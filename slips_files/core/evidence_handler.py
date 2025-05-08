@@ -448,8 +448,6 @@ class EvidenceHandler(ICore):
             "ip": ip_to_block,
             "block": True,
             "tw": timewindow.number,
-            # block until the end of the next 1 timewindow
-            "block_for": 1,
         }
         blocking_data = json.dumps(blocking_data)
         self.db.publish("new_blocking", blocking_data)
@@ -651,7 +649,6 @@ class EvidenceHandler(ICore):
                     "block": True,
                     "to": True,
                     "from": True,
-                    "block_for": self.width * 2,  # block for 2 timewindows
                 }
                 blocking_data = json.dumps(blocking_data)
                 self.db.publish("new_blocking", blocking_data)

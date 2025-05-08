@@ -47,44 +47,24 @@ class Unblocker(IUnblocker):
     def unblock_request(
         self,
         ip: str,
-        how_many_tws_to_block: int,
         current_tw: int,
         flags: Dict[str, str],
     ):
         """
-        schedules unblocking for th egiven ip for the next timewindow.
-        and extends the blocking by 1 tw if the given ip is already blocked
+        schedules unblocking for the given ip for the next timewindow.
         """
-        # if this ip was blocked, and is still setting alerts, how many tws
-        # to extend its blocking?
-        extend_blocking_for = 1
-        # first check if there's already an unblocking request, if so,
-        # we extend the blocking 1 more timewindow.
-        try:
-            tw_to_unblock_at: TimeWindow = self.requests[ip]["tw_to_unblock"]
-            print(
-                f"@@@@@@@@@@@@@@@@ !!!!!!!!!!!!!!!!!!!!!!!! Extending "
-                f"the blockinnnnggg for {ip}"
-            )
-            tw_to_unblock_at: TimeWindow = self._get_tw_to_unblock_at(
-                ip,
-                tw_to_unblock_at.number + extend_blocking_for,
-                how_many_tws_to_block,
-            )
-            self.log(
-                f"Extending the blocking period for {ip} for"
-                f" {extend_blocking_for} extra timewindow."
-            )
-        except KeyError:
-            print(f"@@@@@@@@@@@@@@@@ unblock_request for ip {ip}")
-            tw_to_unblock_at: TimeWindow = self._get_tw_to_unblock_at(
-                ip, current_tw, how_many_tws_to_block
-            )
-            print(
-                f"@@@@@@@@@@@@@@@@ unblocking {ip} at the end of {tw_to_unblock_at}"
-            )
+        if ip in self.requests:
+            # ip is already blocked, extend the blocking by 1 tw
+            tws = self.requests[ip]["block_this_ip_for"]
+            block_this_ip_for = tws + 1
+        else:
+            # measured in tws
+            block_this_ip_for = 1
 
-        self._add_req(ip, tw_to_unblock_at, flags)
+        tw_to_unblock_at: TimeWindow = self._get_tw_to_unblock_at(
+            ip, current_tw, block_this_ip_for
+        )
+        self._add_req(ip, tw_to_unblock_at, flags, block_this_ip_for)
 
     def _check_if_time_to_unblock(self):
         """
@@ -142,23 +122,48 @@ class Unblocker(IUnblocker):
         )
         self.log(txt)
 
+    def update_requests(self):
+        """
+        is called whenever a new timewindow starts. (on msgs to tw_closed)
+        the only purpose of this is to keep track of how many tws the ips in
+        self.requests will stay blocked for.
+        it answers this question
+        "how many extra tws should IP X stay blocked in?"
+        """
+        new_requests = {}
+        with self.requests_lock:
+            for ip, req in self.requests.items():
+                new_req = req
+                new_req["block_this_ip_for"] = req["block_this_ip_for"] - 1
+                new_requests[ip] = new_req
+
+        return new_requests
+
     def _add_req(
-        self, ip: str, tw_to_unblock_at: TimeWindow, flags: Dict[str, str]
+        self,
+        ip: str,
+        tw_to_unblock_at: TimeWindow,
+        flags: Dict[str, str],
+        block_this_ip_for: int,
     ):
         """
         Add an unblocking request to self.requests
         :param tw_to_unblock_at: unix ts to unblock the given ip at
+        :param block_this_ip_for: number of following timewindows this ip
+        will remain blocked in.
         """
         with self.requests_lock:
             self.requests[ip] = {
                 "tw_to_unblock": tw_to_unblock_at,
+                "block_this_ip_for": block_this_ip_for,
                 "flags": flags,
             }
 
+        interval = self.requests[ip]["block_this_ip_for"]
         self.log(
             f"Registered unblocking request to unblock {ip} at the end "
-            f"of the next timewindow. "
-            f"Timewindow to unblock: {tw_to_unblock_at} "
+            f"of the next timewindow. {tw_to_unblock_at}. IP will be "
+            f"blocked for {interval} timewindows. "
             f"Timestamp to unblock: {tw_to_unblock_at.end_time}) "
         )
         print(f"@@@@@@@@@@@@@@@@ [_add_req] DONEE. added req for {ip}  to ")

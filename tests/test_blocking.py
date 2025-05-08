@@ -83,7 +83,7 @@ def test_initialize_chains_in_firewall():
 def test_block_ip():
     blocking = ModuleFactory().create_blocking_obj()
     blocking._init_chains_in_firewall()
-    if not blocking._is_ip_blocked("2.2.0.0"):
+    if not blocking._is_ip_already_blocked("2.2.0.0"):
         ip = "2.2.0.0"
         from_ = True
         to = True
@@ -99,6 +99,6 @@ def test_unblock_ip():
     from_ = True
     to = True
     # first make sure that it's blocked
-    if not blocking._is_ip_blocked("2.2.0.0"):
+    if not blocking._is_ip_already_blocked("2.2.0.0"):
         assert blocking._block_ip(ip, from_, to) is True
     assert blocking.unblock_ip(ip, from_, to) is True

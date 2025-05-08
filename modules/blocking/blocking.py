@@ -27,8 +27,10 @@ class Blocking(IModule):
 
     def init(self):
         self.c1 = self.db.subscribe("new_blocking")
+        self.c2 = self.db.subscribe("tw_closed")
         self.channels = {
             "new_blocking": self.c1,
+            "tw_closed": self.c2,
         }
         if platform.system() == "Darwin":
             self.print("Mac OS blocking is not supported yet.")
@@ -37,6 +39,7 @@ class Blocking(IModule):
         self.firewall = self._determine_linux_firewall()
         self.sudo = utils.get_sudo_according_to_env()
         self._init_chains_in_firewall()
+        self.blocked_ips = {}
         self.blocking_log_path = os.path.join(self.output_dir, "blocking.log")
         self.blocking_logfile_lock = Lock()
         # clear it
@@ -116,7 +119,7 @@ class Blocking(IModule):
                 + "iptables -I FORWARD -j slipsBlocking >/dev/null 2>&1"
             )
 
-    def _is_ip_blocked(self, ip) -> bool:
+    def _is_ip_already_blocked(self, ip) -> bool:
         """Checks if ip is already blocked or not using iptables"""
         command = f"{self.sudo}iptables -L slipsBlocking -v -n"
         # Execute command
@@ -139,7 +142,7 @@ class Blocking(IModule):
             return False
 
         # Make sure ip isn't already blocked before blocking
-        if self._is_ip_blocked(ip_to_block):
+        if self._is_ip_already_blocked(ip_to_block):
             return False
 
         from_ = flags.get("from_")
@@ -185,7 +188,6 @@ class Blocking(IModule):
                 self.print(txt)
                 self.log(f"Blocked all traffic to: {ip_to_block}")
                 self.db.set_blocked_ip(ip_to_block)
-
         return blocked
 
     def shutdown_gracefully(self):
@@ -214,7 +216,6 @@ class Blocking(IModule):
             #       "dport"    : Optional destination port number
             #       "sport"    : Optional source port number
             #       "protocol" : Optional protocol
-            #       'block_for': Optional, after this time (in seconds) this ip will be unblocked
             #   }
             # Example of passing blocking_data to this module:
             #   blocking_data = json.dumps(blocking_data)
@@ -226,12 +227,6 @@ class Blocking(IModule):
             ip = data.get("ip")
             tw: int = data.get("tw")
             block = data.get("block")
-            # number of tws to block for
-            # blocking should last until the end of the next
-            # timewindow by default. we'll be blocking in the cur
-            # timewindow anyways, this number is "how many tws AFTER the
-            # cur tw to keep this ip blocked in"
-            how_many_tws_to_block = data.get("block_for", 1)
 
             flags = {
                 "from_": data.get("from"),
@@ -240,21 +235,15 @@ class Blocking(IModule):
                 "sport": data.get("sport"),
                 "protocol": data.get("protocol"),
             }
-
             if block:
-                # blocking request
-                blocked = self._block_ip(ip, flags)
-                if blocked or self._is_ip_blocked(ip):
-                    print(
-                        f"@@@@@@@@@@@@@@@@ calling unblocker for ip {ip} "
-                        f".. whether extend the blocking OR block."
-                    )
-                    self.unblocker.unblock_request(
-                        ip, how_many_tws_to_block, tw, flags
-                    )
+                self._block_ip(ip, flags)
+            # whether this ip is blocked now, or was already blocked, make an unblocking request to either extend its
+            # blocking period, or block it until the next timewindow is over.
+            print(
+                f"@@@@@@@@@@@@@@@@ calling unblocker for ip {ip} "
+                f".. whether extend the blocking OR block."
+            )
+            self.unblocker.unblock_request(ip, tw, flags)
 
-            else:
-                # unblocking request
-                self.unblocker.unblock_request(
-                    ip, how_many_tws_to_block, tw, flags
-                )
+        if msg := self.get_msg("tw_closed"):
+            self.unblocker.update_requests()
