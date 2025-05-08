@@ -92,6 +92,7 @@ class EvidenceHandler(ICore):
         utils.change_logfiles_ownership(self.logfile.name, self.UID, self.GID)
 
         self.is_running_non_stop = self.db.is_running_non_stop()
+        self.blocking_module_supported = self.is_blocking_module_supported()
 
         # clear output/alerts.json
         self.jsonfile = self.clean_file(self.output_dir, "alerts.json")
@@ -422,7 +423,7 @@ class EvidenceHandler(ICore):
          returns True if the given IP was blocked by Slips blocking module
         """
         # send ip to the blocking module
-        if not self.is_blocking_module_supported():
+        if not self.blocking_module_supported:
             print(
                 "@@@@@@@@@@@@@@@@ decide_blocking blocking module "
                 "unsupported"
@@ -452,7 +453,7 @@ class EvidenceHandler(ICore):
         }
         blocking_data = json.dumps(blocking_data)
         self.db.publish("new_blocking", blocking_data)
-        print("@@@@@@@@@@@@@@@@ published st in new_blocking")
+        print(f"@@@@@@@@@@@@@@@@ published {blocking_data} in new_blocking")
         return True
 
     def increment_attack_counter(
