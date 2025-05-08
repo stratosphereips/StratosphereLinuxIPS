@@ -545,7 +545,7 @@ class Utils(object):
         """
         # This env variable is defined in the Dockerfile
         running_in_docker = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
-        return "" if running_in_docker else "sudo "
+        return "" if running_in_docker else "sudo"
 
     def is_msg_intended_for(self, message, channel):
         """

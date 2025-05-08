@@ -11,7 +11,9 @@ def _chain_exists() -> bool:
     # check if slipsBlocking chain exists before flushing it and suppress
     # stderr and stdout while checking
     # 0 means it exists
-    return os.system(f"{sudo}iptables -nvL slipsBlocking >/dev/null 2>&1") == 0
+    return (
+        os.system(f"{sudo} iptables -nvL slipsBlocking >/dev/null 2>&1") == 0
+    )
 
 
 def del_slips_blocking_chain() -> bool:
@@ -24,17 +26,15 @@ def del_slips_blocking_chain() -> bool:
     # Delete all references to slipsBlocking inserted in INPUT OUTPUT
     # and FORWARD before deleting the chain
     cmd = (
-        f"{sudo}iptables -D INPUT -j slipsBlocking "
-        f">/dev/null 2>&1 ; {sudo}iptables -D OUTPUT "
-        f"-j slipsBlocking >/dev/null 2>&1 ; "
-        f"{sudo}iptables -D FORWARD -j "
-        f"slipsBlocking >/dev/null 2>&1"
+        f"{sudo} iptables -D INPUT -j slipsBlocking >/dev/null 2>&1 ;"
+        f" {sudo} iptables -D OUTPUT -j slipsBlocking >/dev/null 2>&1 ; "
+        f"{sudo} iptables -D FORWARD -j slipsBlocking >/dev/null 2>&1"
     )
     os.system(cmd)
 
     # flush and delete all the rules in slipsBlocking
     cmd = (
-        f"{sudo}iptables -F slipsBlocking >/dev/null 2>&1 ; "
+        f"{sudo} iptables -F slipsBlocking >/dev/null 2>&1 ; "
         f"{sudo} iptables -X slipsBlocking >/dev/null 2>&1"
     )
     os.system(cmd)

@@ -43,7 +43,10 @@ class Blocking(IModule):
         self.blocking_log_path = os.path.join(self.output_dir, "blocking.log")
         self.blocking_logfile_lock = Lock()
         # clear it
-        open(self.blocking_log_path, "w").close()
+        try:
+            open(self.blocking_log_path, "w").close()
+        except FileNotFoundError:
+            pass
 
     def log(self, text: str):
         """Logs the given text to the blocking log file"""
@@ -87,7 +90,7 @@ class Blocking(IModule):
         # self.delete_iptables_chain()
         self.print('Executing "sudo iptables -N slipsBlocking"', 6, 0)
         # Add a new chain to iptables
-        os.system(f"{self.sudo}iptables -N slipsBlocking >/dev/null 2>&1")
+        os.system(f"{self.sudo} iptables -N slipsBlocking >/dev/null 2>&1")
 
         # Check if we're already redirecting to slipsBlocking chain
         input_chain_rules = self._get_cmd_output(
@@ -106,22 +109,22 @@ class Blocking(IModule):
         if "slipsBlocking" not in input_chain_rules:
             os.system(
                 self.sudo
-                + "iptables -I INPUT -j slipsBlocking >/dev/null 2>&1"
+                + " iptables -I INPUT -j slipsBlocking >/dev/null 2>&1"
             )
         if "slipsBlocking" not in output_chain_rules:
             os.system(
                 self.sudo
-                + "iptables -I OUTPUT -j slipsBlocking >/dev/null 2>&1"
+                + " iptables -I OUTPUT -j slipsBlocking >/dev/null 2>&1"
             )
         if "slipsBlocking" not in forward_chain_rules:
             os.system(
                 self.sudo
-                + "iptables -I FORWARD -j slipsBlocking >/dev/null 2>&1"
+                + " iptables -I FORWARD -j slipsBlocking >/dev/null 2>&1"
             )
 
     def _is_ip_already_blocked(self, ip) -> bool:
         """Checks if ip is already blocked or not using iptables"""
-        command = f"{self.sudo}iptables -L slipsBlocking -v -n"
+        command = f"{self.sudo} iptables -L slipsBlocking -v -n"
         # Execute command
         result = subprocess.run(command.split(), stdout=subprocess.PIPE)
         result = result.stdout.decode("utf-8")
