@@ -57,8 +57,12 @@ class Unblocker(IUnblocker):
         # first check if there's already an unblocking request, if so,
         # we extend the blocking 1 more timewindow.
         try:
+            print(
+                f"@@@@@@@@@@@@@@@@ !!!!!!!!!!!!!!!!!!!!!!!! Extending "
+                f"the blockinnnnggg for {ip}"
+            )
             tw_to_unblock_at: TimeWindow = self.requests[ip]["tw_to_unblock"]
-            tw_to_unblock_at: TimeWindow = self._calc_unblock_time(
+            tw_to_unblock_at: TimeWindow = self._get_tw_to_unblock_at(
                 ip,
                 tw_to_unblock_at.number + extend_blocking_for,
                 how_many_tws_to_block,
@@ -69,7 +73,7 @@ class Unblocker(IUnblocker):
             )
         except KeyError:
             print(f"@@@@@@@@@@@@@@@@ unblock_request for ip {ip}")
-            tw_to_unblock_at: TimeWindow = self._calc_unblock_time(
+            tw_to_unblock_at: TimeWindow = self._get_tw_to_unblock_at(
                 ip, current_tw, how_many_tws_to_block
             )
             print(
@@ -143,12 +147,6 @@ class Unblocker(IUnblocker):
         :param tw_to_unblock_at: unix ts to unblock the given ip at
         """
         with self.requests_lock:
-            ts = utils.convert_ts_format(time.time() + 30, "iso")
-            tw_to_unblock_at.end_time = ts  # @@@@@@@@@@@@@
-            # del this
-            print(
-                f"@@@@@@@@@@@@@@@@ tw_to_unblock_at.end_time {tw_to_unblock_at.end_time}"
-            )
             self.requests[ip] = {
                 "tw_to_unblock": tw_to_unblock_at,
                 "flags": flags,
@@ -233,5 +231,4 @@ class Unblocker(IUnblocker):
             txt = f"An errror occured. Unable to unblock {ip_to_unblock}"
             self.print(txt)
             self.log(txt)
-
-        return False
+            return False

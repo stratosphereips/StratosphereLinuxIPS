@@ -57,7 +57,7 @@ class IUnblocker(ABC):
         """a bg thread that unblocks ips once their ts is reached"""
         ...
 
-    def _calc_unblock_time(
+    def _get_tw_to_unblock_at(
         self, ip: str, cur_tw: int, how_many_tws_to_block: int
     ) -> TimeWindow:
         """
