@@ -143,7 +143,7 @@ def test_add_metadata(
     with patch("os.mkdir"), patch("shutil.copy"), patch(
         "builtins.open", create=True
     ), patch.object(
-        utils, "convert_format", return_value="2023-01-01 00:00:00"
+        utils, "convert_ts_format", return_value="2023-01-01 00:00:00"
     ):
         result = metadata_manager._add_metadata()
         assert result == expected_result

@@ -88,9 +88,9 @@ def test_format_evidence_for_printing(
     with patch.object(
         formatter, "get_printable_alert"
     ) as mock_get_alert_time, patch(
-        "slips_files.common.slips_utils.utils.convert_format"
-    ) as mock_convert_format:
-        mock_convert_format.return_value = "converted_time"
+        "slips_files.common.slips_utils.utils.convert_ts_format"
+    ) as mock_convert_ts_format:
+        mock_convert_ts_format.return_value = "converted_time"
 
         mock_get_alert_time.return_value = (
             f"IP {profileid.ip} detected as malicious "
@@ -219,9 +219,9 @@ def test_get_printable_alert(
         last_flow_datetime="",
     )
     with patch(
-        "slips_files.common.slips_utils.utils.convert_format"
-    ) as mock_convert_format:
-        mock_convert_format.return_value = "converted_time"
+        "slips_files.common.slips_utils.utils.convert_ts_format"
+    ) as mock_convert_ts_format:
+        mock_convert_ts_format.return_value = "converted_time"
 
         result = formatter.get_printable_alert(alert)
 

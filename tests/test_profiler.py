@@ -351,13 +351,13 @@ def test_convert_starttime_to_epoch():
     starttime = "2023-04-04 12:00:00"
 
     with patch(
-        "slips_files.core.profiler.utils.convert_format"
-    ) as mock_convert_format:
-        mock_convert_format.return_value = 1680604800
+        "slips_files.core.profiler.utils.convert_ts_format"
+    ) as mock_convert_ts_format:
+        mock_convert_ts_format.return_value = 1680604800
 
         converted = profiler.convert_starttime_to_epoch(starttime)
 
-        mock_convert_format.assert_called_once_with(
+        mock_convert_ts_format.assert_called_once_with(
             "2023-04-04 12:00:00", "unixtimestamp"
         )
         assert converted == 1680604800
@@ -367,7 +367,7 @@ def test_convert_starttime_to_epoch_invalid_format(monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
     starttime = "not a real time"
     monkeypatch.setattr(
-        "slips_files.core.profiler.utils.convert_format",
+        "slips_files.core.profiler.utils.convert_ts_format",
         Mock(side_effect=ValueError),
     )
     converted = profiler.convert_starttime_to_epoch(starttime)
