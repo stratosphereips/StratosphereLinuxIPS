@@ -81,6 +81,12 @@ class ProfileHandler:
                 json.dumps(flow),
             )
 
+    def get_tw_start_time(self, profileid, twid):
+        """Return the time when this TW in this profile was created"""
+        # We need to encode it to 'search' because the data in the
+        # sorted set is encoded
+        return self.r.zscore(f"tws{profileid}", twid.encode("utf-8"))
+
     def get_first_flow_time(self) -> Optional[float]:
         """
         Get the starttime of the first timewindow
