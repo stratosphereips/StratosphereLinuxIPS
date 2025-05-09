@@ -2216,14 +2216,14 @@ def test_get_tw_of_ts():
 
 
 @pytest.mark.parametrize(
-    "flowtime, width, hget_return_value, expected_twid, "
-    "expected_tw_start, expected_add_new_tw_call",
+    "flowtime, width, first_flow_time, "
+    "expected_twid, expected_tw_start, expected_add_new_tw_call",
     [
         # Testcase 1: Normal case, existing start time
         (
             26,
             5,
-            "0",
+            0,
             "timewindow6",
             25,
             call("profile_1", "timewindow6", 25),
@@ -2232,7 +2232,7 @@ def test_get_tw_of_ts():
         (
             1600000100.0,
             100.0,
-            "1600000000.0",
+            1600000000.0,
             "timewindow2",
             1600000100.0,
             call("profile_1", "timewindow2", 1600000100.0),
@@ -2251,7 +2251,7 @@ def test_get_tw_of_ts():
 def test_get_timewindow(
     flowtime,
     width,
-    hget_return_value,
+    first_flow_time,
     expected_twid,
     expected_tw_start,
     expected_add_new_tw_call,
@@ -2260,11 +2260,11 @@ def test_get_timewindow(
     profileid = "profile_1"
     handler.add_new_tw = MagicMock()
     handler.width = width
-    handler.r.hget.return_value = hget_return_value
+    handler.get_first_flow_time = Mock(return_value=first_flow_time)
 
     twid = handler.get_timewindow(flowtime, profileid)
 
-    handler.r.hget.assert_called_once_with("analysis", "file_start")
+    handler.get_first_flow_time.assert_called_once()
     handler.add_new_tw.assert_called_once_with(*expected_add_new_tw_call.args)
     assert twid == expected_twid
 

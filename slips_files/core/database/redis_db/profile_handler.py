@@ -124,7 +124,8 @@ class ProfileHandler:
             tw_number: int = 1
         else:
             starttime_of_first_tw: float = self.get_first_flow_time()
-            if starttime_of_first_tw:
+            if starttime_of_first_tw is not None:  #  because 0 is a valid
+                # value
                 tw_number: int = (
                     floor((flowtime - starttime_of_first_tw) / self.width) + 1
                 )
