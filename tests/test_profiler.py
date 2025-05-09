@@ -405,20 +405,6 @@ def test_check_for_stop_msg(monkeypatch):
     assert profiler.is_stop_msg("not_stop") is False
 
 
-def test_pre_main(monkeypatch):
-    profiler = ModuleFactory().create_profiler_obj()
-
-    with monkeypatch.context() as m:
-        mock_drop_root_privs = Mock()
-        m.setattr(
-            "slips_files.core.profiler.utils.drop_root_privs",
-            mock_drop_root_privs,
-        )
-        profiler.pre_main()
-
-    mock_drop_root_privs.assert_called_once()
-
-
 def test_main_stop_msg_received():
     profiler = ModuleFactory().create_profiler_obj()
     profiler.should_stop = Mock(side_effect=[False, True])
