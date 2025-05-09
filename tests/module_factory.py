@@ -13,6 +13,7 @@ from multiprocessing import Queue
 from managers.host_ip_manager import HostIPManager
 from managers.metadata_manager import MetadataManager
 from managers.profilers_manager import ProfilersManager
+from modules.blocking.unblocker import Unblocker
 from modules.flowalerts.conn import Conn
 from modules.threat_intelligence.circl_lu import Circllu
 from modules.threat_intelligence.spamhaus import Spamhaus
@@ -217,6 +218,18 @@ class ModuleFactory:
         blocking.blocking_log_path = Mock()
         blocking.unblocker = Mock()
         return blocking
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_unblocker_obj(self, mock_db):
+        unblocker = Unblocker(
+            mock_db,
+            "",  # sudo
+            Mock(return_value=False),
+            self.logger,
+            Mock(),  # mocking log()
+        )
+        unblocker.print = Mock()
+        return unblocker
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_flowalerts_obj(self, mock_db):

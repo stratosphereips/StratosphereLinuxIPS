@@ -11,8 +11,9 @@ from modules.blocking.exec_iptables_cmd import exec_iptables_command
 
 class Unblocker(IUnblocker):
     """
-    For every blocking method in slips, there should be an unblocker
+    For every blocking module in slips, there should be an unblocker
     implemented
+    this is the one for the firewall blocker.
     """
 
     name = "iptables_unblocker"
@@ -124,9 +125,6 @@ class Unblocker(IUnblocker):
                 new_req["block_this_ip_for"] = req["block_this_ip_for"] - 1
                 new_requests[ip] = new_req
             self.requests = new_requests
-        from pprint import pp
-
-        pp(self.requests)
 
     def _add_req(
         self,

@@ -1,50 +1,14 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-"""Unit test for modules/blocking/blocking.py
-this file needs sudoroot to run
-"""
+"""Unit test for modules/blocking/blocking.py"""
 from tests.module_factory import ModuleFactory
 import subprocess
 from unittest.mock import patch
 import pytest
 import json
 
-import platform
-import os
 from unittest.mock import call
 from unittest import mock
-from tests.common_test_utils import IS_IN_A_DOCKER_CONTAINER
-
-
-def has_netadmin_cap():
-    """Check the capabilities given to this docker container"""
-    cmd = (
-        'capsh --print | grep "Current:" | cut -d' " -f3 | grep cap_net_admin"
-    )
-    output = os.popen(cmd).read()
-    return "cap_net_admin" in output
-
-
-IS_DEPENDENCY_IMAGE = os.environ.get("IS_DEPENDENCY_IMAGE", False)
-# ignore all tests if not using linux
-linuxOS = pytest.mark.skipif(
-    platform.system() != "Linux",
-    reason="Blocking is supported only in Linux with root priveledges",
-)
-# When using docker in github actions,  we can't use --cap-add NET_ADMIN
-# so all blocking module unit tests will fail because we don't have admin privs
-# we use this environment variable to check if slips is
-# running in github actions
-isroot = pytest.mark.skipif(
-    os.geteuid() != 0 or IS_DEPENDENCY_IMAGE is not False,
-    reason="Blocking is supported only with root priveledges",
-)
-
-# blocking requires net admin capabilities in docker, otherwise skips blocking tests
-has_net_admin_cap = pytest.mark.skipif(
-    IS_IN_A_DOCKER_CONTAINER and not has_netadmin_cap(),
-    reason="Blocking is supported only with --cap-add=NET_ADMIN",
-)
 
 
 def test_init_chains_in_firewall():
