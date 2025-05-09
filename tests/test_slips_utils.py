@@ -182,10 +182,12 @@ def test_calculate_confidence(input_value, expected_output):
         ),
     ],
 )
-def test_convert_format(input_value, input_format, expected_output):
+def test_convert_ts_format(input_value, input_format, expected_output):
     utils = ModuleFactory().create_utils_obj()
     utils.local_tz = datetime.timezone.utc
-    assert utils.convert_format(input_value, input_format) == expected_output
+    assert (
+        utils.convert_ts_format(input_value, input_format) == expected_output
+    )
 
 
 @pytest.mark.parametrize(

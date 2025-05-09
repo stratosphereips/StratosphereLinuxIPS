@@ -59,7 +59,6 @@ class AlertHandler:
         """
         When we have a bunch of evidence causing an alert,
         we associate all evidence IDs with the alert ID in our database
-        this function stores evidence in 'alerts_profile_twid' key only
         """
         old_profileid_twid_alerts: Dict[str, List[str]]
 
@@ -140,9 +139,39 @@ class AlertHandler:
         # the victim is the whole network
         return ""
 
+    def set_blocked_ip(self, ip: str):
+        self.r.zadd("blocked_ips", {ip: time.time()})
+
+    def is_ip_blocked(self, ip: str) -> Optional[float]:
+        ts = self.r.zscore("blocked_ips", ip)
+        if ts is not None:
+            return ts
+        return None
+
+    def del_blocked_ip(self, ip: str):
+        # remove ip from the blocked_ips sorted set
+        self.r.zrem("blocked_ips", ip)
+
     def get_tw_limits(self, profileid, twid: str) -> Tuple[float, float]:
-        """returns the timewindow start and endtime"""
+        """
+        returns the timewindow start and endtime
+        """
         twid_start_time: float = self.get_tw_start_time(profileid, twid)
+        if not twid_start_time:
+            # the given tw is in the future
+            # calc the start time of the twid manually based on the first
+            # twid
+            first_twid_start_time: float = self.get_first_flow_time()
+            given_twid: int = int(twid.replace("timewindow", ""))
+            # tws in slips start from 1.
+            #     tw1   tw2   tw3   tw4
+            # 0 ──────┬─────┬──────┬──────
+            #         │     │      │
+            #         2     4      6
+            twid_start_time = first_twid_start_time + (
+                self.width * (given_twid - 1)
+            )
+
         twid_end_time: float = twid_start_time + self.width
         return twid_start_time, twid_end_time
 
@@ -332,7 +361,7 @@ class AlertHandler:
     ) -> Dict[str, List[str]]:
         """
         The format for the returned dict is
-            {profile123_twid1_<alert_uuid>: [ev_uuid1, ev_uuid2, ev_uuid3]}
+            {<alert_uuid>: [ev_uuid1, ev_uuid2, ev_uuid3]}
         """
         alerts: str = self.r.hget(f"{profileid}_{twid}", "alerts")
         if not alerts:
@@ -425,7 +454,7 @@ class AlertHandler:
         if the past threat level and confidence
         are the same as the ones we wanna store, we replace the timestamp only
         """
-        now = utils.convert_format(time.time(), utils.alerts_format)
+        now = utils.convert_ts_format(time.time(), utils.alerts_format)
         confidence = f"confidence: {confidence}"
         # this is what we'll be storing in the db, tl, ts, and confidence
         threat_level_data = (threat_level, now, confidence)

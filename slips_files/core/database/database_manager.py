@@ -823,6 +823,15 @@ class DBManager:
     def mark_profile_as_gateway(self, *args, **kwargs):
         return self.rdb.mark_profile_as_gateway(*args, **kwargs)
 
+    def set_blocked_ip(self, *args, **kwargs):
+        return self.rdb.set_blocked_ip(*args, **kwargs)
+
+    def get_blocking_timestamp(self, *args, **kwargs):
+        return self.rdb.is_ip_blocked(*args, **kwargs)
+
+    def del_blocked_ip(self, *args, **kwargs):
+        return self.rdb.del_blocked_ip(*args, **kwargs)
+
     def set_ipv6_of_profile(self, *args, **kwargs):
         return self.rdb.set_ipv6_of_profile(*args, **kwargs)
 

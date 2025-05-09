@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from managers.process_manager import ProcessManager
 from tests.module_factory import ModuleFactory
 from slips_files.common.slips_utils import utils
@@ -241,7 +241,7 @@ def test_get_analysis_time(
     end_date_str, start_time_str, expected_analysis_time
 ):
     process_manager = ModuleFactory().create_process_manager_obj()
-    utils.convert_format = Mock(return_value=end_date_str)
+    utils.convert_ts_format = Mock(return_value=end_date_str)
     process_manager.main.db.get_slips_start_time.return_value = start_time_str
 
     analysis_time = process_manager.get_analysis_time()

@@ -522,7 +522,7 @@ def test_convert_timestamp_to_slips_format(timestamp, is_human, expected):
     timeline = ModuleFactory().create_timeline_object()
     timeline.is_human_timestamp = is_human
     with patch(
-        "slips_files.common.slips_utils.utils.convert_format",
+        "slips_files.common.slips_utils.utils.convert_ts_format",
         return_value=expected,
     ):
         result = timeline.convert_timestamp_to_slips_format(timestamp)

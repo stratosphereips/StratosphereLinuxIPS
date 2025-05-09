@@ -41,7 +41,7 @@ class Timeline(IModule):
 
     def convert_timestamp_to_slips_format(self, timestamp: float) -> str:
         if self.is_human_timestamp:
-            timestamp = utils.convert_format(timestamp, utils.alerts_format)
+            timestamp = utils.convert_ts_format(timestamp, utils.alerts_format)
         return str(timestamp)
 
     def ensure_int_bytes(self, bytes: Any) -> int:

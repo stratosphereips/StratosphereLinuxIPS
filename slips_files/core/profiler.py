@@ -128,7 +128,7 @@ class Profiler(ICore, IObservable):
 
     def convert_starttime_to_epoch(self, starttime) -> str:
         try:
-            return utils.convert_format(starttime, "unixtimestamp")
+            return utils.convert_ts_format(starttime, "unixtimestamp")
         except ValueError:
             self.print(
                 f"We can not recognize time format of "
@@ -679,7 +679,6 @@ class Profiler(ICore, IObservable):
         self.mark_process_as_done_processing()
 
     def pre_main(self):
-        utils.drop_root_privs()
         client_ips = [str(ip) for ip in self.client_ips]
         if client_ips:
             self.print(f"Used client IPs: {green(', '.join(client_ips))}")
@@ -716,3 +715,4 @@ class Profiler(ICore, IObservable):
             self.pending_flows_queue_lock.acquire()
             self.flows_to_process_q.put(msg)
             self.pending_flows_queue_lock.release()
+        return None

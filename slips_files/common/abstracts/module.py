@@ -133,13 +133,16 @@ class IModule(ABC, Process):
         """
 
     def get_msg(self, channel: str) -> Optional[dict]:
-        message = self.db.get_message(self.channels[channel])
-        if utils.is_msg_intended_for(message, channel):
-            self.channel_tracker[channel]["msg_received"] = True
-            self.db.incr_msgs_received_in_channel(self.name, channel)
-            return message
+        try:
+            message = self.db.get_message(self.channels[channel])
+            if utils.is_msg_intended_for(message, channel):
+                self.channel_tracker[channel]["msg_received"] = True
+                self.db.incr_msgs_received_in_channel(self.name, channel)
+                return message
 
-        self.channel_tracker[channel]["msg_received"] = False
+            self.channel_tracker[channel]["msg_received"] = False
+        except KeyboardInterrupt:
+            return None
 
     def print_traceback(self):
         exception_line = sys.exc_info()[2].tb_lineno

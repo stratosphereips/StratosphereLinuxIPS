@@ -26,8 +26,8 @@ class Nfdump(IInputType):
             except (IndexError, KeyError):
                 return default_
 
-        starttime = utils.convert_format(get_value_at(0), "unixtimestamp")
-        endtime = utils.convert_format(get_value_at(1), "unixtimestamp")
+        starttime = utils.convert_ts_format(get_value_at(0), "unixtimestamp")
+        endtime = utils.convert_ts_format(get_value_at(1), "unixtimestamp")
         self.flow: NfdumpConn = NfdumpConn(
             starttime,
             endtime,

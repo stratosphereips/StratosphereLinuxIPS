@@ -13,6 +13,7 @@ from multiprocessing import Queue
 from managers.host_ip_manager import HostIPManager
 from managers.metadata_manager import MetadataManager
 from managers.profilers_manager import ProfilersManager
+from modules.blocking.unblocker import Unblocker
 from modules.flowalerts.conn import Conn
 from modules.threat_intelligence.circl_lu import Circllu
 from modules.threat_intelligence.spamhaus import Spamhaus
@@ -214,7 +215,21 @@ class ModuleFactory:
         )
         # override the print function to avoid broken pipes
         blocking.print = Mock()
+        blocking.blocking_log_path = Mock()
+        blocking.unblocker = Mock()
         return blocking
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_unblocker_obj(self, mock_db):
+        unblocker = Unblocker(
+            mock_db,
+            "",  # sudo
+            Mock(return_value=False),
+            self.logger,
+            Mock(),  # mocking log()
+        )
+        unblocker.print = Mock()
+        return unblocker
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_flowalerts_obj(self, mock_db):
@@ -679,9 +694,12 @@ class ModuleFactory:
     def create_process_manager_obj(self):
         main_mock = Mock()
         main_mock.conf.get_disabled_modules.return_value = []
-        #main_mock.conf.get_bootstrapping_setting.return_value = (False, [])
+        # main_mock.conf.get_bootstrapping_setting.return_value = (False, [])
         main_mock.conf.is_bootstrapping_node.return_value = False
-        main_mock.conf.get_bootstrapping_modules.return_value = ["fidesModule", "irisModule"]
+        main_mock.conf.get_bootstrapping_modules.return_value = [
+            "fidesModule",
+            "irisModule",
+        ]
         main_mock.input_type = "pcap"
         main_mock.mode = "normal"
         main_mock.stdout = ""

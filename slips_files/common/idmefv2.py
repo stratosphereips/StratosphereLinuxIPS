@@ -129,10 +129,10 @@ class IDMEFv2:
         """
         try:
             now = datetime.now(utils.local_tz).isoformat("T")
-            iso_start_time = utils.convert_format(
+            iso_start_time = utils.convert_ts_format(
                 alert.timewindow.start_time, "iso"
             ).replace(" ", "T")
-            iso_end_time = utils.convert_format(
+            iso_end_time = utils.convert_ts_format(
                 alert.timewindow.end_time, "iso"
             ).replace(" ", "T")
 
@@ -184,7 +184,7 @@ class IDMEFv2:
         """
         try:
             now = datetime.now(utils.local_tz).isoformat("T")
-            iso_ts: str = utils.convert_format(
+            iso_ts: str = utils.convert_ts_format(
                 evidence.timestamp, "iso"
             ).replace(" ", "T")
             attacker, attacker_type = self.extract_role_type(
