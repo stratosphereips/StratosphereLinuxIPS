@@ -19,11 +19,10 @@ from sklearn.metrics import (
     matthews_corrcoef,
     recall_score,
 )
-
-
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.module import IModule
+from slips_files.core.structures.labels import Label
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -44,6 +43,10 @@ def warn(*args, **kwargs):
 
 
 warnings.warn = warn
+
+BACKGROUND = Label.BACKGROUND.name
+BENIGN = Label.BENIGN.name
+MALICIOUS = Label.MALICIOUS.name
 
 
 class FlowMLDetection(IModule):
@@ -132,9 +135,9 @@ class FlowMLDetection(IModule):
 
             # Count the number of labels of each type in this epoc
             epoch_label_counts = {
-                "Background": (y_flow == "Background").sum(),
-                "Malicious": (y_flow == "Malicious").sum(),
-                "Benign": (y_flow == "Benign").sum(),
+                BACKGROUND: (y_flow == BACKGROUND).sum(),
+                MALICIOUS: (y_flow == MALICIOUS).sum(),
+                BENIGN: (y_flow == BENIGN).sum(),
             }
 
             # Train
@@ -143,7 +146,7 @@ class FlowMLDetection(IModule):
                 self.clf.partial_fit(
                     X_flow,
                     y_flow,
-                    classes=["Background", "Malicious", "Benign"],
+                    classes=[BACKGROUND, MALICIOUS, BENIGN],
                 )
             except Exception:
                 self.print("Error while calling clf.train()")
@@ -153,13 +156,13 @@ class FlowMLDetection(IModule):
             y_pred = self.clf.predict(X_flow)
 
             # For metrics, let's focus on Malicious vs Benign (ignore Background)
-            mask = (y_flow == "Malicious") | (y_flow == "Benign")
+            mask = (y_flow == MALICIOUS) | (y_flow == BENIGN)
             y_true_bin = y_flow[mask]
             y_pred_bin = y_pred[mask]
 
             # Map to binary: Malicious=1, Benign=0
-            y_true_bin = numpy.where(y_true_bin == "Malicious", 1, 0)
-            y_pred_bin = numpy.where(y_pred_bin == "Malicious", 1, 0)
+            y_true_bin = numpy.where(y_true_bin == MALICIOUS, 1, 0)
+            y_pred_bin = numpy.where(y_pred_bin == MALICIOUS, 1, 0)
 
             # Compute confusion matrix: tn, fp, fn, tp
             tn, fp, fn, tp = (
@@ -190,9 +193,12 @@ class FlowMLDetection(IModule):
             self.write_to_log(
                 f"Total labels: {sum_labeled_flows}, "
                 f"Background: {epoch_label_counts['Background']}. "
-                f"Benign: {epoch_label_counts['Benign']}. Malicious: {epoch_label_counts['Malicious']}. "
-                f"Metrics: FPR={FPR:.4f}, TNR={TNR:.4f}, TPR={TPR:.4f}, FNR={FNR:.4f}, "
-                f"F1={F1:.4f}, Precision={PREC:.4f}, Accuracy={ACCU:.4f}, MCC={MCC:.4f}, Recall={RECALL:.4f}."
+                f"Benign: {epoch_label_counts['Benign']}. "
+                f"Malicious: {epoch_label_counts[MALICIOUS]}. "
+                f"Metrics: FPR={FPR:.4f}, TNR={TNR:.4f}, "
+                f"TPR={TPR:.4f}, FNR={FNR:.4f}, "
+                f"F1={F1:.4f}, Precision={PREC:.4f}, "
+                f"Accuracy={ACCU:.4f}, MCC={MCC:.4f}, Recall={RECALL:.4f}."
             )
         except Exception:
             self.print("Error in train().", 0, 1)
@@ -345,9 +351,9 @@ class FlowMLDetection(IModule):
                         "sbytes": 25517,
                         "dbytes": 17247,
                         "appproto": "ssl",
-                        "ground_truth_label": "Malicious",
+                        "ground_truth_label": MALICIOUS,
                         "module_labels": {
-                            "flowalerts-long-connection": "Malicious"
+                            "flowalerts-long-connection": MALICIOUS
                         },
                     }
                 )
@@ -366,9 +372,9 @@ class FlowMLDetection(IModule):
                         "sbytes": 100,
                         "dbytes": 67596,
                         "appproto": "http",
-                        "ground_truth_label": "Benign",
+                        "ground_truth_label": BENIGN,
                         "module_labels": {
-                            "flowalerts-long-connection": "Benign"
+                            "flowalerts-long-connection": BENIGN
                         },
                     }
                 )
@@ -421,7 +427,8 @@ class FlowMLDetection(IModule):
                 "ground_truth_label",
                 "detailed_ground_truth_label",
             ]
-            # For argus binetflows this fails because ther is a field calle bytes that was not in other flows. It should be called allbytes.
+            # For argus binetflows this fails because ther is a field calle
+            # bytes that was not in other flows. It should be called allbytes.
             # Error
             """ [Flow ML Detection] Error in detect() while processing
             dur proto  sport dport  state  pkts  spkts  dpkts  bytes  sbytes  dbytes  allbytes
@@ -546,8 +553,8 @@ class FlowMLDetection(IModule):
             self.twid = msg["twid"]
             self.profileid = msg["profileid"]
             self.flow = msg["flow"]
-            # These following extra fields are expected in testing. update the original
-            # flow dict to have them
+            # These following extra fields are expected in testing.
+            # update the original flow dict to have them
             self.flow.update(
                 {
                     "state": msg["interpreted_state"],
@@ -612,7 +619,7 @@ class FlowMLDetection(IModule):
                         # an error occurred
                         return
 
-                    if pred[0] == "Malicious":
+                    if pred[0] == MALICIOUS:
                         # Generate an alert
                         self.set_evidence_malicious_flow(self.flow, self.twid)
                         self.print(
@@ -642,26 +649,18 @@ class FlowMLDetection(IModule):
 
                         # Update counters based on predictions and labels
                         if (
-                            pred[0] == "Malicious"
-                            and original_label == "Malicious"
+                            pred[0] == MALICIOUS
+                            and original_label == MALICIOUS
                         ):
                             self.tp += 1
-                        elif (
-                            pred[0] == "Benign" and original_label == "Benign"
-                        ):
+                        elif pred[0] == BENIGN and original_label == BENIGN:
                             self.tn += 1
-                        elif (
-                            pred[0] == "Malicious"
-                            and original_label == "Benign"
-                        ):
+                        elif pred[0] == MALICIOUS and original_label == BENIGN:
                             self.fp += 1
                             self.write_to_log(
                                 f"False Positive Flow: {self.flow}"
                             )
-                        elif (
-                            pred[0] == "Benign"
-                            and original_label == "Malicious"
-                        ):
+                        elif pred[0] == BENIGN and original_label == MALICIOUS:
                             self.fn += 1
                             self.write_to_log(
                                 f"False Negative Flow: {self.flow}"
