@@ -25,7 +25,7 @@ class RiskIQ(IModule):
 
     def read_configuration(self):
         conf = ConfigParser()
-        risk_iq_credentials_path = conf.RiskIQ_credentials_path()
+        risk_iq_credentials_path = conf.risk_iq_credentials_path()
         try:
             with open(risk_iq_credentials_path, "r") as f:
                 self.riskiq_email = f.readline().replace("\n", "")

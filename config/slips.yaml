@@ -213,6 +213,9 @@ flowmldetection:
   # You should have trained at least once with 'Normal' data and once with
   # 'Malicious' data in order for the test to work.
   mode: test
+  # creates an extra log file called training.log/testing.log in the
+  # ouptput dir with performance metrics depending on the mode.
+  create_performance_metrics_log_files: False
 
 #############################
 virustotal:

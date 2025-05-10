@@ -119,7 +119,7 @@ class UpdateManager(IModule):
         self.ssl_feeds_path = conf.ssl_feeds()
         self.ssl_feeds = self.get_feed_details(self.ssl_feeds_path)
 
-        risk_iq_credentials_path = conf.RiskIQ_credentials_path()
+        risk_iq_credentials_path = conf.risk_iq_credentials_path()
         read_riskiq_creds(risk_iq_credentials_path)
         self.riskiq_update_period = conf.riskiq_update_period()
 
