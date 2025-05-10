@@ -418,7 +418,12 @@ class ConfigParser(object):
     def get_ml_mode(self):
         return self.read_configuration("flowmldetection", "mode", "test")
 
-    def RiskIQ_credentials_path(self):
+    def create_performance_metrics_log_files(self) -> bool:
+        return self.read_configuration(
+            "flowmldetection", "create_performance_metrics_log_files", False
+        )
+
+    def risk_iq_credentials_path(self):
         return self.read_configuration(
             "threatintelligence", "RiskIQ_credentials_path", ""
         )

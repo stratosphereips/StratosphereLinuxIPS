@@ -10,9 +10,8 @@ import pandas as pd
 import json
 import traceback
 import warnings
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import confusion_matrix
 from sklearn.metrics import (
-    confusion_matrix,
     f1_score,
     precision_score,
     accuracy_score,
@@ -36,6 +35,7 @@ from slips_files.core.structures.evidence import (
     Victim,
     Method,
 )
+
 
 # This horrible hack is only to stop sklearn from printing those warnings
 def warn(*args, **kwargs):
@@ -73,7 +73,7 @@ class FlowMLDetection(IModule):
         self.model_path = "./modules/flowmldetection/model.bin"
         self.scaler_path = "./modules/flowmldetection/scaler.bin"
         self.init_log_file()
-    
+
     def init_log_file(self):
         """
         Init the log file for training or testing
@@ -92,11 +92,16 @@ class FlowMLDetection(IModule):
         # This is the global label in the configuration,
         # in case the flows do not have a label themselves
         self.label = conf.label()
+        self.enable_logs: bool = conf.create_performance_metrics_log_files()
 
     def write_to_log(self, message: str):
         """
-        Write a message to the local log file.
+        Write a message to the local log file if
+        create_performance_metrics_log_files is enabled in slips.yaml
         """
+        if not self.enable_logs:
+            return
+
         try:
             self.log_file.write(message + "\n")
         except Exception as e:
@@ -108,7 +113,9 @@ class FlowMLDetection(IModule):
         """
         try:
             # Create y_flow with the label
-            y_flow = numpy.full(self.flows.shape[0], self.flows.ground_truth_label)
+            y_flow = numpy.full(
+                self.flows.shape[0], self.flows.ground_truth_label
+            )
             # Create X_flow with the current flows minus the label
             X_flow = self.flows.drop("ground_truth_label", axis=1)
             # Drop the detailed labels
@@ -130,7 +137,9 @@ class FlowMLDetection(IModule):
             try:
                 # Online incremental learning
                 self.clf.partial_fit(
-                    X_flow, y_flow, classes=["Background", "Malicious", "Benign"]
+                    X_flow,
+                    y_flow,
+                    classes=["Background", "Malicious", "Benign"],
                 )
             except Exception:
                 self.print("Error while calling clf.train()")
@@ -149,7 +158,11 @@ class FlowMLDetection(IModule):
             y_pred_bin = numpy.where(y_pred_bin == "Malicious", 1, 0)
 
             # Compute confusion matrix: tn, fp, fn, tp
-            tn, fp, fn, tp = confusion_matrix(y_true_bin, y_pred_bin, labels=[0,1]).ravel() if len(set(y_true_bin)) > 1 else (0,0,0,0)
+            tn, fp, fn, tp = (
+                confusion_matrix(y_true_bin, y_pred_bin, labels=[0, 1]).ravel()
+                if len(set(y_true_bin)) > 1
+                else (0, 0, 0, 0)
+            )
 
             # Compute metrics
             FPR = fp / (fp + tn) if (fp + tn) > 0 else 0
@@ -159,7 +172,11 @@ class FlowMLDetection(IModule):
             F1 = f1_score(y_true_bin, y_pred_bin, zero_division=0)
             PREC = precision_score(y_true_bin, y_pred_bin, zero_division=0)
             ACCU = accuracy_score(y_true_bin, y_pred_bin)
-            MCC = matthews_corrcoef(y_true_bin, y_pred_bin) if len(set(y_true_bin)) > 1 else 0
+            MCC = (
+                matthews_corrcoef(y_true_bin, y_pred_bin)
+                if len(set(y_true_bin)) > 1
+                else 0
+            )
             RECALL = recall_score(y_true_bin, y_pred_bin, zero_division=0)
 
             # Store the models on disk
@@ -189,7 +206,8 @@ class FlowMLDetection(IModule):
             for proto in to_discard:
                 dataset = dataset[dataset.proto != proto]
 
-            # If te proto is in the list to delete and there is only one flow, then the dataset will be empty
+            # If te proto is in the list to delete and there is only one flow,
+            # then the dataset will be empty
             if dataset.empty:
                 # DataFrame is empty now, so return empty
                 return dataset
@@ -295,7 +313,9 @@ class FlowMLDetection(IModule):
             if last_number_of_flows_when_trained is None:
                 last_number_of_flows_when_trained = 0
             else:
-                last_number_of_flows_when_trained = int(last_number_of_flows_when_trained)
+                last_number_of_flows_when_trained = int(
+                    last_number_of_flows_when_trained
+                )
 
             # We get all the flows so far
             flows = self.db.get_all_flows()
@@ -399,21 +419,21 @@ class FlowMLDetection(IModule):
             ]
             # For argus binetflows this fails because ther is a field calle bytes that was not in other flows. It should be called allbytes.
             # Error
-            ''' [Flow ML Detection] Error in detect() while processing                                                                                                                                                                                                                         
-            dur proto  sport dport  state  pkts  spkts  dpkts  bytes  sbytes  dbytes  allbytes                                                                                                                                                                                    
-            0  63.822830     0  56119   981    0.0    15     15      0   8764    1887       0      1887                                                                                                                                                                                    
-            The feature names should match those that were passed during fit.                                                                                                                                                                                                              
-            Feature names unseen at fit time:                                                                                                                                                                                                                                              
-            - bytes     
-            '''
+            """ [Flow ML Detection] Error in detect() while processing
+            dur proto  sport dport  state  pkts  spkts  dpkts  bytes  sbytes  dbytes  allbytes
+            0  63.822830     0  56119   981    0.0    15     15      0   8764    1887       0      1887
+            The feature names should match those that were passed during fit.
+            Feature names unseen at fit time:
+            - bytes
+            """
 
             # IF we delete here the filed bytes the error is
-            # [Flow ML Detection] Error in detect() while processing 
-            # dur proto sport dport  state  pkts  spkts  dpkts  sbytes  dbytes allbytes                                                                                                                                                             
-            # 0  63.822830     0  56120   980    0.0    15     15      0    1887       0      1887                                                                                                                                                             
-            # The feature names should match those that were passed during fit.                                                                                                                                                                                
-            # Feature names must be in the same order as they were in fit.                                                                                                                                                                                     
-                                                                                                                                                                                                                                                 
+            # [Flow ML Detection] Error in detect() while processing
+            # dur proto sport dport  state  pkts  spkts  dpkts  sbytes  dbytes allbytes
+            # 0  63.822830     0  56120   980    0.0    15     15      0    1887       0      1887
+            # The feature names should match those that were passed during fit.
+            # Feature names must be in the same order as they were in fit.
+
             for field in fields_to_drop:
                 try:
                     x_flow = x_flow.drop(field, axis=1)
@@ -540,17 +560,19 @@ class FlowMLDetection(IModule):
                 labels = self.db.get_labels()
                 sum_labeled_flows = sum(i[1] for i in labels)
 
-                # The min labels to retrain is the min number of flows 
+                # The min labels to retrain is the min number of flows
                 # we should have seen so far in this capture to start training
                 # This is so we dont _start_ training with only 1 flow
 
-                # Once we are over the start minimum, the second condition is 
+                # Once we are over the start minimum, the second condition is
                 # to force to retrain every a minimum_labels_to_retrain number
                 # of flows. So we dont retrain every 1 flow.
-                if (
-                    sum_labeled_flows >= self.minimum_labels_to_start_train
-                ):
-                    if (sum_labeled_flows - self.last_number_of_flows_when_trained >= self.minimum_labels_to_retrain):
+                if sum_labeled_flows >= self.minimum_labels_to_start_train:
+                    if (
+                        sum_labeled_flows
+                        - self.last_number_of_flows_when_trained
+                        >= self.minimum_labels_to_retrain
+                    ):
                         # So for example we retrain every 50 labels and only when
                         # we have at least 50 labels
                         self.print(
@@ -559,10 +581,17 @@ class FlowMLDetection(IModule):
                         )
                         # Process all flows in the DB and make them ready
                         # for pandas
-                        self.process_training_flows(self.last_number_of_flows_when_trained)
+                        self.process_training_flows(
+                            self.last_number_of_flows_when_trained
+                        )
                         # Train an algorithm
-                        self.train(sum_labeled_flows, self.last_number_of_flows_when_trained)
-                        self.last_number_of_flows_when_trained = sum_labeled_flows
+                        self.train(
+                            sum_labeled_flows,
+                            self.last_number_of_flows_when_trained,
+                        )
+                        self.last_number_of_flows_when_trained = (
+                            sum_labeled_flows
+                        )
 
             elif self.mode == "test":
                 # We are testing, which means using the model to detect
@@ -570,7 +599,9 @@ class FlowMLDetection(IModule):
                 # After processing the flow, it may happen that we
                 # delete icmp/arp/etc so the dataframe can be empty
                 if processed_flow is not None and not processed_flow.empty:
-                    original_label = processed_flow["ground_truth_label"].iloc[0]
+                    original_label = processed_flow["ground_truth_label"].iloc[
+                        0
+                    ]
                     # Predict
                     pred: numpy.ndarray = self.detect(processed_flow)
                     if not pred:
@@ -591,30 +622,49 @@ class FlowMLDetection(IModule):
                             2,
                         )
 
-                    # So you can disable this code easily. Since it is used only for evaluating a testing
+                    # So you can disable this code easily. Since it is used
+                    # only for evaluating a testing
                     log_testing_data = True
                     if log_testing_data:
                         # Initialize counters if not already done
-                        if not hasattr(self, 'tp'):
+                        if not hasattr(self, "tp"):
                             self.tp = 0
-                        if not hasattr(self, 'tn'):
+                        if not hasattr(self, "tn"):
                             self.tn = 0
-                        if not hasattr(self, 'fp'):
+                        if not hasattr(self, "fp"):
                             self.fp = 0
-                        if not hasattr(self, 'fn'):
+                        if not hasattr(self, "fn"):
                             self.fn = 0
 
                         # Update counters based on predictions and labels
-                        if pred[0] == "Malicious" and original_label == "Malicious":
+                        if (
+                            pred[0] == "Malicious"
+                            and original_label == "Malicious"
+                        ):
                             self.tp += 1
-                        elif pred[0] == "Benign" and original_label == "Benign":
+                        elif (
+                            pred[0] == "Benign" and original_label == "Benign"
+                        ):
                             self.tn += 1
-                        elif pred[0] == "Malicious" and original_label == "Benign":
+                        elif (
+                            pred[0] == "Malicious"
+                            and original_label == "Benign"
+                        ):
                             self.fp += 1
-                            self.write_to_log(f"False Positive Flow: {self.flow}")
-                        elif pred[0] == "Benign" and original_label == "Malicious":
+                            self.write_to_log(
+                                f"False Positive Flow: {self.flow}"
+                            )
+                        elif (
+                            pred[0] == "Benign"
+                            and original_label == "Malicious"
+                        ):
                             self.fn += 1
-                            self.write_to_log(f"False Negative Flow: {self.flow}")
+                            self.write_to_log(
+                                f"False Negative Flow: {self.flow}"
+                            )
 
                         # Log the testing performance metrics
-                        self.write_to_log(f"TP: {self.tp}, TN: {self.tn}, FP: {self.fp}, FN: {self.fn}")
+                        self.write_to_log(
+                            f"TP: {self.tp}, TN: {self.tn},"
+                            f" FP: {self.fp}, FN: {self.fn}"
+                        )
