@@ -3,6 +3,7 @@ from typing import Optional
 
 # SPDX-License-Identifier: GPL-2.0-only
 import numpy
+import os
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler
 import pickle
@@ -83,10 +84,10 @@ class FlowMLDetection(IModule):
 
         if self.mode == "train":
             # Initialize the training log file
-            self.log_path = "./modules/flowmldetection/training.log"
+            self.log_path = os.path.join(self.output_dir, "training.log")
         elif self.mode == "test":
             # Initialize the testing log file
-            self.log_path = "./modules/flowmldetection/testing.log"
+            self.log_path = os.path.join(self.output_dir, "testing.log")
         self.log_file = open(self.log_path, "w")
 
     def read_configuration(self):
