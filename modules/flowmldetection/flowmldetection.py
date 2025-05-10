@@ -78,6 +78,9 @@ class FlowMLDetection(IModule):
         """
         Init the log file for training or testing
         """
+        if not self.enable_logs:
+            return
+
         if self.mode == "train":
             # Initialize the training log file
             self.log_path = "./modules/flowmldetection/training.log"
