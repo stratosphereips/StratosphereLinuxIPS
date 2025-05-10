@@ -399,7 +399,7 @@ class ProfileHandler:
             try:
                 pre = state.split("_")[0]
             except AttributeError:
-                pre = ''
+                pre = ""
 
             try:
                 # Try suricata states
@@ -412,7 +412,7 @@ class ProfileHandler:
                 # This is controversial, but if we dont have a good state, we consider it not established for now
                 if "new" in state or state.lower() == "established":
                     return "Established"
-                elif "closed" in state or state.lower() == 'not established':
+                elif "closed" in state or state.lower() == "not established":
                     return "Not Established"
 
                 # We have varius type of states depending on the type of flow.
@@ -427,7 +427,7 @@ class ProfileHandler:
                 try:
                     suf = state.split("_")[1]
                 except AttributeError:
-                    suf = ''
+                    suf = ""
                 if "S" in pre and "A" in pre and "S" in suf and "A" in suf:
                     """
                     Examples:
