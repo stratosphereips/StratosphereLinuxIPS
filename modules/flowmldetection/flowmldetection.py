@@ -98,7 +98,7 @@ class FlowMLDetection(IModule):
         self.mode = conf.get_ml_mode()
         # This is the global label in the configuration,
         # in case the flows do not have a label themselves
-        self.label = conf.label()
+        self.ground_truth_config_label = conf.label()
         self.enable_logs: bool = conf.create_performance_metrics_log_files()
 
     def write_to_log(self, message: str):
@@ -610,9 +610,15 @@ class FlowMLDetection(IModule):
                 # After processing the flow, it may happen that we
                 # delete icmp/arp/etc so the dataframe can be empty
                 if processed_flow is not None and not processed_flow.empty:
-                    original_label = processed_flow["ground_truth_label"].iloc[
-                        0
-                    ]
+                    try:
+                        original_label = processed_flow[
+                            "ground_truth_label"
+                        ].iloc[0]
+                    except KeyError:
+                        # If there are no labels in the flows, the default
+                        # label should be the one in the config file.
+                        original_label = self.ground_truth_config_label
+
                     # Predict
                     pred: numpy.ndarray = self.detect(processed_flow)
                     if not pred:
