@@ -44,15 +44,6 @@ class IUnblocker(ABC):
         """
 
     @abstractmethod
-    def _unblock(self, *args, **kwargs):
-        """
-        Should contain the logic to unblock, throught the FW for
-        example.
-        is called whenever a ts is reached in _check_if_time_to_unblock()
-        to do the actual unblocking
-        """
-
-    @abstractmethod
     def _check_if_time_to_unblock(self):
         """a bg thread that unblocks ips once their ts is reached"""
         ...

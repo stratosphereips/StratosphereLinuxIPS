@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import ipaddress
 import os
 import time
 from threading import Lock
@@ -61,8 +62,7 @@ class Template(IModule):
         is called in a loop, executes once every 10s
         repoisons all ips in self.unblocker.requests
         """
-        if not self._is_time_to_repoison():
-            print("@@@@@@@@@@@@@@@@ not _is_time_to_repoison yet!")
+        if not self._is_time_to_repoison() or not self.unblocker.requests:
             return
 
         print("@@@@@@@@@@@@@@@@ time to repoison")
@@ -124,6 +124,34 @@ class Template(IModule):
         )
         send(pkt2, verbose=0)
 
+    def is_broadcast(self, ip_str, net_str) -> bool:
+        try:
+            net = ipaddress.ip_network(net_str, strict=False)
+            ip = ipaddress.ip_address(ip_str)
+            return ip == net.broadcast_address
+        except ValueError:
+            return False
+
+    def is_valid_ip(self, ip) -> bool:
+        """
+        Checks if the ip is in out localnet, isnt the router
+        """
+        if utils.is_public_ip(ip):
+            return False
+
+        localnet = self.db.get_local_network()
+        if ipaddress.ip_address(ip) not in ipaddress.ip_network(localnet):
+            return False
+
+        if self.is_broadcast(ip, localnet):
+            return False
+
+        if ip == self.db.get_gateway_ip():
+            return False
+        # no need to check if the ip is in our ips because all our ips are
+        # excluded from the new_blocking channel
+        return True
+
     def main(self):
         self.keep_attackers_poisoned()
 
@@ -135,10 +163,16 @@ class Template(IModule):
                 f"@@@@@@@@@@@@@@@@ arp poison new blocking requets for "
                 f"{ip} {tw}"
             )
+
+            if not self.is_valid_ip(ip):
+                print(f"@@@@@@@@@@@@@@@@ invalid ip {ip}")
+                return
+
+            self._arp_poison(ip)
+
             # whether this ip is blocked now, or was already blocked, make an
             # unblocking request to either extend its
             # blocking period, or block it until the next timewindow is over.
-            self._arp_poison(ip)
             self.unblocker.unblock_request(ip, tw)
 
         if self.get_msg("tw_closed"):

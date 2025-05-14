@@ -288,6 +288,19 @@ class Utils(object):
         os.setresuid(sudo_uid, sudo_uid, -1)
         return
 
+    def is_public_ip(self, ip_str) -> bool:
+        try:
+            ip = ipaddress.ip_address(ip_str)
+            return not (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_reserved
+                or ip.is_multicast
+                or ip.is_link_local
+            )
+        except ValueError:
+            return False  # invalid IP
+
     def is_ignored_zeek_log_file(self, filepath: str) -> bool:
         """
         Returns true if the given file ends with .log or .log.labeled and

@@ -338,6 +338,8 @@ class ProcessManager:
             return plugins
 
         ordered = OrderedDict(plugins)
+
+        print(f"@@@@@@@@@@@@@@@@ {ordered}")
         # last=False to move to the beginning of the dict
         ordered.move_to_end("Blocking", last=False)
         ordered.move_to_end("ARP Poisoner", last=False)
