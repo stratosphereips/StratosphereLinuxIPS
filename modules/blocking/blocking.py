@@ -39,7 +39,6 @@ class Blocking(IModule):
         self.firewall = self._determine_linux_firewall()
         self.sudo = utils.get_sudo_according_to_env()
         self._init_chains_in_firewall()
-        self.blocked_ips = {}
         self.blocking_log_path = os.path.join(self.output_dir, "blocking.log")
         self.blocking_logfile_lock = Lock()
         # clear it
@@ -224,9 +223,7 @@ class Blocking(IModule):
             #   blocking_data = json.dumps(blocking_data)
             #   self.db.publish('new_blocking', blocking_data )
 
-            # Decode(deserialize) the python dict into JSON formatted string
             data = json.loads(msg["data"])
-            # Parse the data dictionary
             ip = data.get("ip")
             tw: int = data.get("tw")
             block = data.get("block")
@@ -240,7 +237,8 @@ class Blocking(IModule):
             }
             if block:
                 self._block_ip(ip, flags)
-            # whether this ip is blocked now, or was already blocked, make an unblocking request to either extend its
+            # whether this ip is blocked now, or was already blocked, make an
+            # unblocking request to either extend its
             # blocking period, or block it until the next timewindow is over.
             self.unblocker.unblock_request(ip, tw, flags)
 
