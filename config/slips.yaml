@@ -26,7 +26,7 @@ parameters:
   # For 5 min
   # time_window_width : 300
   # For 1 hour
-  time_window_width: 3600
+  time_window_width: 50
   # For 1 day
   # time_window_width = 86400
   # Make Slips use only one time window (also like if no TW is used)
@@ -181,7 +181,7 @@ detection:
   # - 0.43: Use this threshold If you want Slips to be insensitive.
   #        Using this means Slips will need so many evidence to trigger an alert
   #        May lead to false negatives
-  evidence_detection_threshold: 0.25
+  evidence_detection_threshold: 0.08
 
   # Make Slips pop up alerts? Both Linux and Macos
   popup_alerts: false
