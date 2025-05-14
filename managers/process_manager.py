@@ -83,7 +83,8 @@ class ProcessManager:
         )
         self.bootstrap_p2p = self.main.conf.is_bootstrapping_node()
         self.bootstrapping_modules = self.main.conf.get_bootstrapping_modules()
-        # self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.get_bootstrapping_setting()
+        # self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.
+        # get_bootstrapping_setting()
 
     def start_output_process(self, stderr, slips_logfile, stdout=""):
         output_process = Output(
@@ -266,7 +267,7 @@ class ProcessManager:
         return plugins, failed_to_load_modules
 
     def _reorder_modules(self, plugins):
-        plugins = self._prioritize_blocking_module(plugins)
+        plugins = self._prioritize_blocking_modules(plugins)
         plugins = self._start_cyst_module_last(plugins)
         return plugins
 
@@ -327,16 +328,19 @@ class ProcessManager:
                     }
         return plugins
 
-    def _prioritize_blocking_module(self, plugins):
-        # change the order of the blocking module (load it first)
-        # so it can receive msgs sent from other modules
-        if "Blocking" not in plugins:
+    def _prioritize_blocking_modules(self, plugins):
+        """
+        Changes the order of the blocking modules (ARP poisoner and
+        Blocking) to load them before the rest of the modules
+        so they can receive msgs sent from other modules
+        """
+        if "Blocking" not in plugins and "ARP Poisoner" not in plugins:
             return plugins
 
         ordered = OrderedDict(plugins)
-        ordered.move_to_end(
-            "Blocking", last=False
-        )  # last=False to move to the beginning of the dict
+        # last=False to move to the beginning of the dict
+        ordered.move_to_end("Blocking", last=False)
+        ordered.move_to_end("ARP Poisoner", last=False)
         plugins.clear()
         plugins.update(ordered)
         return plugins
@@ -487,6 +491,7 @@ class ProcessManager:
 
         if self.main.args.blocking:
             pids_to_kill_last.append(self.main.db.get_pid_of("Blocking"))
+            pids_to_kill_last.append(self.main.db.get_pid_of("ARP Poisoner"))
 
         if "exporting_alerts" not in self.main.db.get_disabled_modules():
             pids_to_kill_last.append(

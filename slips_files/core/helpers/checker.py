@@ -159,7 +159,7 @@ class Checker:
         ):
             # If the user wants to blocks, we need permission to modify
             # iptables
-            print("Run Slips with sudo to use the blocking module.")
+            print("Run Slips with sudo to use the blocking modules.")
             self.main.terminate_slips()
 
         if self.main.args.clearblocking:

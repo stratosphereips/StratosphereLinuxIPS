@@ -153,9 +153,6 @@ class Unblocker(IUnblocker):
             f"blocked for {interval} timewindows. "
             f"Timestamp to unblock: {tw_to_unblock_at.end_time}) "
         )
-        from pprint import pp
-
-        pp(self.requests)
 
     def _del_request(self, ip):
         """Delete an unblocking request from self.requests"""
