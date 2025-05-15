@@ -392,6 +392,7 @@ class IPInfo(AsyncModule):
             # get the gw of the given interface
             return self.get_gateway_for_iface(interface)
 
+    @staticmethod
     def get_own_mac() -> str:
         # get the MAC address as a hex string
         mac_num = getnode()
