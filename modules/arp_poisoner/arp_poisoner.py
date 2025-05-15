@@ -158,7 +158,7 @@ class Template(IModule):
         if msg := self.get_msg("new_blocking"):
             data = json.loads(msg["data"])
             ip = data.get("ip")
-            tw: int = data.get("tw").replace("timewindow", "")
+            tw: int = data.get("tw")
             print(
                 f"@@@@@@@@@@@@@@@@ arp poison new blocking requets for "
                 f"{ip} {tw}"

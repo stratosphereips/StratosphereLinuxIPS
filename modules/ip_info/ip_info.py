@@ -327,6 +327,16 @@ class IPInfo(AsyncModule):
         await self.reading_mac_db_task
 
     # GW
+    @staticmethod
+    def get_gateway_for_iface(iface) -> str:
+        gws = netifaces.gateways()
+        for family in (netifaces.AF_INET, netifaces.AF_INET6):
+            if family in gws:
+                for gw, gw_iface, *_ in gws[family]:
+                    if gw_iface == iface:
+                        return gw
+        return None
+
     def get_gateway_ip_if_interface(self):
         """
         Slips tries different ways to get the ip of the default gateway
@@ -336,6 +346,12 @@ class IPInfo(AsyncModule):
         if not self.is_running_non_stop:
             # only works if running on an interface
             return False
+
+        # first try to get the gw of the given interface specifically.. not
+        # the default one
+        interface: str = getattr(self.args, "interface", None)
+        if gw := self.get_gateway_for_iface(interface):
+            return gw
 
         gws = netifaces.gateways()
         try:

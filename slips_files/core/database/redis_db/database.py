@@ -794,6 +794,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """
         return self.r.hget(self.constants.ANALYSIS, "input_type")
 
+    def get_interface(self) -> str:
+        return self.r.hget(self.constants.ANALYSIS, "interface")
+
     def get_output_dir(self):
         """
         returns the currently used output dir

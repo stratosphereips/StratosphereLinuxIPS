@@ -212,7 +212,8 @@ class Profiler(ICore, IObservable):
     def get_gateway_info(self, flow):
         """
         Gets the IP and MAC of the gateway and stores them in the db
-
+        doesn't get the gateway ip if it's already in the db (for example
+        detected by ip_info) module
         usually the mac of the flow going from a private ip -> a
         public ip is the mac of the GW
         """

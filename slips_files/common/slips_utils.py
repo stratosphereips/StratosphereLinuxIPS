@@ -416,8 +416,8 @@ class Utils(object):
 
     def get_own_ips(self, ret=Dict) -> Union[Dict[str, List[str]], List[str]]:
         """
-        Returns a dict of our private and public IPs
-        return a dict by default
+        Returns a dict of our private IPs from all interfaces and our public
+        IPs. return a dict by default
         e.g. { "ipv4": [..], "ipv6": [..] }
         and returns a list of all the ips combined if ret=List is given
         """

@@ -105,6 +105,7 @@ class ProcessManager:
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
+            self.main.args,
             is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
@@ -125,6 +126,7 @@ class ProcessManager:
             self.main.args.output,
             self.main.redis_port,
             self.evidence_handler_termination_event,
+            self.main.args,
         )
         evidence_process.start()
         self.main.print(
@@ -142,6 +144,7 @@ class ProcessManager:
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
+            self.main.args,
             is_input_done=self.is_input_done,
             profiler_queue=self.profiler_queue,
             input_type=self.main.input_type,
@@ -268,7 +271,7 @@ class ProcessManager:
 
     def _reorder_modules(self, plugins):
         plugins = self._prioritize_blocking_modules(plugins)
-        plugins = self._start_cyst_module_last(plugins)
+        plugins = self._change_cyst_module_order(plugins)
         return plugins
 
     def _discover_module_names(self):
@@ -347,7 +350,7 @@ class ProcessManager:
         plugins.update(ordered)
         return plugins
 
-    def _start_cyst_module_last(self, plugins):
+    def _change_cyst_module_order(self, plugins):
         # when cyst starts first, as soon as slips connects to cyst,
         # cyst sends slips the flows,
         # but the inputprocess didn't even start yet so the flows are lost
@@ -377,6 +380,7 @@ class ProcessManager:
                 self.main.args.output,
                 self.main.redis_port,
                 self.termination_event,
+                self.main.args,
             )
             module.start()
             self.main.db.store_pid(module_name, int(module.pid))
@@ -431,6 +435,7 @@ class ProcessManager:
                     self.main.args.output,
                     self.main.redis_port,
                     multiprocessing.Event(),
+                    self.main.args,
                 )
 
                 if local_files:
