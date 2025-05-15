@@ -52,7 +52,7 @@ class ARPUnblocker(IUnblocker):
         tw_to_unblock_at: TimeWindow = self._get_tw_to_unblock_at(
             ip, current_tw, block_this_ip_for
         )
-        self._add_req(ip, tw_to_unblock_at, block_this_ip_for)
+        self._add_req(ip, current_tw, tw_to_unblock_at, block_this_ip_for)
 
     def _check_if_time_to_unblock(self, ip: str):
         """
@@ -82,7 +82,7 @@ class ARPUnblocker(IUnblocker):
         )
         printable_now = utils.convert_ts_format(now, utils.alerts_format)
         txt = (
-            f"Done poisoning. The poisoning of {ip} lasted {blocking_tws} "
+            f"Done poisoning {ip}. The poisoning lasted {blocking_tws} "
             f"timewindows. ({blocking_hrs}hrs - "
             f"From {printable_blocking_ts} to {printable_now})."
         )
@@ -107,6 +107,7 @@ class ARPUnblocker(IUnblocker):
     def _add_req(
         self,
         ip: str,
+        current_tw: str,
         tw_to_unblock_at: TimeWindow,
         block_this_ip_for: int,
     ):
@@ -124,8 +125,9 @@ class ARPUnblocker(IUnblocker):
 
         interval = self.requests[ip]["block_this_ip_for"]
         self.log(
-            f"Registered a request to stop poisoning {ip} at the end "
-            f"of the next timewindow. {tw_to_unblock_at}. IP will be "
+            f"Current TW: {current_tw}. Registered a request to stop "
+            f"poisoning {ip} at the end "
+            f"of the next timewindow: {tw_to_unblock_at}. IP will be "
             f"poisoned for {interval} timewindows. "
             f"Timestamp to stop poisoning: {tw_to_unblock_at.end_time}) "
         )

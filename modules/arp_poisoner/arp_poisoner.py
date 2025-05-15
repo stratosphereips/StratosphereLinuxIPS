@@ -68,7 +68,7 @@ class Template(IModule):
         # the unblocker will remove ips that should be unblocked from this dict
         for ip in self.unblocker.requests:
             print(f"@@@@@@@@@@@@@@@@ calling _arp_poison({ip})")
-            self._arp_poison(ip)
+            self._arp_poison(ip, first_time=False)
 
     @staticmethod
     def _get_mac(target_ip: str) -> str:
@@ -87,7 +87,12 @@ class Template(IModule):
 
         return None
 
-    def _arp_poison(self, target_ip: str):
+    def _arp_poison(self, target_ip: str, first_time=False):
+        """
+        :kwarg first_time: is true if we're poisoning for the first time
+        based on a new_blocking msg, and should be false when we're
+        repoisoning every x seconds.
+        """
         print(f"@@@@@@@@@@@@@@@@  _arp_poison is called ({target_ip})")
         fake_mac = "aa:aa:aa:aa:aa:aa"
         gateway_ip: str = self.db.get_gateway_ip()
@@ -126,6 +131,8 @@ class Template(IModule):
             hwsrc=fake_mac,
         )
         send(pkt2, verbose=0)
+        if first_time:
+            self.log(f"Poisoned {target_ip} at {target_mac}.")
 
     def is_broadcast(self, ip_str, net_str) -> bool:
         try:
@@ -171,7 +178,7 @@ class Template(IModule):
                 print(f"@@@@@@@@@@@@@@@@ invalid ip {ip}")
                 return
 
-            self._arp_poison(ip)
+            self._arp_poison(ip, first_time=True)
 
             # whether this ip is blocked now, or was already blocked, make an
             # unblocking request to either extend its
