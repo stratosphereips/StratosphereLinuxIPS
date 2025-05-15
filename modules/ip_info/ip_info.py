@@ -413,7 +413,6 @@ class IPInfo(AsyncModule):
         # check if we have the mac of this ip already saved in the db.
         if gw_mac := self.db.get_mac_addr_from_profile(f"profile_{gw_ip}"):
             gw_mac: Union[str, None]
-            self.db.set_default_gateway("MAC", gw_mac)
             return gw_mac
 
         if not self.is_running_non_stop:
@@ -440,14 +439,13 @@ class IPInfo(AsyncModule):
                 text=True,
             ).stdout
             gw_mac = ip_output.split()[-2]
-            self.db.set_default_gateway("MAC", gw_mac)
+
             return gw_mac
         except (subprocess.CalledProcessError, IndexError, FileNotFoundError):
             # If the ip command doesn't exist or has failed, try using the
             # arp command
             try:
                 gw_mac = utils.get_mac_for_ip(gw_ip)
-                self.db.set_default_gateway("MAC", gw_mac)
                 return gw_mac
             except (subprocess.CalledProcessError, IndexError):
                 # Could not find the MAC address of gw_ip
@@ -563,7 +561,8 @@ class IPInfo(AsyncModule):
             # whether we found the gw ip using dhcp in profiler
             # or using ip route using self.get_gateway_ip()
             # now that it's found, get and store the mac addr of it
-            self.get_gateway_mac(ip)
+            if mac := self.get_gateway_mac(ip):
+                self.db.set_default_gateway("MAC", mac)
 
     def handle_new_ip(self, ip: str):
         try:
