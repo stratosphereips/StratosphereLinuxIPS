@@ -73,11 +73,10 @@ class IUnblocker(ABC):
 
         tw_start: str = utils.convert_ts_format(tw_start, "iso")
         tw_end: str = utils.convert_ts_format(tw_end, "iso")
-        print(
-            f"@@@@@@@@@@@@@@@@ _get_tw_to_unblock_at returning {TimeWindow(
+        tww = TimeWindow(
             number=tw_to_unblock, start_time=tw_start, end_time=tw_end
-        )}"
         )
+        print(f"@@@@@@@@@@@@@@@@ _get_tw_to_unblock_at returning {tww}")
 
         return TimeWindow(
             number=tw_to_unblock, start_time=tw_start, end_time=tw_end
