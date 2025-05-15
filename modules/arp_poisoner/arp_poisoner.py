@@ -70,23 +70,6 @@ class Template(IModule):
             print(f"@@@@@@@@@@@@@@@@ calling _arp_poison({ip})")
             self._arp_poison(ip, first_time=False)
 
-    @staticmethod
-    def _get_mac(target_ip: str) -> str:
-        """
-        gets it using the local arp cache
-        """
-        try:
-            with open("/proc/net/arp") as f:
-                next(f)  # skip header
-                for line in f:
-                    parts = line.split()
-                    if parts[0] == target_ip:
-                        return parts[3]
-        except FileNotFoundError:
-            pass
-
-        return None
-
     def _arp_poison(self, target_ip: str, first_time=False):
         """
         :kwarg first_time: is true if we're poisoning for the first time
@@ -97,7 +80,7 @@ class Template(IModule):
         fake_mac = "aa:aa:aa:aa:aa:aa"
         gateway_ip: str = self.db.get_gateway_ip()
 
-        target_mac: str = self._get_mac(target_ip)
+        target_mac: str = utils.get_mac_for_ip(target_ip)
         if not target_mac:
             print(f"@@@@@@@@@@@@ could not get MAC for {target_ip}")
             return

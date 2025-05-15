@@ -19,3 +19,4 @@ nodejs
 notify-osd
 yara
 libnotify-bin
+wireless-tools

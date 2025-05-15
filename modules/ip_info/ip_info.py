@@ -5,7 +5,7 @@ from typing import (
     Union,
     Optional,
 )
-from uuid import uuid4
+from uuid import uuid4, getnode
 import datetime
 import maxminddb
 import ipaddress
@@ -66,6 +66,7 @@ class IPInfo(AsyncModule):
         self.whitelist = Whitelist(self.logger, self.db)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.valid_tlds = whois.validTlds()
+        self.is_running_in_ap_mode = False
 
     async def open_dbs(self):
         """Function to open the different offline databases used in this
@@ -328,14 +329,36 @@ class IPInfo(AsyncModule):
 
     # GW
     @staticmethod
-    def get_gateway_for_iface(iface) -> str:
+    def get_gateway_for_iface(iface) -> Optional[str]:
         gws = netifaces.gateways()
         for family in (netifaces.AF_INET, netifaces.AF_INET6):
-            if family in gws:
-                for gw, gw_iface, *_ in gws[family]:
-                    if gw_iface == iface:
-                        return gw
+            if family in gws and "default" in gws[family]:
+                gw, gw_iface = gws[family]["default"]
+                if gw_iface == iface:
+                    return gw
         return None
+
+    def is_ap_mode_iwconfig(self) -> bool:
+        """
+        check is slips is running as an AP
+        """
+        interface: str = getattr(self.args, "interface", None)
+        try:
+            output = subprocess.check_output(
+                ["iwconfig", interface], text=True, stderr=subprocess.DEVNULL
+            )
+            for line in output.splitlines():
+                if "Mode:" in line:
+                    mode = line.split("Mode:")[1].split()[0]
+                    return mode.lower() == "master"
+        except Exception:
+            pass
+        return False
+
+    def get_default_gateway(self) -> str:
+        gws = netifaces.gateways()
+        default = gws.get("default", {})
+        return default.get(netifaces.AF_INET, (None,))[0]
 
     def get_gateway_ip_if_interface(self) -> Optional[str]:
         """
@@ -348,33 +371,41 @@ class IPInfo(AsyncModule):
             # only works if running on an interface
             return
 
-        # ok why?? because when slips is running on normal hosts, we want
-        # the ip of the default gateway which is probably going to be the
-        # gw of the given interface and in the localnet of that interface.
-        # BUT when Slips is running as an AP, we dont want the ip of the
-        # default gateway, we want the ip of the AP. because in this case,
-        # the AP is the gateway of the computers connected to it. we don't
-        # want the ip of the actual gateway that is probably present in
-        # another localnet (the eth0).
-
-        # first try to get the gw of the given interface
         interface: str = getattr(self.args, "interface", None)
-        if gw := self.get_gateway_for_iface(interface):
-            return gw
+        if self.is_running_in_ap_mode:
+            # ok why?? because when slips is running on normal hosts, we want
+            # the ip of the default gateway which is probably going to be the
+            # gw of the given interface and in the localnet of that interface.
+            # BUT when Slips is running as an AP, we dont want the ip of the
+            # default gateway, we want the ip of the AP. because in this case,
+            # the AP is the gateway of the computers connected to it. we don't
+            # want the ip of the actual gateway that is probably present in
+            # another localnet (the eth0).
+            # return the own IP. because slips is "the gw" for connected clients
+            try:
+                return netifaces.ifaddresses(interface)[netifaces.AF_INET][0][
+                    "addr"
+                ]
+            except KeyError:
+                return  # No IP assigned
+        else:
+            # get the gw of the given interface
+            return self.get_gateway_for_iface(interface)
 
-        # Fallback: return the interface's own IP. reaching here
-        # means that slips is running as an AP
-        try:
-            return netifaces.ifaddresses(interface)[netifaces.AF_INET][0][
-                "addr"
-            ]
-        except KeyError:
-            return  # No IP assigned
+    def get_own_mac() -> str:
+        # get the MAC address as a hex string
+        mac_num = getnode()
+        # format it as usual MAC address format xx:xx:xx:xx:xx:xx
+        mac = ":".join(
+            f"{(mac_num >> ele) & 0xff:02x}" for ele in range(40, -1, -8)
+        )
+        return mac
 
     def get_gateway_mac(self, gw_ip: str) -> Optional[str]:
         """
         Given the gw_ip, this function tries to get the MAC
-         from arp.log or from arp tables
+         from arp.log, using ip neigh or from arp tables
+         PS: returns own MAc address if running in AP mode
         """
         # we keep a cache of the macs and their IPs
         # In case of a zeek dir or a pcap,
@@ -391,6 +422,13 @@ class IPInfo(AsyncModule):
             # if it's seen associated with a public IP
             return
 
+        if self.is_running_in_ap_mode:
+            # when running in AP mode, we are the GW for the connected
+            # clients, this makes our mac the GW mac.
+            # in AP mode, the given gw_ip is our own ip anyway, so it wont
+            # be found in arp tables or ip neigh command anyway.
+            return self.get_own_mac()
+
         # Obtain the MAC address by using the hosts ARP table
         # First, try the ip command
         try:
@@ -403,23 +441,14 @@ class IPInfo(AsyncModule):
             gw_mac = ip_output.split()[-2]
             self.db.set_default_gateway("MAC", gw_mac)
             return gw_mac
-        except (subprocess.CalledProcessError, FileNotFoundError):
+        except (subprocess.CalledProcessError, IndexError, FileNotFoundError):
             # If the ip command doesn't exist or has failed, try using the
             # arp command
             try:
-                arp_output = subprocess.run(
-                    ["arp", "-an"], capture_output=True, check=True, text=True
-                ).stdout
-                for line in arp_output.split("\n"):
-                    fields = line.split()
-                    gw_ip_from_arp_cmd = fields[1].strip("()")
-                    # Match the gw_ip in the output with the one given to
-                    # this function
-                    if len(fields) >= 2 and gw_ip_from_arp_cmd == gw_ip:
-                        gw_mac = fields[-4]
-                        self.db.set_default_gateway("MAC", gw_mac)
-                        return gw_mac
-            except (subprocess.CalledProcessError, FileNotFoundError):
+                gw_mac = utils.get_mac_for_ip(gw_ip)
+                self.db.set_default_gateway("MAC", gw_mac)
+                return gw_mac
+            except (subprocess.CalledProcessError, IndexError):
                 # Could not find the MAC address of gw_ip
                 return
 
@@ -525,6 +554,8 @@ class IPInfo(AsyncModule):
     def pre_main(self):
         utils.drop_root_privs()
         self.wait_for_dbs()
+
+        self.is_running_in_ap_mode: bool = self.is_ap_mode_iwconfig()
         # the following method only works when running on an interface
         if ip := self.get_gateway_ip_if_interface():
             self.db.set_default_gateway("IP", ip)

@@ -6,7 +6,6 @@ import hashlib
 from datetime import datetime, timedelta
 from re import findall
 from threading import Thread
-
 import netifaces
 from uuid import UUID
 import tldextract
@@ -413,6 +412,19 @@ class Utils(object):
 
     def get_human_readable_datetime(self) -> str:
         return utils.convert_ts_format(datetime.now(), self.alerts_format)
+
+    def get_mac_for_ip(ip: str) -> str | None:
+        """gets the mac of teh given local ip using the local arp cache"""
+        try:
+            with open("/proc/net/arp") as f:
+                next(f)  # skip header
+                for line in f:
+                    parts = line.split()
+                    if parts[0] == ip:
+                        return parts[3]
+        except FileNotFoundError:
+            pass
+        return None
 
     def get_own_ips(self, ret=Dict) -> Union[Dict[str, List[str]], List[str]]:
         """
