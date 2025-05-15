@@ -516,12 +516,15 @@ class IPInfo(AsyncModule):
         self.wait_for_dbs()
         # the following method only works when running on an interface
         if ip := self.get_gateway_ip_if_interface():
+            self.print(f"Detected gateway IP: {ip}")
+
             self.db.set_default_gateway("IP", ip)
 
             # whether we found the gw ip using dhcp in profiler
             # or using ip route using self.get_gateway_ip()
             # now that it's found, get and store the mac addr of it
-            self.get_gateway_mac(ip)
+            if gw_mac := self.get_gateway_mac(ip):
+                self.print(f"Detected gateway MAC: {gw_mac}")
 
     def handle_new_ip(self, ip: str):
         try:
