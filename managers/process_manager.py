@@ -337,15 +337,23 @@ class ProcessManager:
         Blocking) to load them before the rest of the modules
         so they can receive msgs sent from other modules
         """
-        if "Blocking" not in plugins and "ARP Poisoner" not in plugins:
+        blocking_modules = ("Blocking", "ARP Poisoner")
+
+        at_least_one_blocking_module_is_loaded = False
+        for module in blocking_modules:
+            if module in plugins:
+                at_least_one_blocking_module_is_loaded = True
+                break
+        if not at_least_one_blocking_module_is_loaded:
             return plugins
 
+        # put the blocking modules at the top to start first
         ordered = OrderedDict(plugins)
+        for module in blocking_modules:
+            if module in plugins:
+                # last=False to move to the beginning of the dict
+                ordered.move_to_end(module, last=False)
 
-        print(f"@@@@@@@@@@@@@@@@ {ordered}")
-        # last=False to move to the beginning of the dict
-        ordered.move_to_end("Blocking", last=False)
-        ordered.move_to_end("ARP Poisoner", last=False)
         plugins.clear()
         plugins.update(ordered)
         return plugins
