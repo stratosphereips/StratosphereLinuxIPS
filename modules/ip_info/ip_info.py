@@ -337,28 +337,39 @@ class IPInfo(AsyncModule):
                         return gw
         return None
 
-    def get_gateway_ip_if_interface(self):
+    def get_gateway_ip_if_interface(self) -> Optional[str]:
         """
-        Slips tries different ways to get the ip of the default gateway
-        this method tries to get the default gateway IP address using ip route
-        only works when running on an interface
+        returns the gateway ip of the given interface if running on an
+        interface.
+        and returns own ip if running as an AP (aka the given interface
+        is NATing/bridging traffic to another interface).
         """
         if not self.is_running_non_stop:
             # only works if running on an interface
-            return False
+            return
 
-        # first try to get the gw of the given interface specifically.. not
-        # the default one
+        # ok why?? because when slips is running on normal hosts, we want
+        # the ip of the default gateway which is probably going to be the
+        # gw of the given interface and in the localnet of that interface.
+        # BUT when Slips is running as an AP, we dont want the ip of the
+        # default gateway, we want the ip of the AP. because in this case,
+        # the AP is the gateway of the computers connected to it. we don't
+        # want the ip of the actual gateway that is probably present in
+        # another localnet (the eth0).
+
+        # first try to get the gw of the given interface
         interface: str = getattr(self.args, "interface", None)
         if gw := self.get_gateway_for_iface(interface):
             return gw
 
-        gws = netifaces.gateways()
+        # Fallback: return the interface's own IP. reaching here
+        # means that slips is running as an AP
         try:
-            return gws["default"][netifaces.AF_INET][0]
-        except (KeyError, IndexError):
-            # no default gateway found
-            return False
+            return netifaces.ifaddresses(interface)[netifaces.AF_INET][0][
+                "addr"
+            ]
+        except KeyError:
+            return  # No IP assigned
 
     def get_gateway_mac(self, gw_ip: str) -> Optional[str]:
         """
