@@ -6,8 +6,6 @@ import time
 from threading import Lock
 
 from scapy.all import ARP, send
-from scapy.layers.l2 import Ether
-from scapy.sendrecv import srp
 
 from slips_files.common.abstracts.module import IModule
 from modules.arp_poisoner.unblocker import ARPUnblocker
@@ -73,15 +71,20 @@ class Template(IModule):
             self._arp_poison(ip)
 
     @staticmethod
-    def _get_mac(target_ip):
-        arp_req = ARP(pdst=target_ip)
-        ether = Ether(dst="ff:ff:ff:ff:ff:ff")
-        packet = ether / arp_req
+    def _get_mac(target_ip: str) -> str:
+        """
+        gets it using the local arp cache
+        """
+        try:
+            with open("/proc/net/arp") as f:
+                next(f)  # skip header
+                for line in f:
+                    parts = line.split()
+                    if parts[0] == target_ip:
+                        return parts[3]
+        except FileNotFoundError:
+            pass
 
-        # send the packet and wait for a response
-        answered, _ = srp(packet, timeout=2, verbose=0)
-        if answered:
-            return answered[0][1].hwsrc
         return None
 
     def _arp_poison(self, target_ip: str):
@@ -91,7 +94,7 @@ class Template(IModule):
 
         target_mac: str = self._get_mac(target_ip)
         if not target_mac:
-            print(f"@@@@@@@@@@@@ could not resolve MAC for {target_ip}")
+            print(f"@@@@@@@@@@@@ could not get MAC for {target_ip}")
             return
 
         print(
