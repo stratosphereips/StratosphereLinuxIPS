@@ -413,7 +413,7 @@ class Utils(object):
     def get_human_readable_datetime(self) -> str:
         return utils.convert_ts_format(datetime.now(), self.alerts_format)
 
-    def get_mac_for_ip(ip: str) -> str | None:
+    def get_mac_for_ip(self, ip: str) -> str | None:
         """gets the mac of teh given local ip using the local arp cache"""
         try:
             with open("/proc/net/arp") as f:
@@ -426,7 +426,7 @@ class Utils(object):
             pass
         return None
 
-    def get_own_ips(self, ret=Dict) -> Union[Dict[str, List[str]], List[str]]:
+    def get_own_ips(self, ret=Dict) -> Dict[str, List[str]] | List[str]:
         """
         Returns a dict of our private IPs from all interfaces and our public
         IPs. return a dict by default
