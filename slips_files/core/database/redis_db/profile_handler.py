@@ -87,7 +87,7 @@ class ProfileHandler:
         # sorted set is encoded
         return self.r.zscore(f"tws{profileid}", twid.encode("utf-8"))
 
-    def get_first_flow_time(self) -> Optional[float]:
+    def get_first_flow_time(self) -> float | None:
         """
         Get the starttime of the first timewindow
         aka ts of the first flow
@@ -833,6 +833,7 @@ class ProfileHandler:
 
         # set the pcap/file stime in the analysis key
         if self.first_flow:
+            print(f"@@@@@@@@@@@@@@@@ adding file start {flow.starttime}")
             self.set_input_metadata({"file_start": flow.starttime})
             self.first_flow = False
 
