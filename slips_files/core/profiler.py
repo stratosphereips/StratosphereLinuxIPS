@@ -305,7 +305,7 @@ class Profiler(ICore, IObservable):
         # set the pcap/file start time in the analysis key
         if self.first_flow:
             print(f"@@@@@@@@@@@@@@@@ adding file start {ts}")
-            self.set_input_metadata({"file_start": ts})
+            self.db.set_input_metadata({"file_start": ts})
             self.first_flow = False
 
     def store_features_going_out(self, flow, flow_parser: FlowHandler):
