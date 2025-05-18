@@ -8,7 +8,7 @@ import time
 from threading import Lock
 import json
 import ipaddress
-from scapy.all import ARP, send, Ether, srp
+from scapy.all import ARP, send, Ether
 
 from slips_files.common.abstracts.module import IModule
 from modules.arp_poisoner.unblocker import ARPUnblocker
@@ -167,19 +167,6 @@ class Template(IModule):
         print("@@@@@@@@@@@@@@@@ SENT this packet")
         pkt.show()
 
-    def _get_mac_for_ip_using_arp(self, ip: str) -> str | None:
-        """sends an arp request to get the mac of the given local ip"""
-        # we're getting the mac using arp because the cache may be missing
-        # computers that didnt interact with us yet
-        pkt = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=ip)
-        try:
-            ans, _ = srp(pkt, timeout=5, verbose=0, iface=self.args.interface)
-            for _, rcv in ans:
-                return rcv[ARP].hwsrc
-        except Exception:
-            pass
-        return None
-
     def _arp_poison(self, target_ip: str, first_time=False):
         """
         :kwarg first_time: is true if we're poisoning for the first time
@@ -188,7 +175,11 @@ class Template(IModule):
         """
         print(f"@@@@@@@@@@@@@@@@  _arp_poison is called ({target_ip})")
         fake_mac = "aa:aa:aa:aa:aa:aa"
-        target_mac: str = self._get_mac_for_ip_using_arp(target_ip)
+        # it makes sense here to get the mac using cache, because if we
+        # reached this function, means there's an alert, means slips seen
+        # traffic from that target_ip and has itsmac in the arp cache.
+        # no need to use an arp packet to get the mac.
+        target_mac: str = utils.get_mac_for_ip_using_cache(target_ip)
         if not target_mac:
             print(f"@@@@@@@@@@@@ could not get MAC for {target_ip}")
             return
