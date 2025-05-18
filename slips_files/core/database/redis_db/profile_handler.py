@@ -831,12 +831,6 @@ class ProfileHandler:
         }
         to_send = json.dumps(to_send)
 
-        # set the pcap/file stime in the analysis key
-        if self.first_flow:
-            print(f"@@@@@@@@@@@@@@@@ adding file start {flow.starttime}")
-            self.set_input_metadata({"file_start": flow.starttime})
-            self.first_flow = False
-
         # dont send arp flows in this channel, they have their own
         # new_arp channel
         if flow.type_ != "arp":

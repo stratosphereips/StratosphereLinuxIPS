@@ -113,6 +113,8 @@ class Profiler(ICore, IObservable):
         # that queue will be used in 4 different threads. the 3 profilers
         # and main().
         self.pending_flows_queue_lock = threading.Lock()
+        # flag to know which flow is the start of the pcap/file
+        self.first_flow = True
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -299,10 +301,19 @@ class Profiler(ICore, IObservable):
             self.print(pprint.pp(asdict(flow)))
         return True
 
+    def store_first_seen_ts(self, ts):
+        # set the pcap/file start time in the analysis key
+        if self.first_flow:
+            print(f"@@@@@@@@@@@@@@@@ adding file start {ts}")
+            self.set_input_metadata({"file_start": ts})
+            self.first_flow = False
+
     def store_features_going_out(self, flow, flow_parser: FlowHandler):
         """
         function for adding the features going out of the profile
         """
+        self.store_first_seen_ts(flow.starttime)
+
         cases = {
             "flow": flow_parser.handle_conn,
             "conn": flow_parser.handle_conn,
