@@ -413,8 +413,8 @@ class Utils(object):
     def get_human_readable_datetime(self) -> str:
         return utils.convert_ts_format(datetime.now(), self.alerts_format)
 
-    def get_mac_for_ip(self, ip: str) -> str | None:
-        """gets the mac of teh given local ip using the local arp cache"""
+    def get_mac_for_ip_using_cache(self, ip: str) -> str | None:
+        """gets the mac of the given local ip using the local arp cache"""
         try:
             with open("/proc/net/arp") as f:
                 next(f)  # skip header

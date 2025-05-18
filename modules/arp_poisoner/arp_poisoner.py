@@ -1,17 +1,20 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import ipaddress
-import os
-import time
-from threading import Lock
-
-from scapy.all import ARP, send
-
 from slips_files.common.abstracts.module import IModule
 from modules.arp_poisoner.unblocker import ARPUnblocker
-import json
-
 from slips_files.common.slips_utils import utils
+
+import logging
+import os
+import subprocess
+import time
+from threading import Lock
+import json
+import ipaddress
+
+from scapy.all import ARP, send, Ether
+
+logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 
 
 class Template(IModule):
@@ -68,7 +71,101 @@ class Template(IModule):
         # the unblocker will remove ips that should be unblocked from this dict
         for ip in self.unblocker.requests:
             print(f"@@@@@@@@@@@@@@@@ calling _arp_poison({ip})")
-            self._arp_poison(ip, first_time=False)
+            self._arp_poison(ip)
+
+    def _get_all_ip_mac_pairs(self, interface) -> list[tuple[str, str]]:
+        """gets the available ip/mac pairs in the local
+        network using arp-scan tool"""
+        cmd = ["arp-scan", f"--interface={interface}", "--localnet"]
+        output = subprocess.check_output(cmd, text=True)
+
+        pairs = []
+        for line in output.splitlines():
+            parts = line.strip().split()
+            if (
+                len(parts) >= 2
+                and parts[0].count(".") == 3
+                and ":" in parts[1]
+            ):
+                ip, mac = parts[0], parts[1].lower()
+                pairs.append((ip, mac))
+
+        return pairs
+
+    def _arp_poison_everyone_about_target(
+        self, target_ip: str, target_mac: str, fake_mac: str
+    ):
+        """
+        Tells all the available hosts in the localnet that the target_ip is
+        at fake_mac using unsolicited arp replies.
+        """
+        print(
+            f"@@@@@@@@@@@@@@@@  arp_poison_everyone_about_target is"
+            f" called ({target_ip})"
+        )
+        interface = self.args.interface
+        all_hosts: list[tuple[str, str]] = self._get_all_ip_mac_pairs(
+            interface
+        )
+        poisoned = 0
+        print(
+            f"@@@@@@@@@@@@@@@@@@ poison the network: tell everyone that the"
+            f" target is at fake_mac "
+            f" {target_ip} at MAC {target_mac}"
+        )
+        print(f"@@@@@@@@@@@@@@@@ hosts t o poison: {all_hosts}")
+
+        for ip, mac in all_hosts:
+            if ip == target_ip:
+                continue
+
+            pkt = Ether(dst=mac) / ARP(
+                op=2,
+                pdst=ip,  # which dst ip are we sending this pkt to?
+                hwdst=mac,  # which dst mac are we sending this pkt to?
+                # the ip/mac combo that we're announcing
+                psrc=target_ip,
+                hwsrc=fake_mac,
+            )
+            send(pkt, verbose=0)
+            pkt.show()
+            print(
+                f"@@@@@@@@@@@@ sent to {ip} ({mac}) => told them "
+                f"{target_ip} is at {fake_mac}"
+            )
+            poisoned += 1
+
+        print(f"@@@@@@@@@@@@ done poisoning {poisoned} hosts")
+
+    def _arp_poison_target_about_gateway(
+        self, target_ip: str, target_mac: str, fake_mac: str
+    ):
+        """
+        Tells the target_ip that the gateway is at fake_mac using unsolicited
+        arp reply
+        """
+        # in ap mode, this gw ip is the same as our own ip
+        gateway_ip: str = self.db.get_gateway_ip()
+
+        print(
+            f"@@@@@@@@@@@@@@@@@@ poison the target ({target_ip}, {target_mac}): "
+            f"tell it "
+            f"the "
+            f"gateway "
+            f"is at "
+            f"fake_mac {gateway_ip} at MAC {target_mac}"
+        )
+        # poison the target: tell it the gateway is at fake_mac
+        pkt = ARP(
+            op=2,
+            pdst=target_ip,
+            hwdst=target_mac,
+            psrc=gateway_ip,
+            hwsrc=fake_mac,
+        )
+        send(pkt, verbose=0)
+        print("@@@@@@@@@@@@@@@@ SENT this packet")
+        pkt.show()
 
     def _arp_poison(self, target_ip: str, first_time=False):
         """
@@ -78,44 +175,15 @@ class Template(IModule):
         """
         print(f"@@@@@@@@@@@@@@@@  _arp_poison is called ({target_ip})")
         fake_mac = "aa:aa:aa:aa:aa:aa"
-        gateway_ip: str = self.db.get_gateway_ip()
-
-        target_mac: str = utils.get_mac_for_ip(target_ip)
+        target_mac: str = self.get_mac_for_ip_using_cache(target_ip)
         if not target_mac:
             print(f"@@@@@@@@@@@@ could not get MAC for {target_ip}")
             return
 
-        print(
-            f"@@@@@@@@@@@@@@@@@@ poison the target: tell it the gateway is at "
-            f"fake_mac {target_ip} at MAC {target_mac}"
-        )
-        # poison the target: tell it the gateway is at fake_mac
-        pkt1 = ARP(
-            op=2,
-            pdst=target_ip,
-            hwdst=target_mac,
-            psrc=gateway_ip,
-            hwsrc=fake_mac,
-        )
-        send(pkt1, verbose=0)
-        print(f"@@@@@@@@@@@@@@@@ SENT this packet {pkt1}")
+        self._arp_poison_target_about_gateway(target_ip, target_mac, fake_mac)
+        self._arp_poison_everyone_about_target(target_ip, target_mac, fake_mac)
 
-        print(
-            f"@@@@@@@@@@@@@@@@@@ poison the network: tell everyone that the"
-            f" target is at fake_mac "
-            f" {target_ip} at MAC {target_mac}"
-        )
-
-        # poison the network: tell everyone that the target is at fake_mac
-        pkt2 = ARP(
-            op=2,
-            pdst="255.255.255.255",
-            hwdst="ff:ff:ff:ff:ff:ff",
-            psrc=target_ip,
-            hwsrc=fake_mac,
-        )
-        send(pkt2, verbose=0)
-        print(f"@@@@@@@@@@@@@@@@ SENT this packet {pkt2}")
+        # we repoison every 10s, we dont wanna log every 10s.
         if first_time:
             self.log(f"Poisoned {target_ip} at {target_mac}.")
 
@@ -155,7 +223,7 @@ class Template(IModule):
             ip = data.get("ip")
             tw: int = data.get("tw")
             print(
-                f"@@@@@@@@@@@@@@@@ arp poison new blocking requets for "
+                f"@@@@@@@@@@@@@@@@ arp poison new blocking request for "
                 f"{ip} {tw}"
             )
 

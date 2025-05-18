@@ -20,3 +20,4 @@ notify-osd
 yara
 libnotify-bin
 wireless-tools
+arp-scan

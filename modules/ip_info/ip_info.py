@@ -445,7 +445,7 @@ class IPInfo(AsyncModule):
             # If the ip command doesn't exist or has failed, try using the
             # arp command
             try:
-                gw_mac = utils.get_mac_for_ip(gw_ip)
+                gw_mac = utils.get_mac_for_ip_using_cache(gw_ip)
                 return gw_mac
             except (subprocess.CalledProcessError, IndexError):
                 # Could not find the MAC address of gw_ip
