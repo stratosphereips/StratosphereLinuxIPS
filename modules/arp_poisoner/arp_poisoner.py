@@ -98,6 +98,7 @@ class Template(IModule):
             hwsrc=fake_mac,
         )
         send(pkt1, verbose=0)
+        print(f"@@@@@@@@@@@@@@@@ SENT this packet {pkt1}")
 
         print(
             f"@@@@@@@@@@@@@@@@@@ poison the network: tell everyone that the"
@@ -114,6 +115,7 @@ class Template(IModule):
             hwsrc=fake_mac,
         )
         send(pkt2, verbose=0)
+        print(f"@@@@@@@@@@@@@@@@ SENT this packet {pkt2}")
         if first_time:
             self.log(f"Poisoned {target_ip} at {target_mac}.")
 
