@@ -29,6 +29,8 @@ from typing import (
     Union,
     Optional,
 )
+
+import netifaces
 import validators
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 from slips_files.common.abstracts.observer import IObservable
@@ -518,6 +520,26 @@ class Profiler(ICore, IObservable):
                 private_clients.append(ip)
         return private_clients
 
+    def get_localnet_of_given_interface(self) -> str | None:
+        """
+        returns the local network of the given interface only if slips is
+        running with -i
+        """
+        addrs = netifaces.ifaddresses(self.args.interface).get(
+            netifaces.AF_INET
+        )
+        if not addrs:
+            return
+        for addr in addrs:
+            ip = addr.get("addr")
+            netmask = addr.get("netmask")
+            if ip and netmask:
+                network = ipaddress.IPv4Network(
+                    f"{ip}/{netmask}", strict=False
+                )
+                return str(network)
+        return None
+
     def get_local_net(self, flow) -> Optional[str]:
         """
         gets the local network from client_ip param in the config file,
@@ -526,6 +548,11 @@ class Profiler(ICore, IObservable):
         """
         # For now the local network is only ipv4, but it
         # could be ipv6 in the future. Todo.
+        if self.args.interface:
+            self.is_localnet_set = True
+            return self.get_localnet_of_given_interface()
+
+        # slips is running on a file, we either have a client ip or not
         private_client_ips: List[
             Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
         ]
