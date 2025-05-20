@@ -79,7 +79,7 @@ class Template(IModule):
         cmd = ["arp-scan", f"--interface={interface}", "--localnet"]
         output = subprocess.check_output(cmd, text=True)
 
-        pairs = []
+        pairs = set()
         for line in output.splitlines():
             parts = line.strip().split()
             if (
@@ -88,7 +88,7 @@ class Template(IModule):
                 and ":" in parts[1]
             ):
                 ip, mac = parts[0], parts[1].lower()
-                pairs.append((ip, mac))
+                pairs.add((ip, mac))
 
         return pairs
 
