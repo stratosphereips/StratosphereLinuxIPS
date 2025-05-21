@@ -58,26 +58,11 @@ class IUnblocker(ABC):
         """
         # we unblock at the end of this tw
         tw_to_unblock: int = cur_tw + how_many_tws_to_block
-        print(
-            f"@@@@@@@@@@@@@@@@ _get_tw_to_unblock_at tw_to_unblock "
-            f"{tw_to_unblock} .. cur_tw: {cur_tw} how_many_tws_to_block"
-            f" {how_many_tws_to_block}"
-        )
         tw_start, tw_end = self.db.get_tw_limits(
             f"profile_{ip}", f"timewindow{tw_to_unblock}"
         )
-        print(
-            f"@@@@@@@@@@@@@@@@ _get_tw_to_unblock_attw_start {tw_start}  "
-            f"tw_end {tw_end}"
-        )
-
         tw_start: str = utils.convert_ts_format(tw_start, "iso")
         tw_end: str = utils.convert_ts_format(tw_end, "iso")
-        tww = TimeWindow(
-            number=tw_to_unblock, start_time=tw_start, end_time=tw_end
-        )
-        print(f"@@@@@@@@@@@@@@@@ _get_tw_to_unblock_at returning {tww}")
-
         return TimeWindow(
             number=tw_to_unblock, start_time=tw_start, end_time=tw_end
         )

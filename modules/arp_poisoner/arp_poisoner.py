@@ -8,6 +8,7 @@ import time
 from threading import Lock
 import json
 import ipaddress
+from typing import Set, Tuple
 from scapy.all import ARP, send, Ether
 from scapy.sendrecv import srp, sendp
 
@@ -20,7 +21,7 @@ logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 
 class Template(IModule):
     name = "ARP Poisoner"
-    description = "ARP Poisons attackers to isolate them from the network"
+    description = "ARP poisons attackers to isolate them from the network."
     authors = ["Alya Gomaa"]
 
     def init(self):
@@ -71,10 +72,9 @@ class Template(IModule):
 
         # the unblocker will remove ips that should be unblocked from this dict
         for ip in self.unblocker.requests:
-            print(f"@@@@@@@@@@@@@@@@ calling _arp_poison({ip})")
             self._arp_poison(ip)
 
-    def _get_all_ip_mac_pairs(self, interface) -> list[tuple[str, str]]:
+    def _arp_scan(self, interface) -> Set[Tuple[str, str]]:
         """gets the available ip/mac pairs in the local
         network using arp-scan tool"""
         cmd = ["arp-scan", f"--interface={interface}", "--localnet"]
@@ -106,34 +106,15 @@ class Template(IModule):
             return result[0][1].hwsrc
         return None
 
-    def _isolate_target_from_localnet(
-        self, target_ip: str, target_mac: str, fake_mac: str
-    ):
+    def _isolate_target_from_localnet(self, target_ip: str, fake_mac: str):
         """
         Tells all the available hosts in the localnet that the target_ip is
         at fake_mac using unsolicited arp replies.
         """
-        print(
-            f"@@@@@@@@@@@@@@@@  arp_poison_everyone_about_target is"
-            f" called ({target_ip})"
-        )
-        interface = self.args.interface
-        all_hosts: list[tuple[str, str]] = self._get_all_ip_mac_pairs(
-            interface
-        )
-        poisoned = 0
-        print(
-            f"@@@@@@@@@@@@@@@@@@ poison the network: tell everyone that the"
-            f" target is at fake_mac "
-            f" {target_ip} at MAC {target_mac}"
-        )
-        print(f"@@@@@@@@@@@@@@@@ hosts t o poison: {all_hosts}")
-
+        all_hosts: Set[Tuple[str, str]] = self._arp_scan(self.args.interface)
         for ip, mac in all_hosts:
             if ip == target_ip:
                 continue
-            # todo try sending a reuqest first
-            # todo try gratiutos arp req
 
             pkt = Ether(dst=mac) / ARP(
                 op=2,
@@ -144,14 +125,6 @@ class Template(IModule):
                 hwsrc=fake_mac,
             )
             send(pkt, verbose=0)
-            pkt.show()
-            print(
-                f"@@@@@@@@@@@@ sent to {ip} ({mac}) => told them "
-                f"{target_ip} is at {fake_mac}"
-            )
-            poisoned += 1
-
-        print(f"@@@@@@@@@@@@ done poisoning {poisoned} hosts")
 
     def _cut_targets_internet(
         self, target_ip: str, target_mac: str, fake_mac: str
@@ -164,16 +137,7 @@ class Template(IModule):
         # in ap mode, this gw ip is the same as our own ip
         gateway_ip: str = self.db.get_gateway_ip()
 
-        print(f"@@@@@@@@@@@@@@@@ gateway_ip {gateway_ip}")
-        print(
-            f"@@@@@@@@@@@@@@@@@@ poison the target ({target_ip}, {target_mac}): "
-            f"tell it "
-            f"the "
-            f"gateway "
-            f"is at "
-            f"fake_mac"
-        )
-        # todo We use Ether() before ARP() to explicitly construct a complete Ethernet frame
+        # We use Ether() before ARP() to explicitly construct a complete Ethernet frame
         # poison the target: tell it the gateway is at fake_mac
         # gw -> attacker: im at a fake mac.
         pkt = Ether(dst=target_mac) / ARP(
@@ -184,8 +148,6 @@ class Template(IModule):
             hwdst=target_mac,
         )
         sendp(pkt, iface=self.args.interface, verbose=0)
-        print("@@@@@@@@@@@@@@@@ SENT this packet")
-        pkt.show()
 
         # poison the gw, tell it the victim is at a fake mac so traffic
         # from it wont reach the victim
@@ -200,9 +162,6 @@ class Template(IModule):
         )
         sendp(pkt, iface=self.args.interface, verbose=0)
 
-        print("@@@@@@@@@@@@@@@@ SENT this packet")
-        pkt.show()
-
     def _arp_poison(self, target_ip: str, first_time=False):
         """
         Prevents the target from accessing the internet and isolates it
@@ -211,32 +170,20 @@ class Template(IModule):
         based on a new_blocking msg, and should be false when we're
         repoisoning every x seconds.
         """
-        print(f"@@@@@@@@@@@@@@@@  _arp_poison is called ({target_ip})")
         fake_mac = "aa:aa:aa:aa:aa:aa"
         # it makes sense here to get the mac using cache, because if we
         # reached this function, means there's an alert, means slips seen
         # traffic from that target_ip and has itsmac in the arp cache.
         # no need to use an arp packet to get the mac.
         target_mac: str = utils.get_mac_for_ip_using_cache(target_ip)
-        using_cache = True
+
         if not target_mac:
-            print(
-                f"@@@@@@@@@@@@@@@@ couldnt get mac of {target_ip} using cache"
-            )
             target_mac: str = self._get_mac_using_arp(target_ip)
-            using_cache = False
             if not target_mac:
-                print(
-                    f"@@@@@@@@@@@@ could not get MAC for {target_ip} "
-                    f"using arp!"
-                )
                 return
-        print(
-            f"@@@@@@@@@@@@@@@@ awesome got the mac! of {target_ip} "
-            f"using_cache? {using_cache}"
-        )
+
         self._cut_targets_internet(target_ip, target_mac, fake_mac)
-        # self._isolate_target_from_localnet(target_ip, target_mac, fake_mac)
+        self._isolate_target_from_localnet(target_ip, fake_mac)
 
         # we repoison every 10s, we dont wanna log every 10s.
         if first_time:
