@@ -332,8 +332,8 @@ class IPInfo(AsyncModule):
     def get_gateway_for_iface(iface) -> Optional[str]:
         gws = netifaces.gateways()
         for family in (netifaces.AF_INET, netifaces.AF_INET6):
-            if family in gws and "default" in gws[family]:
-                gw, gw_iface = gws[family]["default"]
+            if "default" in gws and gws["default"][family]:
+                gw, gw_iface = gws["default"][family]
                 if gw_iface == iface:
                     return gw
         return None

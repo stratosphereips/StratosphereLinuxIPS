@@ -306,7 +306,6 @@ class Profiler(ICore, IObservable):
     def store_first_seen_ts(self, ts):
         # set the pcap/file start time in the analysis key
         if self.first_flow:
-            print(f"@@@@@@@@@@@@@@@@ adding file start {ts}")
             self.db.set_input_metadata({"file_start": ts})
             self.first_flow = False
 
