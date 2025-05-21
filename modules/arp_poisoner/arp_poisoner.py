@@ -9,6 +9,7 @@ from threading import Lock
 import json
 import ipaddress
 from scapy.all import ARP, send, Ether
+from scapy.sendrecv import srp, sendp
 
 from slips_files.common.abstracts.module import IModule
 from modules.arp_poisoner.unblocker import ARPUnblocker
@@ -92,7 +93,20 @@ class Template(IModule):
 
         return pairs
 
-    def _arp_poison_everyone_about_target(
+    def _get_mac_using_arp(self, ip) -> str | None:
+        """sends an arp asking for the mac of the given ip"""
+        arp = ARP(pdst=ip)
+        ether = Ether(dst="ff:ff:ff:ff:ff:ff")
+        packet = ether / arp
+
+        # send the packet and receive response
+        result = srp(packet, timeout=4, verbose=0)[0]
+
+        if result:
+            return result[0][1].hwsrc
+        return None
+
+    def _isolate_target_from_localnet(
         self, target_ip: str, target_mac: str, fake_mac: str
     ):
         """
@@ -118,6 +132,8 @@ class Template(IModule):
         for ip, mac in all_hosts:
             if ip == target_ip:
                 continue
+            # todo try sending a reuqest first
+            # todo try gratiutos arp req
 
             pkt = Ether(dst=mac) / ARP(
                 op=2,
@@ -137,38 +153,60 @@ class Template(IModule):
 
         print(f"@@@@@@@@@@@@ done poisoning {poisoned} hosts")
 
-    def _arp_poison_target_about_gateway(
+    def _cut_targets_internet(
         self, target_ip: str, target_mac: str, fake_mac: str
     ):
         """
-        Tells the target_ip that the gateway is at fake_mac using unsolicited
-        arp reply
+        Cuts the target's internet by telling the target_ip that the gateway
+        is at fake_mac using unsolicited arp reply AND telling the gw that
+        the target is at a fake mac.
         """
         # in ap mode, this gw ip is the same as our own ip
         gateway_ip: str = self.db.get_gateway_ip()
 
+        print(f"@@@@@@@@@@@@@@@@ gateway_ip {gateway_ip}")
         print(
             f"@@@@@@@@@@@@@@@@@@ poison the target ({target_ip}, {target_mac}): "
             f"tell it "
             f"the "
             f"gateway "
             f"is at "
-            f"fake_mac {gateway_ip} at MAC {target_mac}"
+            f"fake_mac"
         )
+        # todo We use Ether() before ARP() to explicitly construct a complete Ethernet frame
         # poison the target: tell it the gateway is at fake_mac
-        pkt = ARP(
+        # gw -> attacker: im at a fake mac.
+        pkt = Ether(dst=target_mac) / ARP(
             op=2,
-            pdst=target_ip,
-            hwdst=target_mac,
             psrc=gateway_ip,
             hwsrc=fake_mac,
+            pdst=target_ip,
+            hwdst=target_mac,
         )
-        send(pkt, verbose=0)
+        sendp(pkt, iface=self.args.interface, verbose=0)
+        print("@@@@@@@@@@@@@@@@ SENT this packet")
+        pkt.show()
+
+        # poison the gw, tell it the victim is at a fake mac so traffic
+        # from it wont reach the victim
+        # attacker -> gw: im at a fake mac.
+        gateway_mac = self.db.get_gateway_mac()
+        pkt = Ether(dst=gateway_mac) / ARP(
+            op=2,
+            psrc=target_ip,
+            hwsrc=fake_mac,
+            pdst=gateway_ip,
+            hwdst=gateway_mac,
+        )
+        sendp(pkt, iface=self.args.interface, verbose=0)
+
         print("@@@@@@@@@@@@@@@@ SENT this packet")
         pkt.show()
 
     def _arp_poison(self, target_ip: str, first_time=False):
         """
+        Prevents the target from accessing the internet and isolates it
+        from the rest of the network.
         :kwarg first_time: is true if we're poisoning for the first time
         based on a new_blocking msg, and should be false when we're
         repoisoning every x seconds.
@@ -180,12 +218,25 @@ class Template(IModule):
         # traffic from that target_ip and has itsmac in the arp cache.
         # no need to use an arp packet to get the mac.
         target_mac: str = utils.get_mac_for_ip_using_cache(target_ip)
+        using_cache = True
         if not target_mac:
-            print(f"@@@@@@@@@@@@ could not get MAC for {target_ip}")
-            return
-
-        self._arp_poison_target_about_gateway(target_ip, target_mac, fake_mac)
-        self._arp_poison_everyone_about_target(target_ip, target_mac, fake_mac)
+            print(
+                f"@@@@@@@@@@@@@@@@ couldnt get mac of {target_ip} using cache"
+            )
+            target_mac: str = self._get_mac_using_arp(target_ip)
+            using_cache = False
+            if not target_mac:
+                print(
+                    f"@@@@@@@@@@@@ could not get MAC for {target_ip} "
+                    f"using arp!"
+                )
+                return
+        print(
+            f"@@@@@@@@@@@@@@@@ awesome got the mac! of {target_ip} "
+            f"using_cache? {using_cache}"
+        )
+        self._cut_targets_internet(target_ip, target_mac, fake_mac)
+        # self._isolate_target_from_localnet(target_ip, target_mac, fake_mac)
 
         # we repoison every 10s, we dont wanna log every 10s.
         if first_time:
