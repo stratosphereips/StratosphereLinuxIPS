@@ -19,18 +19,6 @@ docker run -it --rm --net=host --cap-add=NET_ADMIN stratosphereips/slips
 
 To be able to use the fides module you should use ```--cap-add=NET_ADMIN```
 
-## Installation:
-
-```
-docker pull stratosphereips/slips
-docker run -it --rm --net=host --use_fides=True stratosphereips/slips
-```
-
-***NOTE***
-
-If you plan on using the Fides Module, lease be aware that it is used only
-if Slips is running on an interface. The `--use_fides=True` is ignored when Slips is run on a file.
-
 ### Configuration
 Evaluation model, evaluation thrash-holds and other configuration is located in fides.conf.yml
 
