@@ -9,8 +9,8 @@ from threading import Lock
 import json
 import ipaddress
 from typing import Set, Tuple
-from scapy.all import ARP, send, Ether
-from scapy.sendrecv import srp, sendp
+from scapy.all import ARP, Ether
+from scapy.sendrecv import sendp, srp
 
 from slips_files.common.abstracts.module import IModule
 from modules.arp_poisoner.unblocker import ARPUnblocker
@@ -111,6 +111,20 @@ class Template(IModule):
         Tells all the available hosts in the localnet that the target_ip is
         at fake_mac using unsolicited arp replies.
         """
+        # send gratuitous arp request to update caches
+        gratuitous_pkt = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(
+            op=1,
+            pdst=target_ip,
+            hwdst="00:00:00:00:00:00",
+            psrc=target_ip,
+            hwsrc=fake_mac,
+        )
+        sendp(gratuitous_pkt, verbose=0)
+
+        # PS: this function doesnt poison own cache. when an attacker is
+        # found, FW blocking module handles blocking it through the fw,
+        # plus we need our cache unpoisoned to be able to get the mac of
+        # attackers to poison/reposion them.
         all_hosts: Set[Tuple[str, str]] = self._arp_scan(self.args.interface)
         for ip, mac in all_hosts:
             if ip == target_ip:
@@ -124,7 +138,7 @@ class Template(IModule):
                 psrc=target_ip,
                 hwsrc=fake_mac,
             )
-            send(pkt, verbose=0)
+            sendp(pkt, verbose=0)
 
     def _cut_targets_internet(
         self, target_ip: str, target_mac: str, fake_mac: str

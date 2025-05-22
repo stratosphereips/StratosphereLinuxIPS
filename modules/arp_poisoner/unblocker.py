@@ -128,7 +128,7 @@ class ARPUnblocker(IUnblocker):
             f"Current TW: {current_tw}. Registered a request to stop "
             f"poisoning {ip} at the end "
             f"of timewindow: {tw_to_unblock_at}. IP will be "
-            f"poisoned for {interval} timewindows. "
+            f"poisoned for {interval} more timewindows. "
             f"Timestamp to stop poisoning: {tw_to_unblock_at.end_time}) "
         )
 
