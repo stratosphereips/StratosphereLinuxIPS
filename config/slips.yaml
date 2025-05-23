@@ -26,7 +26,7 @@ parameters:
   # For 5 min
   # time_window_width : 300
   # For 1 hour
-  time_window_width: 50
+  time_window_width: 3600
   # For 1 day
   # time_window_width = 86400
   # Make Slips use only one time window (also like if no TW is used)
@@ -181,7 +181,7 @@ detection:
   # - 0.43: Use this threshold If you want Slips to be insensitive.
   #        Using this means Slips will need so many evidence to trigger an alert
   #        May lead to false negatives
-  evidence_detection_threshold: 0.08
+  evidence_detection_threshold: 0.25
 
   # Make Slips pop up alerts? Both Linux and Macos
   popup_alerts: false
@@ -194,7 +194,7 @@ modules:
   # (they all should be lowercase with no special characters). Example,
   # threatintelligence, blocking, networkdiscovery, timeline, virustotal,
   # rnnccdetection, flowmldetection, updatemanager
-  disable: [template, blocking]
+  disable: [template]
 
   # For each line in timeline file there is a timestamp.
   # By default the timestamp is seconds in unix time. However
