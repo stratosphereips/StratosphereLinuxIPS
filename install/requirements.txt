@@ -36,7 +36,7 @@ aid_hash
 black==24.10.0
 ruff==0.11.8
 pre-commit==4.0.1
-coverage==7.8.0
+coverage==7.8.1
 netifaces==0.11.0
 pyyaml
 pytest-asyncio
