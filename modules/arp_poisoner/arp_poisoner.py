@@ -19,7 +19,7 @@ from slips_files.common.slips_utils import utils
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 
 
-class Template(IModule):
+class ARPPoisoner(IModule):
     name = "ARP Poisoner"
     description = "ARP poisons attackers to isolate them from the network."
     authors = ["Alya Gomaa"]
@@ -67,8 +67,6 @@ class Template(IModule):
         """
         if not self._is_time_to_repoison() or not self.unblocker.requests:
             return
-
-        print("@@@@@@@@@@@@@@@@ time to repoison")
 
         # the unblocker will remove ips that should be unblocked from this dict
         for ip in self.unblocker.requests:
@@ -211,7 +209,7 @@ class Template(IModule):
         except ValueError:
             return False
 
-    def is_valid_ip(self, ip) -> bool:
+    def can_poison_ip(self, ip) -> bool:
         """
         Checks if the ip is in out localnet, isnt the router
         """
@@ -225,8 +223,6 @@ class Template(IModule):
         if self.is_broadcast(ip, localnet):
             return False
 
-        if ip == self.db.get_gateway_ip():
-            return False
         # no need to check if the ip is in our ips because all our ips are
         # excluded from the new_blocking channel
         return True
@@ -238,13 +234,8 @@ class Template(IModule):
             data = json.loads(msg["data"])
             ip = data.get("ip")
             tw: int = data.get("tw")
-            print(
-                f"@@@@@@@@@@@@@@@@ arp poison new blocking request for "
-                f"{ip} {tw}"
-            )
 
-            if not self.is_valid_ip(ip):
-                print(f"@@@@@@@@@@@@@@@@ invalid ip {ip}")
+            if not self.can_poison_ip(ip):
                 return
 
             self._arp_poison(ip, first_time=True)

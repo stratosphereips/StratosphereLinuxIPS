@@ -36,6 +36,7 @@ jobs:
           - test_smtp.py
           - test_whitelist.py
           - test_arp.py
+          - test_arp_poisoner.py
           - test_blocking.py
           - test_unblocker.py
           - test_flow_handler.py
