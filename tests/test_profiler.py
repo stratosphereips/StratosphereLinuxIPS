@@ -467,7 +467,6 @@ def test_read_configuration(
     mock_conf.local_whitelist_path.return_value = "path/to/whitelist"
     mock_conf.ts_format.return_value = "unixtimestamp"
     mock_conf.analysis_direction.return_value = "all"
-    mock_conf.label.return_value = "malicious"
     mock_conf.get_tw_width_as_float.return_value = 1.0
     mock_conf.client_ips.return_value = ["192.168.1.1", "10.0.0.1"]
 
@@ -476,7 +475,6 @@ def test_read_configuration(
     assert profiler.local_whitelist_path == "path/to/whitelist"
     assert profiler.timeformat == "unixtimestamp"
     assert profiler.analysis_direction == "all"
-    assert profiler.label == "malicious"
     assert profiler.width == 1.0
     assert profiler.client_ips == ["192.168.1.1", "10.0.0.1"]
 

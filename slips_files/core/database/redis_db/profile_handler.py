@@ -395,7 +395,12 @@ class ProfileHandler:
         We receive the pakets to distinguish some Reset connections
         """
         try:
-            pre = state.split("_")[0]
+            # In some flows the state is a nan
+            try:
+                pre = state.split("_")[0]
+            except AttributeError:
+                pre = ""
+
             try:
                 # Try suricata states
                 """
@@ -404,9 +409,10 @@ class ProfileHandler:
                 these are: New, Established and Closed,for UDP only new and established.
                 For each of these states Suricata can employ different timeouts.
                 """
-                if "new" in state or "established" in state:
+                # This is controversial, but if we dont have a good state, we consider it not established for now
+                if "new" in state or state.lower() == "established":
                     return "Established"
-                elif "closed" in state:
+                elif "closed" in state or state.lower() == "not established":
                     return "Not Established"
 
                 # We have varius type of states depending on the type of flow.
@@ -417,7 +423,11 @@ class ProfileHandler:
                     return "Established"
 
                 # For Argus
-                suf = state.split("_")[1]
+                # In some flows the state is a nan
+                try:
+                    suf = state.split("_")[1]
+                except AttributeError:
+                    suf = ""
                 if "S" in pre and "A" in pre and "S" in suf and "A" in suf:
                     """
                     Examples:
@@ -518,7 +528,7 @@ class ProfileHandler:
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Error in getFinalStateFromFlags() in database.py line {exception_line}",
+                f"Error in get_final_state_from_flags() in profile_handler.py line {exception_line}",
                 0,
                 1,
             )
