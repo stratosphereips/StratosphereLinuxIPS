@@ -243,4 +243,13 @@ class Blocking(IModule):
             self.unblocker.unblock_request(ip, tw, flags)
 
         if msg := self.get_msg("tw_closed"):
-            self.unblocker.update_requests()
+            # this channel receives requests for closed tws for every ip
+            # slips sees.
+            # if slips saw 3 ips, this channel will receive 3 msgs with tw1
+            # as closed. we're not interested in the ips, we just wanna
+            # know when slips advances to the next tw.
+            profileid_tw = msg["data"].split("_")
+            twid = profileid_tw[-1]
+            if self.last_closed_tw != twid:
+                self.last_closed_tw = twid
+                self.unblocker.update_requests()

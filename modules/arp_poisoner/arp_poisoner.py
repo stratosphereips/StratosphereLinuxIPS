@@ -42,6 +42,7 @@ class ARPPoisoner(IModule):
         self.unblocker = ARPUnblocker(
             self.db, self.should_stop, self.logger, self.log
         )
+        self.last_closed_tw = ""
 
     def log(self, text):
         """Logs the given text to the blocking log file"""
@@ -68,15 +69,26 @@ class ARPPoisoner(IModule):
         if not self._is_time_to_repoison() or not self.unblocker.requests:
             return
 
+        ips_to_stop_poisoning = []
         # the unblocker will remove ips that should be unblocked from this dict
         for ip in self.unblocker.requests:
-            self._arp_poison(ip)
+            if self.unblocker.check_if_time_to_unblock(ip):
+                ips_to_stop_poisoning.append(ip)
+            else:
+                self._arp_poison(ip)
+
+        for ip in ips_to_stop_poisoning:
+            self.unblocker.del_request(ip)
 
     def _arp_scan(self, interface) -> Set[Tuple[str, str]]:
         """gets the available ip/mac pairs in the local
         network using arp-scan tool"""
         cmd = ["arp-scan", f"--interface={interface}", "--localnet"]
-        output = subprocess.check_output(cmd, text=True)
+        try:
+            output = subprocess.check_output(cmd, text=True)
+        except subprocess.CalledProcessError as e:
+            self.print(f"arp-scan failed: {e.stderr or str(e)}", 0, 1)
+            return set()
 
         pairs = set()
         for line in output.splitlines():
@@ -245,5 +257,14 @@ class ARPPoisoner(IModule):
             # blocking period, or block it until the next timewindow is over.
             self.unblocker.unblock_request(ip, tw)
 
-        if self.get_msg("tw_closed"):
-            self.unblocker.update_requests()
+        if msg := self.get_msg("tw_closed"):
+            # this channel receives requests for closed tws for every ip
+            # slips sees.
+            # if slips saw 3 ips, this channel will receive 3 msgs with tw1
+            # as closed. we're not interested in the ips, we just wanna
+            # know when slips advances to the next tw.
+            profileid_tw = msg["data"].split("_")
+            twid = profileid_tw[-1]
+            if self.last_closed_tw != twid:
+                self.last_closed_tw = twid
+                self.unblocker.update_requests()
