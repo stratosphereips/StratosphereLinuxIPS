@@ -63,7 +63,7 @@ def test_check_if_time_to_unblock():
     ) as mock_log, patch.object(
         unblocker.db, "del_blocked_ip"
     ) as mock_del, patch.object(
-        unblocker, "_del_request"
+        unblocker, "del_request"
     ) as mock_del_req:
 
         unblocker.check_if_time_to_unblock()
