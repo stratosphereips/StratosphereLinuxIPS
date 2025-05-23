@@ -339,28 +339,23 @@ def test_send_to_exporting_module():
 @pytest.mark.parametrize(
     "sys_argv, running_non_stop, expected_result",
     [
-        # Testcase 1: running non stop with -p enabled
+        # testcase 1: running non stop with -p enabled
         (["-i", "-p"], True, True),
-        # Testcase 2: custom flows but the module is disabled
+        # testcase 2: custom flows but the module is disabled
         (["-i", "-im"], False, False),
-        # Testcase 3: -i not in sys.argv and
-        # is_running_on_interface returns False
+        # testcase 3: -i not in sys.argv and not running non stop
         ([], False, False),
     ],
 )
-def test_is_blocking_module_enabled(
+def test_is_blocking_module_supported(
     sys_argv, running_non_stop, expected_result
 ):
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
     evidence_handler.is_running_non_stop = running_non_stop
 
     with patch("sys.argv", sys_argv):
-        with patch.object(
-            evidence_handler, "is_running_non_stop"
-        ) as mock_is_running_non_stop:
-            mock_is_running_non_stop.return_value = running_non_stop
-            result = evidence_handler.is_blocking_module_supported()
-        assert result == expected_result
+        result = evidence_handler.is_blocking_modules_supported()
+    assert result == expected_result
 
 
 @pytest.mark.parametrize(
