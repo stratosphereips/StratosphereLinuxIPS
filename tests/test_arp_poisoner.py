@@ -68,8 +68,18 @@ def test__arp_scan(poisoner):
 def test__get_mac_using_arp(poisoner):
     from scapy.all import ARP, Ether
 
-    fake_resp = [(Ether(), ARP(hwsrc="aa:bb:cc:dd:ee:ff"))]
-    with patch("scapy.sendrecv.srp", return_value=(fake_resp, None)):
+    arp = ARP(hwsrc="aa:bb:cc:dd:ee:ff")
+    ether = Ether()
+    pkt = ether / arp
+
+    fake_resp = [(None, pkt)]  # emulate srp's (sent, received) tuple
+    with (
+        patch(
+            "modules.arp_poisoner.arp_poisoner.srp",
+            return_value=(fake_resp, None),
+        ),
+        patch("scapy.config.conf.L2socket", new=MagicMock()),
+    ):
         mac = poisoner._get_mac_using_arp("192.168.1.5")
         assert mac == "aa:bb:cc:dd:ee:ff"
 
@@ -82,7 +92,9 @@ def test__get_mac_using_arp(poisoner):
 )
 def test__get_mac_using_arp_none(poisoner, ip, expected):
     with (
-        patch("scapy.sendrecv.srp", return_value=([], None)),
+        patch(
+            "modules.arp_poisoner.arp_poisoner.srp", return_value=([], None)
+        ),
         patch("scapy.config.conf.L2socket", new=MagicMock()),
     ):
         assert poisoner._get_mac_using_arp(ip) is expected
@@ -177,12 +189,25 @@ def test__arp_poison_fails(poisoner):
             assert poisoner._arp_poison("192.168.1.5") is None
 
 
-def test_keep_attackers_poisoned(poisoner):
+@pytest.mark.parametrize("should_unblock", [False, True])
+def test_keep_attackers_poisoned(should_unblock):
+    poisoner = ModuleFactory().create_arp_poisoner_obj()
     poisoner._is_time_to_repoison = MagicMock(return_value=True)
     poisoner.unblocker.requests = {"192.168.1.5"}
-    with patch.object(poisoner, "_arp_poison") as poison:
+    poisoner.unblocker.check_if_time_to_unblock = MagicMock(
+        return_value=should_unblock
+    )
+    poisoner.unblocker.del_request = MagicMock()
+
+    with patch.object(poisoner, "_arp_poison") as _arp_poison:
         poisoner.keep_attackers_poisoned()
-        poison.assert_called_once()
+
+    if should_unblock:
+        _arp_poison.assert_not_called()
+        poisoner.unblocker.del_request.assert_called_once_with("192.168.1.5")
+    else:
+        _arp_poison.assert_called_once_with("192.168.1.5")
+        poisoner.unblocker.del_request.assert_not_called()
 
 
 def test_main(poisoner):
@@ -199,7 +224,11 @@ def test_main(poisoner):
 
 
 def test_main_tw_closed(poisoner):
-    with patch.object(poisoner, "get_msg", side_effect=[None, True]):
+
+    raw_data = "profile_1234_tw_999"
+    tw_msg = {"data": json.dumps(raw_data)}
+
+    with patch.object(poisoner, "get_msg", side_effect=[None, tw_msg, True]):
         with patch.object(poisoner.unblocker, "update_requests") as update:
             poisoner.main()
             update.assert_called_once()
