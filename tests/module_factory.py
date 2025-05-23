@@ -152,6 +152,7 @@ class ModuleFactory:
         main.input_information = ""
         main.input_type = "pcap"
         main.line_type = False
+        main.args = Mock()
         return main
 
     @patch(MODULE_DB_MANAGER, name="mock_db")

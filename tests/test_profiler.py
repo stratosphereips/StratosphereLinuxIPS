@@ -569,32 +569,61 @@ def test_shutdown_gracefully(monkeypatch):
     profiler.mark_process_as_done_processing.assert_called_once()
 
 
-def test_get_local_net_from_flow(monkeypatch):
-    profiler = ModuleFactory().create_profiler_obj()
-    flow = Mock()
-    flow.saddr = "10.0.0.1"
-    profiler.client_ips = []
-    local_net = profiler.get_local_net(flow)
-
-    assert local_net == "10.0.0.0/8"
-
-
 @pytest.mark.parametrize(
-    "client_ips, expected_cidr",
+    "client_ips, saddr, expected_cidr",
     [
-        (["192.168.1.1"], "192.168.0.0/16"),
-        (["172.16.0.1"], "172.16.0.0/12"),
-        ([], "192.168.0.0/16"),
+        (
+            [ipaddress.IPv4Network("192.168.1.0/24")],
+            "10.0.0.1",
+            "192.168.1.0/24",
+        ),
+        (
+            [ipaddress.IPv4Network("172.16.0.0/16")],
+            "10.0.0.1",
+            "172.16.0.0/16",
+        ),
+        ([], "10.0.0.1", "10.0.0.0/8"),
     ],
 )
-def test_get_local_net(client_ips, expected_cidr, monkeypatch):
+def test_get_local_net(client_ips, saddr, expected_cidr):
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.client_ips = client_ips
-    flow = Mock()
-    flow.saddr = "192.168.1.1"
+    profiler.args.interface = None
 
-    local_net = profiler.get_local_net(flow)
+    if not client_ips:
+        with patch.object(
+            profiler, "get_private_client_ips", return_value=client_ips
+        ), patch(
+            "slips_files.common.slips_utils.Utils.get_cidr_of_private_ip",
+            return_value="10.0.0.0/8",
+        ):
+            flow = Mock()
+            flow.saddr = saddr
+            local_net = profiler.get_local_net(flow)
+    else:
+        with patch.object(
+            profiler, "get_private_client_ips", return_value=client_ips
+        ):
+            flow = Mock()
+            flow.saddr = saddr
+            local_net = profiler.get_local_net(flow)
+
     assert local_net == expected_cidr
+
+
+def test_get_local_net_from_flow():
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.args.interface = None
+    with patch.object(
+        profiler, "get_private_client_ips", return_value=[]
+    ), patch(
+        "slips_files.common.slips_utils.Utils.get_cidr_of_private_ip",
+        return_value="10.0.0.0/8",
+    ):
+        flow = Mock()
+        flow.saddr = "10.0.0.1"
+        local_net = profiler.get_local_net(flow)
+
+    assert local_net == "10.0.0.0/8"
 
 
 def test_handle_setting_local_net_when_already_set():

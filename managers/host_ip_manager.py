@@ -27,9 +27,11 @@ class HostIPManager:
 
         # we use all interfaces when -g is used, otherwise we use the given
         # interface
-        interfaces: List[str] = [
-            self.main.args.interface
-        ] or netifaces.interfaces()
+        interfaces: List[str] = (
+            [self.main.args.interface]
+            if self.main.args.interface
+            else netifaces.interfaces()
+        )
 
         for iface in interfaces:
             addrs = netifaces.ifaddresses(iface)
