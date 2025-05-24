@@ -9,10 +9,11 @@
 
 # ARP Poisoning
 
-The ARP Poisoning is designed as a part of the Slips Immune, where Slips takes down attackers using ARP poisoning in addition to blocking them through the firewall, protecting the rest of the local network before the attacker reaches them.
+The ARP Poisoning Module is designed as a part of the Slips Immune, where Slips takes down attackers using ARP poisoning in addition to blocking them through the firewall, protecting the rest of the local network before the attacker reaches them.
 
-ARP Poisoning module: <https://github.com/stratosphereips/StratosphereLinuxIPS/pull/1499>
-
+ARP Poisoning module:
+* <https://github.com/stratosphereips/StratosphereLinuxIPS/pull/1499>
+* https://github.com/stratosphereips/StratosphereLinuxIPS/tree/develop/modules/arp_poisoner
 
 ## How it works
 
@@ -24,15 +25,15 @@ ARP Poisoning module: <https://github.com/stratosphereips/StratosphereLinuxIPS/p
 ![](../images/immune/a4/slips_isolating_attacker_as_an_ap.jpg)
 
 
-Whether the attacker is connected to the AP on the RPI or connected directly to the router’s WIFI, once Slips detects an alert, it does the following
+Whether the attacker is connected to the AP on the RPI or connected directly to the router, once Slips detects an alert, it does the following
 
-1. Isolates the attacker from the internet by sending an ARP request to the attacker announcing the gateway at a fake mac, so it’s no longer reachable.
+1. Cuts the attacker's internet by sending an ARP request to the attacker announcing the gateway at a fake mac, so it’s no longer reachable.
 
-2. Isolates the attacker from the rest of the network by sending a gratioutos ARP request announcing the attacker at a fake mac, so it’s no longer reachable by the rest of the network.
+2. Isolates the attacker from the rest of the network by sending a gratuitous ARP request announcing the attacker at a fake mac, so it’s no longer reachable by the rest of the network.
 
-3. Regularly sends ARP replies for all hosts in the network announcing the attacker at a fake MAC so it doesn’t give the attacker time to reply with it’s real MAC and be reached by the rest of the network..
+3. Regularly sends ARP replies for all hosts in the network announcing the attacker at a fake MAC so the attacker doesn't have enought time to reply with its real MAC and be reached by the rest of the network.
 
-These attacks are done on a loop until the blocking period is over to ensure that the attacker is still isolated even after the ARP cache expires.
+These attacks are done in a loop until the blocking period is over to ensure that the attacker stays isolated even after the ARP cache expires.
 
 
 ### Slips on a host’s computer in the network
@@ -49,13 +50,13 @@ Even if Slips is not controlling the AP where the rest of the clients are connec
 
 ## Unblocking
 
-Slips doesn’t keep poisoning attackers forever once they’re detected, instead, it implements a probation period of one timewindow. Meaning, it blocks the attacker for the rest of this timewindow and one extra timewindow once an alert is generated, if Slips receives no more attacks during that extra timewindow from this attacker, it unblocks the attacker after that timewindow is over, if it receives more attacks, it extends the blocking/probation period by one more timewindow.
+Slips doesn’t keep poisoning attackers forever once they’re detected, instead, it implements a probation period of one timewindow. Meaning, it blocks the attacker for the rest of this timewindow and one extra timewindow once an alert is generated, if Slips detects no more attacks during that extra timewindow from this attacker, it unblocks the attacker after the probation period is over. if Slips detects more attacks, it extends the blocking/probation period by one more timewindow.
 
-This way, the more attacks the attacker does, the longer slips will Isolate them. 
+This way, the more attacks the attacker does, the longer Slips will isolate them.
 
-Once the blocking period is over, Slips stop poisoning the attacker, which restores its internet connection, and stops announcing the attacker at a fake MAC, which allows the rest of the network to reach it.
+Once the blocking period is over, Slips stops poisoning the attacker, which restores its internet connection, and stops announcing the attacker at a fake MAC, which allows the rest of the network to reach it.
 
-Blocking and unblocking are tracked in arp\_poisoning.log in the output directory.
+Blocking and unblocking are tracked in arp_poisoning.log in the output directory.
 
 
 ## How to use it
