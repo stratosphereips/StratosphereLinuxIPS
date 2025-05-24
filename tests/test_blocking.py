@@ -174,17 +174,17 @@ def test_main_blocking_logic(block, expected_block_called):
 @pytest.mark.parametrize(
     "last_closed_tw, msg_data, should_call",
     [
-        ("tw1", "profileid_tw_tw2", True),  # new tw, should call update
-        ("tw2", "profileid_tw_tw2", False),  # same tw, no update
+        ("tw1", "profileid_123_tw2", True),  # new tw, should call update
+        ("tw2", "profileid_234_tw2", False),  # same tw, no update
     ],
 )
 def test_main_tw_closed_triggers_update(last_closed_tw, msg_data, should_call):
     blocking = ModuleFactory().create_blocking_obj()
     blocking.last_closed_tw = last_closed_tw
 
-    msg_tw_closed = {"data": msg_data}
+    msg_tw_closed = {"data": msg_data, "channel": "tw_closed"}
 
-    with patch.object(blocking, "get_msg", side_effect=[msg_tw_closed]):
+    with patch.object(blocking, "get_msg", side_effect=[False, msg_tw_closed]):
         with patch.object(
             blocking.unblocker, "update_requests"
         ) as mock_update:
@@ -192,4 +192,4 @@ def test_main_tw_closed_triggers_update(last_closed_tw, msg_data, should_call):
             if should_call:
                 mock_update.assert_called_once()
             else:
-                assert not mock_update.called
+                mock_update.assert_not_called()
