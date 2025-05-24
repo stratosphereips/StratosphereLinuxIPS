@@ -52,6 +52,7 @@ class Main:
         self.last_updated_stats_time = datetime.now()
         self.input_type = False
         self.proc_man = ProcessManager(self)
+        self.gw_info_printed = False
         # in testing mode we manually set the following params
         # TODO use mocks instead of this testing param
         if not testing:
@@ -443,6 +444,15 @@ class Main:
         elif self.mode == "interactive":
             return os.path.join(self.args.output, "errors.log")
 
+    def print_gw_info(self):
+        if self.gw_info_printed:
+            return
+        if ip := self.db.get_gateway_ip():
+            self.print(f"Detected gateway IP: {green(ip)}")
+        if mac := self.db.get_gateway_mac():
+            self.print(f"Detected gateway MAC: {green(mac)}")
+        self.gw_info_printed = True
+
     def start(self):
         """Main Slips Function"""
         try:
@@ -608,15 +618,14 @@ class Main:
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
+                self.print_gw_info()
 
                 # if you remove the below logic anywhere before the
                 # above sleep() statement, it will try to get the return
                 # value very quickly before
                 # the webinterface thread sets it. so don't:D
                 self.ui_man.check_if_webinterface_started()
-
                 self.update_stats()
-
                 self.db.check_tw_to_close()
 
                 modified_profiles: Set[str] = (

@@ -56,10 +56,20 @@ def test_update_host_ip(
 )
 def test_get_host_ip(interfaces, ifaddresses, expected):
     host_ip_man = ModuleFactory().create_host_ip_manager_obj()
+    host_ip_man.main.args.interface = None  # simulate not passed, to use all
+    host_ip_man.main.args.growing = (
+        True  # simulate -g used, so use all interfaces
+    )
 
-    with patch("netifaces.interfaces", return_value=interfaces), patch(
-        "netifaces.ifaddresses", side_effect=lambda iface: ifaddresses[iface]
-    ), patch("netifaces.AF_INET", 2):
+    with patch(
+        "managers.host_ip_manager.netifaces.interfaces",
+        return_value=interfaces,
+    ), patch(
+        "managers.host_ip_manager.netifaces.ifaddresses",
+        side_effect=lambda iface: ifaddresses.get(iface, {}),
+    ), patch(
+        "managers.host_ip_manager.netifaces.AF_INET", 2
+    ):
         result = host_ip_man.get_host_ip()
         assert result == expected
 

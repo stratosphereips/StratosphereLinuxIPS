@@ -29,6 +29,8 @@ from typing import (
     Union,
     Optional,
 )
+
+import netifaces
 import validators
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 from slips_files.common.abstracts.observer import IObservable
@@ -113,6 +115,8 @@ class Profiler(ICore, IObservable):
         # that queue will be used in 4 different threads. the 3 profilers
         # and main().
         self.pending_flows_queue_lock = threading.Lock()
+        # flag to know which flow is the start of the pcap/file
+        self.first_flow = True
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -212,7 +216,8 @@ class Profiler(ICore, IObservable):
     def get_gateway_info(self, flow):
         """
         Gets the IP and MAC of the gateway and stores them in the db
-
+        doesn't get the gateway ip if it's already in the db (for example
+        detected by ip_info) module
         usually the mac of the flow going from a private ip -> a
         public ip is the mac of the GW
         """
@@ -298,10 +303,18 @@ class Profiler(ICore, IObservable):
             self.print(pprint.pp(asdict(flow)))
         return True
 
+    def store_first_seen_ts(self, ts):
+        # set the pcap/file start time in the analysis key
+        if self.first_flow:
+            self.db.set_input_metadata({"file_start": ts})
+            self.first_flow = False
+
     def store_features_going_out(self, flow, flow_parser: FlowHandler):
         """
         function for adding the features going out of the profile
         """
+        self.store_first_seen_ts(flow.starttime)
+
         cases = {
             "flow": flow_parser.handle_conn,
             "conn": flow_parser.handle_conn,
@@ -506,6 +519,26 @@ class Profiler(ICore, IObservable):
                 private_clients.append(ip)
         return private_clients
 
+    def get_localnet_of_given_interface(self) -> str | None:
+        """
+        returns the local network of the given interface only if slips is
+        running with -i
+        """
+        addrs = netifaces.ifaddresses(self.args.interface).get(
+            netifaces.AF_INET
+        )
+        if not addrs:
+            return
+        for addr in addrs:
+            ip = addr.get("addr")
+            netmask = addr.get("netmask")
+            if ip and netmask:
+                network = ipaddress.IPv4Network(
+                    f"{ip}/{netmask}", strict=False
+                )
+                return str(network)
+        return None
+
     def get_local_net(self, flow) -> Optional[str]:
         """
         gets the local network from client_ip param in the config file,
@@ -514,6 +547,11 @@ class Profiler(ICore, IObservable):
         """
         # For now the local network is only ipv4, but it
         # could be ipv6 in the future. Todo.
+        if self.args.interface:
+            self.is_localnet_set = True
+            return self.get_localnet_of_given_interface()
+
+        # slips is running on a file, we either have a client ip or not
         private_client_ips: List[
             Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
         ]

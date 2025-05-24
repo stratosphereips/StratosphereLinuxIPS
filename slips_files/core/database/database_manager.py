@@ -156,6 +156,9 @@ class DBManager:
     def get_input_type(self, *args, **kwargs):
         return self.rdb.get_input_type(*args, **kwargs)
 
+    def get_interface(self, *args, **kwargs):
+        return self.rdb.get_interface(*args, **kwargs)
+
     def get_output_dir(self, *args, **kwargs):
         return self.rdb.get_output_dir(*args, **kwargs)
 

@@ -6,7 +6,6 @@ import hashlib
 from datetime import datetime, timedelta
 from re import findall
 from threading import Thread
-
 import netifaces
 from uuid import UUID
 import tldextract
@@ -288,6 +287,19 @@ class Utils(object):
         os.setresuid(sudo_uid, sudo_uid, -1)
         return
 
+    def is_public_ip(self, ip_str) -> bool:
+        try:
+            ip = ipaddress.ip_address(ip_str)
+            return not (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_reserved
+                or ip.is_multicast
+                or ip.is_link_local
+            )
+        except ValueError:
+            return False  # invalid IP
+
     def is_ignored_zeek_log_file(self, filepath: str) -> bool:
         """
         Returns true if the given file ends with .log or .log.labeled and
@@ -401,10 +413,23 @@ class Utils(object):
     def get_human_readable_datetime(self) -> str:
         return utils.convert_ts_format(datetime.now(), self.alerts_format)
 
-    def get_own_ips(self, ret=Dict) -> Union[Dict[str, List[str]], List[str]]:
+    def get_mac_for_ip_using_cache(self, ip: str) -> str | None:
+        """gets the mac of the given local ip using the local arp cache"""
+        try:
+            with open("/proc/net/arp") as f:
+                next(f)  # skip header
+                for line in f:
+                    parts = line.split()
+                    if parts[0] == ip:
+                        return parts[3]
+        except FileNotFoundError:
+            pass
+        return None
+
+    def get_own_ips(self, ret=Dict) -> Dict[str, List[str]] | List[str]:
         """
-        Returns a dict of our private and public IPs
-        return a dict by default
+        Returns a dict of our private IPs from all interfaces and our public
+        IPs. return a dict by default
         e.g. { "ipv4": [..], "ipv6": [..] }
         and returns a list of all the ips combined if ret=List is given
         """

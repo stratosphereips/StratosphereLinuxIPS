@@ -83,7 +83,8 @@ class ProcessManager:
         )
         self.bootstrap_p2p = self.main.conf.is_bootstrapping_node()
         self.bootstrapping_modules = self.main.conf.get_bootstrapping_modules()
-        # self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.get_bootstrapping_setting()
+        # self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.
+        # get_bootstrapping_setting()
 
     def start_output_process(self, stderr, slips_logfile, stdout=""):
         output_process = Output(
@@ -104,6 +105,7 @@ class ProcessManager:
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
+            self.main.args,
             is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
@@ -124,6 +126,7 @@ class ProcessManager:
             self.main.args.output,
             self.main.redis_port,
             self.evidence_handler_termination_event,
+            self.main.args,
         )
         evidence_process.start()
         self.main.print(
@@ -141,6 +144,7 @@ class ProcessManager:
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
+            self.main.args,
             is_input_done=self.is_input_done,
             profiler_queue=self.profiler_queue,
             input_type=self.main.input_type,
@@ -266,8 +270,8 @@ class ProcessManager:
         return plugins, failed_to_load_modules
 
     def _reorder_modules(self, plugins):
-        plugins = self._prioritize_blocking_module(plugins)
-        plugins = self._start_cyst_module_last(plugins)
+        plugins = self._prioritize_blocking_modules(plugins)
+        plugins = self._change_cyst_module_order(plugins)
         return plugins
 
     def _discover_module_names(self):
@@ -327,21 +331,34 @@ class ProcessManager:
                     }
         return plugins
 
-    def _prioritize_blocking_module(self, plugins):
-        # change the order of the blocking module (load it first)
-        # so it can receive msgs sent from other modules
-        if "Blocking" not in plugins:
+    def _prioritize_blocking_modules(self, plugins):
+        """
+        Changes the order of the blocking modules (ARP poisoner and
+        Blocking) to load them before the rest of the modules
+        so they can receive msgs sent from other modules
+        """
+        blocking_modules = ("Blocking", "ARP Poisoner")
+
+        at_least_one_blocking_module_is_loaded = False
+        for module in blocking_modules:
+            if module in plugins:
+                at_least_one_blocking_module_is_loaded = True
+                break
+        if not at_least_one_blocking_module_is_loaded:
             return plugins
 
+        # put the blocking modules at the top to start first
         ordered = OrderedDict(plugins)
-        ordered.move_to_end(
-            "Blocking", last=False
-        )  # last=False to move to the beginning of the dict
+        for module in blocking_modules:
+            if module in plugins:
+                # last=False to move to the beginning of the dict
+                ordered.move_to_end(module, last=False)
+
         plugins.clear()
         plugins.update(ordered)
         return plugins
 
-    def _start_cyst_module_last(self, plugins):
+    def _change_cyst_module_order(self, plugins):
         # when cyst starts first, as soon as slips connects to cyst,
         # cyst sends slips the flows,
         # but the inputprocess didn't even start yet so the flows are lost
@@ -371,6 +388,7 @@ class ProcessManager:
                 self.main.args.output,
                 self.main.redis_port,
                 self.termination_event,
+                self.main.args,
             )
             module.start()
             self.main.db.store_pid(module_name, int(module.pid))
@@ -425,6 +443,7 @@ class ProcessManager:
                     self.main.args.output,
                     self.main.redis_port,
                     multiprocessing.Event(),
+                    self.main.args,
                 )
 
                 if local_files:
@@ -487,6 +506,7 @@ class ProcessManager:
 
         if self.main.args.blocking:
             pids_to_kill_last.append(self.main.db.get_pid_of("Blocking"))
+            pids_to_kill_last.append(self.main.db.get_pid_of("ARP Poisoner"))
 
         if "exporting_alerts" not in self.main.db.get_disabled_modules():
             pids_to_kill_last.append(

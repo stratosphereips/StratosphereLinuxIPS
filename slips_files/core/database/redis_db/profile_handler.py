@@ -87,7 +87,7 @@ class ProfileHandler:
         # sorted set is encoded
         return self.r.zscore(f"tws{profileid}", twid.encode("utf-8"))
 
-    def get_first_flow_time(self) -> Optional[float]:
+    def get_first_flow_time(self) -> float | None:
         """
         Get the starttime of the first timewindow
         aka ts of the first flow
@@ -830,11 +830,6 @@ class ProfileHandler:
             "module_labels": {},
         }
         to_send = json.dumps(to_send)
-
-        # set the pcap/file stime in the analysis key
-        if self.first_flow:
-            self.set_input_metadata({"file_start": flow.starttime})
-            self.first_flow = False
 
         # dont send arp flows in this channel, they have their own
         # new_arp channel

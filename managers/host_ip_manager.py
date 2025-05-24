@@ -5,6 +5,7 @@ import netifaces
 from typing import (
     Set,
     Optional,
+    List,
 )
 
 from slips_files.common.style import green
@@ -16,9 +17,21 @@ class HostIPManager:
 
     def get_host_ip(self) -> Optional[str]:
         """
-        tries to determine the machine's IP
+        tries to determine the machine's IP.
+        uses the intrfaces provided by the user if -i is given, or all
+        interfaces if not.
         """
-        interfaces = netifaces.interfaces()
+        if not (self.main.args.interface or self.main.args.growing):
+            # slips is running on a file, we cant determine the host IP
+            return
+
+        # we use all interfaces when -g is used, otherwise we use the given
+        # interface
+        interfaces: List[str] = (
+            [self.main.args.interface]
+            if self.main.args.interface
+            else netifaces.interfaces()
+        )
 
         for iface in interfaces:
             addrs = netifaces.ifaddresses(iface)

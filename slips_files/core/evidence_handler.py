@@ -92,7 +92,7 @@ class EvidenceHandler(ICore):
         utils.change_logfiles_ownership(self.logfile.name, self.UID, self.GID)
 
         self.is_running_non_stop = self.db.is_running_non_stop()
-        self.blocking_module_supported = self.is_blocking_module_supported()
+        self.blocking_module_supported = self.is_blocking_modules_supported()
 
         # clear output/alerts.json
         self.jsonfile = self.clean_file(self.output_dir, "alerts.json")
@@ -362,7 +362,7 @@ class EvidenceHandler(ICore):
             evidence: dict = utils.to_dict(evidence)
             self.db.publish("export_evidence", json.dumps(evidence))
 
-    def is_blocking_module_supported(self) -> bool:
+    def is_blocking_modules_supported(self) -> bool:
         """
         returns true if slips is running in an interface or growing
          zeek dir with -p

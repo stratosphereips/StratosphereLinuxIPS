@@ -39,7 +39,7 @@ class Unblocker(IUnblocker):
 
     def _start_checker_thread(self):
         self.unblocker_thread = threading.Thread(
-            target=self._check_if_time_to_unblock,
+            target=self.check_if_time_to_unblock,
             daemon=True,
             name="iptables_unblocker_thread",
         )
@@ -67,7 +67,7 @@ class Unblocker(IUnblocker):
         )
         self._add_req(ip, tw_to_unblock_at, flags, block_this_ip_for)
 
-    def _check_if_time_to_unblock(self):
+    def check_if_time_to_unblock(self):
         """
         This method should be called in a thread that checks the timestamps
         in self.requests regularly.
@@ -88,7 +88,7 @@ class Unblocker(IUnblocker):
                         requests_to_del.append(ip)
 
             for ip in requests_to_del:
-                self._del_request(ip)
+                self.del_request(ip)
             time.sleep(10)
 
     def _log_successful_unblock(self, ip):
@@ -121,6 +121,9 @@ class Unblocker(IUnblocker):
         new_requests = {}
         with self.requests_lock:
             for ip, req in self.requests.items():
+                if req["block_this_ip_for"] == 0:
+                    # the ip is unblocked, we dont need to keep track of it
+                    continue
                 new_req = req
                 new_req["block_this_ip_for"] = req["block_this_ip_for"] - 1
                 new_requests[ip] = new_req
@@ -153,11 +156,8 @@ class Unblocker(IUnblocker):
             f"blocked for {interval} timewindows. "
             f"Timestamp to unblock: {tw_to_unblock_at.end_time}) "
         )
-        from pprint import pp
 
-        pp(self.requests)
-
-    def _del_request(self, ip):
+    def del_request(self, ip):
         """Delete an unblocking request from self.requests"""
         if ip in self.requests:
             with self.requests_lock:

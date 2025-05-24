@@ -502,7 +502,7 @@ This feature is not supported in Docker
 
 Slips doesn't need root permissions unless you
 
-1. use the blocking module ( with -p )
+1. use the blocking modules (Firewall and ARP poisoner) ( with -p )
 2. use slips notifications
 3. are saving the database ( with -d )
 

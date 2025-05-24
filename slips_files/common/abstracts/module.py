@@ -4,6 +4,7 @@ import sys
 import traceback
 import warnings
 from abc import ABC, abstractmethod
+from argparse import Namespace
 from multiprocessing import Process, Event
 from typing import (
     Dict,
@@ -34,12 +35,15 @@ class IModule(ABC, Process):
         output_dir,
         redis_port,
         termination_event,
+        args,
         **kwargs,
     ):
         Process.__init__(self)
         self.redis_port = redis_port
         self.output_dir = output_dir
         self.msg_received = False
+        # as parsed by arg_parser, these are the cli args
+        self.args: Namespace = args
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
         self.logger = logger
