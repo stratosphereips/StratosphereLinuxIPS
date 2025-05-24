@@ -20,6 +20,7 @@ ARP Poisoning module: <https://github.com/stratosphereips/StratosphereLinuxIPS/p
 
 
 ![](../images/immune/a4/slips_running_as_an_ap.jpg)
+<br>
 ![](../images/immune/a4/slips_isolating_attacker_as_an_ap.jpg)
 
 
@@ -41,6 +42,7 @@ Even if Slips is not controlling the AP where the rest of the clients are connec
 **This means that even if one host only is running Slips on the network, the rest of the network will be protected.**
 
 ![](../images/immune/a4/slips_running_in_1_dev_in_lan.jpg)
+<br>
 ![](../images/immune/a4/slips_as_a_host_isolating_attacker.jpg)
 
 
