@@ -100,7 +100,7 @@ To evaluate task-specific performance, [Promptfoo](https://www.promptfoo.dev/) [
 
 The results of the `Promptfoo` tests are presented in the heatmap below. In addition to the previously evaluated models, BitNet B1.58 2B 4T was included using 1.58-bit quantization with `bitnet.cpp`. Note that not all models are compatible with 1.58-bit quantization.
 
-![](images/immune/models_heatmap_rpi5_Q4.png)
+![](../images/immune/models_heatmap_rpi5_Q4.png)
 
 Results from Promptfoo on the Raspberry Pi 5 were consistent with those reported for x86 architecture.
 
@@ -120,13 +120,13 @@ The chart shows that **Qwen2 models** consistently deliver the highest performan
 
 To simplify the overall analysis, a single performance score was calculated for each model by *averaging the results across all tests*. These mean scores are presented in the figure below, providing a clear comparison of overall model performance.
 
-![](images/immune/models_score.png){width="100%"}
+![](../images/immune/models_score.png){width="100%"}
 
 As expected, the larger models such as **LLaMA 3.2 3B** and **Qwen2.5 3B** demonstrated the highest average score. These were followed by the 2B models, including Granite 3.1 Dense and **BitNet B1.58 2B 4T**, which also showed competitive results relative to their size.
 
 ## Trade off analysis
 
-![](images/immune/trade_off-01.png)
+![](../images/immune/trade_off-01.png)
 
 The figure below analyzes model performance using two key metrics: **overall score** and **tokens per second**. These highlight the balance between resource use and speed. Additionally, **RAM usage** is plotted to visualize each model’s memory footprint.
 
