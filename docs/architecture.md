@@ -12,7 +12,7 @@ Slips is heavily based on the Zeek monitoring tool as input tool for packets fro
 Figure 1 shows how the data is analyzed by Slips.
 As we can see, Slips internally uses <a href="https://zeek.org/">Zeek</a>, an
 open source network security monitoring tool. Slips divides flows into profiles and
-each profile into a timewindows.
+each profile into a timewindows, timewindows are numbered from 1 to infinity.
 Slips runs detection modules on each flow and stores all evidence,
 alerts and features in an appropriate profile structure.
 All profile info, performed detections, profiles and timewindows' data,

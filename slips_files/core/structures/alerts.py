@@ -78,7 +78,7 @@ class Alert:
         # timestamp of the flow causing the last evidence of this alert
         if not self.last_flow_datetime:
             last_flow_timestamp: str = self.last_evidence.timestamp
-            self.last_flow_datetime = utils.convert_format(
+            self.last_flow_datetime = utils.convert_ts_format(
                 last_flow_timestamp, "iso"
             )
 
@@ -103,14 +103,14 @@ def dict_to_alert(alert: dict) -> Alert:
         ),
         timewindow=TimeWindow(
             alert["timewindow"]["number"],
-            utils.convert_format(alert["timewindow"]["start_time"], "iso"),
-            utils.convert_format(alert["timewindow"]["end_time"], "iso"),
+            utils.convert_ts_format(alert["timewindow"]["start_time"], "iso"),
+            utils.convert_ts_format(alert["timewindow"]["end_time"], "iso"),
         ),
         last_evidence=dict_to_evidence(alert["last_evidence"]),
         accumulated_threat_level=alert.get("accumulated_threat_level"),
         id=alert.get("id", ""),
         correl_id=alert.get("correl_id"),
-        last_flow_datetime=utils.convert_format(
+        last_flow_datetime=utils.convert_ts_format(
             alert["last_flow_datetime"], "iso"
         ),
         threat_level=ThreatLevel[alert["threat_level"].upper()],

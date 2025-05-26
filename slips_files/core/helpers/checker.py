@@ -159,7 +159,7 @@ class Checker:
         ):
             # If the user wants to blocks, we need permission to modify
             # iptables
-            print("Run Slips with sudo to enable the blocking module.")
+            print("Run Slips with sudo to use the blocking modules.")
             self.main.terminate_slips()
 
         if self.main.args.clearblocking:
@@ -171,23 +171,18 @@ class Checker:
             else:
                 self.delete_blocking_chain()
             self.main.terminate_slips()
+
         # Check if user want to save and load a db at the same time
         if self.main.args.save and self.main.args.db:
             print("Can't use -s and -d together")
             self.main.terminate_slips()
 
     def delete_blocking_chain(self):
-        # start only the blocking module process and the db
-        from multiprocessing import Queue, active_children
-        from modules.blocking.blocking import Blocking
+        from modules.blocking.slips_chain_manager import (
+            del_slips_blocking_chain,
+        )
 
-        blocking = Blocking(Queue())
-        blocking.start()
-        blocking.delete_slipsBlocking_chain()
-        # kill the blocking module manually because we can't
-        # run shutdown_gracefully here (not all modules has started)
-        for child in active_children():
-            child.kill()
+        del_slips_blocking_chain()
 
     def clear_redis_cache(self):
         redis_cache_default_server_port = 6379

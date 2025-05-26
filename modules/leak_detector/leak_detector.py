@@ -218,7 +218,7 @@ class LeakDetector(IModule):
         # in which tw is this ts?
         twid = self.db.get_tw_of_ts(profileid, ts)
         # convert ts to a readable format
-        ts = utils.convert_format(ts, utils.alerts_format)
+        ts = utils.convert_ts_format(ts, utils.alerts_format)
 
         if not twid:
             return

@@ -22,8 +22,8 @@ analysis = Blueprint(
 # ----------------------------------------
 def ts_to_date(ts, seconds=False):
     if seconds:
-        return utils.convert_format(ts, "%Y/%m/%d %H:%M:%S.%f")
-    return utils.convert_format(ts, "%Y/%m/%d %H:%M:%S")
+        return utils.convert_ts_format(ts, "%Y/%m/%d %H:%M:%S.%f")
+    return utils.convert_ts_format(ts, "%Y/%m/%d %H:%M:%S")
 
 
 def get_all_tw_with_ts(profileid):

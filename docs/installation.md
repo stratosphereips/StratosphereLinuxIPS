@@ -344,6 +344,13 @@ We chose channel 40 because it is a 5GHz channel, which is faster and less crowd
 
 Note: Please make sure your RPI model supports 5GHz channels. If not, you can use `-c 1` for 2.4GHz.
 
+
+If all goes well you should see `wlan0: AP-ENABLED` in the output of the command.
+
+Check the [Debugging common AP errors](https://stratospherelinuxips.readthedocs.io/en/develop/immune/installing_slips_in_the_rpi.html#debugging-common-ap-errors) section if you have any issues.
+
+
+
 3. Run Slips in the RPI using the command below to listen to the traffic from the access point.
 
 ```bash

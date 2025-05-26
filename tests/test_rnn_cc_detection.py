@@ -90,7 +90,7 @@ def test_set_evidence_cc_channel(
     cc_detection.db.get_ip_identification.return_value = "Some IP info"
 
     with patch(
-        "slips_files.common.slips_utils.utils.convert_format",
+        "slips_files.common.slips_utils.utils.convert_ts_format",
         return_value=timestamp,
     ):
         cc_detection.set_evidence_cc_channel(

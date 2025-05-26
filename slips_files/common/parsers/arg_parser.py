@@ -188,7 +188,6 @@ class ArgumentParser(argparse.ArgumentParser):
             action="store_true",
         )
         self.add_argument(
-            "-cb",
             "--clearblocking",
             help="Flush and delete slipsBlocking iptables chain",
             required=False,

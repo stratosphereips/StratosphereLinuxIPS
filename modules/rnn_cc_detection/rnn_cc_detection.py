@@ -74,7 +74,9 @@ class CCDetection(IModule):
             f'score: {format(score, ".4f")}.'
         )
 
-        timestamp: str = utils.convert_format(timestamp, utils.alerts_format)
+        timestamp: str = utils.convert_ts_format(
+            timestamp, utils.alerts_format
+        )
         twid_int = int(twid.replace("timewindow", ""))
         # to add a correlation between the 2 evidence in alerts.json
         evidence_id_of_dstip_as_the_attacker = str(uuid4())

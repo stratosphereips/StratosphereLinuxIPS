@@ -31,7 +31,7 @@ def test_set_analysis_end_date(
         enable_metadata
     )
 
-    utils.convert_format = Mock(return_value=expected_end_date)
+    utils.convert_ts_format = Mock(return_value=expected_end_date)
 
     with patch("builtins.open", create=True) as mock_open:
         result = metadata_manager.set_analysis_end_date("dummy_end_date")
@@ -143,7 +143,7 @@ def test_add_metadata(
     with patch("os.mkdir"), patch("shutil.copy"), patch(
         "builtins.open", create=True
     ), patch.object(
-        utils, "convert_format", return_value="2023-01-01 00:00:00"
+        utils, "convert_ts_format", return_value="2023-01-01 00:00:00"
     ):
         result = metadata_manager._add_metadata()
         assert result == expected_result

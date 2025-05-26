@@ -40,7 +40,7 @@ class Conn(IFlowalertsAnalyzer):
         self.dns_analyzer = DNS(self.db, flowalerts=self)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.classifier = FlowClassifier()
-        self.our_ips = utils.get_own_ips()
+        self.our_ips: List[str] = utils.get_own_ips(ret=List)
         self.input_type: str = self.db.get_input_type()
         self.multiple_reconnection_attempts_threshold = 5
         # we use this to try to detect if there's dns server that has a

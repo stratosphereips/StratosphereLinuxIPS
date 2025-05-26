@@ -115,9 +115,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     # flag to know if we found the gateway MAC using the most seen MAC method
     _gateway_MAC_found = False
     _conf_file = "config/redis.conf"
-    our_ips = utils.get_own_ips()
-    # flag to know which flow is the start of the pcap/file
-    first_flow = True
+    our_ips: List[str] = utils.get_own_ips(ret=List)
     # to make sure we only detect and store the user's localnet once
     is_localnet_set = False
     # in case of redis ConnectionErrors, this is how long we'll wait in
@@ -793,6 +791,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         "suricata"
         """
         return self.r.hget(self.constants.ANALYSIS, "input_type")
+
+    def get_interface(self) -> str:
+        return self.r.hget(self.constants.ANALYSIS, "interface")
 
     def get_output_dir(self):
         """

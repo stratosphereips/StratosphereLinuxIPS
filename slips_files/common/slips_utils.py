@@ -6,7 +6,7 @@ import hashlib
 from datetime import datetime, timedelta
 from re import findall
 from threading import Thread
-
+import netifaces
 from uuid import UUID
 import tldextract
 import validators
@@ -19,12 +19,7 @@ import os
 import sys
 import ipaddress
 import aid_hash
-from typing import (
-    Any,
-    Optional,
-    Union,
-    List,
-)
+from typing import Any, Optional, Union, List, Dict
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 from dataclasses import is_dataclass, asdict
 from enum import Enum
@@ -94,7 +89,7 @@ class Utils(object):
         try:
             datetime.fromisoformat(date_time)
             return True
-        except ValueError:
+        except (ValueError, TypeError):
             return False
 
     def extract_hostname(self, url: str) -> str:
@@ -292,6 +287,19 @@ class Utils(object):
         os.setresuid(sudo_uid, sudo_uid, -1)
         return
 
+    def is_public_ip(self, ip_str) -> bool:
+        try:
+            ip = ipaddress.ip_address(ip_str)
+            return not (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_reserved
+                or ip.is_multicast
+                or ip.is_link_local
+            )
+        except ValueError:
+            return False  # invalid IP
+
     def is_ignored_zeek_log_file(self, filepath: str) -> bool:
         """
         Returns true if the given file ends with .log or .log.labeled and
@@ -319,7 +327,7 @@ class Utils(object):
         thread.start()
         db.store_pid(thread.name, int(thread._native_id))
 
-    def convert_format(self, ts, required_format: str):
+    def convert_ts_format(self, ts, required_format: str):
         """
         Detects and converts the given ts to the given format
         PS: it sets iso format datetime in the local timezone
@@ -403,28 +411,56 @@ class Utils(object):
         return timedelta(seconds=int(time_in_seconds))
 
     def get_human_readable_datetime(self) -> str:
-        return utils.convert_format(datetime.now(), self.alerts_format)
+        return utils.convert_ts_format(datetime.now(), self.alerts_format)
 
-    def get_own_ips(self) -> list:
+    def get_mac_for_ip_using_cache(self, ip: str) -> str | None:
+        """gets the mac of the given local ip using the local arp cache"""
+        try:
+            with open("/proc/net/arp") as f:
+                next(f)  # skip header
+                for line in f:
+                    parts = line.split()
+                    if parts[0] == ip:
+                        return parts[3]
+        except FileNotFoundError:
+            pass
+        return None
+
+    def get_own_ips(self, ret=Dict) -> Dict[str, List[str]] | List[str]:
         """
-        Returns a list of our local and public IPs
+        Returns a dict of our private IPs from all interfaces and our public
+        IPs. return a dict by default
+        e.g. { "ipv4": [..], "ipv6": [..] }
+        and returns a list of all the ips combined if ret=List is given
         """
-        if "-i" not in sys.argv:
+        if "-i" not in sys.argv and "-g" not in sys.argv:
             # this method is only valid when running on an interface
             return []
 
-        IPs = []
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            s.connect(("10.255.255.255", 1))
-            IPs.append(s.getsockname()[0])
-        except Exception:
-            IPs.append("127.0.0.1")
-        finally:
-            s.close()
+        ips = {"ipv4": [], "ipv6": []}
+
+        interfaces = netifaces.interfaces()
+
+        for interface in interfaces:
+            try:
+                addrs = netifaces.ifaddresses(interface)
+
+                # get IPv4 addresses
+                if netifaces.AF_INET in addrs:
+                    for addr in addrs[netifaces.AF_INET]:
+                        ips["ipv4"].append(addr["addr"])
+
+                # get IPv6 addresses
+                if netifaces.AF_INET6 in addrs:
+                    for addr in addrs[netifaces.AF_INET6]:
+                        # remove interface suffix
+                        ip = addr["addr"].split("%")[0]
+                        ips["ipv6"].append(ip)
+
+            except Exception as e:
+                print(f"Error processing interface {interface}: {e}")
 
         # get public ip
-
         try:
             response = requests.get(
                 "http://ipinfo.io/json",
@@ -435,19 +471,27 @@ class Utils(object):
             requests.exceptions.ChunkedEncodingError,
             requests.exceptions.ReadTimeout,
         ):
-            return IPs
+            return ips
 
         if response.status_code != 200:
-            return IPs
+            return ips
         if "Connection timed out" in response.text:
-            return IPs
+            return ips
         try:
             response = json.loads(response.text)
         except json.decoder.JSONDecodeError:
-            return IPs
+            return ips
+
         public_ip = response["ip"]
-        IPs.append(public_ip)
-        return IPs
+        if validators.ipv4(public_ip):
+            ips["ipv4"].append(public_ip)
+        elif validators.ipv6(public_ip):
+            ips["ipv6"].append(public_ip)
+
+        if ret == Dict:
+            return ips
+        elif ret == List:
+            return [ip for sublist in ips.values() for ip in sublist]
 
     def convert_to_mb(self, bytes):
         return int(bytes) / (10**6)
@@ -518,6 +562,15 @@ class Utils(object):
                 file_bytes = f.read(block_size)
 
         return file_hash.hexdigest()
+
+    def get_sudo_according_to_env(self) -> str:
+        """
+        Check if running in host or in docker and sets sudo string accordingly.
+        There's no sudo in docker so we need to execute all commands without it
+        """
+        # This env variable is defined in the Dockerfile
+        running_in_docker = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
+        return "" if running_in_docker else "sudo"
 
     def is_msg_intended_for(self, message, channel):
         """
@@ -649,7 +702,7 @@ class Utils(object):
         :param ts: unix ts
         :return: ts
         """
-        ts = self.convert_format(ts, "unixtimestamp")
+        ts = self.convert_ts_format(ts, "unixtimestamp")
 
         ts = str(ts)
         # pattern of unix ts with microseconds
@@ -670,7 +723,7 @@ class Utils(object):
         proto = flow.proto.lower()
 
         # aid_hash lib only accepts unix ts
-        ts = utils.convert_format(flow.starttime, "unixtimestamp")
+        ts = utils.convert_ts_format(flow.starttime, "unixtimestamp")
         ts: str = self.assert_microseconds(ts)
 
         cases = {

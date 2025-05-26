@@ -21,13 +21,17 @@ class Spamhaus:
         self._resolver = self._setup_resolver()
 
     @staticmethod
-    def _setup_resolver():
+    def _setup_resolver() -> dns.resolver.Resolver | None:
         """Initialize and configure the DNS resolver."""
-        resolver = dns.resolver.Resolver()
-        resolver.timeout = 2.0
-        resolver.lifetime = 2.0
-        resolver.cache = dns.resolver.LRUCache()
-        return resolver
+        try:
+            resolver = dns.resolver.Resolver()
+            resolver.timeout = 2.0
+            resolver.lifetime = 2.0
+            resolver.cache = dns.resolver.LRUCache()
+            return resolver
+        except dns.resolver.NoResolverConfiguration:
+            # slips started with no internet connection
+            return
 
     def query(self, ip) -> Union[bool, Dict[str, str]]:
         """Queries the Spamhaus DNSBL to check if the IP is listed."""

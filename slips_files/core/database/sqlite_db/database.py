@@ -305,7 +305,7 @@ class SQLiteDB:
         """
         adds an alert to the alerts table
         """
-        now = utils.convert_format(datetime.now(), "unixtimestamp")
+        now = utils.convert_ts_format(datetime.now(), "unixtimestamp")
         self.execute(
             "INSERT OR REPLACE INTO alerts "
             "(alert_id, ip_alerted, timewindow, tw_start, tw_end, label, alert_time) "

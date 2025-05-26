@@ -201,7 +201,9 @@ class FlowHandler:
 
     def handle_software(self):
         self.db.add_software_to_profile(self.profileid, self.flow)
-        epoch_time = utils.convert_format(self.flow.starttime, "unixtimestamp")
+        epoch_time = utils.convert_ts_format(
+            self.flow.starttime, "unixtimestamp"
+        )
         self.flow.starttime = epoch_time
         self.publisher.new_software(self.profileid, self.flow)
 
@@ -220,7 +222,9 @@ class FlowHandler:
             self.db.store_dhcp_server(self.flow.server_addr)
             self.db.mark_profile_as_dhcp(self.profileid)
 
-        epoch_time = utils.convert_format(self.flow.starttime, "unixtimestamp")
+        epoch_time = utils.convert_ts_format(
+            self.flow.starttime, "unixtimestamp"
+        )
         self.flow.starttime = epoch_time
 
         self.publisher.new_dhcp(self.profileid, self.flow)

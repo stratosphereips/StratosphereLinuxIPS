@@ -4,6 +4,8 @@
 
 import asyncio
 
+import netifaces
+
 from tests.module_factory import ModuleFactory
 import maxminddb
 import pytest
@@ -405,27 +407,48 @@ async def test_shutdown_gracefully(
 
 
 @pytest.mark.parametrize(
-    "platform_system, subprocess_output, expected_ip",
+    "is_running_non_stop, is_running_in_ap_mode, ifaddresses_ret, get_gw_ret, expected",
     [
-        # Testcase 1: MacOS (Darwin) with valid output
-        ("Darwin", b"gateway: 192.168.1.1", "192.168.1.1"),
-        # Testcase 2: Linux with valid output
-        ("Linux", b"default via 10.0.0.1 dev eth0", "10.0.0.1"),
-        # Testcase 3: MacOS with invalid output
-        ("Darwin", b"No default gateway", False),
-        # Testcase 4: Unsupported OS
-        ("Windows", b"", False),
+        # ap mode: returns own ip
+        (True, True, {"addr": "10.0.0.1"}, None, "10.0.0.1"),
+        (True, True, KeyError, None, None),
+        # not ap mode: returns gw
+        (True, False, None, "192.168.1.1", "192.168.1.1"),
+        (True, False, None, None, None),
+        # not running
+        (False, True, {"addr": "10.0.0.1"}, None, None),
+        (False, False, None, "192.168.1.1", None),
     ],
 )
-def test_get_gateway_ip(
-    mocker, platform_system, subprocess_output, expected_ip
+def test_get_gateway_ip_if_interface(
+    mocker,
+    is_running_non_stop,
+    is_running_in_ap_mode,
+    ifaddresses_ret,
+    get_gw_ret,
+    expected,
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
-    mocker.patch("platform.system", return_value=platform_system)
-    mocker.patch("subprocess.check_output", return_value=subprocess_output)
-    mocker.patch("sys.argv", ["-i", "eth0"])
+    ip_info.is_running_non_stop = is_running_non_stop
+    ip_info.is_running_in_ap_mode = is_running_in_ap_mode
+    ip_info.args.interface = "wlan0"
+
+    if is_running_non_stop:
+        if is_running_in_ap_mode:
+            if ifaddresses_ret is KeyError:
+                mocker.patch("netifaces.ifaddresses", side_effect=KeyError)
+            else:
+                mocker.patch(
+                    "netifaces.ifaddresses",
+                    return_value={netifaces.AF_INET: [ifaddresses_ret]},
+                )
+        else:
+            mocker.patch.object(
+                ip_info, "get_gateway_for_iface", return_value=get_gw_ret
+            )
+
     result = ip_info.get_gateway_ip_if_interface()
-    assert result == expected_ip
+    assert result == expected
 
 
 @pytest.mark.parametrize(
@@ -503,11 +526,14 @@ def test_check_if_we_have_pending_mac_queries_empty_queue(
     mock_get_vendor.assert_not_called()
 
 
-def test_get_gateway_MAC_cached():
+@pytest.mark.parametrize(
+    "gw_ip, cached_mac",
+    [
+        ("192.168.1.1", "00:11:22:33:44:55"),
+    ],
+)
+def test_get_gateway_mac_cached(gw_ip, cached_mac):
     ip_info = ModuleFactory().create_ip_info_obj()
-    gw_ip = "192.168.1.1"
-    cached_mac = "00:11:22:33:44:55"
-
     ip_info.db.get_mac_addr_from_profile.return_value = cached_mac
 
     result = ip_info.get_gateway_mac(gw_ip)
@@ -516,124 +542,63 @@ def test_get_gateway_MAC_cached():
     ip_info.db.get_mac_addr_from_profile.assert_called_once_with(
         f"profile_{gw_ip}"
     )
-    (ip_info.db.set_default_gateway.assert_called_once_with("MAC", cached_mac))
 
 
-def test_get_gateway_MAC_arp_command(
-    mocker,
-):
+@pytest.mark.parametrize("gw_ip", ["192.168.0.1"])
+def test_get_gateway_mac_not_found(mocker, gw_ip):
     ip_info = ModuleFactory().create_ip_info_obj()
-    gw_ip = "172.16.0.1"
-    arp_output = "? (172.16.0.1) at 11:22:33:44:55:66 " "[ether] on eth0"
-    expected_mac = "11:22:33:44:55:66"
 
     ip_info.db.get_mac_addr_from_profile.return_value = None
-    ip_info.db.is_growing_zeek_dir.return_value = True
+    ip_info.is_running_non_stop = True
+    ip_info.is_running_in_ap_mode = False
 
     mocker.patch("sys.argv", ["-i", "eth0"])
-
     mock_subprocess_run = mocker.patch("subprocess.run")
-    mock_subprocess_run.side_effect = [
-        subprocess.CalledProcessError(1, "cmd"),
-        Mock(stdout=arp_output),
-    ]
-
-    result = ip_info.get_gateway_mac(gw_ip)
-
-    assert result == expected_mac
-    assert mock_subprocess_run.call_count == 2
-    mock_subprocess_run.assert_any_call(
-        ["arp", "-an"], capture_output=True, check=True, text=True
-    )
-    (
-        ip_info.db.set_default_gateway.assert_called_once_with(
-            "MAC", expected_mac
-        )
+    mock_subprocess_run.side_effect = subprocess.CalledProcessError(
+        1, "ip neigh"
     )
 
-
-def test_get_gateway_MAC_not_found(
-    mocker,
-):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    gw_ip = "192.168.0.1"
-
-    ip_info.db.get_mac_addr_from_profile.return_value = None
-    ip_info.db.is_growing_zeek_dir.return_value = True
-
-    mocker.patch("sys.argv", ["-i", "eth0"])
-
-    mock_subprocess_run = mocker.patch("subprocess.run")
-    mock_subprocess_run.side_effect = subprocess.CalledProcessError(1, "cmd")
+    mocker.patch(
+        "slips_files.common.slips_utils.utils.get_mac_for_ip_using_cache",
+        side_effect=subprocess.CalledProcessError(1, "arp"),
+    )
 
     result = ip_info.get_gateway_mac(gw_ip)
 
     assert result is None
-    assert mock_subprocess_run.call_count == 2
+    assert mock_subprocess_run.call_count == 1  # only ip neigh is called
     ip_info.db.set_default_gateway.assert_not_called()
 
 
-def test_get_gateway_mac_ip_command_success(
-    mocker,
-):
+@pytest.mark.parametrize("gw_ip", ["172.16.0.1"])
+def test_get_gateway_mac_ip_command_failure(mocker, gw_ip):
     ip_info = ModuleFactory().create_ip_info_obj()
-    gw_ip = "10.0.0.1"
-    ip_output = "10.0.0.1 dev eth0 lladdr aa:bb:cc:dd:ee:ff " "REACHABLE"
-    expected_mac = "aa:bb:cc:dd:ee:ff"
 
     ip_info.db.get_mac_addr_from_profile.return_value = None
-    ip_info.db.is_growing_zeek_dir.return_value = True
+    ip_info.is_running_non_stop = True
+    ip_info.is_running_in_ap_mode = False
 
     mocker.patch("sys.argv", ["-i", "eth0"])
 
     mock_subprocess_run = mocker.patch("subprocess.run")
-    mock_subprocess_run.return_value = Mock(stdout=ip_output)
+    mock_subprocess_run.side_effect = subprocess.CalledProcessError(
+        1, "ip neigh"
+    )
+
+    mocker.patch(
+        "slips_files.common.slips_utils.utils.get_mac_for_ip_using_cache",
+        side_effect=subprocess.CalledProcessError(1, "arp"),
+    )
 
     result = ip_info.get_gateway_mac(gw_ip)
 
-    assert result == expected_mac
+    assert result is None
+    assert mock_subprocess_run.call_count == 1
     mock_subprocess_run.assert_called_once_with(
         ["ip", "neigh", "show", gw_ip],
         capture_output=True,
         check=True,
         text=True,
-    )
-    (
-        ip_info.db.set_default_gateway.assert_called_once_with(
-            "MAC", expected_mac
-        )
-    )
-
-
-def test_get_gateway_mac_ip_command_failure(
-    mocker,
-):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    gw_ip = "172.16.0.1"
-
-    ip_info.db.get_mac_addr_from_profile.return_value = None
-    ip_info.db.is_growing_zeek_dir.return_value = True
-
-    mocker.patch("sys.argv", ["-i", "eth0"])
-
-    mock_subprocess_run = mocker.patch("subprocess.run")
-    mock_subprocess_run.side_effect = [
-        subprocess.CalledProcessError(1, "cmd"),
-        subprocess.CalledProcessError(1, "cmd"),
-    ]
-
-    result = ip_info.get_gateway_mac(gw_ip)
-
-    assert result is None
-    assert mock_subprocess_run.call_count == 2
-    mock_subprocess_run.assert_any_call(
-        ["ip", "neigh", "show", gw_ip],
-        capture_output=True,
-        check=True,
-        text=True,
-    )
-    mock_subprocess_run.assert_any_call(
-        ["arp", "-an"], capture_output=True, check=True, text=True
     )
     ip_info.db.set_default_gateway.assert_not_called()
 

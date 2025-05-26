@@ -52,6 +52,7 @@ class Main:
         self.last_updated_stats_time = datetime.now()
         self.input_type = False
         self.proc_man = ProcessManager(self)
+        self.gw_info_printed = False
         # in testing mode we manually set the following params
         # TODO use mocks instead of this testing param
         if not testing:
@@ -205,7 +206,7 @@ class Main:
             ),  # get pcap name from path
         )
         # add timestamp to avoid conflicts wlp3s0_2022-03-1_03:55
-        ts = utils.convert_format(datetime.now(), "%Y-%m-%d_%H:%M:%S")
+        ts = utils.convert_ts_format(datetime.now(), "%Y-%m-%d_%H:%M:%S")
         self.args.output += f"_{ts}/"
 
         os.makedirs(self.args.output)
@@ -386,7 +387,7 @@ class Main:
             return
 
         self.last_updated_stats_time = now
-        now = utils.convert_format(now, "%Y/%m/%d %H:%M:%S")
+        now = utils.convert_ts_format(now, "%Y/%m/%d %H:%M:%S")
         modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
         profiles_len = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
@@ -397,7 +398,7 @@ class Main:
             f"Evidence: {green(evidence_number)}. "
             f"Number of IPs seen in the last ({self.twid_width}):"
             f" {green(modified_ips_in_the_last_tw)}. "
-            f"Analyzed {flow_per_min} flows/min."
+            f"Analyzed {green(flow_per_min)} flows/min."
         )
         self.print(stats)
         sys.stdout.flush()  # Make sure the output is displayed immediately
@@ -442,6 +443,15 @@ class Main:
             return self.daemon.stderr
         elif self.mode == "interactive":
             return os.path.join(self.args.output, "errors.log")
+
+    def print_gw_info(self):
+        if self.gw_info_printed:
+            return
+        if ip := self.db.get_gateway_ip():
+            self.print(f"Detected gateway IP: {green(ip)}")
+        if mac := self.db.get_gateway_mac():
+            self.print(f"Detected gateway MAC: {green(mac)}")
+        self.gw_info_printed = True
 
     def start(self):
         """Main Slips Function"""
@@ -608,15 +618,14 @@ class Main:
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
+                self.print_gw_info()
 
                 # if you remove the below logic anywhere before the
                 # above sleep() statement, it will try to get the return
                 # value very quickly before
                 # the webinterface thread sets it. so don't:D
                 self.ui_man.check_if_webinterface_started()
-
                 self.update_stats()
-
                 self.db.check_tw_to_close()
 
                 modified_profiles: Set[str] = (

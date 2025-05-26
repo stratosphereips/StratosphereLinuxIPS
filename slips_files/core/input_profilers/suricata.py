@@ -76,10 +76,10 @@ class Suricata(IInputType):
                 return default_
 
         if event_type == "flow":
-            starttime = utils.convert_format(
+            starttime = utils.convert_ts_format(
                 get_value_at("flow", "start"), "unixtimestamp"
             )
-            endtime = utils.convert_format(
+            endtime = utils.convert_ts_format(
                 get_value_at("flow", "end"), "unixtimestamp"
             )
             self.flow: SuricataFlow = SuricataFlow(

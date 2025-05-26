@@ -812,30 +812,6 @@ def test_add_new_tw(
 
 
 @pytest.mark.parametrize(
-    "zscore_return_value, expected_start_time",
-    [  # Testcase 1: TW exists and has a start time
-        (1100.0, 1100.0),
-        # Testcase 2: TW does not exist
-        (None, None),
-    ],
-)
-def test_get_tw_start_time(zscore_return_value, expected_start_time):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    profileid = "profile_1"
-    twid = "timewindow2"
-
-    handler.r.zscore.return_value = zscore_return_value
-
-    start_time = handler.get_tw_start_time(profileid, twid)
-
-    handler.r.zscore.assert_called_once_with(
-        f"tws{profileid}", twid.encode("utf-8")
-    )
-    assert start_time == expected_start_time
-
-
-@pytest.mark.parametrize(
     "profileid, zcard_return_value, expected_num_tws",
     [  # Testcase 1: Profile with 3 timewindows
         ("profile_1", 3, 3),
@@ -2216,14 +2192,14 @@ def test_get_tw_of_ts():
 
 
 @pytest.mark.parametrize(
-    "flowtime, width, hget_return_value, expected_twid, "
-    "expected_tw_start, expected_add_new_tw_call",
+    "flowtime, width, first_flow_time, "
+    "expected_twid, expected_tw_start, expected_add_new_tw_call",
     [
         # Testcase 1: Normal case, existing start time
         (
             26,
             5,
-            "0",
+            0,
             "timewindow6",
             25,
             call("profile_1", "timewindow6", 25),
@@ -2232,7 +2208,7 @@ def test_get_tw_of_ts():
         (
             1600000100.0,
             100.0,
-            "1600000000.0",
+            1600000000.0,
             "timewindow2",
             1600000100.0,
             call("profile_1", "timewindow2", 1600000100.0),
@@ -2251,7 +2227,7 @@ def test_get_tw_of_ts():
 def test_get_timewindow(
     flowtime,
     width,
-    hget_return_value,
+    first_flow_time,
     expected_twid,
     expected_tw_start,
     expected_add_new_tw_call,
@@ -2260,11 +2236,11 @@ def test_get_timewindow(
     profileid = "profile_1"
     handler.add_new_tw = MagicMock()
     handler.width = width
-    handler.r.hget.return_value = hget_return_value
+    handler.get_first_flow_time = Mock(return_value=first_flow_time)
 
     twid = handler.get_timewindow(flowtime, profileid)
 
-    handler.r.hget.assert_called_once_with("analysis", "file_start")
+    handler.get_first_flow_time.assert_called_once()
     handler.add_new_tw.assert_called_once_with(*expected_add_new_tw_call.args)
     assert twid == expected_twid
 
@@ -2507,9 +2483,33 @@ def test_mark_profile_as_dhcp_profile_already_dhcp():
 
 
 @pytest.mark.parametrize(
+    "zscore_return_value, expected_start_time",
+    [  # Testcase 1: TW exists and has a start time
+        (1100.0, 1100.0),
+        # Testcase 2: TW does not exist
+        (None, None),
+    ],
+)
+def test_get_tw_start_time(zscore_return_value, expected_start_time):
+    handler = ModuleFactory().create_profile_handler_obj()
+
+    profileid = "profile_1"
+    twid = "timewindow2"
+
+    handler.r.zscore.return_value = zscore_return_value
+
+    start_time = handler.get_tw_start_time(profileid, twid)
+
+    handler.r.zscore.assert_called_once_with(
+        f"tws{profileid}", twid.encode("utf-8")
+    )
+    assert start_time == expected_start_time
+
+
+@pytest.mark.parametrize(
     "hget_return_value, expected_first_flow_time",
     [  # Testcase 1: First flow time exists
-        ("1600000000.0", "1600000000.0"),
+        ("1600000000.0", 1600000000.0),
         # Testcase 2: First flow time does not exist
         (None, None),
     ],

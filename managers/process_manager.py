@@ -83,7 +83,8 @@ class ProcessManager:
         )
         self.bootstrap_p2p = self.main.conf.is_bootstrapping_node()
         self.bootstrapping_modules = self.main.conf.get_bootstrapping_modules()
-        # self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.get_bootstrapping_setting()
+        # self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.
+        # get_bootstrapping_setting()
 
     def start_output_process(self, stderr, slips_logfile, stdout=""):
         output_process = Output(
@@ -104,6 +105,7 @@ class ProcessManager:
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
+            self.main.args,
             is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
@@ -124,6 +126,7 @@ class ProcessManager:
             self.main.args.output,
             self.main.redis_port,
             self.evidence_handler_termination_event,
+            self.main.args,
         )
         evidence_process.start()
         self.main.print(
@@ -141,6 +144,7 @@ class ProcessManager:
             self.main.args.output,
             self.main.redis_port,
             self.termination_event,
+            self.main.args,
             is_input_done=self.is_input_done,
             profiler_queue=self.profiler_queue,
             input_type=self.main.input_type,
@@ -242,92 +246,133 @@ class ProcessManager:
 
     def get_modules(self):
         """
-        Get modules from the 'modules' folder.
+        get modules to load from the modules/ dir and ignore the ones in
+        the disable param in the config file.
+        Starts the blocking module only if --clearblocking in given
+        and returns a list of modules to load in the correct order if
+        applicable.
         """
-        # This plugins import will automatically load the modules
-        # and put them in the __modules__ variable
         plugins = {}
         failed_to_load_modules = 0
 
-        # __path__ is the current path of this python program
-        look_for_modules_in = modules.__path__
-        prefix = f"{modules.__name__}."
-        # Walk recursively through all modules and packages found on the .
-        # folder.
-        for loader, module_name, ispkg in pkgutil.walk_packages(
-            look_for_modules_in, prefix
-        ):
-            # If current item is a package, skip.
-            if ispkg:
+        for module_name in self._discover_module_names():
+            if not self._should_load_module(module_name):
                 continue
 
-            # to avoid loading everything in the dir,
-            # only load modules that have the same name as the dir name
-            dir_name = module_name.split(".")[1]
-            file_name = module_name.split(".")[2]
-            if dir_name != file_name:
-                continue
-
-            if self.bootstrap_p2p:  # if bootstrapping the p2p network
-                if not self.is_bootstrapping_module(
-                    module_name
-                ):  # keep only the bootstrapping-necessary modules
-                    continue
-            else:  # if not bootstrappig mode
-                if self.is_ignored_module(
-                    module_name
-                ):  # ignore blacklisted modules
-                    continue
-
-            # Try to import the module, otherwise skip.
-            try:
-                # "level specifies whether to use absolute or relative imports.
-                # The default is -1 which
-                # indicates both absolute and relative imports will
-                # be attempted.
-                # 0 means only perform absolute imports.
-                # Positive values for level indicate the number of parent
-                # directories to search relative to the directory of the
-                # module calling __import__()."
-                module = importlib.import_module(module_name)
-            except ImportError as e:
-                print(
-                    f"Something wrong happened while "
-                    f"importing the module {module_name}: {e}"
-                )
-                print(traceback.format_exc())
+            module = self._import_module(module_name)
+            if not module:
                 failed_to_load_modules += 1
                 continue
 
-            # Walk through all members of currently imported modules.
-            for member_name, member_object in inspect.getmembers(module):
-                # Check if current member is a class.
-                if inspect.isclass(member_object) and (
-                    issubclass(member_object, IModule)
-                    and not self.is_abstract_module(member_object)
-                ):
-                    plugins[member_object.name] = dict(
-                        obj=member_object,
-                        description=member_object.description,
-                    )
+            plugins = self._load_valid_classes_from_module(module, plugins)
 
-        # Change the order of the blocking module(load it first)
-        # so it can receive msgs sent from other modules
-        if "Blocking" in plugins:
-            plugins = OrderedDict(plugins)
-            # last=False to move to the beginning of the dict
-            plugins.move_to_end("Blocking", last=False)
+        plugins = self._reorder_modules(plugins)
+        return plugins, failed_to_load_modules
 
+    def _reorder_modules(self, plugins):
+        plugins = self._prioritize_blocking_modules(plugins)
+        plugins = self._change_cyst_module_order(plugins)
+        return plugins
+
+    def _discover_module_names(self):
+        """
+        walk recursively through all modules and packages found in modules/
+        """
+        # __path__ is the current path of this python program
+        look_for_modules_in = modules.__path__
+        prefix = f"{modules.__name__}."
+
+        for loader, module_name, ispkg in pkgutil.walk_packages(
+            look_for_modules_in, prefix
+        ):
+            if ispkg:
+                continue  # skip if current item is a package
+
+            dir_name, file_name = module_name.split(".")[1:3]
+
+            # to avoid loading everything in the dir,
+            # only load modules that have the same name as the dir name
+            if dir_name == file_name:
+                yield module_name
+
+    def _should_load_module(self, module_name):
+        # filter modules based on bootstrapping or blacklist conditions
+        if self.bootstrap_p2p:
+            if not self.is_bootstrapping_module(module_name):
+                return False  # keep only the bootstrapping-necessary modules
+        else:
+            if self.is_ignored_module(module_name):
+                return False  # ignore blacklisted modules
+        return True
+
+    def _import_module(self, module_name):
+        # try to import the module, otherwise return None
+        try:
+            # "level" specifies how importlib should resolve the module
+            return importlib.import_module(module_name)
+        except ImportError as e:
+            print(
+                f"Something wrong happened while importing the module"
+                f" {module_name}: {e}"
+            )
+            print(traceback.format_exc())
+            return None
+
+    def _load_valid_classes_from_module(self, module, plugins):
+        # walk through all members of the given module
+        for member_name, member_object in inspect.getmembers(module):
+            if inspect.isclass(member_object):
+                if issubclass(
+                    member_object, IModule
+                ) and not self.is_abstract_module(member_object):
+                    plugins[member_object.name] = {
+                        "obj": member_object,
+                        "description": member_object.description,
+                    }
+        return plugins
+
+    def _prioritize_blocking_modules(self, plugins):
+        """
+        Changes the order of the blocking modules (ARP poisoner and
+        Blocking) to load them before the rest of the modules
+        so they can receive msgs sent from other modules
+        """
+        blocking_modules = ("Blocking", "ARP Poisoner")
+
+        at_least_one_blocking_module_is_loaded = False
+        for module in blocking_modules:
+            if module in plugins:
+                at_least_one_blocking_module_is_loaded = True
+                break
+        if not at_least_one_blocking_module_is_loaded:
+            return plugins
+
+        # put the blocking modules at the top to start first
+        ordered = OrderedDict(plugins)
+        for module in blocking_modules:
+            if module in plugins:
+                # last=False to move to the beginning of the dict
+                ordered.move_to_end(module, last=False)
+
+        plugins.clear()
+        plugins.update(ordered)
+        return plugins
+
+    def _change_cyst_module_order(self, plugins):
         # when cyst starts first, as soon as slips connects to cyst,
         # cyst sends slips the flows,
         # but the inputprocess didn't even start yet so the flows are lost
-        # to fix this, change the order of the CYST module(load it last)
-        if "cyst" in plugins:
-            plugins = OrderedDict(plugins)
-            # last=False to move to the beginning of the dict
-            plugins.move_to_end("cyst", last=True)
+        # to fix this, change the order of the CYST module (load it last)
+        if "cyst" not in plugins:
+            return plugins
 
-        return plugins, failed_to_load_modules
+        ordered = OrderedDict(plugins)
+        ordered.move_to_end(
+            "cyst", last=True
+        )  # last=True to move to the end of the dict
+        plugins.clear()
+        plugins.update(ordered)
+        return plugins
 
     def print_disabled_modules(self):
         print("-" * 27)
@@ -343,6 +388,7 @@ class ProcessManager:
                 self.main.args.output,
                 self.main.redis_port,
                 self.termination_event,
+                self.main.args,
             )
             module.start()
             self.main.db.store_pid(module_name, int(module.pid))
@@ -397,6 +443,7 @@ class ProcessManager:
                     self.main.args.output,
                     self.main.redis_port,
                     multiprocessing.Event(),
+                    self.main.args,
                 )
 
                 if local_files:
@@ -459,6 +506,7 @@ class ProcessManager:
 
         if self.main.args.blocking:
             pids_to_kill_last.append(self.main.db.get_pid_of("Blocking"))
+            pids_to_kill_last.append(self.main.db.get_pid_of("ARP Poisoner"))
 
         if "exporting_alerts" not in self.main.db.get_disabled_modules():
             pids_to_kill_last.append(
@@ -515,7 +563,7 @@ class ProcessManager:
         returns analysis_time in minutes and slips end_time as a date
         """
         start_time = self.main.db.get_slips_start_time()
-        end_time = utils.convert_format(datetime.now(), "unixtimestamp")
+        end_time = utils.convert_ts_format(datetime.now(), "unixtimestamp")
         return (
             utils.get_time_diff(start_time, end_time, return_type="minutes"),
             end_time,

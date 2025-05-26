@@ -47,6 +47,7 @@ from slips_files.core.structures.evidence import (
     Evidence,
     Victim,
     EvidenceType,
+    TimeWindow,
 )
 from slips_files.core.structures.alerts import (
     Alert,
@@ -91,12 +92,13 @@ class EvidenceHandler(ICore):
         utils.change_logfiles_ownership(self.logfile.name, self.UID, self.GID)
 
         self.is_running_non_stop = self.db.is_running_non_stop()
+        self.blocking_module_supported = self.is_blocking_modules_supported()
 
         # clear output/alerts.json
         self.jsonfile = self.clean_file(self.output_dir, "alerts.json")
         utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
         # this list will have our local and public ips when using -i
-        self.our_ips = utils.get_own_ips()
+        self.our_ips: List[str] = utils.get_own_ips(ret=List)
         self.formatter = EvidenceFormatter(self.db)
         # thats just a tmp value, this variable will be set and used when
         # the
@@ -244,12 +246,13 @@ class EvidenceHandler(ICore):
         given timewindow
         """
         past_alerts: dict = self.db.get_profileid_twid_alerts(profileid, twid)
-        try:
-            past_evidence_ids = list(past_alerts.values())[0]
-            past_evidence_ids: List[str] = json.loads(past_evidence_ids)
-        except IndexError:
-            # no past evidence
-            past_evidence_ids = []
+
+        past_evidence_ids = []
+        if past_alerts:
+            for evidence_id_list in list(past_alerts.values()):
+                evidence_id_list: List[str] = json.loads(evidence_id_list)
+                past_evidence_ids += evidence_id_list
+
         return past_evidence_ids
 
     def is_evidence_done_by_others(self, evidence: Evidence) -> bool:
@@ -359,7 +362,7 @@ class EvidenceHandler(ICore):
             evidence: dict = utils.to_dict(evidence)
             self.db.publish("export_evidence", json.dumps(evidence))
 
-    def is_blocking_module_supported(self) -> bool:
+    def is_blocking_modules_supported(self) -> bool:
         """
         returns true if slips is running in an interface or growing
          zeek dir with -p
@@ -377,8 +380,23 @@ class EvidenceHandler(ICore):
     ):
         """
         saves alert details in the db and informs exporting modules about it
+
+        if a profile already generated an alert in this tw, we send a
+        blocking request (to extend its blocking period), and log the alert
+        in the db only, without printing it to cli.
         """
+
         self.db.set_alert(alert, evidence_causing_the_alert)
+        self.decide_blocking(alert.profile.ip, alert.timewindow)
+        # like in the firewall
+        profile_already_blocked: bool = self.db.is_blocked_profile_and_tw(
+            str(alert.profile), str(alert.timewindow)
+        )
+        if profile_already_blocked:
+            # that's it, dont keep logging new alerts if 1 alerts is logged
+            # in this tw.
+            return
+
         self.send_to_exporting_module(evidence_causing_the_alert)
         alert_to_print: str = self.formatter.format_evidence_for_printing(
             alert, evidence_causing_the_alert
@@ -389,20 +407,25 @@ class EvidenceHandler(ICore):
         if self.popup_alerts:
             self.show_popup(alert)
 
-        is_blocked: bool = self.decide_blocking(alert.profile.ip)
+        is_blocked: bool = self.decide_blocking(
+            alert.profile.ip, alert.timewindow
+        )
         if is_blocked:
             self.db.mark_profile_and_timewindow_as_blocked(
                 str(alert.profile), str(alert.timewindow)
             )
+
         self.log_alert(alert, blocked=is_blocked)
 
-    def decide_blocking(self, ip_to_block: str) -> bool:
+    def decide_blocking(
+        self, ip_to_block: str, timewindow: TimeWindow
+    ) -> bool:
         """
         Decide whether to block or not and send to the blocking module
          returns True if the given IP was blocked by Slips blocking module
         """
         # send ip to the blocking module
-        if not self.is_blocking_module_supported():
+        if not self.blocking_module_supported:
             return False
         # now since this source ip(profileid) caused an alert,
         # it means it caused so many evidence(attacked others a lot)
@@ -419,6 +442,7 @@ class EvidenceHandler(ICore):
         blocking_data = {
             "ip": ip_to_block,
             "block": True,
+            "tw": timewindow.number,
         }
         blocking_data = json.dumps(blocking_data)
         self.db.publish("new_blocking", blocking_data)
@@ -512,7 +536,7 @@ class EvidenceHandler(ICore):
                     timestamp: datetime = utils.convert_to_local_timezone(
                         timestamp
                     )
-                flow_datetime = utils.convert_format(timestamp, "iso")
+                flow_datetime = utils.convert_ts_format(timestamp, "iso")
 
                 evidence: Evidence = (
                     self.formatter.add_threat_level_to_evidence_description(
@@ -555,11 +579,6 @@ class EvidenceHandler(ICore):
                 evidence_dict: dict = utils.to_dict(evidence)
                 self.db.publish("report_to_peers", json.dumps(evidence_dict))
 
-                # if the profile was already blocked in
-                # this twid, we shouldn't alert
-                profile_already_blocked = self.db.is_blocked_profile_and_tw(
-                    profileid, twid
-                )
                 # This is the part to detect if the accumulated
                 # evidence was enough for generating a detection
                 # The detection should be done in attacks per minute.
@@ -570,7 +589,6 @@ class EvidenceHandler(ICore):
                 if (
                     accumulated_threat_level
                     >= self.detection_threshold_in_this_width
-                    and not profile_already_blocked
                 ):
                     tw_evidence: Dict[str, Evidence]
                     tw_evidence = self.get_evidence_for_tw(profileid, twid)
@@ -625,7 +643,6 @@ class EvidenceHandler(ICore):
                     "block": True,
                     "to": True,
                     "from": True,
-                    "block_for": self.width * 2,  # block for 2 timewindows
                 }
                 blocking_data = json.dumps(blocking_data)
                 self.db.publish("new_blocking", blocking_data)

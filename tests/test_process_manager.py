@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from managers.process_manager import ProcessManager
 from tests.module_factory import ModuleFactory
 from slips_files.common.slips_utils import utils
@@ -48,6 +48,7 @@ def test_start_input_process(
             process_manager.main.args.output,
             process_manager.main.redis_port,
             process_manager.termination_event,
+            process_manager.main.args,
             is_input_done=process_manager.is_input_done,
             profiler_queue=process_manager.profiler_queue,
             input_type=input_type,
@@ -241,7 +242,7 @@ def test_get_analysis_time(
     end_date_str, start_time_str, expected_analysis_time
 ):
     process_manager = ModuleFactory().create_process_manager_obj()
-    utils.convert_format = Mock(return_value=end_date_str)
+    utils.convert_ts_format = Mock(return_value=end_date_str)
     process_manager.main.db.get_slips_start_time.return_value = start_time_str
 
     analysis_time = process_manager.get_analysis_time()
@@ -402,6 +403,7 @@ def test_start_profiler_process():
             process_manager.main.args.output,
             process_manager.main.redis_port,
             process_manager.termination_event,
+            process_manager.main.args,
             is_profiler_done=process_manager.is_profiler_done,
             profiler_queue=process_manager.profiler_queue,
             is_profiler_done_event=process_manager.is_profiler_done_event,
@@ -440,6 +442,7 @@ def test_start_evidence_process(output_dir, redis_port):
             output_dir,
             redis_port,
             process_manager.evidence_handler_termination_event,
+            process_manager.main.args,
         )
         mock_evidence_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()

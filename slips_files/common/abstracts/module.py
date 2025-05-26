@@ -4,6 +4,7 @@ import sys
 import traceback
 import warnings
 from abc import ABC, abstractmethod
+from argparse import Namespace
 from multiprocessing import Process, Event
 from typing import (
     Dict,
@@ -34,12 +35,15 @@ class IModule(ABC, Process):
         output_dir,
         redis_port,
         termination_event,
+        args,
         **kwargs,
     ):
         Process.__init__(self)
         self.redis_port = redis_port
         self.output_dir = output_dir
         self.msg_received = False
+        # as parsed by arg_parser, these are the cli args
+        self.args: Namespace = args
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
         self.logger = logger
@@ -133,13 +137,16 @@ class IModule(ABC, Process):
         """
 
     def get_msg(self, channel: str) -> Optional[dict]:
-        message = self.db.get_message(self.channels[channel])
-        if utils.is_msg_intended_for(message, channel):
-            self.channel_tracker[channel]["msg_received"] = True
-            self.db.incr_msgs_received_in_channel(self.name, channel)
-            return message
+        try:
+            message = self.db.get_message(self.channels[channel])
+            if utils.is_msg_intended_for(message, channel):
+                self.channel_tracker[channel]["msg_received"] = True
+                self.db.incr_msgs_received_in_channel(self.name, channel)
+                return message
 
-        self.channel_tracker[channel]["msg_received"] = False
+            self.channel_tracker[channel]["msg_received"] = False
+        except KeyboardInterrupt:
+            return None
 
     def print_traceback(self):
         exception_line = sys.exc_info()[2].tb_lineno

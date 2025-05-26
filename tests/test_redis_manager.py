@@ -52,7 +52,7 @@ def test_log_redis_server_pid_normal_ports(
     redis_manager.main.args.daemon = is_daemon
     redis_manager.main.args.save = save_db
     redis_manager.remove_old_logline = Mock()
-    slips_files.common.slips_utils.utils.convert_format = Mock(
+    slips_files.common.slips_utils.utils.convert_ts_format = Mock(
         return_value="Date"
     )
 

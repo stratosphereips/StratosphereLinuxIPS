@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import socket
 from unittest.mock import MagicMock, patch, Mock
 import pytest
 from tests.module_factory import ModuleFactory
@@ -36,38 +35,43 @@ def test_update_host_ip(
     assert host_ip_man.get_host_ip.call_count == expected_calls
 
 
-def test_get_host_ip_success():
+@pytest.mark.parametrize(
+    "interfaces, ifaddresses, expected",
+    [
+        (  # 2 here is AF_INET
+            ["lo", "eth0"],
+            {"lo": {}, "eth0": {2: [{"addr": "192.168.1.10"}]}},
+            "192.168.1.10",
+        ),
+        (
+            ["lo", "eth0"],
+            {
+                "lo": {2: [{"addr": "127.0.0.1"}]},
+                "eth0": {2: [{"addr": "127.0.0.2"}]},
+            },
+            None,
+        ),
+        (["lo"], {"lo": {2: [{"addr": "127.0.0.1"}]}}, None),
+    ],
+)
+def test_get_host_ip(interfaces, ifaddresses, expected):
     host_ip_man = ModuleFactory().create_host_ip_manager_obj()
-    expected_ip = "192.168.1.100"
+    host_ip_man.main.args.interface = None  # simulate not passed, to use all
+    host_ip_man.main.args.growing = (
+        True  # simulate -g used, so use all interfaces
+    )
 
-    with patch("socket.socket") as mock_socket:
-        mock_instance = MagicMock()
-        mock_socket.return_value = mock_instance
-
-        mock_instance.getsockname.return_value = (expected_ip, 80)
-
+    with patch(
+        "managers.host_ip_manager.netifaces.interfaces",
+        return_value=interfaces,
+    ), patch(
+        "managers.host_ip_manager.netifaces.ifaddresses",
+        side_effect=lambda iface: ifaddresses.get(iface, {}),
+    ), patch(
+        "managers.host_ip_manager.netifaces.AF_INET", 2
+    ):
         result = host_ip_man.get_host_ip()
-
-        assert result == expected_ip
-        mock_instance.connect.assert_any_call(("1.1.1.1", 80))
-        mock_instance.getsockname.assert_called_once()
-
-
-def test_get_host_ip_failure():
-    host_ip_man = ModuleFactory().create_host_ip_manager_obj()
-
-    with patch("socket.socket") as mock_socket:
-        mock_instance = MagicMock()
-        mock_socket.return_value = mock_instance
-
-        mock_instance.connect.side_effect = socket.error()
-
-        result = host_ip_man.get_host_ip()
-
-        assert result is None
-        mock_instance.connect.assert_any_call(("1.1.1.1", 80))
-        mock_instance.connect.assert_any_call(("2606:4700:4700::1111", 80))
-        mock_instance.getsockname.assert_not_called()
+        assert result == expected
 
 
 @pytest.mark.parametrize(

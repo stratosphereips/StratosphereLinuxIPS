@@ -1,10 +1,11 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import socket
 import time
+import netifaces
 from typing import (
     Set,
     Optional,
+    List,
 )
 
 from slips_files.common.style import green
@@ -16,29 +17,31 @@ class HostIPManager:
 
     def get_host_ip(self) -> Optional[str]:
         """
-        tries to determine the machine's IP address by creating a UDP
-        connection to cloudflare
-        returns ipv4 or ipv6 of the current computer
+        tries to determine the machine's IP.
+        uses the intrfaces provided by the user if -i is given, or all
+        interfaces if not.
         """
-        for address_family in (socket.AF_INET, socket.AF_INET6):
-            try:
-                s = socket.socket(address_family, socket.SOCK_DGRAM)
+        if not (self.main.args.interface or self.main.args.growing):
+            # slips is running on a file, we cant determine the host IP
+            return
 
-                test_address = (
-                    ("1.1.1.1", 80)
-                    if address_family == socket.AF_INET
-                    else ("2606:4700:4700::1111", 80)
-                )
+        # we use all interfaces when -g is used, otherwise we use the given
+        # interface
+        interfaces: List[str] = (
+            [self.main.args.interface]
+            if self.main.args.interface
+            else netifaces.interfaces()
+        )
 
-                s.connect(test_address)
-                ipaddr_check = s.getsockname()[0]
-                s.close()
-                return ipaddr_check
-            except socket.error:
+        for iface in interfaces:
+            addrs = netifaces.ifaddresses(iface)
+            # check for IPv4 address
+            if netifaces.AF_INET not in addrs:
                 continue
-
-        # neither ipv4 nor ipv6 worked
-        return None
+            for addr in addrs[netifaces.AF_INET]:
+                ip = addr.get("addr")
+                if ip and not ip.startswith("127."):
+                    return ip
 
     def store_host_ip(self) -> Optional[str]:
         """

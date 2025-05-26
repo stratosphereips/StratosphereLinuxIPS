@@ -10,6 +10,7 @@ import pytest
 import pytz
 import json
 from collections import namedtuple
+from typing import List
 
 
 def test_get_sha256_hash():
@@ -181,10 +182,12 @@ def test_calculate_confidence(input_value, expected_output):
         ),
     ],
 )
-def test_convert_format(input_value, input_format, expected_output):
+def test_convert_ts_format(input_value, input_format, expected_output):
     utils = ModuleFactory().create_utils_obj()
     utils.local_tz = datetime.timezone.utc
-    assert utils.convert_format(input_value, input_format) == expected_output
+    assert (
+        utils.convert_ts_format(input_value, input_format) == expected_output
+    )
 
 
 @pytest.mark.parametrize(
@@ -289,13 +292,15 @@ def _check_ip_presence(utils, expected_ip):
     Helper function to check if the given IP is present
     in the list of own IPs.
     """
-    return expected_ip in utils.get_own_ips() or not utils.get_own_ips()
+    return (
+        expected_ip in utils.get_own_ips(ret=List) or not utils.get_own_ips()
+    )
 
 
 def test_get_own_ips_success():
     """Test that the function returns a list when successful."""
     utils = ModuleFactory().create_utils_obj()
-    ips = utils.get_own_ips()
+    ips = utils.get_own_ips(ret=List)
     assert isinstance(ips, list), "Should return a list of IPs"
 
 

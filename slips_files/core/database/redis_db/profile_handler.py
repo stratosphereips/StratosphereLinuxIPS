@@ -81,6 +81,24 @@ class ProfileHandler:
                 json.dumps(flow),
             )
 
+    def get_tw_start_time(self, profileid, twid):
+        """Return the time when this TW in this profile was created"""
+        # We need to encode it to 'search' because the data in the
+        # sorted set is encoded
+        return self.r.zscore(f"tws{profileid}", twid.encode("utf-8"))
+
+    def get_first_flow_time(self) -> float | None:
+        """
+        Get the starttime of the first timewindow
+        aka ts of the first flow
+        first tw is always timewindow1
+        """
+        starttime_of_first_tw: str = self.r.hget(
+            self.constants.ANALYSIS, "file_start"
+        )
+        if starttime_of_first_tw:
+            return float(starttime_of_first_tw)
+
     def get_timewindow(self, flowtime, profileid):
         """
         This function returns the TW in the database where the flow belongs.
@@ -111,11 +129,9 @@ class ProfileHandler:
             tw_start = float(flowtime - (31536000 * 100))
             tw_number: int = 1
         else:
-            starttime_of_first_tw: str = self.r.hget(
-                self.constants.ANALYSIS, "file_start"
-            )
-            if starttime_of_first_tw:
-                starttime_of_first_tw = float(starttime_of_first_tw)
+            starttime_of_first_tw: float = self.get_first_flow_time()
+            if starttime_of_first_tw is not None:  #  because 0 is a valid
+                # value
                 tw_number: int = (
                     floor((flowtime - starttime_of_first_tw) / self.width) + 1
                 )
@@ -815,11 +831,6 @@ class ProfileHandler:
         }
         to_send = json.dumps(to_send)
 
-        # set the pcap/file stime in the analysis key
-        if self.first_flow:
-            self.set_input_metadata({"file_start": flow.starttime})
-            self.first_flow = False
-
         # dont send arp flows in this channel, they have their own
         # new_arp channel
         if flow.type_ != "arp":
@@ -1148,13 +1159,6 @@ class ProfileHandler:
             self.print("Error in addNewTW", 0, 1)
             self.print(traceback.format_exc(), 0, 1)
 
-    def get_tw_start_time(self, profileid, twid):
-        """Return the time when this TW in this profile was created"""
-        # Get all the TW for this profile
-        # We need to encode it to 'search' because the data in the
-        # sorted set is encoded
-        return self.r.zscore(f"tws{profileid}", twid.encode("utf-8"))
-
     def get_number_of_tws(self, profileid):
         """Return the number of tws for this profile id"""
         return self.r.zcard(f"tws{profileid}") if profileid else False
@@ -1450,9 +1454,6 @@ class ProfileHandler:
         # check if it's already marked as dhcp
         if not is_dhcp_set:
             self.r.hset(profileid, "dhcp", "true")
-
-    def get_first_flow_time(self) -> Optional[str]:
-        return self.r.hget(self.constants.ANALYSIS, "file_start")
 
     def add_profile(self, profileid, starttime):
         """

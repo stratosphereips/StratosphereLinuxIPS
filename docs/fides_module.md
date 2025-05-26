@@ -1,38 +1,31 @@
-# Fides module
+# Fides module. Global P2P Threat Ingelligence Sharing
 
-The Fides module is an essential component of the Global P2P system in Slips.
+Slips implements an internet global P2P system for Threat Intelligence sharing and alerting.
 
+The Fides module implements the Global P2P system in Slips.
 
 Traditional network defense systems depend on centralized threat intelligence, which has limitations like single points of failure, inflexibility, and reliance on trust in centralized authorities. Peer-to-peer networks offer an alternative for sharing threat intelligence but face challenges in verifying the trustworthiness of participants, including potential malicious actors.
 
-The Fides Module, based on [Master Theses](https://github.com/stratosphereips/fides/tree/bfac47728172d3a4bbb27a5bb53ceef424e45e4f) on CTU FEL by Lukáš Forst. The goal of this module is to address the challenge of trustworthiness of peers in peer-to-peer networks by providing several trust evaluation models. It evaluates peer behavior, considers membership in trusted organizations, and assesses incoming threat data to determine reliability. Fides aggregates and weights data to enhance intrusion prevention systems, even in adversarial scenarios. Experiments show that Fides can maintain accurate threat intelligence even when 75% of the network is controlled by malicious actors, assuming the remaining 25% are trusted.
+The Fides Module is based on the [Master Thesis](https://dspace.cvut.cz/handle/10467/101312) of Lukáš Forst and implemented in Slips in the Master Thesis of David Otta. The goal of the Fides module is to address the challenge of trust of peers in P2P networks by providing several trust evaluation models. It evaluates peer behavior, considers membership in trusted organizations, and assesses incoming threat data to determine reliability. Fides aggregates and weights data to enhance intrusion prevention systems, even in adversarial scenarios. Experiments show that Fides can maintain accurate threat intelligence even when 75% of the network is controlled by malicious actors, assuming the remaining 25% are trusted.
 
 The whole architecture is thoroughly documented in the thesis itself, which can be downloaded from the link above.
 
 ## Docker direct use
-You can use Slips with Fides Module by allowing it in the Slips config file or by using the following commands.
+You can use Slips with the Fides Module by allowing it in the Slips config file or by using the following commands.
 
 ```
 docker pull stratosphereips/slips
-docker run -it --rm --net=host --cap-add=NET_ADMIN stratosphereips/slips
+docker run -it --rm --net=host --use_fides=True --cap-add=NET_ADMIN stratosphereips/slips
 ```
 
-To be able to use the fides module you should use ```--cap-add=NET_ADMIN```
+To be able to use the fides module, you should use ```--cap-add=NET_ADMIN```
 
-## Installation:
+## Conditions
 
-```
-docker pull stratosphereips/slips
-docker run -it --rm --net=host --use_fides=True stratosphereips/slips
-```
+If you plan on using the Fides Module, please be aware that it is used only if Slips is running on an interface OR on a growing Zeek directory. The `--use_fides=True` is ignored when Slips is run on a file.
 
-***NOTE***
-
-If you plan on using the Fides Module, lease be aware that it is used only
-if Slips is running on an interface. The `--use_fides=True` is ignored when Slips is run on a file.
-
-### Configuration
-Evaluation model, evaluation thrash-holds and other configuration is located in fides.conf.yml
+## Configuration
+The evaluation model used, the evaluation thresholds, and other configurations are located in ```fides.conf.yml``` file
 
 **Possible threat intelligence evaluation models**
 
@@ -48,51 +41,33 @@ Fides is inactive by default in Slips.
 
 To enable it, change ```use_fides=False``` to ```use_fides=True``` in ```config/slips.yaml```.
 
-And start slips on your interface.
-
-## Project sections
-
-The project is built into Slips as a module and uses Redis for communication. Integration with Slips
-is seamless, and it should be easy to adjust the module for use with other IPSs.
-
- - Slips, the Intrusion Prevention System
- - Fides Module the trust evaluation module for global p2p interaction
-
+And start Slips on your interface.
 
 ## How it works:
 
 Slips interacts with other slips peers for the following purposes:
 
-### Sharing opinion on peers
+### Sharing an opinion with peers
 
-If a peers A is asked for its opinion on peer B by peer C, peer A sends the aggregated opinion on peer B to peer C, if there is any.
+If peer A is asked for its opinion on peer B by peer C, peer A sends its opinion on peer B to peer C, if there is any.
 
 ### Asking for an opinion
 
-Newly connected peer will create a base trust by asking ather peers for opinion.
+Peers can ask other peers what they think about an IP address or domain.
 
 ### Dispatching alerts
 
-If a threat so great it may impact whole network, one or more groups, threat alert is
-dispatched to peers, without regard to trust level accumulated on them.
-
-### Answering and receiving requests form global P2P module.
+If a peer generates an alert based on evidence of an attack, it can alert other peers by sending an **Alert message** in the P2P network.
 
 ## Logs
 
-Slips contains a minimal log file for reports received by other peers and peer updates in
-```output``` directory if not manually specified using the appropriate slips parameter upon start.
-Custom logger ```modules/fidesModule/utils/logger.py``` is used by Fide Module for internal logging.  Either Slips' logging is used, or the custom logger is defaulted to logging via Python's printing function.
-
-## Limitations
-
-For now, slips supports the trust intelligence evaluation, global p2p is to be implemented.
+Slips contains a minimal log file for reports received by other peers and peer updates in the ```output``` directory if not manually specified using the appropriate slips parameter upon start.
+The custom logger ```modules/fidesModule/utils/logger.py``` code is used by the Fides Module for internal logging. 
 
 ## Implementation notes and credit
-The mathematical models for trust evaluation were written by Lukáš Forst as part of his theses and can be accessed [here](https://github.com/LukasForst/fides/commits?author=LukasForst).
+The mathematical models for the trust evaluation were written by Lukáš Forst as part of his [Master Thesis](https://dspace.cvut.cz/handle/10467/101312).
 
 
-## TLDR;
+## Privacy
 
-Slips (meaning Fides Module here) only shares trust level and confidence (numbers) generated by slips about IPs to the network,
-no private information is shared.
+Slips only shares the trust level and confidence values generated by Slips about IPs to the network, no more information.

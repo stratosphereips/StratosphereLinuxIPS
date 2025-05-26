@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import pytest
 import os
-from unittest.mock import Mock, patch, call
+from unittest.mock import Mock, MagicMock, patch, call
 
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.evidence import (
@@ -35,10 +35,13 @@ def test_decide_blocking(
     profileid, our_ips, expected_result, expected_publish_call_count
 ):
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
-    evidence_handler.is_blocking_module_supported = Mock(return_value=True)
+    evidence_handler.blocking_module_supported = True
     evidence_handler.our_ips = our_ips
     with patch.object(evidence_handler.db, "publish") as mock_publish:
-        result = evidence_handler.decide_blocking(profileid)
+        tw = TimeWindow(
+            2, "2025-05-09T13:27:45.123456", "2025-05-09T13:27:45.123456"
+        )
+        result = evidence_handler.decide_blocking(profileid, tw)
         assert result == expected_result
         assert mock_publish.call_count == expected_publish_call_count
 
@@ -80,56 +83,71 @@ def test_get_evidence_that_were_part_of_a_past_alert(
     assert result == expected_output
 
 
-@pytest.mark.parametrize(
-    "profile_ip, timewindow, tw_evidence, block",
-    [
-        # testcase1: Basic alert
-        ("192.168.1.1", 1, {"evidence1": Mock(spec=Evidence)}, True),
-        # testcase2: Multiple evidence
-        (
-            "10.0.0.1",
-            2,
-            {
-                "evidence1": Mock(spec=Evidence),
-                "evidence2": Mock(spec=Evidence),
-            },
-            False,
-        ),
-    ],
-)
-def test_handle_new_alert(profile_ip, timewindow, tw_evidence, block):
-    evidence_handler = ModuleFactory().create_evidence_handler_obj()
+def setup_handler(popup_enabled, blocked, mark_blocked=None):
+    handler = ModuleFactory().create_evidence_handler_obj()
+    handler.popup_alerts = popup_enabled
+
     alert = Alert(
-        profile=ProfileID(profile_ip),
-        timewindow=TimeWindow(timewindow),
+        profile=ProfileID("1.2.3.4"),
+        timewindow=TimeWindow(1),
         last_evidence=Mock(),
         accumulated_threat_level=12.2,
         last_flow_datetime="2024/10/04 15:45:30.123456+0000",
     )
-    evidence_handler.db.set_alert = Mock()
-    evidence_handler.db.mark_profile_and_timewindow_as_blocked = Mock()
-    evidence_handler.send_to_exporting_module = Mock()
-    evidence_handler.formatter.format_evidence_for_printing = Mock(
-        return_value="evidence to print"
-    )
-    evidence_handler.log_alert = Mock()
-    evidence_handler.decide_blocking = Mock(return_value=block)
-    evidence_handler.show_popup = Mock()
-    evidence_handler.print = Mock()
-    evidence_handler.db._set_accumulated_threat_level = Mock()
+    evidence = {"k": MagicMock(spec=Evidence)}
 
-    evidence_handler.handle_new_alert(alert, tw_evidence)
-    if evidence_handler.popup_alerts:
-        evidence_handler.show_popup.assert_called_once()
-    if block:
-        (
-            evidence_handler.db.mark_profile_and_timewindow_as_blocked.assert_called_once()
-        )
-    evidence_handler.decide_blocking.assert_called_once()
-    evidence_handler.send_to_exporting_module.assert_called_once()
-    evidence_handler.print.assert_called_once_with("evidence to print", 1, 0)
-    evidence_handler.db.set_alert.assert_called_once()
-    evidence_handler.log_alert.assert_called_once()
+    handler.db.set_alert = MagicMock()
+    handler.decide_blocking = MagicMock(side_effect=[None, mark_blocked])
+    handler.db.is_blocked_profile_and_tw = MagicMock(return_value=blocked)
+    handler.send_to_exporting_module = MagicMock()
+    handler.formatter.format_evidence_for_printing = MagicMock(
+        return_value="formatted_alert"
+    )
+    handler.print = MagicMock()
+    handler.show_popup = MagicMock()
+    handler.db.mark_profile_and_timewindow_as_blocked = MagicMock()
+    handler.log_alert = MagicMock()
+
+    return handler, alert, evidence
+
+
+@pytest.mark.parametrize("popup_enabled", [True, False])
+def test_handle_new_alert_already_blocked(popup_enabled):
+    handler, alert, evidence = setup_handler(popup_enabled, blocked=True)
+    handler.handle_new_alert(alert, evidence)
+
+    handler.db.set_alert.assert_called_once_with(alert, evidence)
+    handler.db.is_blocked_profile_and_tw.assert_called_once()
+    handler.send_to_exporting_module.assert_not_called()
+    handler.print.assert_not_called()
+    handler.show_popup.assert_not_called()
+    handler.db.mark_profile_and_timewindow_as_blocked.assert_not_called()
+    handler.log_alert.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "popup_enabled, expect_popup",
+    [
+        (True, True),
+        (False, False),
+    ],
+)
+def test_handle_new_alert_not_blocked(popup_enabled, expect_popup):
+    handler, alert, evidence = setup_handler(
+        popup_enabled, blocked=False, mark_blocked=True
+    )
+    handler.handle_new_alert(alert, evidence)
+
+    handler.send_to_exporting_module.assert_called_once_with(evidence)
+    handler.print.assert_called_once_with("formatted_alert", 1, 0)
+
+    if expect_popup:
+        handler.show_popup.assert_called_once_with(alert)
+    else:
+        handler.show_popup.assert_not_called()
+
+    handler.db.mark_profile_and_timewindow_as_blocked.assert_called_once()
+    handler.log_alert.assert_called_once_with(alert, blocked=True)
 
 
 @pytest.mark.parametrize(
@@ -321,28 +339,23 @@ def test_send_to_exporting_module():
 @pytest.mark.parametrize(
     "sys_argv, running_non_stop, expected_result",
     [
-        # Testcase 1: running non stop with -p enabled
+        # testcase 1: running non stop with -p enabled
         (["-i", "-p"], True, True),
-        # Testcase 2: custom flows but the module is disabled
+        # testcase 2: custom flows but the module is disabled
         (["-i", "-im"], False, False),
-        # Testcase 3: -i not in sys.argv and
-        # is_running_on_interface returns False
+        # testcase 3: -i not in sys.argv and not running non stop
         ([], False, False),
     ],
 )
-def test_is_blocking_module_enabled(
+def test_is_blocking_module_supported(
     sys_argv, running_non_stop, expected_result
 ):
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
     evidence_handler.is_running_non_stop = running_non_stop
 
     with patch("sys.argv", sys_argv):
-        with patch.object(
-            evidence_handler, "is_running_non_stop"
-        ) as mock_is_running_non_stop:
-            mock_is_running_non_stop.return_value = running_non_stop
-            result = evidence_handler.is_blocking_module_supported()
-        assert result == expected_result
+        result = evidence_handler.is_blocking_modules_supported()
+    assert result == expected_result
 
 
 @pytest.mark.parametrize(

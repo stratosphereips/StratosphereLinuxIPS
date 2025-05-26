@@ -1315,7 +1315,9 @@ class SetEvidenceHelper:
     ) -> None:
         saddr: str = profileid.split("_")[-1]
         description: str = f"Large data upload. {src_mbs} MBs sent to {daddr}"
-        timestamp: str = utils.convert_format(timestamp, utils.alerts_format)
+        timestamp: str = utils.convert_ts_format(
+            timestamp, utils.alerts_format
+        )
         twid_number = int(twid.replace("timewindow", ""))
         # to add a correlation the 2 evidence in alerts.json
         evidence_id_of_dstip_as_the_attacker = str(uuid4())

@@ -351,13 +351,13 @@ def test_convert_starttime_to_epoch():
     starttime = "2023-04-04 12:00:00"
 
     with patch(
-        "slips_files.core.profiler.utils.convert_format"
-    ) as mock_convert_format:
-        mock_convert_format.return_value = 1680604800
+        "slips_files.core.profiler.utils.convert_ts_format"
+    ) as mock_convert_ts_format:
+        mock_convert_ts_format.return_value = 1680604800
 
         converted = profiler.convert_starttime_to_epoch(starttime)
 
-        mock_convert_format.assert_called_once_with(
+        mock_convert_ts_format.assert_called_once_with(
             "2023-04-04 12:00:00", "unixtimestamp"
         )
         assert converted == 1680604800
@@ -367,7 +367,7 @@ def test_convert_starttime_to_epoch_invalid_format(monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
     starttime = "not a real time"
     monkeypatch.setattr(
-        "slips_files.core.profiler.utils.convert_format",
+        "slips_files.core.profiler.utils.convert_ts_format",
         Mock(side_effect=ValueError),
     )
     converted = profiler.convert_starttime_to_epoch(starttime)
@@ -403,20 +403,6 @@ def test_check_for_stop_msg(monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
     assert profiler.is_stop_msg("stop") is True
     assert profiler.is_stop_msg("not_stop") is False
-
-
-def test_pre_main(monkeypatch):
-    profiler = ModuleFactory().create_profiler_obj()
-
-    with monkeypatch.context() as m:
-        mock_drop_root_privs = Mock()
-        m.setattr(
-            "slips_files.core.profiler.utils.drop_root_privs",
-            mock_drop_root_privs,
-        )
-        profiler.pre_main()
-
-    mock_drop_root_privs.assert_called_once()
 
 
 def test_main_stop_msg_received():
@@ -583,32 +569,61 @@ def test_shutdown_gracefully(monkeypatch):
     profiler.mark_process_as_done_processing.assert_called_once()
 
 
-def test_get_local_net_from_flow(monkeypatch):
-    profiler = ModuleFactory().create_profiler_obj()
-    flow = Mock()
-    flow.saddr = "10.0.0.1"
-    profiler.client_ips = []
-    local_net = profiler.get_local_net(flow)
-
-    assert local_net == "10.0.0.0/8"
-
-
 @pytest.mark.parametrize(
-    "client_ips, expected_cidr",
+    "client_ips, saddr, expected_cidr",
     [
-        (["192.168.1.1"], "192.168.0.0/16"),
-        (["172.16.0.1"], "172.16.0.0/12"),
-        ([], "192.168.0.0/16"),
+        (
+            [ipaddress.IPv4Network("192.168.1.0/24")],
+            "10.0.0.1",
+            "192.168.1.0/24",
+        ),
+        (
+            [ipaddress.IPv4Network("172.16.0.0/16")],
+            "10.0.0.1",
+            "172.16.0.0/16",
+        ),
+        ([], "10.0.0.1", "10.0.0.0/8"),
     ],
 )
-def test_get_local_net(client_ips, expected_cidr, monkeypatch):
+def test_get_local_net(client_ips, saddr, expected_cidr):
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.client_ips = client_ips
-    flow = Mock()
-    flow.saddr = "192.168.1.1"
+    profiler.args.interface = None
 
-    local_net = profiler.get_local_net(flow)
+    if not client_ips:
+        with patch.object(
+            profiler, "get_private_client_ips", return_value=client_ips
+        ), patch(
+            "slips_files.common.slips_utils.Utils.get_cidr_of_private_ip",
+            return_value="10.0.0.0/8",
+        ):
+            flow = Mock()
+            flow.saddr = saddr
+            local_net = profiler.get_local_net(flow)
+    else:
+        with patch.object(
+            profiler, "get_private_client_ips", return_value=client_ips
+        ):
+            flow = Mock()
+            flow.saddr = saddr
+            local_net = profiler.get_local_net(flow)
+
     assert local_net == expected_cidr
+
+
+def test_get_local_net_from_flow():
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.args.interface = None
+    with patch.object(
+        profiler, "get_private_client_ips", return_value=[]
+    ), patch(
+        "slips_files.common.slips_utils.Utils.get_cidr_of_private_ip",
+        return_value="10.0.0.0/8",
+    ):
+        flow = Mock()
+        flow.saddr = "10.0.0.1"
+        local_net = profiler.get_local_net(flow)
+
+    assert local_net == "10.0.0.0/8"
 
 
 def test_handle_setting_local_net_when_already_set():

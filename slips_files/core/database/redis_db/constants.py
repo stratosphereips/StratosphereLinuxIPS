@@ -61,6 +61,7 @@ class Constants:
     PORT_INFO = "portinfo"
     DHCP_FLOWS = "DHCP_flows"
     REDIS_USED_PORT = "port"
+    # used in the web interface
     BLOCKED_PROFILES_AND_TWS = "BlockedProfTW"
     PROFILES = "profiles"
     NUMBER_OF_ALERTS = "number_of_alerts"
