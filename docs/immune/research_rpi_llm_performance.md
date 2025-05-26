@@ -1,6 +1,16 @@
 
 # Research and analysis of performance of LLM on the Raspberry Pi 5
 
+## Table of Contents 
+  * [Inference Engines Considered on Raspberry Pi 5](#inference-engines-considered-on-raspberry-pi-5)
+  * [Performance on RPI](#performance-on-rpi)
+      - [System Resource Utilization](#system-resource-utilization)
+      - [Task-Specific Performance evaluation](#task-specific-performance-evaluation)
+      - [Per test Analysis](#per-test-analysis)
+      - [Overall Score](#overall-score)
+  * [Trade off analysis](#trade-off-analysis)
+  * [Finals remarks](#finals-remarks)
+  * [References](#references)
 
 ## Inference Engines Considered on Raspberry Pi 5
 
