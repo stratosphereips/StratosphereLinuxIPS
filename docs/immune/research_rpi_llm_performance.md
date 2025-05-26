@@ -1,8 +1,6 @@
----
-title: "Research and analysis of performance of LLM on the Raspberry Pi 5"
-format: html
-editor: visual
----
+
+# Research and analysis of performance of LLM on the Raspberry Pi 5
+
 
 ## Inference Engines Considered on Raspberry Pi 5
 
@@ -112,7 +110,7 @@ The test involving the analysis of [Zeek logs](https://docs.zeek.org/en/master/l
 
 This analysis considers performance on a per-test basis, highlighting two key models: t**he overall best-performing mode**l, and **the best model capable of achieving at least 8 tokens per second**. The goal is to identify viable alternatives depending on specific needs. In some cases, speed may be the priority, while in others, accuracy or depth of understanding may take precedence. The choice of model will depend on the nature and requirements of each test.
 
-![](images/immune/perf_test_model.png)
+![](../images/immune/perf_test_model.png)
 
 The chart shows that **Qwen2 models** consistently deliver the highest performance across most tasks, particularly in structured output scenarios like generating function calls or JSON data. However, when speed is a priority, **BitNet B1.58 2B 4**T emerges as a strong alternative, maintaining over 8 tokens per second while delivering reasonably competitive results. In tasks like interpreting or summarizing logs, **Gemma** and **Granite3.1** also show up, but less frequently. The narrow performance gap in many cases suggests that faster models like **BitNet B1.58 2B 4T** can often be used without significant loss in accuracy, offering a practical trade-off between speed and precision depending on task demands.
 
@@ -120,13 +118,13 @@ The chart shows that **Qwen2 models** consistently deliver the highest performan
 
 To simplify the overall analysis, a single performance score was calculated for each model by *averaging the results across all tests*. These mean scores are presented in the figure below, providing a clear comparison of overall model performance.
 
-![](../images/immune/models_score.png){width="100%"}
+![](../images/immune/models_score.png)
 
 As expected, the larger models such as **LLaMA 3.2 3B** and **Qwen2.5 3B** demonstrated the highest average score. These were followed by the 2B models, including Granite 3.1 Dense and **BitNet B1.58 2B 4T**, which also showed competitive results relative to their size.
 
 ## Trade off analysis
 
-![](../images/immune/trade_off-01.png)
+![](../images/immune/trade_off.png)
 
 The figure below analyzes model performance using two key metrics: **overall score** and **tokens per second**. These highlight the balance between resource use and speed. Additionally, **RAM usage** is plotted to visualize each model’s memory footprint.
 
