@@ -1,7 +1,7 @@
 maxminddb==2.7.0
 numpy==1.26.4
 watchdog==5.0.0
-redis==5.2.1
+redis==6.2.0
 urllib3==2.4.0
 pandas==2.2.3
 tzlocal==5.3.1
