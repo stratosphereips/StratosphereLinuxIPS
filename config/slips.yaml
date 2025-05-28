@@ -105,13 +105,12 @@ parameters:
   deletePrevdb: true
 
   # Set the label for all the flows that are being read.
-  # For now only normal and malware directly. No option for setting labels
-  # with a filter
+  # For now only Benign and Malicious (Capitalized)
   # The purpose is to be used in the training of ML models and to output
   # flows with labels for other tools.
-  # label: malicious
-  # label: unknown
-  label: normal
+  # label: Malicious
+  # label: Benign
+  label: Benign
   # If Zeek files are rotated or not to avoid running out of disk.
   # Zeek rotation is enabled by default when using an interface,
   # which means Slips will delete all Zeek log files after 1 day
@@ -213,7 +212,10 @@ flowmldetection:
   # training the models, to test in unknown data.
   # You should have trained at least once with 'Normal' data and once with
   # 'Malicious' data in order for the test to work.
-  mode: test
+  mode: train
+  # creates an extra log file called training.log/testing.log in the
+  # ouptput dir with performance metrics depending on the mode.
+  create_performance_metrics_log_files: True
 
 #############################
 virustotal:

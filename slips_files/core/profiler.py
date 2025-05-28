@@ -123,7 +123,7 @@ class Profiler(ICore, IObservable):
         self.local_whitelist_path = conf.local_whitelist_path()
         self.timeformat = conf.ts_format()
         self.analysis_direction = conf.analysis_direction()
-        self.label = conf.label()
+        self.configuration_label = conf.label()
         self.width = conf.get_tw_width_as_float()
         self.client_ips: List[
             Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
@@ -390,7 +390,7 @@ class Profiler(ICore, IObservable):
             flow,
             profileid=profileid,
             twid=twid,
-            label=self.label,
+            label=self.configuration_label,
         )
         self.db.mark_profile_tw_as_modified(profileid, twid, "")
 

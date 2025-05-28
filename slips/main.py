@@ -415,7 +415,7 @@ class Main:
             self.total_flows = self.db.get_total_flows()
 
         flows_percentage = int(
-            (self.db.get_processed_flows_so_far() / self.total_flows) * 100
+            (self.db.get_processed_flows_so_far() / self.total_flows) * 100 if self.total_flows != 0 else 0
         )
         return f"Analyzed Flows: {green(flows_percentage)}{green('%')}. "
 
