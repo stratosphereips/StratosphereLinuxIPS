@@ -121,13 +121,15 @@ def plot_single_group(metrics_dict, output_filename, experiment_number, is_close
     if is_close_to_0:
         min_val = min(min(metrics_dict['FPR']), min(metrics_dict['FNR']))
         max_val = max(max(metrics_dict['FPR']), max(metrics_dict['FNR']))
-        
+
         # Avoid log(0), so set the minimum limit a little higher than zero
         if min_val == 0:
             min_val = 1e-4  # Avoid zero values on the logarithmic scale
 
         plt.ylim(min_val, max_val)  # Set Y-axis limits based on the data range
-        plt.yticks(np.logspace(np.log10(min_val), np.log10(max_val), num=60))  # Set ticks logarithmically
+        # Ensure ticks are within the valid range
+        if min_val > 0 and max_val > 0:
+            plt.yticks(np.logspace(np.log10(min_val), np.log10(max_val), num=6))  # Set ticks logarithmically
 
     # Add the experiment number to the plot title
     plt.xlabel('Index')
