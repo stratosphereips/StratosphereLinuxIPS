@@ -23,7 +23,7 @@ pytest-xdist==3.6.1
 scipy==1.15.1
 scikit-learn==1.6.1
 GitPython==3.1.44
-protobuf==4.25.3
+protobuf==6.31.1
 exclusiveprocess==0.9.4
 pytest-dependency==0.6.0
 whois==1.20240129.2
