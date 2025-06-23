@@ -180,6 +180,12 @@ class DBManager:
     def store_p2p_report(self, *args, **kwargs):
         return self.rdb.store_p2p_report(*args, **kwargs)
 
+    def set_peer_trust(self, *args, **kwargs):
+        return self.rdb.set_peer_trust(*args, **kwargs)
+
+    def get_peer_trust(self, *args, **kwargs):
+        return self.rdb.get_peer_trust(*args, **kwargs)
+
     def get_dns_resolution(self, *args, **kwargs):
         return self.rdb.get_dns_resolution(*args, **kwargs)
 

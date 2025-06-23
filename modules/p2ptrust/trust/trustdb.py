@@ -316,6 +316,7 @@ class TrustDB:
                     reporter_reliability,
                     reporter_score,
                     reporter_confidence,
+                    reporter_ipaddress,
                 )
             )
 
@@ -323,4 +324,4 @@ class TrustDB:
 
 
 if __name__ == "__main__":
-    trustDB = TrustDB(r"trustdb.db")
+    trustDB = TrustDB("trustdb.db")

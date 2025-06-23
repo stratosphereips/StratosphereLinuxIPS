@@ -197,7 +197,7 @@ class Trust(IModule):
             self.logger, self.sql_db_name, drop_tables_on_startup=True
         )
         self.reputation_model = reputation_model.BaseModel(
-            self.logger, self.trust_db
+            self.logger, self.trust_db, self.db
         )
         # print(f"[DEBUGGING] Starting godirector with
         # pygo_channel: {self.pygo_channel}")
@@ -572,7 +572,7 @@ class Trust(IModule):
     ):
         """
         stores the reported score and confidence about the ip and adds an
-        evidence if necessary
+        evidence if necessary like when the peers report a malicious ip
         """
         # no data in db - this happens when testing,
         # if there is not enough data on peers

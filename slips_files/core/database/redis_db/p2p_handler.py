@@ -104,3 +104,17 @@ class P2PHandler:
             k: v for k, v in cache_data.items() if k != "created_seconds"
         }
         return opinion
+
+    def set_peer_trust(self, peer_ip, peer_trust):
+        """
+        Set the trust value for a peer in the database.
+        :param peer_ip: IP address of the peer
+        :param peer_trust: Trust value to be set as determined by the
+        trust model
+        For now, this is only for local peers
+        """
+
+        self.r.hset("peer_trust", peer_ip, peer_trust)
+
+    def get_peer_trust(self, peer_ip):
+        return self.r.hget("peer_trust", peer_ip)

@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from slips_files.common.printer import Printer
+from slips_files.core.database.database_manager import DBManager
 from slips_files.core.output import Output
 
 
@@ -17,15 +18,16 @@ class BaseModel:
 
     name = "P2P Base Model"
 
-    def __init__(self, logger: Output, trustdb):
+    def __init__(self, logger: Output, trustdb, main_slips_db: DBManager):
         self.trustdb = trustdb
+        self.main_slips_db = main_slips_db
         self.printer = Printer(logger, self.name)
         self.reliability_weight = 0.7
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
 
-    def get_opinion_on_ip(self, ipaddr: str) -> (float, float, float):
+    def get_opinion_on_ip(self, ipaddr: str) -> (float, float):
         """
         Compute the network's opinion for a given IP
 
@@ -108,6 +110,11 @@ class BaseModel:
          by TrustDB.get_opinion_on_ip()
         :return: average peer reputation, final score and final confidence
         """
+        print(
+            f"@@@@@@@@@@@@@@@@ assemble_peer_opinion is called on data"
+            f" {data}"
+        )
+        # TODO how to get peer id/ip or peer info from the message?
 
         reports = []
         reporters = []
@@ -119,12 +126,17 @@ class BaseModel:
                 reporter_reliability,
                 reporter_score,
                 reporter_confidence,
+                reporter_ipaddress,
             ) = peer_report
             reports.append((report_score, report_confidence))
-            reporters.append(
-                self.compute_peer_trust(
-                    reporter_reliability, reporter_score, reporter_confidence
-                )
+            peer_trust = self.compute_peer_trust(
+                reporter_reliability, reporter_score, reporter_confidence
+            )
+            reporters.append(peer_trust)
+            self.main_slips_db.set_peer_trust(reporter_ipaddress, peer_trust)
+            print(
+                f"@@@@@@@@@@@@@@@@ for this peer report {peer_report} the "
+                f"computer peer trust is {peer_trust} "
             )
 
         weighted_reporters = self.normalize_peer_reputations(reporters)
