@@ -144,7 +144,7 @@ def read_data_from_ip_info(ip_info: dict) -> (float, float):
             confidence = float(confidence.split()[-1])
 
         return float(score), confidence
-    except KeyError:
+    except (KeyError, TypeError):
         return None, None
 
 
