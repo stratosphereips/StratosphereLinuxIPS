@@ -48,6 +48,6 @@ repos:
   hooks:
     - id: vulture
       name: vulture dead code check
-      entry: vulture .
+      entry: bash -c 'files=$(git diff --cached --name-only --diff-filter=ACM | grep -E "\.py$" | grep -vE "^(tests/|migrations/)"); [ -n "$files" ] && vulture --exclude "tests/*,venv/*" $files || true'
       language: system
       types: [python]

@@ -41,4 +41,5 @@ netifaces==0.11.0
 scapy==2.6.1
 pyyaml
 pytest-asyncio
+vulture
 git+https://github.com/SECEF/python-idmefv2.git
