@@ -1147,14 +1147,8 @@ class ProfileHandler:
                 0,
                 4,
             )
-
             # The creation of a TW now does not imply that it was modified.
             # You need to put data to mark is at modified.
-
-            # When a new TW is created for this profile,
-            # change the threat level of the profile to 0(info)
-            # and confidence to 0.05
-            self.update_threat_level(profileid, "info", 0.5)
         except redis.exceptions.ResponseError:
             self.print("Error in addNewTW", 0, 1)
             self.print(traceback.format_exc(), 0, 1)
@@ -1455,7 +1449,7 @@ class ProfileHandler:
         if not is_dhcp_set:
             self.r.hset(profileid, "dhcp", "true")
 
-    def add_profile(self, profileid, starttime):
+    def add_profile(self, profileid, starttime, confidence):
         """
         Add a new profile to the DB. Both the list of profiles and the
          hashmap of profile data
@@ -1477,8 +1471,7 @@ class ProfileHandler:
             self.r.hset(profileid, "duration", self.width)
             # When a new profiled is created assign threat level = 0
             # and confidence = 0.05
-            confidence = 0.05
-            self.update_threat_level(profileid, "info", confidence)
+
             self.r.hset(profileid, "confidence", confidence)
             # The IP of the profile should also be added as a new IP
             # we know about.

@@ -9,6 +9,7 @@ from typing import (
 
 from modules.p2ptrust.trust.trustdb import TrustDB
 from slips_files.common.printer import Printer
+from slips_files.common.slips_utils import utils
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -455,8 +456,17 @@ class DBManager:
         """returns the list of uids of the flows causing evidence"""
         return self.rdb.get_flows_causing_evidence(*args, **kwargs)
 
-    def set_evidence(self, *args, **kwargs):
-        return self.rdb.set_evidence(*args, **kwargs)
+    def set_evidence(self, evidence: Evidence):
+        evidence_set = self.rdb.set_evidence(evidence)
+        if evidence_set:
+            # an evidence is generated for this profile
+            # update the threat level of this profile
+            self.update_threat_level(
+                str(evidence.attacker.profile),
+                str(evidence.threat_level),
+                evidence.confidence,
+            )
+        return evidence_set
 
     def set_alert(
         self, alert: Alert, evidence_causing_the_alert: Dict[str, Evidence]
@@ -467,6 +477,11 @@ class DBManager:
         """
         self.rdb.set_alert(alert)
         self.sqlite.add_alert(alert)
+
+        # when an alert is generated , we should set the threat level of the
+        # attacker's profile to 1(critical) and confidence 1
+        # so that it gets reported to other peers with these numbers
+        self.update_threat_level(str(alert.profile), "critical", 1)
 
         for evidence_id in evidence_causing_the_alert.keys():
             uids: List[str] = self.rdb.get_flows_causing_evidence(evidence_id)
@@ -506,8 +521,21 @@ class DBManager:
     def get_twid_evidence(self, *args, **kwargs):
         return self.rdb.get_twid_evidence(*args, **kwargs)
 
-    def update_threat_level(self, *args, **kwargs):
-        return self.rdb.update_threat_level(*args, **kwargs)
+    def update_threat_level(
+        self, profileid: str, threat_level: str, confidence: float
+    ):
+        """updates the threat level and confidence of an ip in redis and
+        trust db for other peers to use it"""
+        if self.trust_db:
+            ip = profileid.split("_")[-1]
+            float_threat_level = utils.threat_levels[threat_level]
+            print("@@@@@@@@@@@@@@@@ insert slips score is calllledddd")
+            self.trust_db.insert_slips_score(
+                ip, float_threat_level, confidence
+            )
+        return self.rdb.update_threat_level(
+            profileid, threat_level, confidence
+        )
 
     def set_loaded_ti_files(self, *args, **kwargs):
         return self.rdb.set_loaded_ti_files(*args, **kwargs)
@@ -757,8 +785,12 @@ class DBManager:
     def get_tw_of_ts(self, *args, **kwargs):
         return self.rdb.get_tw_of_ts(*args, **kwargs)
 
-    def add_new_tw(self, *args, **kwargs):
-        return self.rdb.add_new_tw(*args, **kwargs)
+    def add_new_tw(self, profileid, timewindow: str, startoftw: float):
+        self.rdb.add_new_tw(profileid, timewindow, startoftw)
+        # When a new TW is created for this profile,
+        # change the threat level of the profile to 0(info)
+        # and confidence to 0.05
+        self.update_threat_level(profileid, "info", 0.5)
 
     def get_tw_start_time(self, *args, **kwargs):
         return self.rdb.get_tw_start_time(*args, **kwargs)
@@ -796,8 +828,10 @@ class DBManager:
     def mark_profile_as_dhcp(self, *args, **kwargs):
         return self.rdb.mark_profile_as_dhcp(*args, **kwargs)
 
-    def add_profile(self, *args, **kwargs):
-        return self.rdb.add_profile(*args, **kwargs)
+    def add_profile(self, profileid, starttime):
+        confidence = 0.05
+        self.update_threat_level(profileid, "info", confidence)
+        return self.rdb.add_profile(profileid, starttime, confidence)
 
     def set_module_label_for_profile(self, *args, **kwargs):
         return self.rdb.set_module_label_for_profile(*args, **kwargs)
