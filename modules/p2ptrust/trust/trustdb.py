@@ -254,7 +254,8 @@ class TrustDB:
             "FROM go_reliability "
             "WHERE peerid = ? "
             "ORDER BY update_time DESC "
-            "LIMIT 1;"
+            "LIMIT 1;",
+            (reporter_peerid,),
         )
         if res := go_reliability_cur.fetchone():
             return res[0]
