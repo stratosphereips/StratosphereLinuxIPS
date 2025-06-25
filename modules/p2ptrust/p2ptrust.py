@@ -185,8 +185,11 @@ class Trust(IModule):
 
     def _configure(self):
         # TODO: do not drop tables on startup
-        self.trust_db = trustdb.TrustDB(
-            self.logger, self.sql_db_name, drop_tables_on_startup=True
+        self.trust_db = trustdb.TrustDB(  #
+            # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@22 TODO that was true
+            self.logger,
+            self.sql_db_name,
+            drop_tables_on_startup=False,
         )
         self.reputation_model = reputation_model.BaseModel(
             self.logger, self.trust_db, self.db
@@ -394,12 +397,14 @@ class Trust(IModule):
     #         self.printer.print(f"Exception {e} in update_callback")
 
     def data_request_callback(self, msg: Dict):
-        try:
-            # ignore subscribe msgs (first 2 msgs sent in redis channel)
-            if msg and not isinstance(msg["data"], int):
-                self.handle_data_request(msg["data"])
-        except Exception as e:
-            self.print(f"Exception {e} in data_request_callback", 0, 1)
+        # try:
+        # ignore subscribe msgs (first 2 msgs sent in redis channel)
+        if msg and not isinstance(msg["data"], int):
+            self.handle_data_request(msg["data"])
+        # todo uncomment the try except here @@@@@@@@@@@@@@@@@@@
+        # except Exception as e:
+        #     self.print(f"Exception: {e} .. msg: {msg} in "
+        #                f"data_request_callback()", 0, 1)
 
     def set_evidence_malicious_ip(
         self, ip_info: dict, threat_level: str, confidence: float
@@ -487,7 +492,9 @@ class Trust(IModule):
         :return: None, the result is saved into the redis
             database under key `p2p4slips`
         """
-
+        print(
+            f"@@@@@@@@@@@@@@@@ handle_data_request() is called with {message_data}"
+        )
         # make sure that IP address is valid
         # and cache age is a valid timestamp from the past
         ip_info = validate_slips_data(message_data)
@@ -496,7 +503,10 @@ class Trust(IModule):
             # print(f"DEBUGGING: IP address is not valid:
             # {ip_info}, not asking the network")
             return
-
+        print(
+            "@@@@@@@@@@@@@@@@ handle_data_request: ok msg is valid, "
+            "getting cached network opinion"
+        )
         # ip_info is {
         #             'ip': str(saddr),
         #             'profileid' : str(profileid),
@@ -517,9 +527,15 @@ class Trust(IModule):
             network_score,
             timestamp,
         ) = self.trust_db.get_cached_network_opinion("ip", ip_address)
+        print(
+            f"@@@@@@@@@@@@@@@@ get_cached_network_opinion returned "
+            f"fine! "
+            f"{score} {confidence} {network_score} {timestamp} \n\n\n\n\n\n\n\n"
+        )
         if score is not None and time.time() - timestamp < cache_age:
             # cached value is ok, do nothing
             # print("DEBUGGING:  cached value is ok, not asking the network.")
+            print("@@@@@@@@@@@@@@@@ returning!")
             return
 
         # since cached value is old, ask the peers
@@ -537,13 +553,20 @@ class Trust(IModule):
         # processed by an independent process in this module and
         # database will be updated accordingly
         time.sleep(2)
-
+        print(
+            "@@@@@@@@@@@@@@@@ get data from db, processed by the trust model"
+        )
         # get data from db, processed by the trust model
+        # this score and confidence are the network's opinion
         (
             combined_score,
             combined_confidence,
         ) = self.reputation_model.get_opinion_on_ip(ip_address)
-
+        print(
+            f"@@@@@@@@@@@@@@@@ combined_score : {combined_score} "
+            f"combined_confidence: {combined_confidence} "
+            f"process_network_response"
+        )
         self.process_network_response(
             ip_address,
             combined_score,
@@ -569,15 +592,13 @@ class Trust(IModule):
         # no data in db - this happens when testing,
         # if there is not enough data on peers
         if combined_score is None:
-            self.print(
-                f"No data received from the" f" network about {ip}\n", 0, 2
-            )
+            self.print(f"No data received from the network about {ip}\n", 0, 2)
             return
 
         self.print(
             f"The Network shared some data about {ip}, "
             f"Shared data: score={combined_score}, "
-            f"confidence={combined_confidence} saving it to  now!\n",
+            f"confidence={combined_confidence} saving it now!\n",
             0,
             2,
         )

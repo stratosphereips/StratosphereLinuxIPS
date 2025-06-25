@@ -1,5 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+from typing_extensions import List
+
 from slips_files.common.printer import Printer
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.output import Output
@@ -41,10 +43,17 @@ class BaseModel:
 
         # get report on that ip that is at most max_age old
         # if no such report is found:
-
-        reports_on_ip = self.trustdb.get_opinion_on_ip(ipaddr)
+        print(
+            f"@@@@@@@@@@@@@@@@ inside get_opinion_on_ip now .. going to "
+            f"the trustdb to get reports on {ipaddr}"
+        )
+        # reports_on_ip looks like this:
+        # [(report_score, report_confidence, reporter_reliability,
+        # reporter_score, reporter_confidence, reporter_ipaddress), ...]
+        reports_on_ip: List[tuple] = self.trustdb.get_opinion_on_ip(ipaddr)
         if len(reports_on_ip) == 0:
             return None, None
+        print("@@@@@@@@@@@@@@@@ now calling assemble_peer_opinion")
         combined_score, combined_confidence = self.assemble_peer_opinion(
             reports_on_ip
         )
@@ -108,14 +117,21 @@ class BaseModel:
 
         :param data: a list of peers and their reports, in the format given
          by TrustDB.get_opinion_on_ip()
+         (
+            report_score,
+            report_confidence,
+            reporter_reliability,
+            reporter_score, # what does slips think about the reporter's ip
+            # how confident slips is about the reporter's ip's score
+            reporter_confidence,
+            reporter_ipaddress,
+        )
         :return: average peer reputation, final score and final confidence
         """
         print(
             f"@@@@@@@@@@@@@@@@ assemble_peer_opinion is called on data"
             f" {data}"
         )
-        # TODO how to get peer id/ip or peer info from the message?
-
         reports = []
         reporters = []
 
@@ -124,11 +140,16 @@ class BaseModel:
                 report_score,
                 report_confidence,
                 reporter_reliability,
+                # what does slips think about the reporter's ip
                 reporter_score,
+                # how confident slips is about the reporter's ip's score
                 reporter_confidence,
                 reporter_ipaddress,
             ) = peer_report
+
             reports.append((report_score, report_confidence))
+            # here reporter_score, reporter_confidence are the local ips
+            # detection of this peer
             peer_trust = self.compute_peer_trust(
                 reporter_reliability, reporter_score, reporter_confidence
             )

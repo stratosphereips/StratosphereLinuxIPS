@@ -1449,7 +1449,7 @@ class ProfileHandler:
         if not is_dhcp_set:
             self.r.hset(profileid, "dhcp", "true")
 
-    def add_profile(self, profileid, starttime, confidence):
+    def add_profile(self, profileid, starttime, confidence=0.05):
         """
         Add a new profile to the DB. Both the list of profiles and the
          hashmap of profile data

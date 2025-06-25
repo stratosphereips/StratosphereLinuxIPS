@@ -529,7 +529,6 @@ class DBManager:
         if self.trust_db:
             ip = profileid.split("_")[-1]
             float_threat_level = utils.threat_levels[threat_level]
-            print("@@@@@@@@@@@@@@@@ insert slips score is calllledddd")
             self.trust_db.insert_slips_score(
                 ip, float_threat_level, confidence
             )

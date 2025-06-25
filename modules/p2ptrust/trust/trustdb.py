@@ -95,7 +95,6 @@ class TrustDB(ISQLite):
         if timestamp is None:
             timestamp = time.time()
         parameters = (ip, score, confidence, timestamp)
-        print(f"@@@@@@@@@@@@@@@@ parameters {parameters}")
         self.execute(
             "INSERT INTO slips_reputation "
             "(ipaddress, score, confidence, update_time) "
