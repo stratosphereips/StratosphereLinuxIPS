@@ -7,7 +7,6 @@ import time
 from slips_files.common.abstracts.sqlite import ISQLite
 from slips_files.common.printer import Printer
 from slips_files.core.output import Output
-from slips_files.common.slips_utils import utils
 
 
 class TrustDB(ISQLite):
@@ -94,13 +93,13 @@ class TrustDB(ISQLite):
     ):
         if timestamp is None:
             timestamp = time.time()
-        parameters = (ip, score, confidence, timestamp)
-        self.execute(
-            "INSERT INTO slips_reputation "
-            "(ipaddress, score, confidence, update_time) "
-            "VALUES (?, ?, ?, ?);",
-            parameters,
-        )
+
+        query = """
+            INSERT OR REPLACE INTO slips_reputation
+            (ipaddress, score, confidence, update_time)
+            VALUES (?, ?, ?, ?)
+        """
+        self.execute(query, (ip, score, confidence, timestamp))
 
     def insert_go_reliability(
         self, peerid: str, reliability: float, timestamp: int = None
@@ -108,11 +107,9 @@ class TrustDB(ISQLite):
         if timestamp is None:
             timestamp = datetime.datetime.now()
 
-        parameters = (peerid, reliability, timestamp)
-        self.execute(
-            "INSERT INTO go_reliability (peerid, reliability, update_time) "
-            "VALUES (?, ?, ?);",
-            parameters,
+        values = (peerid, reliability, timestamp)
+        self.insert(
+            "go_reliability", values, "peerid, reliability, update_time"
         )
 
     def insert_go_ip_pairing(
@@ -121,21 +118,11 @@ class TrustDB(ISQLite):
         if timestamp is None:
             timestamp = datetime.datetime.now()
 
-        parameters = (ip, peerid, timestamp)
-        self.execute(
-            "INSERT INTO peer_ips (ipaddress, peerid, update_time) "
-            "VALUES (?, ?, ?);",
-            parameters,
-        )
+        values = (ip, peerid, timestamp)
+        self.insert("peer_ips", values, "ipaddress, peerid, update_time")
 
-    def insert_new_go_data(self, reports: list):
-        self.executemany(
-            "INSERT INTO reports "
-            "(reporter_peerid, key_type, reported_key, "
-            "score, confidence, update_time) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            reports,
-        )
+    # def insert_new_go_data(self, reports: list):
+    #     self.insert("reports" , reports)
 
     def insert_new_go_report(
         self,
@@ -161,12 +148,11 @@ class TrustDB(ISQLite):
             confidence,
             timestamp,
         )
-        self.execute(
-            "INSERT INTO reports "
-            "(reporter_peerid, key_type, reported_key, "
-            "score, confidence, update_time) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+        self.insert(
+            "reports",
             parameters,
+            "reporter_peerid, key_type, reported_key, score, "
+            "confidence, update_time",
         )
 
     def update_cached_network_opinion(
@@ -186,15 +172,13 @@ class TrustDB(ISQLite):
         )
 
     def get_cached_network_opinion(self, key_type: str, reported_key: str):
-        condition = (
-            f'key_type = "{utils.sanitize(key_type)}" '
-            f'AND reported_key = "{utils.sanitize(reported_key)}" '
-            f"ORDER BY update_time LIMIT 1"
-        )
         self.select(
             table_name="opinion_cache",
             columns="score, confidence, network_score, update_time",
-            condition=condition,
+            condition="key_type = ? AND reported_key = ?",
+            params=(key_type, reported_key),
+            order_by="update_time",
+            limit=1,
         )
         result = self.fetchone()
         print(f"@@@@@@@@@@@@@@@@ get_cached_network_opinion result: {result}")
@@ -207,11 +191,11 @@ class TrustDB(ISQLite):
         Returns the latest IP seen associated with the given peerid
         :param peerid: the id of the peer we want the ip of
         """
-        condition = f'peerid = "{utils.sanitize(peerid)}" '
         self.select(
             table_name="peer_ips",
             columns="MAX(update_time) AS ip_update_time, ipaddress",
-            condition=condition,
+            condition="peerid = ?",
+            params=(peerid,),
         )
         if res := self.fetchone():
             last_update_time, ip = res
@@ -222,14 +206,11 @@ class TrustDB(ISQLite):
         """
         Returns a list of all reports for the given IP address.
         """
-        # get all reports made about this ip
-        ipaddress = utils.sanitize(ipaddress)
-        condition = f"reported_key = \"{ipaddress}\" AND key_type = 'ip'"
         self.select(
             table_name="reports",
-            columns="reporter_peerid, update_time,"
-            " score, confidence, reported_key",
-            condition=condition,
+            columns="reporter_peerid, update_time, score, confidence, reported_key",
+            condition="reported_key = ? AND key_type = ?",
+            params=(ipaddress, "ip"),
         )
         return self.fetchall()
 
@@ -237,16 +218,11 @@ class TrustDB(ISQLite):
         """
         Returns the IP address of the reporter at the time of the report.
         """
-        reporter_peerid = utils.sanitize(reporter_peerid)
-        report_timestamp = utils.sanitize(report_timestamp)
-        condition = (
-            f'update_time <= "{report_timestamp}" AND '
-            f'peerid = "{reporter_peerid}"'
-        )
         self.select(
             table_name="peer_ips",
             columns="MAX(update_time), ipaddress",
-            condition=condition,
+            condition="update_time <= ? AND peerid = ?",
+            params=(report_timestamp, reporter_peerid),
         )
         if res := self.fetchone():
             return res[1]
@@ -256,12 +232,11 @@ class TrustDB(ISQLite):
         """
         Returns the latest reliability score for the given peer.
         """
-        reporter_peerid = utils.sanitize(reporter_peerid)
-        condition = f'peerid = "{reporter_peerid}"'
         self.select(
             table_name="go_reliability",
             columns="reliability",
-            condition=condition,
+            condition="peerid = ?",
+            params=(reporter_peerid,),
         )
         if res := self.fetchone():
             return res[0]
@@ -269,18 +244,15 @@ class TrustDB(ISQLite):
 
     def get_reporter_reputation(self, reporter_ipaddress):
         """
-        Returns the latest reputation score and confidence for the given IP address.
+        returns the latest reputation score and confidence for the given IP address.
         """
-        reporter_ipaddress = utils.sanitize(reporter_ipaddress)
-        condition = (
-            f'ipaddress = "{reporter_ipaddress}" '
-            f"ORDER BY update_time DESC "
-            f"LIMIT 1;"
-        )
         self.select(
             table_name="slips_reputation",
             columns="score, confidence",
-            condition=condition,
+            condition="ipaddress = ?",
+            params=(reporter_ipaddress,),
+            order_by="update_time DESC",
+            limit=1,
         )
         if res := self.fetchone():
             return res

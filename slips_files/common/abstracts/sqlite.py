@@ -26,9 +26,17 @@ class ISQLite(ABC):
         query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
         self.execute(query)
 
-    def insert(self, table_name, values):
-        query = f"INSERT INTO {table_name} VALUES ({values})"
-        self.execute(query)
+    def insert(self, table_name, values: tuple, columns: str = None):
+        if columns:
+            placeholders = ", ".join(["?"] * len(values))
+            query = (
+                f"INSERT INTO {table_name} ({columns}) "
+                f"VALUES ({placeholders})"
+            )
+            self.execute(query, values)
+        else:
+            query = f"INSERT INTO {table_name} VALUES {values}"  # fallback
+            self.execute(query)
 
     def update(self, table_name, set_clause, condition):
         query = f"UPDATE {table_name} SET {set_clause} WHERE {condition}"
@@ -38,12 +46,26 @@ class ISQLite(ABC):
         query = f"DELETE FROM {table_name} WHERE {condition}"
         self.execute(query)
 
-    def select(self, table_name, columns="*", condition=None):
-        query = f"SELECT {columns} FROM {table_name}"
+    def select(
+        self,
+        table_name,
+        columns="*",
+        condition=None,
+        params=(),
+        order_by=None,
+        limit=None,
+    ):
+        query = f"SELECT {columns} FROM {table_name} "
         if condition:
             query += f" WHERE {condition}"
-        self.execute(query)
-        result = self.fetchall()
+        if order_by:
+            query += f" ORDER BY {order_by}"
+
+        self.execute(query, params)
+        if limit == "1":
+            result = self.fetchone()
+        else:
+            result = self.fetchall()
         return result
 
     def get_count(self, table, condition=None):
@@ -129,7 +151,7 @@ class ISQLite(ABC):
                 if trial >= max_trials:
                     self.print(
                         f"Error executing query: "
-                        f"({query} {params}) - {err}. "
+                        f"'{query}'. Params: {params}. Error: {err}. "
                         f"Retried executing {trial} times but failed. "
                         f"Query discarded.",
                         0,
