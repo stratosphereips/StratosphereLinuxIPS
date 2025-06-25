@@ -1,10 +1,13 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import os
+from pathlib import Path
 from typing import (
     List,
     Dict,
 )
 
+from modules.p2ptrust.trust.trustdb import TrustDB
 from slips_files.common.printer import Printer
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
@@ -28,10 +31,12 @@ class DBManager:
         logger: Output,
         output_dir,
         redis_port,
+        conf,
         start_sqlite=True,
         start_redis_server=True,
         **kwargs,
     ):
+        self.conf = conf
         self.output_dir = output_dir
         self.redis_port = redis_port
         self.logger = logger
@@ -40,12 +45,35 @@ class DBManager:
             self.logger, redis_port, start_redis_server, **kwargs
         )
 
+        self.trust_db = None
+        if self.conf.use_local_p2p():
+            self.trust_db_path: str = self.init_p2ptrust_db()
+            self.trust_db = TrustDB(  #
+                # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@22 TODO that was true
+                self.logger,
+                self.trust_db_path,
+                drop_tables_on_startup=False,
+            )
+
         # in some rare cases we don't wanna create the sqlite db from scratch,
         # like when using -S to stop the daemon, we just wanna connect to
         # the existing one
         self.sqlite = None
         if start_sqlite:
             self.sqlite = SQLiteDB(self.logger, output_dir)
+
+    def init_p2ptrust_db(self) -> str:
+        """returns  the path of the trustdb inside the p2ptrust_runtime_dir"""
+        p2ptrust_runtime_dir = os.path.join(os.getcwd(), "p2ptrust_runtime/")
+        Path(p2ptrust_runtime_dir).mkdir(parents=True, exist_ok=True)
+        self.p2ptrust_runtime_dir = p2ptrust_runtime_dir
+        return os.path.join(p2ptrust_runtime_dir, "trustdb.db")
+
+    def get_p2ptrust_dir(self) -> str:
+        return self.p2ptrust_runtime_dir
+
+    def get_p2ptrust_db_path(self) -> str:
+        return self.trust_db_path
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)

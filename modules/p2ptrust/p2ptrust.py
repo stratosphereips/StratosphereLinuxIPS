@@ -6,7 +6,6 @@ import shutil
 import signal
 import subprocess
 import time
-from pathlib import Path
 from typing import Dict, Optional, Tuple
 import json
 import socket
@@ -83,25 +82,21 @@ class Trust(IModule):
     pigeon_binary = os.path.join(os.getcwd(), "p2p4slips/p2p4slips")
     pigeon_key_file = "pigeon.keys"
     rename_redis_ip_info = False
-    rename_sql_db_file = False
     override_p2p = False
 
     def init(self, *args, **kwargs):
-        output_dir = self.db.get_output_dir()
-        # flag to ensure slips prints multiaddress only once
-        self.mutliaddress_printed = False
-        self.pigeon_logfile_raw = os.path.join(output_dir, "p2p.log")
-
-        self.p2p_reports_logfile = os.path.join(output_dir, "p2p_reports.log")
-        # pigeon generate keys and stores them in the following dir, if this is placed in the <output> dir,
-        # when restarting slips, it will look for the old keys in the new output dir! so it wont find them and will
+        self.pigeon_logfile_raw = os.path.join(self.output_dir, "p2p.log")
+        self.p2p_reports_logfile = os.path.join(
+            self.output_dir, "p2p_reports.log"
+        )
+        # pigeon generate keys and stores them in the following dir, if this
+        # is placed in the <output> dir,
+        # when restarting slips, it will look for the old keys in the new
+        # output dir! so it wont find them and will
         # generate new keys, and therefore new peerid!
         # store the keys in slips main dir so they don't change every run
-        data_dir = os.path.join(os.getcwd(), "p2ptrust_runtime/")
-        # data_dir = f'./output/{used_interface}/p2ptrust_runtime/'
-        # create data folder
-        Path(data_dir).mkdir(parents=True, exist_ok=True)
-        self.data_dir = data_dir
+        self.p2ptrust_runtime_dir = self.db.get_p2ptrust_dir()
+        self.sql_db_name = self.db.get_p2ptrust_db_path()
 
         self.port = self.get_available_port()
         self.host = self.get_local_IP()
@@ -137,8 +132,10 @@ class Trust(IModule):
             self.gopy_channel: self.c3,
         }
 
-        # they have to be defined here because the variable name utils is already taken
-        # TODO rename one of them
+        # todo don't duplicate this dict, move it to slips_utils
+        # all evidence slips detects has threat levels of strings
+        # each string should have a corresponding int value to be able to calculate
+        # the accumulated threat level and alert
         self.threat_levels = {
             "info": 0,
             "low": 0.2,
@@ -147,13 +144,8 @@ class Trust(IModule):
             "critical": 1,
         }
 
-        self.sql_db_name = f"{self.data_dir}trustdb.db"
-        if self.rename_sql_db_file:
-            self.sql_db_name += str(self.pigeon_port)
-        # todo don't duplicate this dict, move it to slips_utils
-        # all evidence slips detects has threat levels of strings
-        # each string should have a corresponding int value to be able to calculate
-        # the accumulated threat level and alert
+        # flag to ensure slips prints multiaddress only once
+        self.mutliaddress_printed = False
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -252,7 +244,7 @@ class Trust(IModule):
                 outfile = open(os.devnull, "+w")
 
             self.pigeon = subprocess.Popen(
-                executable, cwd=self.data_dir, stdout=outfile
+                executable, cwd=self.p2ptrust_runtime_dir, stdout=outfile
             )
 
             # print(f"[debugging] runnning pigeon: {executable}")
