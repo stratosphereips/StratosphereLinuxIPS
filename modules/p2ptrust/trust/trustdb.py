@@ -3,11 +3,14 @@
 import sqlite3
 import datetime
 import time
+
+from slips_files.common.abstracts.sqlite import ISQLite
 from slips_files.common.printer import Printer
 from slips_files.core.output import Output
+from slips_files.common.slips_utils import utils
 
 
-class TrustDB:
+class TrustDB(ISQLite):
     name = "P2P Trust DB"
 
     def __init__(
@@ -18,74 +21,73 @@ class TrustDB:
     ):
         """create a database connection to a SQLite database"""
         self.printer = Printer(logger, self.name)
-        self.conn = sqlite3.connect(db_file)
+        self.conn = sqlite3.connect(
+            db_file, check_same_thread=False, timeout=20
+        )
+        self.cursor = self.conn.cursor()
         if drop_tables_on_startup:
             self.print("Dropping tables")
             self.delete_tables()
 
         self.create_tables()
-        # self.insert_slips_score("8.8.8.8", 0.0, 0.9)
-        # self.get_opinion_on_ip("zzz")
+        super().__init__()
 
     def __del__(self):
         self.conn.close()
 
-    def print(self, *args, **kwargs):
-        return self.printer.print(*args, **kwargs)
-
     def create_tables(self):
-        self.conn.execute(
-            "CREATE TABLE IF NOT EXISTS slips_reputation ("
-            "id INTEGER PRIMARY KEY NOT NULL, "
-            "ipaddress TEXT NOT NULL, "
-            "score REAL NOT NULL, "
-            "confidence REAL NOT NULL, "
-            "update_time REAL NOT NULL);"
-        )
+        table_schema = {
+            "slips_reputation": (
+                "id INTEGER PRIMARY KEY NOT NULL, "
+                "ipaddress TEXT NOT NULL, "
+                "score REAL NOT NULL, "
+                "confidence REAL NOT NULL, "
+                "update_time REAL NOT NULL"
+            ),
+            "go_reliability": (
+                "id INTEGER PRIMARY KEY NOT NULL, "
+                "peerid TEXT NOT NULL, "
+                "reliability REAL NOT NULL, "
+                "update_time REAL NOT NULL"
+            ),
+            "peer_ips": (
+                "id INTEGER PRIMARY KEY NOT NULL, "
+                "ipaddress TEXT NOT NULL, "
+                "peerid TEXT NOT NULL, "
+                "update_time REAL NOT NULL"
+            ),
+            "reports": (
+                "id INTEGER PRIMARY KEY NOT NULL, "
+                "reporter_peerid TEXT NOT NULL, "
+                "key_type TEXT NOT NULL, "
+                "reported_key TEXT NOT NULL, "
+                "score REAL NOT NULL, "
+                "confidence REAL NOT NULL, "
+                "update_time REAL NOT NULL"
+            ),
+            "opinion_cache": (
+                "key_type TEXT NOT NULL, "
+                "reported_key TEXT NOT NULL PRIMARY KEY, "
+                "score REAL NOT NULL, "
+                "confidence REAL NOT NULL, "
+                "network_score REAL NOT NULL, "
+                "update_time DATE NOT NULL"
+            ),
+        }
 
-        self.conn.execute(
-            "CREATE TABLE IF NOT EXISTS go_reliability ("
-            "id INTEGER PRIMARY KEY NOT NULL, "
-            "peerid TEXT NOT NULL, "
-            "reliability REAL NOT NULL, "
-            "update_time REAL NOT NULL);"
-        )
-
-        self.conn.execute(
-            "CREATE TABLE IF NOT EXISTS peer_ips ("
-            "id INTEGER PRIMARY KEY NOT NULL, "
-            "ipaddress TEXT NOT NULL, "
-            "peerid TEXT NOT NULL, "
-            "update_time REAL NOT NULL);"
-        )
-
-        self.conn.execute(
-            "CREATE TABLE IF NOT EXISTS reports ("
-            "id INTEGER PRIMARY KEY NOT NULL, "
-            "reporter_peerid TEXT NOT NULL, "
-            "key_type TEXT NOT NULL, "
-            "reported_key TEXT NOT NULL, "
-            "score REAL NOT NULL, "
-            "confidence REAL NOT NULL, "
-            "update_time REAL NOT NULL);"
-        )
-
-        self.conn.execute(
-            "CREATE TABLE IF NOT EXISTS opinion_cache ("
-            "key_type TEXT NOT NULL, "
-            "reported_key TEXT NOT NULL PRIMARY KEY, "
-            "score REAL NOT NULL, "
-            "confidence REAL NOT NULL, "
-            "network_score REAL NOT NULL, "
-            "update_time DATE NOT NULL);"
-        )
+        for table, schema in table_schema.items():
+            self.create_table(table, schema)
 
     def delete_tables(self):
-        self.conn.execute("DROP TABLE IF EXISTS opinion_cache;")
-        self.conn.execute("DROP TABLE IF EXISTS slips_reputation;")
-        self.conn.execute("DROP TABLE IF EXISTS go_reliability;")
-        self.conn.execute("DROP TABLE IF EXISTS peer_ips;")
-        self.conn.execute("DROP TABLE IF EXISTS reports;")
+        tables = [
+            "opinion_cache",
+            "slips_reputation",
+            "go_reliability",
+            "peer_ips",
+            "reports",
+        ]
+        for table in tables:
+            self.execute(f"DROP TABLE IF EXISTS {table};")
 
     def insert_slips_score(
         self, ip: str, score: float, confidence: float, timestamp: int = None
@@ -93,12 +95,13 @@ class TrustDB:
         if timestamp is None:
             timestamp = time.time()
         parameters = (ip, score, confidence, timestamp)
-        self.conn.execute(
-            "INSERT INTO slips_reputation (ipaddress, score, confidence, update_time) "
+        print(f"@@@@@@@@@@@@@@@@ parameters {parameters}")
+        self.execute(
+            "INSERT INTO slips_reputation "
+            "(ipaddress, score, confidence, update_time) "
             "VALUES (?, ?, ?, ?);",
             parameters,
         )
-        self.conn.commit()
 
     def insert_go_reliability(
         self, peerid: str, reliability: float, timestamp: int = None
@@ -107,12 +110,11 @@ class TrustDB:
             timestamp = datetime.datetime.now()
 
         parameters = (peerid, reliability, timestamp)
-        self.conn.execute(
+        self.execute(
             "INSERT INTO go_reliability (peerid, reliability, update_time) "
             "VALUES (?, ?, ?);",
             parameters,
         )
-        self.conn.commit()
 
     def insert_go_ip_pairing(
         self, peerid: str, ip: str, timestamp: int = None
@@ -121,21 +123,20 @@ class TrustDB:
             timestamp = datetime.datetime.now()
 
         parameters = (ip, peerid, timestamp)
-        self.conn.execute(
+        self.execute(
             "INSERT INTO peer_ips (ipaddress, peerid, update_time) "
             "VALUES (?, ?, ?);",
             parameters,
         )
-        self.conn.commit()
 
     def insert_new_go_data(self, reports: list):
-        self.conn.executemany(
+        self.executemany(
             "INSERT INTO reports "
-            "(reporter_peerid, key_type, reported_key, score, confidence, update_time) "
+            "(reporter_peerid, key_type, reported_key, "
+            "score, confidence, update_time) "
             "VALUES (?, ?, ?, ?, ?, ?)",
             reports,
         )
-        self.conn.commit()
 
     def insert_new_go_report(
         self,
@@ -151,8 +152,7 @@ class TrustDB:
         #       f"score: {score} confidence: {confidence} timestamp: {timestamp} ")
 
         if timestamp is None:
-            timestamp = datetime.datetime.now()
-        timestamp = time.time()
+            timestamp = time.time()
 
         parameters = (
             reporter_peerid,
@@ -162,13 +162,13 @@ class TrustDB:
             confidence,
             timestamp,
         )
-        self.conn.execute(
+        self.execute(
             "INSERT INTO reports "
-            "(reporter_peerid, key_type, reported_key, score, confidence, update_time) "
+            "(reporter_peerid, key_type, reported_key, "
+            "score, confidence, update_time) "
             "VALUES (?, ?, ?, ?, ?, ?)",
             parameters,
         )
-        self.conn.commit()
 
     def update_cached_network_opinion(
         self,
@@ -178,25 +178,27 @@ class TrustDB:
         confidence: float,
         network_score: float,
     ):
-        self.conn.execute(
+        self.execute(
             "REPLACE INTO"
-            " opinion_cache (key_type, reported_key, score, confidence, network_score, update_time)"
+            " opinion_cache (key_type, reported_key, "
+            "score, confidence, network_score, update_time)"
             "VALUES (?, ?, ?, ?, ?, strftime('%s','now'));",
             (key_type, reported_key, score, confidence, network_score),
         )
-        self.conn.commit()
 
     def get_cached_network_opinion(self, key_type: str, reported_key: str):
-        cache_cur = self.conn.execute(
-            "SELECT score, confidence, network_score, update_time "
-            "FROM opinion_cache "
-            "WHERE key_type = ? "
-            "  AND reported_key = ? "
-            "ORDER BY update_time LIMIT 1;",
-            (key_type, reported_key),
+        condition = (
+            f'key_type = "{utils.sanitize(key_type)}" '
+            f'AND reported_key = "{utils.sanitize(reported_key)}" '
+            f"ORDER BY update_time LIMIT 1"
         )
-
-        result = cache_cur.fetchone()
+        self.select(
+            table_name="opinion_cache",
+            columns="score, confidence, network_score, update_time",
+            condition=condition,
+        )
+        result = self.fetchone()
+        print(f"@@@@@@@@@@@@@@@@ get_cached_network_opinion result: {result}")
         if result is None:
             result = None, None, None, None
         return result
@@ -206,11 +208,13 @@ class TrustDB:
         Returns the latest IP seen associated with the given peerid
         :param peerid: the id of the peer we want the ip of
         """
-        cache_cur = self.conn.execute(
-            "SELECT MAX(update_time) AS ip_update_time, ipaddress FROM peer_ips WHERE peerid = ?;",
-            ((peerid),),
+        condition = f'peerid = "{utils.sanitize(peerid)}" '
+        self.select(
+            table_name="peer_ips",
+            columns="MAX(update_time) AS ip_update_time, ipaddress",
+            condition=condition,
         )
-        if res := cache_cur.fetchone():
+        if res := self.fetchone():
             last_update_time, ip = res
             return last_update_time, ip
         return False, False
@@ -219,29 +223,33 @@ class TrustDB:
         """
         Returns a list of all reports for the given IP address.
         """
-        reports_cur = self.conn.execute(
-            "SELECT reports.reporter_peerid, reports.update_time, reports.score, "
-            "       reports.confidence, reports.reported_key "
-            "FROM reports "
-            "WHERE reports.reported_key = ? AND reports.key_type = 'ip'"
-            "ORDER BY reports.update_time DESC;",
-            (ipaddress,),
+        # get all reports made about this ip
+        ipaddress = utils.sanitize(ipaddress)
+        condition = f"reported_key = \"{ipaddress}\" AND key_type = 'ip'"
+        self.select(
+            table_name="reports",
+            columns="reporter_peerid, update_time,"
+            " score, confidence, reported_key",
+            condition=condition,
         )
-        return reports_cur.fetchall()
+        return self.fetchall()
 
     def get_reporter_ip(self, reporter_peerid, report_timestamp):
         """
         Returns the IP address of the reporter at the time of the report.
         """
-        ip_cur = self.conn.execute(
-            "SELECT MAX(update_time), ipaddress "
-            "FROM peer_ips "
-            "WHERE update_time <= ? AND peerid = ? "
-            "ORDER BY update_time DESC "
-            "LIMIT 1;",
-            (report_timestamp, reporter_peerid),
+        reporter_peerid = utils.sanitize(reporter_peerid)
+        report_timestamp = utils.sanitize(report_timestamp)
+        condition = (
+            f'update_time <= "{report_timestamp}" AND '
+            f'peerid = "{reporter_peerid}"'
         )
-        if res := ip_cur.fetchone():
+        self.select(
+            table_name="peer_ips",
+            columns="MAX(update_time), ipaddress",
+            condition=condition,
+        )
+        if res := self.fetchone():
             return res[1]
         return None
 
@@ -249,15 +257,14 @@ class TrustDB:
         """
         Returns the latest reliability score for the given peer.
         """
-        go_reliability_cur = self.conn.execute(
-            "SELECT reliability "
-            "FROM go_reliability "
-            "WHERE peerid = ? "
-            "ORDER BY update_time DESC "
-            "LIMIT 1;",
-            (reporter_peerid,),
+        reporter_peerid = utils.sanitize(reporter_peerid)
+        condition = f'peerid = "{reporter_peerid}"'
+        self.select(
+            table_name="go_reliability",
+            columns="reliability",
+            condition=condition,
         )
-        if res := go_reliability_cur.fetchone():
+        if res := self.fetchone():
             return res[0]
         return None
 
@@ -265,15 +272,18 @@ class TrustDB:
         """
         Returns the latest reputation score and confidence for the given IP address.
         """
-        slips_reputation_cur = self.conn.execute(
-            "SELECT score, confidence "
-            "FROM slips_reputation "
-            "WHERE ipaddress = ? "
-            "ORDER BY update_time DESC "
-            "LIMIT 1;",
-            (reporter_ipaddress,),
+        reporter_ipaddress = utils.sanitize(reporter_ipaddress)
+        condition = (
+            f'ipaddress = "{reporter_ipaddress}" '
+            f"ORDER BY update_time DESC "
+            f"LIMIT 1;"
         )
-        if res := slips_reputation_cur.fetchone():
+        self.select(
+            table_name="slips_reputation",
+            columns="score, confidence",
+            condition=condition,
+        )
+        if res := self.fetchone():
             return res
         return None, None
 
@@ -283,6 +293,7 @@ class TrustDB:
         reporter reliability, reporter score, and reporter confidence for a given IP address.
         """
         reports = self.get_reports_for_ip(ipaddress)
+        print(f"@@@@@@@@@@@@@@@@ trustdb.py. .. reports: {reports}")
         reporters_scores = []
 
         for (
@@ -296,31 +307,50 @@ class TrustDB:
                 reporter_peerid, report_timestamp
             )
             if reporter_ipaddress == ipaddress:
+                print(
+                    f"@@@@@@@@@@@@@@@@ reporter is the same as the ip "
+                    f"were getting opinion for: {reporter_ipaddress}, "
+                    f"skipping"
+                )
                 continue
 
             reporter_reliability = self.get_reporter_reliability(
                 reporter_peerid
             )
             if reporter_reliability is None:
+                print(
+                    f"@@@@@@@@@@@@@@@@ no reliability, skipping reporter: {reporter_peerid}"
+                )
                 continue
 
             reporter_score, reporter_confidence = self.get_reporter_reputation(
                 reporter_ipaddress
             )
             if reporter_score is None or reporter_confidence is None:
+                print(
+                    f"@@@@@@@@@@@@@@@@ reporter_score is None: "
+                    f"{reporter_score is None}, OR reporter_confidence is "
+                    f"None {reporter_confidence is None} "
+                    f"skipping"
+                )
                 continue
 
+            # TODO update the docs in assemble_peer_opinion() when the
+            #  format of this list changes:D
             reporters_scores.append(
                 (
                     report_score,
                     report_confidence,
                     reporter_reliability,
-                    reporter_score,
+                    reporter_score,  # what does slips think about the reporter's ip
+                    # how confident slips is about the reporter's ip's score
                     reporter_confidence,
                     reporter_ipaddress,
                 )
             )
-
+        print(
+            f"@@@@@@@@@@@@@@@@ ok returning reporters_scores: {reporters_scores}"
+        )
         return reporters_scores
 
 
