@@ -172,7 +172,7 @@ class TrustDB(ISQLite):
         )
 
     def get_cached_network_opinion(self, key_type: str, reported_key: str):
-        self.select(
+        res = self.select(
             table_name="opinion_cache",
             columns="score, confidence, network_score, update_time",
             condition="key_type = ? AND reported_key = ?",
@@ -180,73 +180,75 @@ class TrustDB(ISQLite):
             order_by="update_time",
             limit=1,
         )
-        result = self.fetchone()
-        print(f"@@@@@@@@@@@@@@@@ get_cached_network_opinion result: {result}")
-        if result is None:
-            result = None, None, None, None
-        return result
+        print(f"@@@@@@@@@@@@@@@@ get_cached_network_opinion result: {res}")
+        if res is None:
+            return None, None, None, None
+        return res
 
     def get_ip_of_peer(self, peerid):
         """
         Returns the latest IP seen associated with the given peerid
         :param peerid: the id of the peer we want the ip of
+        returns a tuple with  (last_update_time, ip)
         """
-        self.select(
+        res = self.select(
             table_name="peer_ips",
             columns="MAX(update_time) AS ip_update_time, ipaddress",
             condition="peerid = ?",
             params=(peerid,),
+            limit=1,
         )
-        if res := self.fetchone():
-            last_update_time, ip = res
-            return last_update_time, ip
-        return False, False
+        return res or False, False
 
     def get_reports_for_ip(self, ipaddress):
         """
         Returns a list of all reports for the given IP address.
         """
-        self.select(
+        return self.select(
             table_name="reports",
             columns="reporter_peerid, update_time, score, confidence, reported_key",
             condition="reported_key = ? AND key_type = ?",
             params=(ipaddress, "ip"),
         )
-        return self.fetchall()
 
     def get_reporter_ip(self, reporter_peerid, report_timestamp):
         """
         Returns the IP address of the reporter at the time of the report.
         """
-        self.select(
+        res = self.select(
             table_name="peer_ips",
             columns="MAX(update_time), ipaddress",
             condition="update_time <= ? AND peerid = ?",
             params=(report_timestamp, reporter_peerid),
+            limit=1,
         )
-        if res := self.fetchone():
-            return res[1]
+        print(f"@@@@@@@@@@@@@@@@ get_reporter_ip . res: {res}")
+        if res:
+            return res[1]  # Return the IP address
         return None
 
     def get_reporter_reliability(self, reporter_peerid):
         """
         Returns the latest reliability score for the given peer.
         """
-        self.select(
+        res = self.select(
             table_name="go_reliability",
             columns="reliability",
             condition="peerid = ?",
             params=(reporter_peerid,),
+            limit=1,
         )
-        if res := self.fetchone():
+        print(f"@@@@@@@@@@@@@@@@ get_reporter_reliability returning {res}")
+        try:
             return res[0]
-        return None
+        except IndexError:
+            return None
 
     def get_reporter_reputation(self, reporter_ipaddress):
         """
         returns the latest reputation score and confidence for the given IP address.
         """
-        self.select(
+        res = self.select(
             table_name="slips_reputation",
             columns="score, confidence",
             condition="ipaddress = ?",
@@ -254,9 +256,8 @@ class TrustDB(ISQLite):
             order_by="update_time DESC",
             limit=1,
         )
-        if res := self.fetchone():
-            return res
-        return None, None
+        print(f"@@@@@@@@@@@@@@@@ get_reporter_reputation res {res}")
+        return res or (None, None)
 
     def get_opinion_on_ip(self, ipaddress):
         """
@@ -299,8 +300,10 @@ class TrustDB(ISQLite):
             )
             if reporter_score is None or reporter_confidence is None:
                 print(
-                    f"@@@@@@@@@@@@@@@@ reporter_score is None: "
-                    f"{reporter_score is None}, OR reporter_confidence is "
+                    f"@@@@@@@@@@@@@@@@ reporter_score ({reporter_score}) is "
+                    f"None: "
+                    f"{reporter_score is None}, OR reporter_confidence ("
+                    f"{reporter_confidence}) is "
                     f"None {reporter_confidence is None} "
                     f"skipping"
                 )

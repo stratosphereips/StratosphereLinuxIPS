@@ -157,7 +157,7 @@ class BaseModel:
             self.main_slips_db.set_peer_trust(reporter_ipaddress, peer_trust)
             print(
                 f"@@@@@@@@@@@@@@@@ for this peer report {peer_report} the "
-                f"computer peer trust is {peer_trust} "
+                f"computed peer trust is {peer_trust} "
             )
 
         weighted_reporters = self.normalize_peer_reputations(reporters)

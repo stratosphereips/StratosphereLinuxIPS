@@ -53,7 +53,7 @@ class ISQLite(ABC):
         condition=None,
         params=(),
         order_by=None,
-        limit=None,
+        limit: int = None,
     ):
         query = f"SELECT {columns} FROM {table_name} "
         if condition:
@@ -62,7 +62,7 @@ class ISQLite(ABC):
             query += f" ORDER BY {order_by}"
 
         self.execute(query, params)
-        if limit == "1":
+        if limit == 1:
             result = self.fetchone()
         else:
             result = self.fetchall()
