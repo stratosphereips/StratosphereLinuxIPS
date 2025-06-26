@@ -571,7 +571,6 @@ class Trust(IModule):
             ip_address,
             combined_score,
             combined_confidence,
-            network_score,
             confidence,
             ip_info,
         )
@@ -581,7 +580,6 @@ class Trust(IModule):
         ip,
         combined_score,
         combined_confidence,
-        network_score,
         confidence,
         ip_info,
     ):
@@ -603,16 +601,6 @@ class Trust(IModule):
             2,
         )
 
-        # save it to IPsInfo hash in p2p4slips key in the db
-        # AND p2p_reports key
-        p2p_utils.save_ip_report_to_db(
-            ip,
-            combined_score,
-            combined_confidence,
-            network_score,
-            self.db,
-            self.storage_name,
-        )
         if int(combined_score) * int(confidence) > 0:
             self.set_evidence_malicious_ip(ip_info, combined_score, confidence)
 

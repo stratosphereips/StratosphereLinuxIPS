@@ -203,12 +203,6 @@ class DBManager:
     def set_ip_info(self, *args, **kwargs):
         return self.rdb.set_ip_info(*args, **kwargs)
 
-    def get_p2p_reports_about_ip(self, *args, **kwargs):
-        return self.rdb.get_p2p_reports_about_ip(*args, **kwargs)
-
-    def store_p2p_report(self, *args, **kwargs):
-        return self.rdb.store_p2p_report(*args, **kwargs)
-
     def set_peer_trust(self, *args, **kwargs):
         return self.rdb.set_peer_trust(*args, **kwargs)
 
