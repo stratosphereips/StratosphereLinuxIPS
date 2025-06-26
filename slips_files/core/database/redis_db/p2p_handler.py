@@ -105,6 +105,16 @@ class P2PHandler:
         }
         return opinion
 
+    def get_p2p_reports_about_ip(self, ip) -> dict:
+        """
+        returns a dict of all p2p past reports about the given ip
+        """
+        # p2p_reports key is basically
+        # { ip:  { reporter1: [report1, report2, report3]} }
+        if reports := self.rcache.hget(self.constants.P2P_REPORTS, ip):
+            return json.loads(reports)
+        return {}
+
     def set_peer_trust(self, peer_ip, peer_trust):
         """
         Set the trust value for a peer in the database.
