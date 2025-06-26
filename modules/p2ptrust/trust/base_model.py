@@ -43,17 +43,12 @@ class BaseModel:
 
         # get report on that ip that is at most max_age old
         # if no such report is found:
-        print(
-            f"@@@@@@@@@@@@@@@@ inside get_opinion_on_ip now .. going to "
-            f"the trustdb to get reports on {ipaddr}"
-        )
         # reports_on_ip looks like this:
         # [(report_score, report_confidence, reporter_reliability,
         # reporter_score, reporter_confidence, reporter_ipaddress), ...]
         reports_on_ip: List[tuple] = self.trustdb.get_opinion_on_ip(ipaddr)
         if len(reports_on_ip) == 0:
             return None, None
-        print("@@@@@@@@@@@@@@@@ now calling assemble_peer_opinion")
         combined_score, combined_confidence = self.assemble_peer_opinion(
             reports_on_ip
         )
@@ -128,10 +123,6 @@ class BaseModel:
         )
         :return: average peer reputation, final score and final confidence
         """
-        print(
-            f"@@@@@@@@@@@@@@@@ assemble_peer_opinion is called on data"
-            f" {data}"
-        )
         reports = []
         reporters = []
 
@@ -155,10 +146,6 @@ class BaseModel:
             )
             reporters.append(peer_trust)
             self.main_slips_db.set_peer_trust(reporter_ipaddress, peer_trust)
-            print(
-                f"@@@@@@@@@@@@@@@@ for this peer report {peer_report} the "
-                f"computed peer trust is {peer_trust} "
-            )
 
         weighted_reporters = self.normalize_peer_reputations(reporters)
 

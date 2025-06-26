@@ -180,7 +180,7 @@ class TrustDB(ISQLite):
             order_by="update_time",
             limit=1,
         )
-        print(f"@@@@@@@@@@@@@@@@ get_cached_network_opinion result: {res}")
+
         if res is None:
             return None, None, None, None
         return res
@@ -222,7 +222,7 @@ class TrustDB(ISQLite):
             params=(report_timestamp, reporter_peerid),
             limit=1,
         )
-        print(f"@@@@@@@@@@@@@@@@ get_reporter_ip . res: {res}")
+
         if res:
             return res[1]  # Return the IP address
         return None
@@ -238,7 +238,7 @@ class TrustDB(ISQLite):
             params=(reporter_peerid,),
             limit=1,
         )
-        print(f"@@@@@@@@@@@@@@@@ get_reporter_reliability returning {res}")
+
         try:
             return res[0]
         except IndexError:
@@ -256,7 +256,7 @@ class TrustDB(ISQLite):
             order_by="update_time DESC",
             limit=1,
         )
-        print(f"@@@@@@@@@@@@@@@@ get_reporter_reputation res {res}")
+
         return res or (None, None)
 
     def get_opinion_on_ip(self, ipaddress):
@@ -265,7 +265,7 @@ class TrustDB(ISQLite):
         reporter reliability, reporter score, and reporter confidence for a given IP address.
         """
         reports = self.get_reports_for_ip(ipaddress)
-        print(f"@@@@@@@@@@@@@@@@ trustdb.py. .. reports: {reports}")
+
         reporters_scores = []
 
         for (
@@ -279,34 +279,18 @@ class TrustDB(ISQLite):
                 reporter_peerid, report_timestamp
             )
             if reporter_ipaddress == ipaddress:
-                print(
-                    f"@@@@@@@@@@@@@@@@ reporter is the same as the ip "
-                    f"were getting opinion for: {reporter_ipaddress}, "
-                    f"skipping"
-                )
                 continue
 
             reporter_reliability = self.get_reporter_reliability(
                 reporter_peerid
             )
             if reporter_reliability is None:
-                print(
-                    f"@@@@@@@@@@@@@@@@ no reliability, skipping reporter: {reporter_peerid}"
-                )
                 continue
 
             reporter_score, reporter_confidence = self.get_reporter_reputation(
                 reporter_ipaddress
             )
             if reporter_score is None or reporter_confidence is None:
-                print(
-                    f"@@@@@@@@@@@@@@@@ reporter_score ({reporter_score}) is "
-                    f"None: "
-                    f"{reporter_score is None}, OR reporter_confidence ("
-                    f"{reporter_confidence}) is "
-                    f"None {reporter_confidence is None} "
-                    f"skipping"
-                )
                 continue
 
             # TODO update the docs in assemble_peer_opinion() when the
@@ -322,9 +306,6 @@ class TrustDB(ISQLite):
                     reporter_ipaddress,
                 )
             )
-        print(
-            f"@@@@@@@@@@@@@@@@ ok returning reporters_scores: {reporters_scores}"
-        )
         return reporters_scores
 
 

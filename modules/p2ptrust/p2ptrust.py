@@ -492,9 +492,6 @@ class Trust(IModule):
         :return: None, the result is saved into the redis
             database under key `p2p4slips`
         """
-        print(
-            f"@@@@@@@@@@@@@@@@ handle_data_request() is called with {message_data}"
-        )
         # make sure that IP address is valid
         # and cache age is a valid timestamp from the past
         ip_info = validate_slips_data(message_data)
@@ -503,10 +500,6 @@ class Trust(IModule):
             # print(f"DEBUGGING: IP address is not valid:
             # {ip_info}, not asking the network")
             return
-        print(
-            "@@@@@@@@@@@@@@@@ handle_data_request: ok msg is valid, "
-            "getting cached network opinion"
-        )
         # ip_info is {
         #             'ip': str(saddr),
         #             'profileid' : str(profileid),
@@ -522,20 +515,17 @@ class Trust(IModule):
         # if data is in cache and is recent enough,
         # nothing happens and Slips should just check the database
         (
-            score,
-            confidence,
-            network_score,
-            timestamp,
+            cached_score,
+            cached_confidence,
+            cached_network_score,
+            cached_timestamp,
         ) = self.trust_db.get_cached_network_opinion("ip", ip_address)
-        print(
-            f"@@@@@@@@@@@@@@@@ get_cached_network_opinion returned "
-            f"fine! "
-            f"{score} {confidence} {network_score} {timestamp} \n\n\n\n\n\n\n\n"
-        )
-        if score is not None and time.time() - timestamp < cache_age:
+        if (
+            cached_score is not None
+            and time.time() - cached_timestamp < cache_age
+        ):
             # cached value is ok, do nothing
             # print("DEBUGGING:  cached value is ok, not asking the network.")
-            print("@@@@@@@@@@@@@@@@ returning!")
             return
 
         # since cached value is old, ask the peers
@@ -553,25 +543,18 @@ class Trust(IModule):
         # processed by an independent process in this module and
         # database will be updated accordingly
         time.sleep(2)
-        print(
-            "@@@@@@@@@@@@@@@@ get data from db, processed by the trust model"
-        )
+
         # get data from db, processed by the trust model
         # this score and confidence are the network's opinion
         (
             combined_score,
             combined_confidence,
         ) = self.reputation_model.get_opinion_on_ip(ip_address)
-        print(
-            f"@@@@@@@@@@@@@@@@ combined_score : {combined_score} "
-            f"combined_confidence: {combined_confidence} "
-            f"process_network_response"
-        )
+
         self.process_network_response(
             ip_address,
             combined_score,
             combined_confidence,
-            confidence,
             ip_info,
         )
 
@@ -580,7 +563,6 @@ class Trust(IModule):
         ip,
         combined_score,
         combined_confidence,
-        confidence,
         ip_info,
     ):
         """
@@ -589,10 +571,9 @@ class Trust(IModule):
         """
         # no data in db - this happens when testing,
         # if there is not enough data on peers
-        if combined_score is None:
+        if combined_score is None or combined_confidence is None:
             self.print(f"No data received from the network about {ip}\n", 0, 2)
             return
-
         self.print(
             f"The Network shared some data about {ip}, "
             f"Shared data: score={combined_score}, "
@@ -601,8 +582,10 @@ class Trust(IModule):
             2,
         )
 
-        if int(combined_score) * int(confidence) > 0:
-            self.set_evidence_malicious_ip(ip_info, combined_score, confidence)
+        if combined_score * combined_confidence > 0:
+            self.set_evidence_malicious_ip(
+                ip_info, combined_score, combined_confidence
+            )
 
     def respond_to_message_request(self, key, reporter):
         # todo do you mean another peer is asking me about
