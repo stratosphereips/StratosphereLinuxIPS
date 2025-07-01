@@ -3,7 +3,7 @@
 import ipaddress
 from typing import List, Dict
 
-from slips_files.common.abstracts.whitelist_analyzer import IWhitelistAnalyzer
+from slips_files.common.abstracts.iwhitelist_analyzer import IWhitelistAnalyzer
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.core.structures.evidence import (
     Direction,

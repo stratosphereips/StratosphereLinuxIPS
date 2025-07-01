@@ -9,7 +9,7 @@ from typing import Tuple, List, Dict
 import validators
 
 from modules.flowalerts.dns import DNS
-from slips_files.common.abstracts.flowalerts_analyzer import (
+from slips_files.common.abstracts.iflowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
 from slips_files.common.parsers.config_parser import ConfigParser

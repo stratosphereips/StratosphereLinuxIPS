@@ -8,7 +8,7 @@ import json
 import csv
 from dataclasses import asdict
 
-from slips_files.common.abstracts.sqlite import ISQLite
+from slips_files.common.abstracts.isqlite import ISQLite
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.alerts import Alert
@@ -26,14 +26,7 @@ class SQLiteDB(ISQLite):
     def __init__(self, logger: Output, output_dir: str):
         self.printer = Printer(logger, self.name)
         self._flows_db = os.path.join(output_dir, "flows.sqlite")
-        self.connect()
-        super().__init__()
 
-    def connect(self):
-        """
-        Creates the db if it doesn't exist and connects to it.
-        OR connects to the existing db if it's there.
-        """
         db_newly_created = False
         if not os.path.exists(self._flows_db):
             # db not created, mark it as first time accessing it so we can
@@ -41,32 +34,34 @@ class SQLiteDB(ISQLite):
             db_newly_created = True
             self._init_db()
 
+        self.connect()
+        super().__init__(self.name.lower())
+        if db_newly_created:
+            # only init tables if the db is newly created
+            self.init_tables()
+
+    def connect(self):
+        """
+        Creates the db if it doesn't exist and connects to it.
+        OR connects to the existing db if it's there.
+        """
         # you can get multithreaded access on a single pysqlite connection by
         # passing "check_same_thread=False"
         self.conn = sqlite3.connect(
             self._flows_db, check_same_thread=False, timeout=20
         )
-
         self.cursor = self.conn.cursor()
-        if db_newly_created:
-            # only init tables if the db is newly created
-            self.init_tables()
-
-    def get_number_of_tables(self):
-        """
-        returns the number of tables in the current db
-        """
-        query = "SELECT count(*) FROM sqlite_master WHERE type='table';"
-        self.execute(query)
-        x = self.fetchone()
-        return x[0]
 
     def init_tables(self):
         """creates the tables we're gonna use"""
         table_schema = {
-            "flows": "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, aid TEXT",
-            "altflows": "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT, flow_type TEXT",
-            "alerts": "alert_id TEXT PRIMARY KEY, alert_time TEXT, ip_alerted TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT",
+            "flows": "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid "
+            "TEXT, twid TEXT, aid TEXT",
+            "altflows": "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, "
+            "profileid TEXT, twid TEXT, flow_type TEXT",
+            "alerts": "alert_id TEXT PRIMARY KEY, alert_time TEXT, ip_alerted "
+            "TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, "
+            "label TEXT",
         }
         for table_name, schema in table_schema.items():
             self.create_table(table_name, schema)
@@ -203,7 +198,8 @@ class SQLiteDB(ISQLite):
         def row_generator():
             # select all flows and altflows
             self.execute(
-                "SELECT * FROM flows UNION SELECT uid, flow, label, profileid, twid FROM altflows"
+                "SELECT * FROM flows UNION SELECT uid, flow, label, profileid,"
+                " twid FROM altflows"
             )
 
             while True:
@@ -285,7 +281,8 @@ class SQLiteDB(ISQLite):
             flow.type_,
         )
         self.execute(
-            "INSERT OR REPLACE INTO altflows (profileid, twid, uid, flow, label, flow_type) "
+            "INSERT OR REPLACE INTO altflows (profileid, twid, uid, "
+            "flow, label, flow_type) "
             "VALUES (?, ?, ?, ?, ?, ?);",
             parameters,
         )

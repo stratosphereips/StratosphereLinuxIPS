@@ -21,7 +21,7 @@ from pathlib import Path
 from datetime import datetime
 import os
 
-from slips_files.common.abstracts.observer import IObserver
+from slips_files.common.abstracts.iobserver import IObserver
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import red, yellow

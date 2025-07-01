@@ -3,7 +3,7 @@
 import traceback
 from multiprocessing import Process
 
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 
 
 class ICore(IModule, Process):

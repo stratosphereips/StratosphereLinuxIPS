@@ -6,7 +6,7 @@ from typing import (
     Callable,
     List,
 )
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 
 
 class AsyncModule(IModule):

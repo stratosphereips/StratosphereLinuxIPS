@@ -181,7 +181,7 @@ detection:
   # - 0.43: Use this threshold If you want Slips to be insensitive.
   #        Using this means Slips will need so many evidence to trigger an alert
   #        May lead to false negatives
-  evidence_detection_threshold: 0.25
+  evidence_detection_threshold: 0.08
 
   # Make Slips pop up alerts? Both Linux and Macos
   popup_alerts: false
@@ -194,7 +194,7 @@ modules:
   # (they all should be lowercase with no special characters). Example,
   # threatintelligence, blocking, networkdiscovery, timeline, virustotal,
   # rnnccdetection, flowmldetection, updatemanager
-  disable: [template]
+  disable: [template, blocking]
 
   # For each line in timeline file there is a timestamp.
   # By default the timestamp is seconds in unix time. However
@@ -512,5 +512,5 @@ global_p2p:
 #############################
 local_p2p:
    # create p2p.log with additional info about peer communications?
-   create_p2p_logfile : False
-   use_p2p : False
+   create_p2p_logfile : True
+   use_p2p : True

@@ -9,7 +9,7 @@ import ipaddress
 import validators
 
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 from slips_files.core.structures.evidence import (
     ThreatLevel,
     Evidence,

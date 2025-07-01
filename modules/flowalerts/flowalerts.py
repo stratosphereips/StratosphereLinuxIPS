@@ -6,7 +6,7 @@ from asyncio import Task
 from typing import List
 
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.async_module import AsyncModule
+from slips_files.common.abstracts.iasync_module import AsyncModule
 from .conn import Conn
 from .dns import DNS
 from .downloaded_file import DownloadedFile

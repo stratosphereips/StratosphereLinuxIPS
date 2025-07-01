@@ -12,7 +12,7 @@ from typing import Set, Tuple
 from scapy.all import ARP, Ether
 from scapy.sendrecv import sendp, srp
 
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 from modules.arp_poisoner.unblocker import ARPUnblocker
 from slips_files.common.slips_utils import utils
 

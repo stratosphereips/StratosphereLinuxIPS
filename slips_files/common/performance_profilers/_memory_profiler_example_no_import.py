@@ -433,7 +433,7 @@ class MultiprocessPatchMeta(ABCMeta):
 
         def _cleanup(self):
             self._pop_map()
-            self._release_lock()
+            self._release_flock()
 
         cls._cleanup = _cleanup
 

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import json
 
-from slips_files.common.abstracts.flowalerts_analyzer import (
+from slips_files.common.abstracts.iflowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
 from slips_files.common.flow_classifier import FlowClassifier

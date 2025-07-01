@@ -49,8 +49,7 @@ class DBManager:
         self.trust_db = None
         if self.conf.use_local_p2p():
             self.trust_db_path: str = self.init_p2ptrust_db()
-            self.trust_db = TrustDB(  #
-                # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@22 TODO that was true
+            self.trust_db = TrustDB(
                 self.logger,
                 self.trust_db_path,
                 drop_tables_on_startup=False,
@@ -1030,10 +1029,11 @@ class DBManager:
         if self.sqlite:
             self.sqlite.close(*args, **kwargs)
 
-    def close_redis_and_sqlite(self, *args, **kwargs):
+    def close_all_dbs(self, *args, **kwargs):
         self.rdb.r.close()
         self.rdb.rcache.close()
         self.close_sqlite()
+        self.trust_db.conn.close()
 
     def get_fides_ti(self, target: str):
         return self.rdb.get_fides_ti(target)

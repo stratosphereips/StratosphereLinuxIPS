@@ -10,7 +10,7 @@ from typing import Dict
 import time
 from threading import Lock
 
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.slips_utils import utils
 from .exec_iptables_cmd import exec_iptables_command
 from modules.blocking.unblocker import Unblocker

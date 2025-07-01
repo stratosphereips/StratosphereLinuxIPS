@@ -33,7 +33,7 @@ import multiprocessing
 import modules
 from modules.update_manager.update_manager import UpdateManager
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.module import (
+from slips_files.common.abstracts.imodule import (
     IModule,
 )
 
@@ -826,7 +826,7 @@ class ProcessManager:
             self.main.profilers_manager.cpu_profiler_release()
             self.main.profilers_manager.memory_profiler_release()
 
-            self.main.db.close_redis_and_sqlite()
+            self.main.db.close_all_dbs()
             if graceful_shutdown:
                 print(
                     "[Process Manager] Slips shutdown gracefully\n",

@@ -2,7 +2,7 @@ from threading import Lock
 import time
 import threading
 from typing import Dict, Callable
-from slips_files.common.abstracts.unblocker import IUnblocker
+from slips_files.common.abstracts.iunblocker import IUnblocker
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import TimeWindow

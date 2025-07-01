@@ -33,10 +33,10 @@ from typing import (
 import netifaces
 import validators
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
-from slips_files.common.abstracts.observer import IObservable
+from slips_files.common.abstracts.iobserver import IObservable
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.core import ICore
+from slips_files.common.abstracts.icore import ICore
 from slips_files.common.style import green
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler

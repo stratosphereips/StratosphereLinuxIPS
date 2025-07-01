@@ -3,7 +3,7 @@
 import sys
 import traceback
 
-from slips_files.common.abstracts.input_type import IInputType
+from slips_files.common.abstracts.iinput_type import IInputType
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.argus import ArgusConn
 
