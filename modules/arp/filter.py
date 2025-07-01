@@ -30,6 +30,12 @@ class ARPEvidenceFilter:
             return False
 
         trust = self.db.get_peer_trust(ip)
-        if trust >= 0.3:
-            return True
-        return False
+        if not trust:
+            print(f"@@@@@@@@@@@@@@@@ cnat get the trust of peer {ip}")
+            return False
+
+        print(
+            f"@@@@@@@@@@@@@@@@ trust of {ip} is {trust} .. i"
+            f"s slips peer?? {trust >= 0.3}"
+        )
+        return trust >= 0.3
