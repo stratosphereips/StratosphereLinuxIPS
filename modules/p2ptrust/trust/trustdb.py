@@ -4,7 +4,7 @@ import sqlite3
 import datetime
 import time
 
-from slips_files.common.abstracts.sqlite import ISQLite
+from slips_files.common.abstracts.isqlite import ISQLite
 from slips_files.common.printer import Printer
 from slips_files.core.output import Output
 
@@ -24,12 +24,12 @@ class TrustDB(ISQLite):
             db_file, check_same_thread=False, timeout=20
         )
         self.cursor = self.conn.cursor()
+        super().__init__(self.name.replace(" ", "_").lower())
         if drop_tables_on_startup:
             self.print("Dropping tables")
             self.delete_tables()
 
         self.create_tables()
-        super().__init__()
 
     def __del__(self):
         self.conn.close()

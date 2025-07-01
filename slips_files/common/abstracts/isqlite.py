@@ -1,3 +1,4 @@
+import fcntl
 import sqlite3
 from abc import ABC
 from threading import Lock
@@ -11,16 +12,53 @@ class ISQLite(ABC):
     avoiding common sqlite errors
     """
 
-    # used to lock operations using the self.cursor
+    # to avoid multi threading errors where multiple threads try to write to
+    # the same sqlite db at the same time
     cursor_lock = Lock()
 
-    def __init__(self):
+    def __init__(self, name):
+        """
+        :param name: the name of the sqlite db, used to create a lock file
+        """
         # enable write-ahead logging for concurrent reads and writes to
         # avoid the "DB is locked" error
+        # to avoid multi processing errors where multiple processes
+        # try to write to the same sqlite db at the same time
+        # this name needs to change per sqlite db, meaning trustb should have
+        # its own lock file that is different from slips' main sqlite db lockfile
+        self.lockfile_name = f"/tmp/slips_{name}.lock"
+        # important: do not use self.execute here because this query
+        # shouldnt be wrapped in a transaction, which is what self.execute(
+        # ) does
         self.conn.execute("PRAGMA journal_mode=WAL;")
+
+    def _acquire_flock(self):
+        """to avoid multiprocess issues with sqlite,
+        we use a lock file, if the lock file is acquired by a different
+        proc, the current proc will wait until the lock is released"""
+        self.lockfile_fd = open(self.lockfile_name, "w")
+        fcntl.flock(self.lockfile_fd, fcntl.LOCK_EX)
+
+    def _release_flock(self):
+        try:
+            fcntl.flock(self.lockfile_fd, fcntl.LOCK_UN)
+            self.lockfile_fd.close()
+        except ValueError:
+            # to handle trying to release an already released
+            # lock "ValueError: I/O operation on closed file"
+            pass
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
+
+    def get_number_of_tables(self):
+        """
+        returns the number of tables in the current db
+        """
+        query = "SELECT count(*) FROM sqlite_master WHERE type='table';"
+        self.execute(query)
+        x = self.fetchone()
+        return x[0]
 
     def create_table(self, table_name, schema):
         query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
@@ -131,11 +169,12 @@ class ISQLite(ABC):
                 with self.cursor_lock:
                     if self.conn.in_transaction is False:
                         self.cursor.execute("BEGIN")
-
+                    self._acquire_flock()
                     if params is None:
                         self.cursor.execute(query)
                     else:
                         self.cursor.execute(query, params)
+                    self._release_flock()
 
                 # aka END TRANSACTION
                 if self.conn.in_transaction:
@@ -144,10 +183,10 @@ class ISQLite(ABC):
                 return
 
             except sqlite3.Error as err:
+                self._release_flock()
                 # no need to manually rollback here
                 # sqlite automatically rolls back the tx if an error occurs
                 trial += 1
-
                 if trial >= max_trials:
                     self.print(
                         f"Error executing query: "
