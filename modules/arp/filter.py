@@ -1,3 +1,5 @@
+from typing import List
+
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
 
@@ -11,12 +13,32 @@ class ARPEvidenceFilter:
     evidence about other slips attacking.
     """
 
-    def __init__(self, conf, db: DBManager):
+    def __init__(self, conf, slips_args, db: DBManager):
         self.db = db
+        self.conf = conf
+        self.args = slips_args
         # p2p needs to be enabled for slips to be able to recognize slips peers
         self.p2p_enabled = False
-        if conf.use_local_p2p():
+        if self.conf.use_local_p2p():
             self.p2p_enabled = True
+        self.our_ips: List[str] = utils.get_own_ips(ret=List)
+
+    def should_discard_evidence(self, ip: str) -> bool:
+        return self.is_slips_peer(ip) or self.is_self_defense(ip)
+
+    def is_self_defense(self, ip: str):
+        """
+        slips uses arp poison to defend itself and th enetwork,
+        check arp_poison.py for more details.
+        goal of this function is to discard evidence about slips doing arp
+        attacks when it's just attacking attackers
+        """
+        loaded_modules = self.db.get_pids().keys()
+        return (
+            ip in self.our_ips
+            and self.args.blocking
+            and "ARP Poisoner" in loaded_modules
+        )
 
     def is_slips_peer(self, ip: str) -> bool:
         """

@@ -35,7 +35,7 @@ class IModule(ABC, Process):
         output_dir,
         redis_port,
         termination_event,
-        args,
+        slips_args,
         conf,
         **kwargs,
     ):
@@ -44,7 +44,7 @@ class IModule(ABC, Process):
         self.output_dir = output_dir
         self.msg_received = False
         # as parsed by arg_parser, these are the cli args
-        self.args: Namespace = args
+        self.args: Namespace = slips_args
         # to be able to access the configuration file
         self.conf = conf
         # used to tell all slips.py children to stop

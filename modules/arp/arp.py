@@ -65,7 +65,7 @@ class ARP(IModule):
         # wait 10s for mmore arp scan evidence to come
         self.time_to_wait = 10
         self.is_zeek_running: bool = self.is_running_zeek()
-        self.evidence_filter = ARPEvidenceFilter(self.conf, self.db)
+        self.evidence_filter = ARPEvidenceFilter(self.conf, self.args, self.db)
 
     def read_configuration(self):
         conf = ConfigParser()
