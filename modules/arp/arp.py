@@ -528,7 +528,7 @@ class ARP(IModule):
             f"@@@@@@@@@@@@@@@@ slips detected {evidence} but didnt dicard "
             f"it "
         )
-        self.set_evidence(evidence)
+        self.db.set_evidence(evidence)
 
     def pre_main(self):
         """runs once before the main() is executed in a loop"""
