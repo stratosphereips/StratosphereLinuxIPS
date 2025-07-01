@@ -293,9 +293,12 @@ class Trust(IModule):
 
     def should_share(self, evidence: Evidence) -> bool:
         """
-        decides whether or not to report the given evidence to other
+        decides whether to report the given evidence to other
         peers
         """
+        if evidence.profile.ip in utils.get_own_ips():
+            return False
+
         if evidence.evidence_type == EvidenceType.P2P_REPORT:
             # we shouldn't re-share evidence reported by other peers
             return False
