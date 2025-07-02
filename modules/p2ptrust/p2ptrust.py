@@ -398,14 +398,16 @@ class Trust(IModule):
     #         self.printer.print(f"Exception {e} in update_callback")
 
     def data_request_callback(self, msg: Dict):
-        # try:
-        # ignore subscribe msgs (first 2 msgs sent in redis channel)
-        if msg and not isinstance(msg["data"], int):
-            self.handle_data_request(msg["data"])
-        # todo uncomment the try except here @@@@@@@@@@@@@@@@@@@
-        # except Exception as e:
-        #     self.print(f"Exception: {e} .. msg: {msg} in "
-        #                f"data_request_callback()", 0, 1)
+        try:
+            # ignore subscribe msgs (first 2 msgs sent in redis channel)
+            if msg and not isinstance(msg["data"], int):
+                self.handle_data_request(msg["data"])
+        except Exception as e:
+            self.print(
+                f"Exception: {e} .. msg: {msg} in " f"data_request_callback()",
+                0,
+                1,
+            )
 
     def set_evidence_malicious_ip(
         self, ip_info: dict, threat_level: float, confidence: float
@@ -428,10 +430,6 @@ class Trust(IModule):
         :param threat_level: the threat level we learned form the network
         :param confidence: how confident the network opinion is about this opinion
         """
-        print(
-            f"@@@@@@@@@@@@@@@@ set_evidence_malicious_ip: threat_level"
-            f" {threat_level} confidence: {confidence}"
-        )
         attacker_ip: str = ip_info.get("ip")
         profileid = ip_info.get("profileid")
         saddr = profileid.split("_")[-1]
@@ -578,12 +576,6 @@ class Trust(IModule):
         if combined_score is None or combined_confidence is None:
             self.print(f"No data received from the network about {ip}\n", 0, 2)
             return
-        print(
-            f"@@@@@@@@@@@@@@@@ process_network_response: The Network "
-            f"shared some data about {ip}, "
-            f"Shared data: score={combined_score}, "
-            f"confidence={combined_confidence} saving it now!"
-        )
 
         self.print(
             f"The Network shared some data about {ip}, "
