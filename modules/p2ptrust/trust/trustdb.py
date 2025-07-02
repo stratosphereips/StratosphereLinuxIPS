@@ -121,9 +121,6 @@ class TrustDB(ISQLite):
         values = (ip, peerid, timestamp)
         self.insert("peer_ips", values, "ipaddress, peerid, update_time")
 
-    # def insert_new_go_data(self, reports: list):
-    #     self.insert("reports" , reports)
-
     def insert_new_go_report(
         self,
         reporter_peerid: str,
@@ -198,7 +195,7 @@ class TrustDB(ISQLite):
             params=(peerid,),
             limit=1,
         )
-        return res or False, False
+        return res if res else (False, False)
 
     def get_reports_for_ip(self, ipaddress):
         """
@@ -211,7 +208,7 @@ class TrustDB(ISQLite):
             params=(ipaddress, "ip"),
         )
 
-    def get_reporter_ip(self, reporter_peerid, report_timestamp):
+    def get_reporter_ip(self, reporter_peerid, report_timestamp) -> str:
         """
         Returns the IP address of the reporter at the time of the report.
         """
