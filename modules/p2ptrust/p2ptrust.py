@@ -428,7 +428,10 @@ class Trust(IModule):
         :param threat_level: the threat level we learned form the network
         :param confidence: how confident the network opinion is about this opinion
         """
-
+        print(
+            f"@@@@@@@@@@@@@@@@ set_evidence_malicious_ip: threat_level"
+            f" {threat_level} confidence: {confidence}"
+        )
         attacker_ip: str = ip_info.get("ip")
         profileid = ip_info.get("profileid")
         saddr = profileid.split("_")[-1]
