@@ -197,9 +197,8 @@ class ARPPoisoner(IModule):
         fake_mac = "aa:aa:aa:aa:aa:aa"
 
         # @@@@@@@@@@@@@@@@@@@@ for debugging, remove this:S
-        if target_ip not in ("192.168.1.15", "192.168.1.4"):
+        if target_ip == "192.168.1.13":
             return
-
         # it makes sense here to get the mac using cache, because if we
         # reached this function, means there's an alert, means slips seen
         # traffic from that target_ip and has itsmac in the arp cache.
