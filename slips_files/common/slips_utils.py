@@ -19,7 +19,7 @@ import os
 import sys
 import ipaddress
 import aid_hash
-from typing import Any, Optional, Union, List, Dict
+from typing import Any, Optional, Union, List
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 from dataclasses import is_dataclass, asdict
 from enum import Enum
@@ -426,12 +426,31 @@ class Utils(object):
             pass
         return None
 
-    def get_own_ips(self, ret="Dict") -> Dict[str, List[str]] | List[str]:
+    def get_public_ip(self) -> str | None:
         """
-        Returns a dict of our private IPs from all interfaces and our public
+        fetch public IP from ipinfo.io
+        returns either an IPv4 or IPv6 address as a string, or None if unavailable
+        """
+        try:
+            response = requests.get("http://ipinfo.io/json", timeout=5)
+            if response.status_code == 200:
+                data = json.loads(response.text)
+                if "ip" in data:
+                    return data["ip"]
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+            requests.exceptions.ReadTimeout,
+            json.decoder.JSONDecodeError,
+        ):
+            return None
+
+    def get_own_ips(self, ret="Dict") -> dict[str, list[str]] | list[str]:
+        """
+        returns a dict of our private IPs from all interfaces and our public
         IPs. return a dict by default
         e.g. { "ipv4": [..], "ipv6": [..] }
-        :kwarg ret: "Dict" ir "List"
+        :kwarg ret: "Dict" or "List"
         and returns a list of all the ips combined if ret=List is given
         """
         if "-i" not in sys.argv and "-g" not in sys.argv:
@@ -440,18 +459,14 @@ class Utils(object):
 
         ips = {"ipv4": [], "ipv6": []}
 
-        interfaces = netifaces.interfaces()
-
-        for interface in interfaces:
+        for interface in netifaces.interfaces():
             try:
                 addrs = netifaces.ifaddresses(interface)
 
-                # get IPv4 addresses
                 if netifaces.AF_INET in addrs:
                     for addr in addrs[netifaces.AF_INET]:
                         ips["ipv4"].append(addr["addr"])
 
-                # get IPv6 addresses
                 if netifaces.AF_INET6 in addrs:
                     for addr in addrs[netifaces.AF_INET6]:
                         # remove interface suffix
@@ -461,33 +476,12 @@ class Utils(object):
             except Exception as e:
                 print(f"Error processing interface {interface}: {e}")
 
-        # get public ip
-        try:
-            response = requests.get(
-                "http://ipinfo.io/json",
-                timeout=5,
-            )
-        except (
-            requests.exceptions.ConnectionError,
-            requests.exceptions.ChunkedEncodingError,
-            requests.exceptions.ReadTimeout,
-        ):
-            return ips
-
-        if response.status_code != 200:
-            return ips
-        if "Connection timed out" in response.text:
-            return ips
-        try:
-            response = json.loads(response.text)
-        except json.decoder.JSONDecodeError:
-            return ips
-
-        public_ip = response["ip"]
-        if validators.ipv4(public_ip):
-            ips["ipv4"].append(public_ip)
-        elif validators.ipv6(public_ip):
-            ips["ipv6"].append(public_ip)
+        public_ip = self.get_public_ip()
+        if public_ip:
+            if validators.ipv4(public_ip):
+                ips["ipv4"].append(public_ip)
+            elif validators.ipv6(public_ip):
+                ips["ipv6"].append(public_ip)
 
         if ret == "Dict":
             return ips
