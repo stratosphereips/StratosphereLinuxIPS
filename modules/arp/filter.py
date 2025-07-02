@@ -34,6 +34,15 @@ class ARPEvidenceFilter:
         attacks when it's just attacking attackers
         """
         loaded_modules = self.db.get_pids().keys()
+        print(f"@@@@@@@@@@@@@@@@ loaded_modules {loaded_modules}")
+        print(
+            f"@@@@@@@@@@@@@@@@ ARP Poisoner in loaded_modules"
+            f" {'ARP Poisoner' in loaded_modules}"
+        )
+        print(
+            f"@@@@@@@@@@@@@@@@ self.our_ips {self.our_ips} .. checking ip  { ip}"
+        )
+        print(f"@@@@@@@@@@@@@@@@ self.args.blocking {self.args.blocking}")
         return (
             ip in self.our_ips
             and self.args.blocking
