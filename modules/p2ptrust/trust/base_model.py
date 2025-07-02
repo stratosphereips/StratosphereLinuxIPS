@@ -148,12 +148,20 @@ class BaseModel:
             self.main_slips_db.set_peer_trust(reporter_ipaddress, peer_trust)
 
         weighted_reporters = self.normalize_peer_reputations(reporters)
-
+        # peers we trust more will contribute more to the final score.
+        # r[0] → the score from each peer's report.
+        # w → the normalized trust weight for that peer
         combined_score = sum(
             r[0] * w for r, w, in zip(reports, weighted_reporters)
         )
         combined_confidence = sum(
             [max(0, r[1] * w) for r, w, in zip(reports, reporters)]
         ) / len(reporters)
+
+        # to ensure the score and confidence are within the range [0, 1]
+        # this avoids python issues with negative values or values
+        # slightly above 1.0
+        combined_score = min(1.0, max(0.0, combined_score))
+        combined_confidence = min(1.0, max(0.0, combined_confidence))
 
         return combined_score, combined_confidence

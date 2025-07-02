@@ -127,4 +127,7 @@ class P2PHandler:
         self.r.hset("peer_trust", peer_ip, peer_trust)
 
     def get_peer_trust(self, peer_ip):
-        return self.r.hget("peer_trust", peer_ip)
+        trust = self.r.hget("peer_trust", peer_ip)
+        if trust:
+            return float(trust)
+        return None

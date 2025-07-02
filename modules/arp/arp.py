@@ -521,7 +521,8 @@ class ARP(IModule):
         peers doing arp scans because that's slips attacking back attackers"""
         if self.evidence_filter.is_slips_peer(evidence.profile.ip):
             print(
-                f"@@@@@@@@@@@@@@@@ slips detected {evidence} but dicarded it because it's slips peer"
+                f"@@@@@@@@@@@@@!!!!!!!!!!!!!!!!***************************!!!!!!!!!!!!!!!!!!!!"
+                f"@@@ slips detected {evidence} but dicarded it because it's slips peer"
             )
             return
         print(
