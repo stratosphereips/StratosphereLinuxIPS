@@ -21,7 +21,7 @@ class ARPEvidenceFilter:
         self.p2p_enabled = False
         if self.conf.use_local_p2p():
             self.p2p_enabled = True
-        self.our_ips: List[str] = utils.get_own_ips(ret=List)
+        self.our_ips: List[str] = utils.get_own_ips(ret="List")
 
     def should_discard_evidence(self, ip: str) -> bool:
         return self.is_slips_peer(ip) or self.is_self_defense(ip)

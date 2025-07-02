@@ -426,11 +426,12 @@ class Utils(object):
             pass
         return None
 
-    def get_own_ips(self, ret=Dict) -> Dict[str, List[str]] | List[str]:
+    def get_own_ips(self, ret="Dict") -> Dict[str, List[str]] | List[str]:
         """
         Returns a dict of our private IPs from all interfaces and our public
         IPs. return a dict by default
         e.g. { "ipv4": [..], "ipv6": [..] }
+        :kwarg ret: "Dict" ir "List"
         and returns a list of all the ips combined if ret=List is given
         """
         if "-i" not in sys.argv and "-g" not in sys.argv:
@@ -488,9 +489,9 @@ class Utils(object):
         elif validators.ipv6(public_ip):
             ips["ipv6"].append(public_ip)
 
-        if ret == Dict:
+        if ret == "Dict":
             return ips
-        elif ret == List:
+        elif ret == "List":
             return [ip for sublist in ips.values() for ip in sublist]
 
     def convert_to_mb(self, bytes):
