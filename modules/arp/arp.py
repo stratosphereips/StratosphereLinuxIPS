@@ -519,7 +519,7 @@ class ARP(IModule):
     def set_evidence(self, evidence: Evidence):
         """the goal of this function is to discard evidence of other slips
         peers doing arp scans because that's slips attacking back attackers"""
-        if self.evidence_filter.is_slips_peer(evidence.profile.ip):
+        if self.evidence_filter.should_discard_evidence(evidence.profile.ip):
             return
         self.db.set_evidence(evidence)
 
