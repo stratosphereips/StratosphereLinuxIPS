@@ -1,3 +1,9 @@
+1.1.11 (July 3rd, 2025)
+- Fix local P2P trust model.
+- Fix SQLite cursor errors.
+- Avoid reporting own self or other slips peers when arp poisoning attackers.
+
+
 1.1.10 (May 26, 2025)
 - Add support for unblocking attackers using IP tables after a probation period.
 - Add support for blocking attackers using ARP poisoning.
