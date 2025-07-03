@@ -33,7 +33,7 @@ import multiprocessing
 import modules
 from modules.update_manager.update_manager import UpdateManager
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.module import (
+from slips_files.common.abstracts.imodule import (
     IModule,
 )
 
@@ -106,6 +106,7 @@ class ProcessManager:
             self.main.redis_port,
             self.termination_event,
             self.main.args,
+            self.main.conf,
             is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
@@ -127,6 +128,7 @@ class ProcessManager:
             self.main.redis_port,
             self.evidence_handler_termination_event,
             self.main.args,
+            self.main.conf,
         )
         evidence_process.start()
         self.main.print(
@@ -145,6 +147,7 @@ class ProcessManager:
             self.main.redis_port,
             self.termination_event,
             self.main.args,
+            self.main.conf,
             is_input_done=self.is_input_done,
             profiler_queue=self.profiler_queue,
             input_type=self.main.input_type,
@@ -389,6 +392,7 @@ class ProcessManager:
                 self.main.redis_port,
                 self.termination_event,
                 self.main.args,
+                self.main.conf,
             )
             module.start()
             self.main.db.store_pid(module_name, int(module.pid))
@@ -444,6 +448,7 @@ class ProcessManager:
                     self.main.redis_port,
                     multiprocessing.Event(),
                     self.main.args,
+                    self.main.conf,
                 )
 
                 if local_files:
@@ -821,7 +826,7 @@ class ProcessManager:
             self.main.profilers_manager.cpu_profiler_release()
             self.main.profilers_manager.memory_profiler_release()
 
-            self.main.db.close_redis_and_sqlite()
+            self.main.db.close_all_dbs()
             if graceful_shutdown:
                 print(
                     "[Process Manager] Slips shutdown gracefully\n",

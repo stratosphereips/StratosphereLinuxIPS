@@ -5,7 +5,7 @@ from typing import List
 
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 from slips_files.core.structures.evidence import (

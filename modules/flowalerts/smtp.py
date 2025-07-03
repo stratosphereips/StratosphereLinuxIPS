@@ -3,7 +3,7 @@
 import json
 
 
-from slips_files.common.abstracts.flowalerts_analyzer import (
+from slips_files.common.abstracts.iflowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
 from slips_files.common.slips_utils import utils

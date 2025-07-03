@@ -3,7 +3,7 @@
 from slack import WebClient
 from slack.errors import SlackApiError
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.exporter import IExporter
+from slips_files.common.abstracts.iexporter import IExporter
 from slips_files.common.parsers.config_parser import ConfigParser
 
 

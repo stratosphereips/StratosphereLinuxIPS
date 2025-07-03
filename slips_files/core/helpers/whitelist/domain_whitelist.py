@@ -3,7 +3,7 @@
 from typing import List, Dict
 import tldextract
 
-from slips_files.common.abstracts.whitelist_analyzer import IWhitelistAnalyzer
+from slips_files.common.abstracts.iwhitelist_analyzer import IWhitelistAnalyzer
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (

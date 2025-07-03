@@ -271,26 +271,12 @@ class AlertHandler:
             self.r.hset(evidence_hash, evidence.id, evidence_to_send)
             self.r.incr(self.constants.NUMBER_OF_EVIDENCE, 1)
             self.publish("evidence_added", evidence_to_send)
-
-            # an evidence is generated for this profile
-            # update the threat level of this profile
-            self.update_threat_level(
-                str(evidence.attacker.profile),
-                str(evidence.threat_level),
-                evidence.confidence,
-            )
-
             return True
 
         return False
 
     def set_alert(self, alert: Alert):
         self.set_evidence_causing_alert(alert)
-        # when an alert is generated , we should set the threat level of the
-        # attacker's profile to 1(critical) and confidence 1
-        # so that it gets reported to other peers with these numbers
-        self.update_threat_level(str(alert.profile), "critical", 1)
-
         # reset the accumulated threat level now that an alert is generated
         self._set_accumulated_threat_level(alert, 0)
         self.mark_profile_as_malicious(alert.profile)
@@ -488,9 +474,11 @@ class AlertHandler:
         self.r.hset(profileid, "past_threat_levels", past_threat_levels)
 
     def update_ips_info(self, profileid, max_threat_lvl, confidence):
-        # set the score and confidence of the given ip in the db
-        # when it causes an evidence
-        # these 2 values will be needed when sharing with peers
+        """
+        sets the score and confidence of the given ip in the db
+        when it causes an evidence
+        these 2 values will be needed when sharing with peers
+        """
         score_confidence = {"score": max_threat_lvl, "confidence": confidence}
         ip = profileid.split("_")[-1]
 
@@ -512,6 +500,8 @@ class AlertHandler:
         in IPsInfo
         :param threat_level: available options are 'low',
          'medium' 'critical' etc
+        Do not call this function directy from the db, always call it user
+        dbmanager.update_threat_level() to update the trustdb too:D
         """
 
         self.r.hset(profileid, "threat_level", threat_level)

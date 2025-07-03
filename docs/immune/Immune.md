@@ -5,4 +5,5 @@
 - [Slips Compatibility In The RPI](https://stratospherelinuxips.readthedocs.io/en/develop/immune/reimplement_slips_features_incompatible_with_the_rpi.html)
 - [Installing Slips On the RPI](https://stratospherelinuxips.readthedocs.io/en/develop/immune/installing_slips_in_the_rpi.html)
 - [LLM Research and Selection](https://stratospherelinuxips.readthedocs.io/en/develop/immune/research_and_selection_of_llm_candidates.html)
+- [LLM RPI Performance](https://stratospherelinuxips.readthedocs.io/en/develop/immune/research_rpi_llm_performance.html)
 - [ARP Poisoning](https://stratospherelinuxips.readthedocs.io/en/develop/immune/arp_poisoning.html)

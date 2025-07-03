@@ -1,6 +1,9 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+from typing_extensions import List
+
 from slips_files.common.printer import Printer
+from slips_files.core.database.database_manager import DBManager
 from slips_files.core.output import Output
 
 
@@ -17,15 +20,16 @@ class BaseModel:
 
     name = "P2P Base Model"
 
-    def __init__(self, logger: Output, trustdb):
+    def __init__(self, logger: Output, trustdb, main_slips_db: DBManager):
         self.trustdb = trustdb
+        self.main_slips_db = main_slips_db
         self.printer = Printer(logger, self.name)
         self.reliability_weight = 0.7
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
 
-    def get_opinion_on_ip(self, ipaddr: str) -> (float, float, float):
+    def get_opinion_on_ip(self, ipaddr: str) -> (float, float):
         """
         Compute the network's opinion for a given IP
 
@@ -39,8 +43,10 @@ class BaseModel:
 
         # get report on that ip that is at most max_age old
         # if no such report is found:
-
-        reports_on_ip = self.trustdb.get_opinion_on_ip(ipaddr)
+        # reports_on_ip looks like this:
+        # [(report_score, report_confidence, reporter_reliability,
+        # reporter_score, reporter_confidence, reporter_ipaddress), ...]
+        reports_on_ip: List[tuple] = self.trustdb.get_opinion_on_ip(ipaddr)
         if len(reports_on_ip) == 0:
             return None, None
         combined_score, combined_confidence = self.assemble_peer_opinion(
@@ -106,9 +112,17 @@ class BaseModel:
 
         :param data: a list of peers and their reports, in the format given
          by TrustDB.get_opinion_on_ip()
+         (
+            report_score,
+            report_confidence,
+            reporter_reliability,
+            reporter_score, # what does slips think about the reporter's ip
+            # how confident slips is about the reporter's ip's score
+            reporter_confidence,
+            reporter_ipaddress,
+        )
         :return: average peer reputation, final score and final confidence
         """
-
         reports = []
         reporters = []
 
@@ -117,23 +131,37 @@ class BaseModel:
                 report_score,
                 report_confidence,
                 reporter_reliability,
+                # what does slips think about the reporter's ip
                 reporter_score,
+                # how confident slips is about the reporter's ip's score
                 reporter_confidence,
+                reporter_ipaddress,
             ) = peer_report
+
             reports.append((report_score, report_confidence))
-            reporters.append(
-                self.compute_peer_trust(
-                    reporter_reliability, reporter_score, reporter_confidence
-                )
+            # here reporter_score, reporter_confidence are the local ips
+            # detection of this peer
+            peer_trust = self.compute_peer_trust(
+                reporter_reliability, reporter_score, reporter_confidence
             )
+            reporters.append(peer_trust)
+            self.main_slips_db.set_peer_trust(reporter_ipaddress, peer_trust)
 
         weighted_reporters = self.normalize_peer_reputations(reporters)
-
+        # peers we trust more will contribute more to the final score.
+        # r[0] → the score from each peer's report.
+        # w → the normalized trust weight for that peer
         combined_score = sum(
             r[0] * w for r, w, in zip(reports, weighted_reporters)
         )
         combined_confidence = sum(
             [max(0, r[1] * w) for r, w, in zip(reports, reporters)]
         ) / len(reporters)
+
+        # to ensure the score and confidence are within the range [0, 1]
+        # this avoids python issues with negative values or values
+        # slightly above 1.0
+        combined_score = min(1.0, max(0.0, combined_score))
+        combined_confidence = min(1.0, max(0.0, combined_confidence))
 
         return combined_score, combined_confidence

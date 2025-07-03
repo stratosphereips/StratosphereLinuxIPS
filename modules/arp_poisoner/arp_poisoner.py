@@ -12,7 +12,7 @@ from typing import Set, Tuple
 from scapy.all import ARP, Ether
 from scapy.sendrecv import sendp, srp
 
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 from modules.arp_poisoner.unblocker import ARPUnblocker
 from slips_files.common.slips_utils import utils
 
@@ -195,6 +195,7 @@ class ARPPoisoner(IModule):
         repoisoning every x seconds.
         """
         fake_mac = "aa:aa:aa:aa:aa:aa"
+
         # it makes sense here to get the mac using cache, because if we
         # reached this function, means there's an alert, means slips seen
         # traffic from that target_ip and has itsmac in the arp cache.
