@@ -1033,7 +1033,8 @@ class DBManager:
         self.rdb.r.close()
         self.rdb.rcache.close()
         self.close_sqlite()
-        self.trust_db.close()
+        if self.trust_db:
+            self.trust_db.close()
 
     def get_fides_ti(self, target: str):
         return self.rdb.get_fides_ti(target)
