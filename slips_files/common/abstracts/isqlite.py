@@ -10,11 +10,15 @@ class ISQLite(ABC):
     Interface for SQLite database operations.
     Any sqlite db that slips connects to should use thisinterface for
     avoiding common sqlite errors
+
+    PS: if you're gonna use cursor.anything, please always create a new cursor
+    to avoid shared-cursor bugs from sqlite.
+    and use the conn_lock whenever you're accessing the conn
     """
 
     # to avoid multi threading errors where multiple threads try to write to
     # the same sqlite db at the same time
-    cursor_lock = Lock()
+    conn_lock = Lock()
 
     def __init__(self, name):
         """
@@ -30,7 +34,8 @@ class ISQLite(ABC):
         # important: do not use self.execute here because this query
         # shouldnt be wrapped in a transaction, which is what self.execute(
         # ) does
-        self.conn.execute("PRAGMA journal_mode=WAL;")
+        with self.conn_lock:
+            self.conn.execute("PRAGMA journal_mode=WAL;")
 
     def _acquire_flock(self):
         """to avoid multiprocess issues with sqlite,
@@ -120,23 +125,27 @@ class ISQLite(ABC):
         return self.fetchone()[0]
 
     def close(self):
-        self.cursor.close()
-        self.conn.close()
+        with self.conn_lock:
+            cursor = self.conn.cursor()
+            cursor.close()
+            self.conn.close()
 
     def fetchall(self):
         """
         wrapper for sqlite fetchall to be able to use a lock
         """
-        with self.cursor_lock:
-            res = self.cursor.fetchall()
+        with self.conn_lock:
+            cursor = self.conn.cursor()
+            res = cursor.fetchall()
         return res
 
     def fetchone(self):
         """
         wrapper for sqlite fetchone to be able to use a lock
         """
-        with self.cursor_lock:
-            res = self.cursor.fetchone()
+        with self.conn_lock:
+            cursor = self.conn.cursor()
+            res = cursor.fetchone()
         return res
 
     def execute(self, query: str, params=None) -> None:
@@ -166,19 +175,22 @@ class ISQLite(ABC):
                 # example.
                 # if no errors occur, this will be the only transaction in
                 # the conn
-                with self.cursor_lock:
+                # self.conn object is still shared across threads, and SQLite
+                # does not allow concurrent use of a single connection without a lock.
+                with self.conn_lock:
+                    cursor = self.conn.cursor()
                     if self.conn.in_transaction is False:
-                        self.cursor.execute("BEGIN")
+                        cursor.execute("BEGIN")
                     self._acquire_flock()
                     if params is None:
-                        self.cursor.execute(query)
+                        cursor.execute(query)
                     else:
-                        self.cursor.execute(query, params)
+                        cursor.execute(query, params)
                     self._release_flock()
 
-                # aka END TRANSACTION
-                if self.conn.in_transaction:
-                    self.conn.commit()
+                    # aka END TRANSACTION
+                    if self.conn.in_transaction:
+                        self.conn.commit()
 
                 return
 
