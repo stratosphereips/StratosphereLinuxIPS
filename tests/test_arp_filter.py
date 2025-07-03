@@ -16,13 +16,15 @@ from tests.module_factory import ModuleFactory
     ],
 )
 def test_is_slips_peer(p2p_enabled, is_private, peer_trust, expected):
+    arp = ModuleFactory().create_arp_filter_obj()
     with patch(
-        "slips.modules.arp_filter.utils.is_private_ip", return_value=is_private
-    ), patch(
-        "slips.modules.arp_filter.DBManager.get_peer_trust",
+        "slips_files.core.profiler.utils.is_private_ip",
+        return_value=is_private,
+    ), patch.object(
+        arp.db,
+        "get_peer_trust",
         return_value=peer_trust,
     ):
-        arp = ModuleFactory().create_arp_filter_obj()
         arp.p2p_enabled = p2p_enabled
         assert arp.is_slips_peer("192.168.1.100") == expected
 
