@@ -60,10 +60,11 @@ class ISQLite(ABC):
         """
         returns the number of tables in the current db
         """
-        query = "SELECT count(*) FROM sqlite_master WHERE type='table';"
-        self.execute(query)
-        x = self.fetchone()
-        return x[0]
+        condition = "type='table'"
+        res = self.select(
+            "sqlite_master", columns="count(*)", condition=condition, limit=1
+        )
+        return res[0]
 
     def create_table(self, table_name, schema):
         query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
@@ -103,12 +104,18 @@ class ISQLite(ABC):
             query += f" WHERE {condition}"
         if order_by:
             query += f" ORDER BY {order_by}"
-
-        self.execute(query, params)
-        if limit == 1:
-            result = self.fetchone()
+        if params:
+            cursor = self.execute(query, params)
         else:
-            result = self.fetchall()
+            cursor = self.execute(query)
+
+        if not cursor:
+            return None
+
+        if limit == 1:
+            result = self.fetchone(cursor)
+        else:
+            result = self.fetchall(cursor)
         return result
 
     def get_count(self, table, condition=None):
@@ -116,13 +123,10 @@ class ISQLite(ABC):
         returns th enumber of matching rows in the given table
         based on a specific contioins
         """
-        query = f"SELECT COUNT(*) FROM {table}"
-
-        if condition:
-            query += f" WHERE {condition}"
-
-        self.execute(query)
-        return self.fetchone()[0]
+        count = self.select(
+            table, columns="COUNT(*)", condition=condition, limit=1
+        )
+        return count[0] if count else None
 
     def close(self):
         with self.conn_lock:
@@ -130,21 +134,19 @@ class ISQLite(ABC):
             cursor.close()
             self.conn.close()
 
-    def fetchall(self):
+    def fetchall(self, cursor):
         """
         wrapper for sqlite fetchall to be able to use a lock
         """
         with self.conn_lock:
-            cursor = self.conn.cursor()
             res = cursor.fetchall()
         return res
 
-    def fetchone(self):
+    def fetchone(self, cursor):
         """
         wrapper for sqlite fetchone to be able to use a lock
         """
         with self.conn_lock:
-            cursor = self.conn.cursor()
             res = cursor.fetchone()
         return res
 
@@ -192,7 +194,7 @@ class ISQLite(ABC):
                     if self.conn.in_transaction:
                         self.conn.commit()
 
-                return
+                return cursor
 
             except sqlite3.Error as err:
                 self._release_flock()
