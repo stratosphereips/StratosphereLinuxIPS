@@ -13,6 +13,7 @@ from multiprocessing import Queue
 from managers.host_ip_manager import HostIPManager
 from managers.metadata_manager import MetadataManager
 from managers.profilers_manager import ProfilersManager
+from modules.arp.filter import ARPEvidenceFilter
 from modules.arp_poisoner.arp_poisoner import ARPPoisoner
 from modules.blocking.unblocker import Unblocker
 from modules.flowalerts.conn import Conn
@@ -216,6 +217,11 @@ class ModuleFactory:
         arp.print = Mock()
         arp.evidence_filter.is_slips_peer = Mock(return_value=False)
         return arp
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_arp_filter_obj(self, mock_db):
+        filter = ARPEvidenceFilter(Mock(), Mock(), mock_db)  # conf  # args
+        return filter
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_blocking_obj(self, mock_db):
