@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-"""Unit test for slips_files/core/performance_profiler.py"""
+"""Unit test for slips_files/core/iperformance_profiler.py"""
 
 from unittest.mock import Mock
 

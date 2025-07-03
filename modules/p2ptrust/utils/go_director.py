@@ -116,7 +116,8 @@ class GoDirector:
 
         except json.decoder.JSONDecodeError:
             self.print(
-                f"Couldn't load message from pigeon - invalid Json from the pigeon: {data_dict}",
+                f"Couldn't load message from pigeon - invalid Json from"
+                f" the pigeon: {data_dict}",
                 0,
                 1,
             )
@@ -134,7 +135,8 @@ class GoDirector:
 
         The data is expected to be a list of messages received from go peers.
         They are parsed and inserted into the database.
-        If a message does not comply with the format, the reporter's reputation is lowered.
+        If a message does not comply with the format, the reporter's
+        reputation is lowered.
         """
         # "message_type":"go_data",
         # "message_contents":{"reporter":"aconcagua","report_time":1649445643,"message":
@@ -398,7 +400,7 @@ class GoDirector:
         :param report_time: Time of receiving the data, provided by the go part
         :param key_type: The type of key the peer is reporting (only "ip" is
         supported now)
-        :param key: The key itself
+        :param key: The key itself, aka the ip
         :param evaluation: Dictionary containing score and confidence values
         :return: None, data is saved to the database
         """
@@ -437,7 +439,6 @@ class GoDirector:
             self.print("Confidence value is out of bounds", 0, 2)
             # TODO: lower reputation
             return
-
         self.trustdb.insert_new_go_report(
             reporter, key_type, key, score, confidence, report_time
         )
@@ -447,19 +448,7 @@ class GoDirector:
             f"score {score}, confidence {confidence}"
         )
         self.print(result, 2, 0)
-        # print(f"*** [debugging p2p] ***  stored a report about about
-        # {key} from {reporter} in p2p_reports key in the db ")
-        # save all report info in the db
-        # convert ts to human readable format
-        report_info = {
-            "reporter": reporter,
-            "report_time": utils.convert_ts_format(
-                report_time, utils.alerts_format
-            ),
-        }
-        report_info.update(evaluation)
-        self.db.store_p2p_report(key, report_info)
-
+        report_time = time.time()
         # create a new profile for the reported ip
         # with the width from slips.yaml and the starttime as the report time
         if key_type == "ip":

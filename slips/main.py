@@ -477,6 +477,7 @@ class Main:
                     self.logger,
                     self.args.output,
                     self.redis_port,
+                    self.conf,
                     start_redis_server=start_redis_server,
                 )
             except RuntimeError as e:

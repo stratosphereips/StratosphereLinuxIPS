@@ -67,14 +67,6 @@ def profiler_queue():
     profiler_queue.put = do_nothing
     return profiler_queue
 
-
-@pytest.fixture
-def database():
-    db = DBManager(Output(), "output/", 6379)
-    db.print = do_nothing
-    return db
-
-
 @pytest.fixture
 def flow():
     """returns a dummy flow for testing"""

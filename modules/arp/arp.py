@@ -8,10 +8,11 @@ import threading
 from multiprocessing import Queue
 from typing import List
 
+from modules.arp.filter import ARPEvidenceFilter
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -26,7 +27,7 @@ from slips_files.core.structures.evidence import (
 
 
 class ARP(IModule):
-    # Name: short name of the module. Do not use spaces
+
     name = "ARP"
     description = "Detect ARP attacks"
     authors = ["Alya Gomaa"]
@@ -64,6 +65,7 @@ class ARP(IModule):
         # wait 10s for mmore arp scan evidence to come
         self.time_to_wait = 10
         self.is_zeek_running: bool = self.is_running_zeek()
+        self.evidence_filter = ARPEvidenceFilter(self.conf, self.args, self.db)
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -247,7 +249,7 @@ class ARP(IModule):
             timestamp=ts,
         )
 
-        self.db.set_evidence(evidence)
+        self.set_evidence(evidence)
         # after we set evidence, clear the dict so we can detect if it
         # does another scan
         try:
@@ -315,7 +317,7 @@ class ARP(IModule):
                 timestamp=flow.starttime,
                 victim=victim,
             )
-            self.db.set_evidence(evidence)
+            self.set_evidence(evidence)
             return True
 
         return False
@@ -357,7 +359,7 @@ class ARP(IModule):
                 timestamp=flow.starttime,
             )
 
-            self.db.set_evidence(evidence)
+            self.set_evidence(evidence)
             return True
 
     def detect_mitm_arp_attack(self, twid: str, flow):
@@ -460,7 +462,7 @@ class ARP(IModule):
                 victim=victim,
             )
 
-            self.db.set_evidence(evidence)
+            self.set_evidence(evidence)
             return True
 
     def check_if_gratutitous_arp(self, flow):
@@ -513,6 +515,13 @@ class ARP(IModule):
             open(arp_log_file_path, "w").close()
             # update ts of the new arp.log
             self.arp_log_creation_time = time.time()
+
+    def set_evidence(self, evidence: Evidence):
+        """the goal of this function is to discard evidence of other slips
+        peers doing arp scans because that's slips attacking back attackers"""
+        if self.evidence_filter.should_discard_evidence(evidence.profile.ip):
+            return
+        self.db.set_evidence(evidence)
 
     def pre_main(self):
         """runs once before the main() is executed in a loop"""

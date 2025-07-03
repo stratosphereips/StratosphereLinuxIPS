@@ -41,7 +41,7 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
-from slips_files.common.abstracts.core import ICore
+from slips_files.common.abstracts.icore import ICore
 from slips_files.core.structures.evidence import (
     dict_to_evidence,
     Evidence,
@@ -98,7 +98,7 @@ class EvidenceHandler(ICore):
         self.jsonfile = self.clean_file(self.output_dir, "alerts.json")
         utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
         # this list will have our local and public ips when using -i
-        self.our_ips: List[str] = utils.get_own_ips(ret=List)
+        self.our_ips: List[str] = utils.get_own_ips(ret="List")
         self.formatter = EvidenceFormatter(self.db)
         # thats just a tmp value, this variable will be set and used when
         # the

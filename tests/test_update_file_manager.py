@@ -44,7 +44,6 @@ def test_check_if_update_based_on_e_tag(mocker):
 
 
 def test_check_if_update_based_on_last_modified(
-    database,
     mocker,
 ):
     update_manager = ModuleFactory().create_update_manager_obj()

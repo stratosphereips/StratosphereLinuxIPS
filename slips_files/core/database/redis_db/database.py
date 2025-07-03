@@ -115,7 +115,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     # flag to know if we found the gateway MAC using the most seen MAC method
     _gateway_MAC_found = False
     _conf_file = "config/redis.conf"
-    our_ips: List[str] = utils.get_own_ips(ret=List)
+    our_ips: List[str] = utils.get_own_ips(ret="List")
     # to make sure we only detect and store the user's localnet once
     is_localnet_set = False
     # in case of redis ConnectionErrors, this is how long we'll wait in
@@ -834,63 +834,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     def get_redis_pid(self):
         """returns the pid of the current redis server"""
         return int(self.r.info()["process_id"])
-
-    def get_p2p_reports_about_ip(self, ip) -> dict:
-        """
-        returns a dict of all p2p past reports about the given ip
-        """
-        # p2p_reports key is basically
-        # { ip:  { reporter1: [report1, report2, report3]} }
-        if reports := self.rcache.hget(self.constants.P2P_REPORTS, ip):
-            return json.loads(reports)
-        return {}
-
-    def store_p2p_report(self, ip: str, report_data: dict):
-        """
-        stores answers about IPs slips asked other peers for.
-        updates the p2p_reports key only
-        """
-        # reports in the db are sorted by reporter by default
-        reporter = report_data["reporter"]
-        del report_data["reporter"]
-
-        # if we have old reports about this ip, append this one to them
-        # cached_p2p_reports is a dict
-        cached_p2p_reports: Dict[str, List[dict]] = (
-            self.get_p2p_reports_about_ip(ip)
-        )
-        if cached_p2p_reports:
-            # was this ip reported by the same peer before?
-            if reporter in cached_p2p_reports:
-                # ip was reported before, by the same peer
-                # did the same peer report the same score and
-                # confidence about the same ip twice in a row?
-                last_report_about_this_ip = cached_p2p_reports[reporter][-1]
-                score = report_data["score"]
-                confidence = report_data["confidence"]
-                if (
-                    last_report_about_this_ip["score"] == score
-                    and last_report_about_this_ip["confidence"] == confidence
-                ):
-                    report_time = report_data["report_time"]
-                    # score and confidence are the same as the last report,
-                    # only update the time
-                    last_report_about_this_ip["report_time"] = report_time
-                else:
-                    # score and confidence are the different from the last
-                    # report, add report to the list
-                    cached_p2p_reports[reporter].append(report_data)
-            else:
-                # ip was reported before, but not by the same peer
-                cached_p2p_reports[reporter] = [report_data]
-            report_data = cached_p2p_reports
-        else:
-            # no old reports about this ip
-            report_data = {reporter: [report_data]}
-
-        self.rcache.hset(
-            self.constants.P2P_REPORTS, ip, json.dumps(report_data)
-        )
 
     def get_dns_resolution(self, ip: str):
         """

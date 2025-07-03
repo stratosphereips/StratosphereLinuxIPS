@@ -144,31 +144,8 @@ def read_data_from_ip_info(ip_info: dict) -> (float, float):
             confidence = float(confidence.split()[-1])
 
         return float(score), confidence
-    except KeyError:
+    except (KeyError, TypeError):
         return None, None
-
-
-def save_ip_report_to_db(
-    ip, score, confidence, network_trust, db, timestamp=None
-):
-    if timestamp is None:
-        timestamp = time.time()
-
-    report_data = {
-        "score": score,
-        "confidence": confidence,
-        "network_score": network_trust,
-        "timestamp": timestamp,
-    }
-
-    # store it in p2p_reports key
-    # print(f"*** [debugging p2p] ***  stored a report about
-    # {ip} in p2p_Reports and IPsInfo keys")
-    db.store_p2p_report(ip, report_data)
-
-    # store it in IPsInfo key
-    wrapped_data = {"p2p4slips": report_data}
-    db.set_ip_info(ip, wrapped_data)
 
 
 #
@@ -182,13 +159,16 @@ def build_go_message(
     evaluation=None,
 ) -> dict:
     """
-    Assemble parameters to one dictionary, with keys that are expected by the remote peer.
+    Assemble parameters to one dictionary, with keys that are expected by the
+    remote peer.
 
     :param message_type: Type of message (request, report, blame...)
     :param key_type: Type of key, usually "ip"
     :param key: The key the message is about
-    :param evaluation_type: Type of evaluation that is reported (for report and blame) or expected (for request message)
-    :param evaluation: The score that is being reported (for report and blame). This can be left out for request message
+    :param evaluation_type: Type of evaluation that is reported (for report
+    and blame) or expected (for request message)
+    :param evaluation: The score that is being reported (for report and
+    blame). This can be left out for request message
     :return: A dictionary with proper values set.
     """
 

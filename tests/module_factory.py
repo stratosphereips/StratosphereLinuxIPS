@@ -13,6 +13,7 @@ from multiprocessing import Queue
 from managers.host_ip_manager import HostIPManager
 from managers.metadata_manager import MetadataManager
 from managers.profilers_manager import ProfilersManager
+from modules.arp.filter import ARPEvidenceFilter
 from modules.arp_poisoner.arp_poisoner import ARPPoisoner
 from modules.blocking.unblocker import Unblocker
 from modules.flowalerts.conn import Conn
@@ -100,8 +101,7 @@ def check_zeek_or_bro():
     return False
 
 
-MODULE_DB_MANAGER = "slips_files.common.abstracts.module.DBManager"
-# CORE_DB_MANAGER = "slips_files.common.abstracts.core.DBManager"
+MODULE_DB_MANAGER = "slips_files.common.abstracts.imodule.DBManager"
 DB_MANAGER = "slips_files.core.database.database_manager.DBManager"
 
 
@@ -132,10 +132,12 @@ class ModuleFactory:
             "RedisDB._set_redis_options",
             return_value=Mock(),
         ):
+            conf = Mock()
             db = DBManager(
                 self.logger,
                 output_dir,
                 port,
+                conf,
                 flush_db=flush_db,
                 start_sqlite=False,
                 start_redis_server=start_redis_server,
@@ -163,6 +165,7 @@ class ModuleFactory:
             6379,
             Mock(),  # termination event
             Mock(),  # args
+            Mock(),  # conf
         )
 
         # override the self.print function to avoid broken pipes
@@ -177,6 +180,7 @@ class ModuleFactory:
             6379,
             Mock(),  # termination event
             Mock(),  # args
+            Mock(),  # conf
         )
 
         # override the self.print function
@@ -191,6 +195,7 @@ class ModuleFactory:
             6379,
             Mock(),  # termination event
             Mock(),  # args
+            Mock(),  # conf
         )
         virustotal.print = Mock()
         virustotal.__read_configuration = Mock()
@@ -207,9 +212,16 @@ class ModuleFactory:
                 6379,
                 Mock(),  # termination event
                 Mock(),  # args
+                Mock(),  # conf
             )
         arp.print = Mock()
+        arp.evidence_filter.is_slips_peer = Mock(return_value=False)
         return arp
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_arp_filter_obj(self, mock_db):
+        filter = ARPEvidenceFilter(Mock(), Mock(), mock_db)  # conf  # args
+        return filter
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_blocking_obj(self, mock_db):
@@ -219,6 +231,7 @@ class ModuleFactory:
             6379,
             Mock(),  # termination event
             Mock(),  # args
+            Mock(),  # conf
         )
         # override the print function to avoid broken pipes
         blocking.print = Mock()
@@ -246,6 +259,7 @@ class ModuleFactory:
             6379,
             Mock(),  # termination event
             Mock(),  # args
+            Mock(),  # conf
         )
 
         # override the self.print function to avoid broken pipes
@@ -306,8 +320,9 @@ class ModuleFactory:
             Output(),
             "dummy_output_dir",
             6379,
-            Mock(),  # args
             Mock(),  # termination event
+            Mock(),  # args
+            Mock(),  # args
             is_input_done=Mock(),
             profiler_queue=self.profiler_queue,
             input_type=input_type,
@@ -334,8 +349,9 @@ class ModuleFactory:
             self.logger,
             "dummy_output_dir",
             6379,
-            Mock(),  # args
             Mock(),  # termination event
+            Mock(),  # args
+            Mock(),  # conf
         )
         # override the self.print function to avoid broken pipes
         ip_info.print = Mock()
@@ -356,8 +372,9 @@ class ModuleFactory:
             self.logger,
             "dummy_output_dir",
             6379,
-            Mock(),  # args
             Mock(),  # termination event
+            Mock(),  # args
+            Mock(),  # conf
         )
         leak_detector.print = Mock()
         # this is the path containing 1 yara rule for testing,
@@ -373,8 +390,9 @@ class ModuleFactory:
             self.logger,
             "output/",
             6379,
-            Mock(),  # args
             Mock(),  # termination event
+            Mock(),  # args
+            Mock(),  # conf
             is_profiler_done=Mock(),
             profiler_queue=self.input_queue,
             is_profiler_done_event=Mock(),
@@ -415,8 +433,9 @@ class ModuleFactory:
             self.logger,
             "dummy_output_dir",
             6379,
-            Mock(),  # args
             Mock(),  # termination event
+            Mock(),  # args
+            Mock(),  # conf
         )
 
         # override the self.print function to avoid broken pipes
@@ -433,8 +452,9 @@ class ModuleFactory:
             self.logger,
             "dummy_output_dir",
             6379,
-            Mock(),  # args
             Mock(),  # termination event
+            Mock(),  # args
+            Mock(),  # conf
         )
         # override the self.print function to avoid broken pipes
         update_manager.print = Mock()
@@ -549,8 +569,9 @@ class ModuleFactory:
             self.logger,
             "dummy_output_dir",
             6379,
-            Mock(),  # args
             Mock(),  # termination event
+            Mock(),  # args
+            Mock(),  # conf
         )
         return network_discovery
 
@@ -562,6 +583,7 @@ class ModuleFactory:
             6379,
             Mock(),  # termination event
             Mock(),  # args
+            Mock(),  # conf
         )
         return poisoner
 
@@ -625,10 +647,11 @@ class ModuleFactory:
         trust_db.print = Mock()
         return trust_db
 
-    def create_base_model_obj(self):
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_base_model_obj(self, mock_db):
         logger = Mock(spec=Output)
         trustdb = Mock()
-        return BaseModel(logger, trustdb)
+        return BaseModel(logger, trustdb, mock_db)
 
     def create_notify_obj(self):
         notify = Notify()
@@ -652,6 +675,7 @@ class ModuleFactory:
             redis_port,
             Mock(),  # termination event
             Mock(),  # args
+            Mock(),  # conf
         )
         cesnet.db = mock_db
         cesnet.wclient = MagicMock()
@@ -673,6 +697,7 @@ class ModuleFactory:
             redis_port,
             Mock(),  # termination event
             Mock(),  # args
+            Mock(),  # conf
         )
         handler.db = mock_db
         return handler
@@ -695,6 +720,7 @@ class ModuleFactory:
             6379,
             Mock(),  # termination event
             Mock(),  # args
+            Mock(),  # conf
         )
         riskiq.db = mock_db
         return riskiq
@@ -710,6 +736,7 @@ class ModuleFactory:
             redis_port,
             Mock(),  # termination event
             Mock(),  # args
+            Mock(),  # conf
         )
         tl.db = mock_db
         return tl

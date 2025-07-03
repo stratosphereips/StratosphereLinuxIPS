@@ -12,7 +12,7 @@ from typing import (
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 
 
 class Timeline(IModule):
