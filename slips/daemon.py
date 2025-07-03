@@ -311,6 +311,7 @@ class Daemon:
                     self.logger,
                     output_dir,
                     port,
+                    self.slips.conf,
                     start_sqlite=False,
                     flush_db=False,
                 )
