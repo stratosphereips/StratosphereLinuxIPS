@@ -6,6 +6,7 @@ from typing import (
 )
 import os
 
+from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.output import Output
 from .signals import message_sent
@@ -49,11 +50,13 @@ class Database(object):
             slips_logfile=os.path.join(output_dir, "slips.log"),
             create_logfiles=False,
         )
+        conf = ConfigParser()
         try:
             return DBManager(
                 logger,
                 output_dir,
                 port,
+                conf,
                 start_redis_server=False,
                 start_sqlite=True,
                 flush_db=False,
