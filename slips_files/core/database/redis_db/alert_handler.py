@@ -260,17 +260,21 @@ class AlertHandler:
         evidence_to_send: str = json.dumps(evidence_to_send)
 
         evidence_hash = f"{evidence.profile}_{evidence.timewindow}_evidence"
-        # This is done to ignore repetition of the same evidence sent.
+        # This is done to ignore repetition.
         evidence_exists: Optional[dict] = self.r.hget(
             evidence_hash, evidence.id
         )
 
         # note that publishing HAS TO be done after adding the evidence
         # to the db
-        if not evidence_exists:
+        # whitelisted evidence are deleted from the db, so we need to check
+        # that we're not re-adding a deleted evidence
+        if (not evidence_exists) and (
+            not self.is_whitelisted_evidence(evidence.id)
+        ):
             self.r.hset(evidence_hash, evidence.id, evidence_to_send)
             self.r.incr(self.constants.NUMBER_OF_EVIDENCE, 1)
-            self.publish("evidence_added", evidence_to_send)
+            self.publish(self.channels.EVIDENCE_ADDED, evidence_to_send)
             return True
 
         return False

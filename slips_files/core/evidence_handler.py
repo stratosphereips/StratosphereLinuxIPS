@@ -516,13 +516,15 @@ class EvidenceHandler(ICore):
                 twid: str = str(evidence.timewindow)
                 evidence_type: EvidenceType = evidence.evidence_type
                 timestamp: str = evidence.timestamp
-
-                # FP whitelisted alerts happen when the db returns an evidence
-                # that isn't processed in this channel, in the tw_evidence
-                # below.
-                # to avoid this, we only alert about processed evidence
+                # the database naturally has evidence before they reach
+                # this module. and sometime when this module queries
+                # evidence for a specific timewindow, the db returns all
+                # evidence including the ones the werent processed here yet.
+                # this marking of ev. as processed is to avoid that.
+                # so that get_evidence_for_tw() call below won't return
+                # unprocessed evidence.
                 self.db.mark_evidence_as_processed(evidence.id)
-                # Ignore evidence if IP is whitelisted
+
                 if self.whitelist.is_whitelisted_evidence(evidence):
                     self.db.cache_whitelisted_evidence_id(evidence.id)
                     # Modules add evidence to the db before
