@@ -236,6 +236,9 @@ class ARPPoisoner(IModule):
         if self.is_broadcast(ip, localnet):
             return False
 
+        if ip == self.db.get_gateway_ip():
+            return False
+
         # no need to check if the ip is in our ips because all our ips are
         # excluded from the new_blocking channel
         return True
