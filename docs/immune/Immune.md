@@ -6,4 +6,5 @@
 - [Installing Slips On the RPI](https://stratospherelinuxips.readthedocs.io/en/develop/immune/installing_slips_in_the_rpi.html)
 - [LLM Research and Selection](https://stratospherelinuxips.readthedocs.io/en/develop/immune/research_and_selection_of_llm_candidates.html)
 - [LLM RPI Performance](https://stratospherelinuxips.readthedocs.io/en/develop/immune/research_rpi_llm_performance.html)
+- [LLM RPI Finetuning Frameworks](https://stratospherelinuxips.readthedocs.io/en/develop/immune/finetuning_frameworks_rpi_5.html)
 - [ARP Poisoning](https://stratospherelinuxips.readthedocs.io/en/develop/immune/arp_poisoning.html)
