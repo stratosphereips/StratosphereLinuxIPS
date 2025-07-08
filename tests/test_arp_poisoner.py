@@ -36,7 +36,7 @@ def test_is_broadcast_false(poisoner):
     [
         ("1.2.3.4", True, True, False, False, False),  # public ip
         ("192.168.1.255", False, True, True, False, False),  # bc
-        ("192.168.1.1", False, True, False, True, True),  # gw ip
+        ("192.168.1.1", False, True, False, True, False),  # gw ip
         ("192.168.1.5", False, True, False, False, True),  # in net
     ],
 )
@@ -50,7 +50,8 @@ def test_can_poison_ip(
         poisoner.db.get_local_network = MagicMock(
             return_value="192.168.1.0/24"
         )
-        poisoner.db.get_gateway_ip = MagicMock(return_value="192.168.1.1")
+        if is_gw:
+            poisoner.db.get_gateway_ip = MagicMock(return_value=ip)
         poisoner.is_broadcast = MagicMock(return_value=is_bcast)
         assert poisoner.can_poison_ip(ip) == expected
 
