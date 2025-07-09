@@ -31,7 +31,8 @@ class ARPPoisoner(IModule):
             "new_blocking": self.c1,
             "tw_closed": self.c2,
         }
-        self._time_since_last_repoison = time.time()
+        self._time_since_last_repoison = {}
+        self._time_since_last_internet_cut = {}
         self.log_file_path = os.path.join(self.output_dir, "arp_poisoning.log")
         self.blocking_logfile_lock = Lock()
         # clear it
@@ -43,6 +44,9 @@ class ARPPoisoner(IModule):
             self.db, self.should_stop, self.logger, self.log
         )
         self.last_closed_tw = ""
+        self._scan_delay = 30
+        self._last_scan_time = 0
+        self.last_arp_scan_output = ""
 
     def log(self, text):
         """Logs the given text to the blocking log file"""
@@ -53,10 +57,21 @@ class ARPPoisoner(IModule):
                 )
                 f.write(f"{human_readable_datetime} - {text}\n")
 
-    def _is_time_to_repoison(self) -> bool:
-        """returns true if 10s passed since the last poison time"""
-        if time.time() - self._time_since_last_repoison >= 10:
-            self._time_since_last_repoison = time.time()
+    def _is_time_to_repoison(self, target: str) -> bool:
+        """
+        times to repoison are tracked per target ip.
+        returns true if 30s passed since the last poison time
+        :param target: the target ip that we want to repoison.
+        Why 30? ARP caches usually expire after 30–60 seconds on most
+        OSes, so we send the poison packets every 30 seconds to ensure
+        that the target's cache stays poisoned and to avoid overwhelming the
+        network.
+        """
+        if (
+            target not in self._time_since_last_repoison
+            or time.time() - self._time_since_last_repoison[target] >= 30
+        ):
+            self._time_since_last_repoison.update({target: time.time()})
             return True
 
         return False
@@ -66,16 +81,23 @@ class ARPPoisoner(IModule):
         is called in a loop, executes once every 10s
         repoisons all ips in self.unblocker.requests
         """
-        if not self._is_time_to_repoison() or not self.unblocker.requests:
+        if not self.unblocker.requests:
             return
 
         ips_to_stop_poisoning = []
         # the unblocker will remove ips that should be unblocked from this dict
         for ip in self.unblocker.requests:
+            # to keep all attackers poisoned, we re-poison every 30s,
+            # check if the target last poisoned time is more than 30s ago
+            if not self._is_time_to_repoison(ip):
+                # we won't stop poisoning this ip forever, we'll just wait
+                # 30s to repoison it.
+                continue
+
             if self.unblocker.check_if_time_to_unblock(ip):
                 ips_to_stop_poisoning.append(ip)
             else:
-                self._arp_poison(ip)
+                self._attack(ip)
 
         for ip in ips_to_stop_poisoning:
             self.unblocker.del_request(ip)
@@ -83,7 +105,17 @@ class ARPPoisoner(IModule):
     def _arp_scan(self, interface) -> Set[Tuple[str, str]]:
         """gets the available ip/mac pairs in the local
         network using arp-scan tool"""
+        # why are using the arp-scan tool instead of checking the arp
+        # cache? because the cache has only the ips that slips
+        # saw/interacted with, and we want to get all the ips in the
+        # network even if slips never saw them.
+
+        if not self._is_time_to_rescan():
+            return set()
+
+        # --retry=0 to avoid redundant retries.
         cmd = ["arp-scan", f"--interface={interface}", "--localnet"]
+
         try:
             output = subprocess.check_output(cmd, text=True)
         except subprocess.CalledProcessError as e:
@@ -101,6 +133,7 @@ class ARPPoisoner(IModule):
                 ip, mac = parts[0], parts[1].lower()
                 pairs.add((ip, mac))
 
+        self._adjust_scan_delay_based_on_arp_scan_output(pairs)
         return pairs
 
     def _get_mac_using_arp(self, ip) -> str | None:
@@ -186,7 +219,7 @@ class ARPPoisoner(IModule):
         )
         sendp(pkt, iface=self.args.interface, verbose=0)
 
-    def _arp_poison(self, target_ip: str, first_time=False):
+    def _attack(self, target_ip: str, first_time=False):
         """
         Prevents the target from accessing the internet and isolates it
         from the rest of the network.
@@ -197,8 +230,8 @@ class ARPPoisoner(IModule):
         fake_mac = "aa:aa:aa:aa:aa:aa"
 
         # it makes sense here to get the mac using cache, because if we
-        # reached this function, means there's an alert, means slips seen
-        # traffic from that target_ip and has itsmac in the arp cache.
+        # reached this function, means there's an alert, means slips saw
+        # traffic from that target_ip and has its mac in the arp cache.
         # no need to use an arp packet to get the mac.
         target_mac: str = utils.get_mac_for_ip_using_cache(target_ip)
 
@@ -254,7 +287,7 @@ class ARPPoisoner(IModule):
             if not self.can_poison_ip(ip):
                 return
 
-            self._arp_poison(ip, first_time=True)
+            self._attack(ip, first_time=True)
 
             # whether this ip is blocked now, or was already blocked, make an
             # unblocking request to either extend its
