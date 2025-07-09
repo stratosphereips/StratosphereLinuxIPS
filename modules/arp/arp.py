@@ -88,7 +88,7 @@ class ARP(IModule):
     def wait_for_arp_scans(self):
         """
         This thread waits for 10s then checks if more
-        arp scans happened to reduce the number of alerts
+        arp scans happened to reduce the number of evidence
         """
         # this evidence is the one that triggered this thread
         scans_ctr = 0
@@ -317,7 +317,11 @@ class ARP(IModule):
                 timestamp=flow.starttime,
                 victim=victim,
             )
-            self.set_evidence(evidence)
+            # no need to go through the arp filter here, so use
+            # self.db.set_evidence instead of self.set_evidence
+            # because the filter is only to filter attacks that can be done
+            # using the arp_poisoner, but this one isnt done there.
+            self.db.set_evidence(evidence)
             return True
 
         return False
