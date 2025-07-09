@@ -12,7 +12,7 @@
 - [Framework Analysis](#framework-analysis)
   - [Unsloth](#unsloth-httpsgithubcomunslothaiunsloth)
   - [Axolotl](#axolotl-httpsgithubcomopenaccess-ai-collectiveaxolotl)
-  - [TorchTune](#torchtune-httpsgithubcompytorchtune)
+  - [TorchTune](#torchtune-httpsgithubcompytorchtorchtune)
   - [LlamaFactory and LMTuner](#llamafactory-httpsgithubcomhiyougallama-factory-and-lmtuner-httpsgithubcomoptimalscalelmflow)
   - [Transformers + PEFT](#transformers--peft-httpsgithubcomhuggingfacepeft)
 - [Comparison Table](#comparison-table)
@@ -46,23 +46,23 @@ By carefully evaluating frameworks against these criteria, one can select the mo
 
 #### Framework Analysis
 
-**Unsloth (**[**https://github.com/unslothai/unsloth**](https://github.com/unslothai/unsloth)**)**
+#### Unsloth ([https://github.com/unslothai/unsloth](https://github.com/unslothai/unsloth))
 
 Unsloth supports fast, memory-efficient fine-tuning using LoRA, and includes built-in support for exporting fine-tuned models directly to GGUF format. This eliminates the need for manual adapter merging or external scripts. The model can be quantized during export using GGUF-compatible formats such as `q4_k_m`, which are optimized for CPU inference. For a deployment target like Raspberry Pi, where low memory footprint and fast loading are essential, Unsloth provides the most streamlined workflow. Its ease of use, minimal dependencies, and direct compatibility with llama.cpp make it a strong candidate.
 
-**Axolotl (**[**https://github.com/OpenAccess-AI-Collective/axolotl**](https://github.com/OpenAccess-AI-Collective/axolotl)**)**
+#### Axolotl ([https://github.com/OpenAccess-AI-Collective/axolotl](https://github.com/OpenAccess-AI-Collective/axolotl))
 
 Axolotl is a flexible and scalable fine-tuning framework often used in distributed or multi-GPU environments. It supports a variety of training configurations, including DeepSpeed and FSDP. However, it does not natively export to GGUF. Instead, fine-tuned models must be saved in Hugging Face format and later converted using the `convert.py` utility from llama.cpp. While Axolotl is more powerful for large-scale training, it introduces additional steps that may be unnecessary for this project's goals.
 
-**TorchTune (**[**https://github.com/pytorch/tune**](https://github.com/pytorch/tune)**)**
+#### TorchTune ([https://github.com/pytorch/torchtune](https://github.com/pytorch/torchtune))
 
-TorchTune, developed by the PyTorch team, is a modular and extensible framework designed for research and experimentation. It integrates with PyTorch-native tools and supports LoRA-based fine-tuning. Like Axolotl, TorchTune outputs models in standard Hugging Face format, requiring manual conversion to GGUF post-training. TorchTune is still evolving, and while it is well-suited for experimentation and custom pipelines, it is not optimized for deployment-focused workflows like the one required here.
+TorchTune, developed by the PyTorch team, is a modular and extensible framework designed for research and experimentation. It integrates with PyTorch-native tools and supports LoRA-based fine-tuning. Like Axolotl, TorchTune outputs models in standard Hugging Face format, requiring manual conversion to GGUF post-training. TorchTune is still evolving, and while it is well-suited for experimentation and custom pipelines, it is not optimized for deployment-focused workflows like the one required here. It is particularly suitable for users familiar with PyTorch syntax and operational modes, offering flexibility and control in model training and tuning.
 
-**LlamaFactory (**[**https://github.com/hiyouga/LLaMA-Factory**](https://github.com/hiyouga/LLaMA-Factory)**)** and **LMTuner (**[**https://github.com/OptimalScale/LMFlow**](https://github.com/OptimalScale/LMFlow)**)**
+#### LlamaFactory (https://github.com/hiyouga/LLaMA-Factory) and LMTuner (https://github.com/OptimalScale/LMFlow)
 
 Other frameworks such as LlamaFactory and LMTuner offer UI-based or scripting interfaces for managing fine-tuning jobs. They support efficient tuning methods and cover a wide range of models. However, like Axolotl and TorchTune, they require additional steps to convert models to GGUF. These frameworks are better suited for research and experimentation rather than minimal-dependency deployment pipelines.
 
-**Transformers + PEFT (**[**https://github.com/huggingface/peft**](https://github.com/huggingface/peft)**)**
+#### Transformers + PEFT (https://github.com/huggingface/peft)
 
 Finally, using Transformers with PEFT directly offers the highest level of control and customizability but demands manual orchestration of adapter training, merging, and post-processing. While technically viable, this approach increases implementation complexity and is not ideal for deployment pipelines that must remain simple and reproducible.
 
