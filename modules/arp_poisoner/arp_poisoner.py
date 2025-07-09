@@ -114,8 +114,12 @@ class ARPPoisoner(IModule):
             return set()
 
         # --retry=0 to avoid redundant retries.
-        cmd = ["arp-scan", f"--interface={interface}", "--localnet"]
-
+        cmd = [
+            "arp-scan",
+            f"--interface={interface}",
+            "--localnet",
+            "--retry=0",
+        ]
         try:
             output = subprocess.check_output(cmd, text=True)
         except subprocess.CalledProcessError as e:
