@@ -102,6 +102,46 @@ class ARPPoisoner(IModule):
         for ip in ips_to_stop_poisoning:
             self.unblocker.del_request(ip)
 
+    def _is_time_to_rescan(self) -> bool:
+        """
+        Returns True if it's time to rescan the network using arp-scan.
+        The scan is done every self._scan_delay seconds.
+        """
+        now = time.time()
+        if now - self._last_scan_time >= self._scan_delay:
+            self._last_scan_time = now
+            return True
+
+        return False
+
+    def _adapt_scan_delay(self, changes: bool):
+        """
+        adapts the arp scan delay based on whether there were changes in
+        the output of arp-scan since the last scan or not.
+        :param changes: True if there were changes in the arp-scan command
+        since last time.
+        If there were no changes, it increases the delay by 10s, up to a
+        maximum of 120s (2 minutes).
+        If there were changes, it resets the delay to 30s.
+        The goal of this is to reduce the frequency of scans when the network
+        is stable.
+        """
+        if changes:
+            self._scan_delay = 30
+        else:
+            self._scan_delay = min(self._scan_delay + 10, 120)  # Up to 2 mins
+
+    def _adjust_scan_delay_based_on_arp_scan_output(self, output: Set):
+        if output == self.last_arp_scan_output:
+            # if the output is the same as the last output, it means
+            # there were no changes in the network, so we can increase
+            # the scan delay.
+            self._adapt_scan_delay(changes=False)
+        else:
+            self._adapt_scan_delay(changes=True)
+            # store the last output for comparison
+            self.last_arp_scan_output = output
+
     def _arp_scan(self, interface) -> Set[Tuple[str, str]]:
         """gets the available ip/mac pairs in the local
         network using arp-scan tool"""
