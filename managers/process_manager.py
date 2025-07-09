@@ -47,9 +47,7 @@ from slips_files.core.profiler import Profiler
 class ProcessManager:
     def __init__(self, main):
         self.main = main
-        # this will be set by main.py if slips is not daemonized,
-        # it'll be set to the children of main.py
-        self.processes: Dict[str, Process]
+
         # this is the queue that will be used by the input proces
         # to pass flows to the profiler
         self.profiler_queue = Queue()
@@ -76,6 +74,11 @@ class ProcessManager:
         # cant get more lines anymore!
         self.is_profiler_done_event = Event()
         self.read_config()
+
+    def set_slips_processes(self, children: Dict[str, Process]):
+        # this will be set by main.py if slips is not daemonized,
+        # it'll be set to the children of main.py
+        self.processes = children
 
     def read_config(self):
         self.modules_to_ignore: list = self.main.conf.get_disabled_modules(

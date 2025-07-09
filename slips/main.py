@@ -590,9 +590,9 @@ class Main:
             self.metadata_man.add_metadata_if_enabled()
 
             self.input_process = self.proc_man.start_input_process()
-
             # obtain the list of active processes
-            self.proc_man.processes = multiprocessing.active_children()
+            children = multiprocessing.active_children()
+            self.proc_man.set_slips_processes(children)
 
             self.db.store_pid("slips.py", int(self.pid))
             self.metadata_man.set_input_metadata()
