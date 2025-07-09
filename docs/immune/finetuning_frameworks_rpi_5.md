@@ -48,7 +48,7 @@ By carefully evaluating frameworks against these criteria, one can select the mo
 
 **Unsloth (**[**https://github.com/unslothai/unsloth**](https://github.com/unslothai/unsloth)**)**
 
-Unsloth is currently the most efficient and straightforward framework for this task. It supports fast, memory-efficient fine-tuning using LoRA, and includes built-in support for exporting fine-tuned models directly to GGUF format. This eliminates the need for manual adapter merging or external scripts. The model can be quantized during export using GGUF-compatible formats such as `q4_k_m`, which are optimized for CPU inference. For a deployment target like Raspberry Pi, where low memory footprint and fast loading are essential, Unsloth provides the most streamlined workflow. Its ease of use, minimal dependencies, and direct compatibility with llama.cpp make it a strong candidate.
+Unsloth supports fast, memory-efficient fine-tuning using LoRA, and includes built-in support for exporting fine-tuned models directly to GGUF format. This eliminates the need for manual adapter merging or external scripts. The model can be quantized during export using GGUF-compatible formats such as `q4_k_m`, which are optimized for CPU inference. For a deployment target like Raspberry Pi, where low memory footprint and fast loading are essential, Unsloth provides the most streamlined workflow. Its ease of use, minimal dependencies, and direct compatibility with llama.cpp make it a strong candidate.
 
 **Axolotl (**[**https://github.com/OpenAccess-AI-Collective/axolotl**](https://github.com/OpenAccess-AI-Collective/axolotl)**)**
 
@@ -129,7 +129,9 @@ The exported GGUF model can be optimized using quantization schemes like `q4_k_m
 The complete set of scripts used for finetuning the used inside SLIPS Immune are avaiable 
 [here](https://github.com/stratosphereips/Slips-tools/tree/main/unsloth-scripts)
 
-not for mac. Currently, Unsloth does not support Apple Silicon processors, which means users with Mac devices using Apple Silicon (such as M1 or M2 chips) may face compatibility issues or be unable to use the framework effectively at this time.
+
+**Important:**
+Currently, Unsloth does not support Apple Silicon processors, which means users with Mac devices using Apple Silicon (such as M1 or M2 chips) may face compatibility issues or be unable to use the framework effectively at this time.
 
 #### Conclusion
 
