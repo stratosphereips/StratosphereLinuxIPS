@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -60,7 +61,7 @@ class Main:
             self.profilers_manager = ProfilersManager(self)
             self.pid = os.getpid()
             self.checker.check_given_flags()
-
+            self.prepare_locks_dir()
             if not self.args.stopdaemon:
                 # Check the type of input
                 (
@@ -452,6 +453,19 @@ class Main:
         if mac := self.db.get_gateway_mac():
             self.print(f"Detected gateway MAC: {green(mac)}")
         self.gw_info_printed = True
+
+    def prepare_locks_dir(self):
+        """
+        sets the correct permissions for the /tmp/slips directory to be
+        used by root and non-root users
+        """
+        locks_dir = utils.slips_locks_dir
+        # Create the directory if it doesn't exist
+        if not os.path.exists(locks_dir):
+            os.makedirs(locks_dir, exist_ok=True)
+
+        # Set permissions: 0777 (no sticky bit)
+        os.chmod(locks_dir, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
 
     def start(self):
         """Main Slips Function"""
