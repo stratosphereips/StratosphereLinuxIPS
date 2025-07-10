@@ -1,8 +1,11 @@
 import fcntl
+import os
 import sqlite3
 from abc import ABC
 from threading import Lock
 from time import sleep
+
+from slips_files.common.slips_utils import utils
 
 
 class ISQLite(ABC):
@@ -30,7 +33,14 @@ class ISQLite(ABC):
         # try to write to the same sqlite db at the same time
         # this name needs to change per sqlite db, meaning trustb should have
         # its own lock file that is different from slips' main sqlite db lockfile
-        self.lockfile_name = f"/tmp/slips_{name}.lock"
+        username = os.getenv("USER") or "unknown"
+        pid = os.getpid()
+        # we're using the username and pid to create a unique lock file per
+        # slips run, so that multiple instances of slips can run at the
+        # same time
+        self.lockfile_name = os.path.join(
+            utils.slips_locks_dir, f"{username}_{pid}_trust_db.lock"
+        )
         # important: do not use self.execute here because this query
         # shouldnt be wrapped in a transaction, which is what self.execute(
         # ) does
