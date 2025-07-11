@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import sqlite3
 import datetime
 import time
 
@@ -21,10 +20,7 @@ class TrustDB(ISQLite):
     ):
         """create a database connection to a SQLite database"""
         self.printer = Printer(logger, self.name)
-        self.conn = sqlite3.connect(
-            db_file, check_same_thread=False, timeout=20
-        )
-        self.cursor = self.conn.cursor()
+        self.connect(db_file)
         super().__init__(self.name.replace(" ", "_").lower(), main_pid)
         if drop_tables_on_startup:
             self.print("Dropping tables")

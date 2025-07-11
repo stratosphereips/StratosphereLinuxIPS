@@ -2,6 +2,7 @@ import fcntl
 import os
 import sqlite3
 from abc import ABC
+from contextlib import contextmanager
 from threading import Lock
 from time import sleep
 
@@ -22,6 +23,8 @@ class ISQLite(ABC):
 
     # to avoid multi threading errors where multiple threads try to write to
     # the same sqlite db at the same time
+    # must be used because we're using check_same_thread=False in
+    # sqlite3.connect()
     conn_lock = Lock()
 
     def __init__(self, name: str, main_pid: int):
@@ -37,8 +40,11 @@ class ISQLite(ABC):
         # non root slips modules to use this lock. (because some modules
         # drop privs when slips runs with -p and others dont)
         current_user_uid = utils.drop_root_privs_temporarily()
-        # enable write-ahead logging for concurrent reads and writes to
-        # avoid the "DB is locked" error
+        self._init_flock(name, main_pid, current_user_uid)
+        utils.regain_root_privs()
+        self._enable_wal_mode()
+
+    def _init_flock(self, name: str, main_pid: int, current_user_uid: int):
         # to avoid multi processing errors where multiple processes
         # try to write to the same sqlite db at the same time
         # this name needs to change per sqlite db, meaning trustb should have
@@ -54,34 +60,51 @@ class ISQLite(ABC):
             file_owner_uid = os.stat(self.lockfile_path).st_uid
             lock_file_exists = True
         except FileNotFoundError:
+            file_owner_uid = None
             lock_file_exists = False
 
         # check if the lock file was created by another subprocess of slips
         if not lock_file_exists or file_owner_uid != current_user_uid:
             open(self.lockfile_path, "w").close()
-        utils.regain_root_privs()
-        # important: do not use self.execute here because this query
-        # shouldnt be wrapped in a transaction, which is what self.execute(
-        # ) does
-        with self.conn_lock:
-            self.conn.execute("PRAGMA journal_mode=WAL;")
+            os.chmod(self.lockfile_path, 0o666)
 
+    def _enable_wal_mode(self):
+        """
+        Enables Write-Ahead Logging (WAL) and sets synchronous mode to FULL.
+        WAL is required for safe multi-process access to the SQLite database,
+         to avoid the "DB is locked" error
+        FULL synchronous ensures durability and avoids 'database is
+        malformed' errors.
+        """
+        with self._acquire_flock():
+            # Don't use self.execute — this must not be in a transaction.
+            with self.conn_lock:
+                self.conn.execute("PRAGMA journal_mode=WAL;")
+                self.conn.execute("PRAGMA synchronous=FULL;")
+
+    def connect(self, db_file: str):
+        with self._acquire_flock():
+            self.conn = sqlite3.connect(
+                db_file, check_same_thread=False, timeout=20
+            )
+            self.cursor = self.conn.cursor()
+
+    @contextmanager
     def _acquire_flock(self):
-        """to avoid multiprocess issues with sqlite,
-        we use a lock file, if the lock file is acquired by a different
-        proc, the current proc will wait until the lock is released"""
+        """Context manager for acquiring and releasing the file lock."""
+        # to avoid multiprocess issues with sqlite,
+        # we use a lock file, if the lock file is acquired by a different
+        # proc, the current proc will wait until the lock is released
         self.lockfile_fd = open(self.lockfile_path, "w")
-        os.chmod(self.lockfile_path, 0o666)
-        fcntl.flock(self.lockfile_fd, fcntl.LOCK_EX)
-
-    def _release_flock(self):
         try:
-            fcntl.flock(self.lockfile_fd, fcntl.LOCK_UN)
-            self.lockfile_fd.close()
-        except ValueError:
-            # to handle trying to release an already released
-            # lock "ValueError: I/O operation on closed file"
-            pass
+            fcntl.flock(self.lockfile_fd, fcntl.LOCK_EX)
+            yield  # <-- your code inside `with` will run here
+        finally:
+            try:
+                fcntl.flock(self.lockfile_fd, fcntl.LOCK_UN)
+                self.lockfile_fd.close()
+            except ValueError:
+                pass
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
@@ -180,6 +203,16 @@ class ISQLite(ABC):
             res = cursor.fetchone()
         return res
 
+    def log_err(self, query: str, params: tuple, err: str, trial: int):
+        self.print(
+            f"Error executing query: "
+            f"'{query}'. Params: {params}. Error: {err}. "
+            f"Retried executing {trial} times but failed. "
+            f"Query discarded.",
+            0,
+            1,
+        )
+
     def execute(self, query: str, params=None) -> None:
         """
         wrapper for sqlite execute() To avoid
@@ -208,17 +241,18 @@ class ISQLite(ABC):
                 # if no errors occur, this will be the only transaction in
                 # the conn
                 # self.conn object is still shared across threads, and SQLite
-                # does not allow concurrent use of a single connection without a lock.
+                # does not allow concurrent use of a single connection without
+                # a lock.
                 with self.conn_lock:
                     cursor = self.conn.cursor()
                     if self.conn.in_transaction is False:
                         cursor.execute("BEGIN")
-                    self._acquire_flock()
-                    if params is None:
-                        cursor.execute(query)
-                    else:
-                        cursor.execute(query, params)
-                    self._release_flock()
+
+                    with self._acquire_flock():
+                        if params is None:
+                            cursor.execute(query)
+                        else:
+                            cursor.execute(query, params)
 
                     # aka END TRANSACTION
                     if self.conn.in_transaction:
@@ -227,20 +261,19 @@ class ISQLite(ABC):
                 return cursor
 
             except sqlite3.Error as err:
-                self._release_flock()
                 # no need to manually rollback here
                 # sqlite automatically rolls back the tx if an error occurs
-                trial += 1
-                if trial >= max_trials:
-                    self.print(
-                        f"Error executing query: "
-                        f"'{query}'. Params: {params}. Error: {err}. "
-                        f"Retried executing {trial} times but failed. "
-                        f"Query discarded.",
-                        0,
-                        1,
-                    )
+                self._release_flock()
+                err = str(err)
+
+                if "malformed" in err:
+                    self.log_err(query, params, err, trial)
                     return
 
-                elif "database is locked" in str(err):
+                trial += 1
+                if trial >= max_trials:
+                    self.log_err(query, params, err, trial)
+                    return
+
+                if "database is locked" in err:
                     sleep(5)

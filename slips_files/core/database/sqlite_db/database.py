@@ -34,25 +34,13 @@ class SQLiteDB(ISQLite):
             db_newly_created = True
             self._init_db()
 
-        self.connect()
+        self.connect(self._flows_db)
 
         super().__init__(self.name.lower(), main_pid)
 
         if db_newly_created:
             # only init tables if the db is newly created
             self.init_tables()
-
-    def connect(self):
-        """
-        Creates the db if it doesn't exist and connects to it.
-        OR connects to the existing db if it's there.
-        """
-        # you can get multithreaded access on a single pysqlite connection by
-        # passing "check_same_thread=False"
-        self.conn = sqlite3.connect(
-            self._flows_db, check_same_thread=False, timeout=20
-        )
-        self.cursor = self.conn.cursor()
 
     def init_tables(self):
         """creates the tables we're gonna use"""
