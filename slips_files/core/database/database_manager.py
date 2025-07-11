@@ -22,7 +22,7 @@ class DBManager:
     """
     This class will be calling methods from the appropriate db.
     each method added to any of the dbs should have a
-    handler in here
+    handler in here.
     """
 
     name = "DBManager"

@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import threading
 import os
 import shutil
 import signal
@@ -129,6 +128,8 @@ class Trust(IModule):
 
         # flag to ensure slips prints multiaddress only once
         self.mutliaddress_printed = False
+        self.last_log_rotation_time = time.time()
+        self.rotation_period = 86400  # 1 day in seconds
 
     def _init_log_files(self):
         # should be called after reading configs
@@ -142,12 +143,7 @@ class Trust(IModule):
     def setup_pigeon_logfile_rotation(self):
         str_port = str(self.port) if self.rename_with_port else ""
         self.pigeon_logfile = self.pigeon_logfile_raw + str_port
-        self.print(f"Storing p2p.log in {self.pigeon_logfile}")
-        self.rotator_thread = threading.Thread(
-            target=self.rotate_p2p_logfile,
-            daemon=True,
-            name="p2p_rotator_thread",
-        )
+        self.print(f"Storing p2p in {self.pigeon_logfile}")
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -159,20 +155,6 @@ class Trust(IModule):
         local_ip = s.getsockname()[0]
         s.close()
         return local_ip
-
-    def rotate_p2p_logfile(self):
-        """
-        Thread that rotates p2p.log file every 1 day
-        """
-        rotation_period = 86400  # 1d
-        while True:
-            time.sleep(rotation_period)
-            lock = threading.Lock()
-            lock.acquire()
-            # erase contents of file instead of deleting it
-            # because the pigeon has an open handle of it
-            open(self.pigeon_logfile, "w").close()
-            lock.release()
 
     def get_available_port(self) -> int:
         for port in range(32768, 65535):
@@ -631,15 +613,17 @@ class Trust(IModule):
             )
             return 1
 
-        # create_p2p_logfile is taken from slips.yaml
-        if self.create_p2p_logfile:
-            # rotates p2p.log file every 1 day
-            utils.start_thread(self.rotator_thread, self.db)
-
         # should call self.update_callback
         # self.c4 = self.db.subscribe(self.slips_update_channel)
 
     def main(self):
+        if self.create_p2p_logfile:
+            # rotates p2p.log file every 1 day
+            now = time.time()
+            if now - self.last_log_rotation_time >= self.rotation_period:
+                open(self.pigeon_logfile, "w").close()
+                self.last_log_rotation_time = now
+
         if msg := self.get_msg("report_to_peers"):
             self.new_evidence_callback(msg)
 
