@@ -159,7 +159,7 @@ def test__arp_poison_uses_cache(poisoner):
         patch.object(poisoner, "_isolate_target_from_localnet") as iso,
         patch.object(poisoner, "log"),
     ):
-        poisoner._arp_poison("192.168.1.5", first_time=True)
+        poisoner._attack("192.168.1.5", first_time=True)
         cut.assert_called_once()
         iso.assert_called_once()
 
@@ -176,7 +176,7 @@ def test__arp_poison_fallback_to_arp(poisoner):
                 patch.object(poisoner, "_cut_targets_internet") as cut,
                 patch.object(poisoner, "_isolate_target_from_localnet") as iso,
             ):
-                poisoner._arp_poison("192.168.1.5")
+                poisoner._attack("192.168.1.5")
                 cut.assert_called_once()
                 iso.assert_called_once()
 
@@ -187,7 +187,7 @@ def test__arp_poison_fails(poisoner):
         return_value=None,
     ):
         with patch.object(poisoner, "_get_mac_using_arp", return_value=None):
-            assert poisoner._arp_poison("192.168.1.5") is None
+            assert poisoner._attack("192.168.1.5") is None
 
 
 @pytest.mark.parametrize("should_unblock", [False, True])

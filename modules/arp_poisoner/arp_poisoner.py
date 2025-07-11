@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-
 import logging
 import os
 import subprocess
@@ -46,7 +45,7 @@ class ARPPoisoner(IModule):
         self.last_closed_tw = ""
         self._scan_delay = 30
         self._last_scan_time = 0
-        self.last_arp_scan_output = ""
+        self.last_arp_scan_output = set()
 
     def log(self, text):
         """Logs the given text to the blocking log file"""
@@ -131,12 +130,17 @@ class ARPPoisoner(IModule):
         else:
             self._scan_delay = min(self._scan_delay + 10, 120)  # Up to 2 mins
 
-    def _adjust_scan_delay_based_on_arp_scan_output(self, output: Set):
-        if output == self.last_arp_scan_output:
+    def _adjust_scan_delay_based_on_arp_scan_output(
+        self, output: Set[Tuple[str, str]]
+    ):
+        """sets self.last_arp_scan_output"""
+
+        if output == self.last_arp_scan_output and output != set():
             # if the output is the same as the last output, it means
             # there were no changes in the network, so we can increase
             # the scan delay.
             self._adapt_scan_delay(changes=False)
+
         else:
             self._adapt_scan_delay(changes=True)
             # store the last output for comparison
@@ -151,20 +155,21 @@ class ARPPoisoner(IModule):
         # network even if slips never saw them.
 
         if not self._is_time_to_rescan():
-            return set()
+            # use the cached output if it's not time to rescan
+            return self.last_arp_scan_output
 
         # --retry=0 to avoid redundant retries.
-        cmd = [
-            "arp-scan",
-            f"--interface={interface}",
-            "--localnet",
-            "--retry=0",
-        ]
+        cmd = ["arp-scan", f"--interface={interface}", "--localnet"]
         try:
             output = subprocess.check_output(cmd, text=True)
         except subprocess.CalledProcessError as e:
-            self.print(f"arp-scan failed: {e.stderr or str(e)}", 0, 1)
-            return set()
+            self.print(
+                f"arp-scan failed: {e.stderr or str(e)} using last "
+                f"cached scan output.",
+                0,
+                1,
+            )
+            return self.last_arp_scan_output
 
         pairs = set()
         for line in output.splitlines():
