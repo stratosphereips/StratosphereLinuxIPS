@@ -5,6 +5,7 @@ from abc import ABC
 from threading import Lock
 from time import sleep
 
+
 from slips_files.common.slips_utils import utils
 
 
@@ -23,10 +24,19 @@ class ISQLite(ABC):
     # the same sqlite db at the same time
     conn_lock = Lock()
 
-    def __init__(self, name):
+    def __init__(self, name: str, main_pid: int):
         """
         :param name: the name of the sqlite db, used to create a lock file
+        :param main_pid: the pid of slips.py, used to create a lock file to
+         make sure only 1 lockfile is created per slips run per sqlite db
         """
+        # when files are created by a non-root user, root and non-root can
+        # access them
+        # when they're created by root, non-root can access them
+        # so drop privs temporarily to create that file bc we need root and
+        # non root slips modules to use this lock. (because some modules
+        # drop privs when slips runs with -p and others dont)
+        current_user_uid = utils.drop_root_privs_temporarily()
         # enable write-ahead logging for concurrent reads and writes to
         # avoid the "DB is locked" error
         # to avoid multi processing errors where multiple processes
@@ -34,13 +44,22 @@ class ISQLite(ABC):
         # this name needs to change per sqlite db, meaning trustb should have
         # its own lock file that is different from slips' main sqlite db lockfile
         username = os.getenv("USER") or "unknown"
-        pid = os.getpid()
         # we're using the username and pid to create a unique lock file per
         # slips run, so that multiple instances of slips can run at the
         # same time
-        self.lockfile_name = os.path.join(
-            utils.slips_locks_dir, f"{username}_{pid}_trust_db.lock"
+        self.lockfile_path = os.path.join(
+            utils.slips_locks_dir, f"{username}_{main_pid}_{name}.lock"
         )
+        try:
+            file_owner_uid = os.stat(self.lockfile_path).st_uid
+            lock_file_exists = True
+        except FileNotFoundError:
+            lock_file_exists = False
+
+        # check if the lock file was created by another subprocess of slips
+        if not lock_file_exists or file_owner_uid != current_user_uid:
+            open(self.lockfile_path, "w").close()
+        utils.regain_root_privs()
         # important: do not use self.execute here because this query
         # shouldnt be wrapped in a transaction, which is what self.execute(
         # ) does
@@ -51,7 +70,8 @@ class ISQLite(ABC):
         """to avoid multiprocess issues with sqlite,
         we use a lock file, if the lock file is acquired by a different
         proc, the current proc will wait until the lock is released"""
-        self.lockfile_fd = open(self.lockfile_name, "w")
+        self.lockfile_fd = open(self.lockfile_path, "w")
+        os.chmod(self.lockfile_path, 0o666)
         fcntl.flock(self.lockfile_fd, fcntl.LOCK_EX)
 
     def _release_flock(self):
