@@ -454,7 +454,7 @@ def test_pre_main(mocker):
     http_analyzer = ModuleFactory().create_http_analyzer_obj()
     mocker.patch("slips_files.common.slips_utils.Utils.drop_root_privs")
     http_analyzer.pre_main()
-    utils.drop_root_privs.assert_called_once()
+    utils.drop_root_privs_permanently.assert_called_once()
 
 
 @pytest.mark.parametrize(

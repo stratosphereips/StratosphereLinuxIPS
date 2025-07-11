@@ -529,7 +529,7 @@ class ARP(IModule):
 
     def pre_main(self):
         """runs once before the main() is executed in a loop"""
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
         utils.start_thread(self.timer_thread_arp_scan, self.db)
 
     def main(self):

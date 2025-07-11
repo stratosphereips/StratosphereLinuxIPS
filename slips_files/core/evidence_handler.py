@@ -387,7 +387,9 @@ class EvidenceHandler(ICore):
         """
 
         self.db.set_alert(alert, evidence_causing_the_alert)
-        self.decide_blocking(alert.profile.ip, alert.timewindow)
+        is_blocked: bool = self.decide_blocking(
+            alert.profile.ip, alert.timewindow
+        )
         # like in the firewall
         profile_already_blocked: bool = self.db.is_blocked_profile_and_tw(
             str(alert.profile), str(alert.timewindow)
@@ -407,9 +409,6 @@ class EvidenceHandler(ICore):
         if self.popup_alerts:
             self.show_popup(alert)
 
-        is_blocked: bool = self.decide_blocking(
-            alert.profile.ip, alert.timewindow
-        )
         if is_blocked:
             self.db.mark_profile_and_timewindow_as_blocked(
                 str(alert.profile), str(alert.timewindow)

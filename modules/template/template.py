@@ -39,7 +39,7 @@ class Template(IModule):
         """
         Initializations that run only once before the main() function runs in a loop
         """
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
 
     def main(self):
         """Main loop function"""

@@ -28,4 +28,4 @@ def test_pre_main(mocker, cleanup_database):
     fides_module = ModuleFactory().create_fidesModule_obj()
     mocker.patch("slips_files.common.slips_utils.Utils.drop_root_privs")
     fides_module.pre_main()
-    utils.drop_root_privs.assert_called_once()
+    utils.drop_root_privs_permanently.assert_called_once()

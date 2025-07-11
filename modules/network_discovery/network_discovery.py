@@ -372,7 +372,7 @@ class NetworkDiscovery(IModule):
             )
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
 
     def main(self):
         if msg := self.get_msg("tw_modified"):
