@@ -312,6 +312,7 @@ class Daemon:
                     output_dir,
                     port,
                     self.slips.conf,
+                    self.slips.pid,
                     start_sqlite=False,
                     flush_db=False,
                 )

@@ -7,7 +7,6 @@ import os
 import re
 import shutil
 import signal
-import stat
 import subprocess
 import sys
 import time
@@ -192,6 +191,7 @@ class Main:
                             shutil.rmtree(file_path)
             else:
                 os.makedirs(self.args.output)
+            os.chmod(self.args.output, 0o777)
             return
 
         # self.args.output is the same as self.alerts_default_path
@@ -211,6 +211,7 @@ class Main:
         self.args.output += f"_{ts}/"
 
         os.makedirs(self.args.output)
+        os.chmod(self.args.output, 0o777)
 
     def set_mode(self, mode, daemon=""):
         """
@@ -464,8 +465,7 @@ class Main:
         if not os.path.exists(locks_dir):
             os.makedirs(locks_dir, exist_ok=True)
 
-        # Set permissions: 0777 (no sticky bit)
-        os.chmod(locks_dir, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+        os.chmod(locks_dir, 0o777)  # World-writable, no sticky bit
 
     def start(self):
         """Main Slips Function"""
@@ -486,14 +486,17 @@ class Main:
             self.redis_port: int = self.redis_man.get_redis_port()
             # dont start the redis server if it's already started
             start_redis_server = not utils.is_port_in_use(self.redis_port)
+
             try:
                 self.db = DBManager(
                     self.logger,
                     self.args.output,
                     self.redis_port,
                     self.conf,
+                    int(self.pid),
                     start_redis_server=start_redis_server,
                 )
+
             except RuntimeError as e:
                 self.print(str(e), 1, 1)
                 self.terminate_slips()
@@ -608,7 +611,7 @@ class Main:
             children = multiprocessing.active_children()
             self.proc_man.set_slips_processes(children)
 
-            self.db.store_pid("slips.py", int(self.pid))
+            self.db.store_pid("main", int(self.pid))
             self.metadata_man.set_input_metadata()
 
             # warn about unused open redis servers

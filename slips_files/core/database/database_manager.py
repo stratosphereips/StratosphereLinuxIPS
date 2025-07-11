@@ -33,6 +33,7 @@ class DBManager:
         output_dir,
         redis_port,
         conf,
+        main_pid: int,
         start_sqlite=True,
         start_redis_server=True,
         **kwargs,
@@ -52,6 +53,7 @@ class DBManager:
             self.trust_db = TrustDB(
                 self.logger,
                 self.trust_db_path,
+                main_pid,
                 drop_tables_on_startup=False,
             )
 
@@ -60,7 +62,7 @@ class DBManager:
         # the existing one
         self.sqlite = None
         if start_sqlite:
-            self.sqlite = SQLiteDB(self.logger, output_dir)
+            self.sqlite = SQLiteDB(self.logger, output_dir, main_pid)
 
     def init_p2ptrust_db(self) -> str:
         """returns  the path of the trustdb inside the p2ptrust_runtime_dir"""

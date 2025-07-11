@@ -110,6 +110,7 @@ class ProcessManager:
             self.termination_event,
             self.main.args,
             self.main.conf,
+            self.main.pid,
             is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
@@ -132,6 +133,7 @@ class ProcessManager:
             self.evidence_handler_termination_event,
             self.main.args,
             self.main.conf,
+            self.main.pid,
         )
         evidence_process.start()
         self.main.print(
@@ -151,6 +153,7 @@ class ProcessManager:
             self.termination_event,
             self.main.args,
             self.main.conf,
+            self.main.pid,
             is_input_done=self.is_input_done,
             profiler_queue=self.profiler_queue,
             input_type=self.main.input_type,
@@ -260,7 +263,6 @@ class ProcessManager:
         """
         plugins = {}
         failed_to_load_modules = 0
-
         for module_name in self._discover_module_names():
             if not self._should_load_module(module_name):
                 continue
@@ -396,6 +398,7 @@ class ProcessManager:
                 self.termination_event,
                 self.main.args,
                 self.main.conf,
+                self.main.pid,
             )
             module.start()
             self.main.db.store_pid(module_name, int(module.pid))
@@ -452,6 +455,7 @@ class ProcessManager:
                     multiprocessing.Event(),
                     self.main.args,
                     self.main.conf,
+                    self.main.pid,
                 )
 
                 if local_files:

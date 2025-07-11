@@ -415,6 +415,8 @@ class RedisManager:
                 Output(),
                 self.main.args.output,
                 port,
+                None,  # doesnt matter here
+                None,  # doesnt matter here
                 start_sqlite=False,
                 start_redis_server=False,
             )
