@@ -269,7 +269,26 @@ class Utils(object):
             confidence = pkts_sent / 10.0
         return confidence
 
-    def drop_root_privs(self):
+    def drop_root_privs_temporarily(self) -> int:
+        """returns the uid of the user that launched sudo"""
+        if platform.system() != "Linux":
+            return
+        try:
+            self.sudo_uid = int(os.getenv("SUDO_UID"))
+            self.sudo_gid = int(os.getenv("SUDO_GID"))
+        except (TypeError, ValueError):
+            return  # Not running as root with sudo
+
+        # Drop only effective privileges
+        os.setegid(self.sudo_gid)
+        os.seteuid(self.sudo_uid)
+        return self.sudo_uid
+
+    def regain_root_privs(self):
+        os.seteuid(0)
+        os.setegid(0)
+
+    def drop_root_privs_permanently(self):
         """
         Drop root privileges if the module doesn't need them
         Shouldn't be called from __init__ because then, it affects the parent process too
