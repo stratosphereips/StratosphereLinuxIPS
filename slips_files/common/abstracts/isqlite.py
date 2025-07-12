@@ -27,7 +27,7 @@ class ISQLite(ABC):
     # sqlite3.connect()
     conn_lock = Lock()
 
-    def __init__(self, name: str, main_pid: int):
+    def __init__(self, name: str, main_pid: int, db_file: str):
         """
         :param name: the name of the sqlite db, used to create a lock file
         :param main_pid: the pid of slips.py, used to create a lock file to
@@ -42,7 +42,14 @@ class ISQLite(ABC):
         current_user_uid = utils.drop_root_privs_temporarily()
         self._init_flock(name, main_pid, current_user_uid)
         utils.regain_root_privs()
+        self.connect(db_file)
         self._enable_wal_mode()
+
+    def connect(self, db_file: str):
+        with self._acquire_flock():
+            self.conn = sqlite3.connect(
+                db_file, check_same_thread=False, timeout=20
+            )
 
     def _init_flock(self, name: str, main_pid: int, current_user_uid: int):
         # to avoid multi processing errors where multiple processes
@@ -82,24 +89,23 @@ class ISQLite(ABC):
                 self.conn.execute("PRAGMA journal_mode=WAL;")
                 self.conn.execute("PRAGMA synchronous=FULL;")
 
-    def connect(self, db_file: str):
-        with self._acquire_flock():
-            self.conn = sqlite3.connect(
-                db_file, check_same_thread=False, timeout=20
-            )
-            self.cursor = self.conn.cursor()
-
     @contextmanager
     def _acquire_flock(self):
         """Context manager for acquiring and releasing the file lock."""
+        if getattr(self, "_lock_acquired", False):
+            yield  # already held
+            return
+
         # to avoid multiprocess issues with sqlite,
         # we use a lock file, if the lock file is acquired by a different
         # proc, the current proc will wait until the lock is released
         self.lockfile_fd = open(self.lockfile_path, "w")
         try:
             fcntl.flock(self.lockfile_fd, fcntl.LOCK_EX)
+            self._lock_acquired = True
             yield  # <-- your code inside `with` will run here
         finally:
+            self._lock_acquired = False
             try:
                 fcntl.flock(self.lockfile_fd, fcntl.LOCK_UN)
                 self.lockfile_fd.close()
@@ -183,8 +189,6 @@ class ISQLite(ABC):
 
     def close(self):
         with self.conn_lock:
-            cursor = self.conn.cursor()
-            cursor.close()
             self.conn.close()
 
     def fetchall(self, cursor):
@@ -263,11 +267,11 @@ class ISQLite(ABC):
             except sqlite3.Error as err:
                 # no need to manually rollback here
                 # sqlite automatically rolls back the tx if an error occurs
-                self._release_flock()
                 err = str(err)
 
-                if "malformed" in err:
+                if "malformed" in err or "closed database" in err:
                     self.log_err(query, params, err, trial)
+                    self.close()
                     return
 
                 trial += 1

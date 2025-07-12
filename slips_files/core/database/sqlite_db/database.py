@@ -33,10 +33,8 @@ class SQLiteDB(ISQLite):
             # init tables once we connect
             db_newly_created = True
             self._init_db()
-
-        self.connect(self._flows_db)
-
-        super().__init__(self.name.lower(), main_pid)
+        # connects to the db
+        super().__init__(self.name.lower(), main_pid, self._flows_db)
 
         if db_newly_created:
             # only init tables if the db is newly created

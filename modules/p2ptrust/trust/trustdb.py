@@ -20,8 +20,10 @@ class TrustDB(ISQLite):
     ):
         """create a database connection to a SQLite database"""
         self.printer = Printer(logger, self.name)
-        self.connect(db_file)
-        super().__init__(self.name.replace(" ", "_").lower(), main_pid)
+        # connects to the db
+        super().__init__(
+            self.name.replace(" ", "_").lower(), main_pid, db_file
+        )
         if drop_tables_on_startup:
             self.print("Dropping tables")
             self.delete_tables()
