@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import os
+import shutil
+import sqlite3
 from pathlib import Path
 from typing import (
     List,
@@ -64,12 +66,41 @@ class DBManager:
         if start_sqlite:
             self.sqlite = SQLiteDB(self.logger, output_dir, main_pid)
 
+    def is_db_malformed(self, db_path: str) -> bool:
+        try:
+            with sqlite3.connect(db_path, timeout=3) as conn:
+                cursor = conn.execute("PRAGMA integrity_check;")
+                result = cursor.fetchone()
+                return result[0] != "ok"
+        except sqlite3.DatabaseError as e:
+            self.print(f"Database error during integrity_check: {e}")
+            return True
+
+    def backup_corrupt_db(self, db_path: str):
+        try:
+            # backup the corrupted DB aside (optional safety)
+            corrupted_path = db_path + ".corrupted.bak"
+            shutil.move(db_path, corrupted_path)
+            self.print(f"Corrupt DB moved to {corrupted_path}")
+        except Exception as e:
+            self.print(f"Failed to move corrupted DB: {e}")
+            os.remove(db_path)  # Fallback: just delete
+
     def init_p2ptrust_db(self) -> str:
-        """returns  the path of the trustdb inside the p2ptrust_runtime_dir"""
+        """Initializes and returns the path to a valid trustdb inside p2ptrust_runtime_dir."""
         p2ptrust_runtime_dir = os.path.join(os.getcwd(), "p2ptrust_runtime/")
         Path(p2ptrust_runtime_dir).mkdir(parents=True, exist_ok=True)
+        db_path = os.path.join(p2ptrust_runtime_dir, "trustdb.db")
         self.p2ptrust_runtime_dir = p2ptrust_runtime_dir
-        return os.path.join(p2ptrust_runtime_dir, "trustdb.db")
+
+        if os.path.exists(db_path) and self.is_db_malformed(db_path):
+            self.print(
+                "trustdb.db is malformed. Backing it up and "
+                "creating another one..."
+            )
+            self.backup_corrupt_db(db_path)
+
+        return db_path
 
     def get_p2ptrust_dir(self) -> str:
         return self.p2ptrust_runtime_dir
