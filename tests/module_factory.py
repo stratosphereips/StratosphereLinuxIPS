@@ -260,14 +260,13 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_flowalerts_obj(self, mock_db):
         flowalerts = FlowAlerts(
-            self.logger,
-            "dummy_output_dir",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
-            Mock(),  # ppid
-            Mock(),  # ppid
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
         )
 
         # override the self.print function to avoid broken pipes
