@@ -35,7 +35,7 @@ def test_decide_blocking(
     profileid, our_ips, expected_result, expected_publish_call_count
 ):
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
-    evidence_handler.blocking_module_supported = True
+    evidence_handler.blocking_modules_supported = True
     evidence_handler.our_ips = our_ips
     with patch.object(evidence_handler.db, "publish") as mock_publish:
         tw = TimeWindow(

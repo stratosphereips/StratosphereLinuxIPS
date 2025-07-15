@@ -92,7 +92,7 @@ class EvidenceHandler(ICore):
         utils.change_logfiles_ownership(self.logfile.name, self.UID, self.GID)
 
         self.is_running_non_stop = self.db.is_running_non_stop()
-        self.blocking_module_supported = self.is_blocking_modules_supported()
+        self.blocking_modules_supported = self.is_blocking_modules_supported()
 
         # clear output/alerts.json
         self.jsonfile = self.clean_file(self.output_dir, "alerts.json")
@@ -424,7 +424,7 @@ class EvidenceHandler(ICore):
          returns True if the given IP was blocked by Slips blocking module
         """
         # send ip to the blocking module
-        if not self.blocking_module_supported:
+        if not self.blocking_modules_supported:
             return False
         # now since this source ip(profileid) caused an alert,
         # it means it caused so many evidence(attacked others a lot)

@@ -10,12 +10,19 @@ import ipaddress
 from typing import Set, Tuple
 from scapy.all import ARP, Ether
 from scapy.sendrecv import sendp, srp
+import random
 
 from slips_files.common.abstracts.imodule import IModule
 from modules.arp_poisoner.unblocker import ARPUnblocker
 from slips_files.common.slips_utils import utils
 
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
+
+
+def generate_fake_mac():
+    return "02:%02x:%02x:%02x:%02x:%02x" % tuple(
+        random.randint(0, 255) for _ in range(5)
+    )
 
 
 class ARPPoisoner(IModule):
@@ -243,6 +250,10 @@ class ARPPoisoner(IModule):
         # in ap mode, this gw ip is the same as our own ip
         gateway_ip: str = self.db.get_gateway_ip()
 
+        # we use replies, not requests, because we wanna anser ARP requests
+        # sent to the network instead of waiting for the attacker to answer
+        # them.
+
         # We use Ether() before ARP() to explicitly construct a complete Ethernet frame
         # poison the target: tell it the gateway is at fake_mac
         # gw -> attacker: im at a fake mac.
@@ -276,7 +287,7 @@ class ARPPoisoner(IModule):
         based on a new_blocking msg, and should be false when we're
         repoisoning every x seconds.
         """
-        fake_mac = "aa:aa:aa:aa:aa:aa"
+        fake_mac = generate_fake_mac()
 
         # it makes sense here to get the mac using cache, because if we
         # reached this function, means there's an alert, means slips saw
