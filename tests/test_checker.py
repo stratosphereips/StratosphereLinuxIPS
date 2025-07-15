@@ -83,13 +83,44 @@ def test_check_given_flags(args, expected_calls, monkeypatch):
 
 def test_check_given_flags_root_user(monkeypatch):
     checker = ModuleFactory().create_checker_obj()
-    checker.main.args.clearblocking = True
-    monkeypatch.setattr(os, "geteuid", lambda: 0)
 
-    with mock.patch.object(checker, "delete_blocking_chain") as mock_delete:
+    # Only this flag is True
+    checker.main.args.clearblocking = True
+
+    # Set all others to safe defaults
+    checker.main.args.help = False
+    checker.main.args.interface = None
+    checker.main.args.filepath = None
+    checker.main.args.input_module = None
+    checker.main.args.save = False
+    checker.main.args.db = False
+    checker.main.args.verbose = 0
+    checker.main.args.debug = 0
+    checker.main.args.killall = False
+    checker.main.args.config = None
+    checker.main.args.growing = False
+    checker.main.args.blocking = False
+    checker.main.args.version = False
+    checker.main.args.clearcache = False
+
+    # patch uid as root
+    monkeypatch.setattr(os, "geteuid", lambda: 0)
+    monkeypatch.setattr(os, "getuid", lambda: 0)  # also used in the function
+
+    # patch return values of methods that can early-return
+    checker.main.redis_man.check_redis_database = lambda: True
+    checker.main.conf.use_local_p2p = lambda: False
+    checker.main.conf.use_global_p2p = lambda: False
+    checker.input_module_exists = lambda _: True
+
+    with mock.patch.object(
+        checker, "delete_blocking_chain"
+    ) as mock_delete, mock.patch.object(
+        checker.main, "terminate_slips"
+    ) as mock_term:
         checker.check_given_flags()
         mock_delete.assert_called_once()
-        checker.main.terminate_slips.assert_called()
+        mock_term.assert_called_once()
 
 
 def test_check_input_type_interface():
