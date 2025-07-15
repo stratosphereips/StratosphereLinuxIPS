@@ -452,7 +452,9 @@ async def test_check_weird_http_method(mocker, flow_name, evidence_expected):
 
 def test_pre_main(mocker):
     http_analyzer = ModuleFactory().create_http_analyzer_obj()
-    mocker.patch("slips_files.common.slips_utils.Utils.drop_root_privs")
+    mocker.patch(
+        "slips_files.common.slips_utils.Utils.drop_root_privs_permanently"
+    )
     http_analyzer.pre_main()
     utils.drop_root_privs_permanently.assert_called_once()
 

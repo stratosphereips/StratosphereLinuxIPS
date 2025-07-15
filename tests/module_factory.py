@@ -138,6 +138,7 @@ class ModuleFactory:
                 output_dir,
                 port,
                 conf,
+                12345,
                 flush_db=flush_db,
                 start_sqlite=False,
                 start_redis_server=start_redis_server,
@@ -166,6 +167,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
 
         # override the self.print function to avoid broken pipes
@@ -181,6 +183,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
 
         # override the self.print function
@@ -196,6 +199,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         virustotal.print = Mock()
         virustotal.__read_configuration = Mock()
@@ -213,6 +217,7 @@ class ModuleFactory:
                 Mock(),  # termination event
                 Mock(),  # args
                 Mock(),  # conf
+                Mock(),  # ppid
             )
         arp.print = Mock()
         arp.evidence_filter.is_slips_peer = Mock(return_value=False)
@@ -232,6 +237,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         # override the print function to avoid broken pipes
         blocking.print = Mock()
@@ -260,6 +266,8 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
+            Mock(),  # ppid
         )
 
         # override the self.print function to avoid broken pipes
@@ -352,6 +360,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         # override the self.print function to avoid broken pipes
         ip_info.print = Mock()
@@ -375,6 +384,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         leak_detector.print = Mock()
         # this is the path containing 1 yara rule for testing,
@@ -393,6 +403,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
             is_profiler_done=Mock(),
             profiler_queue=self.input_queue,
             is_profiler_done_event=Mock(),
@@ -436,6 +447,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
 
         # override the self.print function to avoid broken pipes
@@ -455,6 +467,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         # override the self.print function to avoid broken pipes
         update_manager.print = Mock()
@@ -572,6 +585,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         return network_discovery
 
@@ -584,6 +598,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         return poisoner
 
@@ -642,7 +657,12 @@ class ModuleFactory:
 
     @patch("sqlite3.connect", name="sqlite_mock")
     def create_trust_db_obj(self, sqlite_mock):
-        trust_db = TrustDB(self.logger, Mock(), drop_tables_on_startup=False)
+        trust_db = TrustDB(
+            self.logger,
+            Mock(),  # db_file
+            Mock(),  # main_pid
+            drop_tables_on_startup=False,
+        )
         trust_db.conn = Mock()
         trust_db.print = Mock()
         return trust_db
@@ -676,6 +696,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         cesnet.db = mock_db
         cesnet.wclient = MagicMock()
@@ -698,6 +719,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         handler.db = mock_db
         return handler
@@ -721,6 +743,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         riskiq.db = mock_db
         return riskiq
@@ -737,6 +760,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         tl.db = mock_db
         return tl
