@@ -660,13 +660,14 @@ class ModuleFactory:
     @patch("sqlite3.connect", name="sqlite_mock")
     def create_trust_db_obj(self, sqlite_mock):
         trust_db = TrustDB(
-            self.logger,
-            Mock(),  # db_file
-            Mock(),  # main_pid
+            logger=self.logger,
+            db_file=Mock(),
+            main_pid=Mock(),
             drop_tables_on_startup=False,
         )
         trust_db.conn = Mock()
         trust_db.print = Mock()
+        trust_db._init_flock = Mock()
         return trust_db
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
