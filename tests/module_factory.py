@@ -326,12 +326,13 @@ class ModuleFactory:
     ):
         zeek_tmp_dir = os.path.join(os.getcwd(), "zeek_dir_for_testing")
         input = Input(
-            Output(),
-            "dummy_output_dir",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # args
+            logger=Output(),
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
             is_input_done=Mock(),
             profiler_queue=self.profiler_queue,
             input_type=input_type,
@@ -398,13 +399,13 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_profiler_obj(self, mock_db):
         profiler = Profiler(
-            self.logger,
-            "output/",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
-            Mock(),  # ppid
+            logger=self.logger,
+            output_dir="output",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
             is_profiler_done=Mock(),
             profiler_queue=self.input_queue,
             is_profiler_done_event=Mock(),
@@ -710,17 +711,14 @@ class ModuleFactory:
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_evidence_handler_obj(self, mock_db):
-        logger = Mock()
-        output_dir = "/tmp"
-        redis_port = 6379
         handler = EvidenceHandler(
-            logger,
-            output_dir,
-            redis_port,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
-            Mock(),  # ppid
+            logger=Mock(),
+            output_dir="/tmp",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
         )
         handler.db = mock_db
         return handler
