@@ -144,6 +144,8 @@ class ModuleFactory:
                 start_redis_server=start_redis_server,
             )
         db.print = Mock()
+        db._init_flock = Mock()
+        db.init_p2ptrust_db = Mock()
         # for easier access to redis db
         db.r = db.rdb.r
         assert db.get_used_redis_port() == port
