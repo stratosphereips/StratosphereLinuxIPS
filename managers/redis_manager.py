@@ -415,8 +415,8 @@ class RedisManager:
                 Output(),
                 self.main.args.output,
                 port,
-                None,  # doesnt matter here
-                None,  # doesnt matter here
+                self.main.conf,
+                self.main.pid,
                 start_sqlite=False,
                 start_redis_server=False,
             )
@@ -555,5 +555,3 @@ class RedisManager:
                 self.remove_server_from_log(port)
             except (KeyError, ValueError):
                 print(f"Invalid input {server_to_close}")
-
-        self.main.terminate_slips()

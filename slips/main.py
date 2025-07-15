@@ -108,12 +108,12 @@ class Main:
     def terminate_slips(self):
         """
         Shutdown slips, is called when stopping slips before
-        starting all modules. for example using -cb
+        starting all modules. for example using -cb or -k
         """
         if self.mode == DAEMONIZED_MODE:
             self.daemon.stop()
         if not self.conf.get_cpu_profiler_enable():
-            sys.exit(0)
+            sys.exit(0)  # leaves any children started by slips as orphans
 
     def save_the_db(self):
         # save the db to the output dir of this analysis
