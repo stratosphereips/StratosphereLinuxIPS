@@ -41,11 +41,16 @@ class ISQLite(ABC):
         # drop privs when slips runs with -p and others dont)
         current_user_uid = utils.drop_root_privs_temporarily()
         self._init_flock(name, main_pid, current_user_uid)
-        utils.regain_root_privs()
+        if current_user_uid:
+            # because if drop_root_privs_temporarily didnt return a uid,
+            # it means we're not running as root, so we don't need to regain
+            utils.regain_root_privs()
+
         self.connect(db_file)
         self._enable_wal_mode()
 
     def connect(self, db_file: str):
+        """creates the sqlite db if it doesn't exist, and connects to it"""
         with self._acquire_flock():
             self.conn = sqlite3.connect(
                 db_file, check_same_thread=False, timeout=20
@@ -70,7 +75,8 @@ class ISQLite(ABC):
             file_owner_uid = None
             lock_file_exists = False
 
-        # check if the lock file was created by another subprocess of slips
+        # check if the lock file was created by another subprocess of
+        # the current slips run
         if not lock_file_exists or file_owner_uid != current_user_uid:
             open(self.lockfile_path, "w").close()
             os.chmod(self.lockfile_path, 0o666)

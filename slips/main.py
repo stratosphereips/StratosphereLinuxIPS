@@ -464,8 +464,12 @@ class Main:
         # Create the directory if it doesn't exist
         if not os.path.exists(locks_dir):
             os.makedirs(locks_dir, exist_ok=True)
-
-        os.chmod(locks_dir, 0o777)  # World-writable, no sticky bit
+        try:
+            os.chmod(locks_dir, 0o777)  # World-writable, no sticky bit
+        except PermissionError:
+            # this dir was created by root, so we can't change the permissions
+            # but probably root has already set the permissions
+            pass
 
     def start(self):
         """Main Slips Function"""

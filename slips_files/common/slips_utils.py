@@ -432,8 +432,10 @@ class Utils(object):
     def to_delta(self, time_in_seconds):
         return timedelta(seconds=int(time_in_seconds))
 
-    def get_human_readable_datetime(self) -> str:
-        return utils.convert_ts_format(datetime.now(), self.alerts_format)
+    def get_human_readable_datetime(self, format=None) -> str:
+        return utils.convert_ts_format(
+            datetime.now(), format or self.alerts_format
+        )
 
     def get_mac_for_ip_using_cache(self, ip: str) -> str | None:
         """gets the mac of the given local ip using the local arp cache"""
