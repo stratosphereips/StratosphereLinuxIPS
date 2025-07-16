@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import shutil
+from contextlib import contextmanager
 from unittest.mock import (
     patch,
     Mock,
@@ -680,17 +681,28 @@ class ModuleFactory:
         daemon.daemon_stop_lock = "slips_daemon_stop"
         return daemon
 
-    @patch("sqlite3.connect", name="sqlite_mock")
+    @contextmanager
+    def dummy_acquire_flock(self):
+        yield
+
+    @patch("sqlite3.connect")
     def create_trust_db_obj(self, sqlite_mock):
-        trust_db = TrustDB(
-            logger=self.logger,
-            db_file=Mock(),
-            main_pid=Mock(),
-            drop_tables_on_startup=False,
-        )
+        with (
+            patch("slips_files.common.abstracts.isqlite.ISQLite._init_flock"),
+            patch(
+                "slips_files.common.abstracts.isqlite.ISQLite._acquire_flock"
+            ),
+        ):
+            trust_db = TrustDB(
+                logger=self.logger,
+                db_file=Mock(),
+                main_pid=Mock(),
+                drop_tables_on_startup=False,
+            )
         trust_db.conn = Mock()
         trust_db.print = Mock()
         trust_db._init_flock = Mock()
+        trust_db._acquire_flock = MagicMock()
         return trust_db
 
     @patch(MODULE_DB_MANAGER, name="mock_db")

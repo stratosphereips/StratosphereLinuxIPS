@@ -109,7 +109,7 @@ class ISQLite(ABC):
         try:
             fcntl.flock(self.lockfile_fd, fcntl.LOCK_EX)
             self._lock_acquired = True
-            yield  # <-- your code inside `with` will run here
+            yield
         finally:
             self._lock_acquired = False
             try:
