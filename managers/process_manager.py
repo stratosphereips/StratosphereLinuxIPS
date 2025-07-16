@@ -47,9 +47,7 @@ from slips_files.core.profiler import Profiler
 class ProcessManager:
     def __init__(self, main):
         self.main = main
-        # this will be set by main.py if slips is not daemonized,
-        # it'll be set to the children of main.py
-        self.processes: Dict[str, Process]
+
         # this is the queue that will be used by the input proces
         # to pass flows to the profiler
         self.profiler_queue = Queue()
@@ -76,6 +74,11 @@ class ProcessManager:
         # cant get more lines anymore!
         self.is_profiler_done_event = Event()
         self.read_config()
+
+    def set_slips_processes(self, children: Dict[str, Process]):
+        # this will be set by main.py if slips is not daemonized,
+        # it'll be set to the children of main.py
+        self.processes = children
 
     def read_config(self):
         self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
@@ -107,6 +110,7 @@ class ProcessManager:
             self.termination_event,
             self.main.args,
             self.main.conf,
+            self.main.pid,
             is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
@@ -129,6 +133,7 @@ class ProcessManager:
             self.evidence_handler_termination_event,
             self.main.args,
             self.main.conf,
+            self.main.pid,
         )
         evidence_process.start()
         self.main.print(
@@ -148,6 +153,7 @@ class ProcessManager:
             self.termination_event,
             self.main.args,
             self.main.conf,
+            self.main.pid,
             is_input_done=self.is_input_done,
             profiler_queue=self.profiler_queue,
             input_type=self.main.input_type,
@@ -257,7 +263,6 @@ class ProcessManager:
         """
         plugins = {}
         failed_to_load_modules = 0
-
         for module_name in self._discover_module_names():
             if not self._should_load_module(module_name):
                 continue
@@ -393,6 +398,7 @@ class ProcessManager:
                 self.termination_event,
                 self.main.args,
                 self.main.conf,
+                self.main.pid,
             )
             module.start()
             self.main.db.store_pid(module_name, int(module.pid))
@@ -449,6 +455,7 @@ class ProcessManager:
                     multiprocessing.Event(),
                     self.main.args,
                     self.main.conf,
+                    self.main.pid,
                 )
 
                 if local_files:

@@ -59,6 +59,9 @@ class Utils(object):
             "high": 0.8,
             "critical": 1,
         }
+        # why are we not using /var/lock? bc we need it to be r/w/x by
+        # everyone
+        self.slips_locks_dir = "/tmp/slips"
         self.time_formats = (
             "%Y-%m-%dT%H:%M:%S.%f%z",
             "%Y-%m-%d %H:%M:%S.%f",
@@ -266,7 +269,26 @@ class Utils(object):
             confidence = pkts_sent / 10.0
         return confidence
 
-    def drop_root_privs(self):
+    def drop_root_privs_temporarily(self) -> int:
+        """returns the uid of the user that launched sudo"""
+        if platform.system() != "Linux":
+            return
+        try:
+            self.sudo_uid = int(os.getenv("SUDO_UID"))
+            self.sudo_gid = int(os.getenv("SUDO_GID"))
+        except (TypeError, ValueError):
+            return  # Not running as root with sudo
+
+        # Drop only effective privileges
+        os.setegid(self.sudo_gid)
+        os.seteuid(self.sudo_uid)
+        return self.sudo_uid
+
+    def regain_root_privs(self):
+        os.seteuid(0)
+        os.setegid(0)
+
+    def drop_root_privs_permanently(self):
         """
         Drop root privileges if the module doesn't need them
         Shouldn't be called from __init__ because then, it affects the parent process too
@@ -410,8 +432,10 @@ class Utils(object):
     def to_delta(self, time_in_seconds):
         return timedelta(seconds=int(time_in_seconds))
 
-    def get_human_readable_datetime(self) -> str:
-        return utils.convert_ts_format(datetime.now(), self.alerts_format)
+    def get_human_readable_datetime(self, format=None) -> str:
+        return utils.convert_ts_format(
+            datetime.now(), format or self.alerts_format
+        )
 
     def get_mac_for_ip_using_cache(self, ip: str) -> str | None:
         """gets the mac of the given local ip using the local arp cache"""

@@ -110,6 +110,11 @@ class UpdateManager(IModule):
         self.path_to_remote_ti_files = conf.remote_ti_data_path()
         if not os.path.exists(self.path_to_remote_ti_files):
             os.mkdir(self.path_to_remote_ti_files)
+            # make it accessible to root and non-root users, because when
+            # slips is started using sudo, it drops privs from modules that
+            # don't need them, and without this line, these modules wont be
+            # able to access the path_to_remote_ti_files
+            os.chmod(self.path_to_remote_ti_files, 0o777)
 
         self.ti_feeds_path = conf.ti_files()
         self.url_feeds = self.get_feed_details(self.ti_feeds_path)

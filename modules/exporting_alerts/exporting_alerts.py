@@ -30,7 +30,7 @@ class ExportingAlerts(IModule):
         self.stix.shutdown_gracefully()
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
 
         export_to_slack = self.slack.should_export()
         export_to_stix = self.stix.should_export()

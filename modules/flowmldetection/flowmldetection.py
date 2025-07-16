@@ -416,7 +416,7 @@ class FlowMLDetection(IModule):
             self.store_model()
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
         # Load the model
         self.read_model()
 

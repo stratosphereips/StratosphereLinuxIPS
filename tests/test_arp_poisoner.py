@@ -15,12 +15,12 @@ def poisoner():
 
 
 def test__is_time_to_repoison(poisoner):
-    poisoner._time_since_last_repoison = time.time() - 11
-    assert poisoner._is_time_to_repoison()
-    assert abs(poisoner._time_since_last_repoison - time.time()) < 1
+    target = "192.168.1.5"
+    poisoner._time_since_last_repoison = {target: time.time() - 30}
+    assert poisoner._is_time_to_repoison(target)
 
-    poisoner._time_since_last_repoison = time.time()
-    assert not poisoner._is_time_to_repoison()
+    poisoner._time_since_last_repoison = {target: time.time()}
+    assert not poisoner._is_time_to_repoison(target)
 
 
 def test_is_broadcast_true(poisoner):
@@ -148,7 +148,7 @@ def test__isolate_target_from_localnet(poisoner):
         assert sendp.call_count == 2
 
 
-def test__arp_poison_uses_cache(poisoner):
+def test__attack_uses_cache(poisoner):
     with (
         patch(
             "slips_files.common.slips_utils.utils"
@@ -159,12 +159,12 @@ def test__arp_poison_uses_cache(poisoner):
         patch.object(poisoner, "_isolate_target_from_localnet") as iso,
         patch.object(poisoner, "log"),
     ):
-        poisoner._arp_poison("192.168.1.5", first_time=True)
+        poisoner._attack("192.168.1.5", first_time=True)
         cut.assert_called_once()
         iso.assert_called_once()
 
 
-def test__arp_poison_fallback_to_arp(poisoner):
+def test__attack_fallback_to_arp(poisoner):
     with patch(
         "slips_files.common.slips_utils.utils.get_mac_for_ip_using_cache",
         return_value=None,
@@ -176,18 +176,18 @@ def test__arp_poison_fallback_to_arp(poisoner):
                 patch.object(poisoner, "_cut_targets_internet") as cut,
                 patch.object(poisoner, "_isolate_target_from_localnet") as iso,
             ):
-                poisoner._arp_poison("192.168.1.5")
+                poisoner._attack("192.168.1.5")
                 cut.assert_called_once()
                 iso.assert_called_once()
 
 
-def test__arp_poison_fails(poisoner):
+def test__attack_fails(poisoner):
     with patch(
         "slips_files.common.slips_utils.utils.get_mac_for_ip_using_cache",
         return_value=None,
     ):
         with patch.object(poisoner, "_get_mac_using_arp", return_value=None):
-            assert poisoner._arp_poison("192.168.1.5") is None
+            assert poisoner._attack("192.168.1.5") is None
 
 
 @pytest.mark.parametrize("should_unblock", [False, True])
@@ -200,15 +200,17 @@ def test_keep_attackers_poisoned(should_unblock):
     )
     poisoner.unblocker.del_request = MagicMock()
 
-    with patch.object(poisoner, "_arp_poison") as _arp_poison:
+    with patch.object(poisoner, "_attack") as _attack:
         poisoner.keep_attackers_poisoned()
 
-    if should_unblock:
-        _arp_poison.assert_not_called()
-        poisoner.unblocker.del_request.assert_called_once_with("192.168.1.5")
-    else:
-        _arp_poison.assert_called_once_with("192.168.1.5")
-        poisoner.unblocker.del_request.assert_not_called()
+        if should_unblock:
+            _attack.assert_not_called()
+            poisoner.unblocker.del_request.assert_called_once_with(
+                "192.168.1.5"
+            )
+        else:
+            _attack.assert_called_once_with("192.168.1.5")
+            poisoner.unblocker.del_request.assert_not_called()
 
 
 def test_main(poisoner):
@@ -216,7 +218,7 @@ def test_main(poisoner):
     with patch.object(poisoner, "get_msg", side_effect=[msg, None]):
         with patch.object(poisoner, "can_poison_ip", return_value=True):
             with (
-                patch.object(poisoner, "_arp_poison") as poison,
+                patch.object(poisoner, "_attack") as poison,
                 patch.object(poisoner.unblocker, "unblock_request"),
             ):
                 poisoner.main()

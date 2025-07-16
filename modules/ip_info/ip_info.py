@@ -551,7 +551,7 @@ class IPInfo(AsyncModule):
         self.db.set_evidence(evidence)
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
         self.wait_for_dbs()
 
         self.is_running_in_ap_mode: bool = self.is_ap_mode_iwconfig()

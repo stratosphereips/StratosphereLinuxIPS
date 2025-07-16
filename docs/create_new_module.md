@@ -144,11 +144,13 @@ def init(self):
 ```
 
 ```python
-  def pre_main(self):
-        """
-        Initializations that run only once before the main() function runs in a loop
-        """
-        utils.drop_root_privs()
+  def pre_main(
+	self
+	):
+	"""
+    Initializations that run only once before the main() function runs in a loop
+    """
+	utils.drop_root_privs_permanently()
 
 ```
 
@@ -367,147 +369,147 @@ from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.core.structures.evidence import
 
 (
-    Evidence,
-    ProfileID,
-    TimeWindow,
-    Victim,
-    Attacker,
-    ThreatLevel,
-    EvidenceType,
-    IoCType,
-    Direction,
-    )
+	Evidence,
+	ProfileID,
+	TimeWindow,
+	Victim,
+	Attacker,
+	ThreatLevel,
+	EvidenceType,
+	IoCType,
+	Direction,
+	)
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
 
 
 class LocalConnectionDetector(
-    IModule
-    ):
-    # Name: short name of the module. Do not use spaces
-    name = 'local_connection_detector'
-    description = 'detects connections to other devices in your local network'
-    authors = ['Template Author']
+	IModule
+	):
+	# Name: short name of the module. Do not use spaces
+	name = 'local_connection_detector'
+	description = 'detects connections to other devices in your local network'
+	authors = ['Template Author']
 
 
-    def init(
-        self
-        ):
-        # To which channels do you want to subscribe? When a message
-        # arrives on the channel the module will receive a msg
+	def init(
+		self
+		):
+		# To which channels do you want to subscribe? When a message
+		# arrives on the channel the module will receive a msg
 
-        # You can find the full list of channels at
-        # slips_files/core/database/redis_db/database.py
-        self.c1 = self.db.subscribe(
-            'new_flow'
-            )
-        self.channels = {
-            'new_flow': self.c1,
-            }
-        # to be able to convert flows from dict format to objects
-        self.classifier = FlowClassifier()
+		# You can find the full list of channels at
+		# slips_files/core/database/redis_db/database.py
+		self.c1 = self.db.subscribe(
+			'new_flow'
+			)
+		self.channels = {
+			'new_flow': self.c1,
+			}
+		# to be able to convert flows from dict format to objects
+		self.classifier = FlowClassifier()
 
 
-    def pre_main(
-        self
-        ):
-        """
+	def pre_main(
+		self
+		):
+		"""
         Initializations that run only once before the main() function runs in a loop
         """
-        utils.drop_root_privs()
+		utils.drop_root_privs_permanently()
 
 
-    def main(
-        self
-        ):
-        """Main loop function"""
-        if msg := self.get_msg(
-                'new_flow'
-                ):
-            msg = json.loads(
-                msg['data']
-                )
-            # convert the given dict flow to a flow object
-            flow = self.classifier.convert_to_flow_obj(
-                msg["flow"]
-                )
-            saddr = flow.saddr
-            daddr = flow.daddr
-            timestamp = flow.starttime
-            srcip_obj = ipaddress.ip_address(
-                saddr
-                )
-            dstip_obj = ipaddress.ip_address(
-                daddr
-                )
-            if srcip_obj.is_private and dstip_obj.is_private:
-                # on a scale of 0 to 1, how confident you are of this evidence
-                confidence = 0.8
-                # how dangerous is this evidence? info, low, medium, high, critical?
-                threat_level = ThreatLevel.HIGH
+	def main(
+		self
+		):
+		"""Main loop function"""
+		if msg := self.get_msg(
+				'new_flow'
+				):
+			msg = json.loads(
+				msg['data']
+				)
+			# convert the given dict flow to a flow object
+			flow = self.classifier.convert_to_flow_obj(
+				msg["flow"]
+				)
+			saddr = flow.saddr
+			daddr = flow.daddr
+			timestamp = flow.starttime
+			srcip_obj = ipaddress.ip_address(
+				saddr
+				)
+			dstip_obj = ipaddress.ip_address(
+				daddr
+				)
+			if srcip_obj.is_private and dstip_obj.is_private:
+				# on a scale of 0 to 1, how confident you are of this evidence
+				confidence = 0.8
+				# how dangerous is this evidence? info, low, medium, high, critical?
+				threat_level = ThreatLevel.HIGH
 
-                # the name of your evidence, you can put any descriptive string here
-                # this is the type we just created
-                evidence_type = EvidenceType.CONNECTION_TO_LOCAL_DEVICE
-                # which ip is the attacker here?
-                attacker = Attacker(
-                    direction=Direction.SRC,
-                    # who's the attacker the src or the dst?
-                    attacker_type=IoCType.IP,
-                    # is it an IP? is it a domain? etc.
-                    value=saddr
-                    # the actual ip/domain/url of the attacker, in our case, this is the IP
-                    )
-                victim = Victim(
-                    direction=Direction.SRC,
-                    ioc_type=IoCType.IP,
-                    value=daddr,
-                    )
-                # describe the evidence
-                description = f'A connection to a local device {daddr}'
-                # the current profile is the source ip,
-                # this comes in the msg received in the channel
-                # the profile this evidence should be in, should be the profile of the attacker
-                # because this is evidence that this profile is attacker others right?
-                profile = ProfileID(
-                    ip=saddr
-                    )
-                # Profiles are split into timewindows, each timewindow is 1h,
-                # this if of the timewindwo comes in the msg received in the channel
-                twid_number = int(
-                    msg['twid'].replace(
-                        "timewindow",
-                        ''
-                        )
-                    )
-                timewindow = TimeWindow(
-                    number=twid_number
-                    )
-                # list of uids of the flows that are part of this evidence
-                uid_list = [flow.uid]
-                # no use the above info to create the evidence obj
-                evidence = Evidence(
-                    evidence_type=evidence_type,
-                    attacker=attacker,
-                    threat_level=threat_level,
-                    description=description,
-                    victim=victim,
-                    profile=profile,
-                    timewindow=timewindow,
-                    uid=uid_list,
-                    # when did this evidence happen? use the
-                    # flow's ts detected by zeek
-                    # this comes in the msg received in the channel
-                    timestamp=timestamp,
-                    confidence=confidence
-                    )
-                self.db.set_evidence(
-                    evidence
-                    )
-                self.print(
-                    "Done setting evidence!!!"
-                    )
+				# the name of your evidence, you can put any descriptive string here
+				# this is the type we just created
+				evidence_type = EvidenceType.CONNECTION_TO_LOCAL_DEVICE
+				# which ip is the attacker here?
+				attacker = Attacker(
+					direction=Direction.SRC,
+					# who's the attacker the src or the dst?
+					attacker_type=IoCType.IP,
+					# is it an IP? is it a domain? etc.
+					value=saddr
+					# the actual ip/domain/url of the attacker, in our case, this is the IP
+					)
+				victim = Victim(
+					direction=Direction.SRC,
+					ioc_type=IoCType.IP,
+					value=daddr,
+					)
+				# describe the evidence
+				description = f'A connection to a local device {daddr}'
+				# the current profile is the source ip,
+				# this comes in the msg received in the channel
+				# the profile this evidence should be in, should be the profile of the attacker
+				# because this is evidence that this profile is attacker others right?
+				profile = ProfileID(
+					ip=saddr
+					)
+				# Profiles are split into timewindows, each timewindow is 1h,
+				# this if of the timewindwo comes in the msg received in the channel
+				twid_number = int(
+					msg['twid'].replace(
+						"timewindow",
+						''
+						)
+					)
+				timewindow = TimeWindow(
+					number=twid_number
+					)
+				# list of uids of the flows that are part of this evidence
+				uid_list = [flow.uid]
+				# no use the above info to create the evidence obj
+				evidence = Evidence(
+					evidence_type=evidence_type,
+					attacker=attacker,
+					threat_level=threat_level,
+					description=description,
+					victim=victim,
+					profile=profile,
+					timewindow=timewindow,
+					uid=uid_list,
+					# when did this evidence happen? use the
+					# flow's ts detected by zeek
+					# this comes in the msg received in the channel
+					timestamp=timestamp,
+					confidence=confidence
+					)
+				self.db.set_evidence(
+					evidence
+					)
+				self.print(
+					"Done setting evidence!!!"
+					)
 ```
 
 All good, you can find your evidence now in alerts.json and alerts.log of the output directory.
@@ -531,7 +533,7 @@ Now here's the ```pre_main()``` function, all initializations like dropping root
 should be done here
 
 ```python
-utils.drop_root_privs()
+utils.drop_root_privs_permanently()
  ```
 the above line is responsible for dropping root privileges,
 so if slips starts with sudo and the module doesn't need the root permissions, we drop them.

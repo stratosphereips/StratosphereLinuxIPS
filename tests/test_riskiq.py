@@ -65,7 +65,9 @@ def test_get_passive_dns(mock_get, ip, api_response, expected_result):
     ],
 )
 def test_pre_main(email, key, expected_result, mock_db):
-    with patch("slips_files.common.slips_utils.utils.drop_root_privs"):
+    with patch(
+        "slips_files.common.slips_utils.utils.drop_root_privs_permanently"
+    ):
         riskiq = ModuleFactory().create_riskiq_obj()
         riskiq.riskiq_email = email
         riskiq.riskiq_key = key

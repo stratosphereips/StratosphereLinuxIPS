@@ -184,7 +184,7 @@ class FidesModule(IModule):
          runs in a loop
         """
         self.__setup_trust_model()
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
 
     def main(self):
         if msg := self.get_msg("new_alert"):
