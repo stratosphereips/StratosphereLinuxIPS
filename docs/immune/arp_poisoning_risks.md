@@ -1,15 +1,18 @@
 # Possible Risks of ARP Poisoning
 
 
-### Table of Contents
 
+### Table of Contents
+- Risks of ARP Poisoning
   + [Slips setting evidence for its own self as malicious when it’s arp poisoning attackers](#slips-setting-evidence-for-its-own-self-as-malicious-when-it-s-arp-poisoning-attackers)
   + [Slips blocking other Slips instances in the network thinking they’re malicious when they’re ARP poisoning attackers](#slips-blocking-other-slips-instances-in-the-network-thinking-they-re-malicious-when-they-re-arp-poisoning-attackers)
   + [A Large amount of packets are sent when the ARP poisoner is keeping the attacker isolated (repeated poisoning of the attacker)](#a-large-amount-of-packets-are-sent-when-the-arp-poisoner-is-keeping-the-attacker-isolated--repeated-poisoning-of-the-attacker-)
   + [Legal Restrictions](#legal-restrictions)
-  + [Legal Restrictions](#arp-filter-demo)
+
+- [ARP Filter Demo](#arp-filter-demo)
 
 
+---
 
 ### Slips setting evidence for its own self as malicious when it’s arp poisoning attackers
 
@@ -42,15 +45,6 @@ Both countermeasures are implemented in the ARP filter, detecting self defense a
 <https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/modules/arp/filter.py>
 
 
-
-
-**Conclusion**
-
-- Peer B was protected by Peer A even without having the poisoner enabled.
-
-- Peer B would have been protected even without running slips, because another slips instance took care of isolating the attacker.
-
-- Slips is now aware of itself and of other trusted peers using their immunity to attack back.
 
 
 
@@ -116,3 +110,12 @@ Demonstrating the solution of the first 2 issues addressed here (The ARP filter 
   - Peer A detects itself ARP poisoning the attacker’s IP, but discards the evidence since it’s self defense. 
 
   - Peer B detects Peer A sending unsolicited ARP packets while isolating the attacker from the network, but discards the evidence since it’s a trusted Slips peer.
+
+
+**Conclusion**
+
+- Peer B was protected by Peer A even without having the poisoner enabled.
+
+- Peer B would have been protected even without running slips, because another slips instance took care of isolating the attacker.
+
+- Slips is now aware of itself and of other trusted peers using their immunity to attack back.
