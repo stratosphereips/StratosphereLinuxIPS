@@ -35,7 +35,7 @@ repos:
           args: ['--line-length' , '79']
           language_version: python3.12.3
           # excludes formatting slips_files/common/imports.py
-          exclude: (imports|conftest.py)
+          exclude: (imports|conftest.py|tests/*.py)
 
 -     repo: https://github.com/adrienverge/yamllint.git
       rev: v1.35.1
