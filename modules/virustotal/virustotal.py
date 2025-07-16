@@ -544,7 +544,7 @@ class VT(IModule):
         return url_ratio, down_file_ratio, ref_file_ratio, com_file_ratio
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
         if not self.read_api_key() or self.key in ("", None):
             # We don't have a virustotal key
             return 1

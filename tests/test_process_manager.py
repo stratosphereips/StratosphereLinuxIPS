@@ -50,6 +50,7 @@ def test_start_input_process(
             process_manager.termination_event,
             process_manager.main.args,
             process_manager.main.conf,
+            process_manager.main.pid,
             is_input_done=process_manager.is_input_done,
             profiler_queue=process_manager.profiler_queue,
             input_type=input_type,
@@ -406,6 +407,7 @@ def test_start_profiler_process():
             process_manager.termination_event,
             process_manager.main.args,
             process_manager.main.conf,
+            process_manager.main.pid,
             is_profiler_done=process_manager.is_profiler_done,
             profiler_queue=process_manager.profiler_queue,
             is_profiler_done_event=process_manager.is_profiler_done_event,
@@ -446,6 +448,7 @@ def test_start_evidence_process(output_dir, redis_port):
             process_manager.evidence_handler_termination_event,
             process_manager.main.args,
             process_manager.main.conf,
+            process_manager.main.pid,
         )
         mock_evidence_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()

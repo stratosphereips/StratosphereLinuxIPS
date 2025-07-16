@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import shutil
+from contextlib import contextmanager
 from unittest.mock import (
     patch,
     Mock,
@@ -85,6 +86,8 @@ from slips_files.core.structures.evidence import (
 from modules.fidesModule.fidesModule import FidesModule
 from slips_files.core.text_formatters.evidence import EvidenceFormatter
 
+import unittest.mock as mock
+
 
 def read_configuration():
     return
@@ -115,6 +118,9 @@ class ModuleFactory:
         """default is o port 6379, this is the one we're using in conftest"""
         return self.create_db_manager_obj(6379)
 
+    def mocked_init_flock(self):
+        self.lockfile_path = "/tmp/fake.lock"
+
     def create_db_manager_obj(
         self,
         port,
@@ -126,23 +132,44 @@ class ModuleFactory:
         flush_db is False by default  because we use this function to check
         the db after integration tests to make sure everything's going fine
         """
-        # to prevent config/redis.conf from being overwritten
-        with patch(
-            "slips_files.core.database.redis_db.database."
-            "RedisDB._set_redis_options",
-            return_value=Mock(),
+
+        mock_ctx = MagicMock()
+        mock_ctx.__enter__.return_value = None
+        mock_ctx.__exit__.return_value = None
+
+        conf = Mock()
+        conf.delete_prev_db = Mock(return_value=False)
+        conf.disabled_detections = Mock(return_value=[])
+        conf.get_tw_width_as_float = Mock(return_value=3600.0)
+        conf.client_ips = Mock(return_value=[])
+        conf.use_local_p2p = Mock(return_value=False)
+
+        with (
+            # to prevent config/redis.conf from being overwritten
+            patch(
+                "slips_files.core.database.redis_db.database."
+                "RedisDB._set_redis_options",
+                return_value=Mock(),
+            ),
+            patch(
+                "slips_files.core.database.redis_db.database.ConfigParser",
+                return_value=conf,
+            ),
+            patch("builtins.open", new_callable=mock.mock_open),
         ):
-            conf = Mock()
             db = DBManager(
-                self.logger,
-                output_dir,
-                port,
-                conf,
+                logger=self.logger,
+                output_dir=output_dir,
+                redis_port=port,
+                conf=conf,
+                main_pid=12345,
                 flush_db=flush_db,
                 start_sqlite=False,
                 start_redis_server=start_redis_server,
             )
+
         db.print = Mock()
+        db.init_p2ptrust_db = Mock()
         # for easier access to redis db
         db.r = db.rdb.r
         assert db.get_used_redis_port() == port
@@ -166,6 +193,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
 
         # override the self.print function to avoid broken pipes
@@ -181,6 +209,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
 
         # override the self.print function
@@ -196,6 +225,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         virustotal.print = Mock()
         virustotal.__read_configuration = Mock()
@@ -213,6 +243,7 @@ class ModuleFactory:
                 Mock(),  # termination event
                 Mock(),  # args
                 Mock(),  # conf
+                Mock(),  # ppid
             )
         arp.print = Mock()
         arp.evidence_filter.is_slips_peer = Mock(return_value=False)
@@ -232,6 +263,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         # override the print function to avoid broken pipes
         blocking.print = Mock()
@@ -254,12 +286,13 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_flowalerts_obj(self, mock_db):
         flowalerts = FlowAlerts(
-            self.logger,
-            "dummy_output_dir",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
         )
 
         # override the self.print function to avoid broken pipes
@@ -317,12 +350,13 @@ class ModuleFactory:
     ):
         zeek_tmp_dir = os.path.join(os.getcwd(), "zeek_dir_for_testing")
         input = Input(
-            Output(),
-            "dummy_output_dir",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # args
+            logger=Output(),
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
             is_input_done=Mock(),
             profiler_queue=self.profiler_queue,
             input_type=input_type,
@@ -352,6 +386,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         # override the self.print function to avoid broken pipes
         ip_info.print = Mock()
@@ -375,6 +410,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         leak_detector.print = Mock()
         # this is the path containing 1 yara rule for testing,
@@ -387,12 +423,13 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_profiler_obj(self, mock_db):
         profiler = Profiler(
-            self.logger,
-            "output/",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
+            logger=self.logger,
+            output_dir="output",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
             is_profiler_done=Mock(),
             profiler_queue=self.input_queue,
             is_profiler_done_event=Mock(),
@@ -436,6 +473,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
 
         # override the self.print function to avoid broken pipes
@@ -455,6 +493,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         # override the self.print function to avoid broken pipes
         update_manager.print = Mock()
@@ -572,6 +611,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         return network_discovery
 
@@ -584,6 +624,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         return poisoner
 
@@ -640,11 +681,28 @@ class ModuleFactory:
         daemon.daemon_stop_lock = "slips_daemon_stop"
         return daemon
 
-    @patch("sqlite3.connect", name="sqlite_mock")
+    @contextmanager
+    def dummy_acquire_flock(self):
+        yield
+
+    @patch("sqlite3.connect")
     def create_trust_db_obj(self, sqlite_mock):
-        trust_db = TrustDB(self.logger, Mock(), drop_tables_on_startup=False)
+        with (
+            patch("slips_files.common.abstracts.isqlite.ISQLite._init_flock"),
+            patch(
+                "slips_files.common.abstracts.isqlite.ISQLite._acquire_flock"
+            ),
+        ):
+            trust_db = TrustDB(
+                logger=self.logger,
+                db_file=Mock(),
+                main_pid=Mock(),
+                drop_tables_on_startup=False,
+            )
         trust_db.conn = Mock()
         trust_db.print = Mock()
+        trust_db._init_flock = Mock()
+        trust_db._acquire_flock = MagicMock()
         return trust_db
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
@@ -676,6 +734,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         cesnet.db = mock_db
         cesnet.wclient = MagicMock()
@@ -688,16 +747,14 @@ class ModuleFactory:
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_evidence_handler_obj(self, mock_db):
-        logger = Mock()
-        output_dir = "/tmp"
-        redis_port = 6379
         handler = EvidenceHandler(
-            logger,
-            output_dir,
-            redis_port,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
+            logger=Mock(),
+            output_dir="/tmp",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
         )
         handler.db = mock_db
         return handler
@@ -721,6 +778,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         riskiq.db = mock_db
         return riskiq
@@ -737,6 +795,7 @@ class ModuleFactory:
             Mock(),  # termination event
             Mock(),  # args
             Mock(),  # conf
+            Mock(),  # ppid
         )
         tl.db = mock_db
         return tl

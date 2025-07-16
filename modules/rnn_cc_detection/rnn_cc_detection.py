@@ -252,7 +252,7 @@ class CCDetection(IModule):
         self.exporter.export(profileid, twid)
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
         # TODO: set the decision threshold in the function call
         try:
             self.tcpmodel = load_model("modules/rnn_cc_detection/rnn_model.h5")

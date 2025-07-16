@@ -23,7 +23,7 @@ class SQLiteDB(ISQLite):
 
     name = "SQLiteDB"
 
-    def __init__(self, logger: Output, output_dir: str):
+    def __init__(self, logger: Output, output_dir: str, main_pid: int):
         self.printer = Printer(logger, self.name)
         self._flows_db = os.path.join(output_dir, "flows.sqlite")
 
@@ -33,24 +33,12 @@ class SQLiteDB(ISQLite):
             # init tables once we connect
             db_newly_created = True
             self._init_db()
+        # connects to the db
+        super().__init__(self.name.lower(), main_pid, self._flows_db)
 
-        self.connect()
-        super().__init__(self.name.lower())
         if db_newly_created:
             # only init tables if the db is newly created
             self.init_tables()
-
-    def connect(self):
-        """
-        Creates the db if it doesn't exist and connects to it.
-        OR connects to the existing db if it's there.
-        """
-        # you can get multithreaded access on a single pysqlite connection by
-        # passing "check_same_thread=False"
-        self.conn = sqlite3.connect(
-            self._flows_db, check_same_thread=False, timeout=20
-        )
-        self.cursor = self.conn.cursor()
 
     def init_tables(self):
         """creates the tables we're gonna use"""
@@ -70,7 +58,12 @@ class SQLiteDB(ISQLite):
         """
         creates the db if it doesn't exist and clears it if it exists
         """
+        # make it accessible to root and non-root users, because when
+        # slips is started using sudo, it drops privs from modules that
+        # don't need them, and without this line, these modules wont be
+        # able to access the path_to_remote_ti_files
         open(self._flows_db, "w").close()
+        os.chmod(self._flows_db, 0o777)
 
     def get_db_path(self) -> str:
         """

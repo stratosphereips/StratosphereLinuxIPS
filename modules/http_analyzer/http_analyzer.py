@@ -628,7 +628,7 @@ class HTTPAnalyzer(AsyncModule):
         await asyncio.gather(*self.tasks, return_exceptions=True)
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
 
     async def main(self):
         if msg := self.get_msg("new_http"):

@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import os
+import shutil
+import sqlite3
 from pathlib import Path
 from typing import (
     List,
@@ -22,7 +24,7 @@ class DBManager:
     """
     This class will be calling methods from the appropriate db.
     each method added to any of the dbs should have a
-    handler in here
+    handler in here.
     """
 
     name = "DBManager"
@@ -33,6 +35,7 @@ class DBManager:
         output_dir,
         redis_port,
         conf,
+        main_pid: int,
         start_sqlite=True,
         start_redis_server=True,
         **kwargs,
@@ -52,6 +55,7 @@ class DBManager:
             self.trust_db = TrustDB(
                 self.logger,
                 self.trust_db_path,
+                main_pid,
                 drop_tables_on_startup=False,
             )
 
@@ -60,14 +64,103 @@ class DBManager:
         # the existing one
         self.sqlite = None
         if start_sqlite:
-            self.sqlite = SQLiteDB(self.logger, output_dir)
+            self.sqlite = SQLiteDB(self.logger, output_dir, main_pid)
+
+    def is_db_malformed(self, db_path: str) -> bool:
+        try:
+            with sqlite3.connect(db_path, timeout=3) as conn:
+                cursor = conn.execute("PRAGMA integrity_check;")
+                result = cursor.fetchone()
+                return result[0] != "ok"
+        except sqlite3.DatabaseError as e:
+            self.print(f"Database error during integrity_check: {e}")
+            return True
+
+    def backup_db(self, db_path: str):
+        """
+        Backs up the database file to a new file with a timestamp. and
+        deleted the file at db_path if successfully backed up.
+        """
+        try:
+            # backup the DB aside (optional safety)
+            date_time = utils.get_human_readable_datetime(
+                format="%Y-%m-%dT%H:%M:%S"
+            )
+            backup_path = f"{db_path}.{date_time}.bak"
+            shutil.move(db_path, backup_path)
+
+            db_short = Path(db_path).parent.name + "/" + Path(db_path).name
+            backup_short = (
+                Path(backup_path).parent.name + "/" + Path(backup_path).name
+            )
+            self.print(
+                f"{db_short} backup is at {backup_short}. "
+                f"Creating a new one at {db_short}."
+            )
+        except Exception as e:
+            raise Exception(
+                f"Failed to backup DB {db_path}: {e}. "
+                f"Please Manually back it up and remove it and "
+                f"restart Slips."
+            )
 
     def init_p2ptrust_db(self) -> str:
-        """returns  the path of the trustdb inside the p2ptrust_runtime_dir"""
+        """Initializes and returns the path to a valid trustdb inside p2ptrust_runtime_dir."""
         p2ptrust_runtime_dir = os.path.join(os.getcwd(), "p2ptrust_runtime/")
         Path(p2ptrust_runtime_dir).mkdir(parents=True, exist_ok=True)
+        db_path = os.path.join(p2ptrust_runtime_dir, "trustdb.db")
         self.p2ptrust_runtime_dir = p2ptrust_runtime_dir
-        return os.path.join(p2ptrust_runtime_dir, "trustdb.db")
+
+        if os.path.exists(db_path):
+            if self.is_db_malformed(db_path):
+                self.print(
+                    "trustdb.db is malformed. Backing it up and "
+                    "creating another one..."
+                )
+                self.backup_db(db_path)
+            if not self.has_write_access_to_sqlite(db_path):
+                self.print(
+                    "trustdb.db is not writable. Backing it up and "
+                    "creating another one..."
+                )
+                self.backup_db(db_path)
+                # TODO LAST THING HERE IS WE'RE NOT CREATING A NEW DB AFTER
+                #  BACKING UP THE OLDONE??
+
+        return db_path
+
+    def has_write_access_to_sqlite(self, db_path: str) -> bool:
+        """Check if the current process has write access to the
+        SQLite database file."""
+        try:
+            db_file = Path(db_path)
+            # Check if file exists and is writable at the OS level
+            if db_file.exists():
+                if not os.access(db_path, os.W_OK):
+                    return False
+            else:
+                # If file doesn't exist, check write access to parent directory
+                if not os.access(db_file.parent, os.W_OK):
+                    return False
+
+            # Try an actual write transaction in SQLite
+            conn = sqlite3.connect(f"file:{db_path}?mode=rw", uri=True)
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS __write_test__ (id INTEGER)"
+            )
+            cursor.execute("DROP TABLE __write_test__")
+            conn.rollback()
+            conn.close()
+            return True
+
+        except (
+            sqlite3.OperationalError,
+            sqlite3.DatabaseError,
+            PermissionError,
+        ):
+            return False
 
     def get_p2ptrust_dir(self) -> str:
         return self.p2ptrust_runtime_dir

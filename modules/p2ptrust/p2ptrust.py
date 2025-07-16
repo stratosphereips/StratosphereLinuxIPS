@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import threading
 import os
 import shutil
 import signal
@@ -14,7 +13,6 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
 import modules.p2ptrust.trust.base_model as reputation_model
-import modules.p2ptrust.trust.trustdb as trustdb
 import modules.p2ptrust.utils.utils as p2p_utils
 from modules.p2ptrust.utils.go_director import GoDirector
 from slips_files.core.structures.evidence import (
@@ -85,10 +83,7 @@ class Trust(IModule):
     override_p2p = False
 
     def init(self, *args, **kwargs):
-        self.pigeon_logfile_raw = os.path.join(self.output_dir, "p2p.log")
-        self.p2p_reports_logfile = os.path.join(
-            self.output_dir, "p2p_reports.log"
-        )
+        self.read_configuration()
         # pigeon generate keys and stores them in the following dir, if this
         # is placed in the <output> dir,
         # when restarting slips, it will look for the old keys in the new
@@ -100,23 +95,10 @@ class Trust(IModule):
 
         self.port = self.get_available_port()
         self.host = self.get_local_IP()
-
         str_port = str(self.port) if self.rename_with_port else ""
 
         self.gopy_channel = self.gopy_channel_raw + str_port
         self.pygo_channel = self.pygo_channel_raw + str_port
-
-        self.read_configuration()
-        if self.create_p2p_logfile:
-            self.pigeon_logfile = self.pigeon_logfile_raw + str_port
-            self.print(f"Storing p2p.log in {self.pigeon_logfile}")
-            # create the thread that rotates the p2p.log every 1d
-            self.rotator_thread = threading.Thread(
-                target=self.rotate_p2p_logfile,
-                daemon=True,
-                name="p2p_rotator_thread",
-            )
-
         self.storage_name = "IPsInfo"
         if self.rename_redis_ip_info:
             self.storage_name += str(self.port)
@@ -146,6 +128,22 @@ class Trust(IModule):
 
         # flag to ensure slips prints multiaddress only once
         self.mutliaddress_printed = False
+        self.last_log_rotation_time = time.time()
+        self.rotation_period = 86400  # 1 day in seconds
+
+    def _init_log_files(self):
+        # should be called after reading configs
+        self.pigeon_logfile_raw = os.path.join(self.output_dir, "p2p.log")
+        self.p2p_reports_logfile = os.path.join(
+            self.output_dir, "p2p_reports.log"
+        )
+        if self.create_p2p_logfile:
+            self.setup_pigeon_logfile_rotation()
+
+    def setup_pigeon_logfile_rotation(self):
+        str_port = str(self.port) if self.rename_with_port else ""
+        self.pigeon_logfile = self.pigeon_logfile_raw + str_port
+        self.print(f"Storing p2p in {self.pigeon_logfile}")
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -158,21 +156,7 @@ class Trust(IModule):
         s.close()
         return local_ip
 
-    def rotate_p2p_logfile(self):
-        """
-        Thread that rotates p2p.log file every 1 day
-        """
-        rotation_period = 86400  # 1d
-        while True:
-            time.sleep(rotation_period)
-            lock = threading.Lock()
-            lock.acquire()
-            # erase contents of file instead of deleting it
-            # because the pigeon has an open handle of it
-            open(self.pigeon_logfile, "w").close()
-            lock.release()
-
-    def get_available_port(self):
+    def get_available_port(self) -> int:
         for port in range(32768, 65535):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
@@ -184,11 +168,7 @@ class Trust(IModule):
                 continue
 
     def _configure(self):
-        self.trust_db = trustdb.TrustDB(  #
-            self.logger,
-            self.sql_db_name,
-            drop_tables_on_startup=False,
-        )
+        self.trust_db = self.db.trust_db
         self.reputation_model = reputation_model.BaseModel(
             self.logger, self.trust_db, self.db
         )
@@ -247,8 +227,6 @@ class Trust(IModule):
             self.pigeon = subprocess.Popen(
                 executable, cwd=self.p2ptrust_runtime_dir, stdout=outfile
             )
-
-            # print(f"[debugging] runnning pigeon: {executable}")
 
     def extract_confidence(self, evidence: Evidence) -> Optional[float]:
         """
@@ -623,7 +601,8 @@ class Trust(IModule):
             self.trust_db.__del__()
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
+        self._init_log_files()
         # configure process
         self._configure()
         # check if it was possible to start up pigeon
@@ -634,15 +613,17 @@ class Trust(IModule):
             )
             return 1
 
-        # create_p2p_logfile is taken from slips.yaml
-        if self.create_p2p_logfile:
-            # rotates p2p.log file every 1 day
-            utils.start_thread(self.rotator_thread, self.db)
-
         # should call self.update_callback
         # self.c4 = self.db.subscribe(self.slips_update_channel)
 
     def main(self):
+        if self.create_p2p_logfile:
+            # rotates p2p.log file every 1 day
+            now = time.time()
+            if now - self.last_log_rotation_time >= self.rotation_period:
+                open(self.pigeon_logfile, "w").close()
+                self.last_log_rotation_time = now
+
         if msg := self.get_msg("report_to_peers"):
             self.new_evidence_callback(msg)
 

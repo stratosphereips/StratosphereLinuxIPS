@@ -92,7 +92,7 @@ class EvidenceHandler(ICore):
         utils.change_logfiles_ownership(self.logfile.name, self.UID, self.GID)
 
         self.is_running_non_stop = self.db.is_running_non_stop()
-        self.blocking_module_supported = self.is_blocking_modules_supported()
+        self.blocking_modules_supported = self.is_blocking_modules_supported()
 
         # clear output/alerts.json
         self.jsonfile = self.clean_file(self.output_dir, "alerts.json")
@@ -387,7 +387,9 @@ class EvidenceHandler(ICore):
         """
 
         self.db.set_alert(alert, evidence_causing_the_alert)
-        self.decide_blocking(alert.profile.ip, alert.timewindow)
+        is_blocked: bool = self.decide_blocking(
+            alert.profile.ip, alert.timewindow
+        )
         # like in the firewall
         profile_already_blocked: bool = self.db.is_blocked_profile_and_tw(
             str(alert.profile), str(alert.timewindow)
@@ -407,9 +409,6 @@ class EvidenceHandler(ICore):
         if self.popup_alerts:
             self.show_popup(alert)
 
-        is_blocked: bool = self.decide_blocking(
-            alert.profile.ip, alert.timewindow
-        )
         if is_blocked:
             self.db.mark_profile_and_timewindow_as_blocked(
                 str(alert.profile), str(alert.timewindow)
@@ -425,7 +424,7 @@ class EvidenceHandler(ICore):
          returns True if the given IP was blocked by Slips blocking module
         """
         # send ip to the blocking module
-        if not self.blocking_module_supported:
+        if not self.blocking_modules_supported:
             return False
         # now since this source ip(profileid) caused an alert,
         # it means it caused so many evidence(attacked others a lot)

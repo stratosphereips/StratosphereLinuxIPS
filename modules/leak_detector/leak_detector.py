@@ -364,7 +364,7 @@ class LeakDetector(IModule):
                 )
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
 
         if not self.bin_found:
             # yara is not installed
