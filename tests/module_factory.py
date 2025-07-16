@@ -85,6 +85,8 @@ from slips_files.core.structures.evidence import (
 from modules.fidesModule.fidesModule import FidesModule
 from slips_files.core.text_formatters.evidence import EvidenceFormatter
 
+import unittest.mock as mock
+
 
 def read_configuration():
     return
@@ -115,6 +117,9 @@ class ModuleFactory:
         """default is o port 6379, this is the one we're using in conftest"""
         return self.create_db_manager_obj(6379)
 
+    def mocked_init_flock(self):
+        self.lockfile_path = "/tmp/fake.lock"
+
     def create_db_manager_obj(
         self,
         port,
@@ -126,25 +131,43 @@ class ModuleFactory:
         flush_db is False by default  because we use this function to check
         the db after integration tests to make sure everything's going fine
         """
-        # to prevent config/redis.conf from being overwritten
-        with patch(
-            "slips_files.core.database.redis_db.database."
-            "RedisDB._set_redis_options",
-            return_value=Mock(),
+
+        mock_ctx = MagicMock()
+        mock_ctx.__enter__.return_value = None
+        mock_ctx.__exit__.return_value = None
+
+        conf = Mock()
+        conf.delete_prev_db = Mock(return_value=False)
+        conf.disabled_detections = Mock(return_value=[])
+        conf.get_tw_width_as_float = Mock(return_value=3600.0)
+        conf.client_ips = Mock(return_value=[])
+        conf.use_local_p2p = Mock(return_value=False)
+
+        with (
+            # to prevent config/redis.conf from being overwritten
+            patch(
+                "slips_files.core.database.redis_db.database."
+                "RedisDB._set_redis_options",
+                return_value=Mock(),
+            ),
+            patch(
+                "slips_files.core.database.redis_db.database.ConfigParser",
+                return_value=conf,
+            ),
+            patch("builtins.open", new_callable=mock.mock_open),
         ):
-            conf = Mock()
             db = DBManager(
-                self.logger,
-                output_dir,
-                port,
-                conf,
-                12345,
+                logger=self.logger,
+                output_dir=output_dir,
+                redis_port=port,
+                conf=conf,
+                main_pid=12345,
                 flush_db=flush_db,
                 start_sqlite=False,
                 start_redis_server=start_redis_server,
             )
+
         db.print = Mock()
-        db._init_flock = Mock()
         db.init_p2ptrust_db = Mock()
         # for easier access to redis db
         db.r = db.rdb.r

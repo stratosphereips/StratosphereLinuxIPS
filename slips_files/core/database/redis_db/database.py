@@ -216,6 +216,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     @classmethod
     def _read_configuration(cls):
         conf = ConfigParser()
+        print(f"@@@@@@@@@@@@@@@@ conf: {conf}")
         # Should we delete the previously stored data in the DB when we start?
         # By default False. Meaning we don't DELETE the DB by default.
         cls.deletePrevdb: bool = conf.delete_prev_db()
@@ -300,7 +301,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # If the PING/PONG fails, the connection will re-established
 
         # retry_on_timeout=True after the command times out, it will be retried once,
-        # if the retry is successful, it will return normally; if it fails, an exception will be thrown
+        # if the retry is successful, it will return normally; if it fails,
+        # an exception will be thrown
 
         return redis.StrictRedis(
             host="localhost",
