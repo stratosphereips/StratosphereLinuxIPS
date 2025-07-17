@@ -216,7 +216,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     @classmethod
     def _read_configuration(cls):
         conf = ConfigParser()
-        print(f"@@@@@@@@@@@@@@@@ conf: {conf}")
         # Should we delete the previously stored data in the DB when we start?
         # By default False. Meaning we don't DELETE the DB by default.
         cls.deletePrevdb: bool = conf.delete_prev_db()
