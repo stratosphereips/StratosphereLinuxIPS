@@ -1,40 +1,41 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+import json
+import os
+import pickle
+import traceback
+import warnings
 from typing import Optional
 
 # SPDX-License-Identifier: GPL-2.0-only
 import numpy
-import os
-from sklearn.linear_model import SGDClassifier
-from sklearn.preprocessing import StandardScaler
-import pickle
 import pandas as pd
-import json
-import traceback
-import warnings
-from sklearn.metrics import confusion_matrix
+from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import (
-    f1_score,
-    precision_score,
     accuracy_score,
+    confusion_matrix,
+    f1_score,
     matthews_corrcoef,
+    precision_score,
     recall_score,
 )
+from sklearn.preprocessing import StandardScaler
+
+from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.imodule import IModule
-from slips_files.core.structures.labels import Label
 from slips_files.core.structures.evidence import (
-    Evidence,
-    ProfileID,
-    TimeWindow,
     Attacker,
-    ThreatLevel,
+    Direction,
+    Evidence,
     EvidenceType,
     IoCType,
-    Direction,
-    Victim,
     Method,
+    ProfileID,
+    ThreatLevel,
+    TimeWindow,
+    Victim,
 )
+from slips_files.core.structures.labels import Label
 
 
 # This horrible hack is only to stop sklearn from printing those warnings
@@ -118,12 +119,17 @@ class FlowMLDetection(IModule):
         """
         Train a model based on the flows we receive and the labels
         """
+        self.print("lalal")
         try:
+            self.print("lalalala")
             # Create y_flow with the label
             y_flow = numpy.full(
                 self.flows.shape[0], self.flows.ground_truth_label
             )
             # Create X_flow with the current flows minus the label
+            self.print(self.flows.shape)
+            self.print(self.flows.columns)
+            self.print("lalalalalalalalalalalala")
             X_flow = self.flows.drop("ground_truth_label", axis=1)
             # Drop the detailed labels
             X_flow = X_flow.drop("detailed_ground_truth_label", axis=1)
@@ -522,6 +528,7 @@ class FlowMLDetection(IModule):
         # Confirm that the module is done processing
         if self.mode == "train":
             self.store_model()
+        self.log_file.flush()
 
     def pre_main(self):
         utils.drop_root_privs_permanently()
@@ -587,6 +594,7 @@ class FlowMLDetection(IModule):
                         )
 
             elif self.mode == "test":
+                self.print("testing testing")
                 # We are testing, which means using the model to detect
                 processed_flow = self.process_flow(self.flow)
                 # After processing the flow, it may happen that we
@@ -654,6 +662,7 @@ class FlowMLDetection(IModule):
                                 f"False Negative Flow: {self.flow}"
                             )
 
+                        self.print("logging testing performance metrics")
                         # Log the testing performance metrics
                         self.write_to_log(
                             f"TP: {self.tp}, TN: {self.tn},"

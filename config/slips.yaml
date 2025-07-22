@@ -17,7 +17,7 @@ parameters:
 
   # The debugging is related to errors, warnings and cases that may cause
   # errors.
-  debug: 0
+  debug: 1
 
   # The width of the time window (TW) used by Slips. All traffic is separated in
   # TW to be analyzed. This is so old detections can be forgoten.
@@ -212,7 +212,10 @@ flowmldetection:
   # training the models, to test in unknown data.
   # You should have trained at least once with 'Normal' data and once with
   # 'Malicious' data in order for the test to work.
-  mode: train
+
+  mode: test
+  #mode: train
+
   # creates an extra log file called training.log/testing.log in the
   # ouptput dir with performance metrics depending on the mode.
   create_performance_metrics_log_files: True
