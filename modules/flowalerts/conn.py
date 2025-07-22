@@ -733,7 +733,7 @@ class Conn(IFlowalertsAnalyzer):
         :param what_to_check: can be 'srcip' or 'dstip'
         """
         if self._is_dns(flow):
-            # dns flows are checked fot this same detection in dns.py
+            # dns flows are checked for this same detection in dns.py
             return
 
         if self._is_ok_to_connect_to_ip(

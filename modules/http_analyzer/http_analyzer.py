@@ -114,6 +114,8 @@ class HTTPAnalyzer(AsyncModule):
         # to test this wget google.com:80 twice
         # wget makes multiple connections per command,
         # 1 to google.com and another one to www.google.com
+        # PS; if google is whitelisted ( it is by default ), you wont get
+        # an evidence, try yahoo.com
         if flow.uri != "/":
             # emtpy detections are only done when we go to bing.com,
             # bing.com/something seems benign

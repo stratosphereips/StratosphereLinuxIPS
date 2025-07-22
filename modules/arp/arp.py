@@ -328,7 +328,7 @@ class ARP(IModule):
 
     def detect_unsolicited_arp(self, twid: str, flow):
         """
-        Unsolicited arp is used to update the neighbours'
+        Unsolicited arp replies are used to update the neighbours'
         arp caches but can also be used in arp spoofing
         """
         if (
@@ -341,7 +341,7 @@ class ARP(IModule):
             # it may be arp spoofing
             confidence: float = 0.8
             threat_level: ThreatLevel = ThreatLevel.LOW
-            description: str = "broadcasting unsolicited ARP"
+            description: str = "broadcasting unsolicited ARP reply."
 
             attacker = Attacker(
                 direction=Direction.SRC,
@@ -350,7 +350,7 @@ class ARP(IModule):
             )
 
             evidence: Evidence = Evidence(
-                evidence_type=EvidenceType.UNSOLICITED_ARP,
+                evidence_type=EvidenceType.UNSOLICITED_ARP_REPLY,
                 attacker=attacker,
                 threat_level=threat_level,
                 confidence=confidence,

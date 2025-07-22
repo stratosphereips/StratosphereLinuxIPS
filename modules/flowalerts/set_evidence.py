@@ -1076,7 +1076,8 @@ class SetEvidenceHelper:
         description: str = (
             f"A DNS TXT answer with high entropy. "
             f'query: {flow.query} answer: "{sus_answer}" '
-            f"entropy: {round(entropy, 2)} "
+            f"entropy: {round(entropy, 2)} from {flow.saddr} to "
+            f"{flow.daddr}."
         )
         # to add a correlation between the 2 evidence in alerts.json
         evidence_id_of_dstip_as_the_attacker = str(uuid4())
