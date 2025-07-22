@@ -439,8 +439,20 @@ class FlowMLDetection(IModule):
                 except (KeyError, ValueError):
                     pass
             # Scale the flow
-            x_flow: numpy.ndarray = self.scaler.transform(x_flow)
-            pred: numpy.ndarray = self.clf.predict(x_flow)
+            try:
+                x_flow: numpy.ndarray = self.scaler.transform(x_flow)
+                pred: numpy.ndarray = self.clf.predict(x_flow)
+            except Exception as e:
+                self.print(
+                    f"Error in detect() while scaling or predicting the flow: {e}",
+                    0,
+                    1,
+                )
+                self.print("Flow to predict:")
+                self.print(x_flow, 0, 1)
+                # self.print(traceback.format_exc(), 0, 1)
+                return None
+
             return pred
         except Exception as e:
             self.print(
