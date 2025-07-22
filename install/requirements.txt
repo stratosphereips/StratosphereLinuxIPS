@@ -13,6 +13,7 @@ Keras
 validators==0.35.0
 ipwhois==1.2.0
 matplotlib==3.10.1
+cachetools
 scikit_learn
 slackclient==2.9.4
 psutil==7.0.0

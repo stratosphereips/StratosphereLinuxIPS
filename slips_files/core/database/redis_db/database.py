@@ -27,6 +27,7 @@ from typing import (
     Optional,
     Tuple,
 )
+from cachetools import TTLCache
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
@@ -130,9 +131,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     connection_retry = 0
     # used to cleanup flow trackers
     last_cleanup_time = time.time()
+    ip_info_cache = TTLCache(maxsize=300, ttl=300)  # 5-minute TTL
 
     def __new__(
-        cls, logger, redis_port, start_redis_server=True, flush_db=True
+        cls,
+        logger,
+        redis_port,
+        start_redis_server=True,
+        flush_db=True,
+        client_name: str = "Slips",
     ):
         """
         treat the db as a singleton per port
@@ -146,6 +153,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         cls.printer = Printer(logger, cls.name)
 
         if cls.redis_port not in cls._instances:
+            # PS: keep in mind that this code is only called once from
+            # main.py. not
+            # called by each module. that's how singelton works:D
             cls._set_redis_options()
             cls._read_configuration()
             initialized, err = cls.init_redis_server()
@@ -163,14 +173,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             cls.set_slips_internal_time(0)
             if not cls.get_slips_start_time():
                 cls._set_slips_start_time()
-
-            # useful for debugging using 'CLIENT LIST' redis cmd
-            cls.r.client_setname("Slips-DB")
-
         return cls._instances[cls.redis_port]
 
     def __init__(self, *args, **kwargs):
         self.set_new_incoming_flows(True)
+
+    def client_setname(self, name: str):
+        """
+        Set the name of the client in redis, so we can identify it
+        in the redis client list.
+        :param name: the name of the client
+        """
+        # useful for debugging using 'CLIENT LIST' cmd
+        name = name.replace("_", "").replace(" ", "")
+        self.r.client_setname(name)
 
     @classmethod
     def _set_redis_options(cls):
@@ -254,7 +270,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 # we don't need that when using -k
                 cls._start_a_redis_server()
 
-            connected, err = cls.connect_to_redis_server()
+            connected, err = cls._connect_to_redis_server()
             if not connected:
                 return False, err
 
@@ -345,7 +361,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         return True
 
     @classmethod
-    def connect_to_redis_server(cls) -> Tuple[bool, str]:
+    def _connect_to_redis_server(cls) -> Tuple[bool, str]:
         """
         Connects to the given port and Sets r and rcache
         Returns a tuple of (bool, error message).
@@ -618,8 +634,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         Return information about this IP from IPsInfo key
         :return: a dictionary or False if there is no IP in the database
         """
+        if ip in self.ip_info_cache:
+            return self.ip_info_cache[ip]
+
         data = self.rcache.hget(self.constants.IPS_INFO, ip)
-        return json.loads(data) if data else None
+        result = json.loads(data) if data else None
+        self.ip_info_cache[ip] = result
+        return result
 
     def _get_from_ip_info(self, ip: str, info_to_get: str):
         """
