@@ -74,3 +74,4 @@ class Constants:
 class Channels:
     DNS_INFO_CHANGE = "dns_info_change"
     NEW_ALERT = "new_alert"
+    EVIDENCE_ADDED = "evidence_added"

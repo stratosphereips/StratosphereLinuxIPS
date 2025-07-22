@@ -35,7 +35,7 @@ repos:
           args: ['--line-length' , '79']
           language_version: python3.12.3
           # excludes formatting slips_files/common/imports.py
-          exclude: (imports|conftest.py)
+          exclude: (imports|conftest.py|tests/*.py)
 
 -     repo: https://github.com/adrienverge/yamllint.git
       rev: v1.35.1
@@ -43,3 +43,11 @@ repos:
         - id: yamllint
           args: ["-d", "{rules: {line-length: {max: 100}}}"]
           files: "slips.yaml"
+
+- repo: local
+  hooks:
+    - id: vulture
+      name: vulture dead code check
+      entry: bash -c 'files=$(git diff --cached --name-only --diff-filter=ACM | grep -E "\.py$" | grep -vE "^(tests/|migrations/)"); [ -n "$files" ] && vulture --exclude "tests/*,venv/*" $files || true'
+      language: system
+      types: [python]

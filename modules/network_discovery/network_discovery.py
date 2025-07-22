@@ -5,7 +5,7 @@ from typing import List
 
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.vertical_portscan import VerticalPortscan
 from slips_files.core.structures.evidence import (
@@ -29,7 +29,7 @@ class NetworkDiscovery(IModule):
     """
 
     name = "Network Discovery"
-    description = "Detect Horizonal, Vertical Port scans, ICMP, and DHCP scans"
+    description = "Detect Horizonal, Vertical, ICMP and DHCP Scans."
     authors = ["Sebastian Garcia", "Alya Gomaa"]
 
     def init(self):
@@ -372,7 +372,7 @@ class NetworkDiscovery(IModule):
             )
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
 
     def main(self):
         if msg := self.get_msg("tw_modified"):

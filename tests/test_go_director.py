@@ -484,8 +484,6 @@ def test_process_evaluation_score_confidence_valid():
     with patch.object(go_director, "print") as mock_print, patch.object(
         go_director.trustdb, "insert_new_go_report"
     ) as mock_insert, patch.object(
-        go_director.db, "store_p2p_report"
-    ) as mock_store, patch.object(
         go_director.db, "add_profile"
     ) as mock_add_profile, patch.object(
         go_director, "set_evidence_p2p_report"
@@ -496,7 +494,6 @@ def test_process_evaluation_score_confidence_valid():
 
         mock_print.assert_called_with(expected_result, 2, 0)
         mock_insert.assert_called_once()
-        mock_store.assert_called_once()
         mock_add_profile.assert_called_once()
         mock_set_evidence.assert_called_once()
 

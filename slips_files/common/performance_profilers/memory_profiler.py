@@ -5,7 +5,7 @@ import glob
 import os
 import subprocess
 from termcolor import colored
-from slips_files.common.abstracts.performance_profiler import (
+from slips_files.common.abstracts.iperformance_profiler import (
     IPerformanceProfiler,
 )
 import time
@@ -433,7 +433,7 @@ class MultiprocessPatchMeta(ABCMeta):
 
         def _cleanup(self):
             self._pop_map()
-            self._release_lock()
+            self._release_flock()
 
         cls._cleanup = _cleanup
 

@@ -87,7 +87,7 @@ class ProfileHandler:
         # sorted set is encoded
         return self.r.zscore(f"tws{profileid}", twid.encode("utf-8"))
 
-    def get_first_flow_time(self) -> Optional[float]:
+    def get_first_flow_time(self) -> float | None:
         """
         Get the starttime of the first timewindow
         aka ts of the first flow
@@ -841,11 +841,6 @@ class ProfileHandler:
         }
         to_send = json.dumps(to_send)
 
-        # set the pcap/file stime in the analysis key
-        if self.first_flow:
-            self.set_input_metadata({"file_start": flow.starttime})
-            self.first_flow = False
-
         # dont send arp flows in this channel, they have their own
         # new_arp channel
         if flow.type_ != "arp":
@@ -1162,14 +1157,8 @@ class ProfileHandler:
                 0,
                 4,
             )
-
             # The creation of a TW now does not imply that it was modified.
             # You need to put data to mark is at modified.
-
-            # When a new TW is created for this profile,
-            # change the threat level of the profile to 0(info)
-            # and confidence to 0.05
-            self.update_threat_level(profileid, "info", 0.5)
         except redis.exceptions.ResponseError:
             self.print("Error in addNewTW", 0, 1)
             self.print(traceback.format_exc(), 0, 1)
@@ -1470,7 +1459,7 @@ class ProfileHandler:
         if not is_dhcp_set:
             self.r.hset(profileid, "dhcp", "true")
 
-    def add_profile(self, profileid, starttime):
+    def add_profile(self, profileid, starttime, confidence=0.05):
         """
         Add a new profile to the DB. Both the list of profiles and the
          hashmap of profile data
@@ -1492,8 +1481,7 @@ class ProfileHandler:
             self.r.hset(profileid, "duration", self.width)
             # When a new profiled is created assign threat level = 0
             # and confidence = 0.05
-            confidence = 0.05
-            self.update_threat_level(profileid, "info", confidence)
+
             self.r.hset(profileid, "confidence", confidence)
             # The IP of the profile should also be added as a new IP
             # we know about.

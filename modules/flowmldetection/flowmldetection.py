@@ -21,7 +21,7 @@ from sklearn.metrics import (
 )
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 from slips_files.core.structures.labels import Label
 from slips_files.core.structures.evidence import (
     Evidence,
@@ -524,7 +524,7 @@ class FlowMLDetection(IModule):
             self.store_model()
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
         # Load the model
         self.read_model()
 

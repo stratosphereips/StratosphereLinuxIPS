@@ -52,6 +52,7 @@ class Main:
         self.last_updated_stats_time = datetime.now()
         self.input_type = False
         self.proc_man = ProcessManager(self)
+        self.gw_info_printed = False
         # in testing mode we manually set the following params
         # TODO use mocks instead of this testing param
         if not testing:
@@ -59,7 +60,7 @@ class Main:
             self.profilers_manager = ProfilersManager(self)
             self.pid = os.getpid()
             self.checker.check_given_flags()
-
+            self.prepare_locks_dir()
             if not self.args.stopdaemon:
                 # Check the type of input
                 (
@@ -107,12 +108,12 @@ class Main:
     def terminate_slips(self):
         """
         Shutdown slips, is called when stopping slips before
-        starting all modules. for example using -cb
+        starting all modules. for example using -cb or -k
         """
         if self.mode == DAEMONIZED_MODE:
             self.daemon.stop()
         if not self.conf.get_cpu_profiler_enable():
-            sys.exit(0)
+            sys.exit(0)  # leaves any children started by slips as orphans
 
     def save_the_db(self):
         # save the db to the output dir of this analysis
@@ -190,6 +191,7 @@ class Main:
                             shutil.rmtree(file_path)
             else:
                 os.makedirs(self.args.output)
+            os.chmod(self.args.output, 0o777)
             return
 
         # self.args.output is the same as self.alerts_default_path
@@ -209,6 +211,7 @@ class Main:
         self.args.output += f"_{ts}/"
 
         os.makedirs(self.args.output)
+        os.chmod(self.args.output, 0o777)
 
     def set_mode(self, mode, daemon=""):
         """
@@ -414,7 +417,9 @@ class Main:
             self.total_flows = self.db.get_total_flows()
 
         flows_percentage = int(
-            (self.db.get_processed_flows_so_far() / self.total_flows) * 100 if self.total_flows != 0 else 0
+            (self.db.get_processed_flows_so_far() / self.total_flows) * 100
+            if self.total_flows != 0
+            else 0
         )
         return f"Analyzed Flows: {green(flows_percentage)}{green('%')}. "
 
@@ -443,6 +448,31 @@ class Main:
         elif self.mode == "interactive":
             return os.path.join(self.args.output, "errors.log")
 
+    def print_gw_info(self):
+        if self.gw_info_printed:
+            return
+        if ip := self.db.get_gateway_ip():
+            self.print(f"Detected gateway IP: {green(ip)}")
+        if mac := self.db.get_gateway_mac():
+            self.print(f"Detected gateway MAC: {green(mac)}")
+        self.gw_info_printed = True
+
+    def prepare_locks_dir(self):
+        """
+        sets the correct permissions for the /tmp/slips directory to be
+        used by root and non-root users
+        """
+        locks_dir = utils.slips_locks_dir
+        # Create the directory if it doesn't exist
+        if not os.path.exists(locks_dir):
+            os.makedirs(locks_dir, exist_ok=True)
+        try:
+            os.chmod(locks_dir, 0o777)  # World-writable, no sticky bit
+        except PermissionError:
+            # this dir was created by root, so we can't change the permissions
+            # but probably root has already set the permissions
+            pass
+
     def start(self):
         """Main Slips Function"""
         try:
@@ -462,13 +492,17 @@ class Main:
             self.redis_port: int = self.redis_man.get_redis_port()
             # dont start the redis server if it's already started
             start_redis_server = not utils.is_port_in_use(self.redis_port)
+
             try:
                 self.db = DBManager(
                     self.logger,
                     self.args.output,
                     self.redis_port,
+                    self.conf,
+                    int(self.pid),
                     start_redis_server=start_redis_server,
                 )
+
             except RuntimeError as e:
                 self.print(str(e), 1, 1)
                 self.terminate_slips()
@@ -579,11 +613,11 @@ class Main:
             self.metadata_man.add_metadata_if_enabled()
 
             self.input_process = self.proc_man.start_input_process()
-
             # obtain the list of active processes
-            self.proc_man.processes = multiprocessing.active_children()
+            children = multiprocessing.active_children()
+            self.proc_man.set_slips_processes(children)
 
-            self.db.store_pid("slips.py", int(self.pid))
+            self.db.store_pid("main", int(self.pid))
             self.metadata_man.set_input_metadata()
 
             # warn about unused open redis servers
@@ -608,15 +642,14 @@ class Main:
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
+                self.print_gw_info()
 
                 # if you remove the below logic anywhere before the
                 # above sleep() statement, it will try to get the return
                 # value very quickly before
                 # the webinterface thread sets it. so don't:D
                 self.ui_man.check_if_webinterface_started()
-
                 self.update_stats()
-
                 self.db.check_tw_to_close()
 
                 modified_profiles: Set[str] = (

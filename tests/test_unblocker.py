@@ -39,7 +39,7 @@ def test_unblock_request(
         )
 
 
-def test__check_if_time_to_unblock():
+def test_check_if_time_to_unblock():
     unblocker = ModuleFactory().create_unblocker_obj()
 
     unblocker.requests = {
@@ -63,10 +63,10 @@ def test__check_if_time_to_unblock():
     ) as mock_log, patch.object(
         unblocker.db, "del_blocked_ip"
     ) as mock_del, patch.object(
-        unblocker, "_del_request"
+        unblocker, "del_request"
     ) as mock_del_req:
 
-        unblocker._check_if_time_to_unblock()
+        unblocker.check_if_time_to_unblock()
 
         mock_unblock.assert_called_once_with("1.2.3.4", {"src": "test"})
         mock_log.assert_called_once_with("1.2.3.4")

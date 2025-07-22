@@ -1,11 +1,17 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import os
+import shutil
+import sqlite3
+from pathlib import Path
 from typing import (
     List,
     Dict,
 )
 
+from modules.p2ptrust.trust.trustdb import TrustDB
 from slips_files.common.printer import Printer
+from slips_files.common.slips_utils import utils
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -18,7 +24,7 @@ class DBManager:
     """
     This class will be calling methods from the appropriate db.
     each method added to any of the dbs should have a
-    handler in here
+    handler in here.
     """
 
     name = "DBManager"
@@ -28,10 +34,13 @@ class DBManager:
         logger: Output,
         output_dir,
         redis_port,
+        conf,
+        main_pid: int,
         start_sqlite=True,
         start_redis_server=True,
         **kwargs,
     ):
+        self.conf = conf
         self.output_dir = output_dir
         self.redis_port = redis_port
         self.logger = logger
@@ -40,12 +49,124 @@ class DBManager:
             self.logger, redis_port, start_redis_server, **kwargs
         )
 
+        self.trust_db = None
+        if self.conf.use_local_p2p():
+            self.trust_db_path: str = self.init_p2ptrust_db()
+            self.trust_db = TrustDB(
+                self.logger,
+                self.trust_db_path,
+                main_pid,
+                drop_tables_on_startup=False,
+            )
+
         # in some rare cases we don't wanna create the sqlite db from scratch,
         # like when using -S to stop the daemon, we just wanna connect to
         # the existing one
         self.sqlite = None
         if start_sqlite:
-            self.sqlite = SQLiteDB(self.logger, output_dir)
+            self.sqlite = SQLiteDB(self.logger, output_dir, main_pid)
+
+    def is_db_malformed(self, db_path: str) -> bool:
+        try:
+            with sqlite3.connect(db_path, timeout=3) as conn:
+                cursor = conn.execute("PRAGMA integrity_check;")
+                result = cursor.fetchone()
+                return result[0] != "ok"
+        except sqlite3.DatabaseError as e:
+            self.print(f"Database error during integrity_check: {e}")
+            return True
+
+    def backup_db(self, db_path: str):
+        """
+        Backs up the database file to a new file with a timestamp. and
+        deleted the file at db_path if successfully backed up.
+        """
+        try:
+            # backup the DB aside (optional safety)
+            date_time = utils.get_human_readable_datetime(
+                format="%Y-%m-%dT%H:%M:%S"
+            )
+            backup_path = f"{db_path}.{date_time}.bak"
+            shutil.move(db_path, backup_path)
+
+            db_short = Path(db_path).parent.name + "/" + Path(db_path).name
+            backup_short = (
+                Path(backup_path).parent.name + "/" + Path(backup_path).name
+            )
+            self.print(
+                f"{db_short} backup is at {backup_short}. "
+                f"Creating a new one at {db_short}."
+            )
+        except Exception as e:
+            raise Exception(
+                f"Failed to backup DB {db_path}: {e}. "
+                f"Please Manually back it up and remove it and "
+                f"restart Slips."
+            )
+
+    def init_p2ptrust_db(self) -> str:
+        """Initializes and returns the path to a valid trustdb inside p2ptrust_runtime_dir."""
+        p2ptrust_runtime_dir = os.path.join(os.getcwd(), "p2ptrust_runtime/")
+        Path(p2ptrust_runtime_dir).mkdir(parents=True, exist_ok=True)
+        db_path = os.path.join(p2ptrust_runtime_dir, "trustdb.db")
+        self.p2ptrust_runtime_dir = p2ptrust_runtime_dir
+
+        if os.path.exists(db_path):
+            if self.is_db_malformed(db_path):
+                self.print(
+                    "trustdb.db is malformed. Backing it up and "
+                    "creating another one..."
+                )
+                self.backup_db(db_path)
+            if not self.has_write_access_to_sqlite(db_path):
+                self.print(
+                    "trustdb.db is not writable. Backing it up and "
+                    "creating another one..."
+                )
+                self.backup_db(db_path)
+                # TODO LAST THING HERE IS WE'RE NOT CREATING A NEW DB AFTER
+                #  BACKING UP THE OLDONE??
+
+        return db_path
+
+    def has_write_access_to_sqlite(self, db_path: str) -> bool:
+        """Check if the current process has write access to the
+        SQLite database file."""
+        try:
+            db_file = Path(db_path)
+            # Check if file exists and is writable at the OS level
+            if db_file.exists():
+                if not os.access(db_path, os.W_OK):
+                    return False
+            else:
+                # If file doesn't exist, check write access to parent directory
+                if not os.access(db_file.parent, os.W_OK):
+                    return False
+
+            # Try an actual write transaction in SQLite
+            conn = sqlite3.connect(f"file:{db_path}?mode=rw", uri=True)
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS __write_test__ (id INTEGER)"
+            )
+            cursor.execute("DROP TABLE __write_test__")
+            conn.rollback()
+            conn.close()
+            return True
+
+        except (
+            sqlite3.OperationalError,
+            sqlite3.DatabaseError,
+            PermissionError,
+        ):
+            return False
+
+    def get_p2ptrust_dir(self) -> str:
+        return self.p2ptrust_runtime_dir
+
+    def get_p2ptrust_db_path(self) -> str:
+        return self.trust_db_path
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
@@ -156,6 +277,9 @@ class DBManager:
     def get_input_type(self, *args, **kwargs):
         return self.rdb.get_input_type(*args, **kwargs)
 
+    def get_interface(self, *args, **kwargs):
+        return self.rdb.get_interface(*args, **kwargs)
+
     def get_output_dir(self, *args, **kwargs):
         return self.rdb.get_output_dir(*args, **kwargs)
 
@@ -171,11 +295,11 @@ class DBManager:
     def set_ip_info(self, *args, **kwargs):
         return self.rdb.set_ip_info(*args, **kwargs)
 
-    def get_p2p_reports_about_ip(self, *args, **kwargs):
-        return self.rdb.get_p2p_reports_about_ip(*args, **kwargs)
+    def set_peer_trust(self, *args, **kwargs):
+        return self.rdb.set_peer_trust(*args, **kwargs)
 
-    def store_p2p_report(self, *args, **kwargs):
-        return self.rdb.store_p2p_report(*args, **kwargs)
+    def get_peer_trust(self, *args, **kwargs):
+        return self.rdb.get_peer_trust(*args, **kwargs)
 
     def get_dns_resolution(self, *args, **kwargs):
         return self.rdb.get_dns_resolution(*args, **kwargs)
@@ -418,8 +542,17 @@ class DBManager:
         """returns the list of uids of the flows causing evidence"""
         return self.rdb.get_flows_causing_evidence(*args, **kwargs)
 
-    def set_evidence(self, *args, **kwargs):
-        return self.rdb.set_evidence(*args, **kwargs)
+    def set_evidence(self, evidence: Evidence):
+        evidence_set = self.rdb.set_evidence(evidence)
+        if evidence_set:
+            # an evidence is generated for this profile
+            # update the threat level of this profile
+            self.update_threat_level(
+                str(evidence.attacker.profile),
+                str(evidence.threat_level),
+                evidence.confidence,
+            )
+        return evidence_set
 
     def set_alert(
         self, alert: Alert, evidence_causing_the_alert: Dict[str, Evidence]
@@ -430,6 +563,11 @@ class DBManager:
         """
         self.rdb.set_alert(alert)
         self.sqlite.add_alert(alert)
+
+        # when an alert is generated , we should set the threat level of the
+        # attacker's profile to 1(critical) and confidence 1
+        # so that it gets reported to other peers with these numbers
+        self.update_threat_level(str(alert.profile), "critical", 1)
 
         for evidence_id in evidence_causing_the_alert.keys():
             uids: List[str] = self.rdb.get_flows_causing_evidence(evidence_id)
@@ -469,8 +607,20 @@ class DBManager:
     def get_twid_evidence(self, *args, **kwargs):
         return self.rdb.get_twid_evidence(*args, **kwargs)
 
-    def update_threat_level(self, *args, **kwargs):
-        return self.rdb.update_threat_level(*args, **kwargs)
+    def update_threat_level(
+        self, profileid: str, threat_level: str, confidence: float
+    ):
+        """updates the threat level and confidence of an ip in redis and
+        trust db for other peers to use it"""
+        if self.trust_db:
+            ip = profileid.split("_")[-1]
+            float_threat_level = utils.threat_levels[threat_level]
+            self.trust_db.insert_slips_score(
+                ip, float_threat_level, confidence
+            )
+        return self.rdb.update_threat_level(
+            profileid, threat_level, confidence
+        )
 
     def set_loaded_ti_files(self, *args, **kwargs):
         return self.rdb.set_loaded_ti_files(*args, **kwargs)
@@ -721,8 +871,12 @@ class DBManager:
     def get_tw_of_ts(self, *args, **kwargs):
         return self.rdb.get_tw_of_ts(*args, **kwargs)
 
-    def add_new_tw(self, *args, **kwargs):
-        return self.rdb.add_new_tw(*args, **kwargs)
+    def add_new_tw(self, profileid, timewindow: str, startoftw: float):
+        self.rdb.add_new_tw(profileid, timewindow, startoftw)
+        # When a new TW is created for this profile,
+        # change the threat level of the profile to 0(info)
+        # and confidence to 0.05
+        self.update_threat_level(profileid, "info", 0.5)
 
     def get_tw_start_time(self, *args, **kwargs):
         return self.rdb.get_tw_start_time(*args, **kwargs)
@@ -760,8 +914,10 @@ class DBManager:
     def mark_profile_as_dhcp(self, *args, **kwargs):
         return self.rdb.mark_profile_as_dhcp(*args, **kwargs)
 
-    def add_profile(self, *args, **kwargs):
-        return self.rdb.add_profile(*args, **kwargs)
+    def add_profile(self, profileid, starttime):
+        confidence = 0.05
+        self.update_threat_level(profileid, "info", confidence)
+        return self.rdb.add_profile(profileid, starttime, confidence)
 
     def set_module_label_for_profile(self, *args, **kwargs):
         return self.rdb.set_module_label_for_profile(*args, **kwargs)
@@ -970,10 +1126,12 @@ class DBManager:
         if self.sqlite:
             self.sqlite.close(*args, **kwargs)
 
-    def close_redis_and_sqlite(self, *args, **kwargs):
+    def close_all_dbs(self, *args, **kwargs):
         self.rdb.r.close()
         self.rdb.rcache.close()
         self.close_sqlite()
+        if self.trust_db:
+            self.trust_db.close()
 
     def get_fides_ti(self, target: str):
         return self.rdb.get_fides_ti(target)

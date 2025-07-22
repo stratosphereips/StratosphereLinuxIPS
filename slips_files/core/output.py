@@ -21,7 +21,7 @@ from pathlib import Path
 from datetime import datetime
 import os
 
-from slips_files.common.abstracts.observer import IObserver
+from slips_files.common.abstracts.iobserver import IObserver
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import red, yellow
@@ -66,6 +66,10 @@ class Output(IObserver):
         # we just need an instance of this class to be able
         # to start the db from the daemon class
         if create_logfiles:
+            # to create worl-writable files, so that when a module drops
+            # root privs, it can still write to the logfiles created by
+            # root (if slips was started by root)
+            os.umask(0)
             self._read_configuration()
             self.create_logfile(self.errors_logfile)
             self.log_branch_info(self.errors_logfile)

@@ -21,7 +21,7 @@ from modules.threat_intelligence.circl_lu import Circllu
 from modules.threat_intelligence.spamhaus import Spamhaus
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 from modules.threat_intelligence.urlhaus import URLhaus
 from slips_files.core.structures.evidence import (
     Evidence,
@@ -1798,7 +1798,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         return True
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
         # Load the local Threat Intelligence files that are
         # stored in the local folder self.path_to_local_ti_files
         # The remote files are being loaded by the update_manager

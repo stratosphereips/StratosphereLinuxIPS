@@ -22,7 +22,7 @@ class IUnblocker(ABC):
     def __init__(self, db: DBManager):
         self.db = db
         self.checker = Thread(
-            target=self._check_if_time_to_unblock,
+            target=self.check_if_time_to_unblock,
             daemon=True,
             name=f"{self.name}_unblocking_checker",
         )
@@ -33,7 +33,7 @@ class IUnblocker(ABC):
         """Add an unblocking request to self.requests"""
 
     @abstractmethod
-    def _del_request(self, *args, **kwargs):
+    def del_request(self, *args, **kwargs):
         """Delete an unblocking request from self.requests"""
 
     @abstractmethod
@@ -44,16 +44,7 @@ class IUnblocker(ABC):
         """
 
     @abstractmethod
-    def _unblock(self, *args, **kwargs):
-        """
-        Should contain the logic to unblock, throught the FW for
-        example.
-        is called whenever a ts is reached in _check_if_time_to_unblock()
-        to do the actual unblocking
-        """
-
-    @abstractmethod
-    def _check_if_time_to_unblock(self):
+    def check_if_time_to_unblock(self):
         """a bg thread that unblocks ips once their ts is reached"""
         ...
 
@@ -70,10 +61,8 @@ class IUnblocker(ABC):
         tw_start, tw_end = self.db.get_tw_limits(
             f"profile_{ip}", f"timewindow{tw_to_unblock}"
         )
-
         tw_start: str = utils.convert_ts_format(tw_start, "iso")
         tw_end: str = utils.convert_ts_format(tw_end, "iso")
-
         return TimeWindow(
             number=tw_to_unblock, start_time=tw_start, end_time=tw_end
         )

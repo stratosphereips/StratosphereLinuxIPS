@@ -6,7 +6,7 @@ from asyncio import Task
 from typing import List
 
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.async_module import AsyncModule
+from slips_files.common.abstracts.iasync_module import AsyncModule
 from .conn import Conn
 from .dns import DNS
 from .downloaded_file import DownloadedFile
@@ -63,7 +63,7 @@ class FlowAlerts(AsyncModule):
         self.dns.shutdown_gracefully()
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
         self.dns.pre_analyze()
         self.analyzers_map = {
             "new_downloaded_file": [self.downloaded_file],

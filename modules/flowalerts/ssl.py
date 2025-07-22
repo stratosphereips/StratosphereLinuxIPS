@@ -9,7 +9,7 @@ import bisect
 import time
 from multiprocessing import Lock
 import tldextract
-from slips_files.common.abstracts.flowalerts_analyzer import (
+from slips_files.common.abstracts.iflowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
 from slips_files.common.flow_classifier import FlowClassifier

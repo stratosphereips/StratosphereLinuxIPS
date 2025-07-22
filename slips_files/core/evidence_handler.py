@@ -41,7 +41,7 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
-from slips_files.common.abstracts.core import ICore
+from slips_files.common.abstracts.icore import ICore
 from slips_files.core.structures.evidence import (
     dict_to_evidence,
     Evidence,
@@ -92,13 +92,13 @@ class EvidenceHandler(ICore):
         utils.change_logfiles_ownership(self.logfile.name, self.UID, self.GID)
 
         self.is_running_non_stop = self.db.is_running_non_stop()
-        self.blocking_module_supported = self.is_blocking_module_supported()
+        self.blocking_modules_supported = self.is_blocking_modules_supported()
 
         # clear output/alerts.json
         self.jsonfile = self.clean_file(self.output_dir, "alerts.json")
         utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
         # this list will have our local and public ips when using -i
-        self.our_ips: List[str] = utils.get_own_ips(ret=List)
+        self.our_ips: List[str] = utils.get_own_ips(ret="List")
         self.formatter = EvidenceFormatter(self.db)
         # thats just a tmp value, this variable will be set and used when
         # the
@@ -362,7 +362,7 @@ class EvidenceHandler(ICore):
             evidence: dict = utils.to_dict(evidence)
             self.db.publish("export_evidence", json.dumps(evidence))
 
-    def is_blocking_module_supported(self) -> bool:
+    def is_blocking_modules_supported(self) -> bool:
         """
         returns true if slips is running in an interface or growing
          zeek dir with -p
@@ -387,7 +387,9 @@ class EvidenceHandler(ICore):
         """
 
         self.db.set_alert(alert, evidence_causing_the_alert)
-        self.decide_blocking(alert.profile.ip, alert.timewindow)
+        is_blocked: bool = self.decide_blocking(
+            alert.profile.ip, alert.timewindow
+        )
         # like in the firewall
         profile_already_blocked: bool = self.db.is_blocked_profile_and_tw(
             str(alert.profile), str(alert.timewindow)
@@ -407,9 +409,6 @@ class EvidenceHandler(ICore):
         if self.popup_alerts:
             self.show_popup(alert)
 
-        is_blocked: bool = self.decide_blocking(
-            alert.profile.ip, alert.timewindow
-        )
         if is_blocked:
             self.db.mark_profile_and_timewindow_as_blocked(
                 str(alert.profile), str(alert.timewindow)
@@ -425,7 +424,7 @@ class EvidenceHandler(ICore):
          returns True if the given IP was blocked by Slips blocking module
         """
         # send ip to the blocking module
-        if not self.blocking_module_supported:
+        if not self.blocking_modules_supported:
             return False
         # now since this source ip(profileid) caused an alert,
         # it means it caused so many evidence(attacked others a lot)
@@ -516,13 +515,15 @@ class EvidenceHandler(ICore):
                 twid: str = str(evidence.timewindow)
                 evidence_type: EvidenceType = evidence.evidence_type
                 timestamp: str = evidence.timestamp
-
-                # FP whitelisted alerts happen when the db returns an evidence
-                # that isn't processed in this channel, in the tw_evidence
-                # below.
-                # to avoid this, we only alert about processed evidence
+                # the database naturally has evidence before they reach
+                # this module. and sometime when this module queries
+                # evidence for a specific timewindow, the db returns all
+                # evidence including the ones the werent processed here yet.
+                # this marking of ev. as processed is to avoid that.
+                # so that get_evidence_for_tw() call below won't return
+                # unprocessed evidence.
                 self.db.mark_evidence_as_processed(evidence.id)
-                # Ignore evidence if IP is whitelisted
+
                 if self.whitelist.is_whitelisted_evidence(evidence):
                     self.db.cache_whitelisted_evidence_id(evidence.id)
                     # Modules add evidence to the db before

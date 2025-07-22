@@ -7,7 +7,7 @@ from typing import Optional
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 
 
 class RiskIQ(IModule):
@@ -85,7 +85,7 @@ class RiskIQ(IModule):
         return sorted_pt_results
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
         if not self.riskiq_email or not self.riskiq_key:
             return 1
 

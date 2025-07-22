@@ -102,7 +102,8 @@ class MetadataManager:
 
     def set_input_metadata(self):
         """
-        save info about name, size, analysis start date in the db
+        save info about name, size, analysis start date, and used interface
+         in the db
         """
         now = utils.get_human_readable_datetime()
         to_ignore: dict = self.main.conf.get_disabled_modules(
@@ -117,6 +118,8 @@ class MetadataManager:
             "input_type": self.main.input_type,
             "evidence_detection_threshold": self.main.conf.evidence_detection_threshold(),
         }
+        if self.main.args.interface:
+            info.update({"interface": self.main.args.interface})
 
         if hasattr(self.main, "zeek_dir"):
             info.update({"zeek_dir": self.main.zeek_dir})

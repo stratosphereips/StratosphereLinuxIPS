@@ -4,6 +4,7 @@ import sys
 import traceback
 import warnings
 from abc import ABC, abstractmethod
+from argparse import Namespace
 from multiprocessing import Process, Event
 from typing import (
     Dict,
@@ -34,17 +35,28 @@ class IModule(ABC, Process):
         output_dir,
         redis_port,
         termination_event,
+        slips_args,
+        conf,
+        ppid: int,
         **kwargs,
     ):
         Process.__init__(self)
         self.redis_port = redis_port
         self.output_dir = output_dir
         self.msg_received = False
+        # as parsed by arg_parser, these are the cli args
+        self.args: Namespace = slips_args
+        # to be able to access the configuration file
+        self.conf = conf
+        # the parent pid of this module, used for strating the db
+        self.ppid = ppid
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
-        self.db = DBManager(self.logger, self.output_dir, self.redis_port)
+        self.db = DBManager(
+            self.logger, self.output_dir, self.redis_port, self.conf, self.ppid
+        )
         self.keyboard_int_ctr = 0
         self.init(**kwargs)
         # should after the module's init() so the module has a chance to

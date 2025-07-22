@@ -10,7 +10,6 @@ import pytest
 import pytz
 import json
 from collections import namedtuple
-from typing import List
 
 
 def test_get_sha256_hash():
@@ -293,14 +292,14 @@ def _check_ip_presence(utils, expected_ip):
     in the list of own IPs.
     """
     return (
-        expected_ip in utils.get_own_ips(ret=List) or not utils.get_own_ips()
+        expected_ip in utils.get_own_ips(ret="List") or not utils.get_own_ips()
     )
 
 
 def test_get_own_ips_success():
     """Test that the function returns a list when successful."""
     utils = ModuleFactory().create_utils_obj()
-    ips = utils.get_own_ips(ret=List)
+    ips = utils.get_own_ips(ret="List")
     assert isinstance(ips, list), "Should return a list of IPs"
 
 
@@ -526,7 +525,7 @@ def test_drop_root_privs(
 ):
     mock_getenv.side_effect = side_effect
     utils = ModuleFactory().create_utils_obj()
-    utils.drop_root_privs()
+    utils.drop_root_privs_permanently()
 
     assert mock_setresuid.call_args_list == setresuid_calls
     assert mock_setresgid.call_args_list == setresgid_calls

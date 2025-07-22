@@ -15,7 +15,7 @@ from typing import (
 from uuid import uuid4
 
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -364,7 +364,7 @@ class LeakDetector(IModule):
                 )
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
 
         if not self.bin_found:
             # yara is not installed

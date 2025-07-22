@@ -8,7 +8,7 @@ import io
 import pstats
 import os
 
-from slips_files.common.abstracts.performance_profiler import (
+from slips_files.common.abstracts.iperformance_profiler import (
     IPerformanceProfiler,
 )
 

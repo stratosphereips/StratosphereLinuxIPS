@@ -16,7 +16,7 @@ import validators
 from multiprocessing import Queue
 from threading import Thread, Event
 
-from slips_files.common.abstracts.flowalerts_analyzer import (
+from slips_files.common.abstracts.iflowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
 from slips_files.common.flow_classifier import FlowClassifier
@@ -40,7 +40,7 @@ class DNS(IFlowalertsAnalyzer):
         self.arpa_scan_threshold = 10
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.classifier = FlowClassifier()
-        self.our_ips: List[str] = utils.get_own_ips(ret=List)
+        self.our_ips: List[str] = utils.get_own_ips(ret="List")
         # In mins
         self.dns_without_conn_interface_wait_time = 30
         # to store dns queries that we should check later. the purpose of

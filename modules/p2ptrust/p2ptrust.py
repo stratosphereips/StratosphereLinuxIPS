@@ -1,21 +1,18 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import threading
 import os
 import shutil
 import signal
 import subprocess
 import time
-from pathlib import Path
 from typing import Dict, Optional, Tuple
 import json
 import socket
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 import modules.p2ptrust.trust.base_model as reputation_model
-import modules.p2ptrust.trust.trustdb as trustdb
 import modules.p2ptrust.utils.utils as p2p_utils
 from modules.p2ptrust.utils.go_director import GoDirector
 from slips_files.core.structures.evidence import (
@@ -83,45 +80,25 @@ class Trust(IModule):
     pigeon_binary = os.path.join(os.getcwd(), "p2p4slips/p2p4slips")
     pigeon_key_file = "pigeon.keys"
     rename_redis_ip_info = False
-    rename_sql_db_file = False
     override_p2p = False
 
     def init(self, *args, **kwargs):
-        output_dir = self.db.get_output_dir()
-        # flag to ensure slips prints multiaddress only once
-        self.mutliaddress_printed = False
-        self.pigeon_logfile_raw = os.path.join(output_dir, "p2p.log")
-
-        self.p2p_reports_logfile = os.path.join(output_dir, "p2p_reports.log")
-        # pigeon generate keys and stores them in the following dir, if this is placed in the <output> dir,
-        # when restarting slips, it will look for the old keys in the new output dir! so it wont find them and will
+        self.read_configuration()
+        # pigeon generate keys and stores them in the following dir, if this
+        # is placed in the <output> dir,
+        # when restarting slips, it will look for the old keys in the new
+        # output dir! so it wont find them and will
         # generate new keys, and therefore new peerid!
         # store the keys in slips main dir so they don't change every run
-        data_dir = os.path.join(os.getcwd(), "p2ptrust_runtime/")
-        # data_dir = f'./output/{used_interface}/p2ptrust_runtime/'
-        # create data folder
-        Path(data_dir).mkdir(parents=True, exist_ok=True)
-        self.data_dir = data_dir
+        self.p2ptrust_runtime_dir = self.db.get_p2ptrust_dir()
+        self.sql_db_name = self.db.get_p2ptrust_db_path()
 
         self.port = self.get_available_port()
         self.host = self.get_local_IP()
-
         str_port = str(self.port) if self.rename_with_port else ""
 
         self.gopy_channel = self.gopy_channel_raw + str_port
         self.pygo_channel = self.pygo_channel_raw + str_port
-
-        self.read_configuration()
-        if self.create_p2p_logfile:
-            self.pigeon_logfile = self.pigeon_logfile_raw + str_port
-            self.print(f"Storing p2p.log in {self.pigeon_logfile}")
-            # create the thread that rotates the p2p.log every 1d
-            self.rotator_thread = threading.Thread(
-                target=self.rotate_p2p_logfile,
-                daemon=True,
-                name="p2p_rotator_thread",
-            )
-
         self.storage_name = "IPsInfo"
         if self.rename_redis_ip_info:
             self.storage_name += str(self.port)
@@ -137,8 +114,10 @@ class Trust(IModule):
             self.gopy_channel: self.c3,
         }
 
-        # they have to be defined here because the variable name utils is already taken
-        # TODO rename one of them
+        # todo don't duplicate this dict, move it to slips_utils
+        # all evidence slips detects has threat levels of strings
+        # each string should have a corresponding int value to be able to calculate
+        # the accumulated threat level and alert
         self.threat_levels = {
             "info": 0,
             "low": 0.2,
@@ -147,13 +126,24 @@ class Trust(IModule):
             "critical": 1,
         }
 
-        self.sql_db_name = f"{self.data_dir}trustdb.db"
-        if self.rename_sql_db_file:
-            self.sql_db_name += str(self.pigeon_port)
-        # todo don't duplicate this dict, move it to slips_utils
-        # all evidence slips detects has threat levels of strings
-        # each string should have a corresponding int value to be able to calculate
-        # the accumulated threat level and alert
+        # flag to ensure slips prints multiaddress only once
+        self.mutliaddress_printed = False
+        self.last_log_rotation_time = time.time()
+        self.rotation_period = 86400  # 1 day in seconds
+
+    def _init_log_files(self):
+        # should be called after reading configs
+        self.pigeon_logfile_raw = os.path.join(self.output_dir, "p2p.log")
+        self.p2p_reports_logfile = os.path.join(
+            self.output_dir, "p2p_reports.log"
+        )
+        if self.create_p2p_logfile:
+            self.setup_pigeon_logfile_rotation()
+
+    def setup_pigeon_logfile_rotation(self):
+        str_port = str(self.port) if self.rename_with_port else ""
+        self.pigeon_logfile = self.pigeon_logfile_raw + str_port
+        self.print(f"Storing p2p in {self.pigeon_logfile}")
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -166,21 +156,7 @@ class Trust(IModule):
         s.close()
         return local_ip
 
-    def rotate_p2p_logfile(self):
-        """
-        Thread that rotates p2p.log file every 1 day
-        """
-        rotation_period = 86400  # 1d
-        while True:
-            time.sleep(rotation_period)
-            lock = threading.Lock()
-            lock.acquire()
-            # erase contents of file instead of deleting it
-            # because the pigeon has an open handle of it
-            open(self.pigeon_logfile, "w").close()
-            lock.release()
-
-    def get_available_port(self):
+    def get_available_port(self) -> int:
         for port in range(32768, 65535):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
@@ -192,12 +168,9 @@ class Trust(IModule):
                 continue
 
     def _configure(self):
-        # TODO: do not drop tables on startup
-        self.trust_db = trustdb.TrustDB(
-            self.logger, self.sql_db_name, drop_tables_on_startup=True
-        )
+        self.trust_db = self.db.trust_db
         self.reputation_model = reputation_model.BaseModel(
-            self.logger, self.trust_db
+            self.logger, self.trust_db, self.db
         )
         # print(f"[DEBUGGING] Starting godirector with
         # pygo_channel: {self.pygo_channel}")
@@ -252,10 +225,8 @@ class Trust(IModule):
                 outfile = open(os.devnull, "+w")
 
             self.pigeon = subprocess.Popen(
-                executable, cwd=self.data_dir, stdout=outfile
+                executable, cwd=self.p2ptrust_runtime_dir, stdout=outfile
             )
-
-            # print(f"[debugging] runnning pigeon: {executable}")
 
     def extract_confidence(self, evidence: Evidence) -> Optional[float]:
         """
@@ -300,9 +271,12 @@ class Trust(IModule):
 
     def should_share(self, evidence: Evidence) -> bool:
         """
-        decides whether or not to report the given evidence to other
+        decides whether to report the given evidence to other
         peers
         """
+        if evidence.profile.ip in utils.get_own_ips():
+            return False
+
         if evidence.evidence_type == EvidenceType.P2P_REPORT:
             # we shouldn't re-share evidence reported by other peers
             return False
@@ -407,10 +381,14 @@ class Trust(IModule):
             if msg and not isinstance(msg["data"], int):
                 self.handle_data_request(msg["data"])
         except Exception as e:
-            self.print(f"Exception {e} in data_request_callback", 0, 1)
+            self.print(
+                f"Exception: {e} .. msg: {msg} in " f"data_request_callback()",
+                0,
+                1,
+            )
 
     def set_evidence_malicious_ip(
-        self, ip_info: dict, threat_level: str, confidence: float
+        self, ip_info: dict, threat_level: float, confidence: float
     ):
         """
         Set an evidence for a malicious IP met in the timewindow
@@ -430,13 +408,12 @@ class Trust(IModule):
         :param threat_level: the threat level we learned form the network
         :param confidence: how confident the network opinion is about this opinion
         """
-
         attacker_ip: str = ip_info.get("ip")
         profileid = ip_info.get("profileid")
         saddr = profileid.split("_")[-1]
 
-        threat_level = utils.threat_level_to_string(threat_level)
-        threat_level = ThreatLevel[threat_level.upper()]
+        threat_level: str = utils.threat_level_to_string(threat_level)
+        threat_level: ThreatLevel = ThreatLevel[threat_level.upper()]
         twid_int = int(ip_info.get("twid").replace("timewindow", ""))
 
         if "src" in ip_info.get("ip_state"):
@@ -495,7 +472,6 @@ class Trust(IModule):
         :return: None, the result is saved into the redis
             database under key `p2p4slips`
         """
-
         # make sure that IP address is valid
         # and cache age is a valid timestamp from the past
         ip_info = validate_slips_data(message_data)
@@ -504,7 +480,6 @@ class Trust(IModule):
             # print(f"DEBUGGING: IP address is not valid:
             # {ip_info}, not asking the network")
             return
-
         # ip_info is {
         #             'ip': str(saddr),
         #             'profileid' : str(profileid),
@@ -520,12 +495,15 @@ class Trust(IModule):
         # if data is in cache and is recent enough,
         # nothing happens and Slips should just check the database
         (
-            score,
-            confidence,
-            network_score,
-            timestamp,
+            cached_score,
+            cached_confidence,
+            cached_network_score,
+            cached_timestamp,
         ) = self.trust_db.get_cached_network_opinion("ip", ip_address)
-        if score is not None and time.time() - timestamp < cache_age:
+        if (
+            cached_score is not None
+            and time.time() - cached_timestamp < cache_age
+        ):
             # cached value is ok, do nothing
             # print("DEBUGGING:  cached value is ok, not asking the network.")
             return
@@ -547,6 +525,7 @@ class Trust(IModule):
         time.sleep(2)
 
         # get data from db, processed by the trust model
+        # this score and confidence are the network's opinion
         (
             combined_score,
             combined_confidence,
@@ -556,8 +535,6 @@ class Trust(IModule):
             ip_address,
             combined_score,
             combined_confidence,
-            network_score,
-            confidence,
             ip_info,
         )
 
@@ -566,42 +543,30 @@ class Trust(IModule):
         ip,
         combined_score,
         combined_confidence,
-        network_score,
-        confidence,
         ip_info,
     ):
         """
         stores the reported score and confidence about the ip and adds an
-        evidence if necessary
+        evidence if necessary like when the peers report a malicious ip
         """
         # no data in db - this happens when testing,
         # if there is not enough data on peers
-        if combined_score is None:
-            self.print(
-                f"No data received from the" f" network about {ip}\n", 0, 2
-            )
+        if combined_score is None or combined_confidence is None:
+            self.print(f"No data received from the network about {ip}\n", 0, 2)
             return
 
         self.print(
             f"The Network shared some data about {ip}, "
             f"Shared data: score={combined_score}, "
-            f"confidence={combined_confidence} saving it to  now!\n",
+            f"confidence={combined_confidence} saving it now!\n",
             0,
             2,
         )
 
-        # save it to IPsInfo hash in p2p4slips key in the db
-        # AND p2p_reports key
-        p2p_utils.save_ip_report_to_db(
-            ip,
-            combined_score,
-            combined_confidence,
-            network_score,
-            self.db,
-            self.storage_name,
-        )
-        if int(combined_score) * int(confidence) > 0:
-            self.set_evidence_malicious_ip(ip_info, combined_score, confidence)
+        if combined_score * combined_confidence > 0:
+            self.set_evidence_malicious_ip(
+                ip_info, combined_score, combined_confidence
+            )
 
     def respond_to_message_request(self, key, reporter):
         # todo do you mean another peer is asking me about
@@ -636,7 +601,8 @@ class Trust(IModule):
             self.trust_db.__del__()
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
+        self._init_log_files()
         # configure process
         self._configure()
         # check if it was possible to start up pigeon
@@ -647,15 +613,17 @@ class Trust(IModule):
             )
             return 1
 
-        # create_p2p_logfile is taken from slips.yaml
-        if self.create_p2p_logfile:
-            # rotates p2p.log file every 1 day
-            utils.start_thread(self.rotator_thread, self.db)
-
         # should call self.update_callback
         # self.c4 = self.db.subscribe(self.slips_update_channel)
 
     def main(self):
+        if self.create_p2p_logfile:
+            # rotates p2p.log file every 1 day
+            now = time.time()
+            if now - self.last_log_rotation_time >= self.rotation_period:
+                open(self.pigeon_logfile, "w").close()
+                self.last_log_rotation_time = now
+
         if msg := self.get_msg("report_to_peers"):
             self.new_evidence_callback(msg)
 

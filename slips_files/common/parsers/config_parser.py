@@ -664,6 +664,7 @@ class ConfigParser(object):
         # don't run blocking module unless specified
         if not ("-cb" in sys.argv or "-p" in sys.argv):
             to_ignore.append("blocking")
+            to_ignore.append("arp_poisoner")
 
         # leak detector only works on pcap files
         if input_type != "pcap":

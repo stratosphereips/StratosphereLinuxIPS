@@ -801,14 +801,9 @@ def test_add_new_tw(
     expected_update_threat_level_call,
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.update_threat_level = MagicMock()
-
     handler.add_new_tw(profileid, timewindow, startoftw)
 
     handler.r.zadd.assert_called_once_with(*expected_zadd_call.args)
-    handler.update_threat_level.assert_called_once_with(
-        *expected_update_threat_level_call.args
-    )
 
 
 @pytest.mark.parametrize(
@@ -2408,7 +2403,6 @@ def test_add_profile_new_profile():
 
     handler.set_new_ip = MagicMock()
     handler.publish = MagicMock()
-    handler.update_threat_level = MagicMock()
 
     profileid = "profile_1"
     starttime = 1678886400.0
@@ -2430,9 +2424,6 @@ def test_add_profile_new_profile():
     ip = profileid.split(handler.separator)[1]
     handler.set_new_ip.assert_called_once_with(ip)
     handler.publish.assert_called_once_with("new_profile", ip)
-    handler.update_threat_level.assert_called_once_with(
-        profileid, "info", 0.05
-    )
 
 
 def test_add_profile_existing_profile():

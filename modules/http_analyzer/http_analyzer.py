@@ -13,7 +13,7 @@ from modules.http_analyzer.set_evidence import SetEvidenceHelper
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.async_module import AsyncModule
+from slips_files.common.abstracts.iasync_module import AsyncModule
 
 
 ESTAB = "Established"
@@ -628,7 +628,7 @@ class HTTPAnalyzer(AsyncModule):
         await asyncio.gather(*self.tasks, return_exceptions=True)
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
 
     async def main(self):
         if msg := self.get_msg("new_http"):

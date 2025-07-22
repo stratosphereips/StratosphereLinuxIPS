@@ -72,6 +72,7 @@ class Checker:
         if self.main.args.interface and self.main.args.filepath:
             print("Only -i or -f is allowed. Stopping slips.")
             self.main.terminate_slips()
+            return
 
         if (
             self.main.args.interface or self.main.args.filepath
@@ -80,16 +81,19 @@ class Checker:
                 "You can't use --input-module with -f or -i. Stopping slips."
             )
             self.main.terminate_slips()
+            return
 
         if (self.main.args.save or self.main.args.db) and os.getuid() != 0:
             print("Saving and loading the database requires root privileges.")
             self.main.terminate_slips()
+            return
 
         if (self.main.args.verbose and int(self.main.args.verbose) > 3) or (
             self.main.args.debug and int(self.main.args.debug) > 3
         ):
             print("Debug and verbose values range from 0 to 3.")
             self.main.terminate_slips()
+            return
 
         # Check if redis server running
         if (
@@ -98,6 +102,7 @@ class Checker:
         ):
             print("Redis database is not running. Stopping Slips")
             self.main.terminate_slips()
+            return
 
         if self.main.args.config and not os.path.exists(self.main.args.config):
             print(f"{self.main.args.config} doesn't exist. Stopping Slips")
@@ -108,6 +113,7 @@ class Checker:
                 "Warning: P2P is only supported using "
                 "an interface. P2P Disabled."
             )
+            return
 
         if self.main.conf.use_global_p2p() and not (
             self.main.args.interface or self.main.args.growing
@@ -116,6 +122,7 @@ class Checker:
                 "Warning: Global P2P (Fides Module + Iris Module) is only supported using "
                 "an interface. Global P2P (Fides Module + Iris Module) Disabled."
             )
+            return
 
         if self.main.args.interface:
             interfaces = psutil.net_if_addrs().keys()
@@ -125,6 +132,7 @@ class Checker:
                     f"Stopping Slips"
                 )
                 self.main.terminate_slips()
+                return
 
         # if we're reading flows from some module other than the input
         # process, make sure it exists
@@ -132,25 +140,31 @@ class Checker:
             self.main.args.input_module
         ):
             self.main.terminate_slips()
+            return
 
         # Clear cache if the parameter was included
         if self.main.args.clearcache:
             self.clear_redis_cache()
+            return
+
         # Clear cache if the parameter was included
         if self.main.args.blocking and not self.main.args.interface:
             print(
                 "Blocking is only allowed when running slips using an interface."
             )
             self.main.terminate_slips()
+            return
 
         # kill all open unused redis servers if the parameter was included
         if self.main.args.killall:
             self.main.redis_man.close_open_redis_servers()
             self.main.terminate_slips()
+            return
 
         if self.main.args.version:
             self.main.print_version()
             self.main.terminate_slips()
+            return
 
         if (
             self.main.args.interface
@@ -159,8 +173,9 @@ class Checker:
         ):
             # If the user wants to blocks, we need permission to modify
             # iptables
-            print("Run Slips with sudo to use the blocking module.")
+            print("Run Slips with sudo to use the blocking modules.")
             self.main.terminate_slips()
+            return
 
         if self.main.args.clearblocking:
             if os.geteuid() != 0:
@@ -171,11 +186,13 @@ class Checker:
             else:
                 self.delete_blocking_chain()
             self.main.terminate_slips()
+            return
 
         # Check if user want to save and load a db at the same time
         if self.main.args.save and self.main.args.db:
             print("Can't use -s and -d together")
             self.main.terminate_slips()
+            return
 
     def delete_blocking_chain(self):
         from modules.blocking.slips_chain_manager import (

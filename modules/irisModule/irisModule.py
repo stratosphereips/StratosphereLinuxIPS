@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 import json
 import os
 import subprocess
@@ -61,7 +61,7 @@ class IrisModule(IModule):
                     "Tl2NlChannel": "iris_internal",
                 }
             if "Server" in config:
-                #config["Server"]["Port"] = 9010
+                # config["Server"]["Port"] = 9010
                 config["Server"]["Host"] = self.db.get_host_ip()
                 config["Server"]["DhtServerMode"] = "true"
             else:

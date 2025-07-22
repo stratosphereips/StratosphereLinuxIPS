@@ -9,7 +9,7 @@ import ipaddress
 import validators
 
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.abstracts.module import IModule
+from slips_files.common.abstracts.imodule import IModule
 from slips_files.core.structures.evidence import (
     ThreatLevel,
     Evidence,
@@ -247,7 +247,7 @@ class CESNET(IModule):
         self.db.add_ips_to_ioc(src_ips)
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
         # Stop module if the configuration file is invalid or not found
         if self.stop_module:
             return 1

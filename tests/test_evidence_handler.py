@@ -35,7 +35,7 @@ def test_decide_blocking(
     profileid, our_ips, expected_result, expected_publish_call_count
 ):
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
-    evidence_handler.blocking_module_supported = True
+    evidence_handler.blocking_modules_supported = True
     evidence_handler.our_ips = our_ips
     with patch.object(evidence_handler.db, "publish") as mock_publish:
         tw = TimeWindow(
@@ -97,7 +97,7 @@ def setup_handler(popup_enabled, blocked, mark_blocked=None):
     evidence = {"k": MagicMock(spec=Evidence)}
 
     handler.db.set_alert = MagicMock()
-    handler.decide_blocking = MagicMock(side_effect=[None, mark_blocked])
+    handler.decide_blocking = MagicMock(side_effect=[False, mark_blocked])
     handler.db.is_blocked_profile_and_tw = MagicMock(return_value=blocked)
     handler.send_to_exporting_module = MagicMock()
     handler.formatter.format_evidence_for_printing = MagicMock(
@@ -146,8 +146,8 @@ def test_handle_new_alert_not_blocked(popup_enabled, expect_popup):
     else:
         handler.show_popup.assert_not_called()
 
-    handler.db.mark_profile_and_timewindow_as_blocked.assert_called_once()
-    handler.log_alert.assert_called_once_with(alert, blocked=True)
+    handler.db.mark_profile_and_timewindow_as_blocked.assert_not_called()
+    handler.log_alert.assert_called_once_with(alert, blocked=False)
 
 
 @pytest.mark.parametrize(
@@ -339,28 +339,23 @@ def test_send_to_exporting_module():
 @pytest.mark.parametrize(
     "sys_argv, running_non_stop, expected_result",
     [
-        # Testcase 1: running non stop with -p enabled
+        # testcase 1: running non stop with -p enabled
         (["-i", "-p"], True, True),
-        # Testcase 2: custom flows but the module is disabled
+        # testcase 2: custom flows but the module is disabled
         (["-i", "-im"], False, False),
-        # Testcase 3: -i not in sys.argv and
-        # is_running_on_interface returns False
+        # testcase 3: -i not in sys.argv and not running non stop
         ([], False, False),
     ],
 )
-def test_is_blocking_module_enabled(
+def test_is_blocking_module_supported(
     sys_argv, running_non_stop, expected_result
 ):
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
     evidence_handler.is_running_non_stop = running_non_stop
 
     with patch("sys.argv", sys_argv):
-        with patch.object(
-            evidence_handler, "is_running_non_stop"
-        ) as mock_is_running_non_stop:
-            mock_is_running_non_stop.return_value = running_non_stop
-            result = evidence_handler.is_blocking_module_supported()
-        assert result == expected_result
+        result = evidence_handler.is_blocking_modules_supported()
+    assert result == expected_result
 
 
 @pytest.mark.parametrize(
