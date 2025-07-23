@@ -14,3 +14,6 @@
 	path = feel_project
 	url = https://github.com/stratosphereips/feel_project
     branch = main
+[submodule "dataset_testing"]
+	path = dataset_testing
+	url = https://github.com/stratosphereips/security-datasets-for-testing

@@ -193,7 +193,7 @@ modules:
   # (they all should be lowercase with no special characters). Example,
   # threatintelligence, blocking, networkdiscovery, timeline, virustotal,
   # rnnccdetection, flowmldetection, updatemanager
-  disable: [template,network,arp,rnn,alert,timeline,threat,http]
+  disable: [template,network,arp,rnn,alert,timeline,threat,http,virustotal,risk,info]
 
   # For each line in timeline file there is a timestamp.
   # By default the timestamp is seconds in unix time. However

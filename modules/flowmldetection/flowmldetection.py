@@ -342,6 +342,8 @@ class FlowMLDetection(IModule):
             labels = self.db.get_labels()
             if len(labels) == 1:
                 # Insert fake flows for both classes if needed
+
+                # I dont like this hack. feels weird, may bias the model in some way??
                 new_flows.append(
                     {
                         "starttime": 1594417039.029793,
@@ -438,6 +440,11 @@ class FlowMLDetection(IModule):
                     x_flow = x_flow.drop(field, axis=1)
                 except (KeyError, ValueError):
                     pass
+
+            # temp fix:
+            if "bytes" in x_flow.columns:
+                x_flow = x_flow.rename(columns={"bytes": "allbytes"})
+
             # Scale the flow
             try:
                 x_flow: numpy.ndarray = self.scaler.transform(x_flow)
@@ -451,7 +458,8 @@ class FlowMLDetection(IModule):
                 self.print("Flow to predict:")
                 self.print(x_flow, 0, 1)
                 # self.print(traceback.format_exc(), 0, 1)
-                return None
+                # in develop: [dur, proto, sport, dport, spkts, dpkts, sbytes, state, ground_truth_label, detailed_ground_truth_label, allbytes, pkts, label, module_labels]
+                # In my branch: dur proto  sport  dport  spkts  dpkts  sbytes  dbytes  state ground_truth_label detailed_ground_truth_label   label  module_labels  bytes  pkts
 
             return pred
         except Exception as e:
@@ -480,27 +488,49 @@ class FlowMLDetection(IModule):
             self.print("Reading the trained model from disk.", 0, 2)
             with open(self.model_path, "rb") as f:
                 self.clf = pickle.load(f)
+        except Exception as e:
+            # If there is no model, create one empty
+            if isinstance(e, FileNotFoundError):
+                # If the file does not exist, create a new model
+                self.print(
+                    "There was no model. " "Creating a new empty model.", 0, 2
+                )
+            elif isinstance(e, EOFError):
+                self.print(
+                    "Error reading model from disk. "
+                    "Creating a new empty model.",
+                    0,
+                    2,
+                )
+            self.clf = SGDClassifier(
+                warm_start=True,
+                loss="hinge",
+                penalty="l1",  # warm start not needed, setting new model up?
+                # experiments: penalty, class weights, losses? validation and such?
+            )
+
+        # Read the scaler
+        try:
             self.print("Reading the trained scaler from disk.", 0, 2)
             with open(self.scaler_path, "rb") as g:
                 self.scaler = pickle.load(g)
-        except FileNotFoundError:
-            # If there is no model, create one empty
-            self.print(
-                "There was no model. " "Creating a new empty model.", 0, 2
-            )
-            self.clf = SGDClassifier(
-                warm_start=True, loss="hinge", penalty="l1"
-            )
-        except EOFError:
-            self.print(
-                "Error reading model from disk. "
-                "Creating a new empty model.",
-                0,
-                2,
-            )
-            self.clf = SGDClassifier(
-                warm_start=True, loss="hinge", penalty="l1"
-            )
+        except Exception as e:
+            # If there is no scaler, create one empty
+            if isinstance(e, FileNotFoundError):
+                # If the file does not exist, create a new scaler
+                self.print(
+                    "There was no scaler. " "Creating a new empty scaler.",
+                    0,
+                    2,
+                )
+            elif isinstance(e, EOFError):
+                self.print(
+                    "Error reading scaler from disk. "
+                    "Creating a new empty scaler.",
+                    0,
+                    2,
+                )
+            self.scaler = StandardScaler()
 
     def set_evidence_malicious_flow(self, flow: dict, twid: str):
         confidence: float = 0.1
@@ -606,7 +636,6 @@ class FlowMLDetection(IModule):
                         )
 
             elif self.mode == "test":
-                self.print("testing testing")
                 # We are testing, which means using the model to detect
                 processed_flow = self.process_flow(self.flow)
                 # After processing the flow, it may happen that we
@@ -626,6 +655,12 @@ class FlowMLDetection(IModule):
                     if not pred:
                         # an error occurred
                         return
+
+                    self.print(
+                        f"Prediction {pred[0]} for label: {original_label} -->",
+                        1,
+                        0,
+                    )
 
                     if pred[0] == MALICIOUS:
                         # Generate an alert
@@ -674,7 +709,7 @@ class FlowMLDetection(IModule):
                                 f"False Negative Flow: {self.flow}"
                             )
 
-                        self.print("logging testing performance metrics")
+                        self.print("logging testing performance metrics", 2, 0)
                         # Log the testing performance metrics
                         self.write_to_log(
                             f"TP: {self.tp}, TN: {self.tn},"
