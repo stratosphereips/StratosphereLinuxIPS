@@ -5,8 +5,10 @@ from asyncio import Task
 from typing import (
     Callable,
     List,
+    Optional,
 )
 from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.slips_utils import utils
 
 
 class IAsyncModule(IModule):
@@ -21,7 +23,7 @@ class IAsyncModule(IModule):
         # list of async functions to await before flowalerts shuts down
         self.tasks: List[Task] = []
 
-    def init(self, **kwargs):
+    async def init(self, **kwargs):
         # PS don't call the self.db from any of the modukes' init()
         # methods, init can't be async, and most db calls are async,
         # so instead, put your async logic in the pre_main() method
@@ -83,17 +85,42 @@ class IAsyncModule(IModule):
         loop.set_exception_handler(self.handle_exception)
         return loop.run_until_complete(func())
 
+    async def get_msg(self, channel: str) -> Optional[dict]:
+
+        # This is a yield point to the event loop.
+        # Forces the coroutine to yield control and give the event loop a
+        # chance to run other tasks.
+        # Prevents your loop from hogging the CPU when no message is received.
+        try:
+            message = await self.db.get_message(channel)
+
+            if utils.is_msg_intended_for(message, channel):
+                self.channel_tracker[channel]["msg_received"] = True
+                self.db.incr_msgs_received_in_channel(self.name, channel)
+                return message
+
+            self.channel_tracker[channel]["msg_received"] = False
+        except KeyboardInterrupt:
+            return None
+
     def run(self):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
         try:
+            self.pubsub = self.run_async_function(self.db.rdb.pubsub)
+            self.run_async_function(self.init)
+            # should be after the module's init() so the module has a chance to
+            # set its own channels
+            self.channel_tracker = self.init_channel_tracker()
+
             error: bool = self.run_async_function(self.pre_main)
             if error or self.should_stop():
                 self.run_async_function(
                     self.gather_tasks_and_shutdown_gracefully
                 )
                 return
+
         except KeyboardInterrupt:
             self.run_async_function(self.gather_tasks_and_shutdown_gracefully)
             return

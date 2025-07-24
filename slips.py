@@ -62,9 +62,6 @@ async def main():
         await slips.start()
 
 
-####################
-# Main execution block
-####################
 if __name__ == "__main__":
     # Use asyncio.run() to run your top-level async main function
     asyncio.run(main())

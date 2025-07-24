@@ -601,7 +601,7 @@ class Main:
                 await self.proc_man.load_modules()
                 # give outputprocess time to print all the started modules
                 time.sleep(0.5)
-                await self.proc_man.print_disabled_modules()
+                self.proc_man.print_disabled_modules()
 
             if self.args.webinterface:
                 self.ui_man.start_webinterface()

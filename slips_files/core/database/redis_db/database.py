@@ -25,7 +25,6 @@ from typing import (
     Dict,
     Optional,
     Tuple,
-    Callable,
 )
 from cachetools import TTLCache
 
@@ -433,23 +432,16 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
     async def subscribe(
         self,
-        channels_and_handlers: Dict[str, Callable],
-        ignore_subscribe_messages=True,
+        pubsub,
+        channels: List[str],
     ):
-        """Subscribe to channel"""
-        # filter unsupported channels
-        handlers = {}
-        for channel, handler in channels_and_handlers.items():
+        """
+        Subscribes to the given channels
+        """
+        for channel in channels:
             if channel not in self.supported_channels:
                 continue
-            handlers.update({channel: handler})
-
-        self.pubsub = self.r.pubsub(
-            ignore_subscribe_messages=ignore_subscribe_messages
-        )
-
-        await self.pubsub.subscribe(**handlers)
-        return self.pubsub
+            await pubsub.subscribe(channel)
 
     async def publish_stop(self):
         """
@@ -604,7 +596,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             return
 
     async def get_message(
-        self, channel_obj: redis.client.PubSub, timeout=0.0000001
+        self, pubsub: redis.client.PubSub, timeout=0.0000001
     ):
         """
         Wrapper for redis' get_message() to be able to handle
@@ -614,7 +606,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         :param channel_obj: PubSub obj of the channel
         """
         try:
-            msg = await channel_obj.get_message(timeout=timeout)
+            msg = await self.pubsub.get_message(timeout=timeout)
             await self._track_flow_processing_rate(msg)
             return msg
         except redis.ConnectionError as ex:
@@ -644,7 +636,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 time.sleep(self.backoff)
                 self.backoff = self.backoff * 2
                 self.connection_retry += 1
-                return await self.get_message(channel_obj, timeout)
+                return await self.get_message(pubsub, timeout)
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)

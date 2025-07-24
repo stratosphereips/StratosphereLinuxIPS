@@ -26,7 +26,8 @@ class IModule(ABC, Process):
     name = "IModule"
     description = "Template module"
     authors = ["Template Author"]
-    # should be filled with the channels each module subscribes to
+    # should be filled with the channels each module subscribes to and
+    # their handlers
     channels = {}
 
     def __init__(
