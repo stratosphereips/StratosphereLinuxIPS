@@ -37,6 +37,7 @@ class Whitelist:
         self.db = db
         self.match = WhitelistMatcher()
         self.parser = WhitelistParser(self.db, self)
+
         self.ip_analyzer = IPAnalyzer(self.db, whitelist_manager=self)
         self.domain_analyzer = DomainAnalyzer(self.db, whitelist_manager=self)
         self.mac_analyzer = MACAnalyzer(self.db, whitelist_manager=self)
@@ -47,11 +48,12 @@ class Whitelist:
         conf = ConfigParser()
         self.enable_local_whitelist: bool = conf.enable_local_whitelist()
 
-    def update(self):
+    async def update(self):
         """
         parses the local whitelist specified in the slips.yaml
         and stores the parsed results in the db
         """
+        await self.parser.create()
         self.parser.parse()
         self.db.set_whitelist("IPs", self.parser.whitelisted_ips)
         self.db.set_whitelist("domains", self.parser.whitelisted_domains)

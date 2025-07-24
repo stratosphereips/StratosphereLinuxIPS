@@ -1488,13 +1488,13 @@ class UpdateManager(IAsyncModule):
         whitelisted_orgs: list = list(whitelisted_orgs.keys())
         return whitelisted_orgs
 
-    def update_local_whitelist(self):
+    async def update_local_whitelist(self):
         """
         parses the local whitelist using the whitelist
          parser and stores it in the db
         """
         if self.enable_local_whitelist:
-            self.whitelist.update()
+            await self.whitelist.update()
 
     async def update_org_files(self):
         for org in utils.supported_orgs:
@@ -1502,13 +1502,13 @@ class UpdateManager(IAsyncModule):
             org_asn = os.path.join(self.org_info_path, f"{org}_asn")
             org_domains = os.path.join(self.org_info_path, f"{org}_domains")
             if self.check_if_update_org(org_ips):
-                self.whitelist.parser.load_org_ips(org)
+                await self.whitelist.parser.load_org_ips(org)
 
             if self.check_if_update_org(org_domains):
-                self.whitelist.parser.load_org_domains(org)
+                await self.whitelist.parser.load_org_domains(org)
 
             if self.check_if_update_org(org_asn):
-                self.whitelist.parser.load_org_asn(org)
+                await self.whitelist.parser.load_org_asn(org)
 
             for file in (org_ips, org_domains, org_asn):
                 info = {
@@ -1722,7 +1722,7 @@ class UpdateManager(IAsyncModule):
             # before updating any feeds, make sure that the cached feeds
             # are not using any feed that is not given in the config of
             # this run (self.url_feeds, self.ja3_feeds, self.ssl_feeds)
-            self.delete_unused_cached_remote_feeds()
+            await self.delete_unused_cached_remote_feeds()
 
             for file_to_download in files_to_download:
                 if await self.should_update(

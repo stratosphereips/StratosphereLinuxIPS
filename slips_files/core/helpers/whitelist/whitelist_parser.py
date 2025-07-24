@@ -18,10 +18,9 @@ class WhitelistParser:
         # to have access to the print function
         self.manager = manager
         self.read_configuration()
-        self.init_whitelists()
         self.org_info_path = "slips_files/organizations_info/"
 
-    def init_whitelists(self):
+    async def create(self):
         """
         initializes the dicts we'll be using for storing the parsed
         whitelists.
@@ -31,14 +30,16 @@ class WhitelistParser:
         self.whitelisted_domains = {}
         self.whitelisted_orgs = {}
         self.whitelisted_mac = {}
-        if self.db.has_cached_whitelist():
+        if await self.db.has_cached_whitelist():
             # since this parser can run when the user modifies whitelist.conf
             # and not just when the user starts slips
             # we need to check if the dicts are already there in the cache db
-            self.whitelisted_ips = self.db.get_whitelist("IPs")
-            self.whitelisted_domains = self.db.get_whitelist("domains")
-            self.whitelisted_orgs = self.db.get_whitelist("organizations")
-            self.whitelisted_mac = self.db.get_whitelist("mac")
+            self.whitelisted_ips = await self.db.get_whitelist("IPs")
+            self.whitelisted_domains = await self.db.get_whitelist("domains")
+            self.whitelisted_orgs = await self.db.get_whitelist(
+                "organizations"
+            )
+            self.whitelisted_mac = await self.db.get_whitelist("mac")
 
     def get_dict_for_storing_data(self, data_type: str):
         """
@@ -178,7 +179,7 @@ class WhitelistParser:
         }
         handlers[entry_type](parsed_line["data"], entry_details)
 
-    def load_org_asn(self, org) -> Optional[List[str]]:
+    async def load_org_asn(self, org) -> Optional[List[str]]:
         """
         Reads the specified org's asn from slips_files/organizations_info
          and stores the info in the database
@@ -196,10 +197,10 @@ class WhitelistParser:
             line = line.replace("\n", "").strip()
             org_asn.append(line.upper())
         org_asn_file.close()
-        self.db.set_org_info(org, json.dumps(org_asn), "asn")
+        await self.db.set_org_info(org, json.dumps(org_asn), "asn")
         return org_asn
 
-    def load_org_domains(self, org):
+    async def load_org_domains(self, org):
         """
         Reads the specified org's domains from
         slips_files/organizations_info
@@ -220,7 +221,7 @@ class WhitelistParser:
             domains.append(line.lower())
         domain_info.close()
 
-        self.db.set_org_info(org, json.dumps(domains), "domains")
+        await self.db.set_org_info(org, json.dumps(domains), "domains")
         return domains
 
     def is_valid_network(self, network: str) -> bool:
@@ -230,7 +231,7 @@ class WhitelistParser:
         except ValueError:
             return False
 
-    def load_org_ips(self, org) -> Optional[Dict[str, List[str]]]:
+    async def load_org_ips(self, org) -> Optional[Dict[str, List[str]]]:
         """
         Reads the specified org's info from slips_files/organizations_info
         and stores the info in the database
@@ -268,7 +269,7 @@ class WhitelistParser:
                 org_subnets[first_octet] = [line]
 
         org_info.close()
-        self.db.set_org_info(org, json.dumps(org_subnets), "IPs")
+        await self.db.set_org_info(org, json.dumps(org_subnets), "IPs")
         return org_subnets
 
     def parse(self) -> bool:
