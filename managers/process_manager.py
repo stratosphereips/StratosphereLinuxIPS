@@ -89,7 +89,7 @@ class ProcessManager:
         # self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.
         # get_bootstrapping_setting()
 
-    def start_output_process(self, stderr, slips_logfile, stdout=""):
+    async def start_output_process(self, stderr, slips_logfile, stdout=""):
         output_process = Output(
             stdout=stdout,
             stderr=stderr,
@@ -102,7 +102,7 @@ class ProcessManager:
         self.slips_logfile = output_process.slips_logfile
         return output_process
 
-    def start_profiler_process(self):
+    async def start_profiler_process(self):
         profiler_process = Profiler(
             self.main.logger,
             self.main.args.output,
@@ -122,10 +122,10 @@ class ProcessManager:
             1,
             0,
         )
-        self.main.db.store_pid("Profiler", int(profiler_process.pid))
+        await self.main.db.store_pid("Profiler", int(profiler_process.pid))
         return profiler_process
 
-    def start_evidence_process(self):
+    async def start_evidence_process(self):
         evidence_process = EvidenceHandler(
             self.main.logger,
             self.main.args.output,
@@ -142,10 +142,12 @@ class ProcessManager:
             1,
             0,
         )
-        self.main.db.store_pid("EvidenceHandler", int(evidence_process.pid))
+        await self.main.db.store_pid(
+            "EvidenceHandler", int(evidence_process.pid)
+        )
         return evidence_process
 
-    def start_input_process(self):
+    async def start_input_process(self):
         input_process = Input(
             self.main.logger,
             self.main.args.output,
@@ -171,7 +173,7 @@ class ProcessManager:
             1,
             0,
         )
-        self.main.db.store_pid("Input", int(input_process.pid))
+        await self.main.db.store_pid("Input", int(input_process.pid))
         return input_process
 
     def kill_process_tree(self, pid: int):
@@ -191,14 +193,16 @@ class ProcessManager:
         for child_pid in process_list:
             self.kill_process_tree(int(child_pid))
 
-    def kill_all_children(self):
+    async def kill_all_children(self):
         """
         kills all processes that are not done
         in self.processes and prints the name of stopped ones
         """
         for process in self.processes:
             process: Process
-            module_name: str = self.main.db.get_name_of_module_at(process.pid)
+            module_name: str = await self.main.db.get_name_of_module_at(
+                process.pid
+            )
             if not module_name:
                 # if it's a thread started by one of the modules or
                 # by slips.py, we don't have it stored in
@@ -386,7 +390,7 @@ class ProcessManager:
         print("-" * 27)
         self.main.print(f"Disabled Modules: {self.modules_to_ignore}", 1, 0)
 
-    def load_modules(self):
+    async def load_modules(self):
         """responsible for starting all the modules in the modules/ dir"""
         modules_to_call = self.get_modules()[0]
         for module_name in modules_to_call:
@@ -401,7 +405,7 @@ class ProcessManager:
                 self.main.pid,
             )
             module.start()
-            self.main.db.store_pid(module_name, int(module.pid))
+            await self.main.db.store_pid(module_name, int(module.pid))
             self.print_started_module(
                 module_name,
                 module.pid,
@@ -430,7 +434,7 @@ class ProcessManager:
             f"\t{green(module)} \tStopped. " f"" f"{green(modules_left)} left."
         )
 
-    def start_update_manager(self, local_files=False, ti_feeds=False):
+    async def start_update_manager(self, local_files=False, ti_feeds=False):
         """
         starts the update manager process
         PS; this function is blocking, slips.py will not start the rest of the
@@ -459,9 +463,9 @@ class ProcessManager:
                 )
 
                 if local_files:
-                    update_manager.update_ports_info()
-                    update_manager.update_org_files()
-                    update_manager.update_local_whitelist()
+                    await update_manager.update_ports_info()
+                    await update_manager.update_org_files()
+                    await update_manager.update_local_whitelist()
 
                 if ti_feeds:
                     update_manager.print("Updating TI feeds")
@@ -500,7 +504,9 @@ class ProcessManager:
         self.warning_printed_once = True
         return True
 
-    def get_hitlist_in_order(self) -> Tuple[List[Process], List[Process]]:
+    async def get_hitlist_in_order(
+        self,
+    ) -> Tuple[List[Process], List[Process]]:
         """
         returns a list of PIDs that slips should terminate first,
          and pids that should be killed last
@@ -513,16 +519,18 @@ class ProcessManager:
         # slips won't reach this function unless they are done already.
         # so no need to kill them last
         pids_to_kill_last = [
-            self.main.db.get_pid_of("EvidenceHandler"),
+            await self.main.db.get_pid_of("EvidenceHandler"),
         ]
 
         if self.main.args.blocking:
-            pids_to_kill_last.append(self.main.db.get_pid_of("Blocking"))
-            pids_to_kill_last.append(self.main.db.get_pid_of("ARP Poisoner"))
-
-        if "exporting_alerts" not in self.main.db.get_disabled_modules():
+            pids_to_kill_last.append(await self.main.db.get_pid_of("Blocking"))
             pids_to_kill_last.append(
-                self.main.db.get_pid_of("Exporting Alerts")
+                await self.main.db.get_pid_of("ARP Poisoner")
+            )
+
+        if "exporting_alerts" not in await self.main.db.get_disabled_modules():
+            pids_to_kill_last.append(
+                await self.main.db.get_pid_of("Exporting Alerts")
             )
 
         # remove all None PIDs. this happens when a module in that list
@@ -569,12 +577,12 @@ class ProcessManager:
 
         return alive_processes
 
-    def get_analysis_time(self) -> Tuple[str, str]:
+    async def get_analysis_time(self) -> Tuple[str, str]:
         """
         Returns how long slips took to analyze the given file
         returns analysis_time in minutes and slips end_time as a date
         """
-        start_time = self.main.db.get_slips_start_time()
+        start_time = await self.main.db.get_slips_start_time()
         end_time = utils.convert_ts_format(datetime.now(), "unixtimestamp")
         return (
             utils.get_time_diff(start_time, end_time, return_type="minutes"),
@@ -705,7 +713,7 @@ class ProcessManager:
         )
         return input_done_processing and profiler_done_processing
 
-    def kill_daemon_children(self):
+    async def kill_daemon_children(self):
         """
         kills the processes started by the daemon
         """
@@ -714,7 +722,7 @@ class ProcessManager:
         # they are the children of the slips.py that ran using -D
         # (so they started on a previous run)
         # and we only have access to the PIDs
-        children = self.main.db.get_pids().items()
+        children = await self.main.db.get_pids().items()
         for module_name, pid in children:
             self.kill_process_tree(int(pid))
             self.print_stopped_module(module_name)
@@ -729,7 +737,7 @@ class ProcessManager:
         else:
             return self.main.print
 
-    def shutdown_gracefully(self):
+    async def shutdown_gracefully(self):
         """
         Wait for all modules to confirm that they're done processing
         or kill them after 15 mins
@@ -751,17 +759,17 @@ class ProcessManager:
             timeout *= 60
 
             # close all tws
-            self.main.db.check_tw_to_close(close_all=True)
+            await self.main.db.check_tw_to_close(close_all=True)
 
             graceful_shutdown = True
             if self.main.mode == "daemonized":
-                self.kill_daemon_children()
-                profiles_len: int = self.main.db.get_profiles_len()
+                await self.kill_daemon_children()
+                profiles_len: int = await self.main.db.get_profiles_len()
                 self.main.daemon.print(f"Total analyzed IPs: {profiles_len}.")
                 self.main.daemon.delete_pidfile()
 
             else:
-                flows_count: int = self.main.db.get_flows_count()
+                flows_count: int = await self.main.db.get_flows_count()
                 print(
                     f"Total flows read (without altflows): " f"{flows_count}",
                     log_to_logfiles_only=True,
@@ -769,7 +777,7 @@ class ProcessManager:
 
                 to_kill_first: List[Process]
                 to_kill_last: List[Process]
-                to_kill_first, to_kill_last = self.get_hitlist_in_order()
+                to_kill_first, to_kill_last = await self.get_hitlist_in_order()
 
                 self.termination_event.set()
 
@@ -805,14 +813,14 @@ class ProcessManager:
                     print(reason)
                     graceful_shutdown = False
 
-                self.kill_all_children()
+                await self.kill_all_children()
 
             if self.main.args.save:
-                self.main.save_the_db()
+                await self.main.save_the_db()
 
             if self.main.conf.export_labeled_flows():
                 format_ = self.main.conf.export_labeled_flows_to().lower()
-                self.main.db.export_labeled_flows(format_)
+                await self.main.db.export_labeled_flows(format_)
 
             # if store_a_copy_of_zeek_files is set to yes in slips.yaml
             # copy the whole zeek_files dir to the output dir
@@ -833,7 +841,7 @@ class ProcessManager:
             self.main.profilers_manager.cpu_profiler_release()
             self.main.profilers_manager.memory_profiler_release()
 
-            self.main.db.close_all_dbs()
+            await self.main.db.close_all_dbs()
             if graceful_shutdown:
                 print(
                     "[Process Manager] Slips shutdown gracefully\n",
