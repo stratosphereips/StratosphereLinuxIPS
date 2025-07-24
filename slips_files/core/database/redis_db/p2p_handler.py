@@ -11,29 +11,29 @@ FIDES_CACHE_KEY = "fides_cache"
 class P2PHandler:
     """
     Helper class for the Redis class in database.py
-    Contains all the logic related Fides module
+    Contains all the logic related to the Fides module
     """
 
     name = "P2PHandlerDB"
 
-    def get_fides_ti(self, target: str):
+    async def get_fides_ti(self, target: str):
         """
-        returns the TI stored for specified target or None
+        Returns the TI stored for the specified target or None
         """
-        return self.r.get(target) or None
+        return await self.r.get(target) or None
 
-    def save_fides_ti(self, target: str, data: str):
+    async def save_fides_ti(self, target: str, data: str):
         """
         :param target: target is used as a key to store the data
         :param data: SlipsThreatIntelligence that is to be saved
         """
-        self.r.set(target, data)
+        await self.r.set(target, data)
 
-    def store_connected_peers(self, peers: List[str]):
-        self.r.set("connected_peers", json.dumps(peers))
+    async def store_connected_peers(self, peers: List[str]):
+        await self.r.set("connected_peers", json.dumps(peers))
 
-    def get_connected_peers(self):
-        json_list = self.r.get("connected_peers") or None
+    async def get_connected_peers(self):
+        json_list = await self.r.get("connected_peers") or None
 
         if json_list is None:
             return []
@@ -41,51 +41,55 @@ class P2PHandler:
             json_peers = json.loads(json_list)
             return json_peers
 
-    def store_peer_td(self, peer_id, td: str):
-        self.r.sadd(trust, peer_id)
-        self.r.hset(hash, peer_id, td)
+    async def store_peer_td(self, peer_id, td: str):
+        await self.r.sadd(trust, peer_id)
+        await self.r.hset(hash, peer_id, td)
 
-    def get_peer_td(self, peer_id: str):
+    async def get_peer_td(self, peer_id: str):
         """
         Get peer trust data by peer_id.
         """
-        return self.r.hget(hash, peer_id)
+        return await self.r.hget(hash, peer_id)
 
-    def update_peer_td(self, peer_id: str, updated_td: str):
+    async def update_peer_td(self, peer_id: str, updated_td: str):
         """
         Update peer information.
         """
-        if self.r.sismember(trust, peer_id):
-            self.r.hset(hash, peer_id, updated_td)
+        if await self.r.sismember(trust, peer_id):
+            await self.r.hset(hash, peer_id, updated_td)
         else:
-            self.store_peer_td(peer_id, updated_td)
+            await self.store_peer_td(peer_id, updated_td)
 
-    def get_all_peers_td(self):
+    async def get_all_peers_td(self):
         """
         Get all connected peers trust data.
         """
-        peer_ids = self.r.smembers(trust)
-        peers = {peer_id: self.r.hget(hash, peer_id) for peer_id in peer_ids}
+        peer_ids = await self.r.smembers(trust)
+        peers = {
+            peer_id: await self.r.hget(hash, peer_id) for peer_id in peer_ids
+        }
         return peers
 
-    def remove_peer_td(self, peer_id: str):
+    async def remove_peer_td(self, peer_id: str):
         """
         Remove a peer trust data from the set and hash.
         """
-        self.r.srem(trust, peer_id)
-        self.r.hdel(hash, peer_id)
+        await self.r.srem(trust, peer_id)
+        await self.r.hdel(hash, peer_id)
 
-    def cache_network_opinion(self, target: str, opinion: dict, time: float):
+    async def cache_network_opinion(
+        self, target: str, opinion: dict, time: float
+    ):
         cache_key = f"{FIDES_CACHE_KEY}:{target}"
 
         cache_data = {"created_seconds": time, **opinion}
-        self.r.hmset(cache_key, cache_data)
+        await self.r.hmset(cache_key, cache_data)
 
-    def get_cached_network_opinion(
+    async def get_cached_network_opinion(
         self, target: str, cache_valid_seconds: int, current_time: float
     ):
         cache_key = f"{FIDES_CACHE_KEY}:{target}"
-        cache_data = self.r.hgetall(cache_key)
+        cache_data = await self.r.hgetall(cache_key)
         if not cache_data:
             return None
 
@@ -96,7 +100,7 @@ class P2PHandler:
         # Check if the cached entry is still valid
         if current_time - created_seconds > cache_valid_seconds:
             # The cached opinion has expired, delete the entry
-            self.r.delete(cache_key)
+            await self.r.delete(cache_key)
             return None
 
         # Return the opinion (excluding the created_seconds field)
@@ -105,17 +109,17 @@ class P2PHandler:
         }
         return opinion
 
-    def get_p2p_reports_about_ip(self, ip) -> dict:
+    async def get_p2p_reports_about_ip(self, ip) -> dict:
         """
-        returns a dict of all p2p past reports about the given ip
+        Returns a dict of all P2P past reports about the given IP
         """
         # p2p_reports key is basically
         # { ip:  { reporter1: [report1, report2, report3]} }
-        if reports := self.rcache.hget(self.constants.P2P_REPORTS, ip):
+        if reports := await self.rcache.hget(self.constants.P2P_REPORTS, ip):
             return json.loads(reports)
         return {}
 
-    def set_peer_trust(self, peer_ip, peer_trust):
+    async def set_peer_trust(self, peer_ip, peer_trust):
         """
         Set the trust value for a peer in the database.
         :param peer_ip: IP address of the peer
@@ -123,11 +127,10 @@ class P2PHandler:
         trust model
         For now, this is only for local peers
         """
+        await self.r.hset("peer_trust", peer_ip, peer_trust)
 
-        self.r.hset("peer_trust", peer_ip, peer_trust)
-
-    def get_peer_trust(self, peer_ip):
-        trust = self.r.hget("peer_trust", peer_ip)
+    async def get_peer_trust(self, peer_ip):
+        trust = await self.r.hget("peer_trust", peer_ip)
         if trust:
             return float(trust)
         return None

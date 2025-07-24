@@ -14,18 +14,18 @@ from slips_files.core.database.redis_db.p2p_handler import P2PHandler
 
 import os
 import signal
-import redis
+import redis.asyncio as redis
 import time
 import json
 import subprocess
 import ipaddress
-import sys
 import validators
 from typing import (
     List,
     Dict,
     Optional,
     Tuple,
+    Callable,
 )
 from cachetools import TTLCache
 
@@ -140,6 +140,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         start_redis_server=True,
         flush_db=True,
         client_name: str = "Slips",
+        conf=None,
+        args=None,
     ):
         """
         treat the db as a singleton per port
@@ -151,6 +153,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # start the redis server using cli if it's not started?
         cls.start_server = start_redis_server
         cls.printer = Printer(logger, cls.name)
+        cls.conf = conf or ConfigParser()
+        cls.args = args
 
         if cls.redis_port not in cls._instances:
             # PS: keep in mind that this code is only called once from
@@ -178,7 +182,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     def __init__(self, *args, **kwargs):
         self.set_new_incoming_flows(True)
 
-    def client_setname(self, name: str):
+    async def client_setname(self, name: str):
         """
         Set the name of the client in redis, so we can identify it
         in the redis client list.
@@ -186,7 +190,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """
         # useful for debugging using 'CLIENT LIST' cmd
         name = name.replace("_", "").replace(" ", "")
-        self.r.client_setname(name)
+        await self.r.client_setname(name)
 
     @classmethod
     def _set_redis_options(cls):
@@ -205,7 +209,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             "appendonly": "no",
         }
         # -s for saving the db
-        if "-s" not in sys.argv:
+        if not cls.args.save:
             return
 
         # Will save the DB if both the given number of seconds
@@ -231,14 +235,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
     @classmethod
     def _read_configuration(cls):
-        conf = ConfigParser()
-        print(f"@@@@@@@@@@@@@@@@ conf: {conf}")
-        # Should we delete the previously stored data in the DB when we start?
-        # By default False. Meaning we don't DELETE the DB by default.
-        cls.deletePrevdb: bool = conf.delete_prev_db()
-        cls.disabled_detections: List[str] = conf.disabled_detections()
-        cls.width = conf.get_tw_width_as_float()
-        cls.client_ips: List[str] = conf.client_ips()
+        # By default we don't DELETE the DB by default.
+        cls.deletePrevdb: bool = cls.conf.delete_prev_db()
+        cls.disabled_detections: List[str] = cls.conf.disabled_detections()
+        cls.width = cls.conf.get_tw_width_as_float()
+        cls.client_ips: List[str] = cls.conf.client_ips()
 
     @classmethod
     def set_slips_internal_time(cls, timestamp):
@@ -282,7 +283,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             if (
                 cls.deletePrevdb
                 and not (
-                    "-S" in sys.argv or "-cb" in sys.argv or "-d" in sys.argv
+                    cls.args.stopdaemon
+                    or cls.args.clearblocking
+                    or cls.args.db
                 )
                 and cls.flush_db
             ):
@@ -302,7 +305,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         except RuntimeError as err:
             return False, str(err)
 
-        except redis.exceptions.ConnectionError as ex:
+        except redis.ConnectionError as ex:
             return False, (
                 f"Redis ConnectionError: "
                 f"Can't connect to redis on port "
@@ -310,7 +313,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             )
 
     @staticmethod
-    def _connect(port: int, db: int) -> redis.StrictRedis:
+    def _connect(port: int, db: int) -> redis.Redis:
         # set health_check_interval to avoid redis ConnectionReset errors:
         # if the connection is idle for more than health_check_interval seconds,
         # a round trip PING/PONG will be attempted before next redis cmd.
@@ -320,11 +323,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # if the retry is successful, it will return normally; if it fails,
         # an exception will be thrown
 
-        return redis.StrictRedis(
+        return redis.Redis(
             host="localhost",
             port=port,
             db=db,
-            charset="utf-8",
             socket_keepalive=True,
             decode_responses=True,
             retry_on_timeout=True,
@@ -372,7 +374,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             # port 6379 db 0 is cache, delete it using -cc flag
             cls.rcache = cls._connect(6379, 1)
 
-            # fix  ConnectionRefused error by giving redis time to open
+            # fix ConnectionRefused error by giving redis time to open
             time.sleep(1)
 
             # the connection to redis is only established
@@ -389,7 +391,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             os.kill(int(server_pid), signal.SIGKILL)
 
     @classmethod
-    def change_redis_limits(cls, client: redis.StrictRedis):
+    async def change_redis_limits(cls, client: redis.Redis):
         """
         changes redis soft and hard limits to fix redis closing/resetting
         the pub/sub connection,
@@ -402,7 +404,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # means if the client has an output buffer bigger than 2GB
         # for, continuously, 10 mins, the connection gets closed.
         # format is client hard_limit soft_limit
-        client.config_set(
+        await client.config_set(
             "client-output-buffer-limit",
             "normal 0 0 0 "
             "slave 268435456 67108864 60 "
@@ -410,40 +412,52 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         )
 
     @classmethod
-    def _set_slips_start_time(cls):
+    async def _set_slips_start_time(cls):
         """store the time slips started (datetime obj)"""
         now = time.time()
-        cls.r.set(cls.constants.SLIPS_START_TIME, now)
+        await cls.r.set(cls.constants.SLIPS_START_TIME, now)
 
-    def publish(self, channel, msg):
+    async def publish(self, channel, msg):
         """Publish a msg in the given channel"""
         # keeps track of how many msgs were published in the given channel
-        self.r.hincrby(self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel, 1)
-        self.r.publish(channel, msg)
-
-    def get_msgs_published_in_channel(self, channel: str) -> int:
-        """returns the number of msgs published in a channel"""
-        return self.r.hget(self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel)
-
-    def subscribe(self, channel: str, ignore_subscribe_messages=True):
-        """Subscribe to channel"""
-        # For when a TW is modified
-        if channel not in self.supported_channels:
-            return False
-
-        self.pubsub = self.r.pubsub()
-        self.pubsub.subscribe(
-            channel, ignore_subscribe_messages=ignore_subscribe_messages
+        await self.r.hincrby(
+            self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel, 1
         )
+        await self.r.publish(channel, msg)
+
+    async def get_msgs_published_in_channel(self, channel: str) -> int:
+        """returns the number of msgs published in a channel"""
+        return await self.r.hget(
+            self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel
+        )
+
+    async def subscribe(
+        self,
+        channels_and_handlers: Dict[str, Callable],
+        ignore_subscribe_messages=True,
+    ):
+        """Subscribe to channel"""
+        # filter unsupported channels
+        handlers = {}
+        for channel, handler in channels_and_handlers.items():
+            if channel not in self.supported_channels:
+                continue
+            handlers.update({channel: handler})
+
+        self.pubsub = self.r.pubsub(
+            ignore_subscribe_messages=ignore_subscribe_messages
+        )
+
+        await self.pubsub.subscribe(**handlers)
         return self.pubsub
 
-    def publish_stop(self):
+    async def publish_stop(self):
         """
         Publish stop command to terminate slips
         to shutdown slips gracefully, this function should only be used by slips.py
         """
         self.print("Sending the stop signal to all listeners", 0, 3)
-        self.r.publish("control_channel", "stop_slips")
+        await self.r.publish("control_channel", "stop_slips")
 
     def _should_track_msg(self, msg: dict) -> bool:
         """
@@ -465,7 +479,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
         return True
 
-    def _cleanup_old_keys_from_flow_tracker(self):
+    async def _cleanup_old_keys_from_flow_tracker(self):
         """
         Deletes flows older than 1 hour from the
         self.constants.SUBS_WHO_PROCESSED_MSG hash.
@@ -483,7 +497,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
         cursor = 0
         while True:
-            cursor, key_values = self.r.hscan(
+            cursor, key_values = await self.r.hscan(
                 self.constants.SUBS_WHO_PROCESSED_MSG, cursor
             )
             for msg_id in key_values.keys():
@@ -500,13 +514,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 break  # Exit when full scan is done
 
         if keys_to_delete:
-            self.r.hdel(self.constants.SUBS_WHO_PROCESSED_MSG, *keys_to_delete)
+            await self.r.hdel(
+                self.constants.SUBS_WHO_PROCESSED_MSG, *keys_to_delete
+            )
         self.last_cleanup_time = now
 
     def _get_current_minute(self) -> str:
         return time.strftime("%Y%m%d%H%M", time.gmtime(time.time()))
 
-    def _keep_track_of_flows_analyzed_per_min(self, pipe):
+    async def _keep_track_of_flows_analyzed_per_min(self, pipe):
         """
         Adds the logic of tracking flows per min to the given pipe for
         excution
@@ -520,15 +536,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # set expiration for 1 hour to avoid long-term storage
         pipe.expire(key, 3600)
 
-    def get_flows_analyzed_per_minute(self):
+    async def get_flows_analyzed_per_minute(self):
         current_minute = self._get_current_minute()
         key = (
             f"{self.constants.FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN}:"
             f"{current_minute}"
         )
-        return self.r.get(key) or 0
+        return await self.r.get(key) or 0
 
-    def _track_flow_processing_rate(self, msg: dict):
+    async def _track_flow_processing_rate(self, msg: dict):
         """
         Every time 1 flow is processed by all the subscribers of the given
         channel, this function increases the
@@ -547,7 +563,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         if not self._should_track_msg(msg):
             return
 
-        self._cleanup_old_keys_from_flow_tracker()
+        await self._cleanup_old_keys_from_flow_tracker()
 
         # we only say that a flow is done being analyzed if it was accessed
         # X times where x is the number of the channel subscribers
@@ -571,9 +587,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         timestamp = int(time.time())
         msg_id = f"{channel_name}_{flow_identifier}_{timestamp}"
 
-        expected_subscribers: int = self.r.pubsub_numsub(channel_name)[0][1]
+        expected_subscribers: int = (await self.r.pubsub_numsub(channel_name))[
+            0
+        ][1]
 
-        subscribers_who_processed_this_msg = self.r.hincrby(
+        subscribers_who_processed_this_msg = await self.r.hincrby(
             self.constants.SUBS_WHO_PROCESSED_MSG, msg_id, 1
         )
 
@@ -581,11 +599,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
             pipe = self.r.pipeline()
             pipe.hdel(self.constants.SUBS_WHO_PROCESSED_MSG, msg_id)
-            self._keep_track_of_flows_analyzed_per_min(pipe)
-            pipe.execute()
+            await self._keep_track_of_flows_analyzed_per_min(pipe)
+            await pipe.execute()
             return
 
-    def get_message(self, channel_obj: redis.client.PubSub, timeout=0.0000001):
+    async def get_message(
+        self, channel_obj: redis.client.PubSub, timeout=0.0000001
+    ):
         """
         Wrapper for redis' get_message() to be able to handle
         redis.exceptions.ConnectionError
@@ -594,16 +614,16 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         :param channel_obj: PubSub obj of the channel
         """
         try:
-            msg = channel_obj.get_message(timeout=timeout)
-            self._track_flow_processing_rate(msg)
+            msg = await channel_obj.get_message(timeout=timeout)
+            await self._track_flow_processing_rate(msg)
             return msg
-        except redis.exceptions.ConnectionError as ex:
+        except redis.ConnectionError as ex:
             # make sure we log the error only once
-            if not self.is_connection_error_logged():
-                self.mark_connection_error_as_logged()
+            if not await self.is_connection_error_logged():
+                await self.mark_connection_error_as_logged()
 
             if self.connection_retry >= self.max_retries:
-                self.publish_stop()
+                await self.publish_stop()
                 self.print(
                     f"Stopping slips due to "
                     f"redis.exceptions.ConnectionError: {ex}",
@@ -624,12 +644,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 time.sleep(self.backoff)
                 self.backoff = self.backoff * 2
                 self.connection_retry += 1
-                self.get_message(channel_obj, timeout)
+                return await self.get_message(channel_obj, timeout)
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
 
-    def get_ip_info(self, ip: str) -> Optional[dict]:
+    async def get_ip_info(self, ip: str) -> Optional[dict]:
         """
         Return information about this IP from IPsInfo key
         :return: a dictionary or False if there is no IP in the database
@@ -637,12 +657,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         if ip in self.ip_info_cache:
             return self.ip_info_cache[ip]
 
-        data = self.rcache.hget(self.constants.IPS_INFO, ip)
+        data = await self.rcache.hget(self.constants.IPS_INFO, ip)
         result = json.loads(data) if data else None
         self.ip_info_cache[ip] = result
         return result
 
-    def _get_from_ip_info(self, ip: str, info_to_get: str):
+    async def _get_from_ip_info(self, ip: str, info_to_get: str):
         """
         :param ip: the key to get from the ip info hash
         :param info_to_get: the value to get from the ip info hash
@@ -650,7 +670,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         if utils.is_ignored_ip(ip):
             return
 
-        ip_info = self.get_ip_info(ip)
+        ip_info = await self.get_ip_info(ip)
         if not ip_info:
             return
 
@@ -659,7 +679,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             return
         return info
 
-    def set_new_ip(self, ip: str):
+    async def set_new_ip(self, ip: str):
         """
         1- Stores this new IP in the IPs hash
         2- Publishes in the channels that there is a new IP, and that we want
@@ -668,18 +688,18 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         accessed as str, it is automatically
         converted to str
         """
-        data = self.get_ip_info(ip)
+        data = await self.get_ip_info(ip)
         if data is False:
             # If there is no data about this IP
             # Set this IP for the first time in the IPsInfo
             # Its VERY important that the data of the first time we see an IP
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if an IP exists or not
-            self.rcache.hset(self.constants.IPS_INFO, ip, "{}")
+            await self.rcache.hset(self.constants.IPS_INFO, ip, "{}")
             # Publish that there is a new IP ready in the channel
-            self.publish("new_ip", ip)
+            await self.publish("new_ip", ip)
 
-    def ask_for_ip_info(
+    async def ask_for_ip_info(
         self, ip, profileid, twid, flow, ip_state, daddr=False
     ):
         """
@@ -707,20 +727,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         cache_age = 1000
         # the p2p module is expecting these 2 keys
         data_to_send.update({"cache_age": cache_age, "ip": str(ip)})
-        self.publish("p2p_data_request", json.dumps(data_to_send))
+        await self.publish("p2p_data_request", json.dumps(data_to_send))
 
-    def get_slips_internal_time(self):
-        return self.r.get(self.constants.SLIPS_INTERNAL_TIME) or 0
+    async def get_slips_internal_time(self):
+        return await self.r.get(self.constants.SLIPS_INTERNAL_TIME) or 0
 
-    def get_redis_keys_len(self) -> int:
+    async def get_redis_keys_len(self) -> int:
         """returns the length of all keys in the db"""
-        return self.r.dbsize()
+        return await self.r.dbsize()
 
-    def set_cyst_enabled(self):
-        return self.r.set(self.constants.IS_CYST_ENABLED, "yes")
+    async def set_cyst_enabled(self):
+        return await self.r.set(self.constants.IS_CYST_ENABLED, "yes")
 
-    def is_cyst_enabled(self):
-        return self.r.get(self.constants.IS_CYST_ENABLED)
+    async def is_cyst_enabled(self):
+        return await self.r.get(self.constants.IS_CYST_ENABLED)
 
     def get_equivalent_tws(self, hrs: float) -> int:
         """
@@ -729,102 +749,104 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """
         return int(hrs * 3600 / self.width)
 
-    def set_local_network(self, cidr):
+    async def set_local_network(self, cidr):
         """
         set the local network used in the db
         """
-        self.r.set(self.constants.LOCAL_NETWORK, cidr)
+        await self.r.set(self.constants.LOCAL_NETWORK, cidr)
 
-    def get_local_network(self):
-        return self.r.get(self.constants.LOCAL_NETWORK)
+    async def get_local_network(self):
+        return await self.r.get(self.constants.LOCAL_NETWORK)
 
-    def get_used_port(self) -> int:
-        return int(self.r.config_get(self.constants.REDIS_USED_PORT)["port"])
+    async def get_used_port(self) -> int:
+        return int(
+            (await self.r.config_get(self.constants.REDIS_USED_PORT))["port"]
+        )
 
-    def get_label_count(self, label):
+    async def get_label_count(self, label):
         """
         :param label: malicious or normal
         """
-        return self.r.zscore(self.constants.LABELS, label)
+        return await self.r.zscore(self.constants.LABELS, label)
 
-    def get_enabled_modules(self) -> List[str]:
+    async def get_enabled_modules(self) -> List[str]:
         """
         Returns a list of the loaded/enabled modules
         """
-        return self.r.hkeys(self.constants.PIDS)
+        return await self.r.hkeys(self.constants.PIDS)
 
-    def get_disabled_modules(self) -> List[str]:
-        if disabled_modules := self.r.hget(
+    async def get_disabled_modules(self) -> List[str]:
+        if disabled_modules := await self.r.hget(
             self.constants.ANALYSIS, "disabled_modules"
         ):
             return json.loads(disabled_modules)
         else:
             return {}
 
-    def set_input_metadata(self, info: dict):
+    async def set_input_metadata(self, info: dict):
         """
         sets name, size, analysis dates, and zeek_dir in the db
         """
         for info, val in info.items():
-            self.r.hset(self.constants.ANALYSIS, info, val)
+            await self.r.hset(self.constants.ANALYSIS, info, val)
 
-    def get_zeek_output_dir(self):
+    async def get_zeek_output_dir(self):
         """
         gets zeek output dir from the db
         """
-        return self.r.hget(self.constants.ANALYSIS, "zeek_dir")
+        return await self.r.hget(self.constants.ANALYSIS, "zeek_dir")
 
-    def get_input_file(self):
+    async def get_input_file(self):
         """
         gets zeek output dir from the db
         """
-        return self.r.hget(self.constants.ANALYSIS, "name")
+        return await self.r.hget(self.constants.ANALYSIS, "name")
 
-    def get_commit(self):
+    async def get_commit(self):
         """
         gets the currently used commit from the db
         """
-        return self.r.hget(self.constants.ANALYSIS, "commit")
+        return await self.r.hget(self.constants.ANALYSIS, "commit")
 
-    def get_zeek_version(self):
+    async def get_zeek_version(self):
         """
         gets the currently used zeek_version from the db
         """
-        return self.r.hget(self.constants.ANALYSIS, "zeek_version")
+        return await self.r.hget(self.constants.ANALYSIS, "zeek_version")
 
-    def get_branch(self):
+    async def get_branch(self):
         """
         gets the currently used branch from the db
         """
-        return self.r.hget(self.constants.ANALYSIS, "branch")
+        return await self.r.hget(self.constants.ANALYSIS, "branch")
 
-    def get_evidence_detection_threshold(self):
+    async def get_evidence_detection_threshold(self):
         """
         gets the currently used evidence_detection_threshold from the db
         """
-        return self.r.hget(
+        return await self.r.hget(
             self.constants.ANALYSIS, "evidence_detection_threshold"
         )
 
-    def get_input_type(self) -> str:
+    async def get_input_type(self) -> str:
         """
         gets input type from the db
         returns one of the following "stdin", "pcap", "interface",
         "zeek_log_file", "zeek_folder", "stdin", "nfdump", "binetflow",
         "suricata"
         """
-        return self.r.hget(self.constants.ANALYSIS, "input_type")
+        return await self.r.hget(self.constants.ANALYSIS, "input_type")
 
-    def get_interface(self) -> str:
-        return self.r.hget(self.constants.ANALYSIS, "interface")
+    async def get_interface(self) -> str:
+        return await self.r.hget(self.constants.ANALYSIS, "interface")
 
-    def get_output_dir(self):
+    async def get_output_dir(self):
         """
         returns the currently used output dir
         """
-        return self.r.hget(self.constants.ANALYSIS, "output_dir")
+        return await self.r.hget(self.constants.ANALYSIS, "output_dir")
 
-    def set_ip_info(self, ip: str, to_store: dict):
+    async def set_ip_info(self, ip: str, to_store: dict):
         """
         Store information for this IP
         We receive a dictionary, such as {
@@ -834,10 +856,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         overwrite it
         """
         # Get the previous info already stored
-        cached_ip_info = self.get_ip_info(ip)
+        cached_ip_info = await self.get_ip_info(ip)
         if not cached_ip_info:
             # This IP is not in the dictionary, add it first:
-            self.set_new_ip(ip)
+            await self.set_new_ip(ip)
             cached_ip_info = {}
 
         # make sure we don't already have the same info about this IP in our db
@@ -848,17 +870,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
             cached_ip_info[info_type] = info_val
 
-        self.rcache.hset(
+        await self.rcache.hset(
             self.constants.IPS_INFO, ip, json.dumps(cached_ip_info)
         )
         if is_new_info:
-            self.r.publish("ip_info_change", ip)
+            await self.r.publish("ip_info_change", ip)
 
-    def get_redis_pid(self):
+    async def get_redis_pid(self):
         """returns the pid of the current redis server"""
-        return int(self.r.info()["process_id"])
+        return int((await self.r.info())["process_id"])
 
-    def get_dns_resolution(self, ip: str):
+    async def get_dns_resolution(self, ip: str):
         """
         IF this IP was resolved by slips
         returns a dict with {ts: .. ,
@@ -869,18 +891,18 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         this function is called for every IP in the timeline of kalipso
         checks for the reolution in self.constants.DNS_RESOLUTION
         """
-        if ip_info := self.r.hget(self.constants.DNS_RESOLUTION, ip):
+        if ip_info := await self.r.hget(self.constants.DNS_RESOLUTION, ip):
             ip_info = json.loads(ip_info)
             # return a dict with 'ts' 'uid' 'domains' about this IP
             return ip_info
         return {}
 
-    def is_ip_resolved(self, ip, hrs):
+    async def is_ip_resolved(self, ip, hrs):
         """
         checks self.constants.DNS_RESOLUTION for the ip's resolutions
         :param hrs: float, how many hours to look back for resolutions
         """
-        ip_info = self.get_dns_resolution(ip)
+        ip_info = await self.get_dns_resolution(ip)
         if ip_info == {}:
             return False
 
@@ -895,8 +917,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 return True
         return False
 
-    def delete_dns_resolution(self, ip):
-        self.r.hdel(self.constants.DNS_RESOLUTION, ip)
+    async def delete_dns_resolution(self, ip):
+        await self.r.hdel(self.constants.DNS_RESOLUTION, ip)
 
     def should_store_resolution(
         self, query: str, answers: list, qtype_name: str
@@ -935,7 +957,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     def is_txt_record(self, answer):
         return "TXT" in answer
 
-    def set_dns_resolution(
+    async def set_dns_resolution(
         self,
         query: str,
         answers: list,
@@ -968,7 +990,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 continue
 
             # get stored DNS resolution from our db
-            ip_info_from_db = self.get_dns_resolution(answer)
+            ip_info_from_db = await self.get_dns_resolution(answer)
             if ip_info_from_db == {}:
                 resolved_by = [srcip]
                 # list of cached domains in the db, in this case theres none
@@ -1006,8 +1028,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             ip_info = json.dumps(ip_info)
             # we store ALL dns resolutions seen since starting slips
             # store with the IP as the key
-            self.r.hset(self.constants.DNS_RESOLUTION, answer, ip_info)
-            self.set_ip_info(answer, {"DNS_resolution": domains})
+            await self.r.hset(self.constants.DNS_RESOLUTION, answer, ip_info)
+            await self.set_ip_info(answer, {"DNS_resolution": domains})
             # these ips will be associated with the query in our db
             if not utils.is_ignored_ip(answer):
                 ips_to_add.append(answer)
@@ -1025,15 +1047,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             except NameError:
                 # no CNAME came with this query
                 pass
-            self.set_info_for_domains(query, domaindata, mode="add")
-            self.set_domain_resolution(query, ips_to_add)
+            await self.set_info_for_domains(query, domaindata, mode="add")
+            await self.set_domain_resolution(query, ips_to_add)
 
-    def set_domain_resolution(self, domain, ips):
+    async def set_domain_resolution(self, domain, ips):
         """
         stores all the resolved domains with their ips in the db
         stored as {Domain: [IP, IP, IP]} in the db
         """
-        self.r.hset(self.constants.DOMAINS_RESOLVED, domain, json.dumps(ips))
+        await self.r.hset(
+            self.constants.DOMAINS_RESOLVED, domain, json.dumps(ips)
+        )
 
     @staticmethod
     def get_redis_server_pid(redis_port):
@@ -1049,44 +1073,44 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 return pid
         return False
 
-    def set_slips_mode(self, slips_mode):
+    async def set_slips_mode(self, slips_mode):
         """
         function to store the current mode (daemonized/interactive)
         in the db
         """
-        self.r.set(self.constants.MODE, slips_mode)
+        await self.r.set(self.constants.MODE, slips_mode)
 
-    def get_slips_mode(self):
+    async def get_slips_mode(self):
         """
         function to get the current mode (daemonized/interactive)
         in the db
         """
-        self.r.get(self.constants.MODE)
+        return await self.r.get(self.constants.MODE)
 
-    def get_modified_ips_in_the_last_tw(self):
+    async def get_modified_ips_in_the_last_tw(self):
         """
         this number is updated in the db every 5s by slips.py
         used for printing running stats in slips.py or outputprocess
         """
-        if modified_ips := self.r.hget(
+        if modified_ips := await self.r.hget(
             self.constants.ANALYSIS, "modified_ips_in_the_last_tw"
         ):
             return modified_ips
         else:
             return 0
 
-    def is_connection_error_logged(self):
-        return bool(self.r.get(self.constants.LOGGED_CONNECTION_ERR))
+    async def is_connection_error_logged(self):
+        return bool(await self.r.get(self.constants.LOGGED_CONNECTION_ERR))
 
-    def mark_connection_error_as_logged(self):
+    async def mark_connection_error_as_logged(self):
         """
         When redis connection error occurs, to prevent
         every module from logging it to slips.log and the console,
         set this variable in the db
         """
-        self.r.set(self.constants.LOGGED_CONNECTION_ERR, "True")
+        await self.r.set(self.constants.LOGGED_CONNECTION_ERR, "True")
 
-    def was_ip_seen_in_connlog_before(self, ip) -> bool:
+    async def was_ip_seen_in_connlog_before(self, ip) -> bool:
         """
         returns true if this is not the first flow slip sees of the given ip
         """
@@ -1096,16 +1120,18 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
         # if the ip's not in the following key, then its the first flow
         # seen of this ip
-        return self.r.sismember(self.constants.SRCIPS_SEEN_IN_CONN_LOG, ip)
+        return await self.r.sismember(
+            self.constants.SRCIPS_SEEN_IN_CONN_LOG, ip
+        )
 
-    def mark_srcip_as_seen_in_connlog(self, ip):
+    async def mark_srcip_as_seen_in_connlog(self, ip):
         """
         Marks the given ip as seen in conn.log
         keeps track of private ipv4 only.
         if an ip is not present in this set, it means we may
          have seen it but not in conn.log
         """
-        self.r.sadd(self.constants.SRCIPS_SEEN_IN_CONN_LOG, ip)
+        await self.r.sadd(self.constants.SRCIPS_SEEN_IN_CONN_LOG, ip)
 
     def _is_gw_mac(self, mac_addr: str) -> bool:
         """
@@ -1142,15 +1168,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             return True
         return False
 
-    def get_ip_of_mac(self, MAC):
+    async def get_ip_of_mac(self, MAC):
         """
         Returns the IP associated with the given MAC in our database
         """
-        return self.r.hget(self.constants.MAC, MAC)
+        return await self.r.hget(self.constants.MAC, MAC)
 
-    def get_modified_tw(self):
+    async def get_modified_tw(self):
         """Return all the list of modified tw"""
-        data = self.r.zrange(
+        data = await self.r.zrange(
             self.constants.MODIFIED_TIMEWINDOWS, 0, -1, withscores=True
         )
         return data or []
@@ -1159,60 +1185,64 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """Return the field separator"""
         return self.separator
 
-    def store_tranco_whitelisted_domain(self, domain):
+    async def store_tranco_whitelisted_domain(self, domain):
         """
         store whitelisted domain from tranco whitelist in the db
         """
         # the reason we store tranco whitelisted domains in the cache db
         # instead of the main db is, we don't want them cleared on every new
         # instance of slips
-        self.rcache.sadd(self.constants.TRANCO_WHITELISTED_DOMAINS, domain)
-
-    def is_whitelisted_tranco_domain(self, domain):
-        return self.rcache.sismember(
+        await self.rcache.sadd(
             self.constants.TRANCO_WHITELISTED_DOMAINS, domain
         )
 
-    def delete_tranco_whitelist(self):
-        return self.rcache.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
+    async def is_whitelisted_tranco_domain(self, domain):
+        return await self.rcache.sismember(
+            self.constants.TRANCO_WHITELISTED_DOMAINS, domain
+        )
 
-    def set_growing_zeek_dir(self):
+    async def delete_tranco_whitelist(self):
+        return await self.rcache.delete(
+            self.constants.TRANCO_WHITELISTED_DOMAINS
+        )
+
+    async def set_growing_zeek_dir(self):
         """
         Mark a dir as growing so it can be treated like the zeek
          logs generated by an interface
         """
-        self.r.set(self.constants.GROWING_ZEEK_DIR, "yes")
+        await self.r.set(self.constants.GROWING_ZEEK_DIR, "yes")
 
-    def is_growing_zeek_dir(self):
+    async def is_growing_zeek_dir(self):
         """Did slips mark the given dir as growing?"""
-        return "yes" in str(self.r.get(self.constants.GROWING_ZEEK_DIR))
+        return "yes" in str(await self.r.get(self.constants.GROWING_ZEEK_DIR))
 
-    def get_asn_info(self, ip: str) -> Optional[Dict[str, str]]:
+    async def get_asn_info(self, ip: str) -> Optional[Dict[str, str]]:
         """
         returns asn info about the given IP
         returns a dict with "number" and "org" keys
         """
-        return self._get_from_ip_info(ip, "asn")
+        return await self._get_from_ip_info(ip, "asn")
 
-    def get_rdns_info(self, ip: str) -> Optional[str]:
+    async def get_rdns_info(self, ip: str) -> Optional[str]:
         """
         returns rdns info about the given IP
         returns a str with the rdns or none
         """
-        return self._get_from_ip_info(ip, "reverse_dns")
+        return await self._get_from_ip_info(ip, "reverse_dns")
 
-    def get_sni_info(self, ip: str) -> Optional[str]:
+    async def get_sni_info(self, ip: str) -> Optional[str]:
         """
         returns sni info about the given IP
         returns the server name or none
         """
-        sni = self._get_from_ip_info(ip, "SNI")
+        sni = await self._get_from_ip_info(ip, "SNI")
         if not sni:
             return
         sni = sni[0] if isinstance(sni, list) else sni
         return sni.get("server_name")
 
-    def get_ip_identification(
+    async def get_ip_identification(
         self, ip: str, get_ti_data=True
     ) -> Dict[str, str]:
         """
@@ -1224,7 +1254,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         TI lists?
         :return: string containing AS, rDNS, and SNI of the IP.
         """
-        cached_info: Optional[Dict[str, str]] = self.get_ip_info(ip)
+        cached_info: Optional[Dict[str, str]] = await self.get_ip_info(ip)
         id = {}
         if not cached_info:
             return id
@@ -1251,53 +1281,59 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
         return id
 
-    def get_multiaddr(self):
+    async def get_multiaddr(self):
         """
         this is can only be called when p2p is enabled, this value is set by p2p pigeon
         """
-        return self.r.get(self.constants.MULTICAST_ADDRESS)
+        return await self.r.get(self.constants.MULTICAST_ADDRESS)
 
-    def get_labels(self):
+    async def get_labels(self):
         """
         Return the amount of each label so far in the DB
         Used to know how many labels are available during training
         """
-        return self.r.zrange(self.constants.LABELS, 0, -1, withscores=True)
+        return await self.r.zrange(
+            self.constants.LABELS, 0, -1, withscores=True
+        )
 
-    def set_port_info(self, portproto: str, name):
+    async def set_port_info(self, portproto: str, name):
         """
         Save in the DB a port with its description
         :param portproto: portnumber + / + protocol
         """
-        self.rcache.hset(self.constants.PORT_INFO, portproto, name)
+        await self.rcache.hset(self.constants.PORT_INFO, portproto, name)
 
-    def get_port_info(self, portproto: str):
+    async def get_port_info(self, portproto: str):
         """
         Retrieve the name of a port
         :param portproto: portnumber + / + protocol
         """
-        return self.rcache.hget(self.constants.PORT_INFO, portproto)
+        return await self.rcache.hget(self.constants.PORT_INFO, portproto)
 
-    def set_ftp_port(self, port):
+    async def set_ftp_port(self, port):
         """
         Stores the used ftp port in our main db (not the cache like set_port_info)
         """
-        self.r.lpush(self.constants.USED_FTP_PORTS, str(port))
+        await self.r.lpush(self.constants.USED_FTP_PORTS, str(port))
 
-    def is_ftp_port(self, port):
+    async def is_ftp_port(self, port):
         # get all used ftp ports
-        used_ftp_ports = self.r.lrange(self.constants.USED_FTP_PORTS, 0, -1)
+        used_ftp_ports = await self.r.lrange(
+            self.constants.USED_FTP_PORTS, 0, -1
+        )
         # check if the given port is used as ftp port
         return str(port) in used_ftp_ports
 
-    def set_organization_of_port(self, organization, ip: str, portproto: str):
+    async def set_organization_of_port(
+        self, organization, ip: str, portproto: str
+    ):
         """
         Save in the DB a port with its organization and the ip/
         range used by this organization
         :param portproto: portnumber + / + protocol.lower()
         :param ip: can be a single org ip, or a range or ''
         """
-        if org_info := self.get_organization_of_port(portproto):
+        if org_info := await self.get_organization_of_port(portproto):
             # this port and proto was used with another
             # organization, append to it
             org_info = json.loads(org_info)
@@ -1307,118 +1343,128 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             org_info = {"org_name": [organization], "ip": [ip]}
 
         org_info = json.dumps(org_info)
-        self.rcache.hset(
+        await self.rcache.hset(
             self.constants.ORGANIZATIONS_PORTS, portproto, org_info
         )
 
-    def get_organization_of_port(self, portproto: str):
+    async def get_organization_of_port(self, portproto: str):
         """
         Retrieve the organization info that uses this port
         :param portproto: portnumber.lower() + / + protocol
         """
         # this key is used to store the ports the are known to be used
         #  by certain organizations
-        return self.rcache.hget(
+        return await self.rcache.hget(
             self.constants.ORGANIZATIONS_PORTS, portproto.lower()
         )
 
-    def add_zeek_file(self, filename):
+    async def add_zeek_file(self, filename):
         """Add an entry to the list of zeek files"""
-        self.r.sadd(self.constants.ZEEK_FILES, filename)
+        await self.r.sadd(self.constants.ZEEK_FILES, filename)
 
-    def get_all_zeek_files(self) -> set:
+    async def get_all_zeek_files(self) -> set:
         """Return all entries from the list of zeek files"""
-        return self.r.smembers(self.constants.ZEEK_FILES)
+        return await self.r.smembers(self.constants.ZEEK_FILES)
 
-    def get_gateway_ip(self):
-        return self.r.hget(self.constants.DEFAULT_GATEWAY, "IP")
+    async def get_gateway_ip(self):
+        return await self.r.hget(self.constants.DEFAULT_GATEWAY, "IP")
 
-    def get_gateway_mac(self):
-        return self.r.hget(self.constants.DEFAULT_GATEWAY, self.constants.MAC)
+    async def get_gateway_mac(self):
+        return await self.r.hget(
+            self.constants.DEFAULT_GATEWAY, self.constants.MAC
+        )
 
-    def get_gateway_mac_vendor(self):
-        return self.r.hget(self.constants.DEFAULT_GATEWAY, "Vendor")
+    async def get_gateway_mac_vendor(self):
+        return await self.r.hget(self.constants.DEFAULT_GATEWAY, "Vendor")
 
-    def set_default_gateway(self, address_type: str, address: str):
+    async def set_default_gateway(self, address_type: str, address: str):
         """
         :param address_type: can either be 'IP' or 'MAC'
         :param address: can be ip or mac, but always is a str
         """
         # make sure the IP or mac aren't already set before re-setting
         if (
-            (address_type == "IP" and not self.get_gateway_ip())
+            (address_type == "IP" and not await self.get_gateway_ip())
             or (
                 address_type == self.constants.MAC
-                and not self.get_gateway_mac()
+                and not await self.get_gateway_mac()
             )
-            or (address_type == "Vendor" and not self.get_gateway_mac_vendor())
+            or (
+                address_type == "Vendor"
+                and not await self.get_gateway_mac_vendor()
+            )
         ):
-            self.r.hset(self.constants.DEFAULT_GATEWAY, address_type, address)
+            await self.r.hset(
+                self.constants.DEFAULT_GATEWAY, address_type, address
+            )
 
-    def get_domain_resolution(self, domain) -> List[str]:
+    async def get_domain_resolution(self, domain) -> List[str]:
         """
         Returns the IPs resolved by this domain
         """
-        ips = self.r.hget(self.constants.DOMAINS_RESOLVED, domain)
+        ips = await self.r.hget(self.constants.DOMAINS_RESOLVED, domain)
         return json.loads(ips) if ips else []
 
-    def get_all_dns_resolutions(self):
-        dns_resolutions = self.r.hgetall(self.constants.DNS_RESOLUTION)
+    async def get_all_dns_resolutions(self):
+        dns_resolutions = await self.r.hgetall(self.constants.DNS_RESOLUTION)
         return dns_resolutions or []
 
-    def is_running_non_stop(self) -> bool:
+    async def is_running_non_stop(self) -> bool:
         """
         Slips runs non-stop in case of an interface or a growing zeek dir,
         in these 2 cases, it only stops on ctrl+c
         """
         return (
-            self.get_input_type() == "interface" or self.is_growing_zeek_dir()
+            await self.get_input_type() == "interface"
+            or await self.is_growing_zeek_dir()
         )
 
-    def set_passive_dns(self, ip, data):
+    async def set_passive_dns(self, ip, data):
         """
         Save in DB passive DNS from virus total
         """
         if data:
             data = json.dumps(data)
-            self.rcache.hset(self.constants.PASSIVE_DNS, ip, data)
+            await self.rcache.hset(self.constants.PASSIVE_DNS, ip, data)
 
-    def get_passive_dns(self, ip):
+    async def get_passive_dns(self, ip):
         """
         Gets passive DNS from the db
         """
-        if data := self.rcache.hget(self.constants.PASSIVE_DNS, ip):
+        if data := await self.rcache.hget(self.constants.PASSIVE_DNS, ip):
             return json.loads(data)
         else:
             return False
 
-    def get_reconnections_for_tw(self, profileid, twid):
+    async def get_reconnections_for_tw(self, profileid, twid):
         """Get the reconnections for this TW for this Profile"""
-        data = self.r.hget(f"{profileid}_{twid}", "Reconnections")
+        data = await self.r.hget(f"{profileid}_{twid}", "Reconnections")
         data = json.loads(data) if data else {}
         return data
 
-    def set_reconnections(self, profileid, twid, data):
+    async def set_reconnections(self, profileid, twid, data):
         """Set the reconnections for this TW for this Profile"""
         data = json.dumps(data)
-        self.r.hset(f"{profileid}_{twid}", "Reconnections", str(data))
+        await self.r.hset(f"{profileid}_{twid}", "Reconnections", str(data))
 
-    def get_host_ip(self) -> Optional[str]:
+    async def get_host_ip(self) -> Optional[str]:
         """returns the latest added host ip"""
-        host_ip: List[str] = self.r.zrevrange(
+        host_ip: List[str] = await self.r.zrevrange(
             "host_ip", 0, 0, withscores=False
         )
         return host_ip[0] if host_ip else None
 
-    def set_host_ip(self, ip):
+    async def set_host_ip(self, ip):
         """Store the IP address of the host in a db.
         There can be more than one"""
         # stored them in a sorted set to be able to retrieve the latest one
         # of them as the host ip
-        host_ips_added = self.r.zcard("host_ip")
-        self.r.zadd("host_ip", {ip: host_ips_added + 1})
+        host_ips_added = await self.r.zcard("host_ip")
+        await self.r.zadd("host_ip", {ip: host_ips_added + 1})
 
-    def set_asn_cache(self, org: str, asn_range: str, asn_number: str) -> None:
+    async def set_asn_cache(
+        self, org: str, asn_range: str, asn_number: str
+    ) -> None:
         """
         Stores the range of asn in cached_asn hash
         """
@@ -1444,53 +1490,55 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
         }
         """
-        if cached_asn := self.get_asn_cache(first_octet=first_octet):
+        if cached_asn := await self.get_asn_cache(first_octet=first_octet):
             # we already have a cached asn of a range that
             # starts with the same first octet
             cached_asn: dict = json.loads(cached_asn)
             cached_asn.update(range_info)
-            self.rcache.hset(
+            await self.rcache.hset(
                 self.constants.CACHED_ASN, first_octet, json.dumps(cached_asn)
             )
         else:
             # first time storing a range starting with the same first octet
-            self.rcache.hset(
+            await self.rcache.hset(
                 self.constants.CACHED_ASN, first_octet, json.dumps(range_info)
             )
 
-    def get_asn_cache(self, first_octet=False):
+    async def get_asn_cache(self, first_octet=False):
         """
          cached ASNs are sorted by first octet
         Returns cached asn of ip if present, or False.
         """
         if first_octet:
-            return self.rcache.hget(self.constants.CACHED_ASN, first_octet)
+            return await self.rcache.hget(
+                self.constants.CACHED_ASN, first_octet
+            )
 
-        return self.rcache.hgetall(self.constants.CACHED_ASN)
+        return await self.rcache.hgetall(self.constants.CACHED_ASN)
 
-    def store_pid(self, process: str, pid: int):
+    async def store_pid(self, process: str, pid: int):
         """
         Stores each started process or module with it's PID
         :param pid: int
         :param process: module name, str
         """
-        self.r.hset(self.constants.PIDS, process, pid)
+        await self.r.hset(self.constants.PIDS, process, pid)
 
-    def get_pids(self) -> dict:
+    async def get_pids(self) -> dict:
         """returns a dict with module names as keys and PIDs as values"""
-        return self.r.hgetall(self.constants.PIDS)
+        return await self.r.hgetall(self.constants.PIDS)
 
-    def get_pid_of(self, module_name: str):
-        pid = self.r.hget(self.constants.PIDS, module_name)
+    async def get_pid_of(self, module_name: str):
+        pid = await self.r.hget(self.constants.PIDS, module_name)
         return int(pid) if pid else None
 
-    def get_name_of_module_at(self, given_pid):
+    async def get_name_of_module_at(self, given_pid):
         """returns the name of the module that has the given pid"""
-        for name, pid in self.get_pids().items():
+        for name, pid in (await self.get_pids()).items():
             if int(given_pid) == int(pid):
                 return name
 
-    def set_org_info(self, org, org_info, info_type):
+    async def set_org_info(self, org, org_info, info_type):
         """
         store ASN, IP and domains of an org in the db
         :param org: supported orgs are ('google', 'microsoft',
@@ -1500,11 +1548,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """
         # info will be stored in OrgInfo key {'facebook_asn': ..,
         # 'twitter_domains': ...}
-        self.rcache.hset(
+        await self.rcache.hset(
             self.constants.ORG_INFO, f"{org}_{info_type}", org_info
         )
 
-    def get_org_info(self, org, info_type) -> str:
+    async def get_org_info(self, org, info_type) -> str:
         """
         get the ASN, IP and domains of an org from the db
         :param org: supported orgs are ('google', 'microsoft', 'apple',
@@ -1514,12 +1562,16 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         PS: All ASNs returned by this function are uppercase
         """
         return (
-            self.rcache.hget(self.constants.ORG_INFO, f"{org}_{info_type}")
+            await self.rcache.hget(
+                self.constants.ORG_INFO, f"{org}_{info_type}"
+            )
             or "[]"
         )
 
-    def get_org_ips(self, org):
-        org_info = self.rcache.hget(self.constants.ORG_INFO, f"{org}_IPs")
+    async def get_org_ips(self, org):
+        org_info = await self.rcache.hget(
+            self.constants.ORG_INFO, f"{org}_IPs"
+        )
 
         if not org_info:
             org_info = {}
@@ -1531,64 +1583,64 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             # it's a dict
             return org_info
 
-    def set_whitelist(self, type_, whitelist_dict):
+    async def set_whitelist(self, type_, whitelist_dict):
         """
         Store the whitelist_dict in the given key
         :param type_: supported types are IPs, domains, macs and organizations
         :param whitelist_dict: the dict of IPs,macs,  domains or orgs to store
         """
-        self.r.hset(
+        await self.r.hset(
             self.constants.WHITELIST, type_, json.dumps(whitelist_dict)
         )
 
-    def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
+    async def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
         """
         Returns a dict with the following keys from the whitelist
         'mac', 'organizations', 'IPs', 'domains'
         """
-        whitelist: Optional[Dict[str, str]] = self.r.hgetall(
+        whitelist: Optional[Dict[str, str]] = await self.r.hgetall(
             self.constants.WHITELIST
         )
         if whitelist:
             whitelist = {k: json.loads(v) for k, v in whitelist.items()}
         return whitelist
 
-    def get_whitelist(self, key: str) -> dict:
+    async def get_whitelist(self, key: str) -> dict:
         """
         Whitelist supports different keys like : IPs domains
         and organizations
         this function is used to check if we have any of the
         above keys whitelisted
         """
-        if whitelist := self.r.hget(self.constants.WHITELIST, key):
+        if whitelist := await self.r.hget(self.constants.WHITELIST, key):
             return json.loads(whitelist)
         else:
             return {}
 
-    def has_cached_whitelist(self) -> bool:
-        return bool(self.r.exists(self.constants.WHITELIST))
+    async def has_cached_whitelist(self) -> bool:
+        return bool(await self.r.exists(self.constants.WHITELIST))
 
-    def is_dhcp_server(self, ip: str) -> bool:
+    async def is_dhcp_server(self, ip: str) -> bool:
         # make sure it's a valid ip
         try:
             ipaddress.ip_address(ip)
         except ValueError:
             # not a valid ip skip
             return False
-        dhcp_servers = self.r.lrange(self.constants.DHCP_SERVERS, 0, -1)
+        dhcp_servers = await self.r.lrange(self.constants.DHCP_SERVERS, 0, -1)
         return ip in dhcp_servers
 
-    def store_dhcp_server(self, server_addr):
+    async def store_dhcp_server(self, server_addr):
         """
         Store all seen DHCP servers in the database.
         """
-        if self.is_dhcp_server(server_addr):
+        if await self.is_dhcp_server(server_addr):
             # already in the db
             return
 
-        self.r.lpush(self.constants.DHCP_SERVERS, server_addr)
+        await self.r.lpush(self.constants.DHCP_SERVERS, server_addr)
 
-    def save(self, backup_file):
+    async def save(self, backup_file):
         """
         Save the db to disk.
         backup_file should be the path+name of the file you want to save the db in
@@ -1600,7 +1652,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
         # saves to /var/lib/redis/dump.rdb
         # this path is only accessible by root
-        self.r.save()
+        await self.r.save()
 
         # gets the db saved to dump.rdb in the cwd
         redis_db_path = os.path.join(os.getcwd(), "dump.rdb")
@@ -1618,7 +1670,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         )
         return False
 
-    def load(self, backup_file: str) -> bool:
+    async def load(self, backup_file: str) -> bool:
         """
         Load the db from disk to the db on port 32850
         backup_file should be the full path of the .rdb
@@ -1665,17 +1717,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             self.print(f"Error loading the database {backup_file}.")
             return False
 
-    def set_last_warden_poll_time(self, time):
+    async def set_last_warden_poll_time(self, time):
         """
         :param time: epoch
         """
-        self.r.hset(self.constants.WARDEN_INFO, "poll", time)
+        await self.r.hset(self.constants.WARDEN_INFO, "poll", time)
 
-    def get_last_warden_poll_time(self):
+    async def get_last_warden_poll_time(self):
         """
         returns epoch time of last poll
         """
-        time = self.r.hget(self.constants.WARDEN_INFO, "poll")
+        time = await self.r.hget(self.constants.WARDEN_INFO, "poll")
         time = float(time) if time else float("-inf")
         return time
 
@@ -1701,37 +1753,37 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         print(s.getvalue())
         print("-" * 30 + " Done profiling")
 
-    def store_blame_report(self, ip, network_evaluation):
+    async def store_blame_report(self, ip, network_evaluation):
         """
         :param network_evaluation: a dict with {'score': ..,
         'confidence':
         .., 'ts': ..} taken from a blame report
         """
-        self.rcache.hset(
+        await self.rcache.hset(
             self.constants.P2P_RECEIVED_BLAME_REPORTS, ip, network_evaluation
         )
 
-    def store_zeek_path(self, path):
+    async def store_zeek_path(self, path):
         """used to store the path of zeek log
         files slips is currently using"""
-        self.r.set(self.constants.ZEEK_PATH, path)
+        await self.r.set(self.constants.ZEEK_PATH, path)
 
-    def get_zeek_path(self) -> str:
+    async def get_zeek_path(self) -> str:
         """return the path of zeek log files slips is currently using"""
-        return self.r.get(self.constants.ZEEK_PATH)
+        return await self.r.get(self.constants.ZEEK_PATH)
 
-    def increment_processed_flows(self):
+    async def increment_processed_flows(self):
         """processed by the profiler only"""
-        return self.r.incr(self.constants.PROCESSED_FLOWS, 1)
+        return await self.r.incr(self.constants.PROCESSED_FLOWS, 1)
 
-    def get_processed_flows_so_far(self) -> int:
+    async def get_processed_flows_so_far(self) -> int:
         """processed by the profiler only"""
-        processed_flows = self.r.get(self.constants.PROCESSED_FLOWS)
+        processed_flows = await self.r.get(self.constants.PROCESSED_FLOWS)
         if not processed_flows:
             return 0
         return int(processed_flows)
 
-    def store_std_file(self, **kwargs):
+    async def store_std_file(self, **kwargs):
         """
         available args are
             std_files = {
@@ -1743,20 +1795,22 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 }
         """
         for file_type, path in kwargs.items():
-            self.r.set(file_type, path)
+            await self.r.set(file_type, path)
 
-    def get_stdfile(self, file_type):
-        return self.r.get(file_type)
+    async def get_stdfile(self, file_type):
+        return await self.r.get(file_type)
 
-    def incr_msgs_received_in_channel(self, module: str, channel: str):
+    async def incr_msgs_received_in_channel(self, module: str, channel: str):
         """increments the number of msgs received by a module in the given
         channel by 1"""
-        self.r.hincrby(f"{module}_msgs_received_at_runtime", channel, 1)
+        await self.r.hincrby(f"{module}_msgs_received_at_runtime", channel, 1)
 
-    def get_msgs_received_at_runtime(self, module: str) -> Dict[str, int]:
+    async def get_msgs_received_at_runtime(
+        self, module: str
+    ) -> Dict[str, int]:
         """
         returns a list of channels this module is subscribed to, and how
         many msgs were received on each one
         :returns: {channel_name: number_of_msgs, ...}
         """
-        return self.r.hgetall(f"{module}_msgs_received_at_runtime")
+        return await self.r.hgetall(f"{module}_msgs_received_at_runtime")

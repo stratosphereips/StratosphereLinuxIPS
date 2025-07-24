@@ -21,85 +21,89 @@ import validators
 class ProfileHandler:
     """
     Helper class for the Redis class in database.py
-    Contains all the logic related to flows, profiles and timewindows
+    Contains all the logic related to flows, profiles, and timewindows
     """
 
     name = "DB"
 
-    def is_doh_server(self, ip: str) -> bool:
-        """returns whether the given ip is a DoH server"""
-        info: dict = self.get_ip_info(ip)
+    async def is_doh_server(self, ip: str) -> bool:
+        """Returns whether the given IP is a DoH server"""
+        info: dict = await self.get_ip_info(ip)
         return info.get("is_doh_server", False) if info else False
 
-    def get_outtuples_from_profile_tw(self, profileid, twid):
+    async def get_outtuples_from_profile_tw(self, profileid, twid):
         """Get the out tuples"""
-        return self.r.hget(profileid + self.separator + twid, "OutTuples")
+        return await self.r.hget(
+            profileid + self.separator + twid, "OutTuples"
+        )
 
-    def set_new_incoming_flows(self, will_slips_have_more_flows: bool):
-        """A flag indicating if slips is still receiving new flows from
-        input an profiler or not"""
-        self.r.set(
+    async def set_new_incoming_flows(self, will_slips_have_more_flows: bool):
+        """A flag indicating if Slips is still receiving new flows from input and profiler or not"""
+        await self.r.set(
             self.constants.WILL_SLIPS_HAVE_MORE_FLOWS,
             "yes" if will_slips_have_more_flows else "no",
         )
 
-    def will_slips_have_new_incoming_flows(self):
-        """A flag indicating if slips is still receiving new flows from
-        input an profiler or not"""
-        return self.r.get(self.constants.WILL_SLIPS_HAVE_MORE_FLOWS) == "yes"
+    async def will_slips_have_new_incoming_flows(self):
+        """A flag indicating if Slips is still receiving new flows from input and profiler or not"""
+        return (
+            await self.r.get(self.constants.WILL_SLIPS_HAVE_MORE_FLOWS)
+            == "yes"
+        )
 
-    def get_intuples_from_profile_tw(self, profileid, twid):
+    async def get_intuples_from_profile_tw(self, profileid, twid):
         """Get the in tuples"""
-        return self.r.hget(profileid + self.separator + twid, "InTuples")
+        return await self.r.hget(profileid + self.separator + twid, "InTuples")
 
-    def get_dhcp_flows(self, profileid, twid) -> list:
+    async def get_dhcp_flows(self, profileid, twid) -> list:
         """
-        returns a dict of dhcp flows that happened in this profileid and twid
+        Returns a dict of DHCP flows that happened in this profileid and twid
         """
-        if flows := self.r.hget(
+        if flows := await self.r.hget(
             self.constants.DHCP_FLOWS, f"{profileid}_{twid}"
         ):
             return json.loads(flows)
+        return []
 
-    def set_dhcp_flow(self, profileid, twid, requested_addr, uid):
+    async def set_dhcp_flow(self, profileid, twid, requested_addr, uid):
         """
-        Stores all dhcp flows sorted by profileid_twid
+        Stores all DHCP flows sorted by profileid_twid
         """
         flow = {requested_addr: uid}
-        if cached_flows := self.get_dhcp_flows(profileid, twid):
-            # we already have flows in this twid, update them
+        if cached_flows := await self.get_dhcp_flows(profileid, twid):
+            # We already have flows in this twid, update them
             cached_flows.update(flow)
-            self.r.hset(
+            await self.r.hset(
                 self.constants.DHCP_FLOWS,
                 f"{profileid}_{twid}",
                 json.dumps(cached_flows),
             )
         else:
-            self.r.hset(
+            await self.r.hset(
                 self.constants.DHCP_FLOWS,
                 f"{profileid}_{twid}",
                 json.dumps(flow),
             )
 
-    def get_tw_start_time(self, profileid, twid):
+    async def get_tw_start_time(self, profileid, twid):
         """Return the time when this TW in this profile was created"""
-        # We need to encode it to 'search' because the data in the
-        # sorted set is encoded
-        return self.r.zscore(f"tws{profileid}", twid.encode("utf-8"))
+        # We need to encode it to 'search' because the data in the sorted set is encoded
+        return await self.r.zscore(f"tws{profileid}", twid.encode("utf-8"))
 
-    def get_first_flow_time(self) -> float | None:
+    async def get_first_flow_time(self) -> float | None:
         """
         Get the starttime of the first timewindow
         aka ts of the first flow
         first tw is always timewindow1
         """
-        starttime_of_first_tw: str = self.r.hget(
+        starttime_of_first_tw: str = await self.r.hget(
             self.constants.ANALYSIS, "file_start"
         )
         if starttime_of_first_tw:
             return float(starttime_of_first_tw)
+        return None
 
-    def get_timewindow(self, flowtime, profileid):
+    async def get_timewindow(self, flowtime, profileid):
         """
         This function returns the TW in the database where the flow belongs.
         Returns the time window id
@@ -129,56 +133,52 @@ class ProfileHandler:
             tw_start = float(flowtime - (31536000 * 100))
             tw_number: int = 1
         else:
-            starttime_of_first_tw: float = self.get_first_flow_time()
-            if starttime_of_first_tw is not None:  #  because 0 is a valid
-                # value
+            starttime_of_first_tw: float = await self.get_first_flow_time()
+            if starttime_of_first_tw is not None:  # because 0 is a valid value
                 tw_number: int = (
                     floor((flowtime - starttime_of_first_tw) / self.width) + 1
                 )
-
                 tw_start: float = starttime_of_first_tw + (
                     self.width * (tw_number - 1)
                 )
             else:
-                # this is the first timewindow
+                # This is the first timewindow
                 tw_number: int = 1
                 tw_start: float = flowtime
 
         tw_id: str = f"timewindow{tw_number}"
 
-        self.add_new_tw(profileid, tw_id, tw_start)
+        await self.add_new_tw(profileid, tw_id, tw_start)
         return tw_id
 
-    def add_out_http(
+    async def add_out_http(
         self,
         profileid,
         twid,
         flow,
     ):
         """
-        Store in the DB a http request
-        All the type of flows that are not netflows are stored in a separate
+        Store in the DB an HTTP request
+        All the types of flows that are not netflows are stored in a separate
         hash ordered by uid.
         The idea is that from the uid of a netflow, you can access which other
-         type of info is related to that uid
+        type of info is related to that uid
         """
-        # Convert to json string
+        # Convert to JSON string
         http_flow = {
             "profileid": profileid,
             "twid": twid,
             "flow": asdict(flow),
         }
         to_send = json.dumps(http_flow)
-        self.publish("new_http", to_send)
-        self.publish("new_url", to_send)
+        await self.publish("new_http", to_send)
+        await self.publish("new_url", to_send)
 
         self.print(f"Adding HTTP flow to DB: {flow}", 3, 0)
-        # Check if the host domain AND the url is detected by the threat
-        # intelligence.
-        # not all flows have a host value so don't send empty hosts to ti
-        # module.
+        # Check if the host domain AND the URL is detected by the threat intelligence.
+        # Not all flows have a host value, so don't send empty hosts to TI module.
         if len(flow.host) > 2:
-            self.give_threat_intelligence(
+            await self.give_threat_intelligence(
                 profileid,
                 twid,
                 "dst",
@@ -187,7 +187,7 @@ class ProfileHandler:
                 flow.daddr,
                 lookup=flow.host,
             )
-            self.give_threat_intelligence(
+            await self.give_threat_intelligence(
                 profileid,
                 twid,
                 "dst",
@@ -197,8 +197,8 @@ class ProfileHandler:
                 lookup=f"http://{flow.host}{flow.uri}",
             )
         else:
-            # use the daddr since there's no host
-            self.give_threat_intelligence(
+            # Use the daddr since there's no host
+            await self.give_threat_intelligence(
                 profileid,
                 twid,
                 "dstip",
@@ -208,13 +208,13 @@ class ProfileHandler:
                 lookup=f"http://{flow.daddr}{flow.uri}",
             )
 
-    def add_out_dns(self, profileid, twid, flow):
+    async def add_out_dns(self, profileid, twid, flow):
         """
         Store in the DB a DNS request
-        All the type of flows that are not netflows are stored in a separate
+        All the types of flows that are not netflows are stored in a separate
         hash ordered by flow.uid.
         The idea is that from the flow.uid of a netflow, you can access which
-         other type of info is related to that flow.uid
+        other type of info is related to that flow.uid
         """
         to_send = {
             "profileid": profileid,
@@ -223,8 +223,8 @@ class ProfileHandler:
         }
 
         to_send = json.dumps(to_send)
-        self.publish("new_dns", to_send)
-        self.give_threat_intelligence(
+        await self.publish("new_dns", to_send)
+        await self.give_threat_intelligence(
             profileid,
             twid,
             "dstip",
@@ -237,7 +237,7 @@ class ProfileHandler:
         # Add DNS resolution to the db if there are answers for the query
         if flow.answers and flow.answers != ["-"]:
             srcip = profileid.split("_")[1]
-            self.set_dns_resolution(
+            await self.set_dns_resolution(
                 flow.query,
                 flow.answers,
                 flow.starttime,
@@ -246,7 +246,7 @@ class ProfileHandler:
                 srcip,
                 twid,
             )
-            # send each dns answer to TI module
+            # Send each DNS answer to TI module
             for answer in flow.answers:
                 if "TXT" in answer:
                     continue
@@ -255,7 +255,7 @@ class ProfileHandler:
                     "is_dns_response": True,
                     "dns_query": flow.query,
                 }
-                self.give_threat_intelligence(
+                await self.give_threat_intelligence(
                     profileid,
                     twid,
                     "dstip",
@@ -269,14 +269,14 @@ class ProfileHandler:
     def _was_flow_flipped(self, flow) -> bool:
         """
         The majority of the FP with horizontal port scan detection
-        happen because a benign computer changes wifi, and many not
-        established conns are redone, which look like a port scan to
+        happen because a benign computer changes WiFi, and many not
+        established connections are redone, which look like a port scan to
         10 webpages. To avoid this, we IGNORE all the flows that have
-        in the history of flags (field history in zeek), the ^,
+        in the history of flags (field history in Zeek), the ^,
         that means that the flow was swapped/flipped.
         The below key_name is only used by the portscan module to check
         for horizontal portscan, which means we can safely ignore it
-        here and it won't affect the rest of slips
+        here and it won't affect the rest of Slips
         """
         state_hist = flow.state_hist if hasattr(flow, "state_hist") else ""
         return "^" in state_hist
@@ -284,7 +284,7 @@ class ProfileHandler:
     @staticmethod
     def _is_multicast_or_broadcast(daddr: str) -> bool:
         """
-        to avoid reporting port scans on the
+        To avoid reporting port scans on the
         broadcast or multicast addresses or invalid values
         """
         if daddr == "255.255.255.255":
@@ -293,15 +293,15 @@ class ProfileHandler:
         daddr_obj = ipaddress.ip_address(daddr)
         return daddr_obj.is_multicast
 
-    def add_port(
+    async def add_port(
         self, profileid: str, twid: str, flow: dict, role: str, port_type: str
     ):
         """
         Store info learned from ports for this flow
         The flow can go out of the IP (we are acting as Client) or into the IP
-         (we are acting as Server)
+        (we are acting as Server)
         role: 'Client' or 'Server'. Client also defines that the flow is going
-         out, Server that is going in
+        out, Server that is going in
         port_type: 'Dst' or 'Src'.
         Depending if this port was a destination port or a source port
         """
@@ -330,19 +330,18 @@ class ProfileHandler:
         # Get the state. Established, NotEstablished
         summary_state = self.get_final_state_from_flags(state, pkts)
 
-        old_profileid_twid_data = self.get_data_from_profile_tw(
+        old_profileid_twid_data = await self.get_data_from_profile_tw(
             profileid, twid, port_type, summary_state, proto, role, "Ports"
         )
 
         try:
-            # we already have info about this dport, update it
+            # We already have info about this dport, update it
             port_data = old_profileid_twid_data[port]
             port_data["totalflows"] += 1
             port_data["totalpkt"] += pkts
             port_data["totalbytes"] += totbytes
 
-            # if there's a conn from this ip on this port, update the pkts
-            # of this conn
+            # If there's a connection from this IP on this port, update the packets
             if ip in port_data[ip_key]:
                 port_data[ip_key][ip]["pkts"] += pkts
                 port_data[ip_key][ip]["spkts"] += spkts
@@ -374,34 +373,34 @@ class ProfileHandler:
         data = json.dumps(old_profileid_twid_data)
         hash_key = f"{profileid}{self.separator}{twid}"
         key_name = f"{port_type}Ports{role}{proto}{summary_state}"
-        self.mark_profile_tw_as_modified(profileid, twid, starttime)
+        await self.mark_profile_tw_as_modified(profileid, twid, starttime)
 
         if key_name == "DstPortsClientTCPNot Established":
-            # this key is used in horizontal ps module only
-            # to avoid unnecessary storing and filtering of data, we store
-            # only unresolved non multicast non broadcast ips.
-            # if this key is ever needed for another module, we'll need to
+            # This key is used in horizontal portscan module only
+            # To avoid unnecessary storing and filtering of data, we store
+            # only unresolved non-multicast non-broadcast IPs.
+            # If this key is ever needed for another module, we'll need to
             # workaround this
-            ip_resolved = self.get_dns_resolution(ip)
+            ip_resolved = await self.get_dns_resolution(ip)
             if ip_resolved or self._is_multicast_or_broadcast(ip):
                 return
 
-        self.r.hset(hash_key, key_name, str(data))
+        await self.r.hset(hash_key, key_name, str(data))
 
     def get_final_state_from_flags(self, state, pkts):
         """
         Analyze the flags given and return a summary of the state. Should work
-         with Argus and Bro flags
-        We receive the pakets to distinguish some Reset connections
+        with Argus and Zeek flags
+        We receive the packets to distinguish some Reset connections
         """
         try:
             pre = state.split("_")[0]
             try:
-                # Try suricata states
+                # Try Suricata states
                 """
                 There are different states in which a flow can be.
                 Suricata distinguishes three flow-states for TCP and two for UDP. For TCP,
-                these are: New, Established and Closed,for UDP only new and established.
+                these are: New, Established and Closed, for UDP only new and established.
                 For each of these states Suricata can employ different timeouts.
                 """
                 if "new" in state or "established" in state:
@@ -409,7 +408,7 @@ class ProfileHandler:
                 elif "closed" in state:
                     return "Not Established"
 
-                # We have varius type of states depending on the type of flow.
+                # We have various types of states depending on the type of flow.
                 # For Zeek
                 if state in ("S0", "REJ", "RSTOS0", "RSTRH", "SH", "SHR"):
                     return "Not Established"
@@ -444,7 +443,7 @@ class ProfileHandler:
                     """
                     return "Established"
                 elif "PA" in pre and "PA" in suf:
-                    # Tipical flow that was reported in the middle
+                    # Typical flow that was reported in the middle
                     """
                     Examples:
                     PA_PA
@@ -484,22 +483,22 @@ class ProfileHandler:
                     # UDP
                     return "Established"
                 elif "INT" in pre:
-                    # UDP trying to connect, NOT preciselly not established but also NOT 'Established'. So we considered not established because there
+                    # UDP trying to connect, NOT precisely not established but also NOT 'Established'. So we considered not established because there
                     # is no confirmation of what happened.
                     return "Not Established"
                 elif "EST" in pre:
                     # TCP
                     return "Established"
                 elif "RST" in pre:
-                    # TCP. When -z B is not used in argus, states are single words. Most connections are reseted when finished and therefore are established
-                    # It can happen that is reseted being not established, but we can't tell without -z b.
+                    # TCP. When -z B is not used in Argus, states are single words. Most connections are reset when finished and therefore are established
+                    # It can happen that it is reset being not established, but we can't tell without -z b.
                     # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
                     return (
                         "Not Established" if int(pkts) <= 3 else "Established"
                     )
                 elif "FIN" in pre:
-                    # TCP. When -z B is not used in argus, states are single words. Most connections are finished with FIN when finished and therefore are established
-                    # It can happen that is finished being not established, but we can't tell without -z b.
+                    # TCP. When -z B is not used in Argus, states are single words. Most connections are finished with FIN when finished and therefore are established
+                    # It can happen that it is finished being not established, but we can't tell without -z b.
                     # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
                     return (
                         "Not Established" if int(pkts) <= 3 else "Established"
@@ -524,7 +523,7 @@ class ProfileHandler:
             )
             self.print(traceback.format_exc(), 0, 1)
 
-    def get_data_from_profile_tw(
+    async def get_data_from_profile_tw(
         self,
         profileid: str,
         twid: str,
@@ -540,26 +539,22 @@ class ProfileHandler:
         particular State (Established, etc.)
 
         :param direction: 'Dst' or 'Src'. This is used to know if you
-        want the data of the src ip or ports, or the data from
-        the dst ips or ports
+        want the data of the src IP or ports, or the data from
+        the dst IPs or ports
         :param state: can be 'Established' or 'NotEstablished'
         :param protocol: can be 'TCP', 'UDP', 'ICMP' or 'IPV6ICMP'
-
         :param role: can be 'Client' or 'Server'
         Depending if the traffic is going out or not, we are Client or Server
         Client role means: the traffic is done by the given profile
-        Server role means:the traffic is going to the given profile
-
+        Server role means: the traffic is going to the given profile
         :param type_data: can be 'Ports' or 'IPs'
         """
-
         try:
             # key_name = [Src,Dst] + [Port,IP] + [Client,Server] +
-            # [TCP,UDP, ICMP, ICMP6] + [Established,
-            # Not Establihed]
+            # [TCP,UDP, ICMP, ICMP6] + [Established, Not Established]
             # Example: key_name = 'SrcPortClientTCPEstablished'
             key = direction + type_data + role + protocol.upper() + state
-            data = self.r.hget(f"{profileid}{self.separator}{twid}", key)
+            data = await self.r.hget(f"{profileid}{self.separator}{twid}", key)
 
             if data:
                 return json.loads(data)
@@ -573,14 +568,13 @@ class ProfileHandler:
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Error in getDataFromProfileTW database.py line "
-                f"{exception_line}",
+                f"Error in getDataFromProfileTW in database.py line {exception_line}",
                 0,
                 1,
             )
             self.print(traceback.format_exc(), 0, 1)
 
-    def update_ip_info(
+    async def update_ip_info(
         self,
         old_profileid_twid_data: dict,
         pkts,
@@ -592,17 +586,17 @@ class ProfileHandler:
         uid,
     ) -> dict:
         """
-        #  Updates how many times each individual DstPort was contacted,
-        the total flows sent by this ip and their uids,
-        the total packets sent by this ip,
-        and total bytes sent by this ip
+        Updates how many times each individual DstPort was contacted,
+        the total flows sent by this IP and their UIDs,
+        the total packets sent by this IP,
+        and total bytes sent by this IP
         """
         dport = str(dport)
         spkts = int(spkts)
         pkts = int(pkts)
         totbytes = int(totbytes)
         if ip in old_profileid_twid_data:
-            # update info about an existing ip
+            # Update info about an existing IP
             ip_data = old_profileid_twid_data[ip]
             ip_data["totalflows"] += 1
             ip_data["totalpkt"] += pkts
@@ -616,7 +610,7 @@ class ProfileHandler:
             else:
                 ip_data["dstports"].update({dport: spkts})
         else:
-            # First time seeing this ip
+            # First time seeing this IP
             ip_data = {
                 "totalflows": 1,
                 "totalpkt": pkts,
@@ -629,49 +623,49 @@ class ProfileHandler:
 
         return old_profileid_twid_data
 
-    def update_times_contacted(self, ip, direction, profileid, twid):
+    async def update_times_contacted(self, ip, direction, profileid, twid):
         """
-        :param ip: the ip that we want to update the times we contacted
+        :param ip: the IP that we want to update the times we contacted
         """
-
         # Get the hash of the timewindow
         profileid_twid = f"{profileid}{self.separator}{twid}"
 
-        # Get the DstIPs data for this tw in this profile
+        # Get the DstIPs data for this TW in this profile
         # The format is {'1.1.1.1' :  3}
-        ips_contacted = self.r.hget(profileid_twid, f"{direction}IPs")
+        ips_contacted = await self.r.hget(profileid_twid, f"{direction}IPs")
         if not ips_contacted:
             ips_contacted = {}
 
         try:
             ips_contacted = json.loads(ips_contacted)
-            # Add 1 because we found this ip again
+            # Add 1 because we found this IP again
             ips_contacted[ip] += 1
         except (TypeError, KeyError):
             # There was no previous data stored in the DB
             ips_contacted[ip] = 1
 
         ips_contacted = json.dumps(ips_contacted)
-        self.r.hset(profileid_twid, f"{direction}IPs", str(ips_contacted))
+        await self.r.hset(
+            profileid_twid, f"{direction}IPs", str(ips_contacted)
+        )
 
-    def add_ips(self, profileid, twid, flow, role):
+    async def add_ips(self, profileid, twid, flow, role):
         """
         Function to add information about an IP address
         The flow can go out of the IP (we are acting as Client) or into the IP
         (we are acting as Server)
         ip_as_obj: IP to add. It can be a dstIP or srcIP depending on the role
         role: 'Client' or 'Server'
-        This function does two things:
-            1- Add the ip to this tw in this profile, counting how many times
+        This function does three things:
+            1- Add the IP to this TW in this profile, counting how many times
             it was contacted, and storing it in the key 'DstIPs' or 'SrcIPs'
             in the hash of the profile
-            2- Use the ip as a key to count how many times that IP was
-            contacted on each port. We store it like this because its the
-               pefect structure to detect vertical port scans later on
+            2- Use the IP as a key to count how many times that IP was
+            contacted on each port. We store it like this because it's the
+            perfect structure to detect vertical port scans later on
             3- Check if this IP has any detection in the threat intelligence
             module. The information is added by the module directly in the DB.
         """
-
         uid = flow.uid
         starttime = str(flow.starttime)
         ip = flow.daddr if role == "Client" else flow.saddr
@@ -679,30 +673,27 @@ class ProfileHandler:
         """
         Depending if the traffic is going out or not, we are Client or Server
         Client role means:
-            The profile corresponds to the src ip that received this flow
-            The dstip is here the one receiving data from your profile
-            So check the dst ip
+            The profile corresponds to the src IP that received this flow
+            The dstIP is here the one receiving data from your profile
+            So check the dst IP
         Server role means:
-            The profile corresponds to the dst ip that received this flow
-            The srcip is here the one sending data to your profile
-            So check the src ip
+            The profile corresponds to the dst IP that received this flow
+            The srcIP is here the one sending data to your profile
+            So check the src IP
         """
         direction = "Dst" if role == "Client" else "Src"
 
-        #############
         # Store the Dst as IP address and notify in the channel
         # We send the obj but when accessed as str, it is automatically
         # converted to str
-        self.set_new_ip(ip)
+        await self.set_new_ip(ip)
 
-        #############
-
-        # OTH means that we didnt see the true src ip and dst ip
-        # from zeek docs; OTH: No SYN seen, just midstream traffic
+        # OTH means that we didn't see the true src IP and dst IP
+        # from Zeek docs; OTH: No SYN seen, just midstream traffic
         # (one example of this is a “partial connection” that was not
         # later closed).
         if flow.state != "OTH":
-            self.ask_for_ip_info(
+            await self.ask_for_ip_info(
                 flow.saddr,
                 profileid,
                 twid,
@@ -710,7 +701,7 @@ class ProfileHandler:
                 "srcip",
                 daddr=flow.daddr,
             )
-            self.ask_for_ip_info(
+            await self.ask_for_ip_info(
                 flow.daddr,
                 profileid,
                 twid,
@@ -718,13 +709,13 @@ class ProfileHandler:
                 "dstip",
             )
 
-        self.update_times_contacted(ip, direction, profileid, twid)
+        await self.update_times_contacted(ip, direction, profileid, twid)
 
         # Get the state. Established, NotEstablished
         summary_state = self.get_final_state_from_flags(flow.state, flow.pkts)
         key_name = f"{direction}IPs{role}{flow.proto.upper()}{summary_state}"
         # Get the previous data about this key
-        old_profileid_twid_data = self.get_data_from_profile_tw(
+        old_profileid_twid_data = await self.get_data_from_profile_tw(
             profileid,
             twid,
             direction,
@@ -733,7 +724,7 @@ class ProfileHandler:
             role,
             "IPs",
         )
-        profileid_twid_data: dict = self.update_ip_info(
+        profileid_twid_data: dict = await self.update_ip_info(
             old_profileid_twid_data,
             flow.pkts,
             flow.dport,
@@ -745,65 +736,69 @@ class ProfileHandler:
         )
 
         # Store this data in the profile hash
-        self.r.hset(
+        await self.r.hset(
             f"{profileid}{self.separator}{twid}",
             key_name,
             json.dumps(profileid_twid_data),
         )
         return True
 
-    def get_all_contacted_ips_in_profileid_twid(self, profileid, twid) -> dict:
+    async def get_all_contacted_ips_in_profileid_twid(
+        self, profileid, twid
+    ) -> dict:
         """
         Get all the contacted IPs in a given profile and TW
         """
-        all_flows: dict = self.get_all_flows_in_profileid_twid(profileid, twid)
+        all_flows: dict = await self.get_all_flows_in_profileid_twid(
+            profileid, twid
+        )
         if not all_flows:
             return {}
         contacted_ips = {}
         for uid, flow in all_flows.items():
-            # get the daddr of this flow
+            # Get the daddr of this flow
             daddr = flow["daddr"]
             contacted_ips[daddr] = uid
         return contacted_ips
 
-    def mark_profile_and_timewindow_as_blocked(self, profileid, twid):
-        """Add this profile and tw to the list of blocked
-        a profile is only blocked if it was blocked using the user's
+    async def mark_profile_and_timewindow_as_blocked(self, profileid, twid):
+        """Add this profile and TW to the list of blocked
+        A profile is only blocked if it was blocked using the user's
         firewall, not if it just generated an alert
         """
-        tws = self.get_blocked_timewindows_of_profile(profileid)
+        tws = await self.get_blocked_timewindows_of_profile(profileid)
         tws.append(twid)
-        self.r.hset(
+        await self.r.hset(
             self.constants.BLOCKED_PROFILES_AND_TWS, profileid, json.dumps(tws)
         )
 
-    def get_blocked_timewindows_of_profile(self, profileid):
-        """Return all the list of blocked tws"""
-        if tws := self.r.hget(
+    async def get_blocked_timewindows_of_profile(self, profileid):
+        """Return all the list of blocked TWs"""
+        if tws := await self.r.hget(
             self.constants.BLOCKED_PROFILES_AND_TWS, profileid
         ):
             return json.loads(tws)
         return []
 
-    def get_blocked_profiles_and_timewindows(self):
-        return self.r.hgetall(self.constants.BLOCKED_PROFILES_AND_TWS)
+    async def get_blocked_profiles_and_timewindows(self):
+        return await self.r.hgetall(self.constants.BLOCKED_PROFILES_AND_TWS)
 
-    def is_blocked_profile_and_tw(self, profileid, twid):
+    async def is_blocked_profile_and_tw(self, profileid, twid):
         """
         Check if profile and timewindow is blocked
         """
-        profile_tws = self.get_blocked_timewindows_of_profile(profileid)
+        profile_tws = await self.get_blocked_timewindows_of_profile(profileid)
         return twid in profile_tws
 
-    def was_profile_and_tw_modified(self, profileid, twid):
-        """Retrieve from the db if this TW of this profile was modified"""
-        data = self.r.zrank(
+    async def was_profile_and_tw_modified(self, profileid, twid):
+        """Retrieve from the DB if this TW of this profile was modified"""
+        data = await self.r.zrank(
             self.constants.MODIFIED_TIMEWINDOWS,
             profileid + self.separator + twid,
         )
         return bool(data)
 
-    def add_flow(
+    async def add_flow(
         self,
         flow,
         profileid="",
@@ -813,10 +808,10 @@ class ProfileHandler:
         """
         Function to add a flow by interpreting the data. The flow is added to
         the correct TW for this profile.
-        The profileid is the main profile that this flow is related too.
+        The profileid is the main profile that this flow is related to.
         """
         if label:
-            self.r.zincrby(self.constants.LABELS, 1, label)
+            await self.r.zincrby(self.constants.LABELS, 1, label)
 
         to_send = {
             "profileid": profileid,
@@ -831,15 +826,15 @@ class ProfileHandler:
         }
         to_send = json.dumps(to_send)
 
-        # dont send arp flows in this channel, they have their own
+        # Don't send ARP flows in this channel, they have their own
         # new_arp channel
         if flow.type_ != "arp":
-            self.publish("new_flow", to_send)
+            await self.publish("new_flow", to_send)
         return True
 
-    def add_software_to_profile(self, profileid, flow):
+    async def add_software_to_profile(self, profileid, flow):
         """
-        Used to associate this profile with it's used software and version
+        Used to associate this profile with its used software and version
         """
         sw_dict = {
             flow.software: {
@@ -850,36 +845,38 @@ class ProfileHandler:
         }
         # cached_sw is {software: {'version-major':x,
         # 'version-minor':y, 'uid':...}}
-        if cached_sw := self.get_software_from_profile(profileid):
+        if cached_sw := await self.get_software_from_profile(profileid):
             if flow.software in cached_sw:
-                # we already have this same software for this proileid.
-                # dont store this one
+                # We already have this same software for this profileid.
+                # Don't store this one
                 return
-            # add this new sw to the list of softwares this profile is using
+            # Add this new software to the list of software this profile is using
             cached_sw.update(sw_dict)
-            self.r.hset(profileid, "used_software", json.dumps(cached_sw))
+            await self.r.hset(
+                profileid, "used_software", json.dumps(cached_sw)
+            )
         else:
-            # first time for this profile to use a software
-            self.r.hset(profileid, "used_software", json.dumps(sw_dict))
+            # First time for this profile to use a software
+            await self.r.hset(profileid, "used_software", json.dumps(sw_dict))
 
-    def get_total_flows(self):
+    async def get_total_flows(self):
         """
-        gets total flows to process from the db
+        Gets total flows to process from the DB
         """
-        return self.r.hget(self.constants.ANALYSIS, "total_flows")
+        return await self.r.hget(self.constants.ANALYSIS, "total_flows")
 
-    def get_analysis_info(self):
-        return self.r.hgetall(self.constants.ANALYSIS)
+    async def get_analysis_info(self):
+        return await self.r.hgetall(self.constants.ANALYSIS)
 
-    def add_out_ssh(
+    async def add_out_ssh(
         self,
         profileid,
         twid,
         flow,
     ):
         """
-        Store in the DB a SSH request
-        All the type of flows that are not netflows are stored in a
+        Store in the DB an SSH request
+        All the types of flows that are not netflows are stored in a
         separate hash ordered by uid.
         The idea is that from the uid of a netflow, you can access which
         other type of info is related to that uid
@@ -890,9 +887,9 @@ class ProfileHandler:
             "flow": asdict(flow),
         }
         to_send = json.dumps(to_send)
-        self.publish("new_ssh", to_send)
+        await self.publish("new_ssh", to_send)
         self.print(f"Adding SSH flow to DB: {flow}", 3, 0)
-        self.give_threat_intelligence(
+        await self.give_threat_intelligence(
             profileid,
             twid,
             "dstip",
@@ -902,7 +899,7 @@ class ProfileHandler:
             lookup=flow.daddr,
         )
 
-    def add_out_notice(
+    async def add_out_notice(
         self,
         profileid,
         twid,
@@ -916,9 +913,9 @@ class ProfileHandler:
             "flow": asdict(flow),
         }
         to_send = json.dumps(to_send)
-        self.publish("new_notice", to_send)
+        await self.publish("new_notice", to_send)
         self.print(f"Adding notice flow to DB: {flow}", 3, 0)
-        self.give_threat_intelligence(
+        await self.give_threat_intelligence(
             profileid,
             twid,
             "dstip",
@@ -928,17 +925,17 @@ class ProfileHandler:
             lookup=flow.daddr,
         )
 
-    def add_out_ssl(self, profileid, twid, flow):
+    async def add_out_ssl(self, profileid, twid, flow):
         """
-        Store in the DB an ssl request
-        All the type of flows that are not netflows are stored in a separate
-         hash ordered by uid.
+        Store in the DB an SSL request
+        All the types of flows that are not netflows are stored in a separate
+        hash ordered by uid.
         The idea is that from the uid of a netflow, you can access which other
-         type of info is related to that uid
+        type of info is related to that uid
         """
         to_send = {"profileid": profileid, "twid": twid, "flow": asdict(flow)}
         to_send = json.dumps(to_send)
-        self.publish("new_ssl", to_send)
+        await self.publish("new_ssl", to_send)
         self.print(f"Adding SSL flow to DB: {flow}", 3, 0)
         # Check if the server_name (SNI) is detected by the threat intelligence.
         # Empty field in the end, cause we have extra field for the IP.
@@ -947,7 +944,7 @@ class ProfileHandler:
             return False
 
         # We are giving only new server_name to the threat_intelligence module.
-        self.give_threat_intelligence(
+        await self.give_threat_intelligence(
             profileid,
             twid,
             "dstip",
@@ -959,7 +956,7 @@ class ProfileHandler:
 
         # Save new server name in the IPInfo. There might be several
         # server_name per IP.
-        if ipdata := self.get_ip_info(flow.daddr):
+        if ipdata := await self.get_ip_info(flow.daddr):
             sni_ipdata = ipdata.get("SNI", [])
         else:
             sni_ipdata = []
@@ -969,75 +966,79 @@ class ProfileHandler:
         if sni_port not in sni_ipdata:
             # Verify that the SNI is equal to any of the domains in the DNS
             # resolution
-            # only add this SNI to our db if it has a DNS resolution
-            if dns_resolutions := self.r.hgetall("DNSresolution"):
+            # Only add this SNI to our DB if it has a DNS resolution
+            if dns_resolutions := await self.r.hgetall("DNSresolution"):
                 # dns_resolutions is a dict with {ip:{'ts'..,'domains':...,
                 # 'uid':..}}
                 for ip, resolution in dns_resolutions.items():
                     resolution = json.loads(resolution)
                     if sni_port["server_name"] in resolution["domains"]:
-                        # add SNI to our db as it has a DNS resolution
+                        # Add SNI to our DB as it has a DNS resolution
                         sni_ipdata.append(sni_port)
-                        self.set_ip_info(flow.daddr, {"SNI": sni_ipdata})
+                        await self.set_ip_info(flow.daddr, {"SNI": sni_ipdata})
                         break
 
-    def get_profileid_from_ip(self, ip: str) -> Optional[str]:
+    async def get_profileid_from_ip(self, ip: str) -> Optional[str]:
         """
-        returns the profile of the given IP only if it was registered in
-        slips before
+        Returns the profile of the given IP only if it was registered in
+        Slips before
         """
         try:
             profileid = f"profile_{ip}"
-            if self.r.sismember(self.constants.PROFILES, profileid):
+            if await self.r.sismember(self.constants.PROFILES, profileid):
                 return profileid
-            return False
+            return None
         except redis.exceptions.ResponseError as inst:
-            self.print("error in get_profileid_from_ip in database.py", 0, 1)
+            self.print("Error in get_profileid_from_ip in database.py", 0, 1)
             self.print(type(inst), 0, 1)
             self.print(inst, 0, 1)
 
-    def get_profiles(self):
+    async def get_profiles(self):
         """Get a list of all the profiles"""
-        profiles = self.r.smembers(self.constants.PROFILES)
+        profiles = await self.r.smembers(self.constants.PROFILES)
         return profiles if profiles != set() else {}
 
-    def get_tws_from_profile(self, profileid):
+    async def get_tws_from_profile(self, profileid):
         """
-        Receives a profile id and returns the list of all the TW in that profile
+        Receives a profile ID and returns the list of all the TWs in that profile
         Returns a list of tuples (twid, ts) or an empty list
         """
         return (
-            self.r.zrange(f"tws{profileid}", 0, -1, withscores=True)
+            await self.r.zrange(f"tws{profileid}", 0, -1, withscores=True)
             if profileid
-            else False
+            else []
         )
 
-    def get_number_of_tws_in_profile(self, profileid) -> int:
+    async def get_number_of_tws_in_profile(self, profileid) -> int:
         """
-        Receives a profile id and returns the number of all the
+        Receives a profile ID and returns the number of all the
         TWs in that profile
         """
-        return len(self.get_tws_from_profile(profileid)) if profileid else 0
+        return (
+            len(await self.get_tws_from_profile(profileid)) if profileid else 0
+        )
 
-    def get_srcips_from_profile_tw(self, profileid, twid):
+    async def get_srcips_from_profile_tw(self, profileid, twid):
         """
-        Get the src ip for a specific TW for a specific profileid
+        Get the src IP for a specific TW for a specific profileid
         """
-        return self.r.hget(profileid + self.separator + twid, "SrcIPs")
+        return await self.r.hget(profileid + self.separator + twid, "SrcIPs")
 
-    def get_dstips_from_profile_tw(self, profileid, twid):
+    async def get_dstips_from_profile_tw(self, profileid, twid):
         """
-        Get the dst ip for a specific TW for a specific profileid
+        Get the dst IP for a specific TW for a specific profileid
         """
-        return self.r.hget(profileid + self.separator + twid, "DstIPs")
+        return await self.r.hget(profileid + self.separator + twid, "DstIPs")
 
-    def get_t2_for_profile_tw(self, profileid, twid, tupleid, tuple_key: str):
+    async def get_t2_for_profile_tw(
+        self, profileid, twid, tupleid, tuple_key: str
+    ):
         """
-        Get T1 and the previous_time for this previous_time, twid and tupleid
+        Get T1 and the previous_time for this previous_time, twid, and tupleid
         """
         try:
             hash_id = profileid + self.separator + twid
-            data = self.r.hget(hash_id, tuple_key)
+            data = await self.r.hget(hash_id, tuple_key)
             if not data:
                 return False, False
             data = json.loads(data)
@@ -1056,69 +1057,77 @@ class ProfileHandler:
             self.print(type(e), 0, 1)
             self.print(e, 0, 1)
 
-    def has_profile(self, profileid):
+    async def has_profile(self, profileid):
         """Check if we have the given profile"""
         return (
-            self.r.sismember(self.constants.PROFILES, profileid)
+            await self.r.sismember(self.constants.PROFILES, profileid)
             if profileid
             else False
         )
 
-    def get_profiles_len(self) -> int:
-        """Return the amount of profiles. Redis should be faster than python
+    async def get_profiles_len(self) -> int:
+        """Return the amount of profiles. Redis should be faster than Python
         to do this count"""
-        profiles_n = self.r.scard(self.constants.PROFILES)
+        profiles_n = await self.r.scard(self.constants.PROFILES)
         return 0 if not profiles_n else int(profiles_n)
 
-    def get_last_twid_of_profile(self, profileid: str) -> Tuple[str, float]:
+    async def get_last_twid_of_profile(
+        self, profileid: str
+    ) -> Tuple[str, float]:
         """
-        Returns the last TW id (aka tw with the greatest ts seen so far) and
-        the starttime of the given profile id
+        Returns the last TW ID (aka TW with the greatest ts seen so far) and
+        the starttime of the given profile ID
         """
         if profileid:
-            res = self.r.zrange(f"tws{profileid}", -1, -1, withscores=True)
+            res = await self.r.zrange(
+                f"tws{profileid}", -1, -1, withscores=True
+            )
             if res:
                 twid, starttime = res[0]
                 return twid, starttime
+        return "", 0.0
 
-    def get_first_twid_for_profile(
+    async def get_first_twid_for_profile(
         self, profileid: str
     ) -> Optional[Tuple[str, float]]:
         """
-        Return the first TW id and the time for the given profile id
-        the returned twid may be a negative tw for example tw-1, depends on
-        what tw was last registered
+        Return the first TW ID and the time for the given profile ID
+        The returned TW ID may be a negative TW, for example tw-1, depending on
+        what TW was last registered
         """
         if profileid:
             res: List[Tuple[str, float]]
-            res = self.r.zrange(f"tws{profileid}", 0, 0, withscores=True)
+            res = await self.r.zrange(f"tws{profileid}", 0, 0, withscores=True)
             if res:
                 tw: str
                 starttime_of_tw: float
                 tw, starttime_of_tw = res[0]
                 return tw, starttime_of_tw
+        return None
 
-    def get_tw_of_ts(self, profileid, time) -> Optional[Tuple[str, float]]:
+    async def get_tw_of_ts(
+        self, profileid, time
+    ) -> Optional[Tuple[str, float]]:
         """
-        Return the TW id and the time for the TW that includes the given time.
+        Return the TW ID and the time for the TW that includes the given time.
         The score in the DB is the start of the timewindow, so we should search
         a TW that includes the given time by making sure the start of the TW
         is < time, and the end of the TW is > time.
         """
-        # [-1] so we bring the last TW that matched this time.
         try:
-            data = self.r.zrangebyscore(
-                f"tws{profileid}",
-                float("-inf"),
-                float(time),
-                withscores=True,
-                start=0,
-                num=-1,
+            data = (
+                await self.r.zrangebyscore(
+                    f"tws{profileid}",
+                    float("-inf"),
+                    float(time),
+                    withscores=True,
+                    start=0,
+                    num=-1,
+                )
             )[-1]
-
         except IndexError:
-            # We dont have any last tw?
-            data = self.r.zrangebyscore(
+            # We don't have any last TW?
+            data = await self.r.zrangebyscore(
                 f"tws{profileid}",
                 0,
                 float(time),
@@ -1126,47 +1135,51 @@ class ProfileHandler:
                 start=0,
                 num=-1,
             )
-
+            if not data:
+                return None
+            data = data[-1]
         return data
 
-    def add_new_tw(self, profileid, timewindow: str, startoftw: float):
+    async def add_new_tw(self, profileid, timewindow: str, startoftw: float):
         """
-        Creates or adds a new timewindow to the list of tw for the
+        Creates or adds a new timewindow to the list of TWs for the
         given profile
-        Add the twid to the ordered set of a given profile
-        :param timewindow: str id of the twid, e.g timewindow7, timewindow-9
-        Returns the id of the timewindow just created
+        Add the TW ID to the ordered set of a given profile
+        :param timewindow: str ID of the TW ID, e.g., timewindow7, timewindow-9
+        Returns the ID of the timewindow just created
         """
         try:
             # Add the new TW to the index of TW
-            self.r.zadd(f"tws{profileid}", {timewindow: float(startoftw)})
+            await self.r.zadd(
+                f"tws{profileid}", {timewindow: float(startoftw)}
+            )
             self.print(
                 f"Created and added to DB for "
-                f"{profileid}: a new tw: {timewindow}. "
-                f" with starttime : {startoftw} ",
+                f"{profileid}: a new TW: {timewindow}. "
+                f" with starttime: {startoftw} ",
                 0,
                 4,
             )
             # The creation of a TW now does not imply that it was modified.
-            # You need to put data to mark is at modified.
+            # You need to put data to mark it as modified.
         except redis.exceptions.ResponseError:
             self.print("Error in addNewTW", 0, 1)
             self.print(traceback.format_exc(), 0, 1)
 
-    def get_number_of_tws(self, profileid):
-        """Return the number of tws for this profile id"""
-        return self.r.zcard(f"tws{profileid}") if profileid else False
+    async def get_number_of_tws(self, profileid):
+        """Return the number of TWs for this profile ID"""
+        return await self.r.zcard(f"tws{profileid}") if profileid else False
 
-    def get_modified_tw_since_time(
+    async def get_modified_tw_since_time(
         self, time: float
     ) -> List[Tuple[str, float]]:
         """
         Return the list of modified timewindows since a certain time
         """
-        # this ModifiedTW set has all timewindows of all profiles
-        #  the score of each tw is the ts it was last updated
-        # this ts is not network time, it is local time
-        data = self.r.zrangebyscore(
+        # This ModifiedTW set has all timewindows of all profiles
+        # The score of each TW is the ts it was last updated
+        # This ts is not network time, it is local time
+        data = await self.r.zrangebyscore(
             self.constants.MODIFIED_TIMEWINDOWS,
             time,
             float("+inf"),
@@ -1174,104 +1187,104 @@ class ProfileHandler:
         )
         return data or []
 
-    def get_modified_profiles_since(
+    async def get_modified_profiles_since(
         self, time: float
     ) -> Tuple[Set[str], float]:
         """Returns a set of modified profiles since a certain time and
         the time of the last modified profile"""
         modified_tws: List[Tuple[str, float]] = (
-            self.get_modified_tw_since_time(time)
+            await self.get_modified_tw_since_time(time)
         )
         if not modified_tws:
-            # no modified tws, and no time_of_last_modified_tw
-            return [], 0
+            # No modified TWs, and no time_of_last_modified_tw
+            return set(), 0
 
-        # get the time of last modified tw
+        # Get the time of last modified TW
         time_of_last_modified_tw: float = modified_tws[-1][-1]
 
-        # this list will store modified profiles without tws
-        # this is a list of ips. not profileids
+        # This list will store modified profiles without TWs
+        # This is a list of IPs, not profile IDs
         profiles = []
         profiles.extend(
             modified_tw[0].split("_")[1] for modified_tw in modified_tws
         )
-        # return a set of unique profiles
+        # Return a set of unique profiles
         return set(profiles), time_of_last_modified_tw
 
-    def add_to_the_list_of_ipv6(
+    async def add_to_the_list_of_ipv6(
         self, ipv6_to_add: str, cached_ipv6: str
     ) -> list:
         """
-        adds the given IPv6 to the list of given cached_ipv6
+        Adds the given IPv6 to the list of given cached_ipv6
         """
         if not cached_ipv6:
             cached_ipv6 = [ipv6_to_add]
         else:
-            # found a list of ipv6 in the db
+            # Found a list of IPv6 in the DB
             cached_ipv6: set = set(json.loads(cached_ipv6))
             cached_ipv6.add(ipv6_to_add)
             cached_ipv6 = list(cached_ipv6)
         return cached_ipv6
 
-    def set_mac_vendor_to_profile(
+    async def set_mac_vendor_to_profile(
         self, profileid: str, mac_addr: str, mac_vendor: str
     ) -> bool:
         """
-        sets the given mac add and vendor to the given profile key
-        is only called when we don't already have a vendor for the given
+        Sets the given MAC address and vendor to the given profile key
+        Is only called when we don't already have a vendor for the given
         profile
         """
-        if self.get_mac_vendor_from_profile(profileid):
-            # it already exists
+        if await self.get_mac_vendor_from_profile(profileid):
+            # It already exists
             return False
 
-        # we only wanna update the vendor of an ip if we have a mac for it
-        # because for example, we don't wanna set a mac to the profile
+        # We only want to update the vendor of an IP if we have a MAC for it
+        # because, for example, we don't want to set a MAC to the profile
         # 0.0.0.0
-        # set_mac_addr_to_profile handles the setting of addrs, and this
-        # func only handles the setting of vendors
+        # set_mac_addr_to_profile handles the setting of addresses, and this
+        # function only handles the setting of vendors
 
-        # so first, make sure the given mac addr belongs to the given profile
-        # before setting the mac vendor
-        if cached_mac_addr := self.get_mac_addr_from_profile(profileid):
+        # So first, make sure the given MAC address belongs to the given profile
+        # before setting the MAC vendor
+        if cached_mac_addr := await self.get_mac_addr_from_profile(profileid):
             cached_mac_addr: str
             if cached_mac_addr == mac_addr:
-                # now we're sure that the vendor of the given mac addr,
+                # Now we're sure that the vendor of the given MAC address
                 # is the vendor of this profileid
-                self.r.hset(profileid, "MAC_vendor", mac_vendor)
+                await self.r.hset(profileid, "MAC_vendor", mac_vendor)
                 return True
 
         return False
 
-    def update_mac_of_profile(self, profileid: str, mac: str):
-        """Add the MAC addr to the given profileid key"""
-        self.r.hset(profileid, self.constants.MAC, mac)
+    async def update_mac_of_profile(self, profileid: str, mac: str):
+        """Add the MAC address to the given profileid key"""
+        await self.r.hset(profileid, self.constants.MAC, mac)
 
     def _should_associate_this_mac_with_this_ip(self, ip, mac) -> bool:
         return not (
             ip == "0.0.0.0"
             or not mac
-            # sometimes we create profiles with the mac address.
-            # don't save that in MAC hash
+            # Sometimes we create profiles with the MAC address.
+            # Don't save that in MAC hash
             or validators.mac_address(ip)
             or self._is_gw_mac(mac)
-            # we're trying to assign the gw mac to
-            # an ip that isn't the gateway's
-            # this happens bc any public IP probably has the gw MAC
-            # in the zeek logs, so skip
+            # We're trying to assign the GW MAC to
+            # an IP that isn't the gateway's
+            # This happens because any public IP probably has the GW MAC
+            # in the Zeek logs, so skip
             or ip == self.get_gateway_ip()
         )
 
-    def add_mac_addr_to_profile(self, profileid: str, mac_addr: str):
+    async def add_mac_addr_to_profile(self, profileid: str, mac_addr: str):
         """
-        Used to associate the given profile with the given MAC addr.
-        stores this info in the 'MAC' key in the db
+        Used to associate the given profile with the given MAC address.
+        Stores this info in the 'MAC' key in the DB
         and in the profileid key of the given profile
-        format of the MAC key is
+        Format of the MAC key is
             MAC: [ipv4, ipv6, etc.]
-        this functions is called for all macs found in
-        dhcp.log, conn.log, arp.log etc.
-        PS: it doesn't deal with the MAC vendor
+        This function is called for all MACs found in
+        dhcp.log, conn.log, arp.log, etc.
+        PS: It doesn't deal with the MAC vendor
         """
         incoming_ip: str = profileid.split("_")[1]
 
@@ -1280,243 +1293,257 @@ class ProfileHandler:
         ):
             return False
 
-        # see if this is the gw mac
+        # See if this is the GW MAC
         self._determine_gw_mac(incoming_ip, mac_addr)
 
-        # get the ips that belong to this mac
-        cached_ips: Optional[List] = self.r.hmget(
-            self.constants.MAC, mac_addr
+        # Get the IPs that belong to this MAC
+        cached_ips: Optional[List] = (
+            await self.r.hmget(self.constants.MAC, mac_addr)
         )[0]
         if not cached_ips:
-            # no mac info stored for profileid
+            # No MAC info stored for profileid
             ip = json.dumps([incoming_ip])
-            self.r.hset(self.constants.MAC, mac_addr, ip)
+            await self.r.hset(self.constants.MAC, mac_addr, ip)
 
-            # now that it's decided that this mac belongs to this profileid
-            # stoe the mac in the profileid's key in the db
-            self.update_mac_of_profile(profileid, mac_addr)
+            # Now that it's decided that this MAC belongs to this profileid
+            # Store the MAC in the profileid's key in the DB
+            await self.update_mac_of_profile(profileid, mac_addr)
         else:
-            # we found another profile that has the same mac as this one
-            # get all the ips, v4 and 6, that are stored with this mac
+            # We found another profile that has the same MAC as this one
+            # Get all the IPs, v4 and v6, that are stored with this MAC
             cached_ips: List[str] = json.loads(cached_ips)
-            # get the last one of them
+            # Get the last one of them
             found_ip = cached_ips[-1]
             cached_ips: Set[str] = set(cached_ips)
 
             if incoming_ip in cached_ips:
-                # this is the case where we have the given ip already
-                # seen with the given mac. nothing to do here.
+                # This is the case where we have the given IP already
+                # seen with the given MAC. Nothing to do here.
                 return False
 
-            # make sure 1 profile is ipv4 and the other is ipv6
+            # Make sure one profile is IPv4 and the other is IPv6
             # (so we don't mess with MITM ARP detections)
             if validators.ipv6(incoming_ip) and validators.ipv4(found_ip):
-                # associate the ipv4 we found with the incoming ipv6
+                # Associate the IPv4 we found with the incoming IPv6
                 # and vice versa
-                self.set_ipv4_of_profile(profileid, found_ip)
-                self.set_ipv6_of_profile(f"profile_{found_ip}", [incoming_ip])
+                await self.set_ipv4_of_profile(profileid, found_ip)
+                await self.set_ipv6_of_profile(
+                    f"profile_{found_ip}", [incoming_ip]
+                )
 
             elif validators.ipv6(found_ip) and validators.ipv4(incoming_ip):
-                # associate the ipv6 we found with the incoming ipv4
+                # Associate the IPv6 we found with the incoming IPv4
                 # and vice versa
-                self.set_ipv6_of_profile(profileid, [found_ip])
-                self.set_ipv4_of_profile(f"profile_{found_ip}", incoming_ip)
+                await self.set_ipv6_of_profile(profileid, [found_ip])
+                await self.set_ipv4_of_profile(
+                    f"profile_{found_ip}", incoming_ip
+                )
             elif validators.ipv6(found_ip) and validators.ipv6(incoming_ip):
-                # If 2 IPv6 are claiming to have the same MAC it's fine
-                # a computer is allowed to have many ipv6
-                # add this found ipv6 to the list of ipv6 of the incoming
-                # ip(profileid)
+                # If two IPv6 are claiming to have the same MAC, it's fine
+                # A computer is allowed to have many IPv6
+                # Add this found IPv6 to the list of IPv6 of the incoming
+                # IP (profileid)
 
-                # get the list of cached ipv6
-                ipv6: str = self.get_ipv6_from_profile(profileid)
-                # get the list of cached ipv6+the new one
-                ipv6: list = self.add_to_the_list_of_ipv6(found_ip, ipv6)
-                self.set_ipv6_of_profile(profileid, ipv6)
+                # Get the list of cached IPv6
+                ipv6: str = await self.get_ipv6_from_profile(profileid)
+                # Get the list of cached IPv6 + the new one
+                ipv6: list = await self.add_to_the_list_of_ipv6(found_ip, ipv6)
+                await self.set_ipv6_of_profile(profileid, ipv6)
 
-                # add this incoming ipv6(profileid) to the list of
-                # ipv6 of the found ip
-                # get the list of cached ipv6
-                ipv6: str = self.get_ipv6_from_profile(f"profile_{found_ip}")
-                # get the list of cached ipv6+the new one
-                ipv6: list = self.add_to_the_list_of_ipv6(incoming_ip, ipv6)
-                self.set_ipv6_of_profile(f"profile_{found_ip}", ipv6)
+                # Add this incoming IPv6 (profileid) to the list of
+                # IPv6 of the found IP
+                # Get the list of cached IPv6
+                ipv6: str = await self.get_ipv6_from_profile(
+                    f"profile_{found_ip}"
+                )
+                # Get the list of cached IPv6 + the new one
+                ipv6: list = await self.add_to_the_list_of_ipv6(
+                    incoming_ip, ipv6
+                )
+                await self.set_ipv6_of_profile(f"profile_{found_ip}", ipv6)
 
             else:
-                # both are ipv4 and are claiming to have the same mac address
-                # OR one of them is 0.0.0.0 and didn't take an ip yet
-                # will be detected later by the ARP module
+                # Both are IPv4 and are claiming to have the same MAC address
+                # OR one of them is 0.0.0.0 and didn't take an IP yet
+                # Will be detected later by the ARP module
                 return False
 
-            # add the incoming ip to the list of ips that belong to this mac
+            # Add the incoming IP to the list of IPs that belong to this MAC
             cached_ips.add(incoming_ip)
             cached_ips = json.dumps(list(cached_ips))
-            self.r.hset(self.constants.MAC, mac_addr, cached_ips)
+            await self.r.hset(self.constants.MAC, mac_addr, cached_ips)
 
-            self.update_mac_of_profile(profileid, mac_addr)
-            self.update_mac_of_profile(f"profile_{found_ip}", mac_addr)
+            await self.update_mac_of_profile(profileid, mac_addr)
+            await self.update_mac_of_profile(f"profile_{found_ip}", mac_addr)
 
         return True
 
-    def get_mac_addr_from_profile(self, profileid: dict) -> Union[str, None]:
+    async def get_mac_addr_from_profile(
+        self, profileid: dict
+    ) -> Union[str, None]:
         """
-        Returns MAC address  of the given profile as a str, or None
-        returns the info from the profileid key.
+        Returns MAC address of the given profile as a str, or None
+        Returns the info from the profileid key.
         """
+        return await self.r.hget(profileid, self.constants.MAC)
 
-        return self.r.hget(profileid, self.constants.MAC)
+    async def add_user_agent_to_profile(self, profileid, user_agent: dict):
+        """
+        Used to associate this profile with its used user_agent
+        :param user_agent: dict containing user_agent, os_type,
+        os_name, and agent_name
+        """
+        await self.r.hset(
+            profileid, "first user-agent", json.dumps(user_agent)
+        )
 
-    def add_user_agent_to_profile(self, profileid, user_agent: dict):
+    async def get_user_agents_count(self, profileid) -> int:
         """
-        Used to associate this profile with it's used user_agent
-        :param user_agent: dict containing user_agent, os_type ,
-        os_name and agent_name
+        Returns the number of unique UAs seen for the given profileid
         """
-        self.r.hset(profileid, "first user-agent", user_agent)
+        count = await self.r.hget(profileid, "user_agents_count")
+        return int(count) if count else 0
 
-    def get_user_agents_count(self, profileid) -> int:
-        """
-        returns the number of unique UAs seen for the given profileid
-        """
-        return int(self.r.hget(profileid, "user_agents_count"))
-
-    def add_all_user_agent_to_profile(self, profileid, user_agent: str):
+    async def add_all_user_agent_to_profile(self, profileid, user_agent: str):
         """
         Used to keep history of past user agents of profile
         :param user_agent: str of user_agent
         """
-        if not self.r.hexists(profileid, "past_user_agents"):
-            # add the first user agent seen to the db
-            self.r.hset(
+        if not await self.r.hexists(profileid, "past_user_agents"):
+            # Add the first user agent seen to the DB
+            await self.r.hset(
                 profileid, "past_user_agents", json.dumps([user_agent])
             )
-            self.r.hset(profileid, "user_agents_count", 1)
+            await self.r.hset(profileid, "user_agents_count", 1)
         else:
-            # we have previous UAs
+            # We have previous UAs
             user_agents = json.loads(
-                self.r.hget(profileid, "past_user_agents")
+                await self.r.hget(profileid, "past_user_agents")
             )
             if user_agent not in user_agents:
-                # the given ua is not cached. cache it as a str
+                # The given UA is not cached. Cache it as a str
                 user_agents.append(user_agent)
-                self.r.hset(
+                await self.r.hset(
                     profileid, "past_user_agents", json.dumps(user_agents)
                 )
 
-                # incr the number of user agents seen for this profile
-                user_agents_count: int = self.get_user_agents_count(profileid)
-                self.r.hset(
+                # Increment the number of user agents seen for this profile
+                user_agents_count: int = await self.get_user_agents_count(
+                    profileid
+                )
+                await self.r.hset(
                     profileid, "user_agents_count", user_agents_count + 1
                 )
 
-    def get_software_from_profile(self, profileid):
+    async def get_software_from_profile(self, profileid):
         """
-        returns a dict with software, major_version, minor_version
+        Returns a dict with software, major_version, minor_version
         """
         if not profileid:
             return False
 
-        if used_software := self.r.hmget(profileid, "used_software")[0]:
+        if used_software := (await self.r.hmget(profileid, "used_software"))[
+            0
+        ]:
             used_software = json.loads(used_software)
             return used_software
+        return None
 
-    def get_first_user_agent(self, profileid) -> str:
-        """returns the first user agent used by the given profile"""
-        return self.r.hmget(profileid, "first user-agent")[0]
+    async def get_first_user_agent(self, profileid) -> str:
+        """Returns the first user agent used by the given profile"""
+        return (await self.r.hmget(profileid, "first user-agent"))[0]
 
-    def get_user_agent_from_profile(self, profileid) -> str:
+    async def get_user_agent_from_profile(self, profileid) -> str:
         """
-        Returns a dict of {'os_name',  'os_type', 'browser': , 'user_agent': }
+        Returns a dict of {'os_name', 'os_type', 'browser': , 'user_agent': }
         used by a certain profile or None
         """
-
-        if user_agent := self.get_first_user_agent(profileid):
-            # user agents may be OpenSSH_8.6 , no need to deserialize them
+        if user_agent := await self.get_first_user_agent(profileid):
+            # User agents may be OpenSSH_8.6, no need to deserialize them
             if "{" in user_agent:
                 user_agent = json.loads(user_agent)
             return user_agent
+        return None
 
-    def mark_profile_as_dhcp(self, profileid):
+    async def mark_profile_as_dhcp(self, profileid):
         """
-        Used to mark this profile as dhcp server
+        Used to mark this profile as DHCP server
         """
-
-        # returns a list of dhcp if the profile is in the db
-        profile_in_db = self.r.hmget(profileid, "dhcp")
+        # Returns a list of DHCP if the profile is in the DB
+        profile_in_db = await self.r.hmget(profileid, "dhcp")
         if not profile_in_db:
             return False
         is_dhcp_set = profile_in_db[0]
-        # check if it's already marked as dhcp
+        # Check if it's already marked as DHCP
         if not is_dhcp_set:
-            self.r.hset(profileid, "dhcp", "true")
+            await self.r.hset(profileid, "dhcp", "true")
 
-    def add_profile(self, profileid, starttime, confidence=0.05):
+    async def add_profile(self, profileid, starttime, confidence=0.05):
         """
         Add a new profile to the DB. Both the list of profiles and the
-         hashmap of profile data
+        hashmap of profile data
         Profiles are stored in two structures. A list of profiles (index)
-         and individual hashmaps for each profile (like a table)
+        and individual hashmaps for each profile (like a table)
         """
         try:
-            if self.r.sismember(self.constants.PROFILES, profileid):
-                # we already have this profile
+            if await self.r.sismember(self.constants.PROFILES, profileid):
+                # We already have this profile
                 return False
 
             # Add the profile to the index. The index is called 'profiles'
-            self.r.sadd(self.constants.PROFILES, str(profileid))
+            await self.r.sadd(self.constants.PROFILES, str(profileid))
             # Create the hashmap with the profileid.
-            # The hasmap of each profile is named with the profileid
+            # The hashmap of each profile is named with the profileid
             # Add the start time of profile
-            self.r.hset(profileid, "starttime", starttime)
+            await self.r.hset(profileid, "starttime", starttime)
             # For now duration of the TW is fixed
-            self.r.hset(profileid, "duration", self.width)
-            # When a new profiled is created assign threat level = 0
+            await self.r.hset(profileid, "duration", self.width)
+            # When a new profile is created assign threat level = 0
             # and confidence = 0.05
-
-            self.r.hset(profileid, "confidence", confidence)
+            await self.r.hset(profileid, "confidence", confidence)
             # The IP of the profile should also be added as a new IP
             # we know about.
             ip = profileid.split(self.separator)[1]
-            # If the ip is new add it to the list of ips
-            self.set_new_ip(ip)
+            # If the IP is new, add it to the list of IPs
+            await self.set_new_ip(ip)
             # Publish that we have a new profile
-            self.publish("new_profile", ip)
+            await self.publish("new_profile", ip)
             return True
         except redis.exceptions.ResponseError as inst:
             self.print("Error in add_profile in database.py", 0, 1)
             self.print(type(inst), 0, 1)
             self.print(inst, 0, 1)
 
-    def set_module_label_for_profile(self, profileid, module, label):
+    async def set_module_label_for_profile(self, profileid, module, label):
         """
         Set a module label for a profile.
         A module label is a label set by a module, and not
         a groundtruth label
         """
-        data = self.get_modules_labels_of_a_profile(profileid)
+        data = await self.get_modules_labels_of_a_profile(profileid)
         data[module] = label
         data = json.dumps(data)
-        self.r.hset(profileid, "modules_labels", data)
+        await self.r.hset(profileid, "modules_labels", data)
 
-    def check_tw_to_close(self, close_all=False):
+    async def check_tw_to_close(self, close_all=False):
         """
         Check if we should close a TW
-        Search in the modified tw list and compare when they
-        were modified with the slips internal time
-        :param close_all: close all tws no matter when they were last modified
+        Search in the modified TW list and compare when they
+        were modified with the Slips internal time
+        :param close_all: close all TWs no matter when they were last modified
         """
+        sit = await self.get_slips_internal_time()
 
-        sit = self.get_slips_internal_time()
-
-        # sit is the ts of the last tw modification detected by slips
-        # so this line means if 1h(width) passed since the last
-        # modification detected, then it's time to close the tw
+        # sit is the ts of the last TW modification detected by Slips
+        # So this line means if 1h (width) passed since the last
+        # modification detected, then it's time to close the TW
         modification_time = float(sit) - self.width
         if close_all:
-            # close all tws no matter when they were last modified
+            # Close all TWs no matter when they were last modified
             modification_time = float("inf")
 
-        # these are the tws that havent been modified in the last 1h
-        profiles_tws_to_close = self.r.zrangebyscore(
+        # These are the TWs that haven't been modified in the last 1h
+        profiles_tws_to_close = await self.r.zrangebyscore(
             self.constants.MODIFIED_TIMEWINDOWS,
             0,
             modification_time,
@@ -1527,49 +1554,49 @@ class ProfileHandler:
             profile_tw_to_close_id = profile_tw_to_close[0]
             profile_tw_to_close_time = profile_tw_to_close[1]
             self.print(
-                f"The profile id {profile_tw_to_close_id} has to be closed"
+                f"The profile ID {profile_tw_to_close_id} has to be closed"
                 f" because it was"
-                f" last modifed on {profile_tw_to_close_time} and we are "
+                f" last modified on {profile_tw_to_close_time} and we are "
                 f"closing everything older than {modification_time}."
                 f" Current time {sit}. "
                 f"Difference: {modification_time - profile_tw_to_close_time}",
                 3,
                 0,
             )
-            self.mark_profile_tw_as_closed(profile_tw_to_close_id)
+            await self.mark_profile_tw_as_closed(profile_tw_to_close_id)
 
-    def mark_profile_tw_as_closed(self, profileid_tw):
+    async def mark_profile_tw_as_closed(self, profileid_tw):
         """
         Mark the TW as closed so tools can work on its data
         """
-        self.r.sadd("ClosedTW", profileid_tw)
-        self.r.zrem(self.constants.MODIFIED_TIMEWINDOWS, profileid_tw)
-        self.publish("tw_closed", profileid_tw)
+        await self.r.sadd("ClosedTW", profileid_tw)
+        await self.r.zrem(self.constants.MODIFIED_TIMEWINDOWS, profileid_tw)
+        await self.publish("tw_closed", profileid_tw)
 
-    def mark_profile_tw_as_modified(self, profileid, twid, timestamp):
+    async def mark_profile_tw_as_modified(self, profileid, twid, timestamp):
         """
         Mark a TW in a profile as modified
         This means:
         1- To add it to the list of ModifiedTW
         2- Add the timestamp received to the time_of_last_modification
            in the TW itself
-        3- To update the internal time of slips
+        3- To update the internal time of Slips
         4- To check if we should 'close' some TW
         """
         timestamp = time.time()
         data = {f"{profileid}{self.separator}{twid}": float(timestamp)}
-        self.r.zadd(self.constants.MODIFIED_TIMEWINDOWS, data)
-        self.publish("tw_modified", f"{profileid}:{twid}")
+        await self.r.zadd(self.constants.MODIFIED_TIMEWINDOWS, data)
+        await self.publish("tw_modified", f"{profileid}:{twid}")
         # Check if we should close some TW
-        self.check_tw_to_close()
+        await self.check_tw_to_close()
 
-    def publish_new_letter(
+    async def publish_new_letter(
         self, new_symbol: str, profileid: str, twid: str, tupleid: str, flow
     ):
         """
-        analyze behavioral model with lstm model if
+        Analyze behavioral model with LSTM model if
         the length is divided by 3 -
-        so we send when there is 3 more characters added
+        so we send when there are 3 more characters added
         """
         if len(new_symbol) % 3 != 0:
             return
@@ -1583,7 +1610,7 @@ class ProfileHandler:
             "flow": asdict(flow),
         }
         to_send = json.dumps(to_send)
-        self.publish("new_letters", to_send)
+        await self.publish("new_letters", to_send)
 
     #
     # def get_previous_symbols(self, profileid: str, twid: str, direction:
@@ -1601,7 +1628,7 @@ class ProfileHandler:
     #     return prev_symbols
     #
 
-    def add_tuple(
+    async def add_tuple(
         self,
         profileid: str,
         twid: str,
@@ -1614,16 +1641,16 @@ class ProfileHandler:
         Add the tuple going in or out for this profile
         and if there was previous symbols for this profile, append the new
         symbol to it
-        before adding the tuple to the db
+        before adding the tuple to the DB
 
-        :param tupleid:  a dash separated str with the following format
+        :param tupleid: a dash-separated str with the following format
         daddr-dport-proto
-        :param symbol:  (symbol, (symbol_to_add, previous_two_timestamps))
+        :param symbol: (symbol, (symbol_to_add, previous_two_timestamps))
         T1: is the time diff between the past flow and the past-past flow.
         last_ts: the timestamp of the last flow
         :param role: 'Client' or 'Server'
         """
-        # If the traffic is going out it is part of our outtuples,
+        # If the traffic is going out, it is part of our outtuples,
         # if not, part of our intuples
         if role == "Client":
             direction = "OutTuples"
@@ -1633,9 +1660,11 @@ class ProfileHandler:
         try:
             profileid_twid = f"{profileid}{self.separator}{twid}"
 
-            # prev_symbols is a dict with {tulpeid: ['symbols_so_far',
+            # prev_symbols is a dict with {tupleid: ['symbols_so_far',
             # [timestamps]]}
-            prev_symbols: str = self.r.hget(profileid_twid, direction) or "{}"
+            prev_symbols: str = (
+                await self.r.hget(profileid_twid, direction) or "{}"
+            )
             prev_symbols: dict = json.loads(prev_symbols)
 
             try:
@@ -1657,13 +1686,13 @@ class ProfileHandler:
                 # Add it to form the string of letters
                 new_symbol = f"{prev_symbol}{symbol_to_add}"
 
-                self.publish_new_letter(
+                await self.publish_new_letter(
                     new_symbol, profileid, twid, tupleid, flow
                 )
 
                 prev_symbols[tupleid] = (new_symbol, previous_two_timestamps)
                 self.print(
-                    f"\tLetters so far for tuple {tupleid}:" f" {new_symbol}",
+                    f"\tLetters so far for tuple {tupleid}: {new_symbol}",
                     3,
                     0,
                 )
@@ -1673,16 +1702,17 @@ class ProfileHandler:
                 # There was no previous data stored in the DB to append
                 # the given symbol to.
                 self.print(
-                    f"First time for tuple {tupleid} as an"
-                    f" {direction} for {profileid} in TW {twid}",
+                    f"First time for tuple {tupleid} as an {direction} for {profileid} in TW {twid}",
                     3,
                     0,
                 )
                 prev_symbols[tupleid] = symbol
 
             prev_symbols = json.dumps(prev_symbols)
-            self.r.hset(profileid_twid, direction, prev_symbols)
-            self.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
+            await self.r.hset(profileid_twid, direction, prev_symbols)
+            await self.mark_profile_tw_as_modified(
+                profileid, twid, flow.starttime
+            )
 
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
@@ -1693,15 +1723,15 @@ class ProfileHandler:
             )
             self.print(traceback.format_exc(), 0, 1)
 
-    def get_modules_labels_of_a_profile(self, profileid):
+    async def get_modules_labels_of_a_profile(self, profileid):
         """
         Get labels set by modules in the profile.
         """
-        data = self.r.hget(profileid, "modules_labels")
+        data = await self.r.hget(profileid, "modules_labels")
         data = json.loads(data) if data else {}
         return data
 
-    def add_timeline_line(self, profileid, twid, data, timestamp):
+    async def add_timeline_line(self, profileid, twid, data, timestamp):
         """Add a line to the timeline of this profileid and twid"""
         self.print(f"Adding timeline for {profileid}, {twid}: {data}", 3, 0)
         key = str(
@@ -1709,11 +1739,11 @@ class ProfileHandler:
         )
         data = json.dumps(data)
         mapping = {data: timestamp}
-        self.r.zadd(key, mapping)
-        # Mark the tw as modified since the timeline line is new data in the TW
-        self.mark_profile_tw_as_modified(profileid, twid, timestamp="")
+        await self.r.zadd(key, mapping)
+        # Mark the TW as modified since the timeline line is new data in the TW
+        await self.mark_profile_tw_as_modified(profileid, twid, timestamp="")
 
-    def get_timeline_last_lines(
+    async def get_timeline_last_lines(
         self, profileid, twid, first_index: int
     ) -> Tuple[str, int]:
         """Get only the new items in the timeline."""
@@ -1721,69 +1751,73 @@ class ProfileHandler:
             profileid + self.separator + twid + self.separator + "timeline"
         )
         # The amount of lines in this list
-        last_index = self.r.zcard(key)
+        last_index = await self.r.zcard(key)
         # Get the data in the list from the index asked (first_index) until the last
-        data = self.r.zrange(key, first_index, last_index - 1)
+        data = await self.r.zrange(key, first_index, last_index - 1)
         return data, last_index
 
-    def get_profiled_tw_timeline(self, profileid, timewindow):
-        return self.r.zrange(f"{profileid}_{timewindow}_timeline", 0, -1)
+    async def get_profiled_tw_timeline(self, profileid, timewindow):
+        return await self.r.zrange(f"{profileid}_{timewindow}_timeline", 0, -1)
 
-    def mark_profile_as_gateway(self, profileid):
+    async def mark_profile_as_gateway(self, profileid):
         """
-        Used to mark this profile as dhcp server
+        Used to mark this profile as DHCP server
         """
+        await self.r.hset(profileid, "gateway", "true")
 
-        self.r.hset(profileid, "gateway", "true")
+    async def set_ipv6_of_profile(self, profileid, ip: list):
+        await self.r.hset(profileid, "IPv6", json.dumps(ip))
 
-    def set_ipv6_of_profile(self, profileid, ip: list):
-        self.r.hset(profileid, "IPv6", json.dumps(ip))
+    async def set_ipv4_of_profile(self, profileid, ip):
+        await self.r.hset(profileid, "IPv4", json.dumps([ip]))
 
-    def set_ipv4_of_profile(self, profileid, ip):
-        self.r.hset(profileid, "IPv4", json.dumps([ip]))
-
-    def get_mac_vendor_from_profile(self, profileid: str) -> Union[str, None]:
+    async def get_mac_vendor_from_profile(
+        self, profileid: str
+    ) -> Union[str, None]:
         """
-        Returns a str MAC vendor of  the given profile or None
+        Returns a str MAC vendor of the given profile or None
         """
+        return await self.r.hget(profileid, "MAC_vendor")
 
-        return self.r.hget(profileid, "MAC_vendor")
-
-    def get_hostname_from_profile(self, profileid: str) -> Optional[str]:
+    async def get_hostname_from_profile(self, profileid: str) -> Optional[str]:
         """
         Returns hostname about a certain profile or None
         """
-        return self.r.hget(profileid, "host_name")
+        return await self.r.hget(profileid, "host_name")
 
-    def add_host_name_to_profile(self, hostname, profileid):
+    async def add_host_name_to_profile(self, hostname, profileid):
         """
         Adds the given hostname to the given profile
         """
-        if not self.get_hostname_from_profile(profileid):
-            self.r.hset(profileid, "host_name", hostname)
+        if not await self.get_hostname_from_profile(profileid):
+            await self.r.hset(profileid, "host_name", hostname)
 
-    def get_ipv4_from_profile(self, profileid) -> str:
+    async def get_ipv4_from_profile(self, profileid) -> str:
         """
-        Returns ipv4 about a certain profile or None
+        Returns IPv4 about a certain profile or None
         """
-        return self.r.hmget(profileid, "IPv4")[0] if profileid else False
+        return (
+            (await self.r.hmget(profileid, "IPv4"))[0] if profileid else False
+        )
 
-    def get_ipv6_from_profile(self, profileid) -> str:
+    async def get_ipv6_from_profile(self, profileid) -> str:
         """
-        Returns ipv6 about a certain profile or None
+        Returns IPv6 about a certain profile or None
         """
-        return self.r.hmget(profileid, "IPv6")[0] if profileid else False
+        return (
+            (await self.r.hmget(profileid, "IPv6"))[0] if profileid else False
+        )
 
-    def get_the_other_ip_version(self, profileid):
+    async def get_the_other_ip_version(self, profileid):
         """
-        Given an ipv4, returns the ipv6 of the same computer
-        Given an ipv6, returns the ipv4 of the same computer
+        Given an IPv4, returns the IPv6 of the same computer
+        Given an IPv6, returns the IPv4 of the same computer
         """
         srcip = profileid.split("_")[-1]
         ip = False
         if validators.ipv4(srcip):
-            ip = self.get_ipv6_from_profile(profileid)
+            ip = await self.get_ipv6_from_profile(profileid)
         elif validators.ipv6(srcip):
-            ip = self.get_ipv4_from_profile(profileid)
+            ip = await self.get_ipv4_from_profile(profileid)
 
         return ip
