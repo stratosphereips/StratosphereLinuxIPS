@@ -24,12 +24,12 @@ from exclusiveprocess import (
 
 from modules.update_manager.timer_manager import InfiniteTimer
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 from slips_files.common.slips_utils import utils
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 
 
-class UpdateManager(IModule):
+class UpdateManager(IAsyncModule):
     name = "Update Manager"
     description = "Update Threat Intelligence files"
     authors = ["Kamila Babayeva", "Alya Gomaa"]
@@ -50,8 +50,6 @@ class UpdateManager(IModule):
         self.online_whitelist_update_timer = InfiniteTimer(
             self.online_whitelist_update_period, self.update_ti_files
         )
-        self.separator = self.db.get_field_separator()
-        self.read_configuration()
         # this will store the number of loaded ti files
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
@@ -117,12 +115,8 @@ class UpdateManager(IModule):
             os.chmod(self.path_to_remote_ti_files, 0o777)
 
         self.ti_feeds_path = conf.ti_files()
-        self.url_feeds = self.get_feed_details(self.ti_feeds_path)
         self.ja3_feeds_path = conf.ja3_feeds()
-        self.ja3_feeds = self.get_feed_details(self.ja3_feeds_path)
-
         self.ssl_feeds_path = conf.ssl_feeds()
-        self.ssl_feeds = self.get_feed_details(self.ssl_feeds_path)
 
         risk_iq_credentials_path = conf.RiskIQ_credentials_path()
         read_riskiq_creds(risk_iq_credentials_path)
@@ -138,7 +132,7 @@ class UpdateManager(IModule):
         self.enable_online_whitelist: bool = conf.enable_online_whitelist()
         self.enable_local_whitelist: bool = conf.enable_local_whitelist()
 
-    def get_feed_details(self, feeds_path):
+    async def get_feed_details(self, feeds_path):
         """
         Parse links, threat level and tags from the given feeds_path file and
         return
@@ -178,10 +172,10 @@ class UpdateManager(IModule):
             # remove commented lines from the cache db
             if url.startswith(";"):
                 feed = url.split("/")[-1]
-                if self.db.get_ti_feed_info(feed):
-                    self.db.delete_feed_entries(feed)
+                if await self.db.get_ti_feed_info(feed):
+                    await self.db.delete_feed_entries(feed)
                     # to avoid calling delete_feed again with the same feed
-                    self.db.delete_ti_feed(feed)
+                    await self.db.delete_ti_feed(feed)
                 continue
 
             # make sure the given tl is valid
@@ -205,7 +199,7 @@ class UpdateManager(IModule):
         """
         self.print(text, verbose=0, debug=1, log_to_logfiles_only=True)
 
-    def read_ports_info(self, ports_info_filepath) -> int:
+    async def read_ports_info(self, ports_info_filepath) -> int:
         """
         Reads port info from slips_files/ports_info/ports_used_by_specific_orgs.csv
         and store it in the db
@@ -243,13 +237,13 @@ class UpdateManager(IModule):
 
                         for port in range(first_port, last_port + 1):
                             portproto = f"{port}/{proto}"
-                            self.db.set_organization_of_port(
+                            await self.db.set_organization_of_port(
                                 organization, ip, portproto
                             )
                     else:
                         # it's a single port
                         portproto = f"{ports_range}/{proto}"
-                        self.db.set_organization_of_port(
+                        await self.db.set_organization_of_port(
                             organization, ip, portproto
                         )
 
@@ -263,14 +257,14 @@ class UpdateManager(IModule):
                     continue
         return line_number
 
-    def update_local_file(self, file_path) -> bool:
+    async def update_local_file(self, file_path) -> bool:
         """
         Returns True if update was successful
         """
         try:
             # each file is updated differently
             if "ports_used_by_specific_orgs.csv" in file_path:
-                self.read_ports_info(file_path)
+                await self.read_ports_info(file_path)
 
             elif "services.csv" in file_path:
                 with open(file_path, "r") as f:
@@ -279,7 +273,9 @@ class UpdateManager(IModule):
                         port = line.split(",")[1]
                         proto = line.split(",")[2]
                         # descr = line.split(',')[3]
-                        self.db.set_port_info(f"{str(port)}/{proto}", name)
+                        await self.db.set_port_info(
+                            f"{str(port)}/{proto}", name
+                        )
 
             # Store the new hash of file in the database
             file_info = {"hash": self.new_hash}
@@ -289,7 +285,7 @@ class UpdateManager(IModule):
         except OSError:
             return False
 
-    def check_if_update_local_file(self, file_path: str) -> bool:
+    async def check_if_update_local_file(self, file_path: str) -> bool:
         """
         Decides whether to update or not based on the file hash.
         Used for local files that are updated if the contents of the file
@@ -301,7 +297,8 @@ class UpdateManager(IModule):
         new_hash = utils.get_sha256_hash_of_file_contents(file_path)
 
         # Get last hash of the file stored in the database
-        file_info = self.db.get_ti_feed_info(file_path)
+        file_info = await self.db.get_ti_feed_info(file_path)
+        print(f"@@@@@@@@@@@@@@@@ file_info {file_info}")
         old_hash = file_info.get("hash", False)
 
         if not old_hash or old_hash != new_hash:
@@ -380,17 +377,17 @@ class UpdateManager(IModule):
         """checks if the mac db is present in databases/"""
         return os.path.isfile(self.path_to_mac_db)
 
-    def did_update_period_pass(self, period, file) -> bool:
+    async def did_update_period_pass(self, period, file) -> bool:
         """
         checks if the given period passed since the last time we
          updated the given file
         """
         # Get the last time this file was updated
-        ti_file_info: dict = self.db.get_ti_feed_info(file)
+        ti_file_info: dict = await self.db.get_ti_feed_info(file)
         last_update = ti_file_info.get("time", float("-inf"))
         return last_update + period <= time.time()
 
-    def mark_feed_as_updated(self, feed, extra_info: dict = {}):
+    async def mark_feed_as_updated(self, feed, extra_info: dict = {}):
         """
         sets the time we're done updating the feed in the db and increases
         the number of loaded ti feeds
@@ -401,14 +398,16 @@ class UpdateManager(IModule):
         """
         now = time.time()
         # update the time we last checked this file for update
-        self.db.set_feed_last_update_time(feed, now)
+        await self.db.set_feed_last_update_time(feed, now)
 
         extra_info.update({"time": now})
-        self.db.set_ti_feed_info(feed, extra_info)
+        await self.db.set_ti_feed_info(feed, extra_info)
 
         self.loaded_ti_files += 1
 
-    def should_update(self, file_to_download: str, update_period) -> bool:
+    async def should_update(
+        self, file_to_download: str, update_period
+    ) -> bool:
         """
         Decides whether to update or not based on the update period and e-tag.
         Used for remote files that are updated periodically
@@ -418,7 +417,9 @@ class UpdateManager(IModule):
         :param update_period: after how many seconds do we need to update
         this file?
         """
-        if not self.did_update_period_pass(update_period, file_to_download):
+        if not await self.did_update_period_pass(
+            update_period, file_to_download
+        ):
             # Update period hasn't passed yet, but the file is in our db
             self.loaded_ti_files += 1
             return False
@@ -437,7 +438,9 @@ class UpdateManager(IModule):
                 return False
 
             # Get the E-TAG of this file to compare with current files
-            ti_file_info: dict = self.db.get_ti_feed_info(file_to_download)
+            ti_file_info: dict = await self.db.get_ti_feed_info(
+                file_to_download
+            )
             old_e_tag = ti_file_info.get("e-tag", "")
             # Check now if E-TAG of file in github is same as downloaded
             # file here.
@@ -459,7 +462,7 @@ class UpdateManager(IModule):
                     self.responses[file_to_download] = response
                     return True
                 else:
-                    self.mark_feed_as_updated(file_to_download)
+                    await self.mark_feed_as_updated(file_to_download)
                     return False
 
             if old_e_tag != new_e_tag:
@@ -473,7 +476,7 @@ class UpdateManager(IModule):
                 # update period passed but the file hasnt changed on the
                 # server, no need to update
                 # Store the update time like we downloaded it anyway
-                self.mark_feed_as_updated(file_to_download)
+                await self.mark_feed_as_updated(file_to_download)
                 return False
 
         except Exception:
@@ -494,7 +497,7 @@ class UpdateManager(IModule):
         with open(full_path, "w") as f:
             f.write(response.text)
 
-    def parse_ssl_feed(self, url, full_path):
+    async def parse_ssl_feed(self, url, full_path):
         """
         Read all ssl fingerprints in full_path and store the info in our db
         :param url: the src feed
@@ -618,7 +621,7 @@ class UpdateManager(IModule):
                     )
                     continue
         # Add all loaded malicious sha1 to the database
-        self.db.add_ssl_sha1_to_ioc(malicious_ssl_certs)
+        await self.db.add_ssl_sha1_to_ioc(malicious_ssl_certs)
         return True
 
     async def update_ti_file(self, link_to_download: str) -> bool:
@@ -639,12 +642,13 @@ class UpdateManager(IModule):
 
             # File is updated in the server and was in our database.
             # Delete previous iocs of this file.
-            self.db.delete_feed_entries(link_to_download)
+            await self.db.delete_feed_entries(link_to_download)
 
             # ja3 files and ti_files are parsed differently, check which file is this
             # is it ja3 feed?
-            if link_to_download in self.ja3_feeds and not self.parse_ja3_feed(
-                link_to_download, full_path
+            if (
+                link_to_download in self.ja3_feeds
+                and not await self.parse_ja3_feed(link_to_download, full_path)
             ):
                 self.print(
                     f"Error parsing JA3 feed {link_to_download}. "
@@ -655,8 +659,9 @@ class UpdateManager(IModule):
                 return False
 
             # is it a ti_file? load updated IPs/domains to the database
-            elif link_to_download in self.url_feeds and not self.parse_ti_feed(
-                link_to_download, full_path
+            elif (
+                link_to_download in self.url_feeds
+                and not await self.parse_ti_feed(link_to_download, full_path)
             ):
                 self.print(
                     f"Error parsing feed {link_to_download}. "
@@ -667,7 +672,7 @@ class UpdateManager(IModule):
                 return False
             elif (
                 link_to_download in self.ssl_feeds
-                and not self.parse_ssl_feed(link_to_download, full_path)
+                and not await self.parse_ssl_feed(link_to_download, full_path)
             ):
                 self.print(
                     f"Error parsing feed {link_to_download}. "
@@ -683,7 +688,9 @@ class UpdateManager(IModule):
                 "time": time.time(),
                 "Last-Modified": self.get_last_modified(response),
             }
-            self.mark_feed_as_updated(link_to_download, extra_info=file_info)
+            await self.mark_feed_as_updated(
+                link_to_download, extra_info=file_info
+            )
             self.log(
                 f"Successfully updated the remote file {link_to_download}"
             )
@@ -706,7 +713,7 @@ class UpdateManager(IModule):
             self.print(traceback.format_exc(), 0, 1)
             return False
 
-    def update_riskiq_feed(self):
+    async def update_riskiq_feed(self):
         """Get and parse RiskIQ feed"""
         if not (self.riskiq_email and self.riskiq_key):
             return False
@@ -740,7 +747,9 @@ class UpdateManager(IModule):
                                 "source": url,
                             }
                         )
-                        self.db.add_domains_to_ioc(malicious_domains_dict)
+                        await self.db.add_domains_to_ioc(
+                            malicious_domains_dict
+                        )
             except KeyError:
                 self.print(
                     f'RiskIQ returned: {response["message"]}. '
@@ -750,7 +759,7 @@ class UpdateManager(IModule):
                 )
                 return False
 
-            self.mark_feed_as_updated("riskiq_domains")
+            await self.mark_feed_as_updated("riskiq_domains")
             self.log("Successfully updated RiskIQ domains.")
             return True
         except Exception as e:
@@ -762,7 +771,7 @@ class UpdateManager(IModule):
             self.print(f"Error: {e}", 0, 1)
             return False
 
-    def parse_ja3_feed(self, url, ja3_feed_path: str) -> bool:
+    async def parse_ja3_feed(self, url, ja3_feed_path: str) -> bool:
         """
         Read all ja3 fingerprints in ja3_feed_path and store the info in our db
         :param url: this is the src feed
@@ -902,7 +911,7 @@ class UpdateManager(IModule):
                         continue
 
             # Add all loaded malicious ja3 to the database
-            self.db.add_ja3_to_ioc(malicious_ja3_dict)
+            await self.db.add_ja3_to_ioc(malicious_ja3_dict)
             return True
 
         except Exception:
@@ -910,7 +919,9 @@ class UpdateManager(IModule):
             self.print(traceback.format_exc(), 0, 1)
             return False
 
-    def parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
+    async def parse_json_ti_feed(
+        self, link_to_download, ti_file_path: str
+    ) -> bool:
         """
         Slips has 2 json TI feeds that are parsed differently. hole.cert.pl
         and rstcloud
@@ -947,7 +958,7 @@ class UpdateManager(IModule):
                         }
                     )
 
-            self.db.add_ips_to_ioc(malicious_ips_dict)
+            await self.db.add_ips_to_ioc(malicious_ips_dict)
             return True
 
         if "hole.cert.pl" in link_to_download:
@@ -985,7 +996,7 @@ class UpdateManager(IModule):
                             "tags": tags,
                         }
                     )
-            self.db.add_domains_to_ioc(malicious_domains_dict)
+            await self.db.add_domains_to_ioc(malicious_domains_dict)
             return True
 
     def get_description_column_index(self, header):
@@ -1211,7 +1222,7 @@ class UpdateManager(IModule):
             line = f"{new_line},{description}"
         return line.replace("\n", "").replace('"', "")
 
-    def extract_domain_info(
+    async def extract_domain_info(
         self, domain: str, ti_file_name: str, feed_link: str, description: str
     ):
         # if we have info about the ioc, append to it, if we don't
@@ -1258,7 +1269,7 @@ class UpdateManager(IModule):
                 }
             )
 
-    def extract_ip_info(
+    async def extract_ip_info(
         self, ip: str, ti_file_name: str, feed_link: str, description: str
     ):
         # make sure we're not blacklisting a private ip
@@ -1311,9 +1322,9 @@ class UpdateManager(IModule):
             # and the profile of this ip to the same as the
             # ones given in slips.conf
             # todo for now the confidence is 1
-            self.db.update_threat_level(f"profile_{ip}", threat_level, 1)
+            await self.db.update_threat_level(f"profile_{ip}", threat_level, 1)
 
-    def extract_ip_range_info(
+    async def extract_ip_range_info(
         self,
         ip_range: str,
         ti_file_name: str,
@@ -1386,7 +1397,7 @@ class UpdateManager(IModule):
             return False
         return True
 
-    def parse_ti_feed(self, feed_link: str, ti_file_path: str) -> bool:
+    async def parse_ti_feed(self, feed_link: str, ti_file_path: str) -> bool:
         """
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
@@ -1401,7 +1412,7 @@ class UpdateManager(IModule):
             return False
 
         if "json" in ti_file_path:
-            return self.parse_json_ti_feed(feed_link, ti_file_path)
+            return await self.parse_json_ti_feed(feed_link, ti_file_path)
 
         structure: Tuple[int] = self.get_feed_structure(ti_file_path)
         if not structure:
@@ -1443,11 +1454,13 @@ class UpdateManager(IModule):
             if data_type not in handlers:
                 # maybe it's a url, urls as iocs are not supported.
                 continue
-            handlers[data_type](ioc, ti_file_name, feed_link, description)
+            await handlers[data_type](
+                ioc, ti_file_name, feed_link, description
+            )
 
-        self.db.add_ips_to_ioc(self.malicious_ips_dict)
-        self.db.add_domains_to_ioc(self.malicious_domains_dict)
-        self.db.add_ip_range_to_ioc(self.malicious_ip_ranges)
+        await self.db.add_ips_to_ioc(self.malicious_ips_dict)
+        await self.db.add_domains_to_ioc(self.malicious_domains_dict)
+        await self.db.add_ip_range_to_ioc(self.malicious_ip_ranges)
         feed.close()
         return True
 
@@ -1462,16 +1475,16 @@ class UpdateManager(IModule):
         #     self.print(traceback.format_exc(), 0, 1)
         #     return False
 
-    def check_if_update_org(self, file):
+    async def check_if_update_org(self, file):
         """checks if we should update organizations' info
         based on the hash of thegiven file"""
-        cached_hash = self.db.get_ti_feed_info(file).get("hash", "")
+        cached_hash = await self.db.get_ti_feed_info(file).get("hash", "")
         if utils.get_sha256_hash_of_file_contents(file) != cached_hash:
             return True
 
-    def get_whitelisted_orgs(self) -> list:
+    async def get_whitelisted_orgs(self) -> list:
 
-        whitelisted_orgs: dict = self.db.get_whitelist("organizations")
+        whitelisted_orgs: dict = await self.db.get_whitelist("organizations")
         whitelisted_orgs: list = list(whitelisted_orgs.keys())
         return whitelisted_orgs
 
@@ -1483,7 +1496,7 @@ class UpdateManager(IModule):
         if self.enable_local_whitelist:
             self.whitelist.update()
 
-    def update_org_files(self):
+    async def update_org_files(self):
         for org in utils.supported_orgs:
             org_ips = os.path.join(self.org_info_path, org)
             org_asn = os.path.join(self.org_info_path, f"{org}_asn")
@@ -1501,14 +1514,15 @@ class UpdateManager(IModule):
                 info = {
                     "hash": utils.get_sha256_hash_of_file_contents(file),
                 }
-                self.mark_feed_as_updated(file, info)
+                await self.mark_feed_as_updated(file, info)
 
-    def update_ports_info(self):
-        for file in os.listdir("slips_files/ports_info"):
-            file = os.path.join("slips_files/ports_info", file)
-            if self.check_if_update_local_file(
+    async def update_ports_info(self):
+        ports_info_dir = "slips_files/ports_info"
+        for file in os.listdir(ports_info_dir):
+            file = os.path.join(ports_info_dir, file)
+            if await self.check_if_update_local_file(
                 file
-            ) and not self.update_local_file(file):
+            ) and not await self.update_local_file(file):
                 # update failed
                 self.print(
                     f"An error occurred while updating {file}. Updating "
@@ -1546,7 +1560,7 @@ class UpdateManager(IModule):
             f"Number of repeated IPs in 3 blacklists: {ips_in_3_bl}", 2, 0
         )
 
-    def update_mac_db(self):
+    async def update_mac_db(self):
         """
         Updates the mac db using the response stored in self.responses
         """
@@ -1565,23 +1579,23 @@ class UpdateManager(IModule):
         with open(self.path_to_mac_db, "w") as mac_db:
             mac_db.write(mac_info)
 
-        self.mark_feed_as_updated(self.mac_db_link)
+        await self.mark_feed_as_updated(self.mac_db_link)
         return True
 
-    def update_online_whitelist(self):
+    async def update_online_whitelist(self):
         """
         Updates online tranco whitelist defined in slips.yaml
          online_whitelist key
         """
         # delete the old ones
-        self.db.delete_tranco_whitelist()
+        await self.db.delete_tranco_whitelist()
         response = self.responses["tranco_whitelist"]
         for line in response.text.splitlines():
             domain = line.split(",")[1]
             domain.strip()
-            self.db.store_tranco_whitelisted_domain(domain)
+            await self.db.store_tranco_whitelisted_domain(domain)
 
-        self.mark_feed_as_updated("tranco_whitelist")
+        await self.mark_feed_as_updated("tranco_whitelist")
 
     def download_mac_db(self):
         """
@@ -1617,7 +1631,7 @@ class UpdateManager(IModule):
 
         return self.download_mac_db()
 
-    def delete_unused_cached_remote_feeds(self):
+    async def delete_unused_cached_remote_feeds(self):
         """
         Slips caches all the feeds it downloads. If the user deleted any of
         the feeds used, like literally deleted it (not using ;) the feeds
@@ -1625,7 +1639,9 @@ class UpdateManager(IModule):
         to delete these unused feeds from the cache
         """
         # get the cached feeds
-        loaded_feeds: Dict[str, Dict[str, str]] = self.db.get_loaded_ti_feeds()
+        loaded_feeds: Dict[str, Dict[str, str]] = (
+            await self.db.get_loaded_ti_feeds()
+        )
         # filter remote ones only, bc the loaded feeds have local ones too
         cached_remote_feeds: List[str] = [
             feed for feed in loaded_feeds if feed.startswith("http")
@@ -1643,8 +1659,8 @@ class UpdateManager(IModule):
             # of this run?
             if feed not in remote_feeds_from_config:
                 # delete the feed from the cache
-                self.db.delete_ti_feed(feed)
-                self.db.delete_feed_entries(feed)
+                await self.db.delete_ti_feed(feed)
+                await self.db.delete_feed_entries(feed)
                 self.print(
                     f"Deleted feed {feed} from cache",
                     2,
@@ -1690,10 +1706,10 @@ class UpdateManager(IModule):
             self.log("Checking if we need to download TI files.")
 
             if self.should_update_mac_db():
-                self.update_mac_db()
+                await self.update_mac_db()
 
-            if self.should_update_online_whitelist():
-                self.update_online_whitelist()
+            if await self.should_update_online_whitelist():
+                await self.update_online_whitelist()
 
             ############### Update remote TI files ################
             # Check if the remote file is newer than our own
@@ -1709,7 +1725,9 @@ class UpdateManager(IModule):
             self.delete_unused_cached_remote_feeds()
 
             for file_to_download in files_to_download:
-                if self.should_update(file_to_download, self.update_period):
+                if await self.should_update(
+                    file_to_download, self.update_period
+                ):
                     # failed to get the response, either a server problem
                     # or the file is up to date so the response isn't needed
                     # either way __check_if_update handles the error printing
@@ -1729,8 +1747,10 @@ class UpdateManager(IModule):
             #######################################################
             # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
             # check if we have a username and api key and a week has passed since we last updated
-            if self.should_update("riskiq_domains", self.riskiq_update_period):
-                self.update_riskiq_feed()
+            if await self.should_update(
+                "riskiq_domains", self.riskiq_update_period
+            ):
+                await self.update_riskiq_feed()
 
             # wait for all TI files to update
             try:
@@ -1740,7 +1760,7 @@ class UpdateManager(IModule):
                 # have task defined, skip
                 pass
 
-            self.db.set_loaded_ti_files(self.loaded_ti_files)
+            await self.db.set_loaded_ti_files(self.loaded_ti_files)
             self.print_duplicate_ip_summary()
             self.loaded_ti_files = 0
         except KeyboardInterrupt:
@@ -1757,9 +1777,14 @@ class UpdateManager(IModule):
 
         await self.update_finished
         self.print(
-            f"{self.db.get_loaded_ti_feeds_number()} "
+            f"{await self.db.get_loaded_ti_feeds_number()} "
             f"TI files successfully loaded."
         )
+
+    async def setup_feed_details(self):
+        self.url_feeds = await self.get_feed_details(self.ti_feeds_path)
+        self.ja3_feeds = await self.get_feed_details(self.ja3_feeds_path)
+        self.ssl_feeds = await self.get_feed_details(self.ssl_feeds_path)
 
     def shutdown_gracefully(self):
         # terminating the timer for the process to be killed
@@ -1768,12 +1793,15 @@ class UpdateManager(IModule):
         self.online_whitelist_update_timer.cancel()
         return True
 
-    def pre_main(self):
+    async def pre_main(self):
         """this method runs only once"""
         try:
             # only one instance of slips should be able to update TI files at a time
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_macdb_and_whitelist_and_TI_files_update"):
+
+                await self.setup_feed_details()
+
                 asyncio.run(self.update_ti_files())
                 # Starting timer to update files
                 self.timer_manager.start()

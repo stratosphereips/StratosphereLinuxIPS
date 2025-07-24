@@ -9,7 +9,7 @@ from typing import (
 from slips_files.common.abstracts.imodule import IModule
 
 
-class AsyncModule(IModule):
+class IAsyncModule(IModule):
     """
     An abstract class for asynchronous slips modules
     """
@@ -21,7 +21,11 @@ class AsyncModule(IModule):
         # list of async functions to await before flowalerts shuts down
         self.tasks: List[Task] = []
 
-    def init(self, **kwargs): ...
+    def init(self, **kwargs):
+        # PS don't call the self.db from any of the modukes' init()
+        # methods, init can't be async, and most db calls are async,
+        # so instead, put your async logic in the pre_main() method
+        ...
 
     def create_task(self, func, *args) -> Task:
         """
@@ -55,6 +59,8 @@ class AsyncModule(IModule):
         except Exception:
             self.print_traceback()
 
+    async def pre_main(self): ...
+
     async def main(self): ...
 
     async def shutdown_gracefully(self):
@@ -82,7 +88,7 @@ class AsyncModule(IModule):
         asyncio.set_event_loop(loop)
 
         try:
-            error: bool = self.pre_main()
+            error: bool = self.run_async_function(self.pre_main)
             if error or self.should_stop():
                 self.run_async_function(
                     self.gather_tasks_and_shutdown_gracefully

@@ -64,7 +64,7 @@ class IModule(ABC, Process):
         )
         self.keyboard_int_ctr = 0
         self.init(**kwargs)
-        # should after the module's init() so the module has a chance to
+        # should be after the module's init() so the module has a chance to
         # set its own channels
         # tracks whether or not in the last iteration there was a msg
         # received in that channel

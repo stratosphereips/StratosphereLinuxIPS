@@ -527,8 +527,8 @@ class DBManager:
     async def store_std_file(self, *args, **kwargs):
         return await self.rdb.store_std_file(*args, **kwargs)
 
-    async def get_stdfile(self, *args, **kwargs):
-        return await self.rdb.get_stdfile(*args, **kwargs)
+    def get_stdfile(self, *args, **kwargs):
+        return self.rdb.get_stdfile(*args, **kwargs)
 
     async def set_evidence_causing_alert(self, *args, **kwargs):
         return await self.rdb.set_evidence_causing_alert(*args, **kwargs)
@@ -716,7 +716,7 @@ class DBManager:
         return await self.rdb.set_feed_last_update_time(*args, **kwargs)
 
     async def get_ti_feed_info(self, *args, **kwargs):
-        await self.rdb.get_ti_feed_info(*args, **kwargs)
+        return await self.rdb.get_ti_feed_info(*args, **kwargs)
 
     async def delete_ti_feed(self, *args, **kwargs):
         return await self.rdb.delete_ti_feed(*args, **kwargs)

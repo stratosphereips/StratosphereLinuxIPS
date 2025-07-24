@@ -1797,8 +1797,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         for file_type, path in kwargs.items():
             await self.r.set(file_type, path)
 
-    async def get_stdfile(self, file_type):
-        return await self.r.get(file_type)
+    def get_stdfile(self, file_type):
+        return self.r.get(file_type)
 
     async def incr_msgs_received_in_channel(self, module: str, channel: str):
         """increments the number of msgs received by a module in the given

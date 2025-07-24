@@ -6,7 +6,7 @@ from asyncio import Task
 from typing import List
 
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.iasync_module import AsyncModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 from .conn import Conn
 from .dns import DNS
 from .downloaded_file import DownloadedFile
@@ -19,7 +19,7 @@ from .tunnel import Tunnel
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 
 
-class FlowAlerts(AsyncModule):
+class FlowAlerts(IAsyncModule):
     name = "Flow Alerts"
     description = (
         "Alerts about flows: long connection, successful ssh, "
