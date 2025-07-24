@@ -77,6 +77,10 @@ class FlowMLDetection(IModule):
         self.scaler = StandardScaler()
         self.model_path = "./modules/flowmldetection/model.bin"
         self.scaler_path = "./modules/flowmldetection/scaler.bin"
+        self.all_classes = [BACKGROUND, MALICIOUS, BENIGN]
+        self.all_labels = ["background", "malicious", "benign"]
+
+        self.classifier_initialized = False
         self.init_log_file()
 
     def init_log_file(self):
@@ -115,31 +119,102 @@ class FlowMLDetection(IModule):
         except Exception as e:
             self.print(f"Error writing to log: {e}", 0, 1)
 
+    def store_training_results(
+        self,
+        y_flow,
+        y_pred,
+        sum_labeled_flows,
+        epoch_label_counts,
+    ):
+        # For metrics, let's focus on Malicious vs Benign (ignore Background)
+        mask = (y_flow == MALICIOUS) | (y_flow == BENIGN)
+        y_true_bin = y_flow[mask]
+        y_pred_bin = y_pred[mask]
+
+        # Map to binary: Malicious=1, Benign=0
+        y_true_bin = numpy.where(y_true_bin == MALICIOUS, 1, 0)
+        y_pred_bin = numpy.where(y_pred_bin == MALICIOUS, 1, 0)
+
+        # Compute confusion matrix: tn, fp, fn, tp
+        tn, fp, fn, tp = (
+            confusion_matrix(y_true_bin, y_pred_bin, labels=[0, 1]).ravel()
+            if len(set(y_true_bin)) > 1
+            else (0, 0, 0, 0)
+        )
+
+        # Compute metrics
+        FPR = fp / (fp + tn) if (fp + tn) > 0 else 0
+        TNR = tn / (tn + fp) if (tn + fp) > 0 else 0
+        TPR = tp / (tp + fn) if (tp + fn) > 0 else 0
+        FNR = fn / (fn + tp) if (fn + tp) > 0 else 0
+        F1 = f1_score(y_true_bin, y_pred_bin, zero_division=0)
+        PREC = precision_score(y_true_bin, y_pred_bin, zero_division=0)
+        ACCU = accuracy_score(y_true_bin, y_pred_bin)
+        MCC = (
+            matthews_corrcoef(y_true_bin, y_pred_bin)
+            if len(set(y_true_bin)) > 1
+            else 0
+        )
+        RECALL = recall_score(y_true_bin, y_pred_bin, zero_division=0)
+
+        # Store the models on disk
+        self.store_model()
+
+        # Log training information
+        self.write_to_log(
+            f"Total labels: {sum_labeled_flows}, "
+            f"Background: {epoch_label_counts['Background']}. "
+            f"Benign: {epoch_label_counts['Benign']}. "
+            f"Malicious: {epoch_label_counts[MALICIOUS]}. "
+            f"Metrics: FPR={FPR:.4f}, TNR={TNR:.4f}, "
+            f"TPR={TPR:.4f}, FNR={FNR:.4f}, "
+            f"F1={F1:.4f}, Precision={PREC:.4f}, "
+            f"Accuracy={ACCU:.4f}, MCC={MCC:.4f}, Recall={RECALL:.4f}."
+        )
+
     def train(self, sum_labeled_flows, last_number_of_flows_when_trained):
         """
         Train a model based on the flows we receive and the labels
         """
-        self.print("lalal")
         try:
-            self.print("lalalala")
             # Create y_flow with the label
             y_flow = numpy.full(
                 self.flows.shape[0], self.flows.ground_truth_label
             )
             # Create X_flow with the current flows minus the label
-            self.print(self.flows.shape)
-            self.print(self.flows.columns)
-            self.print("lalalalalalalalalalalala")
-            X_flow = self.flows.drop("ground_truth_label", axis=1)
+            X_flow = self.flows.copy()
+            X_flow = X_flow.drop("ground_truth_label", axis=1)
             # Drop the detailed labels
             X_flow = X_flow.drop("detailed_ground_truth_label", axis=1)
             # Drop the module_labels
             X_flow = X_flow.drop("module_labels", axis=1)
 
-            # Normalize this batch of data so far. This can get progressively slow
-            X_flow = self.scaler.fit_transform(X_flow)
+            try:  # when not fitted, the scaler.mean_ is None, try fitting it
+                if (
+                    not hasattr(self.scaler, "mean_")
+                    or self.scaler.mean_ is None
+                ):
+                    # fit on the first batch of data
+                    self.print(
+                        "First fitting the scaler to the training data.", 0, 2
+                    )
+                    self.scaler.fit(X_flow)
+                else:
+                    self.print(
+                        "updating the scaler with the training data.", 0, 2
+                    )
+                    self.scaler.partial_fit(X_flow)  # update for now
+                X_flow = self.scaler.transform(X_flow)
+            except Exception as e:
+                self.print(
+                    f"Error in train() while scaling the training data: {e}",
+                    1,
+                    1,
+                )
+                self.print("Flow to scale:", 2, 1)
+                self.print(X_flow, 2, 1)
 
-            # Count the number of labels of each type in this epoc
+            # Count the number of labels of each type in this epoch
             epoch_label_counts = {
                 BACKGROUND: (y_flow == BACKGROUND).sum(),
                 MALICIOUS: (y_flow == MALICIOUS).sum(),
@@ -148,64 +223,36 @@ class FlowMLDetection(IModule):
 
             # Train
             try:
-                # Online incremental learning
-                self.clf.partial_fit(
-                    X_flow,
-                    y_flow,
-                    classes=[BACKGROUND, MALICIOUS, BENIGN],
-                )
+                unique_labels = numpy.unique(y_flow)
+                label_counts = {
+                    label: (y_flow == label).sum() for label in unique_labels
+                }
+                self.print(f"Label counts: {label_counts}", 0, 1)
+
+                if not self.classifier_initialized:  # init the classifier
+                    self.print(
+                        "labels in the training set: " + str(unique_labels),
+                        0,
+                        1,
+                    )
+                    self.clf.partial_fit(
+                        X_flow, y_flow, classes=[BACKGROUND, MALICIOUS, BENIGN]
+                    )
+                    self.classifier_initialized = True
+                else:
+                    self.clf.partial_fit(X_flow, y_flow)
             except Exception:
                 self.print("Error while calling clf.train()")
-                self.print(traceback.format_exc(), 0, 1)
+                self.print(traceback.format_exc(), 1, 1)
 
             # Predict on the training data
             y_pred = self.clf.predict(X_flow)
 
-            # For metrics, let's focus on Malicious vs Benign (ignore Background)
-            mask = (y_flow == MALICIOUS) | (y_flow == BENIGN)
-            y_true_bin = y_flow[mask]
-            y_pred_bin = y_pred[mask]
-
-            # Map to binary: Malicious=1, Benign=0
-            y_true_bin = numpy.where(y_true_bin == MALICIOUS, 1, 0)
-            y_pred_bin = numpy.where(y_pred_bin == MALICIOUS, 1, 0)
-
-            # Compute confusion matrix: tn, fp, fn, tp
-            tn, fp, fn, tp = (
-                confusion_matrix(y_true_bin, y_pred_bin, labels=[0, 1]).ravel()
-                if len(set(y_true_bin)) > 1
-                else (0, 0, 0, 0)
+            # Store the training results (housekeeping..: logs, calculationg metrics)
+            self.store_training_results(
+                y_flow, y_pred, sum_labeled_flows, epoch_label_counts
             )
 
-            # Compute metrics
-            FPR = fp / (fp + tn) if (fp + tn) > 0 else 0
-            TNR = tn / (tn + fp) if (tn + fp) > 0 else 0
-            TPR = tp / (tp + fn) if (tp + fn) > 0 else 0
-            FNR = fn / (fn + tp) if (fn + tp) > 0 else 0
-            F1 = f1_score(y_true_bin, y_pred_bin, zero_division=0)
-            PREC = precision_score(y_true_bin, y_pred_bin, zero_division=0)
-            ACCU = accuracy_score(y_true_bin, y_pred_bin)
-            MCC = (
-                matthews_corrcoef(y_true_bin, y_pred_bin)
-                if len(set(y_true_bin)) > 1
-                else 0
-            )
-            RECALL = recall_score(y_true_bin, y_pred_bin, zero_division=0)
-
-            # Store the models on disk
-            self.store_model()
-
-            # Log training information
-            self.write_to_log(
-                f"Total labels: {sum_labeled_flows}, "
-                f"Background: {epoch_label_counts['Background']}. "
-                f"Benign: {epoch_label_counts['Benign']}. "
-                f"Malicious: {epoch_label_counts[MALICIOUS]}. "
-                f"Metrics: FPR={FPR:.4f}, TNR={TNR:.4f}, "
-                f"TPR={TPR:.4f}, FNR={FNR:.4f}, "
-                f"F1={F1:.4f}, Precision={PREC:.4f}, "
-                f"Accuracy={ACCU:.4f}, MCC={MCC:.4f}, Recall={RECALL:.4f}."
-            )
         except Exception:
             self.print("Error in train().", 0, 1)
             self.print(traceback.format_exc(), 0, 1)
@@ -340,11 +387,12 @@ class FlowMLDetection(IModule):
 
             # Check how many **different** labels are in the DB
             labels = self.db.get_labels()
-            if len(labels) == 1:
+            if len(labels) != len(self.all_classes):
                 # Insert fake flows for both classes if needed
 
                 # I dont like this hack. feels weird, may bias the model in some way??
-                new_flows.append(
+                new_flows.insert(
+                    1,
                     {
                         "starttime": 1594417039.029793,
                         "dur": "1.9424750804901123",
@@ -363,9 +411,10 @@ class FlowMLDetection(IModule):
                         "module_labels": {
                             "flowalerts-long-connection": MALICIOUS
                         },
-                    }
+                    },
                 )
-                new_flows.append(
+                new_flows.insert(
+                    1,
                     {
                         "starttime": 1382355032.706468,
                         "dur": "10.896695",
@@ -384,7 +433,29 @@ class FlowMLDetection(IModule):
                         "module_labels": {
                             "flowalerts-long-connection": BENIGN
                         },
-                    }
+                    },
+                )
+                new_flows.insert(
+                    1,
+                    {
+                        "starttime": 310.391420,
+                        "dur": "5.082519",
+                        "saddr": "192.168.1.115",
+                        "sport": "60041",
+                        "daddr": "54.247.115.15",
+                        "dport": "80",
+                        "proto": "tcp",
+                        "state": "RSTO",
+                        "spkts": 7,
+                        "dpkts": 5,
+                        "sbytes": 2594,
+                        "dbytes": 816,
+                        "appproto": "http",
+                        "ground_truth_label": BACKGROUND,
+                        "module_labels": {
+                            "flowalerts-long-connection": BACKGROUND
+                        },
+                    },
                 )
 
             # Convert to pandas df
@@ -480,6 +551,15 @@ class FlowMLDetection(IModule):
             data = pickle.dumps(self.scaler)
             g.write(data)
 
+    def store_scaler(self):
+        """
+        Store the trained scaler on disk
+        """
+        self.print("Storing the trained scaler on disk.", 0, 2)
+        with open(self.scaler_path, "wb") as g:
+            data = pickle.dumps(self.scaler)
+            g.write(data)
+
     def read_model(self):
         """
         Read the trained model from disk
@@ -488,6 +568,7 @@ class FlowMLDetection(IModule):
             self.print("Reading the trained model from disk.", 0, 2)
             with open(self.model_path, "rb") as f:
                 self.clf = pickle.load(f)
+            self.classifier_initialized
         except Exception as e:
             # If there is no model, create one empty
             if isinstance(e, FileNotFoundError):
@@ -503,21 +584,26 @@ class FlowMLDetection(IModule):
                     2,
                 )
             self.clf = SGDClassifier(
-                warm_start=True,
+                warm_start=True,  # warm start not needed, setting new model up?
                 loss="hinge",
-                penalty="l1",  # warm start not needed, setting new model up?
-                # experiments: penalty, class weights, losses? validation and such?
+                penalty="l2",
+                # experiments:
+                # penalty, L1,L2,elastic,
+                # class weights,
+                # losses? kvadratic? huber?
+                # validation and such? (early stopping?)
+            )
+            self.classifier_initialized = (
+                False  # needs training from this point on
             )
 
-        # Read the scaler
+        # Read the scaler or create it anew
         try:
             self.print("Reading the trained scaler from disk.", 0, 2)
             with open(self.scaler_path, "rb") as g:
                 self.scaler = pickle.load(g)
         except Exception as e:
-            # If there is no scaler, create one empty
             if isinstance(e, FileNotFoundError):
-                # If the file does not exist, create a new scaler
                 self.print(
                     "There was no scaler. " "Creating a new empty scaler.",
                     0,
@@ -530,7 +616,8 @@ class FlowMLDetection(IModule):
                     0,
                     2,
                 )
-            self.scaler = StandardScaler()
+            self.scaler = StandardScaler()  # RobustScaler()
+            # TODO: use the same scaler as in training / can load and look? robust cannot do incremental learning
 
     def set_evidence_malicious_flow(self, flow: dict, twid: str):
         confidence: float = 0.1
@@ -569,7 +656,22 @@ class FlowMLDetection(IModule):
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         if self.mode == "train":
+            # TODO: train on the last flows (below required amount of labels)
+            labels = self.db.get_labels()
+            sum_labeled_flows = sum(i[1] for i in labels)
+            if sum_labeled_flows != self.last_number_of_flows_when_trained:
+                self.print("Training on the last flows before shutdown.", 0, 2)
+                self.process_training_flows(
+                    self.last_number_of_flows_when_trained
+                )
+                self.train(
+                    sum_labeled_flows,
+                    self.last_number_of_flows_when_trained,
+                )
+                self.last_number_of_flows_when_trained = sum_labeled_flows
+
             self.store_model()
+            self.store_scaler()
         self.log_file.flush()
 
     def pre_main(self):
@@ -584,6 +686,7 @@ class FlowMLDetection(IModule):
             self.twid = msg["twid"]
             self.profileid = msg["profileid"]
             self.flow = msg["flow"]
+
             # These following extra fields are expected in testing.
             # update the original flow dict to have them
             self.flow.update(
@@ -599,6 +702,7 @@ class FlowMLDetection(IModule):
 
                 # Is the amount in the DB of labels enough to retrain?
                 # Use labeled flows
+
                 labels = self.db.get_labels()
                 sum_labeled_flows = sum(i[1] for i in labels)
 
@@ -608,32 +712,31 @@ class FlowMLDetection(IModule):
 
                 # Once we are over the start minimum, the second condition is
                 # to force to retrain every a minimum_labels_to_retrain number
-                # of flows. So we dont retrain every 1 flow.
-                if sum_labeled_flows >= self.minimum_labels_to_start_train:
-                    if (
-                        sum_labeled_flows
-                        - self.last_number_of_flows_when_trained
-                        >= self.minimum_labels_to_retrain
-                    ):
-                        # So for example we retrain every 50 labels and only when
-                        # we have at least 50 labels
-                        self.print(
-                            f"Training the model with the last group of "
-                            f"flows and labels. Total flows: {sum_labeled_flows}."
-                        )
-                        # Process all flows in the DB and make them ready
-                        # for pandas
-                        self.process_training_flows(
-                            self.last_number_of_flows_when_trained
-                        )
-                        # Train an algorithm
-                        self.train(
-                            sum_labeled_flows,
-                            self.last_number_of_flows_when_trained,
-                        )
-                        self.last_number_of_flows_when_trained = (
-                            sum_labeled_flows
-                        )
+                # of flows. So we dont retrain every 1 flow.)
+
+                if sum_labeled_flows < self.minimum_labels_to_start_train:
+                    return
+                if (
+                    sum_labeled_flows - self.last_number_of_flows_when_trained
+                    < self.minimum_labels_to_retrain
+                ):
+                    return
+
+                # So for example we retrain every 50 labels and only when
+                # we have at least 50 labels
+
+                # Process all flows in the DB and make them ready
+                # for pandas
+                self.process_training_flows(
+                    self.last_number_of_flows_when_trained
+                )
+
+                # Train an algorithm
+                self.train(
+                    sum_labeled_flows,
+                    self.last_number_of_flows_when_trained,
+                )
+                self.last_number_of_flows_when_trained = sum_labeled_flows
 
             elif self.mode == "test":
                 # We are testing, which means using the model to detect
@@ -655,12 +758,6 @@ class FlowMLDetection(IModule):
                     if not pred:
                         # an error occurred
                         return
-
-                    self.print(
-                        f"Prediction {pred[0]} for label: {original_label} -->",
-                        1,
-                        0,
-                    )
 
                     if pred[0] == MALICIOUS:
                         # Generate an alert

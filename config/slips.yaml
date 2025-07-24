@@ -193,7 +193,7 @@ modules:
   # (they all should be lowercase with no special characters). Example,
   # threatintelligence, blocking, networkdiscovery, timeline, virustotal,
   # rnnccdetection, flowmldetection, updatemanager
-  disable: [template,network,arp,rnn,alert,timeline,threat,http,virustotal,risk,info]
+  disable: [template,network,arp,rnn,alert,timeline,threat,http,virustotal,risk,info,update]
 
   # For each line in timeline file there is a timestamp.
   # By default the timestamp is seconds in unix time. However
@@ -213,8 +213,9 @@ flowmldetection:
   # You should have trained at least once with 'Normal' data and once with
   # 'Malicious' data in order for the test to work.
 
-  mode: test
-  #mode: train
+  mode: train
+  # mode: test
+  # mode: train
 
   # creates an extra log file called training.log/testing.log in the
   # ouptput dir with performance metrics depending on the mode.

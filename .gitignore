@@ -170,11 +170,10 @@ modules/flowmldetection/model.bin
 databases/macaddress-db.json
 output/
 config-live-macos-*
-dataset-private/*
+dataset-private/
 appendonly.aof
 /slipsOut/flows.sqlite
 /slipsOut/metadata/info.txt
 /slipsOut/metadata/slips.yaml
 /slipsOut/metadata/whitelist.conf
 /p2p_db.sqlite
-
