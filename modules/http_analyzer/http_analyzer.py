@@ -11,29 +11,27 @@ from multiprocessing import Lock
 
 from modules.http_analyzer.set_evidence import SetEvidenceHelper
 from slips_files.common.flow_classifier import FlowClassifier
-from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.iasync_module import AsyncModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 
 
 ESTAB = "Established"
 
 
-class HTTPAnalyzer(AsyncModule):
+class HTTPAnalyzer(IAsyncModule):
     # Name: short name of the module. Do not use spaces
     name = "HTTP Analyzer"
     description = "Analyze HTTP flows"
     authors = ["Alya Gomaa"]
 
-    def init(self):
-        self.c1 = self.db.subscribe("new_http")
-        self.c2 = self.db.subscribe("new_weird")
-        self.c3 = self.db.subscribe("new_flow")
+    async def init(self):
         self.channels = {
-            "new_http": self.c1,
-            "new_weird": self.c2,
-            "new_flow": self.c3,
+            "new_http": self.new_http_msg_handler,
+            "new_weird": self.new_weird_msg_handler,
+            "new_flow": self.new_http_msg_handler,
         }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
+
         self.set_evidence = SetEvidenceHelper(self.db)
         self.connections_counter = {}
         self.empty_connections_threshold = 4
@@ -68,9 +66,8 @@ class HTTPAnalyzer(AsyncModule):
         self.condition = asyncio.Condition()
 
     def read_configuration(self):
-        conf = ConfigParser()
         self.pastebin_downloads_threshold = (
-            conf.get_pastebin_download_threshold()
+            self.conf.get_pastebin_download_threshold()
         )
 
     def detect_executable_mime_types(self, twid, flow) -> bool:
@@ -632,47 +629,58 @@ class HTTPAnalyzer(AsyncModule):
     def pre_main(self):
         utils.drop_root_privs_permanently()
 
+    def new_http_msg_handler(self, msg: dict):
+        msg = json.loads(msg["data"])
+        profileid = msg["profileid"]
+        twid = msg["twid"]
+        flow = self.classifier.convert_to_flow_obj(msg["flow"])
+        self.check_suspicious_user_agents(profileid, twid, flow)
+        self.check_multiple_empty_connections(twid, flow)
+        # find the UA of this profileid if we don't have it
+        # get the last used ua of this profile
+        cached_ua = self.db.get_user_agent_from_profile(profileid)
+        if cached_ua:
+            self.check_multiple_user_agents_in_a_row(
+                flow,
+                twid,
+                cached_ua,
+            )
+
+        if not cached_ua or (
+            isinstance(cached_ua, dict)
+            and cached_ua.get("user_agent", "") != flow.user_agent
+            and "server-bag" not in flow.user_agent
+        ):
+            # only UAs of type dict are browser UAs,
+            # skips str UAs as they are SSH clients
+            self.get_user_agent_info(flow.user_agent, profileid)
+
+        self.extract_info_from_ua(flow.user_agent, profileid)
+        self.detect_executable_mime_types(twid, flow)
+        self.check_incompatible_user_agent(profileid, twid, flow)
+        self.check_pastebin_downloads(twid, flow)
+        self.set_evidence.http_traffic(twid, flow)
+
+    def new_weird_msg_handler(self, msg: dict):
+        msg = json.loads(msg["data"])
+        self.check_weird_http_method(msg)
+
+    def new_flow_msg_handler(self, msg: dict):
+        msg = json.loads(msg["data"])
+        twid = msg["twid"]
+        flow = self.classifier.convert_to_flow_obj(msg["flow"])
+        self.create_task(self.check_non_http_port_80_conns, twid, flow)
+
     async def main(self):
-        if msg := self.get_msg("new_http"):
-            msg = json.loads(msg["data"])
-            profileid = msg["profileid"]
-            twid = msg["twid"]
-            flow = self.classifier.convert_to_flow_obj(msg["flow"])
-            self.check_suspicious_user_agents(profileid, twid, flow)
-            self.check_multiple_empty_connections(twid, flow)
-            # find the UA of this profileid if we don't have it
-            # get the last used ua of this profile
-            cached_ua = self.db.get_user_agent_from_profile(profileid)
-            if cached_ua:
-                self.check_multiple_user_agents_in_a_row(
-                    flow,
-                    twid,
-                    cached_ua,
-                )
-
-            if not cached_ua or (
-                isinstance(cached_ua, dict)
-                and cached_ua.get("user_agent", "") != flow.user_agent
-                and "server-bag" not in flow.user_agent
-            ):
-                # only UAs of type dict are browser UAs,
-                # skips str UAs as they are SSH clients
-                self.get_user_agent_info(flow.user_agent, profileid)
-
-            self.extract_info_from_ua(flow.user_agent, profileid)
-            self.detect_executable_mime_types(twid, flow)
-            self.check_incompatible_user_agent(profileid, twid, flow)
-            self.check_pastebin_downloads(twid, flow)
-            self.set_evidence.http_traffic(twid, flow)
-
-        if msg := self.get_msg("new_weird"):
-            msg = json.loads(msg["data"])
-            await self.check_weird_http_method(msg)
-
-        if msg := self.get_msg("new_flow"):
-            msg = json.loads(msg["data"])
-            twid = msg["twid"]
-            flow = self.classifier.convert_to_flow_obj(msg["flow"])
-            self.create_task(self.check_non_http_port_80_conns, twid, flow)
+        msg = await self.db.get_message(self.pubsub)
+        if msg:
+            channel = msg["channel"].decode()
+            data = msg["data"]
+            handler = self.channel_tracker[channel]
+            if asyncio.iscoroutinefunction(handler):
+                await handler(data)
+            else:
+                handler(data)
+        await asyncio.sleep(0)
 
         self.remove_old_entries_from_http_recognized_flows()
