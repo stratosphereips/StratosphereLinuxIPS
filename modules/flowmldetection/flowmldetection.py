@@ -67,20 +67,24 @@ class FlowMLDetection(IModule):
         # Read the configuration
         self.read_configuration()
         # Minum amount of new labels needed to start the train
-        self.minimum_labels_to_start_train = 50
+        self.minimum_labels_to_start_train = 100
         # Minum amount of new labels needed to retrain
-        self.minimum_labels_to_retrain = 50
+        self.minimum_labels_to_retrain = 100
+        # if I end and have more than this flows, I triger the final training
+        # to not lose those.
+        self.minimum_labels_to_finalize_train = 20
+
         # The number of flows when last trained. Used internally only to know
         # when to retrain
         self.last_number_of_flows_when_trained = 0
         # The scaler trained during training and to use during testing
-        self.scaler = StandardScaler()
+
         self.model_path = "./modules/flowmldetection/model.bin"
         self.scaler_path = "./modules/flowmldetection/scaler.bin"
         self.all_classes = [BACKGROUND, MALICIOUS, BENIGN]
-        self.all_labels = ["background", "malicious", "benign"]
 
         self.classifier_initialized = False
+
         self.init_log_file()
 
     def init_log_file(self):
@@ -183,11 +187,14 @@ class FlowMLDetection(IModule):
             )
             # Create X_flow with the current flows minus the label
             X_flow = self.flows.copy()
-            X_flow = X_flow.drop("ground_truth_label", axis=1)
-            # Drop the detailed labels
-            X_flow = X_flow.drop("detailed_ground_truth_label", axis=1)
-            # Drop the module_labels
-            X_flow = X_flow.drop("module_labels", axis=1)
+            try:
+                X_flow = X_flow.drop("ground_truth_label", axis=1)
+                # Drop the detailed labels
+                X_flow = X_flow.drop("detailed_ground_truth_label", axis=1)
+                # Drop the module_labels
+                X_flow = X_flow.drop("module_labels", axis=1)
+            except (KeyError, ValueError):
+                pass
 
             try:  # when not fitted, the scaler.mean_ is None, try fitting it
                 if (
@@ -204,15 +211,15 @@ class FlowMLDetection(IModule):
                         "updating the scaler with the training data.", 0, 2
                     )
                     self.scaler.partial_fit(X_flow)  # update for now
+
                 X_flow = self.scaler.transform(X_flow)
+
             except Exception as e:
                 self.print(
                     f"Error in train() while scaling the training data: {e}",
                     1,
                     1,
                 )
-                self.print("Flow to scale:", 2, 1)
-                self.print(X_flow, 2, 1)
 
             # Count the number of labels of each type in this epoch
             epoch_label_counts = {
@@ -385,79 +392,6 @@ class FlowMLDetection(IModule):
             # Only process new flows since last training
             new_flows = flows[last_number_of_flows_when_trained:]
 
-            # Check how many **different** labels are in the DB
-            labels = self.db.get_labels()
-            if len(labels) != len(self.all_classes):
-                # Insert fake flows for both classes if needed
-
-                # I dont like this hack. feels weird, may bias the model in some way??
-                new_flows.insert(
-                    1,
-                    {
-                        "starttime": 1594417039.029793,
-                        "dur": "1.9424750804901123",
-                        "saddr": "10.7.10.101",
-                        "sport": "49733",
-                        "daddr": "40.70.224.145",
-                        "dport": "443",
-                        "proto": "tcp",
-                        "state": "SF",
-                        "spkts": 17,
-                        "dpkts": 27,
-                        "sbytes": 25517,
-                        "dbytes": 17247,
-                        "appproto": "ssl",
-                        "ground_truth_label": MALICIOUS,
-                        "module_labels": {
-                            "flowalerts-long-connection": MALICIOUS
-                        },
-                    },
-                )
-                new_flows.insert(
-                    1,
-                    {
-                        "starttime": 1382355032.706468,
-                        "dur": "10.896695",
-                        "saddr": "147.32.83.52",
-                        "sport": "47956",
-                        "daddr": "80.242.138.72",
-                        "dport": "80",
-                        "proto": "tcp",
-                        "state": "SF",
-                        "spkts": 1,
-                        "dpkts": 0,
-                        "sbytes": 100,
-                        "dbytes": 67596,
-                        "appproto": "http",
-                        "ground_truth_label": BENIGN,
-                        "module_labels": {
-                            "flowalerts-long-connection": BENIGN
-                        },
-                    },
-                )
-                new_flows.insert(
-                    1,
-                    {
-                        "starttime": 310.391420,
-                        "dur": "5.082519",
-                        "saddr": "192.168.1.115",
-                        "sport": "60041",
-                        "daddr": "54.247.115.15",
-                        "dport": "80",
-                        "proto": "tcp",
-                        "state": "RSTO",
-                        "spkts": 7,
-                        "dpkts": 5,
-                        "sbytes": 2594,
-                        "dbytes": 816,
-                        "appproto": "http",
-                        "ground_truth_label": BACKGROUND,
-                        "module_labels": {
-                            "flowalerts-long-connection": BACKGROUND
-                        },
-                    },
-                )
-
             # Convert to pandas df
             df_flows = pd.DataFrame(new_flows)
 
@@ -512,11 +446,7 @@ class FlowMLDetection(IModule):
                 except (KeyError, ValueError):
                     pass
 
-            # temp fix:
-            if "bytes" in x_flow.columns:
-                x_flow = x_flow.rename(columns={"bytes": "allbytes"})
-
-            # Scale the flow
+            # Scale the flow, then predict. not learning here!
             try:
                 x_flow: numpy.ndarray = self.scaler.transform(x_flow)
                 pred: numpy.ndarray = self.clf.predict(x_flow)
@@ -526,11 +456,7 @@ class FlowMLDetection(IModule):
                     0,
                     1,
                 )
-                self.print("Flow to predict:")
-                self.print(x_flow, 0, 1)
-                # self.print(traceback.format_exc(), 0, 1)
-                # in develop: [dur, proto, sport, dport, spkts, dpkts, sbytes, state, ground_truth_label, detailed_ground_truth_label, allbytes, pkts, label, module_labels]
-                # In my branch: dur proto  sport  dport  spkts  dpkts  sbytes  dbytes  state ground_truth_label detailed_ground_truth_label   label  module_labels  bytes  pkts
+                self.print(traceback.format_exc(), 0, 1)
 
             return pred
         except Exception as e:
@@ -551,15 +477,6 @@ class FlowMLDetection(IModule):
             data = pickle.dumps(self.scaler)
             g.write(data)
 
-    def store_scaler(self):
-        """
-        Store the trained scaler on disk
-        """
-        self.print("Storing the trained scaler on disk.", 0, 2)
-        with open(self.scaler_path, "wb") as g:
-            data = pickle.dumps(self.scaler)
-            g.write(data)
-
     def read_model(self):
         """
         Read the trained model from disk
@@ -568,7 +485,7 @@ class FlowMLDetection(IModule):
             self.print("Reading the trained model from disk.", 0, 2)
             with open(self.model_path, "rb") as f:
                 self.clf = pickle.load(f)
-            self.classifier_initialized
+            self.classifier_initialized = True
         except Exception as e:
             # If there is no model, create one empty
             if isinstance(e, FileNotFoundError):
@@ -616,8 +533,7 @@ class FlowMLDetection(IModule):
                     0,
                     2,
                 )
-            self.scaler = StandardScaler()  # RobustScaler()
-            # TODO: use the same scaler as in training / can load and look? robust cannot do incremental learning
+            self.scaler = StandardScaler()  # RobustScaler()?
 
     def set_evidence_malicious_flow(self, flow: dict, twid: str):
         confidence: float = 0.1
@@ -656,10 +572,16 @@ class FlowMLDetection(IModule):
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         if self.mode == "train":
-            # TODO: train on the last flows (below required amount of labels)
+            # Train on the last bunch of flows before shutdown
             labels = self.db.get_labels()
             sum_labeled_flows = sum(i[1] for i in labels)
-            if sum_labeled_flows != self.last_number_of_flows_when_trained:
+            flows_left = (
+                sum_labeled_flows - self.last_number_of_flows_when_trained
+            )
+            if (
+                flows_left > 0
+                and flows_left > self.minimum_labels_to_finalize_train
+            ):
                 self.print("Training on the last flows before shutdown.", 0, 2)
                 self.process_training_flows(
                     self.last_number_of_flows_when_trained
@@ -668,10 +590,8 @@ class FlowMLDetection(IModule):
                     sum_labeled_flows,
                     self.last_number_of_flows_when_trained,
                 )
-                self.last_number_of_flows_when_trained = sum_labeled_flows
 
-            self.store_model()
-            self.store_scaler()
+            self.store_model()  # model AND scaler
         self.log_file.flush()
 
     def pre_main(self):
