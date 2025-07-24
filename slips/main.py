@@ -115,7 +115,7 @@ class Main:
         if not self.conf.get_cpu_profiler_enable():
             sys.exit(0)  # leaves any children started by slips as orphans
 
-    def save_the_db(self):
+    async def save_the_db(self):
         # save the db to the output dir of this analysis
         # backups_dir = os.path.join(os.getcwd(), 'redis_backups/')
         # try:
@@ -136,7 +136,7 @@ class Main:
             ]
         # Give the exact path to save(), this is where our saved .rdb backup will be
         rdb_filepath = os.path.join(backups_dir, self.input_information)
-        self.db.save(rdb_filepath)
+        await self.db.save(rdb_filepath)
         # info will be lost only if you're out of space and redis
         # can't write to dump.self.rdb, otherwise you're fine
         print(
@@ -144,16 +144,20 @@ class Main:
             "information may be lost in the redis backup file."
         )
 
-    def was_running_zeek(self) -> bool:
+    async def was_running_zeek(self) -> bool:
         """returns true if zeek was used in this run"""
-        return self.db.is_running_non_stop() or self.db.get_input_type() in (
-            "pcap",
-            "interface",
+        return (
+            await self.db.is_running_non_stop()
+            or await self.db.get_input_type()
+            in (
+                "pcap",
+                "interface",
+            )
         )
 
-    def store_zeek_dir_copy(self):
+    async def store_zeek_dir_copy(self):
         store_a_copy_of_zeek_files = self.conf.store_a_copy_of_zeek_files()
-        was_running_zeek = self.was_running_zeek()
+        was_running_zeek = await self.was_running_zeek()
         if store_a_copy_of_zeek_files and was_running_zeek:
             # this is where the copy will be stored
             dest_zeek_dir = os.path.join(self.args.output, "zeek_files")
@@ -373,7 +377,7 @@ class Main:
         slips_version.replace("\n", "")
         print(slips_version)
 
-    def update_stats(self):
+    async def update_stats(self):
         """
         updates the statistics printed every 5s
         """
@@ -390,13 +394,15 @@ class Main:
 
         self.last_updated_stats_time = now
         now = utils.convert_ts_format(now, "%Y/%m/%d %H:%M:%S")
-        modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
-        profiles_len = self.db.get_profiles_len()
-        evidence_number = self.db.get_evidence_number() or 0
-        flow_per_min = self.db.get_flows_analyzed_per_minute()
+        modified_ips_in_the_last_tw = (
+            await self.db.get_modified_ips_in_the_last_tw()
+        )
+        profiles_len = await self.db.get_profiles_len()
+        evidence_number = await self.db.get_evidence_number() or 0
+        flow_per_min = await self.db.get_flows_analyzed_per_minute()
         stats = (
             f"\r[{now}] Total analyzed IPs: {green(profiles_len)}. "
-            f"{self.get_analyzed_flows_percentage()}"
+            f"{await self.get_analyzed_flows_percentage()}"
             f"Evidence: {green(evidence_number)}. "
             f"Number of IPs seen in the last ({self.twid_width}):"
             f" {green(modified_ips_in_the_last_tw)}. "
@@ -405,7 +411,7 @@ class Main:
         self.print(stats)
         sys.stdout.flush()  # Make sure the output is displayed immediately
 
-    def get_analyzed_flows_percentage(self) -> str:
+    async def get_analyzed_flows_percentage(self) -> str:
         """
         returns a str with the percentage of analyzed flows so far to be
         logged in the stats
@@ -414,10 +420,11 @@ class Main:
             return ""
 
         if not hasattr(self, "total_flows"):
-            self.total_flows = self.db.get_total_flows()
+            self.total_flows = await self.db.get_total_flows()
 
         flows_percentage = int(
-            (self.db.get_processed_flows_so_far() / self.total_flows) * 100
+            (await self.db.get_processed_flows_so_far() / self.total_flows)
+            * 100
         )
         return f"Analyzed Flows: {green(flows_percentage)}{green('%')}. "
 
@@ -446,12 +453,12 @@ class Main:
         elif self.mode == "interactive":
             return os.path.join(self.args.output, "errors.log")
 
-    def print_gw_info(self):
+    async def print_gw_info(self):
         if self.gw_info_printed:
             return
-        if ip := self.db.get_gateway_ip():
+        if ip := await self.db.get_gateway_ip():
             self.print(f"Detected gateway IP: {green(ip)}")
-        if mac := self.db.get_gateway_mac():
+        if mac := await self.db.get_gateway_mac():
             self.print(f"Detected gateway MAC: {green(mac)}")
         self.gw_info_printed = True
 
@@ -471,7 +478,7 @@ class Main:
             # but probably root has already set the permissions
             pass
 
-    def start(self):
+    async def start(self):
         """Main Slips Function"""
         try:
             self.print_version()
@@ -482,10 +489,13 @@ class Main:
             slips_logfile: str = self.get_slips_logfile()
             # if stdout is redirected to a file,
             # tell output.py to redirect it's output as well
-            self.logger = self.proc_man.start_output_process(
+            self.logger = await self.proc_man.start_output_process(
                 stderr, slips_logfile
             )
             self.printer = Printer(self.logger, self.name)
+            print(
+                f"@@@@@@@@@@@@@@@@ {f"Storing Slips logs in {self.args.output}"}"
+            )
             self.print(f"Storing Slips logs in {self.args.output}")
             self.redis_port: int = self.redis_man.get_redis_port()
             # dont start the redis server if it's already started
@@ -506,7 +516,7 @@ class Main:
                 self.print(str(e), 1, 1)
                 self.terminate_slips()
 
-            self.db.set_input_metadata(
+            await self.db.set_input_metadata(
                 {
                     "output_dir": self.args.output,
                     "commit": self.commit,
@@ -551,14 +561,14 @@ class Main:
                     self.print(
                         f"Running on a growing zeek dir: {self.input_information}"
                     )
-                    self.db.set_growing_zeek_dir()
+                    await self.db.set_growing_zeek_dir()
 
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
             redis_pid = self.redis_man.get_pid_of_redis_server(self.redis_port)
             self.redis_man.log_redis_server_pid(self.redis_port, redis_pid)
 
-            self.db.set_slips_mode(self.mode)
+            await self.db.set_slips_mode(self.mode)
 
             if self.mode == DAEMONIZED_MODE:
                 std_files = {
@@ -574,7 +584,7 @@ class Main:
                     "stdout": slips_logfile,
                 }
 
-            self.db.store_std_file(**std_files)
+            await self.db.store_std_file(**std_files)
 
             # if slips is given a .rdb file, don't load the
             # modules as we don't need them
@@ -583,40 +593,40 @@ class Main:
                 # if wait_for_TI_to_finish is set to true in the config file,
                 # slips will wait untill all TI files are updated before
                 # starting the rest of the modules
-                self.proc_man.start_update_manager(
+                await self.proc_man.start_update_manager(
                     local_files=True,
                     ti_feeds=self.conf.wait_for_TI_to_finish(),
                 )
                 self.print("Starting modules", 1, 0)
-                self.proc_man.load_modules()
+                await self.proc_man.load_modules()
                 # give outputprocess time to print all the started modules
                 time.sleep(0.5)
-                self.proc_man.print_disabled_modules()
+                await self.proc_man.print_disabled_modules()
 
             if self.args.webinterface:
                 self.ui_man.start_webinterface()
 
             # call shutdown_gracefully on sigterm
-            def sig_handler(sig, frame):
-                self.proc_man.shutdown_gracefully()
+            async def sig_handler(sig, frame):
+                await self.proc_man.shutdown_gracefully()
 
             # The signals SIGKILL and SIGSTOP cannot be caught,
             # blocked, or ignored.
             signal.signal(signal.SIGTERM, sig_handler)
 
-            self.proc_man.start_evidence_process()
-            self.proc_man.start_profiler_process()
+            await self.proc_man.start_evidence_process()
+            await self.proc_man.start_profiler_process()
 
-            self.c1 = self.db.subscribe("control_channel")
+            self.c1 = await self.db.subscribe("control_channel")
 
             self.metadata_man.add_metadata_if_enabled()
 
-            self.input_process = self.proc_man.start_input_process()
+            self.input_process = await self.proc_man.start_input_process()
             # obtain the list of active processes
             children = multiprocessing.active_children()
             self.proc_man.set_slips_processes(children)
 
-            self.db.store_pid("main", int(self.pid))
+            await self.db.store_pid("main", int(self.pid))
             self.metadata_man.set_input_metadata()
 
             # warn about unused open redis servers
@@ -635,21 +645,21 @@ class Main:
 
             # Don't try to stop slips if it's capturing from
             # an interface or a growing zeek dir
-            self.is_interface: bool = self.db.is_running_non_stop()
+            self.is_interface: bool = await self.db.is_running_non_stop()
 
             while not self.proc_man.stop_slips():
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
-                self.print_gw_info()
+                await self.print_gw_info()
 
                 # if you remove the below logic anywhere before the
                 # above sleep() statement, it will try to get the return
                 # value very quickly before
                 # the webinterface thread sets it. so don't:D
                 self.ui_man.check_if_webinterface_started()
-                self.update_stats()
-                self.db.check_tw_to_close()
+                await self.update_stats()
+                await self.db.check_tw_to_close()
 
                 modified_profiles: Set[str] = (
                     self.metadata_man.update_slips_stats_in_the_db()[1]
@@ -663,4 +673,4 @@ class Main:
             # comes here if zeek terminates while slips is still working
             pass
 
-        self.proc_man.shutdown_gracefully()
+        await self.proc_man.shutdown_gracefully()

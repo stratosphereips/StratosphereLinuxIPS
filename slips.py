@@ -25,6 +25,7 @@ import os
 import sys
 import time
 import warnings
+import asyncio
 
 from slips.main import Main
 from slips.daemon import Daemon
@@ -36,10 +37,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 warnings.filterwarnings("ignore")
 
 
-####################
-# Main
-####################
-if __name__ == "__main__":
+async def main():
     if sys.version_info[0] < 3:
         sys.exit("Slips can only run on python3+ .. Stopping.")
 
@@ -61,4 +59,12 @@ if __name__ == "__main__":
         Daemon(slips).start()
     else:
         # interactive mode
-        slips.start()
+        await slips.start()
+
+
+####################
+# Main execution block
+####################
+if __name__ == "__main__":
+    # Use asyncio.run() to run your top-level async main function
+    asyncio.run(main())
