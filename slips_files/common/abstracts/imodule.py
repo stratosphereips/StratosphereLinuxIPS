@@ -55,7 +55,12 @@ class IModule(ABC, Process):
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
         self.db = DBManager(
-            self.logger, self.output_dir, self.redis_port, self.conf, self.ppid
+            logger=self.logger,
+            output_dir=self.output_dir,
+            redis_port=self.redis_port,
+            conf=self.conf,
+            args=self.args,
+            main_pid=self.ppid,
         )
         self.keyboard_int_ctr = 0
         self.init(**kwargs)

@@ -497,6 +497,7 @@ class Main:
                     self.args.output,
                     self.redis_port,
                     self.conf,
+                    self.args,
                     int(self.pid),
                     start_redis_server=start_redis_server,
                 )
