@@ -5,10 +5,8 @@ from asyncio import Task
 from typing import (
     Callable,
     List,
-    Optional,
 )
 from slips_files.common.abstracts.imodule import IModule
-from slips_files.common.slips_utils import utils
 
 
 class IAsyncModule(IModule):
@@ -75,40 +73,67 @@ class IAsyncModule(IModule):
         await asyncio.gather(*self.tasks, return_exceptions=True)
         await self.shutdown_gracefully()
 
-    def run_async_function(self, func: Callable):
+    def run_async_function(self, func: Callable, *args):
         """
         If the func argument is a coroutine object it is implicitly
         scheduled to run as a asyncio.Task.
         Returns the Future’s result or raise its exception.
         """
+        if not asyncio.iscoroutinefunction(func):
+            func(*args)
+            return
+
         loop = asyncio.get_event_loop()
         loop.set_exception_handler(self.handle_exception)
-        return loop.run_until_complete(func())
+        return loop.run_until_complete(func(*args))
 
-    async def get_msg(self, channel: str) -> Optional[dict]:
-
-        # This is a yield point to the event loop.
-        # Forces the coroutine to yield control and give the event loop a
-        # chance to run other tasks.
-        # Prevents your loop from hogging the CPU when no message is received.
+    async def get_msg(self) -> None | tuple:
         try:
-            message = await self.db.get_message(channel)
-
-            if utils.is_msg_intended_for(message, channel):
+            msg = await self.db.get_message(self.pubsub)
+            if msg:
+                channel = msg["channel"].decode()
+                data = msg["data"]
                 self.channel_tracker[channel]["msg_received"] = True
-                self.db.incr_msgs_received_in_channel(self.name, channel)
-                return message
+                await self.db.incr_msgs_received_in_channel(self.name, channel)
+                yield channel, data
+            else:
+                for channel in self.channel_tracker:
+                    self.channel_tracker[channel]["msg_received"] = False
+                yield None
 
-            self.channel_tracker[channel]["msg_received"] = False
+            # This is a yield point to the event loop.
+            # Forces the coroutine to yield control and give the event loop a
+            # chance to run other tasks.
+            # Prevents your loop from hogging the CPU when no message is received.
+            await asyncio.sleep(0)
+
         except KeyboardInterrupt:
-            return None
+            return
+
+    async def call_msg_handler(self, channel: str, data: dict):
+        handler = self.channel_tracker[channel]
+        if asyncio.iscoroutinefunction(handler):
+            await handler(data)
+        else:
+            handler(data)
+
+    def dispatch_msgs(self):
+        """
+        fetches each msg from the pubsub and calls the msg handler
+        """
+        if not self.channel_tracker:
+            return
+
+        if msg := self.run_async_function(self.get_msg):
+            channel, data = msg
+            self.run_async_function(self.call_msg_handler, channel, data)
 
     def run(self):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
         try:
-            self.pubsub = self.run_async_function(self.db.rdb.pubsub)
+
             self.run_async_function(self.init)
             # should be after the module's init() so the module has a chance to
             # set its own channels
@@ -141,6 +166,8 @@ class IAsyncModule(IModule):
                         self.gather_tasks_and_shutdown_gracefully
                     )
                     return
+
+                self.dispatch_msgs()
 
                 # if a module's main() returns 1, it means there's an
                 # error and it needs to stop immediately
