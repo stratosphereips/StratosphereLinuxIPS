@@ -199,6 +199,9 @@ class DBManager:
     async def publish_stop(self, *args, **kwargs):
         return await self.rdb.publish_stop(*args, **kwargs)
 
+    def pubsub(self, *args, **kwargs):
+        return self.rdb.pubsub(*args, **kwargs)
+
     async def get_message(self, *args, **kwargs):
         return await self.rdb.get_message(*args, **kwargs)
 

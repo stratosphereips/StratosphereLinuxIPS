@@ -443,6 +443,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 continue
             await pubsub.subscribe(channel)
 
+    def pubsub(self):
+        return self.r.pubsub()
+
     async def publish_stop(self):
         """
         Publish stop command to terminate slips
