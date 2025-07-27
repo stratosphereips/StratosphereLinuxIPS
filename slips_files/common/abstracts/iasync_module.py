@@ -15,9 +15,13 @@ class IAsyncModule(IModule):
     """
 
     name = "AsyncModule"
+    # by default, all slips modules' main() methods run in a loop
+    # unless this is set to False in the module's init()
+    should_run_in_a_loop = True
 
     def __init__(self, *args, **kwargs):
         IModule.__init__(self, *args, **kwargs)
+        self.did_main_run = False
         # list of async functions to await before flowalerts shuts down
         self.tasks: List[Task] = []
 
@@ -88,14 +92,19 @@ class IAsyncModule(IModule):
         return loop.run_until_complete(func(*args))
 
     async def get_msg(self) -> None | tuple:
+        """
+        gets a msg from the pubsub and yields it
+        returns None if no message is received
+        Returns the channel and the message if a message is received
+        """
         try:
             msg = await self.db.get_message(self.pubsub)
             if msg:
                 channel = msg["channel"].decode()
-                data = msg["data"]
+                # data = msg["data"]
                 self.channel_tracker[channel]["msg_received"] = True
                 await self.db.incr_msgs_received_in_channel(self.name, channel)
-                yield channel, data
+                yield channel, msg
             else:
                 for channel in self.channel_tracker:
                     self.channel_tracker[channel]["msg_received"] = False
@@ -133,7 +142,6 @@ class IAsyncModule(IModule):
         asyncio.set_event_loop(loop)
 
         try:
-
             self.run_async_function(self.init)
             # should be after the module's init() so the module has a chance to
             # set its own channels
@@ -169,6 +177,9 @@ class IAsyncModule(IModule):
 
                 self.dispatch_msgs()
 
+                if not self.should_run_in_a_loop and self.did_main_run:
+                    continue
+
                 # if a module's main() returns 1, it means there's an
                 # error and it needs to stop immediately
                 error: bool = self.run_async_function(self.main)
@@ -177,6 +188,7 @@ class IAsyncModule(IModule):
                         self.gather_tasks_and_shutdown_gracefully
                     )
                     return
+                self.did_main_run = True
 
             except KeyboardInterrupt:
                 self.keyboard_int_ctr += 1
