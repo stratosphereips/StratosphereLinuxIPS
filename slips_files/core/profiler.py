@@ -69,13 +69,19 @@ class Profiler(ICore, IObservable):
 
     name = "Profiler"
 
-    def init(
+    async def init(
         self,
         is_profiler_done: multiprocessing.Semaphore = None,
         profiler_queue=None,
         is_profiler_done_event: multiprocessing.Event = None,
     ):
         IObservable.__init__(self)
+
+        self.channels = {
+            "reload_whitelist": self.new_reload_whitelist_msg_handler,
+        }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
+
         self.add_observer(self.logger)
         # when profiler is done processing, it releases this semaphore,
         # that's how the process_manager knows it's done
@@ -94,10 +100,7 @@ class Profiler(ICore, IObservable):
         # there has to be a timeout or it will wait forever and never
         # receive a new line
         self.timeout = 0.0000001
-        self.c1 = self.db.subscribe("reload_whitelist")
-        self.channels = {
-            "reload_whitelist": self.c1,
-        }
+
         # is set by this proc to tell input proc that we are done
         # processing and it can exit no issue
         self.is_profiler_done_event = is_profiler_done_event
@@ -142,7 +145,7 @@ class Profiler(ICore, IObservable):
             )
             return starttime
 
-    def get_rev_profile(self, flow):
+    async def get_rev_profile(self, flow):
         """
         get the profileid and twid of the daddr at the current starttime,
          not the source address
@@ -151,25 +154,27 @@ class Profiler(ICore, IObservable):
             # some flows don't have a daddr like software.log flows
             return False, False
 
-        rev_profileid: str = self.db.get_profileid_from_ip(flow.daddr)
+        rev_profileid: str = await self.db.get_profileid_from_ip(flow.daddr)
         if not rev_profileid:
             # the profileid is not present in the db, create it
             rev_profileid = f"profile_{flow.daddr}"
-            self.db.add_profile(rev_profileid, flow.starttime)
+            await self.db.add_profile(rev_profileid, flow.starttime)
 
         # in the database, Find and register the id of the tw where the flow
         # belongs.
-        rev_twid: str = self.db.get_timewindow(flow.starttime, rev_profileid)
+        rev_twid: str = await self.db.get_timewindow(
+            flow.starttime, rev_profileid
+        )
         return rev_profileid, rev_twid
 
-    def get_gw_ip_using_gw_mac(self) -> Optional[str]:
+    async def get_gw_ip_using_gw_mac(self) -> Optional[str]:
         """
         gets the ip of the given mac from the db
         prioritizes returning the ipv4. if not found, the function returns
         the ipv6. or none if both are not found.
         """
         # the db returns a serialized list of IPs belonging to this mac
-        gw_ips: str = self.db.get_ip_of_mac(self.gw_mac)
+        gw_ips: str = await self.db.get_ip_of_mac(self.gw_mac)
 
         if not gw_ips:
             return
@@ -186,14 +191,14 @@ class Profiler(ICore, IObservable):
         # all of them are ipv6, return the first
         return gw_ips[0]
 
-    def is_gw_info_detected(self, info_type: str) -> bool:
+    async def is_gw_info_detected(self, info_type: str) -> bool:
         """
         checks own attributes and the db for the gw mac/ip
         :param info_type: can be 'mac' or 'ip'
         """
         info_mapping = {
-            "mac": ("gw_mac", self.db.get_gateway_mac),
-            "ip": ("gw_ip", self.db.get_gateway_ip),
+            "mac": ("gw_mac", await self.db.get_gateway_mac),
+            "ip": ("gw_ip", await self.db.get_gateway_ip),
         }
 
         if info_type not in info_mapping:
@@ -213,7 +218,7 @@ class Profiler(ICore, IObservable):
 
         return False
 
-    def get_gateway_info(self, flow):
+    async def get_gateway_info(self, flow):
         """
         Gets the IP and MAC of the gateway and stores them in the db
         doesn't get the gateway ip if it's already in the db (for example
@@ -226,7 +231,7 @@ class Profiler(ICore, IObservable):
             # some suricata flows dont have that, like SuricataFile objs
             return
 
-        gw_mac_found: bool = self.is_gw_info_detected("mac")
+        gw_mac_found: bool = await self.is_gw_info_detected("mac")
         if not gw_mac_found:
             if (
                 utils.is_private_ip(flow.saddr)
@@ -234,7 +239,7 @@ class Profiler(ICore, IObservable):
                 and flow.dmac
             ):
                 self.gw_mac: str = flow.dmac
-                self.db.set_default_gateway("MAC", self.gw_mac)
+                await self.db.set_default_gateway("MAC", self.gw_mac)
                 # self.print(
                 #     f"MAC address of the gateway detected: "
                 #     f"{green(self.gw_mac)}"
@@ -243,15 +248,15 @@ class Profiler(ICore, IObservable):
 
         # we need the mac to be set to be able to find the ip using it
         if not self.is_gw_info_detected("ip") and gw_mac_found:
-            self.gw_ip: Optional[str] = self.get_gw_ip_using_gw_mac()
+            self.gw_ip: Optional[str] = await self.get_gw_ip_using_gw_mac()
             if self.gw_ip:
-                self.db.set_default_gateway("IP", self.gw_ip)
+                await self.db.set_default_gateway("IP", self.gw_ip)
                 self.print(
                     f"IP address of the gateway detected: "
                     f"{green(self.gw_ip)}"
                 )
 
-    def add_flow_to_profile(self, flow):
+    async def add_flow_to_profile(self, flow):
         """
         This is the main function that takes the columns of a flow
         and does all the magic to convert it into a working data in slips.
@@ -275,7 +280,7 @@ class Profiler(ICore, IObservable):
                 # software and weird.log flows are allowed to not have a daddr
                 return False
 
-        self.get_gateway_info(flow)
+        await self.get_gateway_info(flow)
 
         # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(flow):
@@ -288,32 +293,32 @@ class Profiler(ICore, IObservable):
         flow.starttime = self.convert_starttime_to_epoch(flow.starttime)
         # For this 'forward' profile, find the id in the
         # database of the tw where the flow belongs.
-        twid = self.db.get_timewindow(flow.starttime, profileid)
+        twid = await self.db.get_timewindow(flow.starttime, profileid)
         flow_parser.twid = twid
 
         # Create profiles for all ips we see
-        self.db.add_profile(profileid, flow.starttime)
-        self.store_features_going_out(flow, flow_parser)
+        await self.db.add_profile(profileid, flow.starttime)
+        await self.store_features_going_out(flow, flow_parser)
         if self.analysis_direction == "all":
-            self.handle_in_flow(flow)
+            await self.handle_in_flow(flow)
 
-        if self.db.is_cyst_enabled():
+        if await self.db.is_cyst_enabled():
             # print the added flow as a form of debugging feedback for
             # the user to know that slips is working
             self.print(pprint.pp(asdict(flow)))
         return True
 
-    def store_first_seen_ts(self, ts):
+    async def store_first_seen_ts(self, ts):
         # set the pcap/file start time in the analysis key
         if self.first_flow:
-            self.db.set_input_metadata({"file_start": ts})
+            await self.db.set_input_metadata({"file_start": ts})
             self.first_flow = False
 
-    def store_features_going_out(self, flow, flow_parser: FlowHandler):
+    async def store_features_going_out(self, flow, flow_parser: FlowHandler):
         """
         function for adding the features going out of the profile
         """
-        self.store_first_seen_ts(flow.starttime)
+        await self.store_first_seen_ts(flow.starttime)
 
         cases = {
             "flow": flow_parser.handle_conn,
@@ -345,11 +350,11 @@ class Profiler(ICore, IObservable):
 
         # if the flow type matched any of the ifs above,
         # mark this profile as modified
-        self.db.mark_profile_tw_as_modified(
+        await self.db.mark_profile_tw_as_modified(
             flow_parser.profileid, flow_parser.twid, ""
         )
 
-    def store_features_going_in(self, profileid: str, twid: str, flow):
+    async def store_features_going_in(self, profileid: str, twid: str, flow):
         """
         If we have the all direction set , slips creates profiles
         for each IP, the src and dst
@@ -374,27 +379,27 @@ class Profiler(ICore, IObservable):
         tupleid = f"{saddr_as_obj}-{flow.dport}-{flow.proto}"
         role = "Server"
         # create the intuple
-        self.db.add_tuple(profileid, twid, tupleid, symbol, role, flow)
+        await self.db.add_tuple(profileid, twid, tupleid, symbol, role, flow)
 
         # Add the srcip and srcport
-        self.db.add_ips(profileid, twid, flow, role)
+        await self.db.add_ips(profileid, twid, flow, role)
         port_type = "Src"
-        self.db.add_port(profileid, twid, flow, role, port_type)
+        await self.db.add_port(profileid, twid, flow, role, port_type)
 
         # Add the dstport
         port_type = "Dst"
-        self.db.add_port(profileid, twid, flow, role, port_type)
+        await self.db.add_port(profileid, twid, flow, role, port_type)
 
         # Add the flow with all the fields interpreted
-        self.db.add_flow(
+        await self.db.add_flow(
             flow,
             profileid=profileid,
             twid=twid,
             label=self.label,
         )
-        self.db.mark_profile_tw_as_modified(profileid, twid, "")
+        await self.db.mark_profile_tw_as_modified(profileid, twid, "")
 
-    def handle_in_flow(self, flow):
+    async def handle_in_flow(self, flow):
         """
         Adds a flow for the daddr <- saddr connection
         """
@@ -403,8 +408,8 @@ class Profiler(ICore, IObservable):
         execluded_flows = "software"
         if flow.type_ in execluded_flows:
             return
-        rev_profileid, rev_twid = self.get_rev_profile(flow)
-        self.store_features_going_in(rev_profileid, rev_twid, flow)
+        rev_profileid, rev_twid = await self.get_rev_profile(flow)
+        await self.store_features_going_in(rev_profileid, rev_twid, flow)
 
     def is_ignored_ip(self, ip: str) -> bool:
         """
@@ -576,7 +581,7 @@ class Profiler(ICore, IObservable):
         self.is_localnet_set = True
         return utils.get_cidr_of_private_ip(ip)
 
-    def handle_setting_local_net(self, flow):
+    async def handle_setting_local_net(self, flow):
         """
         stores the local network if possible
         """
@@ -585,7 +590,7 @@ class Profiler(ICore, IObservable):
 
         local_net: str = self.get_local_net(flow)
         self.print(f"Used local network: {green(local_net)}")
-        self.db.set_local_network(local_net)
+        await self.db.set_local_network(local_net)
 
     def get_msg_from_input_proc(
         self, q: multiprocessing.Queue, thread_safe=False
@@ -644,7 +649,7 @@ class Profiler(ICore, IObservable):
             and not self.flows_to_process_q.qsize()
         )
 
-    def process_flow(self):
+    async def process_flow(self):
         """
         This function runs in 3 parallel threads for faster processing of
         the flows
@@ -677,9 +682,9 @@ class Profiler(ICore, IObservable):
                 if not flow:
                     continue
 
-                self.add_flow_to_profile(flow)
-                self.handle_setting_local_net(flow)
-                self.db.increment_processed_flows()
+                await self.add_flow_to_profile(flow)
+                await self.handle_setting_local_net(flow)
+                await self.db.increment_processed_flows()
             except Exception as e:
                 self.print_traceback()
                 self.print(
@@ -700,7 +705,7 @@ class Profiler(ICore, IObservable):
         """
         return False
 
-    def shutdown_gracefully(self):
+    async def shutdown_gracefully(self):
         self.stop_profiler_threads.set()
         # wait for all flows to be processed by the profiler threads.
         self.join_profiler_threads()
@@ -709,7 +714,7 @@ class Profiler(ICore, IObservable):
         self.flows_to_process_q.close()
         self.profiler_queue.close()
 
-        self.db.set_new_incoming_flows(False)
+        await self.db.set_new_incoming_flows(False)
         self.print(
             f"Stopping. Total lines read: {self.rec_lines}",
             log_to_logfiles_only=True,
@@ -722,35 +727,37 @@ class Profiler(ICore, IObservable):
             self.print(f"Used client IPs: {green(', '.join(client_ips))}")
         self.start_profiler_threads()
 
-    def main(self):
+    def new_reload_whitelist_msg_handler(self):
+        """
+        listen on reload_whitelist channel in case whitelist.conf is changed,
+        we need to process the new changes
+
+        PS: if whitelist.conf is edited using pycharm
+        a msg will be sent to this channel on every keypress,
+        because pycharm saves files automatically
+        otherwise this channel will get a msg only when
+        whitelist.conf is modified and saved to disk
+        """
+        self.whitelist.update()
+
+    async def main(self):
         # the only thing that stops this loop is the 'stop' msg
         # we're using self.should_stop() here instead of while True to be
         # able to unit test this function:D
-        while not self.should_stop():
-            # listen on this channel in case whitelist.conf is changed,
-            # we need to process the new changes
-            if self.get_msg("reload_whitelist"):
-                # if whitelist.conf is edited using pycharm
-                # a msg will be sent to this channel on every keypress,
-                # because pycharm saves file automatically
-                # otherwise this channel will get a msg only when
-                # whitelist.conf is modified and saved to disk
-                self.whitelist.update()
 
-            msg = self.get_msg_from_input_proc(self.profiler_queue)
-            if not msg:
-                # wait for msgs
-                continue
+        msg = self.get_msg_from_input_proc(self.profiler_queue)
+        if not msg:
+            # this function is called in a loop in IAsyncModule,
+            # so if there's no msg, it will wait for a new one
+            return False
 
-            # ALYA, DO NOT REMOVE THIS CHECK
-            # without it, there's no way this module will know it's
-            # time to stop and no new flows are coming
-            if self.is_stop_msg(msg):
-                # shutdown gracefully will be called by ICore() once this
-                # function returns
-                return 1
+        # ALYA, DO NOT REMOVE THIS CHECK
+        # without it, there's no way this module will know it's
+        # time to stop and no new flows are coming
+        if self.is_stop_msg(msg):
+            # shutdown gracefully will be called by IAsyncModule() once this
+            # function returns 1
+            return 1
 
-            self.pending_flows_queue_lock.acquire()
+        with self.pending_flows_queue_lock:
             self.flows_to_process_q.put(msg)
-            self.pending_flows_queue_lock.release()
-        return None
