@@ -31,7 +31,7 @@ class MetadataManager:
                 return psutil.Process(conn.pid).pid  # .name()
         return None
 
-    def _add_metadata(self):
+    async def _add_metadata(self):
         """
         Create a metadata dir output/metadata/ that has a copy of
         slips.yaml, whitelist.conf, current commit and date
@@ -58,18 +58,20 @@ class MetadataManager:
             f.write(
                 f"Slips version: {self.main.version}\n"
                 f"File: {self.main.input_information}\n"
-                f"Branch: {self.main.db.get_branch()}\n"
-                f"Commit: {self.main.db.get_commit()}\n"
+                f"Branch: {await self.main.db.get_branch()}\n"
+                f"Commit: {await self.main.db.get_commit()}\n"
                 f"Command: {cmd}\n"
                 f"Slips start date: {now}\n"
             )
             if hasattr(self.main, "zeek_bro"):
-                f.write(f"Zeek version: {self.main.db.get_zeek_version()}\n")
+                f.write(
+                    f"Zeek version: {await self.main.db.get_zeek_version()}\n"
+                )
 
         self.main.print(f"Metadata added to {metadata_dir}")
         return self.info_path
 
-    def set_analysis_end_date(self, end_date):
+    async def set_analysis_end_date(self, end_date):
         """
         Add the analysis end date to the metadata file and
         the db for the web interface to display
@@ -78,7 +80,7 @@ class MetadataManager:
             return
 
         end_date = utils.convert_ts_format(end_date, utils.alerts_format)
-        self.main.db.set_input_metadata({"analysis_end": end_date})
+        await self.main.db.set_input_metadata({"analysis_end": end_date})
 
         # add slips end date in the metadata dir
         try:
@@ -88,7 +90,7 @@ class MetadataManager:
             pass
         return end_date
 
-    def get_zeek_version(self) -> str:
+    def get_zeek_version(self) -> None | str:
         """
         Get the version of zeek/bro used if zeek is used. (e.g. in pcaps
         and interface)
@@ -100,7 +102,7 @@ class MetadataManager:
         version = subprocess.check_output(cmd).decode()
         return version.split("version ")[1]
 
-    def set_input_metadata(self):
+    async def set_input_metadata(self):
         """
         save info about name, size, analysis start date, and used interface
          in the db
@@ -142,14 +144,16 @@ class MetadataManager:
         )
         # analysis end date will be set in shutdown_gracefully
         # file(pcap,netflow, etc.) start date will be set in
-        self.main.db.set_input_metadata(info)
+        await self.main.db.set_input_metadata(info)
 
-    def update_slips_stats_in_the_db(self) -> Tuple[int, Set[str]]:
+    async def update_slips_stats_in_the_db(self) -> Tuple[int, Set[str]]:
         """
         updates the number of processed ips, slips internal time,
          and modified tws so far in the db
         """
-        slips_internal_time = float(self.main.db.get_slips_internal_time()) + 1
+        slips_internal_time = (
+            float(await self.main.db.get_slips_internal_time()) + 1
+        )
 
         # Get the amount of modified profiles since we last checked
         # this is the modification time of the last timewindow
@@ -157,18 +161,18 @@ class MetadataManager:
         (
             modified_profiles,
             last_modified_tw_time,
-        ) = self.main.db.get_modified_profiles_since(slips_internal_time)
+        ) = await self.main.db.get_modified_profiles_since(slips_internal_time)
         modified_ips_in_the_last_tw = len(modified_profiles)
-        self.main.db.set_input_metadata(
+        await self.main.db.set_input_metadata(
             {"modified_ips_in_the_last_tw": modified_ips_in_the_last_tw}
         )
         # last_modified_tw_time is 0 the moment we start slips
         # or if we don't have modified tw since the last slips_internal_time
         if last_modified_tw_time != 0:
-            self.main.db.set_slips_internal_time(last_modified_tw_time)
+            await self.main.db.set_slips_internal_time(last_modified_tw_time)
         return modified_ips_in_the_last_tw, modified_profiles
 
-    def add_metadata_if_enabled(self):
+    async def add_metadata_if_enabled(self):
         if not self.enable_metadata:
             return
-        self.info_path = self._add_metadata()
+        self.info_path = await self._add_metadata()

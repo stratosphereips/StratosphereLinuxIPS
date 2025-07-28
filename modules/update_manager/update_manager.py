@@ -298,7 +298,6 @@ class UpdateManager(IAsyncModule):
 
         # Get last hash of the file stored in the database
         file_info = await self.db.get_ti_feed_info(file_path)
-        print(f"@@@@@@@@@@@@@@@@ file_info {file_info}")
         old_hash = file_info.get("hash", False)
 
         if not old_hash or old_hash != new_hash:

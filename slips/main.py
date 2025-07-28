@@ -493,9 +493,6 @@ class Main:
                 stderr, slips_logfile
             )
             self.printer = Printer(self.logger, self.name)
-            print(
-                f"@@@@@@@@@@@@@@@@ {f"Storing Slips logs in {self.args.output}"}"
-            )
             self.print(f"Storing Slips logs in {self.args.output}")
             self.redis_port: int = self.redis_man.get_redis_port()
             # dont start the redis server if it's already started
@@ -511,7 +508,7 @@ class Main:
                     int(self.pid),
                     start_redis_server=start_redis_server,
                 )
-
+                self.pubsub = self.db.pubsub()
             except RuntimeError as e:
                 self.print(str(e), 1, 1)
                 self.terminate_slips()
@@ -617,9 +614,9 @@ class Main:
             await self.proc_man.start_evidence_process()
             await self.proc_man.start_profiler_process()
 
-            self.c1 = await self.db.subscribe("control_channel")
+            await self.db.subscribe(self.pubsub, ["control_channel"])
 
-            self.metadata_man.add_metadata_if_enabled()
+            await self.metadata_man.add_metadata_if_enabled()
 
             self.input_process = await self.proc_man.start_input_process()
             # obtain the list of active processes
@@ -627,7 +624,7 @@ class Main:
             self.proc_man.set_slips_processes(children)
 
             await self.db.store_pid("main", int(self.pid))
-            self.metadata_man.set_input_metadata()
+            await self.metadata_man.set_input_metadata()
 
             # warn about unused open redis servers
             open_servers = len(self.redis_man.get_open_redis_servers())
@@ -647,7 +644,7 @@ class Main:
             # an interface or a growing zeek dir
             self.is_interface: bool = await self.db.is_running_non_stop()
 
-            while not self.proc_man.stop_slips():
+            while not await self.proc_man.stop_slips():
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
@@ -662,7 +659,7 @@ class Main:
                 await self.db.check_tw_to_close()
 
                 modified_profiles: Set[str] = (
-                    self.metadata_man.update_slips_stats_in_the_db()[1]
+                    await self.metadata_man.update_slips_stats_in_the_db()[1]
                 )
 
                 self.host_ip_man.update_host_ip(host_ip, modified_profiles)
