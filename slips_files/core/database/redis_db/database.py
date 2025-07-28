@@ -318,9 +318,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # a round trip PING/PONG will be attempted before next redis cmd.
         # If the PING/PONG fails, the connection will re-established
 
-        # retry_on_timeout=True after the command times out, it will be retried once,
-        # if the retry is successful, it will return normally; if it fails,
-        # an exception will be thrown
+        # retry_on_timeout=True after the command times out, it will be
+        # retried once, if the retry is successful, it will return
+        # normally; if it fails, an exception will be thrown
 
         return redis.Redis(
             host="localhost",
@@ -370,6 +370,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         try:
             # db 0 changes everytime we run slips
             cls.r = cls._connect(cls.redis_port, 0)
+
+            # Connection specifically for Pub/Sub operations
+            # why? because we can't use self.r for normal operations and
+            # for pub/sub operations. once .pubsub() is called on it,
+            # it cant execute hset hget etc.
+            cls.pubsub_conn = cls._connect(cls.redis_port, 0)
+
             # port 6379 db 0 is cache, delete it using -cc flag
             cls.rcache = cls._connect(6379, 1)
 
@@ -444,7 +451,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             await pubsub.subscribe(channel)
 
     def pubsub(self):
-        return self.r.pubsub()
+        return self.pubsub_conn.pubsub()
 
     async def publish_stop(self):
         """
