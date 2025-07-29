@@ -104,13 +104,13 @@ class ProcessManager:
 
     async def start_profiler_process(self):
         profiler_process = Profiler(
-            self.main.logger,
-            self.main.args.output,
-            self.main.redis_port,
-            self.termination_event,
-            self.main.args,
-            self.main.conf,
-            self.main.pid,
+            logger=self.main.logger,
+            output_dir=self.main.args.output,
+            redis_port=self.main.redis_port,
+            termination_event=self.termination_event,
+            slips_args=self.main.args,
+            conf=self.main.conf,
+            ppid=self.main.pid,
             is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
@@ -149,13 +149,13 @@ class ProcessManager:
 
     async def start_input_process(self):
         input_process = Input(
-            self.main.logger,
-            self.main.args.output,
-            self.main.redis_port,
-            self.termination_event,
-            self.main.args,
-            self.main.conf,
-            self.main.pid,
+            logger=self.main.logger,
+            output_dir=self.main.args.output,
+            redis_port=self.main.redis_port,
+            termination_event=self.termination_event,
+            slips_args=self.main.args,
+            conf=self.main.conf,
+            ppid=self.main.pid,
             is_input_done=self.is_input_done,
             profiler_queue=self.profiler_queue,
             input_type=self.main.input_type,
@@ -469,7 +469,7 @@ class ProcessManager:
 
                 if ti_feeds:
                     update_manager.print("Updating TI feeds")
-                    asyncio.run(update_manager.update_ti_files())
+                    asyncio.run(await update_manager.update_ti_files())
 
         except CannotAcquireLock:
             # another instance of slips is updating ports and orgs
@@ -589,7 +589,7 @@ class ProcessManager:
             end_time,
         )
 
-    def stop_slips(self) -> bool:
+    async def stop_slips(self) -> bool:
         """
         determines whether slips should stop
         based on the following:
@@ -602,24 +602,23 @@ class ProcessManager:
             return False
 
         return (
-            self.is_stop_msg_received() or self.is_done_receiving_new_flows()
+            await self.is_stop_msg_received()
+            or self.is_done_receiving_new_flows()
         )
 
-    def is_stop_msg_received(self) -> bool:
+    async def is_stop_msg_received(self) -> bool:
         """
         returns true if the control_channel channel received the
         'stop_slips' msg
         This control channel is used by CYST or the filemanager to tell
         slips that zeek terminated (useful when running slips with -g)
         """
-        message = self.main.c1.get_message(timeout=0.01)
-        if not message:
+        msg = await self.db.get_message(self.pubsub)
+        if not msg:
             return False
 
-        return (
-            utils.is_msg_intended_for(message, "control_channel")
-            and message["data"] == "stop_slips"
-        )
+        channel = msg["channel"].decode()
+        return channel == "control_channel" and msg["data"] == "stop_slips"
 
     def is_debugger_active(self) -> bool:
         """Returns true if the debugger is currently active"""
@@ -831,7 +830,7 @@ class ProcessManager:
             self.main.delete_zeek_files()
 
             analysis_time, end_date = self.get_analysis_time()
-            self.main.metadata_man.set_analysis_end_date(end_date)
+            await self.main.metadata_man.set_analysis_end_date(end_date)
 
             print(
                 f"Analysis of {self.main.input_information} "

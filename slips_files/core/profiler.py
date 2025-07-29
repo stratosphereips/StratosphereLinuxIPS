@@ -74,6 +74,7 @@ class Profiler(ICore, IObservable):
         is_profiler_done: multiprocessing.Semaphore = None,
         profiler_queue=None,
         is_profiler_done_event: multiprocessing.Event = None,
+        **kwargs,
     ):
         IObservable.__init__(self)
 
