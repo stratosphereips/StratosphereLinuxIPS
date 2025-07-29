@@ -20,7 +20,7 @@
 
 import os
 import json
-import time
+import asyncio
 from watchdog.events import RegexMatchingEventHandler
 
 
@@ -33,13 +33,13 @@ class FileEventHandler(RegexMatchingEventHandler):
         self.db = db
         self.input_type = input_type
 
-    def on_created(self, event):
+    async def on_created(self, event):
         """this will be triggered everytime zeek creates a log file"""
         filename, ext = os.path.splitext(event.src_path)
         if "log" in ext:
-            self.db.add_zeek_file(filename + ext)
+            await self.db.add_zeek_file(filename + ext)
 
-    def on_moved(self, event):
+    async def on_moved(self, event):
         """
         this will be triggered everytime zeek renames all log files
         """
@@ -47,12 +47,13 @@ class FileEventHandler(RegexMatchingEventHandler):
         if event.dest_path != "True":
             to_send = {"old_file": event.dest_path, "new_file": event.src_path}
             to_send = json.dumps(to_send)
-            self.db.publish("remove_old_files", to_send)
+            await self.db.publish("remove_old_files", to_send)
 
             # give inputProc.py time to close the handle or delete the file
-            time.sleep(1)
+            # In an async context, avoid time.sleep() and use asyncio.sleep()
+            await asyncio.sleep(1)
 
-    def on_modified(self, event):
+    async def on_modified(self, event):
         """
         this will be triggered everytime zeek modifies a log file
         """
@@ -66,11 +67,14 @@ class FileEventHandler(RegexMatchingEventHandler):
             for file in os.listdir(self.dir_to_monitor):
                 if "reporter" not in file:
                     continue
+                # For file I/O in an async context, ideally use async file operations
+                # if available (e.g., aiofiles). For simplicity here, sticking with
+                # synchronous open, but be aware it can block the event loop.
                 with open(os.path.join(self.dir_to_monitor, file), "r") as f:
                     while line := f.readline():
                         if "termination" in line:
                             # tell slips to terminate
-                            self.db.publish_stop()
+                            await self.db.publish_stop()
                             break
         elif "whitelist" in filename:
-            self.db.publish("reload_whitelist", "reload")
+            await self.db.publish("reload_whitelist", "reload")
