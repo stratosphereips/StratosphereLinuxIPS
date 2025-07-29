@@ -205,6 +205,9 @@ class DBManager:
     async def get_message(self, *args, **kwargs):
         return await self.rdb.get_message(*args, **kwargs)
 
+    async def is_redis_connected(self, *args, **kwargs):
+        return await self.rdb.is_redis_connected(*args, **kwargs)
+
     async def is_running_non_stop(self, *args, **kwargs):
         return await self.rdb.is_running_non_stop(*args, **kwargs)
 

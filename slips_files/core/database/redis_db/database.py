@@ -312,7 +312,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             )
 
     @staticmethod
-    def _connect(port: int, db: int) -> redis.Redis:
+    def _connect(db_pool: redis.ConnectionPool) -> redis.Redis:
+        """
+        Connects to a redis server and db using the given connection pool.
+        """
         # set health_check_interval to avoid redis ConnectionReset errors:
         # if the connection is idle for more than health_check_interval seconds,
         # a round trip PING/PONG will be attempted before next redis cmd.
@@ -321,13 +324,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # retry_on_timeout=True after the command times out, it will be
         # retried once, if the retry is successful, it will return
         # normally; if it fails, an exception will be thrown
-
         return redis.Redis(
-            host="localhost",
-            port=port,
-            db=db,
-            socket_keepalive=True,
-            decode_responses=True,
+            connection_pool=db_pool,
             retry_on_timeout=True,
             health_check_interval=20,
         )
@@ -362,6 +360,22 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         return True
 
     @classmethod
+    def _create_a_connection_pool(cls, port: int, db: int):
+        """
+        Creates and returns an async Redis connection pool for
+        the given db and port.
+        """
+        # why are we using connection pools? because redis times out
+        # connections and closes them really fast.
+        return redis.ConnectionPool(
+            host="localhost",
+            port=port,
+            db=db,
+            decode_responses=True,
+            socket_keepalive=True,
+        )
+
+    @classmethod
     def _connect_to_redis_server(cls) -> Tuple[bool, str]:
         """
         Connects to the given port and Sets r and rcache
@@ -369,16 +383,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """
         try:
             # db 0 changes everytime we run slips
-            cls.r = cls._connect(cls.redis_port, 0)
-
+            db_0_pool = cls._create_a_connection_pool(cls.redis_port, 0)
+            cls.r = cls._connect(db_0_pool)
             # Connection specifically for Pub/Sub operations
             # why? because we can't use self.r for normal operations and
             # for pub/sub operations. once .pubsub() is called on it,
             # it cant execute hset hget etc.
-            cls.pubsub_conn = cls._connect(cls.redis_port, 0)
+            cls.pubsub_conn = cls._connect(db_0_pool)
 
-            # port 6379 db 0 is cache, delete it using -cc flag
-            cls.rcache = cls._connect(6379, 1)
+            # port 6379 db 0 is cache, the one that gets deleted using -cc
+            db_1_pool = cls._create_a_connection_pool(6379, 1)
+            cls.rcache = cls._connect(db_1_pool)
 
             # fix ConnectionRefused error by giving redis time to open
             time.sleep(1)
@@ -604,6 +619,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             await self._keep_track_of_flows_analyzed_per_min(pipe)
             await pipe.execute()
             return
+
+    async def is_redis_connected(self):
+        try:
+            pong = await self.r.ping()
+            return pong is True
+        except Exception as e:
+            print(f"Redis connection error: {e}")
+            return False
 
     async def get_message(
         self, pubsub: redis.client.PubSub, timeout=0.0000001
