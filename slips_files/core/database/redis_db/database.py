@@ -258,6 +258,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         return cls.r.get(cls.constants.SLIPS_START_TIME)
 
     @classmethod
+    def _create_conn_pools(cls):
+        """
+        creates 3 connection pools. Pub/sub pool, main db pool and cache pool
+        """
+        # db 0 changes everytime we run slips
+        cls.main_db_pool = cls._create_a_connection_pool(cls.redis_port, 0)
+        # port 6379 db 0 is cache, the one that gets deleted using -cc
+        cls.cache_db_pool = cls._create_a_connection_pool(6379, 1)
+        cls.pubsub_pool = cls._create_a_connection_pool(cls.redis_port, 0)
+
+    @classmethod
     def init_redis_server(cls) -> Tuple[bool, str]:
         """
         starts the redis server, connects to the it, and andjusts redis
@@ -270,7 +281,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 # we don't need that when using -k
                 cls._start_a_redis_server()
 
-            connected, err = cls._connect_to_redis_server()
+            cls._create_conn_pools()
+
+            connected, err = cls._init_clients()
             if not connected:
                 return False, err
 
@@ -312,7 +325,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             )
 
     @staticmethod
-    def _connect(db_pool: redis.ConnectionPool) -> redis.Redis:
+    def _get_redis_client(db_pool: redis.ConnectionPool) -> redis.Redis:
         """
         Connects to a redis server and db using the given connection pool.
         """
@@ -376,25 +389,16 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         )
 
     @classmethod
-    def _connect_to_redis_server(cls) -> Tuple[bool, str]:
+    def _init_clients(cls) -> Tuple[bool, str]:
         """
         Connects to the given port and Sets r and rcache
         Returns a tuple of (bool, error message).
         """
+        print("@@@@@@@@@@@@@@@@ _connect_to_redis_server is called")
         try:
-            # db 0 changes everytime we run slips
-            db_0_pool = cls._create_a_connection_pool(cls.redis_port, 0)
-            cls.r = cls._connect(db_0_pool)
-            # Connection specifically for Pub/Sub operations
-            # why? because we can't use self.r for normal operations and
-            # for pub/sub operations. once .pubsub() is called on it,
-            # it cant execute hset hget etc.
-            cls.pubsub_conn = cls._connect(db_0_pool)
-
-            # port 6379 db 0 is cache, the one that gets deleted using -cc
-            db_1_pool = cls._create_a_connection_pool(6379, 1)
-            cls.rcache = cls._connect(db_1_pool)
-
+            cls.r = cls._get_redis_client(cls.main_db_pool)
+            cls.rcache = cls._get_redis_client(cls.cache_db_pool)
+            cls.pubsub_client = cls._get_redis_client(cls.pubsub_pool)
             # fix ConnectionRefused error by giving redis time to open
             time.sleep(1)
 
@@ -465,8 +469,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 continue
             await pubsub.subscribe(channel)
 
-    def pubsub(self):
-        return self.pubsub_conn.pubsub()
+    def pubsub(self) -> redis.client.PubSub:
+        """Creates a new redis PubSub client"""
+        return self.pubsub_client.pubsub()
 
     async def publish_stop(self):
         """
@@ -604,9 +609,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         timestamp = int(time.time())
         msg_id = f"{channel_name}_{flow_identifier}_{timestamp}"
 
-        expected_subscribers: int = (await self.r.pubsub_numsub(channel_name))[
-            0
-        ][1]
+        expected_subscribers: int = (
+            await self.pubsub_client.pubsub_numsub(channel_name)
+        )[0][1]
 
         subscribers_who_processed_this_msg = await self.r.hincrby(
             self.constants.SUBS_WHO_PROCESSED_MSG, msg_id, 1
@@ -615,7 +620,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         if subscribers_who_processed_this_msg == expected_subscribers:
 
             pipe = self.r.pipeline()
-            pipe.hdel(self.constants.SUBS_WHO_PROCESSED_MSG, msg_id)
+            await pipe.hdel(self.constants.SUBS_WHO_PROCESSED_MSG, msg_id)
             await self._keep_track_of_flows_analyzed_per_min(pipe)
             await pipe.execute()
             return
@@ -733,7 +738,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # if the daddr key arg is not given, we know for sure that the ip
         # given is the daddr
         daddr = daddr or ip
-        data_to_send = self.give_threat_intelligence(
+        data_to_send = await self.give_threat_intelligence(
             profileid,
             twid,
             ip_state,
