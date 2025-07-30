@@ -206,7 +206,10 @@ class DBManager:
         return await self.rdb.get_message(*args, **kwargs)
 
     async def is_redis_connected(self, *args, **kwargs):
-        return await self.rdb.is_redis_connected(*args, **kwargs)
+        return await self.rdb.check_health(*args, **kwargs)
+
+    async def check_health(self, *args, **kwargs):
+        return await self.rdb.check_health(*args, **kwargs)
 
     async def is_running_non_stop(self, *args, **kwargs):
         return await self.rdb.is_running_non_stop(*args, **kwargs)
@@ -936,7 +939,7 @@ class DBManager:
 
     async def add_profile(self, profileid, starttime):
         confidence = 0.05
-        self.update_threat_level(profileid, "info", confidence)
+        await self.update_threat_level(profileid, "info", confidence)
         return await self.rdb.add_profile(profileid, starttime, confidence)
 
     async def set_module_label_for_profile(self, *args, **kwargs):
@@ -944,9 +947,6 @@ class DBManager:
 
     async def check_tw_to_close(self, *args, **kwargs):
         return await self.rdb.check_tw_to_close(*args, **kwargs)
-
-    async def check_health(self):
-        await self.rdb.pubsub.check_health()
 
     async def mark_profile_tw_as_closed(self, *args, **kwargs):
         return await self.rdb.mark_profile_tw_as_closed(*args, **kwargs)

@@ -9,6 +9,7 @@ from slips_files.core.database.redis_db.constants import (
     Constants,
     Channels,
 )
+from slips_files.core.database.redis_db.safe_connections import SafeConnection
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
@@ -265,10 +266,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         creates 3 connection pools. Pub/sub pool, main db pool and cache pool
         """
         # db 0 changes everytime we run slips
-        cls.main_db_pool = cls._create_a_connection_pool(cls.redis_port, 0)
+        cls.main_db_pool = cls._create_connection_pool(cls.redis_port, 0)
         # port 6379 db 0 is cache, the one that gets deleted using -cc
-        cls.cache_db_pool = cls._create_a_connection_pool(6379, 1)
-        cls.pubsub_pool = cls._create_a_connection_pool(cls.redis_port, 0)
+        cls.cache_db_pool = cls._create_connection_pool(6379, 1)
+        cls.pubsub_pool = cls._create_connection_pool(cls.redis_port, 0)
 
     @classmethod
     def init_redis_server(cls) -> Tuple[bool, str]:
@@ -342,6 +343,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         return redis.Redis(
             connection_pool=db_pool,
             retry_on_timeout=True,
+            # to force early failure instead of infinite hangs
+            socket_connect_timeout=3,
             health_check_interval=20,
         )
 
@@ -375,10 +378,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         return True
 
     @classmethod
-    def _create_a_connection_pool(cls, port: int, db: int):
+    def _create_connection_pool(cls, port: int, db: int, max_conns=50):
         """
         Creates and returns an async Redis connection pool for
         the given db and port.
+        uses the SafeConnection() for all conns in the pool
         """
         # why are we using connection pools? because redis times out
         # connections and closes them really fast.
@@ -386,6 +390,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             host="localhost",
             port=port,
             db=db,
+            connection_class=SafeConnection,
+            max_connections=max_conns,
             decode_responses=True,
             socket_keepalive=True,
         )
