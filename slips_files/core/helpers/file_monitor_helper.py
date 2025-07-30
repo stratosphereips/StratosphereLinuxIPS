@@ -27,11 +27,7 @@ class FileMonitorHelper:
         it is an infinite loop that will run until
         the termination_event is set by input.py.
         """
-        print(
-            "@@@@@@@@@@@@@@@@ im heeeeere in FileMonitorHelper event_handler"
-        )
         while not self.termination_event.is_set():
-            print("@@@@@@@@@@@@@@@@ FileMonitorHelper event handler looping")
             # waits until an event is available
             event = await self.event_q.get()
             event = json.loads(event)
@@ -40,10 +36,6 @@ class FileMonitorHelper:
             params = event.get("params")
 
             if action == "add_zeek_file":
-                print(
-                    "@@@@@@@@@@@@@@@@ FileMonitorHelper:add zeek files "
-                    "is caaalllleeeddd"
-                )
                 await self.db.add_zeek_file(params["filename"])
 
             elif action == "remove_old_files":
@@ -56,8 +48,4 @@ class FileMonitorHelper:
                 return
 
             elif action == "reload_whitelist":
-                print(
-                    "@@@@@@@@@@@@@@@@ FileMonitorHelper:ooooo should "
-                    "reload whitelist"
-                )
                 await self.db.publish("reload_whitelist", "reload")

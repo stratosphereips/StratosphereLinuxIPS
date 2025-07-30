@@ -185,7 +185,7 @@ def test_handle_conn(flow):
         flow_handler.profileid, flow.smac
     )
     if not flow_handler.running_non_stop:
-        flow_handler.publisher.new_MAC.assert_has_calls(
+        flow_handler.publisher.new_mac.assert_has_calls(
             [call(flow.smac, flow.saddr), call(flow.dmac, flow.daddr)]
         )
 
