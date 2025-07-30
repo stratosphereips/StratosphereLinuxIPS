@@ -613,11 +613,11 @@ class ProcessManager:
         This control channel is used by CYST or the filemanager to tell
         slips that zeek terminated (useful when running slips with -g)
         """
-        msg = await self.db.get_message(self.pubsub)
+        msg = await self.main.db.get_message(self.main.pubsub)
         if not msg:
             return False
 
-        channel = msg["channel"].decode()
+        channel = msg["channel"]
         return channel == "control_channel" and msg["data"] == "stop_slips"
 
     def is_debugger_active(self) -> bool:

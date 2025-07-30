@@ -24,6 +24,8 @@ class IAsyncModule(IModule):
         self.did_main_run = False
         # list of async functions to await before flowalerts shuts down
         self.tasks: List[Task] = []
+        self.init_args = args
+        self.init_kwargs = kwargs
 
     async def init(self, **kwargs):
         # PS don't call the self.db from any of the modukes' init()
@@ -77,19 +79,19 @@ class IAsyncModule(IModule):
         await asyncio.gather(*self.tasks, return_exceptions=True)
         await self.shutdown_gracefully()
 
-    def run_async_function(self, func: Callable, *args):
+    def run_async_function(self, func: Callable, *args, **kwargs):
         """
         If the func argument is a coroutine object it is implicitly
         scheduled to run as a asyncio.Task.
         Returns the Future’s result or raise its exception.
         """
         if not asyncio.iscoroutinefunction(func):
-            func(*args)
+            func(*args, **kwargs)
             return
 
         loop = asyncio.get_event_loop()
         loop.set_exception_handler(self.handle_exception)
-        return loop.run_until_complete(func(*args))
+        return loop.run_until_complete(func(*args, **kwargs))
 
     async def get_msg(self) -> None | tuple:
         """
@@ -142,7 +144,7 @@ class IAsyncModule(IModule):
         asyncio.set_event_loop(loop)
 
         try:
-            self.run_async_function(self.init)
+            self.run_async_function(self.init, **self.init_kwargs)
             # should be after the module's init() so the module has a chance to
             # set its own channels
             self.channel_tracker = self.init_channel_tracker()

@@ -61,7 +61,7 @@ IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 class EvidenceHandler(ICore):
     name = "EvidenceHandler"
 
-    async def init(self):
+    async def init(self, *args, **kwargs):
         self.channels = {
             "evidence_added": self.new_evidence_added_msg_handler,
             "new_blame": self.new_blame_msg_handler,

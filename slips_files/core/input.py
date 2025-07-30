@@ -388,8 +388,8 @@ class Input(ICore):
                 del self.cache_lines[file_with_earliest_flow]
                 del self.file_time[file_with_earliest_flow]
 
-                # Get the new list of files. Since new files may have been created by
-                # Zeek while we were processing them.
+                # Get the new list of files. Since new files may have been
+                # created by Zeek while we were processing them.
                 self.zeek_files = await self.db.get_all_zeek_files()
 
             self.close_all_handles()
