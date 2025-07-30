@@ -1,5 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import asyncio
+
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -1403,6 +1405,92 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         return await self.r.hget(
             self.constants.DEFAULT_GATEWAY, self.constants.MAC
         )
+
+    def _reconnect(self, client: str):
+        """
+        recreates the redis connection and pool based on the given client.
+        :param client: str. an attr of self, such as self.r,
+        self.pubsub_client, etc.
+        returns the newly created client.
+        updates the pool and client attributes of this class
+        """
+        # which pool does the given client belong to
+        # keys are client names, calues are their pool details
+        client_pool_map = {
+            "r": {
+                "name": "main_db_pool",
+                "port": self.main_db_pool.connection_kwargs["port"],
+                "db": self.main_db_pool.connection_kwargs["db"],
+            },
+            "pubsub_client": {
+                "name": "pubsub_pool",
+                "port": self.pubsub_pool.connection_kwargs["port"],
+                "db": self.pubsub_pool.connection_kwargs["db"],
+            },
+            "rcache": {
+                "name": "cache_db_pool",
+                "port": self.cache_db_pool.connection_kwargs["port"],
+                "db": self.cache_db_pool.connection_kwargs["db"],
+            },
+        }
+        pool: dict = client_pool_map[client]
+        # recreate the pool
+        pool_obj = self._create_connection_pool(pool["port"], pool["db"])
+        setattr(self, pool["name"], pool_obj)
+        # recreate the client
+        setattr(self, client, self._get_redis_client(pool_obj))
+
+    async def ping(self, client_obj) -> bool:
+        try:
+            await asyncio.wait_for(client_obj.ping(), timeout=1.0)
+            return False
+        except Exception:
+            return False
+
+    async def check_health(self, client="all") -> bool:
+        """
+        Checks if the given redis client is connected to the redis server.
+        if no client was given, checks all supported clients.
+        reconnects if the client is not connected.
+        :param client: str. can be 'all' or a specific redis client, such as
+        "r" "rcache" etc.
+        """
+        # why are we checking this?
+        # redis.asyncio.Redis clients don’t automatically detect that the
+        # underlying Redis connection has died. If the socket is still open,
+        # the next command (e.g., ping() or hget()) will just hang forever
+        # waiting for a response.
+        if client == "all":
+            clients_to_try_to_check = ("r", "rcache", "pubsub_client")
+        else:
+            clients_to_try_to_check = client
+
+        for client in clients_to_try_to_check:
+            client_obj = getattr(self, client)
+            try:
+                if await self.ping(client_obj):
+                    return True
+            except Exception as e:
+                client_obj.close()
+                await client_obj.connection_pool.disconnect()
+
+                # recreate the client and the client pool
+                print(
+                    f"Redis ping failed for client: {client}, {e}, "
+                    f"reconnecting..."
+                )
+                self._reconnect(client)
+                try:
+                    if await self.ping(client_obj):
+                        print(f"Client {client} Reconnected.")
+                        return True
+                except Exception as e:
+                    print(
+                        f"Redis reconnection failed for client: {client}"
+                        f" {e}"
+                    )
+                    return False
+        return True
 
     async def get_gateway_mac_vendor(self):
         return await self.r.hget(self.constants.DEFAULT_GATEWAY, "Vendor")

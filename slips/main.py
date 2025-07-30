@@ -648,6 +648,7 @@ class Main:
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
+                await self.db.check_health()
                 await self.print_gw_info()
 
                 # if you remove the below logic anywhere before the
