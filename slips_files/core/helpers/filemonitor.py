@@ -21,25 +21,33 @@
 import os
 import json
 import asyncio
+import time
+
 from watchdog.events import RegexMatchingEventHandler
 
 
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r".*\.log$", r".*\.conf$"]
 
-    def __init__(self, dir_to_monitor, input_type, db):
+    def __init__(self, dir_to_monitor, input_type, event_q: asyncio.Queue):
         super().__init__(regexes=self.REGEX)
         self.dir_to_monitor = dir_to_monitor
-        self.db = db
+        # everytime this class needs to access the database, it sends and
+        # event here for the FileMonitorHelper() class to handle it
+        self.event_q = event_q
         self.input_type = input_type
 
-    async def on_created(self, event):
+    def on_created(self, event):
         """this will be triggered everytime zeek creates a log file"""
         filename, ext = os.path.splitext(event.src_path)
         if "log" in ext:
-            await self.db.add_zeek_file(filename + ext)
+            event = {
+                "action": "add_zeek_file",
+                "params": {"filename": filename + ext},
+            }
+            self.event_q.put_nowait(json.dumps(event))
 
-    async def on_moved(self, event):
+    def on_moved(self, event):
         """
         this will be triggered everytime zeek renames all log files
         """
@@ -47,13 +55,16 @@ class FileEventHandler(RegexMatchingEventHandler):
         if event.dest_path != "True":
             to_send = {"old_file": event.dest_path, "new_file": event.src_path}
             to_send = json.dumps(to_send)
-            await self.db.publish("remove_old_files", to_send)
 
+            event = {
+                "action": "remove_old_files",
+                "params": {"to_remove": to_send},
+            }
+            self.event_q.put_nowait(json.dumps(event))
             # give inputProc.py time to close the handle or delete the file
-            # In an async context, avoid time.sleep() and use asyncio.sleep()
-            await asyncio.sleep(1)
+            time.sleep(1)
 
-    async def on_modified(self, event):
+    def on_modified(self, event):
         """
         this will be triggered everytime zeek modifies a log file
         """
@@ -67,14 +78,14 @@ class FileEventHandler(RegexMatchingEventHandler):
             for file in os.listdir(self.dir_to_monitor):
                 if "reporter" not in file:
                     continue
-                # For file I/O in an async context, ideally use async file operations
-                # if available (e.g., aiofiles). For simplicity here, sticking with
-                # synchronous open, but be aware it can block the event loop.
+
                 with open(os.path.join(self.dir_to_monitor, file), "r") as f:
                     while line := f.readline():
                         if "termination" in line:
                             # tell slips to terminate
-                            await self.db.publish_stop()
+                            event = {"action": "publish_stop"}
+                            self.event_q.put_nowait(json.dumps(event))
                             break
         elif "whitelist" in filename:
-            await self.db.publish("reload_whitelist", "reload")
+            event = {"action": "reload_whitelist"}
+            self.event_q.put_nowait(json.dumps(event))

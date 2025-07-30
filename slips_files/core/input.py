@@ -37,6 +37,8 @@ from slips_files.common.abstracts.icore import ICore
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import multiprocessing
+
+from slips_files.core.helpers.file_monitor_helper import FileMonitorHelper
 from slips_files.core.helpers.filemonitor import FileEventHandler
 from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
 
@@ -57,6 +59,8 @@ class Input(ICore):
         zeek_dir=None,
         line_type=None,
         is_profiler_done_event: multiprocessing.Event = None,
+        *args,
+        **kwargs,
     ):
         # who calls these functions on new msgs? the dispatch_msgs()
         # in IAsyncModule
@@ -65,7 +69,6 @@ class Input(ICore):
             "new_module_flow": self.new_module_flow_handler,
         }
         await self.db.subscribe(self.pubsub, self.channels.keys())
-
         self.input_type = input_type
         self.profiler_queue = profiler_queue
         # in case of reading from stdin, the user must tell slips what
@@ -245,7 +248,8 @@ class Input(ICore):
 
     def cache_nxt_line_in_file(self, filename: str):
         """
-        reads 1 line of the given file and stores in queue for sending to the profiler
+        reads 1 line of the given file and stores in queue for sending to
+        the profiler
         :param: full path to the file. includes the .log extension
         """
         file_handle = self.get_file_handle(filename)
@@ -342,6 +346,7 @@ class Input(ICore):
         return earliest_line, file_with_earliest_flow
 
     async def read_zeek_files(self) -> int:
+        print("@@@@@@@@@@@@@@@@ read zeek files is calledddd")
         try:
             self.zeek_files = await self.db.get_all_zeek_files()
             self.open_file_handlers = {}
@@ -438,7 +443,7 @@ class Input(ICore):
             self.bro_timeout = float("inf")
 
         self.zeek_dir = self.given_path
-        self.start_observer()
+        await self.start_observer()
 
         # if 1 file is zeek tabs the rest should be the same
         if not hasattr(self, "is_zeek_tabs"):
@@ -475,6 +480,7 @@ class Input(ICore):
         self.total_flows = total_flows
         await self.db.set_input_metadata({"total_flows": total_flows})
         self.lines = await self.read_zeek_files()
+        print("@@@@@@@@@@@@@@@@ read zeek folder returnedd")
         self.print_lines_read()
         self.mark_self_as_done_processing()
         return True
@@ -627,25 +633,43 @@ class Input(ICore):
         self.mark_self_as_done_processing()
         return True
 
-    def start_observer(self):
-        # Now start the observer of new files. We need the observer because Zeek does not create all the files
+    async def start_observer(self):
+        """
+        this observer is used to monitor the zeek_dir for new files
+        it is the filemonitor.py.
+        This function starts the filemonitor and its helpers.
+        """
+        print("@@@@@@@@@@@@@@@@ start_observer is called")
+        # FileEventHandler (the observer) puts events in this queue,
+        # FileMonitorHelper
+        # executes them.
+        self.file_monitor_events_queue = asyncio.Queue()
+        self.event_queue_termination_event = asyncio.Event()
+
+        # Now start the observer of new files.
+        # We need the observer because Zeek does not create all the files
         # at once, but when the traffic appears. That means that we need
         # some process to tell us which files to read in real time when they appear
-        # Get the file eventhandler
         # We have to set event_handler and event_observer before running zeek.
         event_handler = FileEventHandler(
-            self.zeek_dir, self.input_type, self.db
+            self.zeek_dir, self.input_type, self.file_monitor_events_queue
         )
-        # Create an observer
         self.event_observer = Observer()
         # Schedule the observer with the callback on the file handler
         self.event_observer.schedule(
             event_handler, self.zeek_dir, recursive=True
         )
-        # monitor changes to whitelist
+        # monitor changes to whitelist.conf
         self.event_observer.schedule(event_handler, "config/", recursive=True)
-        # Start the observer
         self.event_observer.start()
+
+        # takes actions based on the monitored files.
+        fm_helper = FileMonitorHelper(
+            self.file_monitor_events_queue,
+            self.db,
+            self.event_queue_termination_event,
+        )
+        asyncio.create_task(fm_helper.event_handler())
 
     async def handle_pcap_and_interface(self) -> int:
         """Returns the number of zeek lines read"""
@@ -654,7 +678,7 @@ class Input(ICore):
         if not os.path.exists(self.zeek_dir):
             os.makedirs(self.zeek_dir)
         self.print(f"Storing zeek log files in {self.zeek_dir}")
-        self.start_observer()
+        await self.start_observer()
 
         if self.input_type == "interface":
             # We don't want to stop bro if we read from an interface
@@ -678,7 +702,8 @@ class Input(ICore):
         await self.db.store_pid("Zeek", self.zeek_pid)
         if not hasattr(self, "is_zeek_tabs"):
             self.is_zeek_tabs = False
-        self.lines = self.read_zeek_files()
+        self.lines = await self.read_zeek_files()
+        print("@@@@@@@@@@@@@@@@ read zile files returned!!")
         self.print_lines_read()
         self.mark_self_as_done_processing()
 
@@ -697,6 +722,7 @@ class Input(ICore):
     def stop_observer(self):
         # Stop the observer
         try:
+            self.event_queue_termination_event.set()
             self.event_observer.stop()
             self.event_observer.join(10)
         except AttributeError:
@@ -749,7 +775,7 @@ class Input(ICore):
         )
         # os.remove(old_log_file)
 
-    def shutdown_gracefully(self):
+    async def shutdown_gracefully(self):
         self.print(f"Stopping. Total lines read: {self.lines}")
         self.stop_observer()
         self.stop_queues()
@@ -934,7 +960,7 @@ class Input(ICore):
                 0,
                 1,
             )
-            return False
+            return 1
 
         # no logic should be put here
         # because some of the above handlers never return
