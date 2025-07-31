@@ -1,14 +1,29 @@
 #!/usr/bin/env bash
+#
+# Training & testing orchestration script (Bash version).
+#
 
-#bash function!! use sed in linux
+set -euo pipefail
+IFS=$'\n\t'
+
+# ===================== FUNCTIONS =========================
+
+# bash function!! use sed for in-place line replacement
 function Replace-Line {
     local Path="$1"
     local LineNumber="$2"
     local NewText="$3"
-    # 0-index adjustment, then replace entire line
+    # sed uses 1-based line numbers
     sed -i "${LineNumber}s/.*/${NewText//\//\\/}/" "$Path"
     echo "Replaced line $LineNumber in '$Path' with: $NewText"
 }
+
+# Cleanup handler: always remove any running 'slips' container
+function cleanup {
+    echo "Cleaning up any running slips container…" >&2
+    docker rm -f slips >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
 
 # ===================== USER CONFIGURATION =========================
 
@@ -17,105 +32,105 @@ FILE_TO_DELETE_1="/path/to/first/tempfile"
 FILE_TO_DELETE_2="/path/to/second/tempfile"
 
 # Log directory (will be created if it doesn't exist)
-LOG_DIR="comparison_logs"
+LOG_DIR="./performance_metrics/comparison_logs"
 
 # Dataset base directory
-DATASET_DIR="private-dataset"
+DATASET_DIR="./dataset-private"
 # use datasets 008-015
 
-#line where mode is set in config/slips.yaml
+# config file & mode line
 CONFIG_FILE="config/slips.yaml"
-# Line number in the config file where the mode is set (0-indexed)
-MODE_LINE_NUMBER=216
+MODE_LINE_NUMBER=216   # 1-based line number in YAML
 
 # ========================== CHECKS =========================
 echo "Running checks..."
 
 if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Config file '$CONFIG_FILE' does not exist." >&2
+    echo "Error: Config file '$CONFIG_FILE' does not exist." >&2
     exit 1
 fi
 
-line=$(sed -n "$MODE_LINE_NUMBER p" "$CONFIG_FILE")
-if [[ "$line" != *mode* ]]; then
-    echo "Config file '$CONFIG_FILE', line $MODE_LINE_NUMBER does not contain 'mode'."
-    echo "Please find the correct line where ML mode is set and update MODE_LINE_NUMBER."
+current_line=$(sed -n "${MODE_LINE_NUMBER}p" "$CONFIG_FILE")
+if [[ "$current_line" != *mode* ]]; then
+    echo "Error: Line $MODE_LINE_NUMBER in '$CONFIG_FILE' does not contain 'mode'." >&2
+    echo "Please update MODE_LINE_NUMBER to the correct line." >&2
     exit 1
 fi
 
 # Print script arguments
-echo "Script arguments: $@"
-
-# Validate that exactly one parameter (dataset index) is provided
-if [ "$#" -ne 1 ]; then
-    echo "Error: Exactly one parameter (dataset index) is required."
-    echo "Usage: $0 <dataset_index>"
-    exit 1
-fi
-
-# Check if the dataset directory exists
-if [ ! -d "$DATASET_DIR" ]; then
-    echo "Error: Dataset directory '$DATASET_DIR' does not exist."
-    exit 1
-fi
+echo "Script arguments: $*"
 
 # ===================== SCRIPT STARTS HERE =========================
 echo "Starting training script..."
 
-# Find all dataset folders in the directory
-# Assuming dataset folders are structured as: private-dataset/<dataset_name>/data
+# Collect all dataset folder names (must contain a 'data' subdir)
 DATASETS=()
 while IFS= read -r -d '' dir; do
-    folder=$(basename "$(dirname "$dir")")
-    DATASETS+=("$folder")
+    DATASETS+=("$(basename "$(dirname "$dir")")")
 done < <(find "$DATASET_DIR" -maxdepth 2 -type d -name data -print0)
 
 if [ "${#DATASETS[@]}" -eq 0 ]; then
-    echo "No datasets found in $DATASET_DIR"
+    echo "Error: No datasets found in '$DATASET_DIR'." >&2
     exit 1
 fi
 
-choice="$1"
-if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -ge "${#DATASETS[@]}" ]; then
-    echo "Available datasets:"
+# Validate parameter count
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <dataset_index>" >&2
+    echo "Available datasets:" >&2
     for i in "${!DATASETS[@]}"; do
-        echo "[$i] ${DATASETS[$i]}"
+        echo "  [$i] ${DATASETS[$i]}" >&2
     done
     exit 1
 fi
 
-# Create log directory if not exists
+choice="$1"
+if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 0 ] || [ "$choice" -ge "${#DATASETS[@]}" ]; then
+    echo "Error: Invalid dataset index '$choice'." >&2
+    exit 1
+fi
+
+# Create log directory if needed
 mkdir -p "$LOG_DIR"
 
-# Delete the model and scaler
+# Delete pre-run files
 echo "Deleting pre-run files..."
 rm -f "$FILE_TO_DELETE_1" "$FILE_TO_DELETE_2"
 echo "Deleted: $FILE_TO_DELETE_1, $FILE_TO_DELETE_2"
 
 TRAIN_FOLDER="${DATASETS[$choice]}"
 TRAIN_DIR="$DATASET_DIR/$TRAIN_FOLDER/data"
-TRAIN_ID="$choice"
 
-# Generate timestamped logfile name
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-LOGFILE="${LOG_DIR}/log_${TRAIN_ID}_${TIMESTAMP}"
+TIMESTAMP=$(date +"%d-%m_%H-%M")
+LOGFILE="$LOG_DIR/run_on_${TRAIN_FOLDER}_${TIMESTAMP}.txt"
 
-#create the logfile (empty or overwrite if exists)
-touch "$LOGFILE"
-
+# Start logfile
 echo "Logging to: $LOGFILE"
-echo "Starting training and testing process..." > "$LOGFILE"
-echo "Training on dataset: $TRAIN_FOLDER" | tee -a "$LOGFILE"
+echo "Starting training and testing process..." >"$LOGFILE"
+echo "Training on dataset: $TRAIN_FOLDER" >>"$LOGFILE"
 
-# make sure we are in training mode
-Replace-Line "$CONFIG_FILE" "$MODE_LINE_NUMBER" "  mode:train"
+# ensure training mode in config
+Replace-Line "$CONFIG_FILE" "$MODE_LINE_NUMBER" "  mode: train"
 
 # Run training
-echo "Running training on $TRAIN_DIR" | tee -a "$LOGFILE"
-# TODO: run whole cmd here! "$TRAIN_DIR" >> "$LOGFILE" 2>&1
+echo "Running training on $TRAIN_DIR" >>"$LOGFILE"
+if ! docker run --rm \
+        --network host \
+        --cap-add NET_ADMIN \
+        --name slips \
+        -v "${PWD}:/StratosphereLinuxIPS" \
+        slips_image \
+        python3 slips.py -f "/StratosphereLinuxIPS/$TRAIN_DIR" \
+        >>"$LOGFILE" 2>&1; then
+    echo "Docker training run failed. See log for details." >&2
+    exit 1
+fi
+echo "Training completed." >>"$LOGFILE"
+echo "-----------------------------------------------------" >>"$LOGFILE"
+echo "" >>"$LOGFILE"
 
-# make sure we are in test mode
-Replace-Line "$CONFIG_FILE" "$MODE_LINE_NUMBER" "  mode:test"
+# ensure test mode in config
+Replace-Line "$CONFIG_FILE" "$MODE_LINE_NUMBER" "  mode: test"
 
 # Run testing on all other datasets
 for TEST_FOLDER in "${DATASETS[@]}"; do
@@ -124,10 +139,21 @@ for TEST_FOLDER in "${DATASETS[@]}"; do
     fi
 
     TEST_DIR="$DATASET_DIR/$TEST_FOLDER/data"
-    echo "----------------------------------------" | tee -a "$LOGFILE"
-    echo "Testing on dataset: $TEST_FOLDER" | tee -a "$LOGFILE"
-    echo "Running test on $TEST_DIR" | tee -a "$LOGFILE"
-    # TODO: testing command here! "$TEST_DIR" >> "$LOGFILE" 2>&1
+    echo "----------------------------------------" >>"$LOGFILE"
+    echo "Testing on dataset: $TEST_FOLDER" >>"$LOGFILE"
+    echo "Running test on $TEST_DIR" >>"$LOGFILE"
+
+    if ! docker run --rm \
+            --network host \
+            --cap-add NET_ADMIN \
+            --name slips \
+            -v "${PWD}:/StratosphereLinuxIPS" \
+            slips_image \
+            python3 slips.py -f "/StratosphereLinuxIPS/$TEST_DIR" \
+            >>"$LOGFILE" 2>&1; then
+        echo "Docker test run failed for $TEST_FOLDER. See log for details." >&2
+        exit 1
+    fi
 done
 
-echo "Training and testing completed." | tee -a "$LOGFILE"
+echo "Training and testing completed." >>"$LOGFILE"

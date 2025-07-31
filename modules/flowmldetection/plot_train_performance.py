@@ -53,7 +53,17 @@ def plot_log_data(file_path, experiment_number):
         "MCC",
         "Recall",
     ]
+
     df = pd.DataFrame(data, columns=columns)
+
+    # Create a new column for the difference in total labels
+    total_labels = [float(row[0]) for row in data]
+    diff_total_labels = [total_labels[0]] + [
+        total_labels[i] - total_labels[i - 1]
+        for i in range(1, len(total_labels))
+    ]
+    df["Batch size"] = diff_total_labels
+
     df = df.astype(
         {
             "Total labels": float,
@@ -69,8 +79,10 @@ def plot_log_data(file_path, experiment_number):
             "Accuracy": float,
             "MCC": float,
             "Recall": float,
+            "Batch size": float,
         }
     )
+    weights = df["Malicious"] + df["Benign"]
 
     dir_name = os.path.dirname(file_path)
 
@@ -169,12 +181,19 @@ def plot_log_data(file_path, experiment_number):
     # --- Print final values in terminal and save to file ---
     print("\nFinal values at last training step:")
     final_metrics_path = os.path.join(saving_dir, "final_metrics.txt")
+
     with open(final_metrics_path, "w") as f:
+        value = df["Total labels"].iloc[-1]
+        print(f"Total labels: {value}")
+        f.write(f"Total labels: {value}\n")
+
+        benign_total = df["Benign"].sum()
+        malicious_total = df["Malicious"].sum()
+        benign_malicious_sum = benign_total + malicious_total
+        print(f"Sum of Benign and Malicious: {benign_malicious_sum}")
+        f.write(f"Sum of Benign and Malicious: {benign_malicious_sum}\n")
+
         for col in [
-            "Total labels",
-            "Background",
-            "Benign",
-            "Malicious",
             "FPR",
             "TNR",
             "TPR",
@@ -185,9 +204,17 @@ def plot_log_data(file_path, experiment_number):
             "MCC",
             "Recall",
         ]:
-            value = df[col].iloc[-1]
-            print(f"{col}: {value}")
-            f.write(f"{col}: {value}\n")
+            # Weighted average using diff_total_labels as weights
+            values = df[col].astype(float)
+            # Use sum of Malicious and Benign as weights
+            weighted_avg = (values * weights).sum() / weights.sum()
+            print(f"{col} (total avg): {weighted_avg}")
+            f.write(f"{col} (total avg): {weighted_avg}\n")
+
+        for col in ["Background", "Benign", "Malicious"]:
+            total = df[col].sum()
+            print(f"Total {col}: {total}")
+            f.write(f"Total {col}: {total}\n")
 
 
 def main():

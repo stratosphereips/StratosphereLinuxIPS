@@ -105,7 +105,7 @@ $UNIX_TRAIN_DIR = ($TRAIN_DIR -replace '\\','/') -replace '^([A-Za-z]):', '/$1'.
 
 # Generate timestamped logfile name
 $TIMESTAMP = Get-Date -Format "dd-MM_HH-mm"
-$LOGFILE   = "$LOG_DIR/log_${TRAIN_ID}_$TIMESTAMP.txt"
+$LOGFILE = "$LOG_DIR/run_on_$TRAIN_FOLDER" + "_$TIMESTAMP.txt"
 
 # Create the logfile (empty or overwrite if exists)
 New-Item -Path $LOGFILE -ItemType File -Force | Out-Null
@@ -129,10 +129,13 @@ try {
         bash -c "python3 -W ignore slips.py -f '$UNIX_TRAIN_DIR'" `
         >> $LOGFILE 2>&1
 }
-finally {
-    Write-Host "Cleaning up container slips during training" -ForegroundColor Yellow
+catch {
+    Write-Host "Docker training run failed:" -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Red
     docker rm -f slips 2>$null
+    exit 1
 }
+
 "Training completed." | Tee-Object -FilePath $LOGFILE -Append
 "-----------------------------------------------------" | Out-File -FilePath $LOGFILE -Append
 ""| Tee-Object -FilePath $LOGFILE -Append
@@ -160,9 +163,11 @@ foreach ($TEST_FOLDER in $DATASETS) {
             bash -c "python3 -W ignore slips.py -f '$UNIX_TEST_DIR'" `
             >> $LOGFILE 2>&1
     }
-    finally {
-        Write-Host "Cleaning up container ‘slips’ after test $TEST_FOLDER…" -ForegroundColor Yellow
+    catch {
+        Write-Host "Docker training run failed:" -ForegroundColor Red
+        Write-Host $_.Exception.Message -ForegroundColor Red
         docker rm -f slips 2>$null
+        exit 1
     }
 }
 
