@@ -1,4 +1,14 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+#bash function!! use sed in linux
+function Replace-Line {
+    local Path="$1"
+    local LineNumber="$2"
+    local NewText="$3"
+    # 0-index adjustment, then replace entire line
+    sed -i "${LineNumber}s/.*/${NewText//\//\\/}/" "$Path"
+    echo "Replaced line $LineNumber in '$Path' with: $NewText"
+}
 
 # ===================== USER CONFIGURATION =========================
 
@@ -13,7 +23,25 @@ LOG_DIR="comparison_logs"
 DATASET_DIR="private-dataset"
 # use datasets 008-015
 
-# ==================================================================
+#line where mode is set in config/slips.yaml
+CONFIG_FILE="config/slips.yaml"
+# Line number in the config file where the mode is set (0-indexed)
+MODE_LINE_NUMBER=216
+
+# ========================== CHECKS =========================
+echo "Running checks..."
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Config file '$CONFIG_FILE' does not exist." >&2
+    exit 1
+fi
+
+line=$(sed -n "$MODE_LINE_NUMBER p" "$CONFIG_FILE")
+if [[ "$line" != *mode* ]]; then
+    echo "Config file '$CONFIG_FILE', line $MODE_LINE_NUMBER does not contain 'mode'."
+    echo "Please find the correct line where ML mode is set and update MODE_LINE_NUMBER."
+    exit 1
+fi
 
 # Print script arguments
 echo "Script arguments: $@"
@@ -31,32 +59,28 @@ if [ ! -d "$DATASET_DIR" ]; then
     exit 1
 fi
 
+# ===================== SCRIPT STARTS HERE =========================
+echo "Starting training script..."
+
 # Find all dataset folders in the directory
 # Assuming dataset folders are structured as: private-dataset/<dataset_name>/data
 DATASETS=()
-for dir in "$DATASET_DIR"/*/data; do
+while IFS= read -r -d '' dir; do
     folder=$(basename "$(dirname "$dir")")
     DATASETS+=("$folder")
-done
+done < <(find "$DATASET_DIR" -maxdepth 2 -type d -name data -print0)
 
-if [ ${#DATASETS[@]} -eq 0 ]; then
+if [ "${#DATASETS[@]}" -eq 0 ]; then
     echo "No datasets found in $DATASET_DIR"
     exit 1
 fi
 
-# Check for required argument: dataset index
-if [ -z "$1" ]; then
+choice="$1"
+if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -ge "${#DATASETS[@]}" ]; then
     echo "Available datasets:"
     for i in "${!DATASETS[@]}"; do
         echo "[$i] ${DATASETS[$i]}"
     done
-    exit 1
-fi
-
-choice=$1
-
-if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -ge "${#DATASETS[@]}" ]; then
-    echo "Invalid choice: $choice"
     exit 1
 fi
 
@@ -70,24 +94,32 @@ echo "Deleted: $FILE_TO_DELETE_1, $FILE_TO_DELETE_2"
 
 TRAIN_FOLDER="${DATASETS[$choice]}"
 TRAIN_DIR="$DATASET_DIR/$TRAIN_FOLDER/data"
-TRAIN_ID=$choice
-
+TRAIN_ID="$choice"
 
 # Generate timestamped logfile name
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOGFILE="${LOG_DIR}/log_${TRAIN_ID}_${TIMESTAMP}"
 
+#create the logfile (empty or overwrite if exists)
+touch "$LOGFILE"
+
 echo "Logging to: $LOGFILE"
 echo "Starting training and testing process..." > "$LOGFILE"
 echo "Training on dataset: $TRAIN_FOLDER" | tee -a "$LOGFILE"
+
+# make sure we are in training mode
+Replace-Line "$CONFIG_FILE" "$MODE_LINE_NUMBER" "  mode:train"
 
 # Run training
 echo "Running training on $TRAIN_DIR" | tee -a "$LOGFILE"
 # TODO: run whole cmd here! "$TRAIN_DIR" >> "$LOGFILE" 2>&1
 
+# make sure we are in test mode
+Replace-Line "$CONFIG_FILE" "$MODE_LINE_NUMBER" "  mode:test"
+
 # Run testing on all other datasets
 for TEST_FOLDER in "${DATASETS[@]}"; do
-    if [[ "$TEST_FOLDER" == "$TRAIN_FOLDER" ]]; then
+    if [ "$TEST_FOLDER" == "$TRAIN_FOLDER" ]; then
         continue
     fi
 

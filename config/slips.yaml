@@ -13,11 +13,11 @@ modes:
 parameters:
   # The verbosity is related to how much data you want to see about the
   # detections.
-  verbose: 1
+  verbose: 0
 
   # The debugging is related to errors, warnings and cases that may cause
   # errors.
-  debug: 1
+  debug: 0
 
   # The width of the time window (TW) used by Slips. All traffic is separated in
   # TW to be analyzed. This is so old detections can be forgoten.
@@ -213,7 +213,7 @@ flowmldetection:
   # You should have trained at least once with 'Normal' data and once with
   # 'Malicious' data in order for the test to work.
 
-  mode: test
+  mode: train
   # mode: test
   # mode: train
 
