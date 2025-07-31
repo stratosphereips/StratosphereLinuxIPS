@@ -525,7 +525,7 @@ def test_drop_root_privs(
 ):
     mock_getenv.side_effect = side_effect
     utils = ModuleFactory().create_utils_obj()
-    utils.drop_root_privs()
+    utils.drop_root_privs_permanently()
 
     assert mock_setresuid.call_args_list == setresuid_calls
     assert mock_setresgid.call_args_list == setresgid_calls

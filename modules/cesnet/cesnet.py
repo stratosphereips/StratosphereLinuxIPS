@@ -247,7 +247,7 @@ class CESNET(IModule):
         self.db.add_ips_to_ioc(src_ips)
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
         # Stop module if the configuration file is invalid or not found
         if self.stop_module:
             return 1

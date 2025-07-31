@@ -1,10 +1,12 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+from pathlib import Path
 from unittest.mock import MagicMock, patch, mock_open, Mock
 import pytest
 from tests.module_factory import ModuleFactory
 from datetime import datetime, timedelta
 import sys
+import os
 
 
 @pytest.mark.parametrize(
@@ -424,55 +426,60 @@ def test_terminate_slips_cpu_profiler_enabled():
     mock_exit.assert_not_called()
 
 
-def test_prepare_output_dir_with_o_flag():
+@pytest.fixture
+def main_obj(tmp_path):
     main = ModuleFactory().create_main_obj()
     main.args = MagicMock()
-    main.args.output = "custom_output_dir"
-    main.args.testing = False
-
-    with (
-        patch.object(sys, "argv", ["-o"]),
-        patch("os.path.exists", return_value=True),
-        patch("os.listdir", return_value=["file1.txt", "dir1"]),
-        patch("os.path.isfile", return_value=True),
-        patch("os.remove") as mock_remove,
-        patch("os.path.isdir", return_value=False),
-    ):
-        main.prepare_output_dir()
-        assert mock_remove.call_count == 2
+    main.args.output = str(tmp_path / "test_output")
+    return main
 
 
-@pytest.mark.parametrize(
-    "testing, filename, " "expected_call_count",
-    [
-        # Test Case 1: Testing mode,
-        # slips_output.txt should not be deleted
-        (True, "slips_output.txt", 0),
-        # Test Case 2: Not testing mode,
-        # slips_output.txt should be deleted
-        (False, "slips_output.txt", 1),
-        # Test Case 3: Testing mode,
-        # other files should be deleted
-        (True, "other_file.txt", 1),
-        # Test Case 4: Not testing mode,
-        # other files should be deleted
-        (False, "other_file.txt", 1),
-    ],
+def test_prepare_output_dir_with_o_flag_deletes_files_preserve_slips(
+    main_obj, tmp_path, monkeypatch
+):
+    test_dir = Path(main_obj.args.output)
+    test_dir.mkdir(parents=True)
+    (test_dir / "a.txt").write_text("remove")
+    (test_dir / "slips_output.txt").write_text("keep")
+
+    main_obj.args.testing = True
+    monkeypatch.setattr(sys, "argv", ["script.py", "-o"])
+    main_obj.prepare_output_dir()
+
+    remaining = list(os.listdir(test_dir))
+    assert "slips_output.txt" in remaining
+    assert len(remaining) == 1
+
+
+def test_prepare_output_dir_with_o_flag_creates_dir(
+    main_obj, tmp_path, monkeypatch
+):
+    non_existent = tmp_path / "new_output"
+    main_obj.args.output = str(non_existent)
+    main_obj.args.testing = False
+    monkeypatch.setattr(sys, "argv", ["script.py", "-o"])
+
+    main_obj.prepare_output_dir()
+
+    assert os.path.exists(non_existent)
+    assert oct(os.stat(non_existent).st_mode & 0o777) == "0o777"
+
+
+@patch(
+    "slips_files.common.slips_utils.utils.convert_ts_format",
+    return_value="2025-07-15_12:00:00",
 )
-def test_prepare_output_dir_testing_mode(
-    testing, filename, expected_call_count
+def test_prepare_output_dir_without_o_flag(
+    mock_convert_ts, tmp_path, monkeypatch
 ):
     main = ModuleFactory().create_main_obj()
     main.args = MagicMock()
-    main.args.output = "test_output"
-    main.args.testing = testing
+    main.alerts_default_path = str(tmp_path)
+    main.input_information = "/fake/input/wlp3s0"
+    monkeypatch.setattr(sys, "argv", ["script.py"])  # No -o
 
-    with (
-        patch.object(sys, "argv", ["-o"]),
-        patch("os.path.exists", return_value=True),
-        patch("os.listdir", return_value=[filename]),
-        patch("os.path.isfile", return_value=True),
-        patch("os.remove") as mock_remove,
-    ):
-        main.prepare_output_dir()
-        assert mock_remove.call_count == expected_call_count
+    main.prepare_output_dir()
+
+    expected_base = tmp_path / "wlp3s0_2025-07-15_12:00:00"
+    assert expected_base.exists()
+    assert oct(expected_base.stat().st_mode & 0o777) == "0o777"

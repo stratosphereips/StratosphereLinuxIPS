@@ -1798,7 +1798,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         return True
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
         # Load the local Threat Intelligence files that are
         # stored in the local folder self.path_to_local_ti_files
         # The remote files are being loaded by the update_manager

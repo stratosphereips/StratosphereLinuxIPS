@@ -300,7 +300,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # If the PING/PONG fails, the connection will re-established
 
         # retry_on_timeout=True after the command times out, it will be retried once,
-        # if the retry is successful, it will return normally; if it fails, an exception will be thrown
+        # if the retry is successful, it will return normally; if it fails,
+        # an exception will be thrown
 
         return redis.StrictRedis(
             host="localhost",

@@ -35,7 +35,7 @@ def test_decide_blocking(
     profileid, our_ips, expected_result, expected_publish_call_count
 ):
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
-    evidence_handler.blocking_module_supported = True
+    evidence_handler.blocking_modules_supported = True
     evidence_handler.our_ips = our_ips
     with patch.object(evidence_handler.db, "publish") as mock_publish:
         tw = TimeWindow(
@@ -97,7 +97,7 @@ def setup_handler(popup_enabled, blocked, mark_blocked=None):
     evidence = {"k": MagicMock(spec=Evidence)}
 
     handler.db.set_alert = MagicMock()
-    handler.decide_blocking = MagicMock(side_effect=[None, mark_blocked])
+    handler.decide_blocking = MagicMock(side_effect=[False, mark_blocked])
     handler.db.is_blocked_profile_and_tw = MagicMock(return_value=blocked)
     handler.send_to_exporting_module = MagicMock()
     handler.formatter.format_evidence_for_printing = MagicMock(
@@ -146,8 +146,8 @@ def test_handle_new_alert_not_blocked(popup_enabled, expect_popup):
     else:
         handler.show_popup.assert_not_called()
 
-    handler.db.mark_profile_and_timewindow_as_blocked.assert_called_once()
-    handler.log_alert.assert_called_once_with(alert, blocked=True)
+    handler.db.mark_profile_and_timewindow_as_blocked.assert_not_called()
+    handler.log_alert.assert_called_once_with(alert, blocked=False)
 
 
 @pytest.mark.parametrize(

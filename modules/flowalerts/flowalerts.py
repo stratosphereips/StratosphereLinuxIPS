@@ -63,7 +63,7 @@ class FlowAlerts(AsyncModule):
         self.dns.shutdown_gracefully()
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
         self.dns.pre_analyze()
         self.analyzers_map = {
             "new_downloaded_file": [self.downloaded_file],

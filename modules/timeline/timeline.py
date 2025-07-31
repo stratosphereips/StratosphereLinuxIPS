@@ -333,7 +333,7 @@ class Timeline(IModule):
             return True
 
     def pre_main(self):
-        utils.drop_root_privs()
+        utils.drop_root_privs_permanently()
 
     def main(self):
         # Main loop function

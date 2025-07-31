@@ -57,6 +57,7 @@ class Database(object):
                 output_dir,
                 port,
                 conf,
+                os.getpid(),  # main_pid doesnt matter here
                 start_redis_server=False,
                 start_sqlite=True,
                 flush_db=False,

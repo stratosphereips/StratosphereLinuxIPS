@@ -37,6 +37,7 @@ class IModule(ABC, Process):
         termination_event,
         slips_args,
         conf,
+        ppid: int,
         **kwargs,
     ):
         Process.__init__(self)
@@ -47,12 +48,14 @@ class IModule(ABC, Process):
         self.args: Namespace = slips_args
         # to be able to access the configuration file
         self.conf = conf
+        # the parent pid of this module, used for strating the db
+        self.ppid = ppid
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
         self.db = DBManager(
-            self.logger, self.output_dir, self.redis_port, self.conf
+            self.logger, self.output_dir, self.redis_port, self.conf, self.ppid
         )
         self.keyboard_int_ctr = 0
         self.init(**kwargs)

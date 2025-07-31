@@ -82,7 +82,7 @@ class ProfilersManager:
                     subprocess.run(viz_args)
                     exit(0)
             else:
-                # reaching here means slips is now running using the vistracer
+                # reaching here means slips is now running using the viztracer
                 # command
                 self.cpu_profiler = CPUProfiler(
                     db=self.main.db,
