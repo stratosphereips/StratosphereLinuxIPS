@@ -6,6 +6,7 @@ from slips_files.common.style import green
 import subprocess
 import os
 import threading
+import asyncio
 from multiprocessing import Queue
 
 
@@ -41,7 +42,7 @@ class UIManager:
         )
         delattr(self, "webinterface_return_value")
 
-    def start_webinterface(self):
+    async def start_webinterface(self):
         """
         Starts the web interface shell script if -w is given
         """
@@ -55,7 +56,10 @@ class UIManager:
             """
             os.setpgrp()
 
-        def run_webinterface():
+        def run_webinterface(
+            loop: asyncio.AbstractEventLoop,
+            future_web_interface_pid: asyncio.Future[str],
+        ):
             # starting the wbeinterface using the shell script results
             # in slips not being able to
             # get the PID of the python proc started by the .sh script
@@ -70,9 +74,16 @@ class UIManager:
                 preexec_fn=detach_child,
                 cwd=os.getcwd(),
             )
-
-            self.main.db.store_pid("Web Interface", webinterface.pid)
             self.web_interface_pid = webinterface.pid
+            # set the pid so that the start_webinterface() would store it
+            # in the db
+            # why are we doing this? to avoid using self.db here (in a
+            # different thread) because the async redis clients aren't
+            # threadsafe:D
+            loop.call_soon_threadsafe(
+                future_web_interface_pid.set_result, webinterface.pid
+            )
+
             # we'll assume that it started, and if not, the return value will
             # immediately change and this thread will
             # print an error
@@ -103,12 +114,20 @@ class UIManager:
             )
             return
 
+        loop = asyncio.get_running_loop()
+        future_web_interface_pid = loop.create_future()
+
         # if there's an error, this webinterface_return_value will be set
         # to false, and the error will be printed
         self.webinterface_return_value = Queue()
         self.webinterface_thread = threading.Thread(
             target=run_webinterface,
             daemon=True,
+            args=(loop, future_web_interface_pid),
         )
+        # we'll be checking the return value of this thread later inside
+        # the run_webinterface() func
         self.webinterface_thread.start()
-        # we'll be checking the return value of this thread later
+
+        await future_web_interface_pid
+        self.main.db.store_pid("Web Interface", future_web_interface_pid)

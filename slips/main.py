@@ -601,7 +601,7 @@ class Main:
                 self.proc_man.print_disabled_modules()
 
             if self.args.webinterface:
-                self.ui_man.start_webinterface()
+                await self.ui_man.start_webinterface()
 
             # call shutdown_gracefully on sigterm
             async def sig_handler(sig, frame):
