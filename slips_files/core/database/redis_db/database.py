@@ -39,7 +39,7 @@ RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     # this db is a singelton per port. meaning no 2 instances
     # should be created for the same port at the same time
-    _obj = None
+    _instance = None
     _port = None
     # clients context vars to be able to have one client per process,
     # and to avoid async issues
@@ -49,8 +49,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
     constants = Constants()
     channels = Channels()
-    # Stores instances per port
-    _instances = {}
     supported_channels = {
         "tw_modified",
         "evidence_added",
@@ -142,6 +140,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     # used to cleanup flow trackers
     last_cleanup_time = time.time()
     ip_info_cache = TTLCache(maxsize=300, ttl=300)  # 5-minute TTL
+    slips_internal_time_set = False
 
     def __new__(
         cls,
@@ -155,9 +154,25 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         args=None,
     ):
         """
-        treat the db as a singleton per port
-        meaning every port will have exactly 1 single obj of this db
+        treat the db as a singleton per process/thread
+        meaning every process will have exactly 1 single obj of this db
         at any given time
+        why?
+        1. Connection Pool Optimization: By reusing the same instance, you're
+        reusing the same connection pool, which is more efficient than
+        creating new pools for each instance
+        2. State Consistency: Multiple instances could lead to inconsistent
+        states across your application. The singleton ensures all components
+        work with the same database state
+        3. Initialization Control: The initialization code (like server
+        startup, configuration loading) only runs once when the first
+        instance is created, avoiding duplicate setup work
+
+        :param caller_pid: pid of the process that initiated this class.
+            in 1 run of slips, each process will have its own instance of
+            this db, only one instance per pid. why? because redis async
+            clients aren't thred safe, so we need a new client for each
+            process.
         """
         cls.redis_port = redis_port
         cls.flush_db = flush_db
@@ -167,10 +182,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         cls.conf = conf or ConfigParser()
         cls.args = args
 
-        if cls.redis_port not in cls._instances:
+        if cls._instance is None:
             # PS: keep in mind that this code is only called once from
-            # main.py. not
-            # called by each module. that's how singelton works:D
+            # main.py. not called by each module. that's how singelton works:D
             cls._set_redis_options()
             cls._read_configuration()
             initialized, err = cls.init_redis_server()
@@ -179,9 +193,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                     f"Failed to connect to the redis server "
                     f"on port {cls.redis_port}: {err}"
                 )
-
-            cls._instances[cls.redis_port] = super().__new__(cls)
+            cls._create_conn_pools()
+            cls._instance = super().__new__(cls)
             super().__init__(cls)
+        return cls._instance
 
     def init_clients(self):
         """
