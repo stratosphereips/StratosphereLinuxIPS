@@ -176,6 +176,100 @@ class FlowMLDetection(IModule):
             f"Accuracy={ACCU:.4f}, MCC={MCC:.4f}, Recall={RECALL:.4f}."
         )
 
+    def store_testing_data(self, original_label, predicted_label):
+        # Initialize per-class metrics if not already done
+
+        if not hasattr(self, "seen_labels"):
+            self.seen_labels = {BACKGROUND: 0, MALICIOUS: 0, BENIGN: 0}
+        if not hasattr(self, "predicted_labels"):
+            self.predicted_labels = {BACKGROUND: 0, MALICIOUS: 0, BENIGN: 0}
+
+        if not hasattr(self, "class_metrics"):
+            self.class_metrics = {}
+            for label in self.all_classes:
+                self.class_metrics[label] = {
+                    "TP": 0,
+                    "FP": 0,
+                    "TN": 0,
+                    "FN": 0,
+                }
+
+        # --- New: Benign/Malicious only metrics ---
+        if not hasattr(self, "benign_malicious_metrics"):
+            self.benign_malicious_metrics = {
+                "TP": 0,
+                "FP": 0,
+                "TN": 0,
+                "FN": 0,
+            }
+
+        # Update counters for true labels seen
+        if original_label in self.seen_labels:
+            self.seen_labels[original_label] += 1
+        else:
+            self.seen_labels[original_label] = 1
+
+        # Update counters for predicted labels
+        if predicted_label in self.predicted_labels:
+            self.predicted_labels[predicted_label] += 1
+        else:
+            self.predicted_labels[predicted_label] = 1
+
+        # Calculate TP, FP, TN, FN for each class
+        for label in self.all_classes:
+            if predicted_label == label and original_label == label:
+                self.class_metrics[label]["TP"] += 1
+            elif predicted_label == label and original_label != label:
+                self.class_metrics[label]["FP"] += 1
+            elif predicted_label != label and original_label == label:
+                self.class_metrics[label]["FN"] += 1
+            elif predicted_label != label and original_label != label:
+                self.class_metrics[label]["TN"] += 1
+
+        # --- New: Benign/Malicious only metrics ---
+        if (original_label in [BENIGN, MALICIOUS]) and (
+            predicted_label in [BENIGN, MALICIOUS]
+        ):
+            # Map: Malicious=1, Benign=0
+            true_bin = 1 if original_label == MALICIOUS else 0
+            pred_bin = 1 if predicted_label == MALICIOUS else 0
+            if pred_bin == 1 and true_bin == 1:
+                self.benign_malicious_metrics["TP"] += 1
+            elif pred_bin == 1 and true_bin == 0:
+                self.benign_malicious_metrics["FP"] += 1
+            elif pred_bin == 0 and true_bin == 1:
+                self.benign_malicious_metrics["FN"] += 1
+            elif pred_bin == 0 and true_bin == 0:
+                self.benign_malicious_metrics["TN"] += 1
+
+        # Store summary statistics in consistent class order
+        total_flows = sum(
+            self.seen_labels[label] for label in self.all_classes
+        )
+        seen_labels_ordered = {
+            label: self.seen_labels.get(label, 0) for label in self.all_classes
+        }
+        predicted_labels_ordered = {
+            label: self.predicted_labels.get(label, 0)
+            for label in self.all_classes
+        }
+        class_metrics_ordered = {
+            label: self.class_metrics.get(
+                label, {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
+            )
+            for label in self.all_classes
+        }
+
+        log_str = (
+            f"Total flows: {total_flows}; "
+            f"Seen labels: {seen_labels_ordered}; "
+            f"Predicted labels: {predicted_labels_ordered}; "
+            f"Per-class metrics: {class_metrics_ordered}; "
+        )
+        bm = self.benign_malicious_metrics
+        log_str += f"Benign/Malicious only: TP={bm['TP']}, FP={bm['FP']}, TN={bm['TN']}, FN={bm['FN']}; "
+        self.write_to_log(log_str)
+
     def train(self, sum_labeled_flows, last_number_of_flows_when_trained):
         """
         Train a model based on the flows we receive and the labels
@@ -697,38 +791,8 @@ class FlowMLDetection(IModule):
                     # only for evaluating a testing
                     log_testing_data = True
                     if log_testing_data:
-                        # Initialize counters if not already done
-                        if not hasattr(self, "tp"):
-                            self.tp = 0
-                        if not hasattr(self, "tn"):
-                            self.tn = 0
-                        if not hasattr(self, "fp"):
-                            self.fp = 0
-                        if not hasattr(self, "fn"):
-                            self.fn = 0
 
-                        # Update counters based on predictions and labels
-                        if (
-                            pred[0] == MALICIOUS
-                            and original_label == MALICIOUS
-                        ):
-                            self.tp += 1
-                        elif pred[0] == BENIGN and original_label == BENIGN:
-                            self.tn += 1
-                        elif pred[0] == MALICIOUS and original_label == BENIGN:
-                            self.fp += 1
-                            self.write_to_log(
-                                f"False Positive Flow: {self.flow}"
-                            )
-                        elif pred[0] == BENIGN and original_label == MALICIOUS:
-                            self.fn += 1
-                            self.write_to_log(
-                                f"False Negative Flow: {self.flow}"
-                            )
-
-                        self.print("logging testing performance metrics", 2, 0)
-                        # Log the testing performance metrics
-                        self.write_to_log(
-                            f"TP: {self.tp}, TN: {self.tn},"
-                            f" FP: {self.fp}, FN: {self.fn}"
+                        self.store_testing_data(
+                            original_label,
+                            pred[0],
                         )

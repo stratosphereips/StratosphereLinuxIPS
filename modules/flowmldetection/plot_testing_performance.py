@@ -1,355 +1,346 @@
 import argparse
+import ast
 import os
+import re
+import traceback
+from typing import Any, Dict, List
 
 import matplotlib.pyplot as plt
-import numpy as np
 
 
-def process_file(file_path):
-    # Initialize the counters for the values
-    FPR_values = []
-    FNR_values = []
-    TNR_values = []
-    TPR_values = []
-    F1_values = []
-    accuracy_values = []
-    precision_values = []
-    MCC_values = []
-    recall_values = []
+def safe_eval_dict(text: str) -> Any:
+    try:
+        return ast.literal_eval(text)
+    except Exception as e:
+        raise ValueError(f"Failed to parse dictionary: {e}")
 
-    # Counters for error tracking
-    total_lines = 0
-    error_lines = 0
-    unusual_lines = 0
 
-    # Read the file and extract the data
-    with open(file_path, "r") as file:
-        for line in file:
-            total_lines += 1
-            if "TP:" in line:
-                try:
-                    # Extract the values from the line
-                    parts = line.split(",")
-                    TP = int(parts[0].split(":")[1].strip())
-                    TN = int(parts[1].split(":")[1].strip())
-                    FP = int(parts[2].split(":")[1].strip())
-                    FN = int(parts[3].split(":")[1].strip())
+def extract_braced_dict(text: str, start_pattern: str) -> str:
+    """Extracts a dictionary string with balanced braces after a given pattern."""
+    start = text.find(start_pattern)
+    if start == -1:
+        return None
+    start = text.find("{", start)
+    if start == -1:
+        return None
+    brace_count = 0
+    end = start
+    while end < len(text):
+        if text[end] == "{":
+            brace_count += 1
+        elif text[end] == "}":
+            brace_count -= 1
+            if brace_count == 0:
+                return text[start : end + 1]
+        end += 1
+    return None
 
-                    # Calculate metrics
-                    FPR = FP / (FP + TN) if (FP + TN) != 0 else 0
-                    FNR = FN / (FN + TP) if (FN + TP) != 0 else 0
-                    TNR = TN / (TN + FP) if (TN + FP) != 0 else 0
-                    TPR = TP / (TP + FN) if (TP + FN) != 0 else 0
-                    Precision = TP / (TP + FP) if (TP + FP) != 0 else 0
-                    Recall = TPR  # Recall is the same as TPR
-                    F1 = (
-                        2 * (Precision * Recall) / (Precision + Recall)
-                        if (Precision + Recall) != 0
-                        else 0
-                    )
-                    Accuracy = (
-                        (TP + TN) / (TP + TN + FP + FN)
-                        if (TP + TN + FP + FN) != 0
-                        else 0
-                    )
-                    MCC = (
-                        ((TP * TN) - (FP * FN))
-                        / np.sqrt(
-                            (TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)
-                        )
-                        if ((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)) != 0
-                        else 0
-                    )
 
-                    # Append the values to the respective lists
-                    FPR_values.append(FPR)
-                    FNR_values.append(FNR)
-                    TNR_values.append(TNR)
-                    TPR_values.append(TPR)
-                    F1_values.append(F1)
-                    accuracy_values.append(Accuracy)
-                    precision_values.append(Precision)
-                    MCC_values.append(MCC)
-                    recall_values.append(Recall)
+def parse_metrics_line(line: str) -> Dict[str, Any]:
+    """
+    Returns:
+        {
+            'total': int,
+            'seen_labels': {'Background':…, 'Malicious':…, 'Benign':…},
+            'pred_labels': {...},
+            'class_metrics': {'Background':{TP,FP,TN,FN}, …}
+        }
+    """
+    total_match = re.search(r"Total flows:\s*(\d+)", line)
+    seen_dict_str = extract_braced_dict(line, "Seen labels:")
+    pred_dict_str = extract_braced_dict(line, "Predicted labels:")
+    per_class_dict_str = extract_braced_dict(line, "Per-class metrics:")
+    # Optionally parse Benign/Malicious only metrics if needed in future:
+    # bm_match = re.search(r"Benign/Malicious only:\s*TP=(\d+), FP=(\d+), TN=(\d+), FN=(\d+)", line)
 
-                except Exception as e:
-                    error_lines += 1
-                    print(f"Error in line {total_lines}: {e}")
-                    continue
+    if not (
+        total_match and seen_dict_str and pred_dict_str and per_class_dict_str
+    ):
+        raise ValueError(
+            "Line missing one of Total/Seen/Predicted/Per-class sections"
+        )
 
-                # Check for any unusual cases
-                if any(
-                    np.isnan(
-                        [
-                            FPR,
-                            FNR,
-                            TNR,
-                            TPR,
-                            F1,
-                            Accuracy,
-                            Precision,
-                            MCC,
-                            Recall,
-                        ]
-                    )
-                ):
-                    unusual_lines += 1
-                    print(
-                        f"Unusual values in line {total_lines}: NaN values found"
-                    )
+    total = int(total_match.group(1))
+    seen = safe_eval_dict(seen_dict_str)
+    pred = safe_eval_dict(pred_dict_str)
+    cls_metrics = safe_eval_dict(per_class_dict_str)
 
-    return (
-        FPR_values,
-        FNR_values,
-        TNR_values,
-        TPR_values,
-        F1_values,
-        accuracy_values,
-        precision_values,
-        MCC_values,
-        recall_values,
-        total_lines,
-        error_lines,
-        unusual_lines,
+    return {
+        "total": total,
+        "seen_labels": seen,
+        "pred_labels": pred,
+        "class_metrics": cls_metrics,
+    }
+
+
+def compute_binary_metrics(
+    TP: int, TN: int, FP: int, FN: int
+) -> Dict[str, float]:
+    precision = TP / (TP + FP) if TP + FP else 0.0
+    recall = TP / (TP + FN) if TP + FN else 0.0
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if (precision + recall)
+        else 0.0
     )
+    accuracy = (TP + TN) / (TP + TN + FP + FN) if (TP + TN + FP + FN) else 0.0
+    FPR = FP / (FP + TN) if (FP + TN) else 0.0
+    FNR = FN / (FN + TP) if (FN + TP) else 0.0
+    TPR = recall
+    TNR = TN / (TN + FP) if (TN + FP) else 0.0
+    return {
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "accuracy": accuracy,
+        "FPR": FPR,
+        "FNR": FNR,
+        "TPR": TPR,
+        "TNR": TNR,
+    }
+
+
+def compute_multiclass_metrics(
+    cls: Dict[str, Dict[str, int]], total: int
+) -> Dict[str, float]:
+    # Per-class values
+    precisions, recalls, f1s = [], [], []
+    sum_TP = sum(v["TP"] for v in cls.values())
+    sum_FP = sum(v["FP"] for v in cls.values())
+    sum_FN = sum(v["FN"] for v in cls.values())
+
+    for v in cls.values():
+        tp, fp, fn = v["TP"], v["FP"], v["FN"]
+        p = tp / (tp + fp) if tp + fp else 0.0
+        r = tp / (tp + fn) if tp + fn else 0.0
+        f1 = 2 * p * r / (p + r) if (p + r) else 0.0
+        precisions.append(p)
+        recalls.append(r)
+        f1s.append(f1)
+
+    macro_p = sum(precisions) / len(precisions)
+    macro_r = sum(recalls) / len(recalls)
+    macro_f1 = sum(f1s) / len(f1s)
+
+    # micro
+    micro_p = sum_TP / (sum_TP + sum_FP) if (sum_TP + sum_FP) else 0.0
+    micro_r = sum_TP / (sum_TP + sum_FN) if (sum_TP + sum_FN) else 0.0
+    micro_f1 = (
+        2 * micro_p * micro_r / (micro_p + micro_r)
+        if (micro_p + micro_r)
+        else 0.0
+    )
+
+    accuracy = sum_TP / total if total else 0.0
+
+    return {
+        "accuracy": accuracy,
+        "macro_precision": macro_p,
+        "macro_recall": macro_r,
+        "macro_f1": macro_f1,
+        "micro_precision": micro_p,
+        "micro_recall": micro_r,
+        "micro_f1": micro_f1,
+    }
+
+
+def process_file(path: str) -> Dict[str, Any]:
+    metrics = {
+        "malicious": [],  # binary Malicious vs Benign
+        "overall": [],  # binary Non-BG vs BG
+        "multiclass": [],  # overall multi-class
+    }
+    counters = {"total": 0, "errors": 0, "unusual": 0}
+
+    with open(path) as f:
+        for line in f:
+            if "Per-class metrics:" not in line:
+                continue
+            counters["total"] += 1
+            try:
+                parsed = parse_metrics_line(line)
+                total = parsed["total"]
+                cls = parsed["class_metrics"]
+                mal = cls.get("Malicious", {})
+                ben = cls.get("Benign", {})
+                bg = cls.get("Background", {})
+
+                # Malicious vs Benign
+                binm = compute_binary_metrics(
+                    mal.get("TP", 0),
+                    ben.get("TP", 0),
+                    mal.get("FP", 0),
+                    mal.get("FN", 0),
+                )
+                # Overall Non-BG vs BG
+                overm = compute_binary_metrics(
+                    mal.get("TP", 0) + ben.get("TP", 0),
+                    bg.get("TN", 0),
+                    mal.get("FP", 0) + ben.get("FP", 0),
+                    bg.get("FN", 0),
+                )
+                # True multiclass
+                multi = compute_multiclass_metrics(cls, total)
+
+                metrics["malicious"].append(binm)
+                metrics["overall"].append(overm)
+                metrics["multiclass"].append(multi)
+
+                # count NaN/Inf
+                for group in (binm, overm, multi):
+                    if any(
+                        (v != v) or (v == float("inf")) for v in group.values()
+                    ):
+                        counters["unusual"] += 1
+                        break
+
+            except Exception:
+                print(f"Error parsing line: {line.strip()}")
+                traceback.print_exc()
+                counters["errors"] += 1
+                counters["unusual"] += 1
+
+    return {"metrics": metrics, "counters": counters}
 
 
 def plot_metrics(
-    FPR_values,
-    FNR_values,
-    TNR_values,
-    TPR_values,
-    F1_values,
-    accuracy_values,
-    precision_values,
-    MCC_values,
-    recall_values,
-    experiment_number,
-    total_lines,
-    error_lines,
-    unusual_lines,
-    testing_dir,
-):
-    # Separate the values into two groups based on their proximity to 0 or 1
-    close_to_0 = {"FPR": [], "FNR": []}
-    close_to_1 = {
-        "TNR": [],
-        "TPR": [],
-        "F1": [],
-        "accuracy": [],
-        "precision": [],
-        "MCC": [],
-        "recall": [],
-    }
+    metrics: Dict[str, List[Dict[str, float]]], exp: str, testing_dir: str
+) -> None:
+    exp_dir = os.path.join(testing_dir, exp)
+    os.makedirs(exp_dir, exist_ok=True)
 
-    # Check and create experiment directory inside 'testing'
-    experiment_dir = os.path.join(testing_dir, experiment_number)
-    if not os.path.exists(experiment_dir):
-        os.makedirs(experiment_dir)
+    for key in ("malicious", "overall"):
+        entries = metrics[key]
+        close0 = {"FPR": [], "FNR": []}
+        close1 = {
+            "TPR": [],
+            "TNR": [],
+            "precision": [],
+            "recall": [],
+            "f1": [],
+            "accuracy": [],
+        }
 
-    # Categorize the metrics into two groups
-    for i in range(len(FPR_values)):
-        close_to_0["FPR"].append(FPR_values[i])
-        close_to_0["FNR"].append(FNR_values[i])
+        for e in entries:
+            close0["FPR"].append(e["FPR"])
+            close0["FNR"].append(e["FNR"])
+            for k in close1:
+                close1[k].append(e[k])
 
-        close_to_1["TNR"].append(TNR_values[i])
-        close_to_1["TPR"].append(TPR_values[i])
-        close_to_1["F1"].append(F1_values[i])
-        close_to_1["accuracy"].append(accuracy_values[i])
-        close_to_1["precision"].append(precision_values[i])
-        close_to_1["MCC"].append(MCC_values[i])
-        close_to_1["recall"].append(recall_values[i])
+        # Close to 0
+        plt.figure(figsize=(10, 6))
+        for m in ("FPR", "FNR"):
+            plt.plot(close0[m], label=m, marker="o")
+        plt.yscale("linear")
+        plt.xlabel("Index")
+        plt.ylabel("Value")
+        plt.title(f"{key.capitalize()} Metrics Close to 0")
+        plt.legend()
+        plt.savefig(os.path.join(exp_dir, f"{key}_metrics_to_0_{exp}.png"))
+        plt.close()
 
-    # Plot metrics for values close to 0 (linear scale)
-    plot_single_group(
-        close_to_0,
-        f"metrics_testing_to_0_experiment_{experiment_number}.png",
-        experiment_number,
-        experiment_dir,
-        is_close_to_0=True,
-    )
-
-    # Plot metrics for values close to 1 (log scale)
-    plot_single_group(
-        close_to_1,
-        f"metrics_testing_to_1_experiment_{experiment_number}.png",
-        experiment_number,
-        experiment_dir,
-        is_close_to_0=False,
-    )
-
-    # Print the final values
-    print("\nFinal Metric Values for Experiment", experiment_number)
-    print(f"Final FPR: {FPR_values[-1]:.4f}")
-    print(f"Final FNR: {FNR_values[-1]:.4f}")
-    print(f"Final TNR: {TNR_values[-1]:.4f}")
-    print(f"Final TPR: {TPR_values[-1]:.4f}")
-    print(f"Final F1 Score: {F1_values[-1]:.4f}")
-    print(f"Final Accuracy: {accuracy_values[-1]:.4f}")
-    print(f"Final Precision: {precision_values[-1]:.4f}")
-    print(f"Final MCC: {MCC_values[-1]:.4f}")
-    print(f"Final Recall: {recall_values[-1]:.4f}")
-
-    # Print summary statistics
-    print(f"\nSummary for Experiment {experiment_number}:")
-    print(f"Total lines read: {total_lines}")
-    print(f"Lines with errors: {error_lines}")
-    print(f"Unusual lines (NaN values): {unusual_lines}")
-
-    # Save statistics to file (the same statistics)
-    stats_path = os.path.join(experiment_dir, "final_metrics.txt")
-    with open(stats_path, "w") as f:
-        f.write(f"Final Metric Values for Experiment {experiment_number}\n")
-        f.write(f"Final FPR: {FPR_values[-1]:.4f}\n")
-        f.write(f"Final FNR: {FNR_values[-1]:.4f}\n")
-        f.write(f"Final TNR: {TNR_values[-1]:.4f}\n")
-        f.write(f"Final TPR: {TPR_values[-1]:.4f}\n")
-        f.write(f"Final F1 Score: {F1_values[-1]:.4f}\n")
-        f.write(f"Final Accuracy: {accuracy_values[-1]:.4f}\n")
-        f.write(f"Final Precision: {precision_values[-1]:.4f}\n")
-        f.write(f"Final MCC: {MCC_values[-1]:.4f}\n")
-        f.write(f"Final Recall: {recall_values[-1]:.4f}\n\n")
-        f.write(f"Summary for Experiment {experiment_number}:\n")
-        f.write(f"Total lines read: {total_lines}\n")
-        f.write(f"Lines with errors: {error_lines}\n")
-        f.write(f"Unusual lines (NaN values): {unusual_lines}\n")
-
-
-def plot_single_group(
-    metrics_dict,
-    output_filename,
-    experiment_number,
-    experiment_dir,
-    is_close_to_0=False,
-):
-    plt.figure(figsize=(12, 8))
-
-    output_filename = os.path.join(experiment_dir, output_filename)
-
-    # Only plot the metrics that exist in the dictionary
-    if "FPR" in metrics_dict:
-        plt.plot(
-            metrics_dict["FPR"], label="False Positive Rate (FPR)", marker="o"
-        )
-    if "FNR" in metrics_dict:
-        plt.plot(
-            metrics_dict["FNR"], label="False Negative Rate (FNR)", marker="o"
-        )
-    if "TNR" in metrics_dict:
-        plt.plot(
-            metrics_dict["TNR"], label="True Negative Rate (TNR)", marker="o"
-        )
-    if "TPR" in metrics_dict:
-        plt.plot(
-            metrics_dict["TPR"], label="True Positive Rate (TPR)", marker="o"
-        )
-    if "F1" in metrics_dict:
-        plt.plot(metrics_dict["F1"], label="F1 Score", marker="o")
-    if "accuracy" in metrics_dict:
-        plt.plot(metrics_dict["accuracy"], label="Accuracy", marker="o")
-    if "precision" in metrics_dict:
-        plt.plot(metrics_dict["precision"], label="Precision", marker="o")
-    if "MCC" in metrics_dict:
-        plt.plot(
-            metrics_dict["MCC"],
-            label="Matthews Correlation Coefficient (MCC)",
-            marker="o",
-        )
-    if "recall" in metrics_dict:
-        plt.plot(metrics_dict["recall"], label="Recall (TPR)", marker="o")
-
-    # If the plot is close to 1, apply log scale
-    if not is_close_to_0:
+        # Close to 1
+        plt.figure(figsize=(10, 6))
+        for m in ("TPR", "TNR", "precision", "recall", "f1", "accuracy"):
+            plt.plot(close1[m], label=m, marker="o")
         plt.yscale("log")
+        plt.xlabel("Index")
+        plt.ylabel("Value")
+        plt.title(f"{key.capitalize()} Metrics Close to 1")
+        plt.legend()
+        plt.savefig(os.path.join(exp_dir, f"{key}_metrics_to_1_{exp}.png"))
+        plt.close()
 
-    # If the plot is close to 0, set dynamic Y-ticks based on the min/max values of the series
-    if is_close_to_0:
-        min_val = min(min(metrics_dict["FPR"]), min(metrics_dict["FNR"]))
-        max_val = max(max(metrics_dict["FPR"]), max(metrics_dict["FNR"]))
 
-        # Avoid log(0), so set the minimum limit a little higher than zero
-        if min_val == 0:
-            min_val = 1e-4  # Avoid zero values on the logarithmic scale
+def print_and_save_summary(
+    metrics: Dict[str, Any],
+    counters: Dict[str, int],
+    exp: str,
+    testing_dir: str,
+) -> None:
+    exp_dir = os.path.join(testing_dir, exp)
+    os.makedirs(exp_dir, exist_ok=True)
+    last_bin = metrics["malicious"][-1] if metrics["malicious"] else {}
+    last_ovr = metrics["overall"][-1] if metrics["overall"] else {}
+    last_mul = metrics["multiclass"][-1] if metrics["multiclass"] else {}
 
-        plt.ylim(min_val, max_val)  # Set Y-axis limits based on the data range
-        # Ensure ticks are within the valid range
-        if min_val > 0 and max_val > 0:
-            plt.yticks(
-                np.logspace(np.log10(min_val), np.log10(max_val), num=6)
-            )  # Set ticks logarithmically
+    lines = [f"Final Metric Values for Experiment {exp}\n"]
 
-    # Add the experiment number to the plot title
-    plt.xlabel("Index")
-    plt.ylabel("Metric Value")
-    plt.title(f"Experiment {experiment_number} - Evaluation Metrics Over Time")
-    plt.legend()
+    lines.append("=== Binary (Benign vs Malicious) ===")
+    for name in (
+        "FPR",
+        "FNR",
+        "TNR",
+        "TPR",
+        "f1",
+        "accuracy",
+        "precision",
+        "recall",
+    ):
+        v = last_bin.get(name if name != "f1" else "f1", 0)
+        lines.append(
+            f"Final {name.upper() if name!='f1' else 'F1 Score'}: {v:.4f}"
+        )
 
-    # Save the plot
-    plt.savefig(output_filename)
-    plt.close()
+    lines.append("\n=== Overall (BG vs Others) ===")
+    for name in (
+        "FPR",
+        "FNR",
+        "TNR",
+        "TPR",
+        "f1",
+        "accuracy",
+        "precision",
+        "recall",
+    ):
+        v = last_ovr.get(name if name != "f1" else "f1", 0)
+        lines.append(
+            f"Final {name.upper() if name!='f1' else 'F1 Score'}: {v:.4f}"
+        )
+
+    lines.append("\n=== Multi-class ===")
+    lines.append(f"Accuracy: {last_mul.get('accuracy',0):.4f}")
+    lines.append(f"Macro Precision: {last_mul.get('macro_precision',0):.4f}")
+    lines.append(f"Macro Recall:    {last_mul.get('macro_recall',0):.4f}")
+    lines.append(f"Macro F1:        {last_mul.get('macro_f1',0):.4f}")
+    lines.append(f"Micro Precision: {last_mul.get('micro_precision',0):.4f}")
+    lines.append(f"Micro Recall:    {last_mul.get('micro_recall',0):.4f}")
+    lines.append(f"Micro F1:        {last_mul.get('micro_f1',0):.4f}")
+
+    lines.append(f"\nSummary for Experiment {exp}:")
+    lines.append(f"Total lines read:        {counters['total']}")
+    lines.append(f"Lines with parse errors: {counters['errors']}")
+    lines.append(f"Unusual (NaN/Inf):       {counters['unusual']}")
+
+    summary = "\n".join(lines)
+    print(summary)
+    with open(os.path.join(exp_dir, "final_metrics.txt"), "w") as f:
+        f.write(summary)
 
 
 def main():
-
-    # Set up argument parsing
     parser = argparse.ArgumentParser(
         description="Plot testing performance metrics."
     )
+    parser.add_argument("-f", "--file", required=True, help="Path to log file")
     parser.add_argument(
-        "-f",
-        "--file",
-        type=str,
-        required=True,
-        help="Path to the testing performance log file",
+        "-e", "--exp", required=True, help="Experiment identifier"
     )
-    parser.add_argument(
-        "-e", "--experiment", type=str, required=True, help="Experiment number"
-    )
-
     args = parser.parse_args()
 
-    file_path = args.file
-    experiment_number = args.experiment
+    if not args.file.endswith(".log"):
+        args.file = os.path.join(args.file, "testing.log")
+    if not os.path.isfile(args.file):
+        raise FileNotFoundError(f"Log file not found: {args.file}")
 
-    # Check and create 'performance_metrics' directory if it doesn't exist
     base_dir = "performance_metrics"
-    if not os.path.exists(base_dir):
-        os.makedirs(base_dir)
-
-    # Check and create 'testing' directory inside 'performance_metrics'
     testing_dir = os.path.join(base_dir, "testing")
-    if not os.path.exists(testing_dir):
-        os.makedirs(testing_dir)
+    os.makedirs(testing_dir, exist_ok=True)
 
-    (
-        FPR_values,
-        FNR_values,
-        TNR_values,
-        TPR_values,
-        F1_values,
-        accuracy_values,
-        precision_values,
-        MCC_values,
-        recall_values,
-        total_lines,
-        error_lines,
-        unusual_lines,
-    ) = process_file(file_path)
-    plot_metrics(
-        FPR_values,
-        FNR_values,
-        TNR_values,
-        TPR_values,
-        F1_values,
-        accuracy_values,
-        precision_values,
-        MCC_values,
-        recall_values,
-        experiment_number,
-        total_lines,
-        error_lines,
-        unusual_lines,
-        testing_dir,
+    data = process_file(args.file)
+    plot_metrics(data["metrics"], args.exp, testing_dir)
+    print_and_save_summary(
+        data["metrics"], data["counters"], args.exp, testing_dir
     )
 
 

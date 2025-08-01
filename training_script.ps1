@@ -169,6 +169,11 @@ foreach ($TEST_FOLDER in $DATASETS) {
         docker rm -f slips 2>$null
         exit 1
     }
+    finally{
+        # Clean up the docker container
+        docker rm -f slips 2>$null
+        Write-Host "Docker container cleaned up."
+    }
 }
 
 "Training and testing completed." | Tee-Object -FilePath $LOGFILE -Append

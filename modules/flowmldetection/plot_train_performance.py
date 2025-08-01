@@ -195,12 +195,12 @@ def plot_log_data(file_path, experiment_number):
 
         for col in [
             "FPR",
+            "FNR",
             "TNR",
             "TPR",
-            "FNR",
             "F1",
-            "Precision",
             "Accuracy",
+            "Precision",
             "MCC",
             "Recall",
         ]:
