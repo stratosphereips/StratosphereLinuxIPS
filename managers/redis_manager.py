@@ -412,14 +412,17 @@ class RedisManager:
         # clear the server opened on this port
         try:
             db = DBManager(
-                Output(),
-                self.main.args.output,
-                port,
-                self.main.conf,
-                self.main.pid,
+                logger=Output(),
+                output_dir=self.main.args.output,
+                redis_port=port,
+                conf=self.main.conf,
+                args=self.main.args,
+                main_pid=self.main.pid,
+                caller_pid=os.getpid(),
                 start_sqlite=False,
                 start_redis_server=False,
             )
+
             # if the redis server opened by slips is closed manually by the
             # user, not by slips, slips won't be able to connect to it
             # that's why we check for db.rdb

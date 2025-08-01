@@ -24,7 +24,7 @@ class IoCHandler:
 
     name = "DB"
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         # Used for faster domain lookups
         self.trie = None
         self.is_trie_cached = False

@@ -298,7 +298,7 @@ class Daemon:
                         "Slips daemon.",
                     }
 
-                port, output_dir, self.pid = info
+                redis_port, output_dir, self.pid = info
 
                 self.stderr = "errors.log"
                 self.stdout = "slips.log"
@@ -307,15 +307,19 @@ class Daemon:
                 self.logger = self.slips.proc_man.start_output_process(
                     self.stderr, self.logsfile, stdout=self.stdout
                 )
+
                 self.db = DBManager(
-                    self.logger,
-                    output_dir,
-                    port,
-                    self.slips.conf,
-                    self.slips.pid,
+                    logger=self.logger,
+                    output_dir=output_dir,
+                    redis_port=redis_port,
+                    conf=self.slips.conf,
+                    args=self.slips.args,
+                    main_pid=self.pid,
+                    caller_pid=self.pid,
                     start_sqlite=False,
                     flush_db=False,
                 )
+
                 self.slips.printer = Printer(self.logger, self.name)
                 self.db.set_slips_mode("daemonized")
                 self.slips.set_mode("daemonized", daemon=self)

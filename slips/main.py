@@ -500,12 +500,13 @@ class Main:
 
             try:
                 self.db = DBManager(
-                    self.logger,
-                    self.args.output,
-                    self.redis_port,
-                    self.conf,
-                    self.args,
-                    int(self.pid),
+                    logger=self.logger,
+                    output_dir=self.args.output,
+                    redis_port=self.redis_port,
+                    conf=self.conf,
+                    args=self.args,
+                    main_pid=int(self.pid),
+                    caller_pid=int(self.pid),
                     start_redis_server=start_redis_server,
                 )
                 self.pubsub = self.db.pubsub()

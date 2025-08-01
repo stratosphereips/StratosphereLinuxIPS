@@ -22,9 +22,12 @@ from slips_files.core.output import Output
 
 class DBManager:
     """
-    This class will be calling methods from the appropriate db.
-    each method added to any of the dbs should have a
-    handler in here.
+    - This class will be calling methods from the appropriate db (SQLite or
+    RedisDB).
+    - The goal of this is to spare developers from having to ask the question:
+    “I want to call the function that does X — is it in SQLite or Redis?”
+    Just use the DBManager, and it’ll handle it.
+    - Each method added to any of the dbs should have a handler in here.
     """
 
     name = "DBManager"
@@ -37,6 +40,7 @@ class DBManager:
         conf,
         args,
         main_pid: int,
+        caller_pid: int,
         start_sqlite=True,
         start_redis_server=True,
         **kwargs,
@@ -49,11 +53,13 @@ class DBManager:
         self.rdb = RedisDB(
             logger=self.logger,
             redis_port=redis_port,
+            caller_pid=caller_pid,
             start_redis_server=start_redis_server,
             conf=self.conf,
             args=args,
             **kwargs,
         )
+        self.rdb.init_clients()
         self.trust_db = None
         if self.conf.use_local_p2p():
             self.trust_db_path: str = self.init_p2ptrust_db()
@@ -210,6 +216,9 @@ class DBManager:
 
     async def check_health(self, *args, **kwargs):
         return await self.rdb.check_health(*args, **kwargs)
+
+    async def change_clients(self, *args, **kwargs):
+        return await self.rdb.change_clients(*args, **kwargs)
 
     async def is_running_non_stop(self, *args, **kwargs):
         return await self.rdb.is_running_non_stop(*args, **kwargs)
