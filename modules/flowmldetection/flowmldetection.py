@@ -710,6 +710,9 @@ class FlowMLDetection(IModule):
                     "module_labels": msg["module_labels"],
                 }
             )
+            self.print(
+                "detailed label of the flow: ", msg["detailed_label"], 0, 0
+            )
 
             if self.mode == "train":
                 # We are training

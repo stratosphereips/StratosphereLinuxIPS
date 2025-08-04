@@ -13,11 +13,11 @@ modes:
 parameters:
   # The verbosity is related to how much data you want to see about the
   # detections.
-  verbose: 0
+  verbose: 1
 
   # The debugging is related to errors, warnings and cases that may cause
   # errors.
-  debug: 0
+  debug: 1
 
   # The width of the time window (TW) used by Slips. All traffic is separated in
   # TW to be analyzed. This is so old detections can be forgoten.

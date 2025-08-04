@@ -147,8 +147,8 @@ def compute_multiclass_metrics(
 def process_file(path: str) -> Dict[str, Any]:
     metrics = {
         "malicious": [],  # binary Malicious vs Benign
-        "overall": [],  # binary Non-BG vs BG
         "multiclass": [],  # overall multi-class
+        "per_class": [],  # per-class accuracy metrics
     }
     counters = {"total": 0, "errors": 0, "unusual": 0}
 
@@ -163,7 +163,15 @@ def process_file(path: str) -> Dict[str, Any]:
                 cls = parsed["class_metrics"]
                 mal = cls.get("Malicious", {})
                 ben = cls.get("Benign", {})
-                bg = cls.get("Background", {})
+
+                # Per-class accuracy
+                per_class_acc = {}
+                for class_name, metrics_dict in cls.items():
+                    tp = metrics_dict.get("TP", 0)
+                    fn = metrics_dict.get("FN", 0)
+                    per_class_acc[class_name] = (
+                        tp / (tp + fn) if (tp + fn) else 0
+                    )
 
                 # Malicious vs Benign
                 binm = compute_binary_metrics(
@@ -172,22 +180,15 @@ def process_file(path: str) -> Dict[str, Any]:
                     mal.get("FP", 0),
                     mal.get("FN", 0),
                 )
-                # Overall Non-BG vs BG
-                overm = compute_binary_metrics(
-                    mal.get("TP", 0) + ben.get("TP", 0),
-                    bg.get("TN", 0),
-                    mal.get("FP", 0) + ben.get("FP", 0),
-                    bg.get("FN", 0),
-                )
                 # True multiclass
                 multi = compute_multiclass_metrics(cls, total)
 
                 metrics["malicious"].append(binm)
-                metrics["overall"].append(overm)
                 metrics["multiclass"].append(multi)
+                metrics["per_class"].append(per_class_acc)
 
                 # count NaN/Inf
-                for group in (binm, overm, multi):
+                for group in (binm, multi, per_class_acc):
                     if any(
                         (v != v) or (v == float("inf")) for v in group.values()
                     ):
@@ -261,7 +262,6 @@ def print_and_save_summary(
     exp_dir = os.path.join(testing_dir, exp)
     os.makedirs(exp_dir, exist_ok=True)
     last_bin = metrics["malicious"][-1] if metrics["malicious"] else {}
-    last_ovr = metrics["overall"][-1] if metrics["overall"] else {}
     last_mul = metrics["multiclass"][-1] if metrics["multiclass"] else {}
 
     lines = [f"Final Metric Values for Experiment {exp}\n"]
@@ -282,21 +282,10 @@ def print_and_save_summary(
             f"Final {name.upper() if name!='f1' else 'F1 Score'}: {v:.4f}"
         )
 
-    lines.append("\n=== Overall (BG vs Others) ===")
-    for name in (
-        "FPR",
-        "FNR",
-        "TNR",
-        "TPR",
-        "f1",
-        "accuracy",
-        "precision",
-        "recall",
-    ):
-        v = last_ovr.get(name if name != "f1" else "f1", 0)
-        lines.append(
-            f"Final {name.upper() if name!='f1' else 'F1 Score'}: {v:.4f}"
-        )
+    lines.append("\n=== Per Class Stats ===")
+    last_per_class = metrics["per_class"][-1] if metrics["per_class"] else {}
+    for class_name, acc in sorted(last_per_class.items()):
+        lines.append(f"{class_name} Accuracy: {acc:.4f}")
 
     lines.append("\n=== Multi-class ===")
     lines.append(f"Accuracy: {last_mul.get('accuracy',0):.4f}")
