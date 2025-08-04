@@ -1,3 +1,9 @@
+1.1.12 (July 31st, 2025)
+- Better filtering of attacks in the ARP poisoner filter and excluded poisoning the gateway.
+- Cache ARP scan results to avoid flooding the network with ARP packets.
+- Increase the delay between ARP poisoning attempts to avoid flooding the network.
+- Local P2P trust model improvements.
+
 1.1.11 (July 3rd, 2025)
 - Fix local P2P trust model.
 - Fix SQLite cursor errors.
