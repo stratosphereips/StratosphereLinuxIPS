@@ -144,7 +144,6 @@ Replace-Line -Path $CONFIG_FILE -LineNumber $MODE_LINE_NUMBER -NewText "  mode: 
 
 # Run testing on all other datasets
 foreach ($TEST_FOLDER in $DATASETS) {
-    if ($TEST_FOLDER -eq $TRAIN_FOLDER) { continue }
 
     $TEST_DIR = Join-Path $DATASET_DIR "$TEST_FOLDER/data"
     $UNIX_TEST_DIR = ($TEST_DIR -replace '\\','/') -replace '^([A-Za-z]):', '/$1'.ToLower()
@@ -176,7 +175,7 @@ try{
     Write-Host "Docker container cleaned up."
 }
 catch {
-    Write-Host "was already exited properly"
+    Write-Host "Docker was already exited properly"
 }
 
 "Training and testing completed." | Tee-Object -FilePath $LOGFILE -Append

@@ -10,14 +10,6 @@ from typing import Optional
 import numpy
 import pandas as pd
 from sklearn.linear_model import SGDClassifier
-from sklearn.metrics import (
-    accuracy_score,
-    confusion_matrix,
-    f1_score,
-    matthews_corrcoef,
-    precision_score,
-    recall_score,
-)
 from sklearn.preprocessing import StandardScaler
 
 from slips_files.common.abstracts.imodule import IModule
@@ -56,7 +48,7 @@ class FlowMLDetection(IModule):
     description = (
         "Train or test a Machine Learning model to detect malicious flows"
     )
-    authors = ["Sebastian Garcia"]
+    authors = ["Sebastian Garcia, Jan Svoboda"]
 
     def init(self):
         # Subscribe to the channel
@@ -66,14 +58,9 @@ class FlowMLDetection(IModule):
         # Set the output queue of our database instance
         # Read the configuration
         self.read_configuration()
-        # Minum amount of new labels needed to start the train
-        self.minimum_labels_to_start_train = 100
-        # Minum amount of new labels needed to retrain
-        self.minimum_labels_to_retrain = 100
-        # if I end and have more than this flows, I triger the final training
-        # to not lose those.
-        self.minimum_labels_to_finalize_train = 20
-
+        self.percentage_validation = (
+            0.1  # 10% of the training data for validation
+        )
         # The number of flows when last trained. Used internally only to know
         # when to retrain
         self.last_number_of_flows_when_trained = 0
@@ -102,6 +89,17 @@ class FlowMLDetection(IModule):
             self.log_path = os.path.join(self.output_dir, "testing.log")
         self.log_file = open(self.log_path, "w")
 
+        self.print(
+            f"Flow ML Detection module initialized in {self.mode} mode. "
+            f"Minimum labels to start training: "
+            f"{self.minimum_labels_to_start_train}, "
+            f"minimum labels to retrain: {self.minimum_labels_to_retrain}, "
+            f"minimum labels to finalize training: "
+            f"{self.minimum_labels_to_finalize_train}.",
+            1,
+            1,
+        )
+
     def read_configuration(self):
         conf = ConfigParser()
         self.mode = conf.get_ml_mode()
@@ -109,6 +107,18 @@ class FlowMLDetection(IModule):
         # in case the flows do not have a label themselves
         self.ground_truth_config_label = conf.label()
         self.enable_logs: bool = conf.create_performance_metrics_log_files()
+
+        batch_size: int = conf.flow_ml_detection_training_batch_size()
+        # Minum amount of new labels needed to start the train (first train)
+        self.minimum_labels_to_start_train = batch_size
+        # Minum amount of new labels needed to retrain
+        self.minimum_labels_to_retrain = batch_size
+
+        # if I end and have more than this flows, I triger the final training
+        # to not lose those.
+        self.minimum_labels_to_finalize_train = int(batch_size / 4)
+
+        self.validate_on_train = conf.validate_on_train()
 
     def write_to_log(self, message: str):
         """
@@ -129,51 +139,64 @@ class FlowMLDetection(IModule):
         y_pred,
         sum_labeled_flows,
         epoch_label_counts,
+        testing_size,
     ):
-        # For metrics, let's focus on Malicious vs Benign (ignore Background)
-        mask = (y_flow == MALICIOUS) | (y_flow == BENIGN)
-        y_true_bin = y_flow[mask]
-        y_pred_bin = y_pred[mask]
+        # Initialize per-batch metrics
+        seen_labels = {BACKGROUND: 0, MALICIOUS: 0, BENIGN: 0}
+        predicted_labels = {BACKGROUND: 0, MALICIOUS: 0, BENIGN: 0}
+        class_metrics = {}
+        for label in self.all_classes:
+            class_metrics[label] = {
+                "TP": 0,
+                "FP": 0,
+                "TN": 0,
+                "FN": 0,
+            }
 
-        # Map to binary: Malicious=1, Benign=0
-        y_true_bin = numpy.where(y_true_bin == MALICIOUS, 1, 0)
-        y_pred_bin = numpy.where(y_pred_bin == MALICIOUS, 1, 0)
+        # Count seen and predicted labels in this batch
+        for label in self.all_classes:
+            seen_labels[label] = numpy.sum(y_flow == label)
+            predicted_labels[label] = numpy.sum(y_pred == label)
 
-        # Compute confusion matrix: tn, fp, fn, tp
-        tn, fp, fn, tp = (
-            confusion_matrix(y_true_bin, y_pred_bin, labels=[0, 1]).ravel()
-            if len(set(y_true_bin)) > 1
-            else (0, 0, 0, 0)
-        )
-
-        # Compute metrics
-        FPR = fp / (fp + tn) if (fp + tn) > 0 else 0
-        TNR = tn / (tn + fp) if (tn + fp) > 0 else 0
-        TPR = tp / (tp + fn) if (tp + fn) > 0 else 0
-        FNR = fn / (fn + tp) if (fn + tp) > 0 else 0
-        F1 = f1_score(y_true_bin, y_pred_bin, zero_division=0)
-        PREC = precision_score(y_true_bin, y_pred_bin, zero_division=0)
-        ACCU = accuracy_score(y_true_bin, y_pred_bin)
-        MCC = (
-            matthews_corrcoef(y_true_bin, y_pred_bin)
-            if len(set(y_true_bin)) > 1
-            else 0
-        )
-        RECALL = recall_score(y_true_bin, y_pred_bin, zero_division=0)
+        # Calculate TP, FP, TN, FN for each class
+        for label in self.all_classes:
+            class_metrics[label]["TP"] = numpy.sum(
+                (y_pred == label) & (y_flow == label)
+            )
+            class_metrics[label]["FP"] = numpy.sum(
+                (y_pred == label) & (y_flow != label)
+            )
+            class_metrics[label]["FN"] = numpy.sum(
+                (y_pred != label) & (y_flow == label)
+            )
+            class_metrics[label]["TN"] = numpy.sum(
+                (y_pred != label) & (y_flow != label)
+            )
 
         # Store the models on disk
         self.store_model()
 
         # Log training information
+        # Store summary statistics in consistent class order
+        seen_labels_ordered = {
+            label: seen_labels.get(label, 0) for label in self.all_classes
+        }
+        predicted_labels_ordered = {
+            label: predicted_labels.get(label, 0) for label in self.all_classes
+        }
+        class_metrics_ordered = {
+            label: class_metrics.get(
+                label, {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
+            )
+            for label in self.all_classes
+        }
+
         self.write_to_log(
             f"Total labels: {sum_labeled_flows}, "
-            f"Background: {epoch_label_counts['Background']}. "
-            f"Benign: {epoch_label_counts['Benign']}. "
-            f"Malicious: {epoch_label_counts[MALICIOUS]}. "
-            f"Metrics: FPR={FPR:.4f}, TNR={TNR:.4f}, "
-            f"TPR={TPR:.4f}, FNR={FNR:.4f}, "
-            f"F1={F1:.4f}, Precision={PREC:.4f}, "
-            f"Accuracy={ACCU:.4f}, MCC={MCC:.4f}, Recall={RECALL:.4f}."
+            f"Testing size: {testing_size}, "
+            f"Seen labels: {seen_labels_ordered}, "
+            f"Predicted labels: {predicted_labels_ordered}, "
+            f"Per-class metrics: {class_metrics_ordered}"
         )
 
     def store_testing_data(self, original_label, predicted_label):
@@ -290,6 +313,25 @@ class FlowMLDetection(IModule):
             except (KeyError, ValueError):
                 pass
 
+            # Take random 10% of data for validation if validating on train set!
+            X_val = None
+            y_val = None
+            if self.validate_on_train:
+                validation_indices = numpy.random.choice(
+                    X_flow.shape[0],
+                    size=int(self.percentage_validation * X_flow.shape[0]),
+                    replace=False,
+                )
+                train_indices = numpy.array(
+                    list(set(range(X_flow.shape[0])) - set(validation_indices))
+                )
+
+                # Split into train and validation sets
+                X_val = X_flow.iloc[validation_indices]
+                y_val = y_flow[validation_indices]
+                X_flow = X_flow.iloc[train_indices]
+                y_flow = y_flow[train_indices]
+
             try:  # when not fitted, the scaler.mean_ is None, try fitting it
                 if (
                     not hasattr(self.scaler, "mean_")
@@ -347,11 +389,24 @@ class FlowMLDetection(IModule):
                 self.print(traceback.format_exc(), 1, 1)
 
             # Predict on the training data
-            y_pred = self.clf.predict(X_flow)
+            testing_size = 0
+            if self.validate_on_train and X_val is not None:  # validation part
+                X_val = self.scaler.transform(X_val)
+                y_pred = self.clf.predict(X_val)
+                y_ground_truth = y_val
+                testing_size = X_val.shape[0]
+            else:  # predict on the original training batch
+                y_pred = self.clf.predict(X_flow)
+                y_ground_truth = y_flow
+                testing_size = X_flow.shape[0]
 
             # Store the training results (housekeeping..: logs, calculationg metrics)
             self.store_training_results(
-                y_flow, y_pred, sum_labeled_flows, epoch_label_counts
+                y_ground_truth,
+                y_pred,
+                sum_labeled_flows,
+                epoch_label_counts,
+                testing_size,
             )
 
         except Exception:
@@ -709,9 +764,6 @@ class FlowMLDetection(IModule):
                     "label": msg["label"],
                     "module_labels": msg["module_labels"],
                 }
-            )
-            self.print(
-                "detailed label of the flow: ", msg["detailed_label"], 0, 0
             )
 
             if self.mode == "train":
