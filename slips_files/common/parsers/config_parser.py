@@ -1,14 +1,12 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-from datetime import timedelta
-import sys
 import ipaddress
-from typing import (
-    List,
-    Union,
-)
+import sys
+from datetime import timedelta
+from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
+from typing import List, Union
+
 import yaml
-from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 
 from slips_files.common.parsers.arg_parser import ArgumentParser
 from slips_files.common.slips_utils import utils
@@ -422,6 +420,24 @@ class ConfigParser(object):
         return self.read_configuration(
             "flowmldetection", "create_performance_metrics_log_files", False
         )
+
+    def validate_on_train(self) -> bool:
+        return self.read_configuration(
+            "flowmldetection", "validate_on_train", True
+        )
+
+    def flow_ml_detection_training_batch_size(self) -> int:
+        default = 200
+        batch_size = self.read_configuration(
+            "flowmldetection", "batch_size", default
+        )
+        try:
+            batch_size = int(batch_size)
+        except ValueError:
+            batch_size = default
+        if batch_size < 1:
+            batch_size = default
+        return batch_size
 
     def risk_iq_credentials_path(self):
         return self.read_configuration(
