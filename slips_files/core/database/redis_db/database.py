@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import asyncio
 
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
@@ -9,8 +8,6 @@ from slips_files.core.database.redis_db.constants import (
     Constants,
     Channels,
 )
-from slips_files.core.database.redis_db.redis_proxy import RedisProxy
-from slips_files.core.database.redis_db.safe_connections import SafeConnection
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
@@ -18,13 +15,13 @@ from slips_files.core.database.redis_db.p2p_handler import P2PHandler
 
 import os
 import signal
+import asyncio
 import redis.asyncio as redis
 import time
 import json
 import subprocess
 import ipaddress
 import validators
-import contextvars
 from typing import (
     List,
     Dict,
@@ -37,15 +34,8 @@ RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 
 class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
-    # this db is a singelton per port. meaning no 2 instances
-    # should be created for the same port at the same time
     _instance = None
     _port = None
-    # clients context vars to be able to have one client per process,
-    # and to avoid async issues
-    _ctx_main = contextvars.ContextVar("redis_main")
-    _ctx_cache = contextvars.ContextVar("redis_cache")
-    _ctx_pubsub = contextvars.ContextVar("redis_pubsub")
 
     constants = Constants()
     channels = Channels()
@@ -141,73 +131,73 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     last_cleanup_time = time.time()
     ip_info_cache = TTLCache(maxsize=300, ttl=300)  # 5-minute TTL
     slips_internal_time_set = False
+    # to keep track of the clients per pid and tid
+    _clients_tracker = {}
 
-    def __new__(
-        cls,
+    def __init__(
+        self,
         logger,
         redis_port,
-        caller_pid: int,
-        start_redis_server=True,
-        flush_db=True,
-        client_name: str = "Slips",
+        start_redis_server=False,
+        flush_db=False,  # should be True the first time slips runs only
         conf=None,
         args=None,
     ):
         """
-        treat the db as a singleton per process/thread
-        meaning every process will have exactly 1 single obj of this db
-        at any given time
-        why?
-        1. Connection Pool Optimization: By reusing the same instance, you're
-        reusing the same connection pool, which is more efficient than
-        creating new pools for each instance
-        2. State Consistency: Multiple instances could lead to inconsistent
-        states across your application. The singleton ensures all components
-        work with the same database state
-        3. Initialization Control: The initialization code (like server
-        startup, configuration loading) only runs once when the first
-        instance is created, avoiding duplicate setup work
-
-        :param caller_pid: pid of the process that initiated this class.
-            in 1 run of slips, each process will have its own instance of
-            this db, only one instance per pid. why? because redis async
-            clients aren't thred safe, so we need a new client for each
-            process.
+        :kwarg is_first_db_instance_ever: should be set to True when
+        starting the dbmanager the first time ever in slips, if True,
+        it starts the redis server, sets slips start time, and other
+        initializations that should be done only once.
         """
-        cls.redis_port = redis_port
-        cls.flush_db = flush_db
-        # start the redis server using cli if it's not started?
-        cls.start_server = start_redis_server
-        cls.printer = Printer(logger, cls.name)
-        cls.conf = conf or ConfigParser()
-        cls.args = args
+        self.redis_port = redis_port
+        self.flush_db = flush_db
+        self.start_redis_server = start_redis_server
+        # usually we only start the redis server if it's the first time
+        # initiating the db
+        self.is_first_db_instance_ever = True if start_redis_server else False
+        self.printer = Printer(logger, self.name)
+        self.conf = conf or ConfigParser()
+        self.args = args
+        self._read_configuration()
+        super().__init__(self)
+        # should run only once by the first process that uses this class
+        self.init_redis_server()
+        self.init_clients()
 
-        if cls._instance is None:
-            # PS: keep in mind that this code is only called once from
-            # main.py. not called by each module. that's how singelton works:D
-            cls._set_redis_options()
-            cls._read_configuration()
-            initialized, err = cls.init_redis_server()
+    def init_redis_server(self):
+        """
+        Starts the redis server with the necessary config options
+        should be called only once by the first process ever to use this
+        class (main.py)
+        """
+        if self.is_first_db_instance_ever:
+            self._set_redis_options()
+            initialized, err = self._start_redis_server()
             if not initialized:
                 raise RuntimeError(
                     f"Failed to connect to the redis server "
-                    f"on port {cls.redis_port}: {err}"
+                    f"on port {self.redis_port}: {err}"
                 )
-            cls._create_conn_pools()
-            cls._instance = super().__new__(cls)
-            super().__init__(cls)
-        return cls._instance
 
     def init_clients(self):
         """
         Initializes the 3 main redis clients r, rcache and the pubsub client.
         and sets the needed timestamps to kick off slips.
+        Returns a Redis client unique per async context.
+        Each thread must call this at least once in its event loop.
         """
-        self._get_clients_and_change_limits()
-        self._init_internal_timestamps()
-        self.set_new_incoming_flows(True)
+        clients_set, err = self._set_redis_clients_and_change_limits()
+        if not clients_set:
+            raise RuntimeError(
+                f"Failed to init redis clients "
+                f"on port {self.redis_port}: {err}"
+            )
 
-    def _get_clients_and_change_limits(self):
+        if self.is_first_db_instance_ever:
+            self._init_internal_timestamps()
+            self.set_new_incoming_flows(True)
+
+    def _set_redis_clients_and_change_limits(self):
         """
         Initializes the 3 main redis client r, rcache and the pubsub client
             r: for all redis commands that are not related to pubsub or cached
@@ -235,11 +225,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 self.r.flushdb()
                 self.r.delete(self.constants.ZEEK_FILES)
 
+            self.clients = (self.r, self.rcache, self.pubsub_client)
             # Set the memory limits of the output buffer,
             # For normal clients: no limits
             # for pub-sub 4GB maximum buffer size and 2GB for soft limit
             # The original values were 50MB for maxm and 8MB for soft limit.
-            for client in (self.r, self.rcache, self.pubsub_client):
+            for client in self.clients:
                 self.change_redis_limits(client)
             return True, ""
         except RuntimeError as err:
@@ -284,24 +275,22 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         name = name.replace("_", "").replace(" ", "")
         await self.r.client_setname(name)
 
-    @classmethod
-    def _set_redis_options(cls):
+    def _set_redis_options(self):
         """
-        Updates the default slips options based on the -s param,
-        writes the new configs to cls._conf_file
+        Updates the default redis parameters in self._conf_file
         """
         # to fix redis.exceptions.ResponseError MISCONF Redis is
         # configured to save RDB snapshots
         # configure redis to stop writing to dump.rdb when an error
         # occurs without throwing errors in slips
-        cls._options = {
+        self._options = {
             "daemonize": "yes",
             "stop-writes-on-bgsave-error": "no",
             "save": '""',
             "appendonly": "no",
         }
         # -s for saving the db
-        if not cls.args.save:
+        if not self.args.save:
             return
 
         # Will save the DB if both the given number of seconds
@@ -312,7 +301,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # AOF persistence logs every write operation received by
         # the server, that will be played again at server startup
         # save the db to <Slips-dir>/dump.rdb
-        cls._options.update(
+        self._options.update(
             {
                 "save": "30 500",
                 "appendonly": "yes",
@@ -321,17 +310,16 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             }
         )
 
-        with open(cls._conf_file, "w") as f:
-            for option, val in cls._options.items():
+        with open(self._conf_file, "w") as f:
+            for option, val in self._options.items():
                 f.write(f"{option} {val}\n")
 
-    @classmethod
-    def _read_configuration(cls):
+    def _read_configuration(self):
         # By default we don't DELETE the DB by default.
-        cls.deletePrevdb: bool = cls.conf.delete_prev_db()
-        cls.disabled_detections: List[str] = cls.conf.disabled_detections()
-        cls.width = cls.conf.get_tw_width_as_float()
-        cls.client_ips: List[str] = cls.conf.client_ips()
+        self.deletePrevdb: bool = self.conf.delete_prev_db()
+        self.disabled_detections: List[str] = self.conf.disabled_detections()
+        self.width = self.conf.get_tw_width_as_float()
+        self.client_ips: List[str] = self.conf.client_ips()
 
     def set_slips_internal_time(self, timestamp):
         """
@@ -348,29 +336,39 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """get the time slips started in unix format"""
         return self.r.get(self.constants.SLIPS_START_TIME)
 
-    @classmethod
-    def _create_conn_pools(cls):
-        """
-        creates 3 connection pools. Pub/sub pool, main db pool and cache pool
-        """
-        # db 0 changes everytime we run slips
-        cls.main_db_pool = cls._create_connection_pool(cls.redis_port, 0)
-        # port 6379 db 0 is cache, the one that gets deleted using -cc
-        cls.cache_db_pool = cls._create_connection_pool(6379, 1)
-        cls.pubsub_pool = cls._create_connection_pool(cls.redis_port, 0)
-
-    @classmethod
-    def init_redis_server(cls) -> Tuple[bool, str]:
+    def _start_redis_server(self) -> Tuple[bool, str]:
         """
         starts the redis server, connects to the it, and andjusts redis
         options.
         Returns a tuple of (connection status, error message).
         """
         try:
-            if cls.start_server:
-                # starts the redis server using cli.
-                # we don't need that when using -k
-                cls._start_a_redis_server()
+            # starts the redis server using cli.
+            # we don't need that when using -k
+            cmd = (
+                f"redis-server {self._conf_file} --port {self.redis_port} "
+                f" --daemonize yes"
+            )
+            process = subprocess.Popen(
+                cmd,
+                cwd=os.getcwd(),
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            stdout, stderr = process.communicate()
+            stderr = stderr.decode("utf-8")
+            stdout = stdout.decode("utf-8")
+
+            # Check for a specific line indicating a successful start
+            # if the redis server is already in use, the return code will be 0
+            # but we dont care because we checked it in main before starting
+            # the DBManager()
+            if process.returncode != 0:
+                raise RuntimeError(
+                    f"database._start_a_redis_server: "
+                    f"Redis did not start properly.\n{stderr}\n{stdout}"
+                )
 
             return True, ""
         except RuntimeError as err:
@@ -380,13 +378,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             return False, (
                 f"Redis ConnectionError: "
                 f"Can't connect to redis on port "
-                f"{cls.redis_port}: {ex}"
+                f"{self.redis_port}: {ex}"
             )
 
     @staticmethod
-    def _get_redis_client(db_pool: redis.ConnectionPool) -> redis.Redis:
+    def _get_redis_client(port: int, db: int) -> redis.Redis:
         """
-        Connects to a redis server and db using the given connection pool.
+        Connects to a redis server on the given port and db
         """
         # set health_check_interval to avoid redis ConnectionReset errors:
         # if the connection is idle for more than health_check_interval seconds,
@@ -397,59 +395,15 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # retried once, if the retry is successful, it will return
         # normally; if it fails, an exception will be thrown
         return redis.Redis(
-            connection_pool=db_pool,
+            host="localhost",
+            port=port,
+            db=db,
+            socket_keepalive=True,
+            decode_responses=True,
             retry_on_timeout=True,
             # to force early failure instead of infinite hangs
             socket_connect_timeout=3,
             health_check_interval=20,
-        )
-
-    @classmethod
-    def _start_a_redis_server(cls) -> bool:
-        cmd = (
-            f"redis-server {cls._conf_file} --port {cls.redis_port} "
-            f" --daemonize yes"
-        )
-        process = subprocess.Popen(
-            cmd,
-            cwd=os.getcwd(),
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        stdout, stderr = process.communicate()
-        stderr = stderr.decode("utf-8")
-        stdout = stdout.decode("utf-8")
-
-        # Check for a specific line indicating a successful start
-        # if the redis server is already in use, the return code will be 0
-        # but we dont care because we checked it in main before starting
-        # the DBManager()
-        if process.returncode != 0:
-            raise RuntimeError(
-                f"database._start_a_redis_server: "
-                f"Redis did not start properly.\n{stderr}\n{stdout}"
-            )
-
-        return True
-
-    @classmethod
-    def _create_connection_pool(cls, port: int, db: int, max_conns=50):
-        """
-        Creates and returns an async Redis connection pool for
-        the given db and port.
-        uses the SafeConnection() for all conns in the pool
-        """
-        # why are we using connection pools? because redis times out
-        # connections and closes them really fast.
-        return redis.ConnectionPool(
-            host="localhost",
-            port=port,
-            db=db,
-            connection_class=SafeConnection,
-            max_connections=max_conns,
-            decode_responses=True,
-            socket_keepalive=True,
         )
 
     def _get_clients(self) -> Tuple[bool, str]:
@@ -458,22 +412,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         Returns a tuple of (bool, error message).
         """
         try:
-            self.r = RedisProxy(
-                self._ctx_main,
-                lambda: self._get_redis_client(self.main_db_pool),
-            )
-            self.rcache = RedisProxy(
-                self._ctx_cache,
-                lambda: self._get_redis_client(self.cache_db_pool),
-            )
-            self.pubsub_client = RedisProxy(
-                self._ctx_pubsub,
-                lambda: self._get_redis_client(self.pubsub_pool),
-            )
-
+            self.r = self._get_redis_client(self.redis_port, 0)
+            self.pubsub_client = self._get_redis_client(self.redis_port, 0)
+            self.rcache = self._get_redis_client(6379, 1)
             # fix ConnectionRefused error by giving redis time to open
             time.sleep(1)
-
             # the connection to redis is only established
             # when you try to execute a command on the server.
             # so make sure it's established first
@@ -482,13 +425,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         except Exception as e:
             return False, f"database.connect_to_redis_server: {e}"
 
-    @classmethod
-    def close_redis_server(cls, redis_port):
-        if server_pid := cls.get_redis_server_pid(redis_port):
+    def close_redis_server(self, redis_port):
+        if server_pid := self.get_redis_server_pid(redis_port):
             os.kill(int(server_pid), signal.SIGKILL)
 
-    @classmethod
-    async def change_redis_limits(cls, client: redis.Redis):
+    async def change_redis_limits(self, client: redis.Redis):
         """
         changes redis soft and hard limits to fix redis closing/resetting
         the pub/sub connection,
@@ -707,7 +648,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         :param channel_obj: PubSub obj of the channel
         """
         try:
-            msg = await self.pubsub.get_message(timeout=timeout)
+            msg = await pubsub.get_message(timeout=timeout)
             await self._track_flow_processing_rate(msg)
             return msg
         except redis.ConnectionError as ex:
@@ -1460,46 +1401,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         return await self.r.smembers(self.constants.ZEEK_FILES)
 
     async def get_gateway_ip(self):
-        return await self.r.hget(self.constants.DEFAULT_GATEWAY, "IP")
+        ip = await self.r.hget(self.constants.DEFAULT_GATEWAY, "IP")
+        print(f"@@@@@@@@@@@ DEBUG: Raw Redis returned: {ip!r}")
+        return ip
 
     async def get_gateway_mac(self):
         return await self.r.hget(
             self.constants.DEFAULT_GATEWAY, self.constants.MAC
         )
-
-    def _reconnect(self, client: str):
-        """
-        recreates the redis connection and pool based on the given client.
-        :param client: str. an attr of self, such as self.r,
-        self.pubsub_client, etc.
-        returns the newly created client.
-        updates the pool and client attributes of this class
-        """
-        # which pool does the given client belong to
-        # keys are client names, calues are their pool details
-        client_pool_map = {
-            "r": {
-                "name": "main_db_pool",
-                "port": self.main_db_pool.connection_kwargs["port"],
-                "db": self.main_db_pool.connection_kwargs["db"],
-            },
-            "pubsub_client": {
-                "name": "pubsub_pool",
-                "port": self.pubsub_pool.connection_kwargs["port"],
-                "db": self.pubsub_pool.connection_kwargs["db"],
-            },
-            "rcache": {
-                "name": "cache_db_pool",
-                "port": self.cache_db_pool.connection_kwargs["port"],
-                "db": self.cache_db_pool.connection_kwargs["db"],
-            },
-        }
-        pool: dict = client_pool_map[client]
-        # recreate the pool
-        pool_obj = self._create_connection_pool(pool["port"], pool["db"])
-        setattr(self, pool["name"], pool_obj)
-        # recreate the client
-        setattr(self, client, self._get_redis_client(pool_obj))
 
     async def ping(self, client_obj) -> bool:
         try:
@@ -1507,51 +1416,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             return False
         except Exception:
             return False
-
-    async def check_health(self, client="all") -> bool:
-        """
-        Checks if the given redis client is connected to the redis server.
-        if no client was given, checks all supported clients.
-        reconnects if the client is not connected.
-        :param client: str. can be 'all' or a specific redis client, such as
-        "r" "rcache" etc.
-        """
-        # why are we checking this?
-        # redis.asyncio.Redis clients don’t automatically detect that the
-        # underlying Redis connection has died. If the socket is still open,
-        # the next command (e.g., ping() or hget()) will just hang forever
-        # waiting for a response.
-        if client == "all":
-            clients_to_try_to_check = ("r", "rcache", "pubsub_client")
-        else:
-            clients_to_try_to_check = client
-
-        for client in clients_to_try_to_check:
-            client_obj = getattr(self, client)
-            try:
-                if await self.ping(client_obj):
-                    return True
-            except Exception as e:
-                client_obj.close()
-                await client_obj.connection_pool.disconnect()
-
-                # recreate the client and the client pool
-                print(
-                    f"Redis ping failed for client: {client}, {e}, "
-                    f"reconnecting..."
-                )
-                self._reconnect(client)
-                try:
-                    if await self.ping(client_obj):
-                        print(f"Client {client} Reconnected.")
-                        return True
-                except Exception as e:
-                    print(
-                        f"Redis reconnection failed for client: {client}"
-                        f" {e}"
-                    )
-                    return False
-        return True
 
     async def get_gateway_mac_vendor(self):
         return await self.r.hget(self.constants.DEFAULT_GATEWAY, "Vendor")
@@ -1701,7 +1565,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         :param pid: int
         :param process: module name, str
         """
-        await self.r.hset(self.constants.PIDS, process, pid)
+        try:
+            await self.log_redis_diagnostics()
+            await asyncio.wait_for(
+                self.r.hset(self.constants.PIDS, process, pid), timeout=5.0
+            )
+            await self.log_redis_diagnostics()
+
+        except asyncio.TimeoutError:
+            print("!!! Timeout while store_pid !!!")
+
+        # await self.r.hset(self.constants.PIDS, process, pid)
 
     async def get_pids(self) -> dict:
         """returns a dict with module names as keys and PIDs as values"""
@@ -1993,3 +1867,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         :returns: {channel_name: number_of_msgs, ...}
         """
         return await self.r.hgetall(f"{module}_msgs_received_at_runtime")
+
+    async def close(self):
+        for client in self.clients:
+            await client.aclose()
