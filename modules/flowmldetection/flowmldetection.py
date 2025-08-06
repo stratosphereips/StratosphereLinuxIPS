@@ -370,7 +370,7 @@ class FlowMLDetection(IModule):
                 label_counts = {
                     label: (y_flow == label).sum() for label in unique_labels
                 }
-                self.print(f"Label counts: {label_counts}", 0, 1)
+                self.print(f"Training label counts: {label_counts}", 0, 1)
 
                 if not self.classifier_initialized:  # init the classifier
                     self.print(
@@ -543,10 +543,14 @@ class FlowMLDetection(IModule):
 
             # Convert to pandas df
             df_flows = pd.DataFrame(new_flows)
-
+            self.print(
+                f"Processing {len(df_flows)} new flows for training.", 0, 1
+            )
             # Process features
             df_flows = self.process_features(df_flows)
-
+            self.print(
+                f"Processed {len(df_flows)} new flows for training.", 0, 1
+            )
             # Update the flow to the processed version
             self.flows = df_flows
         except Exception:
@@ -575,44 +579,22 @@ class FlowMLDetection(IModule):
         """
         Detects the given flow with the current model stored
         and returns the predection array
+        at this point clean flown only!
         """
+
+        # Scale the flow, then predict. not learning here!
         try:
-            # clean the flow
-            fields_to_drop = [
-                "label",
-                "module_labels",
-                "uid",
-                "history",
-                "dir_",
-                "endtime",
-                "flow_source",
-                "ground_truth_label",
-                "detailed_ground_truth_label",
-            ]
-            for field in fields_to_drop:
-                try:
-                    x_flow = x_flow.drop(field, axis=1)
-                except (KeyError, ValueError):
-                    pass
-
-            # Scale the flow, then predict. not learning here!
-            try:
-                x_flow: numpy.ndarray = self.scaler.transform(x_flow)
-                pred: numpy.ndarray = self.clf.predict(x_flow)
-            except Exception as e:
-                self.print(
-                    f"Error in detect() while scaling or predicting the flow: {e}",
-                    0,
-                    1,
-                )
-                self.print(traceback.format_exc(), 0, 1)
-
-            return pred
+            x_flow: numpy.ndarray = self.scaler.transform(x_flow)
+            pred: numpy.ndarray = self.clf.predict(x_flow)
         except Exception as e:
             self.print(
-                f"Error in detect() while processing " f"\n{x_flow}\n{e}"
+                f"Error in detect() while scaling or predicting the flow: {e}",
+                0,
+                1,
             )
             self.print(traceback.format_exc(), 0, 1)
+
+        return pred
 
     def store_model(self):
         """

@@ -1,245 +1,121 @@
 import argparse
 import os
 import re
+import sys
+from collections import defaultdict
 
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-import pandas as pd
+from base_utils import (
+    compute_binary_metrics,
+    compute_multiclass_metrics,
+    extract_braced_dict,
+    print_and_save_summary,
+    process_file,
+    safe_eval_dict,
+)
+from matplotlib import pyplot as plt
 
 
-def plot_log_data(file_path, experiment_number):
+def parse_metrics_line(line: str) -> dict:
+    """
+    Parses lines with:
+    Total labels: 992.0, Testing size: 56, Seen labels: {...}, Predicted labels: {...}, Per-class metrics: {...}
+    """
+    total_match = re.search(r"Testing size:\s*(\d+)", line)
+    seen_dict_str = extract_braced_dict(line, "Seen labels:")
+    pred_dict_str = extract_braced_dict(line, "Predicted labels:")
+    per_class_dict_str = extract_braced_dict(line, "Per-class metrics:")
 
-    # Read the log data from the file
-    with open(file_path, "r") as file:
-        log_data = file.read()
+    if not (
+        total_match and seen_dict_str and pred_dict_str and per_class_dict_str
+    ):
+        raise ValueError("Line missing one of required components")
 
-    # Check and create 'performance_metrics' directory if it doesn't exist
-    base_dir = "performance_metrics"
-    if not os.path.exists(base_dir):
-        os.makedirs(base_dir)
+    total = int(total_match.group(1))
+    seen = safe_eval_dict(seen_dict_str)
+    pred = safe_eval_dict(pred_dict_str)
+    cls_metrics = safe_eval_dict(per_class_dict_str)
 
-    # Check and create 'testing' directory inside 'performance_metrics'
-    testing_dir = os.path.join(base_dir, "training")
-    if not os.path.exists(testing_dir):
-        os.makedirs(testing_dir)
+    return {
+        "total": total,
+        "seen_labels": seen,
+        "pred_labels": pred,
+        "class_metrics": cls_metrics,
+    }
 
-    saving_dir = os.path.join(testing_dir, f"{experiment_number}")
-    if not os.path.exists(saving_dir):
-        os.makedirs(saving_dir)
 
-    # Regex pattern for the new log format
-    pattern = (
-        r"Total labels: ([\d\.]+), Background: (\d+). Benign: (\d+). Malicious: (\d+). Metrics: "
-        r"FPR=([\d\.]+), TNR=([\d\.]+), TPR=([\d\.]+), FNR=([\d\.]+), "
-        r"F1=([\d\.]+), Precision=([\d\.]+), Accuracy=([\d\.]+), MCC=([\d\.]+), Recall=([\d\.]+)\."
-    )
+def plot_metrics(metrics: dict, exp: str, training_dir: str) -> None:
 
-    # Parse the log file
-    data = re.findall(pattern, log_data)
+    def plot_metrics(metrics: dict, exp: str, training_dir: str) -> None:
+        # Initialize data structures
+        data_seen = 0
+        x_points = []
+        binary_metrics = defaultdict(list)
+        multiclass_metrics = defaultdict(list)
 
-    # Convert data to a DataFrame
-    columns = [
-        "Total labels",
-        "Background",
-        "Benign",
-        "Malicious",
-        "FPR",
-        "TNR",
-        "TPR",
-        "FNR",
-        "F1",
-        "Precision",
-        "Accuracy",
-        "MCC",
-        "Recall",
-    ]
+        # Process each batch
+        for batch_metrics in metrics:
+            data_seen += batch_metrics["total"]
+            x_points.append(data_seen)
 
-    df = pd.DataFrame(data, columns=columns)
+            # Calculate and store metrics
+            if len(batch_metrics["class_metrics"]) == 2:
+                bin_results = compute_binary_metrics(
+                    batch_metrics["seen_labels"], batch_metrics["pred_labels"]
+                )
+                for key, value in bin_results.items():
+                    binary_metrics[key].append(value)
+            else:
+                multi_results = compute_multiclass_metrics(
+                    batch_metrics["seen_labels"], batch_metrics["pred_labels"]
+                )
+                for key, value in multi_results.items():
+                    multiclass_metrics[key].append(value)
 
-    # Create a new column for the difference in total labels
-    total_labels = [float(row[0]) for row in data]
-    diff_total_labels = [total_labels[0]] + [
-        total_labels[i] - total_labels[i - 1]
-        for i in range(1, len(total_labels))
-    ]
-    df["Batch size"] = diff_total_labels
-
-    df = df.astype(
-        {
-            "Total labels": float,
-            "Background": int,
-            "Benign": int,
-            "Malicious": int,
-            "FPR": float,
-            "TNR": float,
-            "TPR": float,
-            "FNR": float,
-            "F1": float,
-            "Precision": float,
-            "Accuracy": float,
-            "MCC": float,
-            "Recall": float,
-            "Batch size": float,
-        }
-    )
-    weights = df["Malicious"] + df["Benign"]
-
-    dir_name = os.path.dirname(file_path)
-
-    # --- Plot 1: Number of labels (linear scale, no total labels) ---
-    fig1, ax1 = plt.subplots(figsize=(10, 6))
-    ax1.plot(df.index, df["Background"], label="Background", color="black")
-    ax1.plot(df.index, df["Benign"], label="Benign", color="cyan")
-    ax1.plot(df.index, df["Malicious"], label="Malicious", color="magenta")
-    ax1.set_xlabel("Index")
-    ax1.set_ylabel("Label Counts")
-    ax1.set_title(f"Label Counts - Experiment {experiment_number}")
-    ax1.legend()
-    ax1.yaxis.set_major_locator(ticker.MaxNLocator(70))
-    ax1.xaxis.set_major_locator(ticker.MaxNLocator(50))
-    ax1.axhline(y=0, color="black", linewidth=1)
-    plt.tight_layout()
-    plt.savefig(
-        os.path.join(dir_name, "performance_metrics_training_labels.png")
-    )
-    plt.savefig(
-        os.path.join(
-            saving_dir,
-            f"performance_metrics_training_{experiment_number}_labels.png",
+        # Plot metrics
+        metrics_to_plot = (
+            binary_metrics if binary_metrics else multiclass_metrics
         )
-    )
-    plt.close()
+        plt.figure(figsize=(10, 6))
+        for metric_name, values in metrics_to_plot.items():
+            plt.plot(x_points, values, label=metric_name)
 
-    # --- Plot 2: FNR and FPR (log scale) ---
-    fig2, ax2 = plt.subplots(figsize=(10, 6))
-    ax2.plot(df.index, df["FNR"], label="FNR", color="red")
-    ax2.plot(df.index, df["FPR"], label="FPR", color="blue")
-    ax2.set_xlabel("Index")
-    ax2.set_ylabel("Rate")
-    ax2.set_yscale("log")
-    ax2.set_title(f"FNR and FPR - Experiment {experiment_number}")
-    ax2.legend()
-    ax2.yaxis.set_major_locator(ticker.MaxNLocator(100))
-    ax2.xaxis.set_major_locator(ticker.MaxNLocator(50))
-    plt.tight_layout()
-    plt.savefig(
-        os.path.join(dir_name, "performance_metrics_training_fnr_fpr.png")
-    )
-    plt.savefig(
-        os.path.join(
-            saving_dir,
-            f"performance_metrics_training_{experiment_number}_fnr_fpr.png",
-        )
-    )
-    plt.close()
-
-    # --- Plot 3: Other metrics (log scale) ---
-    fig3, ax3 = plt.subplots(figsize=(12, 7))
-    metrics_rest = [
-        "TNR",
-        "TPR",
-        "F1",
-        "Precision",
-        "Accuracy",
-        "MCC",
-        "Recall",
-    ]
-    colors_rest = [
-        "tab:blue",
-        "tab:green",
-        "tab:purple",
-        "tab:brown",
-        "tab:gray",
-        "tab:pink",
-        "tab:olive",
-    ]
-    for metric, color in zip(metrics_rest, colors_rest):
-        ax3.plot(df.index, df[metric], label=metric, color=color)
-    ax3.set_xlabel("Index")
-    ax3.set_ylabel("Metric Value")
-    ax3.set_yscale("log")
-    ax3.set_title(
-        f"Performance Metrics (except FNR/FPR) - Experiment {experiment_number}"
-    )
-    ax3.legend()
-    ax3.yaxis.set_major_locator(ticker.MaxNLocator(50))
-    ax3.xaxis.set_major_locator(ticker.MaxNLocator(50))
-    plt.tight_layout()
-    plt.savefig(
-        os.path.join(
-            dir_name, "performance_metrics_training_other_metrics.png"
-        )
-    )
-    plt.savefig(
-        os.path.join(
-            saving_dir,
-            f"performance_metrics_training_{experiment_number}_other_metrics.png",
-        )
-    )
-    plt.close()
-
-    # --- Print final values in terminal and save to file ---
-    print("\nFinal values at last training step:")
-    final_metrics_path = os.path.join(saving_dir, "final_metrics.txt")
-
-    with open(final_metrics_path, "w") as f:
-        value = df["Total labels"].iloc[-1]
-        print(f"Total labels: {value}")
-        f.write(f"Total labels: {value}\n")
-
-        benign_total = df["Benign"].sum()
-        malicious_total = df["Malicious"].sum()
-        benign_malicious_sum = benign_total + malicious_total
-        print(f"Sum of Benign and Malicious: {benign_malicious_sum}")
-        f.write(f"Sum of Benign and Malicious: {benign_malicious_sum}\n")
-
-        for col in [
-            "FPR",
-            "FNR",
-            "TNR",
-            "TPR",
-            "F1",
-            "Accuracy",
-            "Precision",
-            "MCC",
-            "Recall",
-        ]:
-            # Weighted average using diff_total_labels as weights
-            values = df[col].astype(float)
-            # Use sum of Malicious and Benign as weights
-            weighted_avg = (values * weights).sum() / weights.sum()
-            print(f"{col} (total avg): {weighted_avg}")
-            f.write(f"{col} (total avg): {weighted_avg}\n")
-
-        for col in ["Background", "Benign", "Malicious"]:
-            total = df[col].sum()
-            print(f"Total {col}: {total}")
-            f.write(f"Total {col}: {total}\n")
+        plt.xlabel("Number of samples seen")
+        plt.ylabel("Metric value")
+        plt.title(f"Training Performance - {exp}")
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(os.path.join(training_dir, f"{exp}_training_metrics.png"))
+        plt.close()
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Process a log file and plot the data with two y-axes."
+        description="Plot training performance metrics."
     )
     parser.add_argument(
-        "-f",
-        "--file",
-        metavar="log_file",
-        type=str,
-        required=True,
-        help="Path to the log file",
+        "-f", "--file", required=True, help="Path to training log file"
     )
     parser.add_argument(
-        "-e",
-        "--experiment",
-        metavar="experiment_number",
-        type=str,
-        required=True,
-        help="Experiment number to add to the filename",
+        "-e", "--exp", required=True, help="Experiment identifier"
     )
     args = parser.parse_args()
-    plot_log_data(args.file, args.experiment)
+
+    if not args.file.endswith(".log"):
+        args.file = os.path.join(args.file, "training.log")
+    if not os.path.isfile(args.file):
+        raise FileNotFoundError(f"Log file not found: {args.file}")
+
+    base_dir = "performance_metrics"
+    training_dir = os.path.join(base_dir, "training")
+    os.makedirs(training_dir, exist_ok=True)
+
+    data = process_file(args.file, parse_metrics_line)
+    plot_metrics(data["metrics"], args.exp, training_dir)
+    print_and_save_summary(
+        data["metrics"], data["counters"], args.exp, training_dir
+    )
 
 
 if __name__ == "__main__":
+    sys.path.insert(0, os.path.dirname(__file__))
     main()

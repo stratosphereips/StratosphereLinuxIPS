@@ -1,57 +1,27 @@
 import argparse
-import ast
 import os
 import re
-import traceback
-from typing import Any, Dict, List
+import sys
+from collections import Dict, List
 
-import matplotlib.pyplot as plt
-
-
-def safe_eval_dict(text: str) -> Any:
-    try:
-        return ast.literal_eval(text)
-    except Exception as e:
-        raise ValueError(f"Failed to parse dictionary: {e}")
-
-
-def extract_braced_dict(text: str, start_pattern: str) -> str:
-    """Extracts a dictionary string with balanced braces after a given pattern."""
-    start = text.find(start_pattern)
-    if start == -1:
-        return None
-    start = text.find("{", start)
-    if start == -1:
-        return None
-    brace_count = 0
-    end = start
-    while end < len(text):
-        if text[end] == "{":
-            brace_count += 1
-        elif text[end] == "}":
-            brace_count -= 1
-            if brace_count == 0:
-                return text[start : end + 1]
-        end += 1
-    return None
+from base_utils import (
+    extract_braced_dict,
+    print_and_save_summary,
+    process_file,
+    safe_eval_dict,
+)
+from matplotlib import pyplot as plt
 
 
-def parse_metrics_line(line: str) -> Dict[str, Any]:
+def parse_metrics_line(line: str) -> dict:
     """
-    Returns:
-        {
-            'total': int,
-            'seen_labels': {'Background':…, 'Malicious':…, 'Benign':…},
-            'pred_labels': {...},
-            'class_metrics': {'Background':{TP,FP,TN,FN}, …}
-        }
+    Parses lines with format:
+    Total flows: 123, Seen labels: {...}, Predicted labels: {...}, Per-class metrics: {...}
     """
     total_match = re.search(r"Total flows:\s*(\d+)", line)
     seen_dict_str = extract_braced_dict(line, "Seen labels:")
     pred_dict_str = extract_braced_dict(line, "Predicted labels:")
     per_class_dict_str = extract_braced_dict(line, "Per-class metrics:")
-    # Optionally parse Benign/Malicious only metrics if needed in future:
-    # bm_match = re.search(r"Benign/Malicious only:\s*TP=(\d+), FP=(\d+), TN=(\d+), FN=(\d+)", line)
 
     if not (
         total_match and seen_dict_str and pred_dict_str and per_class_dict_str
@@ -73,145 +43,19 @@ def parse_metrics_line(line: str) -> Dict[str, Any]:
     }
 
 
-def compute_binary_metrics(
-    TP: int, TN: int, FP: int, FN: int
-) -> Dict[str, float]:
-    precision = TP / (TP + FP) if TP + FP else 0.0
-    recall = TP / (TP + FN) if TP + FN else 0.0
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if (precision + recall)
-        else 0.0
-    )
-    accuracy = (TP + TN) / (TP + TN + FP + FN) if (TP + TN + FP + FN) else 0.0
-    FPR = FP / (FP + TN) if (FP + TN) else 0.0
-    FNR = FN / (FN + TP) if (FN + TP) else 0.0
-    TPR = recall
-    TNR = TN / (TN + FP) if (TN + FP) else 0.0
-    return {
-        "precision": precision,
-        "recall": recall,
-        "f1": f1,
-        "accuracy": accuracy,
-        "FPR": FPR,
-        "FNR": FNR,
-        "TPR": TPR,
-        "TNR": TNR,
-    }
-
-
-def compute_multiclass_metrics(
-    cls: Dict[str, Dict[str, int]], total: int
-) -> Dict[str, float]:
-    # Per-class values
-    precisions, recalls, f1s = [], [], []
-    sum_TP = sum(v["TP"] for v in cls.values())
-    sum_FP = sum(v["FP"] for v in cls.values())
-    sum_FN = sum(v["FN"] for v in cls.values())
-
-    for v in cls.values():
-        tp, fp, fn = v["TP"], v["FP"], v["FN"]
-        p = tp / (tp + fp) if tp + fp else 0.0
-        r = tp / (tp + fn) if tp + fn else 0.0
-        f1 = 2 * p * r / (p + r) if (p + r) else 0.0
-        precisions.append(p)
-        recalls.append(r)
-        f1s.append(f1)
-
-    macro_p = sum(precisions) / len(precisions)
-    macro_r = sum(recalls) / len(recalls)
-    macro_f1 = sum(f1s) / len(f1s)
-
-    # micro
-    micro_p = sum_TP / (sum_TP + sum_FP) if (sum_TP + sum_FP) else 0.0
-    micro_r = sum_TP / (sum_TP + sum_FN) if (sum_TP + sum_FN) else 0.0
-    micro_f1 = (
-        2 * micro_p * micro_r / (micro_p + micro_r)
-        if (micro_p + micro_r)
-        else 0.0
-    )
-
-    accuracy = sum_TP / total if total else 0.0
-
-    return {
-        "accuracy": accuracy,
-        "macro_precision": macro_p,
-        "macro_recall": macro_r,
-        "macro_f1": macro_f1,
-        "micro_precision": micro_p,
-        "micro_recall": micro_r,
-        "micro_f1": micro_f1,
-    }
-
-
-def process_file(path: str) -> Dict[str, Any]:
-    metrics = {
-        "malicious": [],  # binary Malicious vs Benign
-        "multiclass": [],  # overall multi-class
-        "per_class": [],  # per-class accuracy metrics
-    }
-    counters = {"total": 0, "errors": 0, "unusual": 0}
-
-    with open(path) as f:
-        for line in f:
-            if "Per-class metrics:" not in line:
-                continue
-            counters["total"] += 1
-            try:
-                parsed = parse_metrics_line(line)
-                total = parsed["total"]
-                cls = parsed["class_metrics"]
-                mal = cls.get("Malicious", {})
-                ben = cls.get("Benign", {})
-
-                # Per-class accuracy
-                per_class_acc = {}
-                for class_name, metrics_dict in cls.items():
-                    tp = metrics_dict.get("TP", 0)
-                    fn = metrics_dict.get("FN", 0)
-                    per_class_acc[class_name] = (
-                        tp / (tp + fn) if (tp + fn) else 0
-                    )
-
-                # Malicious vs Benign
-                binm = compute_binary_metrics(
-                    mal.get("TP", 0),
-                    ben.get("TP", 0),
-                    mal.get("FP", 0),
-                    mal.get("FN", 0),
-                )
-                # True multiclass
-                multi = compute_multiclass_metrics(cls, total)
-
-                metrics["malicious"].append(binm)
-                metrics["multiclass"].append(multi)
-                metrics["per_class"].append(per_class_acc)
-
-                # count NaN/Inf
-                for group in (binm, multi, per_class_acc):
-                    if any(
-                        (v != v) or (v == float("inf")) for v in group.values()
-                    ):
-                        counters["unusual"] += 1
-                        break
-
-            except Exception:
-                print(f"Error parsing line: {line.strip()}")
-                traceback.print_exc()
-                counters["errors"] += 1
-                counters["unusual"] += 1
-
-    return {"metrics": metrics, "counters": counters}
-
-
 def plot_metrics(
     metrics: Dict[str, List[Dict[str, float]]], exp: str, testing_dir: str
 ) -> None:
     exp_dir = os.path.join(testing_dir, exp)
     os.makedirs(exp_dir, exist_ok=True)
+    # Get all classes from the first entry's class metrics
+    classes = list(metrics["overall"][0]["class_metrics"].keys())
 
-    for key in ("malicious", "overall"):
-        entries = metrics[key]
+    # Plot for each class and overall
+    for category in classes + ["overall"]:
+        entries = (
+            metrics["overall"] if category == "overall" else metrics["overall"]
+        )
         close0 = {"FPR": [], "FNR": []}
         close1 = {
             "TPR": [],
@@ -223,10 +67,15 @@ def plot_metrics(
         }
 
         for e in entries:
-            close0["FPR"].append(e["FPR"])
-            close0["FNR"].append(e["FNR"])
+            if category == "overall":
+                metrics_data = e
+            else:
+                metrics_data = e["class_metrics"][category]
+
+            close0["FPR"].append(metrics_data["FPR"])
+            close0["FNR"].append(metrics_data["FNR"])
             for k in close1:
-                close1[k].append(e[k])
+                close1[k].append(metrics_data[k])
 
         # Close to 0
         plt.figure(figsize=(10, 6))
@@ -235,9 +84,11 @@ def plot_metrics(
         plt.yscale("linear")
         plt.xlabel("Index")
         plt.ylabel("Value")
-        plt.title(f"{key.capitalize()} Metrics Close to 0")
+        plt.title(f"{category.capitalize()} Metrics Close to 0")
         plt.legend()
-        plt.savefig(os.path.join(exp_dir, f"{key}_metrics_to_0_{exp}.png"))
+        plt.savefig(
+            os.path.join(exp_dir, f"{category}_metrics_to_0_{exp}.png")
+        )
         plt.close()
 
         # Close to 1
@@ -247,71 +98,21 @@ def plot_metrics(
         plt.yscale("log")
         plt.xlabel("Index")
         plt.ylabel("Value")
-        plt.title(f"{key.capitalize()} Metrics Close to 1")
+        plt.title(f"{category.capitalize()} Metrics Close to 1")
         plt.legend()
-        plt.savefig(os.path.join(exp_dir, f"{key}_metrics_to_1_{exp}.png"))
-        plt.close()
-
-
-def print_and_save_summary(
-    metrics: Dict[str, Any],
-    counters: Dict[str, int],
-    exp: str,
-    testing_dir: str,
-) -> None:
-    exp_dir = os.path.join(testing_dir, exp)
-    os.makedirs(exp_dir, exist_ok=True)
-    last_bin = metrics["malicious"][-1] if metrics["malicious"] else {}
-    last_mul = metrics["multiclass"][-1] if metrics["multiclass"] else {}
-
-    lines = [f"Final Metric Values for Experiment {exp}\n"]
-
-    lines.append("=== Binary (Benign vs Malicious) ===")
-    for name in (
-        "FPR",
-        "FNR",
-        "TNR",
-        "TPR",
-        "f1",
-        "accuracy",
-        "precision",
-        "recall",
-    ):
-        v = last_bin.get(name if name != "f1" else "f1", 0)
-        lines.append(
-            f"Final {name.upper() if name!='f1' else 'F1 Score'}: {v:.4f}"
+        plt.savefig(
+            os.path.join(exp_dir, f"{category}_metrics_to_1_{exp}.png")
         )
-
-    lines.append("\n=== Per Class Stats ===")
-    last_per_class = metrics["per_class"][-1] if metrics["per_class"] else {}
-    for class_name, acc in sorted(last_per_class.items()):
-        lines.append(f"{class_name} Accuracy: {acc:.4f}")
-
-    lines.append("\n=== Multi-class ===")
-    lines.append(f"Accuracy: {last_mul.get('accuracy',0):.4f}")
-    lines.append(f"Macro Precision: {last_mul.get('macro_precision',0):.4f}")
-    lines.append(f"Macro Recall:    {last_mul.get('macro_recall',0):.4f}")
-    lines.append(f"Macro F1:        {last_mul.get('macro_f1',0):.4f}")
-    lines.append(f"Micro Precision: {last_mul.get('micro_precision',0):.4f}")
-    lines.append(f"Micro Recall:    {last_mul.get('micro_recall',0):.4f}")
-    lines.append(f"Micro F1:        {last_mul.get('micro_f1',0):.4f}")
-
-    lines.append(f"\nSummary for Experiment {exp}:")
-    lines.append(f"Total lines read:        {counters['total']}")
-    lines.append(f"Lines with parse errors: {counters['errors']}")
-    lines.append(f"Unusual (NaN/Inf):       {counters['unusual']}")
-
-    summary = "\n".join(lines)
-    print(summary)
-    with open(os.path.join(exp_dir, "final_metrics.txt"), "w") as f:
-        f.write(summary)
+        plt.close()
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Plot testing performance metrics."
     )
-    parser.add_argument("-f", "--file", required=True, help="Path to log file")
+    parser.add_argument(
+        "-f", "--file", required=True, help="Path to testing log file"
+    )
     parser.add_argument(
         "-e", "--exp", required=True, help="Experiment identifier"
     )
@@ -326,7 +127,7 @@ def main():
     testing_dir = os.path.join(base_dir, "testing")
     os.makedirs(testing_dir, exist_ok=True)
 
-    data = process_file(args.file)
+    data = process_file(args.file, parse_metrics_line)
     plot_metrics(data["metrics"], args.exp, testing_dir)
     print_and_save_summary(
         data["metrics"], data["counters"], args.exp, testing_dir
@@ -334,4 +135,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # Ensure base_utils is importable
+    sys.path.insert(0, os.path.dirname(__file__))
     main()
