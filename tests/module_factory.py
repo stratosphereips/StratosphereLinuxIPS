@@ -163,7 +163,6 @@ class ModuleFactory:
                 redis_port=port,
                 conf=conf,
                 main_pid=12345,
-                caller_pid=3232,
                 flush_db=flush_db,
                 start_sqlite=False,
                 start_redis_server=start_redis_server,

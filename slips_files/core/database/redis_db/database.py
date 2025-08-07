@@ -162,7 +162,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         super().__init__(self)
         # should run only once by the first process that uses this class
         self.init_redis_server()
-        self.init_clients()
 
     def init_redis_server(self):
         """
@@ -171,7 +170,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         class (main.py)
         """
         if self.is_first_db_instance_ever:
-            self._set_redis_options()
+            self._set_options_in_redis_conf_file()
             initialized, err = self._start_redis_server()
             if not initialized:
                 raise RuntimeError(
@@ -179,14 +178,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                     f"on port {self.redis_port}: {err}"
                 )
 
-    def init_clients(self):
+    async def init_clients(self):
         """
         Initializes the 3 main redis clients r, rcache and the pubsub client.
         and sets the needed timestamps to kick off slips.
         Returns a Redis client unique per async context.
         Each thread must call this at least once in its event loop.
         """
-        clients_set, err = self._set_redis_clients_and_change_limits()
+        clients_set, err = await self._set_redis_clients_and_change_limits()
         if not clients_set:
             raise RuntimeError(
                 f"Failed to init redis clients "
@@ -194,10 +193,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             )
 
         if self.is_first_db_instance_ever:
-            self._init_internal_timestamps()
-            self.set_new_incoming_flows(True)
+            await self._init_internal_timestamps()
+            await self.set_new_incoming_flows(True)
 
-    def _set_redis_clients_and_change_limits(self):
+    async def _set_redis_clients_and_change_limits(self):
         """
         Initializes the 3 main redis client r, rcache and the pubsub client
             r: for all redis commands that are not related to pubsub or cached
@@ -213,7 +212,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """
         try:
             # get the 3 main redis clients from their pool
-            connected, err = self._get_clients()
+            connected, err = await self._get_clients()
             if not connected:
                 return False, err
 
@@ -222,8 +221,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             if self.should_flush():
                 # when stopping the daemon, don't flush bc we need to get
                 # the PIDS to close slips files
-                self.r.flushdb()
-                self.r.delete(self.constants.ZEEK_FILES)
+                await self.r.flushdb()
+                await self.r.delete(self.constants.ZEEK_FILES)
 
             self.clients = (self.r, self.rcache, self.pubsub_client)
             # Set the memory limits of the output buffer,
@@ -231,7 +230,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             # for pub-sub 4GB maximum buffer size and 2GB for soft limit
             # The original values were 50MB for maxm and 8MB for soft limit.
             for client in self.clients:
-                self.change_redis_limits(client)
+                await self._change_redis_limits(client)
             return True, ""
         except RuntimeError as err:
             return False, str(err)
@@ -243,17 +242,17 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 f"{self.redis_port}: {ex}"
             )
 
-    def _init_internal_timestamps(self):
+    async def _init_internal_timestamps(self):
         # we dont wanna set the start time each time a new instance is
         # created, just once when slips starts
         if not self.slips_internal_time_set:
             print("@@@@@@@@@@@@@@@@ setttinggg slips internal " "timee!!!!!")
             # slips internal time is the timestamp of the last tw update
             # done in slips, By default it's 0 until we receive something
-            self.set_slips_internal_time(0)
+            await self.set_slips_internal_time(0)
 
-            if not self.get_slips_start_time():
-                self._set_slips_start_time()
+            if not await self.get_slips_start_time():
+                await self._set_slips_start_time()
             self.slips_internal_time_set = True
 
     def should_flush(self) -> bool:
@@ -265,17 +264,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             and self.flush_db
         )
 
-    async def client_setname(self, name: str):
-        """
-        Set the name of the client in redis, so we can identify it
-        in the redis client list.
-        :param name: the name of the client
-        """
-        # useful for debugging using 'CLIENT LIST' cmd
-        name = name.replace("_", "").replace(" ", "")
-        await self.r.client_setname(name)
-
-    def _set_redis_options(self):
+    def _set_options_in_redis_conf_file(self):
         """
         Updates the default redis parameters in self._conf_file
         """
@@ -321,7 +310,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         self.width = self.conf.get_tw_width_as_float()
         self.client_ips: List[str] = self.conf.client_ips()
 
-    def set_slips_internal_time(self, timestamp):
+    async def set_slips_internal_time(self, timestamp):
         """
         slips internal time is the timestamp of the last tw update done in
         slips
@@ -330,11 +319,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         metadata_manager.py checks for new tw modifications every 5s and
         updates this value accordingly
         """
-        self.r.set(self.constants.SLIPS_INTERNAL_TIME, timestamp)
+        await self.r.set(self.constants.SLIPS_INTERNAL_TIME, timestamp)
 
-    def get_slips_start_time(self) -> str:
+    async def get_slips_start_time(self) -> str:
         """get the time slips started in unix format"""
-        return self.r.get(self.constants.SLIPS_START_TIME)
+        return await self.r.get(self.constants.SLIPS_START_TIME)
 
     def _start_redis_server(self) -> Tuple[bool, str]:
         """
@@ -406,7 +395,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             health_check_interval=20,
         )
 
-    def _get_clients(self) -> Tuple[bool, str]:
+    async def _get_clients(self) -> Tuple[bool, str]:
         """
         Connects to the given port and Sets r and rcache
         Returns a tuple of (bool, error message).
@@ -420,7 +409,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             # the connection to redis is only established
             # when you try to execute a command on the server.
             # so make sure it's established first
-            self.r.client_list()
+            await self.r.client_list()
             return True, ""
         except Exception as e:
             return False, f"database.connect_to_redis_server: {e}"
@@ -429,7 +418,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         if server_pid := self.get_redis_server_pid(redis_port):
             os.kill(int(server_pid), signal.SIGKILL)
 
-    async def change_redis_limits(self, client: redis.Redis):
+    async def _change_redis_limits(self, client: redis.Redis):
         """
         changes redis soft and hard limits to fix redis closing/resetting
         the pub/sub connection,
@@ -1566,11 +1555,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         :param process: module name, str
         """
         try:
-            await self.log_redis_diagnostics()
             await asyncio.wait_for(
                 self.r.hset(self.constants.PIDS, process, pid), timeout=5.0
             )
-            await self.log_redis_diagnostics()
 
         except asyncio.TimeoutError:
             print("!!! Timeout while store_pid !!!")

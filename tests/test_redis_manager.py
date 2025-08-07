@@ -106,7 +106,7 @@ def test_load_redis_db(redis_port, redis_pid, db_path, mock_db):
 def test_load_db_success(mock_db):
     redis_manager = ModuleFactory().create_redis_manager_obj()
     redis_manager.main.args.db = "/path/to/db.rdb"
-    redis_manager.main.db.init_redis_server = Mock()
+    redis_manager.main.db._start_redis_server = Mock()
     redis_manager.main.db.load = Mock(return_value=True)
     redis_manager.main.terminate_slips = Mock()
 
@@ -121,7 +121,7 @@ def test_load_db_success(mock_db):
         redis_manager.load_db()
 
         assert redis_manager.input_type == "database"
-        redis_manager.main.db.init_redis_server.assert_called_once()
+        redis_manager.main.db._start_redis_server.assert_called_once()
         mock_get_pid.assert_called_once_with(32850)
         mock_flush.assert_called_once_with(pid=1234)
         mock_kill.assert_called_once_with(1234)
@@ -134,7 +134,7 @@ def test_load_db_failure(mock_db):
     redis_manager = ModuleFactory().create_redis_manager_obj()
     rdb_path = "/path/to/db.rdb"
     redis_manager.main.args.db = rdb_path
-    redis_manager.main.db.init_redis_server = Mock()
+    redis_manager.main.db._start_redis_server = Mock()
     redis_manager.main.db.load = Mock(return_value=False)
     redis_manager.main.terminate_slips = Mock()
 
@@ -150,7 +150,7 @@ def test_load_db_failure(mock_db):
         redis_manager.load_db()
 
         assert redis_manager.input_type == "database"
-        redis_manager.main.db.init_redis_server.assert_called_once()
+        redis_manager.main.db._start_redis_server.assert_called_once()
         mock_get_pid.assert_called_once_with(32850)
         mock_flush.assert_called_once_with(pid=1234)
         mock_kill.assert_called_once_with(1234)

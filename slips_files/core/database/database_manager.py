@@ -38,28 +38,27 @@ class DBManager:
         output_dir,
         redis_port,
         conf,
-        args,
+        slips_args,
         main_pid: int,
-        caller_pid: int,
+        flush_db=False,
         start_sqlite=True,
-        start_redis_server=True,
-        **kwargs,
+        start_redis_server=False,
     ):
         self.conf = conf
         self.output_dir = output_dir
         self.redis_port = redis_port
         self.logger = logger
+        self.args = slips_args
         self.printer = Printer(self.logger, self.name)
         self.rdb = RedisDB(
             logger=self.logger,
             redis_port=redis_port,
-            caller_pid=caller_pid,
             start_redis_server=start_redis_server,
             conf=self.conf,
-            args=args,
-            **kwargs,
+            args=self.args,
+            flush_db=flush_db,
         )
-        self.rdb.init_clients()
+
         self.trust_db = None
         if self.conf.use_local_p2p():
             self.trust_db_path: str = self.init_p2ptrust_db()
@@ -76,6 +75,14 @@ class DBManager:
         self.sqlite = None
         if start_sqlite:
             self.sqlite = SQLiteDB(self.logger, output_dir, main_pid)
+
+    @classmethod
+    async def create(cls, **kwargs):
+        """Factory method to asynchronously create and initialize
+        the class instance."""
+        instance = cls(**kwargs)
+        await instance.init_clients()
+        return instance
 
     def is_db_malformed(self, db_path: str) -> bool:
         try:
@@ -211,12 +218,6 @@ class DBManager:
     async def get_message(self, *args, **kwargs):
         return await self.rdb.get_message(*args, **kwargs)
 
-    async def is_redis_connected(self, *args, **kwargs):
-        return await self.rdb.check_health(*args, **kwargs)
-
-    async def check_health(self, *args, **kwargs):
-        return await self.rdb.check_health(*args, **kwargs)
-
     async def change_clients(self, *args, **kwargs):
         return await self.rdb.change_clients(*args, **kwargs)
 
@@ -240,17 +241,6 @@ class DBManager:
 
     async def ask_for_ip_info(self, *args, **kwargs):
         return await self.rdb.ask_for_ip_info(*args, **kwargs)
-
-    @classmethod
-    def discard_obj(cls):
-        """
-        when connecting on multiple ports, this dbmanager since it's a
-        singelton
-        returns the same instance of the already used db
-        to fix this, we call this function every time we find a used db
-        that slips should connect to
-        """
-        cls._obj = None
 
     async def update_times_contacted(self, *args, **kwargs):
         return await self.rdb.update_times_contacted(*args, **kwargs)
@@ -849,6 +839,9 @@ class DBManager:
     async def increment_processed_flows(self, *args, **kwargs):
         return await self.rdb.increment_processed_flows(*args, **kwargs)
 
+    async def init_clients(self, *args, **kwargs):
+        return await self.rdb.init_clients(*args, **kwargs)
+
     async def get_processed_flows_so_far(self, *args, **kwargs):
         return await self.rdb.get_processed_flows_so_far(*args, **kwargs)
 
@@ -1147,8 +1140,7 @@ class DBManager:
             self.sqlite.close(*args, **kwargs)
 
     async def close_all_dbs(self, *args, **kwargs):
-        await self.rdb.r.close()
-        await self.rdb.rcache.close()
+        await self.rdb.close()
         self.close_sqlite()
         if self.trust_db:
             self.trust_db.close()
