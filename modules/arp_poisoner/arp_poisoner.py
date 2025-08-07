@@ -12,7 +12,7 @@ from scapy.all import ARP, Ether
 from scapy.sendrecv import sendp, srp
 import random
 
-from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 from modules.arp_poisoner.unblocker import ARPUnblocker
 from slips_files.common.slips_utils import utils
 
@@ -25,7 +25,7 @@ def generate_fake_mac():
     )
 
 
-class ARPPoisoner(IModule):
+class ARPPoisoner(IAsyncModule):
     name = "ARP Poisoner"
     description = "ARP poisons attackers to isolate them from the network."
     authors = ["Alya Gomaa"]

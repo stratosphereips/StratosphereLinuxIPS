@@ -41,7 +41,8 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
-from slips_files.common.abstracts.icore import ICore
+from slips_files.core.structures.alerts import Alert
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 from slips_files.core.structures.evidence import (
     dict_to_evidence,
     Evidence,
@@ -49,16 +50,12 @@ from slips_files.core.structures.evidence import (
     EvidenceType,
     TimeWindow,
 )
-from slips_files.core.structures.alerts import (
-    Alert,
-)
 from slips_files.core.text_formatters.evidence import EvidenceFormatter
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 
-# Evidence Process
-class EvidenceHandler(ICore):
+class EvidenceHandler(IAsyncModule):
     name = "EvidenceHandler"
 
     async def init(self, *args, **kwargs):

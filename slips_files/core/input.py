@@ -28,22 +28,19 @@ import time
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from re import split
-
+import multiprocessing
 from watchdog.observers import Observer
 
-from slips_files.common.abstracts.icore import ICore
 
-# common imports for all modules
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-import multiprocessing
-
 from slips_files.core.helpers.file_monitor_helper import FileMonitorHelper
 from slips_files.core.helpers.filemonitor import FileEventHandler
 from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
 
 
-class Input(ICore):
+class Input(IAsyncModule):
     """A class process to run the process of the flows"""
 
     name = "Input"
@@ -673,7 +670,7 @@ class Input(ICore):
 
     async def handle_pcap_and_interface(self) -> int:
         """Returns the number of zeek lines read"""
-
+        print("@@@@@@@@@@@@@@@@ handle_pcap_and_interface is called")
         # Create zeek_folder if does not exist.
         if not os.path.exists(self.zeek_dir):
             os.makedirs(self.zeek_dir)
@@ -715,7 +712,7 @@ class Input(ICore):
             2,
             0,
         )
-
+        print("@@@@@@@@@@@@@@@@ stopping observer")
         self.stop_observer()
         return True
 
@@ -897,7 +894,7 @@ class Input(ICore):
         msg: str = msg["data"]
         if msg == "stop_process":
             self.mark_self_as_done_processing()
-            self.shutdown_gracefully()
+            await self.shutdown_gracefully()
             return
 
         msg = json.loads(msg)
