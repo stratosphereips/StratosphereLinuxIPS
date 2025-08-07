@@ -293,6 +293,24 @@ class FlowMLDetection(IModule):
         log_str += f"Benign/Malicious only: TP={bm['TP']}, FP={bm['FP']}, TN={bm['TN']}, FN={bm['FN']}; "
         self.write_to_log(log_str)
 
+    def drop_labels(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Drop the labels from the DataFrame.
+        This is used to prepare the DataFrame for training or testing.
+        """
+        # Drop the ground truth label and detailed label
+        df = df.drop(
+            [
+                "ground_truth_label",
+                "detailed_ground_truth_label",
+                "label",
+                "module_labels",
+            ],
+            axis=1,
+            errors="ignore",
+        )
+        return df
+
     def train(self, sum_labeled_flows, last_number_of_flows_when_trained):
         """
         Train a model based on the flows we receive and the labels
@@ -304,14 +322,7 @@ class FlowMLDetection(IModule):
             )
             # Create X_flow with the current flows minus the label
             X_flow = self.flows.copy()
-            try:
-                X_flow = X_flow.drop("ground_truth_label", axis=1)
-                # Drop the detailed labels
-                X_flow = X_flow.drop("detailed_ground_truth_label", axis=1)
-                # Drop the module_labels
-                X_flow = X_flow.drop("module_labels", axis=1)
-            except (KeyError, ValueError):
-                pass
+            X_flow = self.drop_labels(X_flow)
 
             # Take random 10% of data for validation if validating on train set!
             X_val = None
@@ -346,7 +357,7 @@ class FlowMLDetection(IModule):
                     self.print(
                         "updating the scaler with the training data.", 0, 2
                     )
-                    self.scaler.partial_fit(X_flow)  # update for now
+                    self.scaler.partial_fit(X_flow)
 
                 X_flow = self.scaler.transform(X_flow)
 
@@ -793,7 +804,7 @@ class FlowMLDetection(IModule):
                 # We are testing, which means using the model to detect
                 processed_flow = self.process_flow(self.flow)
                 # After processing the flow, it may happen that we
-                # delete icmp/arp/etc so the dataframe can be empty
+                # delete icmp/arp/etc so the dataframe can be empty !!
                 if processed_flow is not None and not processed_flow.empty:
                     try:
                         original_label = processed_flow[
@@ -804,7 +815,8 @@ class FlowMLDetection(IModule):
                         # label should be the one in the config file.
                         original_label = self.ground_truth_config_label
 
-                    # Predict
+                    # Predict, normalize flows before
+                    processed_flow = self.drop_labels(processed_flow)
                     pred: numpy.ndarray = self.detect(processed_flow)
                     if not pred:
                         # an error occurred

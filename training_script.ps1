@@ -4,7 +4,6 @@
 #>
 
 
-
 param (
     [Parameter(Mandatory=$true)]
     [int]$dataset_index
@@ -29,9 +28,9 @@ function Replace-Line {
 
 # ===================== USER CONFIGURATION =========================
 
-# Meletemodel and scaler before training (only when not using pre-trained model)
-$FILE_TO_DELETE_1 = "/path/to/first/tempfile"
-$FILE_TO_DELETE_2 = "/path/to/second/tempfile"
+# Dele temodel and scaler before training (only when not using pre-trained model)
+$FILE_TO_DELETE_1 = "/modules/flowmldetection/model.bin"
+$FILE_TO_DELETE_2 = "/modules/flowmldetection/scaler.bin"
 
 # Log directory (will be created if it doesn't exist)
 $LOG_DIR = "./performance_metrics/comparison_logs"
@@ -79,7 +78,6 @@ if ($DATASETS.Count -eq 0) {
     exit 1
 }
 
-# Validate that exactly one parameter (dataset index) is provided
 if ($dataset_index -lt 0 -or $dataset_index -ge $DATASETS.Count) {
     Write-Host "Available datasets:"
     for ($i = 0; $i -lt $DATASETS.Count; $i++) {
