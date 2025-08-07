@@ -11,6 +11,7 @@ from typing import (
     Dict,
     Callable,
     List,
+    Any,
 )
 from abc import ABC, abstractmethod
 from argparse import Namespace
@@ -118,8 +119,8 @@ class IAsyncModule(ABC, Process):
         otherwise.
         """
         tracker = {}
-        for channel_name in self.channels:
-            tracker[channel_name] = {"msg_received": False}
+        for channel_name, handler in self.channels.items():
+            tracker[channel_name] = {"msg_received": False, "handler": handler}
         return tracker
 
     def is_msg_received_in_any_channel(self) -> bool:
@@ -186,6 +187,9 @@ class IAsyncModule(ABC, Process):
         returns None if no message is received
         Returns the channel and the message if a message is received
         """
+        if not self.channel_tracker:
+            return None, None
+
         try:
             msg = await self.db.get_message(self.pubsub)
             if msg:
@@ -199,10 +203,10 @@ class IAsyncModule(ABC, Process):
                 return None, None
 
         except KeyboardInterrupt:
-            return
+            return None, None
 
     async def call_msg_handler(self, channel: str, data: dict):
-        handler = self.channel_tracker[channel]
+        handler: Callable = self.channel_tracker[channel]["handler"]
         if asyncio.iscoroutinefunction(handler):
             await handler(data)
         else:
@@ -212,11 +216,10 @@ class IAsyncModule(ABC, Process):
         """
         fetches each msg from the pubsub and calls the msg handler
         """
-        if not self.channel_tracker:
-            return
-
         if msg := await self.get_msg():
             channel, data = msg
+            if msg is None or channel is None:
+                return
             await self.call_msg_handler(channel, data)
 
     def create_thread(self, func: Callable, *args, **kwargs):
@@ -274,7 +277,9 @@ class IAsyncModule(ABC, Process):
     async def setup(self):
         await self.init_db()
         await self.init(**self.init_kwargs)
-        self.channel_tracker = self.init_channel_tracker()
+        self.channel_tracker: Dict[str, Dict[str, Any]] = (
+            self.init_channel_tracker()
+        )
 
     async def _run_async(self):
         loop = asyncio.get_running_loop()

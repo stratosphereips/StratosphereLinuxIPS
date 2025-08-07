@@ -63,7 +63,8 @@ class Publisher:
 
 class FlowHandler:
     """
-    Each flow seen by slips will be a different instance of this class
+    Each flow seen by slips will use a different instance of this class
+    depending on the type of the flow (conn, dns, etc.)
     """
 
     def __init__(self, db, symbol_handler, flow):
@@ -224,7 +225,7 @@ class FlowHandler:
             self.flow.starttime, "unixtimestamp"
         )
         self.flow.starttime = epoch_time
-        self.publisher.new_software(self.profileid, self.flow)
+        await self.publisher.new_software(self.profileid, self.flow)
 
         await self.db.add_altflow(
             self.flow, self.profileid, self.twid, "benign"
@@ -232,7 +233,7 @@ class FlowHandler:
 
     async def handle_dhcp(self):
         # send this to ip_info module to get vendor info about this MAC
-        self.publisher.new_mac(
+        await self.publisher.new_mac(
             self.flow.smac or False,
             self.flow.saddr,
         )
@@ -248,7 +249,7 @@ class FlowHandler:
         )
         self.flow.starttime = epoch_time
 
-        self.publisher.new_dhcp(self.profileid, self.flow)
+        await self.publisher.new_dhcp(self.profileid, self.flow)
         for uid in self.flow.uids:
             # we're modifying the copy of self.flow
             # the goal is to store a copy of this flow for each uid in self.flow.uids
@@ -290,8 +291,8 @@ class FlowHandler:
         to_send = json.dumps(to_send)
         await self.db.publish("new_arp", to_send)
         await self.db.add_mac_addr_to_profile(self.profileid, self.flow.smac)
-        self.publisher.new_mac(self.flow.dmac, self.flow.daddr)
-        self.publisher.new_mac(self.flow.smac, self.flow.saddr)
+        await self.publisher.new_mac(self.flow.dmac, self.flow.daddr)
+        await self.publisher.new_mac(self.flow.smac, self.flow.saddr)
         await self.db.add_altflow(
             self.flow, self.profileid, self.twid, "benign"
         )

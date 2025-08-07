@@ -641,5 +641,7 @@ class EvidenceHandler(IAsyncModule):
         self.print(f"Using threshold: {green(self.detection_threshold)}")
 
     async def main(self):
-        while not self.should_stop():
-            self.dispatch_msgs()
+        """
+        nothing should run in a loop here
+        """
+        ...

@@ -246,7 +246,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # we dont wanna set the start time each time a new instance is
         # created, just once when slips starts
         if not self.slips_internal_time_set:
-            print("@@@@@@@@@@@@@@@@ setttinggg slips internal " "timee!!!!!")
             # slips internal time is the timestamp of the last tw update
             # done in slips, By default it's 0 until we receive something
             await self.set_slips_internal_time(0)
@@ -637,7 +636,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         :param channel_obj: PubSub obj of the channel
         """
         try:
-            msg = await pubsub.get_message(timeout=timeout)
+            msg = await pubsub.get_message(
+                timeout=timeout, ignore_subscribe_messages=True
+            )
             await self._track_flow_processing_rate(msg)
             return msg
         except redis.ConnectionError as ex:
