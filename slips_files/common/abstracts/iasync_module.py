@@ -73,6 +73,10 @@ class IAsyncModule(ABC, Process):
         initializes it.
         calls the __init__ of thihs class, then the init() of the module.
         """
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.set_exception_handler(cls.handle_loop_exception)
+
         # run the __init_ method of this class
         self = cls(**kwargs)
 
