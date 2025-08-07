@@ -152,12 +152,12 @@ class IAsyncModule(ABC, Process):
         self.tasks.append(task)
         return task
 
-    def handle_exception(self, loop, context):
+    def handle_task_exception(self, loop, context):
         exc = context.get("exception")
         if exc:
-            self.logger.error(f"Unhandled exception: {exc}")
+            self.print(f"Unhandled exception: {exc}")
         else:
-            self.logger.error(f"Unhandled context: {context}")
+            self.print(f"Unhandled context: {context}")
 
     def handle_loop_exception(self, loop, context):
         exception = context.get("exception")
@@ -169,46 +169,18 @@ class IAsyncModule(ABC, Process):
             except Exception:
                 self.print_traceback()
         elif exception:
-            self.logger.error(f"Unhandled loop exception: {exception}")
+            self.print(f"Unhandled loop exception: {exception}")
         else:
-            self.logger.error(
-                f"Unhandled loop error: {context.get('message')}"
-            )
+            self.print(f"Unhandled loop error: {context.get('message')}")
 
-    def handle_task_exception(self, task):
-        """
-        in asyncmodules we use Async.Task to run some of the functions
-        If an exception occurs in a coroutine that was wrapped in a Task
-        (e.g., asyncio.create_task), the exception does not crash the program
-         but remains in the task.
-        This function is used to handle the exception in the task
-        """
-        try:
-            # Access task result to raise the exception if it occurred
-            task.result()
-        except (KeyboardInterrupt, asyncio.exceptions.CancelledError):
-            pass
-        except Exception:
-            self.print_traceback()
-
-    async def gather_tasks_and_shutdown_gracefully(self):
+    async def gather_tasks_and_shutdown(self):
         await asyncio.gather(*self.tasks, return_exceptions=True)
         await self.shutdown_gracefully()
+        # each module has its own sqlite db connection. once this module is
+        # done the connection should be closed
+        self.db.close_sqlite()
 
-    def run_until_complete(self, func: Callable, *args, **kwargs):
-        """
-        If the func argument is a coroutine object it is implicitly
-        scheduled to run as a asyncio.Task.
-        Returns the Future’s result or raise its exception.
-        """
-        if not asyncio.iscoroutinefunction(func):
-            func(*args, **kwargs)
-            return
-
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(func(*args, **kwargs))
-
-    async def get_msg(self) -> None | tuple:
+    async def get_msg(self) -> tuple:
         """
         gets a msg from the pubsub and yields it
         returns None if no message is received
@@ -217,21 +189,14 @@ class IAsyncModule(ABC, Process):
         try:
             msg = await self.db.get_message(self.pubsub)
             if msg:
-                channel = msg["channel"].decode()
-                # data = msg["data"]
+                channel = msg["channel"]
                 self.channel_tracker[channel]["msg_received"] = True
                 await self.db.incr_msgs_received_in_channel(self.name, channel)
-                yield channel, msg
+                return channel, msg
             else:
                 for channel in self.channel_tracker:
                     self.channel_tracker[channel]["msg_received"] = False
-                yield None
-
-            # This is a yield point to the event loop.
-            # Forces the coroutine to yield control and give the event loop a
-            # chance to run other tasks.
-            # Prevents your loop from hogging the CPU when no message is received.
-            await asyncio.sleep(0)
+                return None, None
 
         except KeyboardInterrupt:
             return
@@ -243,16 +208,16 @@ class IAsyncModule(ABC, Process):
         else:
             handler(data)
 
-    def dispatch_msgs(self):
+    async def dispatch_msgs(self):
         """
         fetches each msg from the pubsub and calls the msg handler
         """
         if not self.channel_tracker:
             return
 
-        if msg := self.run_until_complete(self.get_msg):
+        if msg := await self.get_msg():
             channel, data = msg
-            self.run_until_complete(self.call_msg_handler, channel, data)
+            await self.call_msg_handler(channel, data)
 
     def create_thread(self, func: Callable, *args, **kwargs):
         """
@@ -260,6 +225,7 @@ class IAsyncModule(ABC, Process):
         event loop
         """
 
+        # each call to asyncio.run() creates a new, separate loop.
         def wrapper(*args, **kwargs):
             asyncio.run(func(*args, **kwargs))
 
@@ -292,7 +258,7 @@ class IAsyncModule(ABC, Process):
         """
         pass
 
-    async def pre_main(self) -> bool:
+    def pre_main(self) -> bool:
         """
         This function is for initializations that are
         executed once before the main loop
@@ -305,66 +271,55 @@ class IAsyncModule(ABC, Process):
         here will be executed in a loop
         """
 
-    def run(self):
+    async def setup(self):
+        await self.init_db()
+        await self.init(**self.init_kwargs)
+        self.channel_tracker = self.init_channel_tracker()
+
+    async def _run_async(self):
+        loop = asyncio.get_running_loop()
+        loop.set_exception_handler(self.handle_loop_exception)
+
         try:
-            error: bool = self.run_until_complete(self.pre_main)
+            await self.setup()
+            # error: bool = await self.pre_main()
+
+            if asyncio.iscoroutinefunction(self.pre_main):
+                error: bool = await self.pre_main()
+            else:
+                error: bool = self.pre_main()
+
             if error or self.should_stop():
-                self.run_until_complete(
-                    self.gather_tasks_and_shutdown_gracefully
-                )
-                return None
+                await self.gather_tasks_and_shutdown()
+                return
 
-        except KeyboardInterrupt:
-            self.run_until_complete(self.gather_tasks_and_shutdown_gracefully)
-            return None
-        except RuntimeError as e:
-            if "Event loop stopped before Future completed" in str(e):
-                self.run_until_complete(
-                    self.gather_tasks_and_shutdown_gracefully
-                )
-                return None
-        except Exception:
-            self.print_traceback()
-            return None
-
-        while True:
-            try:
+            while True:
                 if self.should_stop():
-                    self.run_until_complete(
-                        self.gather_tasks_and_shutdown_gracefully
-                    )
+                    await self.gather_tasks_and_shutdown()
                     return
 
-                self.dispatch_msgs()
+                await self.dispatch_msgs()
 
                 # if a module's main() returns 1, it means there's an
                 # error and it needs to stop immediately
-                error: bool = self.run_until_complete(self.main)
+                error: bool = await self.main()
                 if error:
-                    self.run_until_complete(
-                        self.gather_tasks_and_shutdown_gracefully
-                    )
+                    await self.gather_tasks_and_shutdown()
                     return
 
-            except KeyboardInterrupt:
-                self.keyboard_int_ctr += 1
-                if self.keyboard_int_ctr >= 2:
-                    # on the second ctrl+c Slips immediately stops
-                    return True
-                # on the first ctrl + C keep looping until the should_stop()
-                # returns true
-                continue
-            except RuntimeError as e:
-                if "Event loop stopped before Future completed" in str(e):
-                    self.run_until_complete(
-                        self.gather_tasks_and_shutdown_gracefully
-                    )
-                    return
-            except Exception:
-                self.print_traceback()
-                return
+                # This is a yield point to the event loop.
+                # Forces the coroutine to yield control and give the event loop a
+                # chance to run other tasks.
+                # Prevents your loop from hogging the CPU when no message is received.
+                await asyncio.sleep(0)
 
-    def __del__(self):
-        # each module has its own sqlite db connection. once this module is
-        # done the connection should be closed
-        self.db.close_sqlite()
+        except KeyboardInterrupt:
+            await self.gather_tasks_and_shutdown()
+        except RuntimeError as e:
+            if "Event loop stopped before Future completed" in str(e):
+                await self.gather_tasks_and_shutdown()
+        except Exception:
+            self.print_traceback()
+
+    def run(self):
+        asyncio.run(self._run_async())
