@@ -35,7 +35,6 @@ class UpdateManager(IAsyncModule):
     authors = ["Kamila Babayeva", "Alya Gomaa"]
 
     async def init(self):
-        self.should_run_in_a_loop = False
         self.read_configuration()
         # Update file manager
         # Timer to update the ThreatIntelligence files

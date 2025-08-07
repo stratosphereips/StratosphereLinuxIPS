@@ -34,9 +34,6 @@ class IAsyncModule(ABC, Process):
     # should be filled with the channels each module subscribes to and
     # their handlers
     channels = {}
-    # by default, all slips modules' main() methods run in a loop
-    # unless this is set to False in the module's init()
-    should_run_in_a_loop = True
 
     def __init__(
         self,
@@ -341,9 +338,6 @@ class IAsyncModule(ABC, Process):
 
                 self.dispatch_msgs()
 
-                if not self.should_run_in_a_loop and self.did_main_run:
-                    return
-
                 # if a module's main() returns 1, it means there's an
                 # error and it needs to stop immediately
                 error: bool = self.run_async_function(self.main)
@@ -352,7 +346,6 @@ class IAsyncModule(ABC, Process):
                         self.gather_tasks_and_shutdown_gracefully
                     )
                     return
-                self.did_main_run = True
 
             except KeyboardInterrupt:
                 self.keyboard_int_ctr += 1

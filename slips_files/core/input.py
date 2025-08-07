@@ -921,7 +921,7 @@ class Input(IAsyncModule):
         # if necessary until a free slot is available
         self.profiler_queue.put(to_send)
 
-    async def main(self):
+    async def pre_main(self):
         """
         This function is the main entry point of the input process.
         it runs in a loop.
@@ -957,9 +957,10 @@ class Input(IAsyncModule):
                 0,
                 1,
             )
-            return 1
+            return
 
-        # no logic should be put here
-        # because some of the above handlers never return
-        # e.g. interface, stdin, cyst etc.
-        return 1
+    async def main(self):
+        """
+        nothing should run in a loop in this module
+        """
+        pass
