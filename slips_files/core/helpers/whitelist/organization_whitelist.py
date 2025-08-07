@@ -45,14 +45,16 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         conf = ConfigParser()
         self.enable_local_whitelist: bool = conf.enable_local_whitelist()
 
-    def is_domain_in_org(self, domain: str, org: str):
+    async def is_domain_in_org(self, domain: str, org: str):
         """
         Checks if the given domains belongs to the given org using
         the hardcoded org domains in organizations_info/org_domains
         """
         try:
-            org_domains = json.loads(self.db.get_org_info(org, "domains"))
-            flow_tld = self.domain_analyzer.get_tld(domain)
+            org_domains = json.loads(
+                await self.db.get_org_info(org, "domains")
+            )
+            flow_tld = await self.domain_analyzer.get_tld(domain)
 
             for org_domain in org_domains:
                 org_domain_tld = self.domain_analyzer.get_tld(org_domain)
@@ -70,6 +72,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
                 # whitelist it
                 if domain in org_domain:
                     return True
+            return False
 
         except (KeyError, TypeError):
             # comes here if the whitelisted org doesn't have domains in
@@ -78,16 +81,16 @@ class OrgAnalyzer(IWhitelistAnalyzer):
             # so we don't know how to link this ip to the whitelisted org!
             return False
 
-    def is_ip_in_org(self, ip: str, org):
+    async def is_ip_in_org(self, ip: str, org):
         """
         Check if the given ip belongs to the given org
         """
         try:
-            org_subnets: dict = self.db.get_org_ips(org)
+            org_subnets: dict = await self.db.get_org_ips(org)
 
             first_octet: str = utils.get_first_octet(ip)
             if not first_octet:
-                return
+                return False
             ip_obj = ipaddress.ip_address(ip)
             # organization IPs are sorted by first octet for faster search
             for range_ in org_subnets.get(first_octet, []):
@@ -100,23 +103,23 @@ class OrgAnalyzer(IWhitelistAnalyzer):
             pass
         return False
 
-    def is_ip_asn_in_org_asn(self, ip: str, org):
+    async def is_ip_asn_in_org_asn(self, ip: str, org):
         """
         returns true if the ASN of the given IP is listed in
          the ASNs of the given org
         """
-        ip_data = self.db.get_ip_info(ip)
+        ip_data = await self.db.get_ip_info(ip)
         if not ip_data:
-            return
+            return False
 
         try:
             ip_asn = ip_data["asn"]["number"]
         except KeyError:
-            return
+            return False
 
-        return self._is_asn_in_org(ip_asn, org)
+        return await self._is_asn_in_org(ip_asn, org)
 
-    def _is_asn_in_org(self, asn: str, org: str) -> bool:
+    async def _is_asn_in_org(self, asn: str, org: str) -> bool:
         """
         returns true if the given ASN is listed in the ASNs of the given org
         """
@@ -127,10 +130,10 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         if org.upper() in asn:
             return True
 
-        org_asn: List[str] = json.loads(self.db.get_org_info(org, "asn"))
+        org_asn: List[str] = json.loads(await self.db.get_org_info(org, "asn"))
         return asn in org_asn
 
-    def is_whitelisted(self, flow) -> bool:
+    async def is_whitelisted(self, flow) -> bool:
         """checks if the given -flow- is whitelisted. not evidence/alerts."""
 
         if not self.enable_local_whitelist:
@@ -140,13 +143,13 @@ class OrgAnalyzer(IWhitelistAnalyzer):
             flow
         )
 
-        for domain in self.domain_analyzer.get_dst_domains_of_flow(flow):
+        for domain in await self.domain_analyzer.get_dst_domains_of_flow(flow):
             if self._is_part_of_a_whitelisted_org(
                 domain, IoCType.DOMAIN, Direction.DST, "flows"
             ):
                 return True
 
-        for domain in self.domain_analyzer.get_src_domains_of_flow(flow):
+        for domain in await self.domain_analyzer.get_src_domains_of_flow(flow):
             if self._is_part_of_a_whitelisted_org(
                 domain, IoCType.DOMAIN, Direction.SRC, "flows"
             ):
@@ -158,12 +161,14 @@ class OrgAnalyzer(IWhitelistAnalyzer):
             return True
 
         for ip in [flow.daddr] + flow_dns_answers:
-            if self._is_part_of_a_whitelisted_org(
+            if await self._is_part_of_a_whitelisted_org(
                 ip, IoCType.IP, Direction.DST, "flows"
             ):
                 return True
 
-    def is_ip_part_of_a_whitelisted_org(self, ip: str, org: str) -> bool:
+        return False
+
+    async def is_ip_part_of_a_whitelisted_org(self, ip: str, org: str) -> bool:
         """
         returns true if the given ip is a part of the given org
         by checking the ASN of the ip and by checking if the IP is
@@ -174,9 +179,9 @@ class OrgAnalyzer(IWhitelistAnalyzer):
             return True
 
         # search in the list of organization IPs
-        return self.is_ip_in_org(ip, org)
+        return await self.is_ip_in_org(ip, org)
 
-    def _is_part_of_a_whitelisted_org(
+    async def _is_part_of_a_whitelisted_org(
         self,
         ioc: str,
         ioc_type: IoCType,
@@ -195,7 +200,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
             if utils.is_private_ip(ioc):
                 return False
 
-        whitelisted_orgs: Dict[str, dict] = self.db.get_whitelist(
+        whitelisted_orgs: Dict[str, dict] = await self.db.get_whitelist(
             "organizations"
         )
         if not whitelisted_orgs:
@@ -216,12 +221,14 @@ class OrgAnalyzer(IWhitelistAnalyzer):
                 IoCType.DOMAIN: self.is_domain_in_org,
                 IoCType.IP: self.is_ip_part_of_a_whitelisted_org,
             }
-            if cases[ioc_type](ioc, org):
+            if await cases[ioc_type](ioc, org):
                 return True
 
         return False
 
-    def is_whitelisted_entity(self, entity: Union[Attacker, Victim]) -> bool:
+    async def is_whitelisted_entity(
+        self, entity: Union[Attacker, Victim]
+    ) -> bool:
         """
         Checks if the given attacker/victim has an ip, domain or an ASN that
         belongs to a whitelisted org
@@ -246,7 +253,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
                 if org.lower() in entity.AS.get("org", "").lower():
                     return True
 
-                if self._is_asn_in_org(entity.AS.get("number", ""), org):
+                if await self._is_asn_in_org(entity.AS.get("number", ""), org):
                     return True
 
         return False

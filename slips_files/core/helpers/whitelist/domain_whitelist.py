@@ -26,34 +26,36 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         self.enable_online_whitelist: bool = conf.enable_online_whitelist()
         self.enable_local_whitelist: bool = conf.enable_local_whitelist()
 
-    def get_domains_of_ip(self, ip: str) -> List[str]:
+    async def get_domains_of_ip(self, ip: str) -> List[str]:
         """
         returns the domains of this IP, e.g. the DNS resolution, the SNI, etc.
         """
         domains = []
-        if ip_data := self.db.get_ip_info(ip):
+        if ip_data := await self.db.get_ip_info(ip):
             if sni_info := ip_data.get("SNI", [{}])[0]:
                 domains.append(sni_info.get("server_name", ""))
 
         try:
-            resolution = self.db.get_dns_resolution(ip).get("domains", [])
+            resolution = await self.db.get_dns_resolution(ip).get(
+                "domains", []
+            )
             domains.extend(iter(resolution))
         except (KeyError, TypeError):
             pass
 
         return domains
 
-    def get_src_domains_of_flow(self, flow) -> List[str]:
-        return self.get_domains_of_ip(flow.saddr)
+    async def get_src_domains_of_flow(self, flow) -> List[str]:
+        return await self.get_domains_of_ip(flow.saddr)
 
-    def get_dst_domains_of_flow(self, flow) -> List[str]:
+    async def get_dst_domains_of_flow(self, flow) -> List[str]:
         """
         returns the domains of flow depending on the flow type
         for example, HTTP flow have their domains in the host field
         SSL flows have the host in the SNI field
         etc.
         """
-        domains: List[str] = self.get_domains_of_ip(flow.daddr)
+        domains: List[str] = await self.get_domains_of_ip(flow.daddr)
         if flow.type_ == "ssl":
             domains.append(flow.server_name)
             domains.append(flow.subject.replace("CN=", ""))
@@ -63,7 +65,7 @@ class DomainAnalyzer(IWhitelistAnalyzer):
             domains.append(flow.query)
         return domains
 
-    def is_whitelisted(
+    async def is_whitelisted(
         self, domain: str, direction: Direction, should_ignore: str
     ) -> bool:
         """
@@ -105,7 +107,7 @@ class DomainAnalyzer(IWhitelistAnalyzer):
                 # not enabled
                 return False
             whitelisted_domains: Dict[str, Dict[str, str]]
-            whitelisted_domains = self.db.get_whitelist("domains")
+            whitelisted_domains = await self.db.get_whitelist("domains")
             if parent_domain in whitelisted_domains:
                 # did the user say slips should ignore flows or alerts in the
                 # config file?
@@ -132,12 +134,12 @@ class DomainAnalyzer(IWhitelistAnalyzer):
 
         return True
 
-    def is_domain_in_tranco_list(self, domain):
+    async def is_domain_in_tranco_list(self, domain):
         """
         The Tranco list contains the top 10k known benign domains
         https://tranco-list.eu/list/X5QNN/1000000
         """
-        return self.db.is_whitelisted_tranco_domain(domain)
+        return await self.db.is_whitelisted_tranco_domain(domain)
 
     @staticmethod
     def get_tld(url: str):
