@@ -118,14 +118,6 @@ class ProcessManager:
             1,
             0,
         )
-        print(
-            f"@@@@@@@@@@@@@@@@ before storing the pid [main]"
-            f"{id(self.main.db.rdb.r)}"
-        )
-        print(
-            f"@@@@@@@@@@@@@@@@ before storing the pid [profiler] "
-            f"{id(profiler_process.db.rdb.r)}"
-        )
         await self.main.db.store_pid("Profiler", int(profiler_process.pid))
         return profiler_process
 
@@ -471,10 +463,6 @@ class ProcessManager:
                     ppid=self.main.pid,
                 )
 
-                print(
-                    f"@@@@@@@@@@@@@@@@ ok created update amanager "
-                    f"{update_manager}"
-                )
                 if local_files:
                     await update_manager.update_local_files_before_module_starts()
 

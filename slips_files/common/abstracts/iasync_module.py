@@ -73,31 +73,6 @@ class IAsyncModule(ABC, Process):
         initializes it.
         calls the __init__ of thihs class, then the init() of the module.
         """
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.set_exception_handler(cls.handle_loop_exception)
-
-        # run the __init_ method of this class
-        self = cls(**kwargs)
-
-        try:
-            await self.init_db()
-            await self.init(**self.init_kwargs)
-            self.channel_tracker = self.init_channel_tracker()
-            return self
-
-        except KeyboardInterrupt:
-            await self.gather_tasks_and_shutdown_gracefully()
-            return None
-
-        except RuntimeError as e:
-            if "Event loop stopped before Future completed" in str(e):
-                await self.gather_tasks_and_shutdown_gracefully()
-                return None
-
-        except Exception:
-            self.print_traceback()
-            return None
 
     async def init_db(self):
         self.db = await DBManager.create(
@@ -173,7 +148,7 @@ class IAsyncModule(ABC, Process):
         # Allow the event loop to run the scheduled task
         # await asyncio.sleep(0)
 
-        # to wait for these functions before this module shuts down
+        # Remember to await these functions before this module shuts down
         self.tasks.append(task)
         return task
 
