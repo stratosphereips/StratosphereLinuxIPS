@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import asyncio
 import importlib
 import inspect
 import os
@@ -33,10 +32,7 @@ import multiprocessing
 import modules
 from modules.update_manager.update_manager import UpdateManager
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.imodule import (
-    IModule,
-)
-
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 from slips_files.common.style import green
 from slips_files.core.evidence_handler import EvidenceHandler
 from slips_files.core.input import Input
@@ -103,7 +99,7 @@ class ProcessManager:
         return output_process
 
     async def start_profiler_process(self):
-        profiler_process = Profiler(
+        profiler_process = await Profiler.create(
             logger=self.main.logger,
             output_dir=self.main.args.output,
             redis_port=self.main.redis_port,
@@ -122,19 +118,28 @@ class ProcessManager:
             1,
             0,
         )
+        print(
+            f"@@@@@@@@@@@@@@@@ before storing the pid [main]"
+            f"{id(self.main.db.rdb.r)}"
+        )
+        print(
+            f"@@@@@@@@@@@@@@@@ before storing the pid [profiler] "
+            f"{id(profiler_process.db.rdb.r)}"
+        )
         await self.main.db.store_pid("Profiler", int(profiler_process.pid))
         return profiler_process
 
     async def start_evidence_process(self):
-        evidence_process = EvidenceHandler(
-            self.main.logger,
-            self.main.args.output,
-            self.main.redis_port,
-            self.evidence_handler_termination_event,
-            self.main.args,
-            self.main.conf,
-            self.main.pid,
+        evidence_process = await EvidenceHandler.create(
+            logger=self.main.logger,
+            output_dir=self.main.args.output,
+            redis_port=self.main.redis_port,
+            termination_event=self.evidence_handler_termination_event,
+            slips_args=self.main.args,
+            conf=self.main.conf,
+            ppid=self.main.pid,
         )
+
         evidence_process.start()
         self.main.print(
             f'Started {green("Evidence Process")} '
@@ -148,7 +153,7 @@ class ProcessManager:
         return evidence_process
 
     async def start_input_process(self):
-        input_process = Input(
+        input_process = await Input.create(
             logger=self.main.logger,
             output_dir=self.main.args.output,
             redis_port=self.main.redis_port,
@@ -335,7 +340,7 @@ class ProcessManager:
         for member_name, member_object in inspect.getmembers(module):
             if inspect.isclass(member_object):
                 if issubclass(
-                    member_object, IModule
+                    member_object, IAsyncModule
                 ) and not self.is_abstract_module(member_object):
                     plugins[member_object.name] = {
                         "obj": member_object,
@@ -394,15 +399,19 @@ class ProcessManager:
         """responsible for starting all the modules in the modules/ dir"""
         modules_to_call = self.get_modules()[0]
         for module_name in modules_to_call:
+            # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+            if module_name.replace(" ", "") != "HTTP Analyzer":
+                continue
+
             module_class = modules_to_call[module_name]["obj"]
-            module = module_class(
-                self.main.logger,
-                self.main.args.output,
-                self.main.redis_port,
-                self.termination_event,
-                self.main.args,
-                self.main.conf,
-                self.main.pid,
+            module = await module_class.create(
+                logger=self.main.logger,
+                output_dir=self.main.args.output,
+                redis_port=self.main.redis_port,
+                termination_event=self.termination_event,
+                slips_args=self.main.args,
+                conf=self.main.conf,
+                ppid=self.main.pid,
             )
             module.start()
             await self.main.db.store_pid(module_name, int(module.pid))
@@ -452,16 +461,19 @@ class ProcessManager:
             with Lock(name="slips_ports_and_orgs"):
                 # pass a dummy termination event for update manager to
                 # update orgs and ports info
-                update_manager = UpdateManager(
-                    self.main.logger,
-                    self.main.args.output,
-                    self.main.redis_port,
-                    multiprocessing.Event(),
-                    self.main.args,
-                    self.main.conf,
-                    self.main.pid,
+                update_manager = await UpdateManager.create(
+                    logger=self.main.logger,
+                    output_dir=self.main.args.output,
+                    redis_port=self.main.redis_port,
+                    termination_event=multiprocessing.Event(),
+                    slips_args=self.main.args,
+                    conf=self.main.conf,
+                    ppid=self.main.pid,
                 )
-
+                print(
+                    f"@@@@@@@@@@@@@@@@ ok created update amanager "
+                    f"{update_manager}"
+                )
                 if local_files:
                     await update_manager.update_ports_info()
                     await update_manager.update_org_files()
@@ -469,7 +481,7 @@ class ProcessManager:
 
                 if ti_feeds:
                     update_manager.print("Updating TI feeds")
-                    asyncio.run(await update_manager.update_ti_files())
+                    await update_manager.update_ti_files()
 
         except CannotAcquireLock:
             # another instance of slips is updating ports and orgs
@@ -768,7 +780,7 @@ class ProcessManager:
                 self.main.daemon.delete_pidfile()
 
             else:
-                flows_count: int = await self.main.db.get_flows_count()
+                flows_count: int = self.main.db.get_flows_count()
                 print(
                     f"Total flows read (without altflows): " f"{flows_count}",
                     log_to_logfiles_only=True,
