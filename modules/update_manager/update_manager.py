@@ -1668,7 +1668,7 @@ class UpdateManager(IAsyncModule):
                 )
         self.loaded_ti_files -= 1
 
-    def handle_exception(self, task):
+    def handle_task_exception(self, task):
         """
         in asyncmodules we use Async.Task to run some of the functions
         If an exception occurs in a coroutine that was wrapped in a Task
@@ -1742,7 +1742,7 @@ class UpdateManager(IAsyncModule):
                     task = asyncio.create_task(
                         self.update_ti_file(file_to_download)
                     )
-                    task.add_done_callback(self.handle_exception)
+                    task.add_done_callback(self.handle_task_exception)
             #######################################################
             # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
             # check if we have a username and api key and a week has passed since we last updated
@@ -1772,7 +1772,7 @@ class UpdateManager(IAsyncModule):
         # create_task is used to run update() function
         # concurrently instead of serially
         self.update_finished: Task = asyncio.create_task(self.update())
-        self.update_finished.add_done_callback(self.handle_exception)
+        self.update_finished.add_done_callback(self.handle_task_exception)
 
         await self.update_finished
         self.print(

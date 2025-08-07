@@ -75,8 +75,6 @@ class IAsyncModule(ABC, Process):
         """
         # run the __init_ method of this class
         self = cls(**kwargs)
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
 
         try:
             await self.init_db()
@@ -166,7 +164,7 @@ class IAsyncModule(ABC, Process):
         exceptions. because asyncio Tasks do not raise exceptions
         """
         task = asyncio.create_task(func(*args))
-        task.add_done_callback(self.handle_exception)
+        task.add_done_callback(self.handle_task_exception)
 
         # Allow the event loop to run the scheduled task
         # await asyncio.sleep(0)
@@ -175,7 +173,30 @@ class IAsyncModule(ABC, Process):
         self.tasks.append(task)
         return task
 
-    def handle_exception(self, task):
+    def handle_exception(self, loop, context):
+        exc = context.get("exception")
+        if exc:
+            self.logger.error(f"Unhandled exception: {exc}")
+        else:
+            self.logger.error(f"Unhandled context: {context}")
+
+    def handle_loop_exception(self, loop, context):
+        exception = context.get("exception")
+        future = context.get("future")
+
+        if future:
+            try:
+                future.result()
+            except Exception:
+                self.print_traceback()
+        elif exception:
+            self.logger.error(f"Unhandled loop exception: {exception}")
+        else:
+            self.logger.error(
+                f"Unhandled loop error: {context.get('message')}"
+            )
+
+    def handle_task_exception(self, task):
         """
         in asyncmodules we use Async.Task to run some of the functions
         If an exception occurs in a coroutine that was wrapped in a Task
@@ -195,7 +216,7 @@ class IAsyncModule(ABC, Process):
         await asyncio.gather(*self.tasks, return_exceptions=True)
         await self.shutdown_gracefully()
 
-    def run_async_function(self, func: Callable, *args, **kwargs):
+    def run_until_complete(self, func: Callable, *args, **kwargs):
         """
         If the func argument is a coroutine object it is implicitly
         scheduled to run as a asyncio.Task.
@@ -206,7 +227,6 @@ class IAsyncModule(ABC, Process):
             return
 
         loop = asyncio.get_event_loop()
-        loop.set_exception_handler(self.handle_exception)
         return loop.run_until_complete(func(*args, **kwargs))
 
     async def get_msg(self) -> None | tuple:
@@ -251,9 +271,9 @@ class IAsyncModule(ABC, Process):
         if not self.channel_tracker:
             return
 
-        if msg := self.run_async_function(self.get_msg):
+        if msg := self.run_until_complete(self.get_msg):
             channel, data = msg
-            self.run_async_function(self.call_msg_handler, channel, data)
+            self.run_until_complete(self.call_msg_handler, channel, data)
 
     def create_thread(self, func: Callable, *args, **kwargs):
         """
@@ -308,19 +328,19 @@ class IAsyncModule(ABC, Process):
 
     def run(self):
         try:
-            error: bool = self.run_async_function(self.pre_main)
+            error: bool = self.run_until_complete(self.pre_main)
             if error or self.should_stop():
-                self.run_async_function(
+                self.run_until_complete(
                     self.gather_tasks_and_shutdown_gracefully
                 )
                 return None
 
         except KeyboardInterrupt:
-            self.run_async_function(self.gather_tasks_and_shutdown_gracefully)
+            self.run_until_complete(self.gather_tasks_and_shutdown_gracefully)
             return None
         except RuntimeError as e:
             if "Event loop stopped before Future completed" in str(e):
-                self.run_async_function(
+                self.run_until_complete(
                     self.gather_tasks_and_shutdown_gracefully
                 )
                 return None
@@ -331,7 +351,7 @@ class IAsyncModule(ABC, Process):
         while True:
             try:
                 if self.should_stop():
-                    self.run_async_function(
+                    self.run_until_complete(
                         self.gather_tasks_and_shutdown_gracefully
                     )
                     return
@@ -340,9 +360,9 @@ class IAsyncModule(ABC, Process):
 
                 # if a module's main() returns 1, it means there's an
                 # error and it needs to stop immediately
-                error: bool = self.run_async_function(self.main)
+                error: bool = self.run_until_complete(self.main)
                 if error:
-                    self.run_async_function(
+                    self.run_until_complete(
                         self.gather_tasks_and_shutdown_gracefully
                     )
                     return
@@ -357,7 +377,7 @@ class IAsyncModule(ABC, Process):
                 continue
             except RuntimeError as e:
                 if "Event loop stopped before Future completed" in str(e):
-                    self.run_async_function(
+                    self.run_until_complete(
                         self.gather_tasks_and_shutdown_gracefully
                     )
                     return
