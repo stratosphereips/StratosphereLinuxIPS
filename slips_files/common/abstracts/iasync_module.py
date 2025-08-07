@@ -40,13 +40,13 @@ class IAsyncModule(ABC, Process):
 
     def __init__(
         self,
-        logger: Output,
-        output_dir,
-        redis_port,
-        termination_event,
-        slips_args,
-        conf,
-        ppid: int,
+        logger: Output = None,
+        output_dir=None,
+        redis_port=None,
+        termination_event=None,
+        slips_args=None,
+        conf=None,
+        ppid: int = None,
         **kwargs,
     ):
         Process.__init__(self)
@@ -70,9 +70,11 @@ class IAsyncModule(ABC, Process):
         self.init_kwargs = kwargs
 
     @classmethod
-    def create(cls, **kwargs):
+    async def create(cls, **kwargs):
         """
-        Creates an instance of the module and initializes it.
+        Factory mehtod that creates an instance of the module and
+        initializes it.
+        calls the __init__ of thihs class, then the init() of the module.
         """
         # run the __init_ method of this class
         self = cls(**kwargs)
@@ -80,31 +82,23 @@ class IAsyncModule(ABC, Process):
         asyncio.set_event_loop(loop)
 
         try:
-            self.run_async_function(self.init_db)
-            self.run_async_function(self.init, **self.init_kwargs)
+            await self.init_db()
+            await self.init(**self.init_kwargs)
             self.channel_tracker = self.init_channel_tracker()
-
-            error: bool = self.run_async_function(self.pre_main)
-            if error or self.should_stop():
-                self.run_async_function(
-                    self.gather_tasks_and_shutdown_gracefully
-                )
-                return None
+            return self
 
         except KeyboardInterrupt:
-            self.run_async_function(self.gather_tasks_and_shutdown_gracefully)
+            await self.gather_tasks_and_shutdown_gracefully()
             return None
+
         except RuntimeError as e:
             if "Event loop stopped before Future completed" in str(e):
-                self.run_async_function(
-                    self.gather_tasks_and_shutdown_gracefully
-                )
+                await self.gather_tasks_and_shutdown_gracefully()
                 return None
+
         except Exception:
             self.print_traceback()
             return None
-
-        return self
 
     async def init_db(self):
         self.db = await DBManager.create(
@@ -316,6 +310,27 @@ class IAsyncModule(ABC, Process):
         """
 
     def run(self):
+        try:
+            error: bool = self.run_async_function(self.pre_main)
+            if error or self.should_stop():
+                self.run_async_function(
+                    self.gather_tasks_and_shutdown_gracefully
+                )
+                return None
+
+        except KeyboardInterrupt:
+            self.run_async_function(self.gather_tasks_and_shutdown_gracefully)
+            return None
+        except RuntimeError as e:
+            if "Event loop stopped before Future completed" in str(e):
+                self.run_async_function(
+                    self.gather_tasks_and_shutdown_gracefully
+                )
+                return None
+        except Exception:
+            self.print_traceback()
+            return None
+
         while True:
             try:
                 if self.should_stop():
