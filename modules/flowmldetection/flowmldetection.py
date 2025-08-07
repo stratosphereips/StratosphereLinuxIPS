@@ -13,7 +13,7 @@ import warnings
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -39,7 +39,7 @@ def warn(*args, **kwargs):
 warnings.warn = warn
 
 
-class FlowMLDetection(IModule):
+class FlowMLDetection(IAsyncModule):
     # Name: short name of the module. Do not use spaces
     name = "Flow ML Detection"
     description = (

@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from typing import (
-    Optional,
     Dict,
     List,
     Union,
@@ -42,6 +41,7 @@ class Whitelist:
         self.domain_analyzer = DomainAnalyzer(self.db, whitelist_manager=self)
         self.mac_analyzer = MACAnalyzer(self.db, whitelist_manager=self)
         self.org_analyzer = OrgAnalyzer(self.db, whitelist_manager=self)
+
         self.read_configuration()
 
     def read_configuration(self):
@@ -123,7 +123,7 @@ class Whitelist:
             return True
         return False
 
-    def is_whitelisted_flow(self, flow) -> bool:
+    async def is_whitelisted_flow(self, flow) -> bool:
         """
         Checks if the src IP, dst IP, domain, dns answer, or organization
          of this flow is whitelisted.
@@ -140,9 +140,9 @@ class Whitelist:
         if self.match.is_ignored_flow_type(flow.type_):
             return False
 
-        return self.org_analyzer.is_whitelisted(flow)
+        return await self.org_analyzer.is_whitelisted(flow)
 
-    def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
+    def get_all_whitelist(self) -> None | Dict[str, dict]:
         """
         returns the whitelisted ips, domains, org from the db
         returns a dict with the following keys
@@ -209,7 +209,7 @@ class Whitelist:
         unique_domains = set(sni + queries + cnames + entity_domain)
         return unique_domains
 
-    def _is_whitelisted_entity(
+    async def _is_whitelisted_entity(
         self, evidence: Evidence, entity_type: str
     ) -> bool:
         """
@@ -241,7 +241,7 @@ class Whitelist:
         ):
             return True
 
-        if self.org_analyzer.is_whitelisted_entity(entity):
+        if await self.org_analyzer.is_whitelisted_entity(entity):
             return True
 
         return False

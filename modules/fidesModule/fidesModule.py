@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 from slips_files.common.parsers.config_parser import (
     ConfigParser,
 )
@@ -32,7 +32,7 @@ from ..fidesModule.persistence.trust_db import SlipsTrustDatabase
 from ..fidesModule.persistence.sqlite_db import SQLiteDB
 
 
-class FidesModule(IModule):
+class FidesModule(IAsyncModule):
     """
     This module ony runs when slips is running on an interface
     """

@@ -12,7 +12,7 @@ from modules.arp.filter import ARPEvidenceFilter
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -26,7 +26,7 @@ from slips_files.core.structures.evidence import (
 )
 
 
-class ARP(IModule):
+class ARP(IAsyncModule):
 
     name = "ARP"
     description = "Detect ARP attacks"

@@ -4,14 +4,14 @@ from pathlib import Path
 
 
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 import json
 import os
 import subprocess
 import yaml
 
 
-class IrisModule(IModule):
+class IrisModule(IAsyncModule):
     # Name: short name of the module. Do not use spaces
     name = "Iris"
     description = "Global P2P module cooperating with Fides"

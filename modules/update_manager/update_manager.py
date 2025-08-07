@@ -34,7 +34,8 @@ class UpdateManager(IAsyncModule):
     description = "Update Threat Intelligence files"
     authors = ["Kamila Babayeva", "Alya Gomaa"]
 
-    def init(self):
+    async def init(self):
+        self.should_run_in_a_loop = False
         self.read_configuration()
         # Update file manager
         # Timer to update the ThreatIntelligence files
@@ -1813,7 +1814,7 @@ class UpdateManager(IAsyncModule):
             # whitelists and mac db
             return 1
 
-    def main(self):
+    async def main(self):
         """
         nothing should run in a loop in this module
         """

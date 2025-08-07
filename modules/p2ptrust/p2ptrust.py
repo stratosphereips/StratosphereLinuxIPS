@@ -11,7 +11,7 @@ import socket
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 import modules.p2ptrust.trust.base_model as reputation_model
 import modules.p2ptrust.utils.utils as p2p_utils
 from modules.p2ptrust.utils.go_director import GoDirector
@@ -65,7 +65,7 @@ def validate_slips_data(message_data: str) -> (str, int):
         return None
 
 
-class Trust(IModule):
+class Trust(IAsyncModule):
     name = "P2P Trust"
     description = "Enables sharing detection data with other Slips instances"
     authors = ["Dita", "Alya Gomaa"]

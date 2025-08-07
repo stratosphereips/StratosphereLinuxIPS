@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 import socket
 import json
 import os
@@ -15,7 +15,7 @@ from slips_files.core.structures.alerts import (
 )
 
 
-class Module(IModule):
+class Module(IAsyncModule):
     # Name: short name of the module. Do not use spaces
     name = "CYST"
     description = "Communicates with CYST simulation framework"

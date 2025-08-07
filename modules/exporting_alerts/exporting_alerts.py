@@ -5,10 +5,10 @@ import json
 from modules.exporting_alerts.slack_exporter import SlackExporter
 from modules.exporting_alerts.stix_exporter import StixExporter
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 
 
-class ExportingAlerts(IModule):
+class ExportingAlerts(IAsyncModule):
     """
     Module to export alerts to slack and/or STIX
     You need to have the token in your environment

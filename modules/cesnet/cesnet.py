@@ -9,7 +9,7 @@ import ipaddress
 import validators
 
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 from slips_files.core.structures.evidence import (
     ThreatLevel,
     Evidence,
@@ -22,7 +22,7 @@ from slips_files.common.idea_format import (
 )
 
 
-class CESNET(IModule):
+class CESNET(IAsyncModule):
     name = "CESNET"
     description = "Send and receive alerts from warden servers."
     authors = ["Alya Gomaa"]

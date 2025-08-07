@@ -10,13 +10,13 @@ from typing import Dict
 import time
 from threading import Lock
 
-from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 from slips_files.common.slips_utils import utils
 from .exec_iptables_cmd import exec_iptables_command
 from modules.blocking.unblocker import Unblocker
 
 
-class Blocking(IModule):
+class Blocking(IAsyncModule):
     """Data should be passed to this module as a json encoded python dict,
     by default this module flushes all slipsBlocking chains before it starts"""
 

@@ -672,15 +672,4 @@ class HTTPAnalyzer(IAsyncModule):
         self.create_task(self.check_non_http_port_80_conns, twid, flow)
 
     async def main(self):
-        msg = await self.db.get_message(self.pubsub)
-        if msg:
-            channel = msg["channel"].decode()
-            data = msg["data"]
-            handler = self.channel_tracker[channel]
-            if asyncio.iscoroutinefunction(handler):
-                await handler(data)
-            else:
-                handler(data)
-        await asyncio.sleep(0)
-
         self.remove_old_entries_from_http_recognized_flows()

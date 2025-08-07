@@ -7,10 +7,10 @@ from typing import Optional
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 
 
-class RiskIQ(IModule):
+class RiskIQ(IAsyncModule):
     # Name: short name of the module. Do not use spaces
     name = "Risk IQ"
     description = "Module to get passive DNS info about IPs from RiskIQ"

@@ -14,11 +14,11 @@
 
 
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 import json
 
 
-class Template(IModule):
+class Template(IAsyncModule):
     # Name: short name of the module. Do not use spaces
     name = "Template"
     description = "Template module"

@@ -12,11 +12,11 @@ import validators
 
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 from slips_files.common.slips_utils import utils
 
 
-class VT(IModule):
+class VT(IAsyncModule):
     name = "Virustotal"
     description = "IP, domain and file hash lookup on Virustotal"
     authors = [
