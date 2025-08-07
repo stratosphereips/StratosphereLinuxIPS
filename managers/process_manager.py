@@ -99,7 +99,7 @@ class ProcessManager:
         return output_process
 
     async def start_profiler_process(self):
-        profiler_process = await Profiler.create(
+        profiler_process = Profiler(
             logger=self.main.logger,
             output_dir=self.main.args.output,
             redis_port=self.main.redis_port,
@@ -130,7 +130,7 @@ class ProcessManager:
         return profiler_process
 
     async def start_evidence_process(self):
-        evidence_process = await EvidenceHandler.create(
+        evidence_process = EvidenceHandler(
             logger=self.main.logger,
             output_dir=self.main.args.output,
             redis_port=self.main.redis_port,
@@ -153,7 +153,7 @@ class ProcessManager:
         return evidence_process
 
     async def start_input_process(self):
-        input_process = await Input.create(
+        input_process = Input(
             logger=self.main.logger,
             output_dir=self.main.args.output,
             redis_port=self.main.redis_port,
@@ -404,7 +404,7 @@ class ProcessManager:
                 continue
 
             module_class = modules_to_call[module_name]["obj"]
-            module = await module_class.create(
+            module = module_class(
                 logger=self.main.logger,
                 output_dir=self.main.args.output,
                 redis_port=self.main.redis_port,
@@ -461,7 +461,7 @@ class ProcessManager:
             with Lock(name="slips_ports_and_orgs"):
                 # pass a dummy termination event for update manager to
                 # update orgs and ports info
-                update_manager = await UpdateManager.create(
+                update_manager = UpdateManager(
                     logger=self.main.logger,
                     output_dir=self.main.args.output,
                     redis_port=self.main.redis_port,
@@ -470,19 +470,16 @@ class ProcessManager:
                     conf=self.main.conf,
                     ppid=self.main.pid,
                 )
+
                 print(
                     f"@@@@@@@@@@@@@@@@ ok created update amanager "
                     f"{update_manager}"
                 )
                 if local_files:
-                    await update_manager.update_ports_info()
-                    await update_manager.update_org_files()
-                    await update_manager.update_local_whitelist()
+                    await update_manager.update_local_files_before_module_starts()
 
                 if ti_feeds:
-                    update_manager.print("Updating TI feeds")
-                    await update_manager.update_ti_files()
-
+                    await update_manager.update_ti_feeds_before_module_starts()
         except CannotAcquireLock:
             # another instance of slips is updating ports and orgs
             return
