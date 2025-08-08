@@ -32,7 +32,7 @@ class MACAnalyzer(IWhitelistAnalyzer):
 
         return validators.mac_address(mac)
 
-    def profile_has_whitelisted_mac(
+    async def profile_has_whitelisted_mac(
         self, profile_ip, direction: Direction, what_to_ignore: str
     ) -> bool:
         """
@@ -44,13 +44,15 @@ class MACAnalyzer(IWhitelistAnalyzer):
         if not self.ip_analyzer.is_valid_ip(profile_ip):
             return False
 
-        mac: str = self.db.get_mac_addr_from_profile(f"profile_{profile_ip}")
+        mac: str = await self.db.get_mac_addr_from_profile(
+            f"profile_{profile_ip}"
+        )
         if not mac:
             return False
 
-        return self.is_whitelisted(mac, direction, what_to_ignore)
+        return await self.is_whitelisted(mac, direction, what_to_ignore)
 
-    def is_whitelisted(
+    async def is_whitelisted(
         self, mac: str, direction: Direction, what_to_ignore: str
     ):
         """
@@ -65,7 +67,7 @@ class MACAnalyzer(IWhitelistAnalyzer):
         if not self.is_valid_mac(mac):
             return False
 
-        whitelisted_macs: Dict[str, dict] = self.db.get_whitelist("macs")
+        whitelisted_macs: Dict[str, dict] = await self.db.get_whitelist("macs")
         if mac not in whitelisted_macs:
             return False
 

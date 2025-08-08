@@ -189,7 +189,7 @@ class Profiler(IAsyncModule, IObservable):
             self.print(f"Used client IPs: {green(', '.join(client_ips))}")
         self.start_profiler_threads()
 
-    def new_reload_whitelist_msg_handler(self):
+    async def new_reload_whitelist_msg_handler(self):
         """
         listen on reload_whitelist channel in case whitelist.conf is changed,
         we need to process the new changes
@@ -200,7 +200,7 @@ class Profiler(IAsyncModule, IObservable):
         otherwise this channel will get a msg only when
         whitelist.conf is modified and saved to disk
         """
-        self.whitelist.update()
+        await self.whitelist.update()
 
     def mark_process_as_done_processing(self):
         """

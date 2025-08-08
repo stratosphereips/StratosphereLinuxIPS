@@ -94,7 +94,7 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         # tranco domains.
         # but domains taken from whitelist.conf have their own direction
         # and type
-        if self.is_domain_in_tranco_list(parent_domain):
+        if await self.is_domain_in_tranco_list(parent_domain):
             if not self.enable_online_whitelist:
                 # domain is in the tranco whitelist, but the it's whitelist
                 # not enabled

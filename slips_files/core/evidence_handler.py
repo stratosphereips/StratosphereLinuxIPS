@@ -524,7 +524,7 @@ class EvidenceHandler(IAsyncModule):
         # unprocessed evidence.
         await self.db.mark_evidence_as_processed(evidence.id)
 
-        if self.whitelist.is_whitelisted_evidence(evidence):
+        if await self.whitelist.is_whitelisted_evidence(evidence):
             await self.db.cache_whitelisted_evidence_id(evidence.id)
             # Modules add evidence to the db before
             # reaching this point, now remove evidence from db so

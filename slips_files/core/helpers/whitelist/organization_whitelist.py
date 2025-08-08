@@ -144,18 +144,18 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         )
 
         for domain in await self.domain_analyzer.get_dst_domains_of_flow(flow):
-            if self._is_part_of_a_whitelisted_org(
+            if await self._is_part_of_a_whitelisted_org(
                 domain, IoCType.DOMAIN, Direction.DST, "flows"
             ):
                 return True
 
         for domain in await self.domain_analyzer.get_src_domains_of_flow(flow):
-            if self._is_part_of_a_whitelisted_org(
+            if await self._is_part_of_a_whitelisted_org(
                 domain, IoCType.DOMAIN, Direction.SRC, "flows"
             ):
                 return True
 
-        if self._is_part_of_a_whitelisted_org(
+        if await self._is_part_of_a_whitelisted_org(
             flow.saddr, IoCType.IP, Direction.SRC, "flows"
         ):
             return True
@@ -234,13 +234,13 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         belongs to a whitelisted org
         """
         for ip in self.manager.extract_ips_from_entity(entity):
-            if self._is_part_of_a_whitelisted_org(
+            if await self._is_part_of_a_whitelisted_org(
                 ip, IoCType.IP, entity.direction, "alerts"
             ):
                 return True
 
         for domain in self.manager.extract_domains_from_entity(entity):
-            if self._is_part_of_a_whitelisted_org(
+            if await self._is_part_of_a_whitelisted_org(
                 domain,
                 IoCType.DOMAIN,
                 Direction.DST,  # domains are always dst

@@ -37,7 +37,7 @@ class IPAnalyzer(IWhitelistAnalyzer):
         except ValueError:
             return False
 
-    def is_whitelisted(
+    async def is_whitelisted(
         self, ip: str, direction: Direction, what_to_ignore: str
     ) -> bool:
         """
@@ -52,7 +52,7 @@ class IPAnalyzer(IWhitelistAnalyzer):
         if not self.is_valid_ip(ip):
             return False
 
-        whitelisted_ips: Dict[str, dict] = self.db.get_whitelist("IPs")
+        whitelisted_ips: Dict[str, dict] = await self.db.get_whitelist("IPs")
 
         if ip not in whitelisted_ips:
             return False

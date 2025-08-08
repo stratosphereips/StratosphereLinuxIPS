@@ -143,12 +143,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         conf=None,
         args=None,
     ):
-        """
-        :kwarg is_first_db_instance_ever: should be set to True when
-        starting the dbmanager the first time ever in slips, if True,
-        it starts the redis server, sets slips start time, and other
-        initializations that should be done only once.
-        """
         self.redis_port = redis_port
         self.flush_db = flush_db
         self.start_redis_server = start_redis_server
@@ -243,6 +237,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             )
 
     async def _init_internal_timestamps(self):
+        """sets slips internal time and slips start time"""
         # we dont wanna set the start time each time a new instance is
         # created, just once when slips starts
         if not self.slips_internal_time_set:
@@ -438,7 +433,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         )
 
     async def _set_slips_start_time(self):
-        """store the time slips started (datetime obj)"""
+        """store the time slips started"""
         now = time.time()
         await self.r.set(self.constants.SLIPS_START_TIME, now)
 

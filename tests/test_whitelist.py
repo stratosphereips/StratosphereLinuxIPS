@@ -86,7 +86,7 @@ def test_get_src_domains_of_flow():
     flow = Mock()
     flow.saddr = "5.6.7.8"
 
-    src_domains = whitelist.domain_analyzer.get_src_domains_of_flow(flow)
+    src_domains = await whitelist.domain_analyzer.get_src_domains_of_flow(flow)
     assert "sni.com" in src_domains
     assert "dns_resolution.com" in src_domains
 
