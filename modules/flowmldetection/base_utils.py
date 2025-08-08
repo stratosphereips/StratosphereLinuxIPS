@@ -1,7 +1,9 @@
 # base_utils.py
 
+import ast
 import os
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -22,22 +24,47 @@ def parse_training_log_line(line):
         }
       }
     """
-    # split on commas, then on colons/braces
-    parts = line.strip().split(";")[0].split(", ")
-    data = {}
-    # Total labels, testing size we ignore here
-    for part in parts:
-        if part.startswith("Seen labels:"):
-            seen = eval(part.split(":", 1)[1].strip())
-            data["seen"] = seen
-        elif part.startswith("Predicted labels:"):
-            pred = eval(part.split(":", 1)[1].strip())
-            data["predicted"] = pred
-        elif part.startswith("Per-class metrics:"):
-            pcm = eval(part.split(":", 1)[1].strip())
-            data["per_class"] = pcm
-    # derive batch number by counting previous calls, or embed if log includes it
-    return data
+    result = {}
+
+    try:
+        # Extract Total labels
+        if "Total labels:" in line:
+            total_str = line.split("Total labels:", 1)[1].split(",")[0].strip()
+            result["total_labels"] = float(total_str)
+
+        # Extract Testing size
+        if "Testing size:" in line:
+            test_str = line.split("Testing size:", 1)[1].split(",")[0].strip()
+            result["testing_size"] = int(test_str)
+
+        # Extract Seen labels
+        if "Seen labels:" in line:
+            seen_str = (
+                line.split("Seen labels:", 1)[1]
+                .split(", Predicted labels:")[0]
+                .strip()
+            )
+            result["seen"] = ast.literal_eval(seen_str)
+
+        # Extract Predicted labels
+        if "Predicted labels:" in line:
+            pred_str = (
+                line.split("Predicted labels:", 1)[1]
+                .split(", Per-class metrics:")[0]
+                .strip()
+            )
+            result["predicted"] = ast.literal_eval(pred_str)
+
+        # Extract Per-class metrics
+        if "Per-class metrics:" in line:
+            per_class_str = line.split("Per-class metrics:", 1)[1].strip()
+            result["per_class"] = ast.literal_eval(per_class_str)
+
+    except Exception as e:
+        print(f"Failed to parse log line: {e}")
+        return None
+
+    return result
 
 
 def parse_testing_log_line(line):
@@ -98,21 +125,17 @@ def compute_multi_metrics(per_class):
     accuracy = (
         (TP + TN) / (TP + TN + FP + FN) if TP + TN + FP + FN > 0 else 0.0
     )
+    prec = TP / (TP + FP) if TP + FP > 0 else 0.0
+    rec = TP / (TP + FN) if TP + FN > 0 else 0.0
+    f1 = (2 * prec * rec) / (prec + rec) if prec + rec > 0 else 0.0
     return {
         "accuracy": accuracy,
         "macro_precision": np.mean(precisions),
         "macro_recall": np.mean(recalls),
         "macro_f1": np.mean(f1s),
-        "micro_precision": TP / (TP + FP) if TP + FP > 0 else 0.0,
-        "micro_recall": TP / (TP + FN) if TP + FN > 0 else 0.0,
-        "micro_f1": (
-            2
-            * (TP / (TP + FP))
-            * (TP / (TP + FN))
-            / ((TP / (TP + FP)) + (TP / (TP + FN)))
-            if TP + FP > 0 and TP + FN > 0
-            else 0.0
-        ),
+        "micro_precision": prec,
+        "micro_recall": rec,
+        "micro_f1": f1,
     }
 
 
@@ -142,3 +165,59 @@ def compute_binary_metrics(binary_counts_dict):
         "recall": recall,
         "f1": f1,
     }
+
+
+def plot_major_metrics_together(
+    series, outpath, title="Metrics over tests", xvals=None
+):
+    if series is None or not series or series == []:
+        print("No data to plot for", title)
+        return
+    what_metrics = series[0].keys()
+    print_dict = {metric: [] for metric in what_metrics}
+    for metric in what_metrics:
+        metric_values = [s[metric] for s in series]
+        print_dict[metric] = metric_values
+
+    plt.figure()
+    if xvals is not None:
+        x_axis = xvals
+    else:
+        x_axis = list(range(1, len(next(iter(print_dict.values()))) + 1))
+
+    for metric, values in print_dict.items():
+        plt.plot(x_axis, values, label=metric)
+    plt.xlabel("Test #")
+    plt.ylabel("Value")
+    # Dynamically adjust y-axis limits to zoom in if possible
+    all_values = [v for values in print_dict.values() for v in values]
+    min_val = min(all_values)
+    max_val = max(all_values)
+    margin = 0.05 * (max_val - min_val) if max_val > min_val else 0.05
+    lower = max(0, min_val - margin)
+    upper = min(1, max_val + margin)
+    if upper - lower < 0.5:
+        plt.ylim(lower, upper)
+    else:
+        plt.ylim(0, 1)
+    plt.title(title)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(outpath)
+    plt.close()
+
+
+def plot_metric_types_over_classes(per_class_series, testing_dir):
+    metrics_types = ["TP", "FP", "TN", "FN"]
+    for metric in metrics_types:
+        plt.figure()
+        for cls, metrics in per_class_series.items():
+            plt.plot(metrics[metric], label=cls)
+        plt.xlabel("Test #")
+        plt.ylabel(f"{metric} Count (log scale)")
+        plt.yscale("log")
+        plt.title(f"{metric} over tests for all classes")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(os.path.join(testing_dir, f"all_classes_{metric}_log.png"))
+        plt.close()

@@ -3,12 +3,13 @@
 import argparse
 import os
 
-import matplotlib.pyplot as plt
 from base_utils import (
     compute_binary_metrics,
     compute_multi_metrics,
     ensure_dir,
     parse_testing_log_line,
+    plot_major_metrics_together,
+    plot_metric_types_over_classes,
 )
 
 
@@ -22,6 +23,7 @@ def read_all_tests(logfile):
                 data = parse_testing_log_line(line)
                 entries.append(data)
             except Exception:
+                print(f"Skipping line due to parsing error: {line.strip()}")
                 continue
     return entries
 
@@ -50,56 +52,6 @@ def accumulate_test_metrics(entries):
         binary_series.append(compute_binary_metrics(binary_m))
 
     return per_class_series, multi_series, binary_series
-
-
-def plot_major_metrics_together(series, outpath, title="Metrics over tests"):
-    if series is None or not series or series == []:
-        print("No data to plot for", title)
-        return
-    what_metrics = series[0].keys()
-    print_dict = {metric: [] for metric in what_metrics}
-    for metric in what_metrics:
-        metric_values = [s[metric] for s in series]
-        print_dict[metric] = metric_values
-
-    plt.figure()
-    for metric, values in print_dict.items():
-        plt.plot(range(1, len(values) + 1), values, label=metric)
-    plt.xlabel("Test #")
-    plt.ylabel("Value")
-
-    # Dynamically adjust y-axis limits to zoom in if possible
-    all_values = [v for values in print_dict.values() for v in values]
-    min_val = min(all_values)
-    max_val = max(all_values)
-    margin = 0.05 * (max_val - min_val) if max_val > min_val else 0.05
-    lower = max(0, min_val - margin)
-    upper = min(1, max_val + margin)
-    if upper - lower < 0.5:
-        plt.ylim(lower, upper)
-    else:
-        plt.ylim(0, 1)
-    plt.title(title)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(outpath)
-    plt.close()
-
-
-def plot_metric_types_over_classes(per_class_series, testing_dir):
-    metrics_types = ["TP", "FP", "TN", "FN"]
-    for metric in metrics_types:
-        plt.figure()
-        for cls in per_class_series[0].keys():
-            plt.plot([m[cls][metric] for m in per_class_series], label=cls)
-        plt.xlabel("Test #")
-        plt.ylabel(f"{metric} Count (log scale)")
-        plt.yscale("log")
-        plt.title(f"{metric} over tests for all classes")
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(os.path.join(testing_dir, f"all_classes_{metric}_log.png"))
-        plt.close()
 
 
 def main():
@@ -147,7 +99,7 @@ def main():
             per_class_flattened.append(flat)
         plot_major_metrics_together(
             per_class_flattened,
-            os.path.join(testing_dir, f"per_class_{metric}_main_metrics.png"),
+            os.path.join(testing_dir, f"per_class_{metric}.png"),
             title=f"Per-class {metric.capitalize()} over test instances",
         )
 
@@ -211,5 +163,7 @@ def main():
     print(summary_text)
 
 
+if __name__ == "__main__":
+    main()
 if __name__ == "__main__":
     main()
