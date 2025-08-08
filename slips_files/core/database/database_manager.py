@@ -44,6 +44,10 @@ class DBManager:
         start_sqlite=True,
         start_redis_server=False,
     ):
+        """
+        :param main_pid: pid of the main slips.py to be able to use locks
+        in the trust_db
+        """
         self.conf = conf
         self.output_dir = output_dir
         self.redis_port = redis_port

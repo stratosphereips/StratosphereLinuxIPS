@@ -6,8 +6,7 @@
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
-import json
-import threading
+import traceback
 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,18 +22,19 @@ from dataclasses import asdict
 import queue
 import ipaddress
 import pprint
+import json
+import threading
 import multiprocessing
 from typing import (
     List,
     Union,
     Optional,
 )
-
+import sys
 import netifaces
 import validators
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 
-from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
@@ -67,17 +67,28 @@ class FlowProcessor:
         flows_to_process_q: queue.Queue,
         pending_flows_queue_lock: threading.Lock,
         logger: Output,
-        **kwargs,
+        output_dir=None,
+        redis_port=None,
+        conf=None,
+        slips_args=None,
+        main_pid=None,
+        flush_db=False,
+        start_redis_server=False,
     ):
+
+        self.conf = conf
         self.read_configuration()
         self.logger = logger
+        self.output_dir = output_dir
+        self.redis_port = redis_port
+        self.slips_args = slips_args
+        self.flush_db = flush_db
+        self.main_pid = main_pid
+        self.start_redis_server = start_redis_server
         self.printer = Printer(self.logger, self.name)
         self.stop_profiler_threads_event = stop_profiler_threads_event
         self.flows_to_process_q = flows_to_process_q
         self.pending_flows_queue_lock = pending_flows_queue_lock
-        self.db = DBManager(**kwargs)
-        self.whitelist = Whitelist(self.logger, self.db)
-        self.symbol_handler = SymbolHandler(self.logger, self.db)
         self.input_type = False
         self.rec_lines = 0
         self.is_localnet_set = False
@@ -86,13 +97,35 @@ class FlowProcessor:
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
 
+    @classmethod
+    async def create(cls, **kwargs):
+        """Factory method to asynchronously create and initialize
+        the class instance."""
+        instance = cls(**kwargs)
+        instance.db = await DBManager.create(
+            logger=instance.logger,
+            output_dir=instance.slips_args.output,
+            redis_port=instance.redis_port,
+            conf=instance.conf,
+            slips_args=instance.slips_args,
+            main_pid=instance.main_pid,
+            flush_db=instance.flush_db,
+            start_redis_server=instance.start_redis_server,
+        )
+        instance.whitelist = Whitelist(instance.logger, instance.db)
+        instance.symbol_handler = SymbolHandler(instance.logger, instance.db)
+        return instance
+
     def read_configuration(self):
-        conf = ConfigParser()
-        self.local_whitelist_path = conf.local_whitelist_path()
-        self.timeformat = conf.ts_format()
-        self.analysis_direction = conf.analysis_direction()
-        self.label = conf.label()
-        self.width = conf.get_tw_width_as_float()
+        self.local_whitelist_path = self.conf.local_whitelist_path()
+        self.timeformat = self.conf.ts_format()
+        self.analysis_direction = self.conf.analysis_direction()
+        self.label = self.conf.label()
+        self.width = self.conf.get_tw_width_as_float()
+        self.client_ips: List[
+            Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
+        ]
+        self.client_ips = self.conf.client_ips()
 
     def get_msg_from_q(self, q: multiprocessing.Queue, thread_safe=False):
         """
@@ -320,7 +353,9 @@ class FlowProcessor:
 
     async def store_first_seen_ts(self, ts):
         # set the pcap/file start time in the analysis key
-        if self.first_flow:
+        # this db.get() is here to see if another FlowProcessor instance
+        # already set the ts
+        if self.first_flow and not self.db.get_first_flow_time():
             await self.db.set_input_metadata({"file_start": ts})
             self.first_flow = False
 
@@ -510,7 +545,7 @@ class FlowProcessor:
         returns the local network of the given interface only if slips is
         running with -i
         """
-        addrs = netifaces.ifaddresses(self.args.interface).get(
+        addrs = netifaces.ifaddresses(self.slips_args.interface).get(
             netifaces.AF_INET
         )
         if not addrs:
@@ -533,7 +568,7 @@ class FlowProcessor:
         """
         # For now the local network is only ipv4, but it
         # could be ipv6 in the future. Todo.
-        if self.args.interface:
+        if self.slips_args.interface:
             self.is_localnet_set = True
             return self.get_localnet_of_given_interface()
 
@@ -573,6 +608,11 @@ class FlowProcessor:
         self.print(f"Used local network: {green(local_net)}")
         await self.db.set_local_network(local_net)
 
+    def print_traceback(self):
+        exception_line = sys.exc_info()[2].tb_lineno
+        self.print(f"Problem in line {exception_line}", 0, 1)
+        self.print(traceback.format_exc(), 0, 1)
+
     async def start(self):
         while not self.stop_profiler_thread():
             msg = self.get_msg_from_q(
@@ -592,7 +632,6 @@ class FlowProcessor:
             # get the correct input type class and process the line based on it
             try:
                 self.init_input_handlers(line, input_type)
-
                 flow = self.input_handler_obj.process_line(line)
                 if not flow:
                     continue
@@ -600,8 +639,6 @@ class FlowProcessor:
                 await self.add_flow_to_profile(flow, self.whitelist)
                 await self.handle_setting_local_net(flow)
                 await self.db.increment_processed_flows()
-                # @@@@@@@@@@@@@@@@@@@@@@@@@@@
-                return
             except Exception as e:
                 self.print_traceback()
                 self.print(

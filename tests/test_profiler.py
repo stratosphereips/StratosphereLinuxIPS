@@ -442,7 +442,7 @@ def test_main():
 
     profiler.get_msg = Mock(side_effect=[None])
     msg = {"somemsg": 1}
-    profiler.get_msg_from_input_proc = Mock(side_effect=[msg])
+    profiler.get_msg_from_q = Mock(side_effect=[msg])
 
     profiler.pending_flows_queue_lock = Mock()  # Mock the lock
     profiler.flows_to_process_q = Mock()  # Mock the queue
@@ -821,7 +821,7 @@ def test_is_gw_info_detected_when_attribute_is_already_set():
 def test_process_flow_no_msg():
     profiler = ModuleFactory().create_profiler_obj()
     profiler.stop_profiler_thread = Mock()
-    profiler.get_msg_from_input_proc = Mock()
+    profiler.get_msg_from_q = Mock()
     profiler.add_flow_to_profile = Mock()
     profiler.input_handler_obj = Mock()
     profiler.print = Mock()
@@ -829,7 +829,7 @@ def test_process_flow_no_msg():
     profiler.print_traceback = Mock()
 
     profiler.stop_profiler_thread.side_effect = [False, True]  # Run loop once
-    profiler.get_msg_from_input_proc.return_value = (
+    profiler.get_msg_from_q.return_value = (
         None  # Empty message (no message in queue)
     )
 
@@ -844,7 +844,7 @@ def test_process_flow_no_msg():
 def test_process_flow():
     profiler = ModuleFactory().create_profiler_obj()
     profiler.stop_profiler_thread = Mock()
-    profiler.get_msg_from_input_proc = Mock()
+    profiler.get_msg_from_q = Mock()
     profiler.input_handler_obj = Mock()
     profiler.add_flow_to_profile = Mock()
     profiler.handle_setting_local_net = Mock()
@@ -852,7 +852,7 @@ def test_process_flow():
     profiler.print_traceback = Mock()
     profiler.init_input_handlers = Mock()
     profiler.stop_profiler_thread.side_effect = [False, True]  # Run once
-    profiler.get_msg_from_input_proc.return_value = {
+    profiler.get_msg_from_q.return_value = {
         "line": {"key": "value"},
         "input_type": "zeek",
     }
@@ -871,14 +871,14 @@ def test_process_flow():
 def test_process_flow_handle_exception():
     profiler = ModuleFactory().create_profiler_obj()
     profiler.stop_profiler_thread = Mock()
-    profiler.get_msg_from_input_proc = Mock()
+    profiler.get_msg_from_q = Mock()
     profiler.input_handler_obj = Mock()
     profiler.print = Mock()
     profiler.print_traceback = Mock()
 
     profiler.stop_profiler_thread.side_effect = [False, True]  # Run loop
     # once
-    profiler.get_msg_from_input_proc.return_value = {
+    profiler.get_msg_from_q.return_value = {
         "line": {"key": "value"},
         "input_type": "invalid_type",
     }

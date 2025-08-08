@@ -7,7 +7,6 @@
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
 import asyncio
-import os
 import threading
 
 # This program is distributed in the hope that it will be useful,
@@ -62,9 +61,7 @@ class Profiler(IAsyncModule, IObservable):
         self.channels = {
             "reload_whitelist": self.new_reload_whitelist_msg_handler,
         }
-        print(f"@@@@@@@@@@@@@@@@ profilerr {self.channels.keys()}")
         await self.db.subscribe(self.pubsub, self.channels.keys())
-        print(f"@@@@@@@@@@@@@@@@ profiler:: {self.pubsub}")
         self.add_observer(self.logger)
         self.read_configuration()
         # when profiler is done processing, it releases this semaphore,
@@ -89,7 +86,7 @@ class Profiler(IAsyncModule, IObservable):
         # so without this, only 1 of the 3 threads receive the stop msg
         # and exits, and the rest of the 2 threads AND the main() keep
         # waiting for new msgs
-        self.flows_to_process_q = threading.Queue()
+        self.flows_to_process_q = queue.Queue()
         # that queue will be used in 4 different threads. the 3 profilers
         # and main().
         self.pending_flows_queue_lock = threading.Lock()
@@ -121,14 +118,9 @@ class Profiler(IAsyncModule, IObservable):
 
     def start_profiler_threads(self):
         """starts 3 profiler threads for faster processing of the flows"""
-        # @@@@@@@@@@@2 reset to 3:D
         num_of_profiler_threads = 3
         for _ in range(num_of_profiler_threads):
-            print(
-                f"@@@@@@@@@@@@@@@@ starting thread {len(self.profiler_threads)}"
-            )
             t = self.create_thread(self.process_flow)
-            print(f"@@@@@@@@@@@@@@@@ [profilerr] starting {t}")
             t.start()
             self.profiler_threads.append(t)
 
@@ -140,7 +132,7 @@ class Profiler(IAsyncModule, IObservable):
         loop = asyncio.get_event_loop()
         loop.set_exception_handler(self.handle_loop_exception)
 
-        processor = FlowProcessor(
+        processor = await FlowProcessor.create(
             stop_profiler_threads_event=self.stop_profiler_threads,
             flows_to_process_q=self.flows_to_process_q,
             pending_flows_queue_lock=self.pending_flows_queue_lock,
@@ -156,7 +148,6 @@ class Profiler(IAsyncModule, IObservable):
         # this function returns when the current thread is done processing
         # all flows, aka when stop_profiler_threads is set
         await processor.start()
-        print(f"@@@@@@@@@@@@@@@@ {os.getpid()} {id(self.db)}")
 
     def should_stop(self):
         """
@@ -180,8 +171,8 @@ class Profiler(IAsyncModule, IObservable):
         self.join_profiler_threads()
         # close the queues to avoid deadlocks.
         # this step SHOULD NEVER be done before closing the threads
-        self.flows_to_process_q.close()
-        self.profiler_queue.close()
+        self.flows_to_process_q.join()
+        self.profiler_queue.join()
 
         await self.db.set_new_incoming_flows(False)
         self.mark_process_as_done_processing()

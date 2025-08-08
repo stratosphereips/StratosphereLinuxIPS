@@ -1,5 +1,6 @@
 import asyncio
 import json
+import multiprocessing
 
 from slips_files.core.database.database_manager import DBManager
 
@@ -13,7 +14,7 @@ class FileMonitorHelper:
 
     def __init__(
         self,
-        event_q: asyncio.Queue,
+        event_q: multiprocessing.Queue,
         db: DBManager,
         termination_event: asyncio.Event,
     ):
@@ -29,7 +30,7 @@ class FileMonitorHelper:
         """
         while not self.termination_event.is_set():
             # waits until an event is available
-            event = await self.event_q.get()
+            event = await asyncio.to_thread(self.event_q.get)
             event = json.loads(event)
 
             action = event["action"]
