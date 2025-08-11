@@ -110,7 +110,9 @@ class FlowHandler:
         # Compute the symbol for this flow, for this TW, for this profile.
         # The symbol is based on the 'letters' of the original
         # Startosphere IPS tool
-        symbol: Tuple = self.symbol.compute(self.flow, self.twid, "OutTuples")
+        symbol: Tuple = await self.symbol.compute(
+            self.flow, self.twid, "OutTuples"
+        )
 
         # Change symbol for its internal data. Symbol is a tuple and is
         # confusing if we ever change the API
@@ -153,12 +155,7 @@ class FlowHandler:
         )
 
     async def handle_http(self):
-        await self.db.add_out_http(
-            self.profileid,
-            self.twid,
-            self.flow,
-        )
-
+        await self.db.add_out_http(self.profileid, self.twid, self.flow)
         await self.db.add_altflow(
             self.flow, self.profileid, self.twid, "benign"
         )

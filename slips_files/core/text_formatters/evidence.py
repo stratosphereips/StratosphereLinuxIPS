@@ -24,7 +24,7 @@ class EvidenceFormatter:
     def __init__(self, db):
         self.db = db
 
-    def get_evidence_to_log(
+    async def get_evidence_to_log(
         self, evidence: Evidence, flow_datetime: str
     ) -> str:
         """
@@ -32,8 +32,10 @@ class EvidenceFormatter:
         Not to the CLI.
         """
         timewindow_number = evidence.timewindow.number
-        extra_info: str = self.get_printable_attacker_and_victim_info(evidence)
-        profile_info = self.get_printable_profile_info(evidence)
+        extra_info: str = await self.get_printable_attacker_and_victim_info(
+            evidence
+        )
+        profile_info = await self.get_printable_profile_info(evidence)
 
         evidence_str = (
             f"{flow_datetime} (TW {timewindow_number}): "
@@ -43,13 +45,15 @@ class EvidenceFormatter:
 
         return evidence_str
 
-    def get_printable_profile_info(self, evidence: Evidence) -> str:
+    async def get_printable_profile_info(self, evidence: Evidence) -> str:
         """
         Formats profile information including IP and
         optional hostname, ensuring alignment.
         """
         ip = evidence.profile.ip
-        hostname = self.db.get_hostname_from_profile(str(evidence.profile))
+        hostname = await self.db.get_hostname_from_profile(
+            str(evidence.profile)
+        )
 
         if not hostname:
             return f"{ip:26}"
@@ -59,7 +63,7 @@ class EvidenceFormatter:
         padding_len = 26 - len(ip) - len(hostname) - 3
         return f"{ip} ({hostname}){' ' * padding_len}"
 
-    def get_printable_alert(self, alert: Alert) -> str:
+    async def get_printable_alert(self, alert: Alert) -> str:
         """
         returns the printable alert.
         aka the start and end time of the timewindow causing the alert
@@ -73,7 +77,7 @@ class EvidenceFormatter:
         )
 
         alert_to_print = f"IP {alert.profile.ip} "
-        hostname: Optional[str] = self.db.get_hostname_from_profile(
+        hostname: Optional[str] = await self.db.get_hostname_from_profile(
             str(alert.profile)
         )
         if hostname:
@@ -86,7 +90,7 @@ class EvidenceFormatter:
 
         return alert_to_print
 
-    def format_evidence_for_printing(
+    async def format_evidence_for_printing(
         self,
         alert: Alert,
         all_evidence: Dict[str, Evidence],
@@ -99,7 +103,7 @@ class EvidenceFormatter:
         # threat_levels, we produce an alert
         # Now instead of printing the last evidence only,
         # we print all of them
-        alert_to_print: str = red(self.get_printable_alert(alert))
+        alert_to_print: str = red(await self.get_printable_alert(alert))
         alert_to_print += red("given the following evidence:\n")
 
         for evidence in all_evidence.values():
@@ -128,7 +132,7 @@ class EvidenceFormatter:
         )
         return evidence
 
-    def get_printable_attacker_and_victim_info(
+    async def get_printable_attacker_and_victim_info(
         self, evidence: Evidence
     ) -> str:
         """
@@ -143,7 +147,9 @@ class EvidenceFormatter:
             if not entity or entity.ioc_type != IoCType.IP.name:
                 continue
 
-            cached_info = self.db.get_ip_identification(entity.value) or {}
+            cached_info = (
+                await self.db.get_ip_identification(entity.value) or {}
+            )
             info_parts = []
             for info_type, info in cached_info.items():
                 if not info:

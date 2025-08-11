@@ -132,11 +132,11 @@ class EvidenceHandler(IAsyncModule):
     def handle_unable_to_log(self):
         self.print("Error logging evidence/alert.")
 
-    def add_alert_to_json_log_file(self, alert: Alert):
+    async def add_alert_to_json_log_file(self, alert: Alert):
         """
         Add a new alert/event line to our alerts.json file in json format.
         """
-        idmef_alert: dict = self.idmefv2.convert_to_idmef_alert(alert)
+        idmef_alert: dict = await self.idmefv2.convert_to_idmef_alert(alert)
         if not idmef_alert:
             self.handle_unable_to_log()
             return
@@ -149,7 +149,7 @@ class EvidenceHandler(IAsyncModule):
         except Exception:
             self.handle_unable_to_log()
 
-    def add_evidence_to_json_log_file(
+    async def add_evidence_to_json_log_file(
         self,
         evidence,
         accumulated_threat_level: float = 0,
@@ -157,7 +157,9 @@ class EvidenceHandler(IAsyncModule):
         """
         Add a new evidence line to our alerts.json file in json format.
         """
-        idmef_evidence: dict = self.idmefv2.convert_to_idmef_event(evidence)
+        idmef_evidence: dict = await self.idmefv2.convert_to_idmef_event(
+            evidence
+        )
         if not idmef_evidence:
             self.handle_unable_to_log()
             return
@@ -201,7 +203,7 @@ class EvidenceHandler(IAsyncModule):
             self.print("Error in add_to_log_file()")
             self.print(traceback.format_exc(), 0, 1)
 
-    def log_alert(self, alert: Alert, blocked=False):
+    async def log_alert(self, alert: Alert, blocked=False):
         """
         constructs the alert descript ion from the given alert and logs it
         to alerts.log and alerts.json
@@ -227,7 +229,7 @@ class EvidenceHandler(IAsyncModule):
         # log to alerts.log
         self.add_to_log_file(alert_description)
         # log to alerts.json
-        self.add_alert_to_json_log_file(alert)
+        await self.add_alert_to_json_log_file(alert)
 
     def shutdown_gracefully(self):
         self.logfile.close()
@@ -401,8 +403,10 @@ class EvidenceHandler(IAsyncModule):
             return
 
         await self.send_to_exporting_module(evidence_causing_the_alert)
-        alert_to_print: str = self.formatter.format_evidence_for_printing(
-            alert, evidence_causing_the_alert
+        alert_to_print: str = (
+            await self.formatter.format_evidence_for_printing(
+                alert, evidence_causing_the_alert
+            )
         )
 
         self.print(f"{alert_to_print}", 1, 0)
@@ -415,7 +419,7 @@ class EvidenceHandler(IAsyncModule):
                 str(alert.profile), str(alert.timewindow)
             )
 
-        self.log_alert(alert, blocked=is_blocked)
+        await self.log_alert(alert, blocked=is_blocked)
 
     async def decide_blocking(
         self, ip_to_block: str, timewindow: TimeWindow
@@ -541,7 +545,7 @@ class EvidenceHandler(IAsyncModule):
             self.formatter.add_threat_level_to_evidence_description(evidence)
         )
 
-        evidence_to_log: str = self.formatter.get_evidence_to_log(
+        evidence_to_log: str = await self.formatter.get_evidence_to_log(
             evidence,
             flow_datetime,
         )
@@ -568,7 +572,7 @@ class EvidenceHandler(IAsyncModule):
             )
 
         # add to alerts.json
-        self.add_evidence_to_json_log_file(
+        await self.add_evidence_to_json_log_file(
             evidence,
             accumulated_threat_level,
         )

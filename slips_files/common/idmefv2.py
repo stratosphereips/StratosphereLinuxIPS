@@ -50,22 +50,27 @@ class IDMEFv2:
     def __init__(self, logger: Output, db):
         self.printer = Printer(logger, self.name)
         self.db = db
-        self.model: str = utils.get_slips_version()
+        # the used idmef version
+        self.version = "2.0.3"
+        self.analyzer_set = False
+
+    async def set_analyzer(self):
+        if self.analyzer_set:
+            return
+
         self.analyzer = {
-            "IP": self.get_host_ip(),
+            "IP": await self.get_host_ip(),
             "Name": "Slips",
-            "Model": self.model,
+            "Model": utils.get_slips_version(),
             "Category": ["NIDS"],
             "Data": ["Flow", "Network"],
             "Method": ["Heuristic"],
         }
-        # the used idmef version
-        self.version = "2.0.3"
 
-    def get_host_ip(self) -> str:
-        if not self.db.is_running_non_stop():
+    async def get_host_ip(self) -> str:
+        if not await self.db.is_running_non_stop():
             return DEFAULT_ADDRESS
-        if host_ip := self.db.get_host_ip():
+        if host_ip := await self.db.get_host_ip():
             return host_ip
         return DEFAULT_ADDRESS
 
@@ -123,10 +128,11 @@ class IDMEFv2:
             .split("from")[0]
         )
 
-    def convert_to_idmef_alert(self, alert: Alert) -> Message:
+    async def convert_to_idmef_alert(self, alert: Alert) -> Message:
         """
         converts the given alert to IDMEFv2 alert
         """
+        await self.set_analyzer()
         try:
             now = datetime.now(utils.local_tz).isoformat("T")
             iso_start_time = utils.convert_ts_format(
@@ -174,7 +180,7 @@ class IDMEFv2:
         """checks if the given string is an icmp error code"""
         return str(code).startswith("0x")
 
-    def convert_to_idmef_event(self, evidence: Evidence) -> Message:
+    async def convert_to_idmef_event(self, evidence: Evidence) -> Message:
         """
         Function to convert Slips evidence to
         The Incident Detection Message Exchange Format version 2
@@ -183,6 +189,7 @@ class IDMEFv2:
         https://www.ietf.org/id/draft-lehmann-idmefv2-03.html#name-the-alert-class
         """
         try:
+            await self.set_analyzer()
             now = datetime.now(utils.local_tz).isoformat("T")
             iso_ts: str = utils.convert_ts_format(
                 evidence.timestamp, "iso"
