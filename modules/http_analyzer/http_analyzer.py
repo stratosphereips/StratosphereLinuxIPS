@@ -3,11 +3,11 @@
 import asyncio
 import json
 import urllib
-import requests
+
+import aiohttp
 from typing import Union, Dict, Optional, List, Tuple
 import time
 import bisect
-from multiprocessing import Lock
 
 from modules.http_analyzer.set_evidence import SetEvidenceHelper
 from slips_files.common.flow_classifier import FlowClassifier
@@ -28,10 +28,9 @@ class HTTPAnalyzer(IAsyncModule):
         self.channels = {
             "new_http": self.new_http_msg_handler,
             "new_weird": self.new_weird_msg_handler,
-            "new_flow": self.new_http_msg_handler,
+            "new_flow": self.new_flow_msg_handler,
         }
         await self.db.subscribe(self.pubsub, self.channels.keys())
-
         self.set_evidence = SetEvidenceHelper(self.db)
         self.connections_counter = {}
         self.empty_connections_threshold = 4
@@ -62,15 +61,16 @@ class HTTPAnalyzer(IAsyncModule):
         self.classifier = FlowClassifier()
         self.http_recognized_flows: Dict[Tuple[str, str], List[float]] = {}
         self.ts_of_last_cleanup_of_http_recognized_flows = time.time()
-        self.http_recognized_flows_lock = Lock()
+        self.http_recognized_flows_lock = asyncio.Lock()
         self.condition = asyncio.Condition()
+        self.aiohttp_session = aiohttp.ClientSession()
 
     def read_configuration(self):
         self.pastebin_downloads_threshold = (
             self.conf.get_pastebin_download_threshold()
         )
 
-    def detect_executable_mime_types(self, twid, flow) -> bool:
+    async def detect_executable_mime_types(self, twid, flow) -> bool:
         """
         detects the type of file in the http response,
         returns true if it's an executable
@@ -80,11 +80,11 @@ class HTTPAnalyzer(IAsyncModule):
 
         for mime_type in flow.resp_mime_types:
             if mime_type in self.executable_mime_types:
-                self.set_evidence.executable_mime_type(twid, flow)
+                await self.set_evidence.executable_mime_type(twid, flow)
                 return True
         return False
 
-    def check_suspicious_user_agents(self, profileid, twid, flow):
+    async def check_suspicious_user_agents(self, profileid, twid, flow):
         """Check unusual user agents and set evidence"""
 
         suspicious_user_agents = (
@@ -98,11 +98,13 @@ class HTTPAnalyzer(IAsyncModule):
         for suspicious_ua in suspicious_user_agents:
             if suspicious_ua.lower() not in flow.user_agent.lower():
                 continue
-            self.set_evidence.suspicious_user_agent(flow, profileid, twid)
+            await self.set_evidence.suspicious_user_agent(
+                flow, profileid, twid
+            )
             return True
         return False
 
-    def check_multiple_empty_connections(self, twid: str, flow):
+    async def check_multiple_empty_connections(self, twid: str, flow):
         """
         Detects more than 4 empty connections to
             google, bing, yandex and yahoo on port 80
@@ -147,24 +149,26 @@ class HTTPAnalyzer(IAsyncModule):
         if connections != self.empty_connections_threshold:
             return False
 
-        self.set_evidence.multiple_empty_connections(flow, host, uids, twid)
+        await self.set_evidence.multiple_empty_connections(
+            flow, host, uids, twid
+        )
         # reset the counter
         self.connections_counter[host] = ([], 0)
         return True
 
-    def check_incompatible_user_agent(self, profileid, twid, flow):
+    async def check_incompatible_user_agent(self, profileid, twid, flow):
         """
         Compare the user agent of this profile to the MAC vendor
         and check incompatibility
         """
-        vendor: Union[str, None] = self.db.get_mac_vendor_from_profile(
+        vendor: Union[str, None] = await self.db.get_mac_vendor_from_profile(
             profileid
         )
         if not vendor:
             return False
         vendor = vendor.lower()
 
-        user_agent: dict = self.db.get_user_agent_from_profile(profileid)
+        user_agent: dict = await self.db.get_user_agent_from_profile(profileid)
         if not user_agent or not isinstance(user_agent, dict):
             return False
 
@@ -173,7 +177,7 @@ class HTTPAnalyzer(IAsyncModule):
         browser = user_agent.get("browser", "").lower()
         # user_agent = user_agent.get('user_agent', '')
         if "safari" in browser and "apple" not in vendor:
-            self.set_evidence.incompatible_user_agent(
+            await self.set_evidence.incompatible_user_agent(
                 twid, flow, user_agent, vendor
             )
             return True
@@ -216,45 +220,41 @@ class HTTPAnalyzer(IAsyncModule):
                     # this means that one of these keywords
                     # [('microsoft', 'windows', 'NT'), ('android'), ('linux')]
                     # is found in the UA that belongs to an apple device
-                    self.set_evidence.incompatible_user_agent(
+                    await self.set_evidence.incompatible_user_agent(
                         twid, flow, user_agent, vendor
                     )
                     return True
 
-    def get_ua_info_online(self, user_agent):
+    async def get_ua_info_online(self, user_agent: str):
         """
-        Get OS and browser info about a use agent from an online database
-         http://useragentstring.com
+        Get OS and browser info about a user agent from an online database
+        http://useragentstring.com
         """
         url = "http://useragentstring.com/"
         params = {"uas": user_agent, "getJSON": "all"}
         params = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+        full_url = f"{url}?{params}"
+
         try:
-            response = requests.get(url, params=params, timeout=5)
-            if response.status_code != 200 or not response.text:
-                raise requests.exceptions.ConnectionError
-        except (
-            requests.exceptions.ConnectionError,
-            requests.exceptions.ReadTimeout,
-        ):
+            async with self.aiohttp_session.get(
+                full_url, timeout=5
+            ) as response:
+                if response.status != 200:
+                    return False
+                text = await response.text()
+                if not text:
+                    return False
+        except (aiohttp.ClientError, asyncio.TimeoutError):
             return False
 
-        # returns the following
-        # {"agent_type":"Browser","agent_name":"Internet Explorer",
-        # "agent_version":"8.0", "os_type":"Windows","os_name":"Windows 7",
-        # "os_versionName":"","os_versionNumber":"",
-        # "os_producer":"","os_producerURL":"","linux_distibution"
-        # :"Null","agent_language":"","agent_languageTag":""}
         try:
-            # responses from this domain are broken for now. so this
-            # is a temp fix until they fix it from their side
-            json_response = json.loads(response.text)
+            json_response = json.loads(text)
         except json.decoder.JSONDecodeError:
-            # unexpected server response
             return False
+
         return json_response
 
-    def get_user_agent_info(self, user_agent: str, profileid: str):
+    async def get_user_agent_info(self, user_agent: str, profileid: str):
         """
         Get OS and browser info about a user agent online
         """
@@ -263,37 +263,37 @@ class HTTPAnalyzer(IAsyncModule):
             return False
 
         # keep a history of the past user agents
-        self.db.add_all_user_agent_to_profile(profileid, user_agent)
+        await self.db.add_all_user_agent_to_profile(profileid, user_agent)
 
         # don't make a request again if we already have a
         # user agent associated with this profile
-        if self.db.get_user_agent_from_profile(profileid) is not None:
+        if await self.db.get_user_agent_from_profile(profileid) is not None:
             # this profile already has a user agent
             return False
 
-        UA_info = {"user_agent": user_agent, "os_type": "", "os_name": ""}
+        ua_info = {"user_agent": user_agent, "os_type": "", "os_name": ""}
 
-        if ua_info := self.get_ua_info_online(user_agent):
+        if online_ua_info := await self.get_ua_info_online(user_agent):
             # the above website returns unknown if it has
             # no info about this UA, remove the 'unknown' from the string
             # before storing in the db
             os_type = (
-                ua_info.get("os_type", "")
+                online_ua_info.get("os_type", "")
                 .replace("unknown", "")
                 .replace("  ", "")
             )
             os_name = (
-                ua_info.get("os_name", "")
+                online_ua_info.get("os_name", "")
                 .replace("unknown", "")
                 .replace("  ", "")
             )
             browser = (
-                ua_info.get("agent_name", "")
+                online_ua_info.get("agent_name", "")
                 .replace("unknown", "")
                 .replace("  ", "")
             )
 
-            UA_info.update(
+            ua_info.update(
                 {
                     "os_name": os_name,
                     "os_type": os_type,
@@ -301,10 +301,10 @@ class HTTPAnalyzer(IAsyncModule):
                 }
             )
 
-        self.db.add_user_agent_to_profile(profileid, json.dumps(UA_info))
-        return UA_info
+        await self.db.add_user_agent_to_profile(profileid, json.dumps(ua_info))
+        return ua_info
 
-    def extract_info_from_ua(self, user_agent, profileid):
+    async def extract_info_from_ua(self, user_agent, profileid):
         """
         Zeek sometimes collects info about a specific UA,
         in this case the UA starts with 'server-bag'
@@ -312,7 +312,7 @@ class HTTPAnalyzer(IAsyncModule):
         if "server-bag" not in user_agent:
             return
 
-        if self.db.get_user_agent_from_profile(profileid) is not None:
+        if await self.db.get_user_agent_from_profile(profileid) is not None:
             # this profile already has a user agent
             return True
 
@@ -334,10 +334,10 @@ class HTTPAnalyzer(IAsyncModule):
             }
         )
         ua_info = json.dumps(ua_info)
-        self.db.add_user_agent_to_profile(profileid, ua_info)
+        await self.db.add_user_agent_to_profile(profileid, ua_info)
         return ua_info
 
-    def check_multiple_user_agents_in_a_row(
+    async def check_multiple_user_agents_in_a_row(
         self,
         flow,
         twid,
@@ -346,7 +346,6 @@ class HTTPAnalyzer(IAsyncModule):
         """
         Detect if the user is using an Apple UA, then android, then linux etc.
         Doesn't check multiple ssh clients
-        :param user_agent: UA of the current flow
         :param cached_ua: UA of this profile from the db
         """
         if not cached_ua or not flow.user_agent:
@@ -365,17 +364,17 @@ class HTTPAnalyzer(IAsyncModule):
                 return False
 
         ua: str = cached_ua.get("user_agent", "")
-        self.set_evidence.multiple_user_agents_in_a_row(flow, ua, twid)
+        await self.set_evidence.multiple_user_agents_in_a_row(flow, ua, twid)
         return True
 
-    def check_pastebin_downloads(self, twid, flow):
+    async def check_pastebin_downloads(self, twid, flow):
         try:
             response_body_len = int(flow.response_body_len)
         except ValueError:
             return False
 
-        ip_identification: Dict[str, str] = self.db.get_ip_identification(
-            flow.daddr, get_ti_data=False
+        ip_identification: Dict[str, str] = (
+            await self.db.get_ip_identification(flow.daddr, get_ti_data=False)
         )
         ip_identification = utils.get_ip_identification_as_str(
             ip_identification
@@ -388,7 +387,7 @@ class HTTPAnalyzer(IAsyncModule):
         ):
             return False
 
-        self.set_evidence.pastebin_downloads(flow, twid)
+        await self.set_evidence.pastebin_downloads(flow, twid)
         return True
 
     async def check_weird_http_method(self, msg: Dict[str, str]):
@@ -402,29 +401,29 @@ class HTTPAnalyzer(IAsyncModule):
             return False
 
         conn_log_flow: Optional[dict]
-        conn_log_flow = utils.get_original_conn_flow(flow, self.db)
+        conn_log_flow = await utils.get_original_conn_flow(flow, self.db)
         if not conn_log_flow:
+            print("@@@@@@@@@@@@@@@@ !!!!!!!!!!!!!!1 sleeping 15 ")
             await asyncio.sleep(15)
-            conn_log_flow = utils.get_original_conn_flow(flow, self.db)
+            print("@@@@@@@@@@@@@@@@ !!!!!!!!!! done sleeping 15!")
+            conn_log_flow = await utils.get_original_conn_flow(flow, self.db)
             if not conn_log_flow:
                 return
 
-        self.set_evidence.weird_http_method(twid, flow, conn_log_flow)
+        await self.set_evidence.weird_http_method(twid, flow, conn_log_flow)
 
-    def keep_track_of_http_flow(self, flow, key) -> None:
+    async def keep_track_of_http_flow(self, flow, key) -> None:
         """keeps track of the given http flow in http_recognized_flows"""
         # we're using locks here because this is a part of an asyncio
         # function and there's another garbage collector that may be
         # modifying the dict at the same time.
-        self.http_recognized_flows_lock.acquire()
-        try:
-            ts_list = self.http_recognized_flows[key]
-            # to store the ts sorted for faster lookups
-            bisect.insort(ts_list, float(flow.starttime))
-        except KeyError:
-            self.http_recognized_flows[key] = [float(flow.starttime)]
-
-        self.http_recognized_flows_lock.release()
+        async with self.http_recognized_flows_lock:
+            try:
+                ts_list = self.http_recognized_flows[key]
+                # to store the ts sorted for faster lookups
+                bisect.insort(ts_list, float(flow.starttime))
+            except KeyError:
+                self.http_recognized_flows[key] = [float(flow.starttime)]
 
     def is_http_proto_recognized_by_zeek(self, flow) -> bool:
         """
@@ -433,8 +432,8 @@ class HTTPAnalyzer(IAsyncModule):
         """
         return flow.appproto and str(flow.appproto.lower()) == "http"
 
-    def is_tcp_established_port_80_non_empty_flow(self, flow) -> bool:
-        state = self.db.get_final_state_from_flags(flow.state, flow.pkts)
+    async def is_tcp_established_port_80_non_empty_flow(self, flow) -> bool:
+        state = utils.get_final_state_from_flags(flow.state, flow.pkts)
         return (
             str(flow.dport) == "80"
             and flow.proto.lower() == "tcp"
@@ -487,7 +486,7 @@ class HTTPAnalyzer(IAsyncModule):
         :kwarg timeout_reached: did we wait 5 mins in future AND in the
         past for the http of the given flow to arrive?
         """
-        if not self.is_tcp_established_port_80_non_empty_flow(flow):
+        if not await self.is_tcp_established_port_80_non_empty_flow(flow):
             # we're not interested in that flow
             return False
 
@@ -496,7 +495,7 @@ class HTTPAnalyzer(IAsyncModule):
 
         if self.is_http_proto_recognized_by_zeek(flow):
             # not a fp, thats a recognized http flow
-            self.keep_track_of_http_flow(flow, key)
+            await self.keep_track_of_http_flow(flow, key)
             return False
 
         flow.starttime = float(flow.starttime)
@@ -528,7 +527,7 @@ class HTTPAnalyzer(IAsyncModule):
         # found no timestamps, did we look in the future 5 mins?
         if timeout_reached:
             # yes we did. set an evidence
-            self.set_evidence.non_http_port_80_conn(twid, flow)
+            await self.set_evidence.non_http_port_80_conn(twid, flow)
             return True
 
         # ts not reached
@@ -546,10 +545,10 @@ class HTTPAnalyzer(IAsyncModule):
 
     async def wait_for_new_flows_or_timeout(self, timeout: float):
         """
-        waits for new incoming flows, but interrupts the wait if profiler
-        stop sending new flows within the timeout period.
+        waits for new incoming flows, but interrupts the wait if the profiler
+        stops sending new flows within the timeout period.
         because that means no more flows are coming during the wait period,
-        no need to wait.
+        so no need to wait.
 
         :param timeout: the maximum time to wait before resuming execution.
         """
@@ -558,7 +557,7 @@ class HTTPAnalyzer(IAsyncModule):
         async def will_slips_have_new_incoming_flows():
             """if slips will have no incoming flows, aka profiler stopped.
             this function will return False immediately"""
-            while self.db.will_slips_have_new_incoming_flows():
+            while await self.db.will_slips_have_new_incoming_flows():
                 await asyncio.sleep(1)  # sleep to avoid busy looping
             return False
 
@@ -581,7 +580,7 @@ class HTTPAnalyzer(IAsyncModule):
         async with self.condition:
             self.condition.notify_all()
 
-    def remove_old_entries_from_http_recognized_flows(self) -> None:
+    async def remove_old_entries_from_http_recognized_flows(self) -> None:
         """
         the goal of this is to not have the http_recognized_flows dict
         growing forever, so here we remove all timestamps older than the last
@@ -617,9 +616,8 @@ class HTTPAnalyzer(IAsyncModule):
                 ts for ts in timestamps if ts not in garbage
             ]
 
-        self.http_recognized_flows_lock.acquire()
-        self.http_recognized_flows = clean_http_recognized_flows
-        self.http_recognized_flows_lock.release()
+        async with self.http_recognized_flows_lock:
+            self.http_recognized_flows = clean_http_recognized_flows
         self.ts_of_last_cleanup_of_http_recognized_flows = now
 
     async def shutdown_gracefully(self):
@@ -629,18 +627,20 @@ class HTTPAnalyzer(IAsyncModule):
     def pre_main(self):
         utils.drop_root_privs_permanently()
 
-    def new_http_msg_handler(self, msg: dict):
+    async def new_http_msg_handler(self, msg: dict):
+        print("@@@@@@@@@@@@@@@@ new http msg handerrr")
         msg = json.loads(msg["data"])
+        print(f"@@@@@@@@@@@@@@@@ msg :{msg}")
         profileid = msg["profileid"]
         twid = msg["twid"]
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
-        self.check_suspicious_user_agents(profileid, twid, flow)
-        self.check_multiple_empty_connections(twid, flow)
+        await self.check_suspicious_user_agents(profileid, twid, flow)
+        await self.check_multiple_empty_connections(twid, flow)
         # find the UA of this profileid if we don't have it
         # get the last used ua of this profile
-        cached_ua = self.db.get_user_agent_from_profile(profileid)
+        cached_ua = await self.db.get_user_agent_from_profile(profileid)
         if cached_ua:
-            self.check_multiple_user_agents_in_a_row(
+            await self.check_multiple_user_agents_in_a_row(
                 flow,
                 twid,
                 cached_ua,
@@ -653,23 +653,23 @@ class HTTPAnalyzer(IAsyncModule):
         ):
             # only UAs of type dict are browser UAs,
             # skips str UAs as they are SSH clients
-            self.get_user_agent_info(flow.user_agent, profileid)
+            await self.get_user_agent_info(flow.user_agent, profileid)
 
-        self.extract_info_from_ua(flow.user_agent, profileid)
-        self.detect_executable_mime_types(twid, flow)
-        self.check_incompatible_user_agent(profileid, twid, flow)
-        self.check_pastebin_downloads(twid, flow)
-        self.set_evidence.http_traffic(twid, flow)
+        await self.extract_info_from_ua(flow.user_agent, profileid)
+        await self.detect_executable_mime_types(twid, flow)
+        await self.check_incompatible_user_agent(profileid, twid, flow)
+        await self.check_pastebin_downloads(twid, flow)
+        await self.set_evidence.http_traffic(twid, flow)
 
-    def new_weird_msg_handler(self, msg: dict):
+    async def new_weird_msg_handler(self, msg: dict):
         msg = json.loads(msg["data"])
-        self.check_weird_http_method(msg)
+        await self.check_weird_http_method(msg)
 
-    def new_flow_msg_handler(self, msg: dict):
+    async def new_flow_msg_handler(self, msg: dict):
         msg = json.loads(msg["data"])
         twid = msg["twid"]
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
         self.create_task(self.check_non_http_port_80_conns, twid, flow)
 
     async def main(self):
-        self.remove_old_entries_from_http_recognized_flows()
+        await self.remove_old_entries_from_http_recognized_flows()

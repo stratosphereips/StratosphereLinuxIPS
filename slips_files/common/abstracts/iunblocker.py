@@ -48,7 +48,7 @@ class IUnblocker(ABC):
         """a bg thread that unblocks ips once their ts is reached"""
         ...
 
-    def _get_tw_to_unblock_at(
+    async def _get_tw_to_unblock_at(
         self, ip: str, cur_tw: int, how_many_tws_to_block: int
     ) -> TimeWindow:
         """
@@ -58,7 +58,7 @@ class IUnblocker(ABC):
         """
         # we unblock at the end of this tw
         tw_to_unblock: int = cur_tw + how_many_tws_to_block
-        tw_start, tw_end = self.db.get_tw_limits(
+        tw_start, tw_end = await self.db.get_tw_limits(
             f"profile_{ip}", f"timewindow{tw_to_unblock}"
         )
         tw_start: str = utils.convert_ts_format(tw_start, "iso")

@@ -43,7 +43,7 @@ class Unblocker(IUnblocker):
             daemon=True,
             name="iptables_unblocker_thread",
         )
-        utils.start_thread(self.unblocker_thread, self.db)
+        await utils.start_thread(self.unblocker_thread, self.db)
 
     def unblock_request(
         self,

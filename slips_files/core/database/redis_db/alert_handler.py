@@ -250,7 +250,8 @@ class AlertHandler:
 
     async def set_evidence(self, evidence: Evidence):
         """
-        Set the evidence for this Profile and Timewindow.
+        Set the given evidence for the given evidence.profile and
+        the current timewindow.
         :param evidence: an Evidence obj (defined in
         slips_files/core/structures/evidence.py) with all the
         evidence details
