@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import sys
 import traceback
-import warnings
 import asyncio
 import os
 import threading
@@ -21,7 +20,7 @@ from slips_files.common.printer import Printer
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.output import Output
 
-warnings.filterwarnings("ignore", category=RuntimeWarning)
+# warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 class IAsyncModule(ABC, Process):
@@ -88,7 +87,7 @@ class IAsyncModule(ABC, Process):
             flush_db=False,
             start_redis_server=False,
         )
-        self.pubsub = self.db.pubsub()
+        self.pubsub = await self.db.pubsub()
 
     @abstractmethod
     async def init(self, **kwargs):
@@ -145,20 +144,17 @@ class IAsyncModule(ABC, Process):
         """
         task = asyncio.create_task(func(*args))
         task.add_done_callback(self.handle_task_exception)
-
-        # Allow the event loop to run the scheduled task
-        # await asyncio.sleep(0)
-
-        # Remember to await these functions before this module shuts down
         self.tasks.append(task)
         return task
 
-    def handle_task_exception(self, loop, context):
-        exc = context.get("exception")
+    def handle_task_exception(self, task: asyncio.Task):
+        try:
+            exc = task.exception()
+        except asyncio.CancelledError:
+            return  # Task was cancelled, not an error
         if exc:
-            self.print(f"Unhandled exception: {exc}")
-        else:
-            self.print(f"Unhandled context: {context}")
+            self.print(f"Unhandled exception in task: {exc}")
+            traceback.print_exception(type(exc), exc, exc.__traceback__)
 
     def handle_loop_exception(self, loop, context):
         exception = context.get("exception")
@@ -179,7 +175,7 @@ class IAsyncModule(ABC, Process):
         await self.shutdown_gracefully()
         # each module has its own sqlite db connection. once this module is
         # done the connection should be closed
-        self.db.close_sqlite()
+        await self.db.close_sqlite()
 
     async def get_msg(self) -> tuple:
         """
@@ -208,7 +204,7 @@ class IAsyncModule(ABC, Process):
     async def call_msg_handler(self, channel: str, data: dict):
         handler: Callable = self.channel_tracker[channel]["handler"]
         if asyncio.iscoroutinefunction(handler):
-            await handler(data)
+            self.create_task(handler, data)
         else:
             handler(data)
 
@@ -287,8 +283,6 @@ class IAsyncModule(ABC, Process):
 
         try:
             await self.setup()
-            # error: bool = await self.pre_main()
-
             if asyncio.iscoroutinefunction(self.pre_main):
                 error: bool = await self.pre_main()
             else:
