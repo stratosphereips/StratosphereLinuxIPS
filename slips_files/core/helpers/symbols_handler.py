@@ -135,7 +135,7 @@ class SymbolHandler:
         # Return empty string if no conditions are met
         return ""
 
-    def compute(self, flow, twid: str, tuple_key: str):
+    async def compute(self, flow, twid: str, tuple_key: str):
         """
         This function computes the new symbol for the tuple according to the
         original stratosphere IPS model of letters
@@ -167,7 +167,7 @@ class SymbolHandler:
             td1, td2 = 0.1, 10.0
             ts1, ts2 = 250.0, 1100.0
 
-            (last_last_ts, last_ts) = self.db.get_t2_for_profile_tw(
+            (last_last_ts, last_ts) = await self.db.get_t2_for_profile_tw(
                 profileid, twid, tupleid, tuple_key
             )
 

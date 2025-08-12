@@ -99,7 +99,7 @@ class Whitelist:
         ):
             return True
 
-        for answer in await self.ip_analyzer.extract_dns_answers(flow):
+        for answer in self.ip_analyzer.extract_dns_answers(flow):
             if await self.ip_analyzer.is_whitelisted(
                 answer, Direction.DST, "flows"
             ):

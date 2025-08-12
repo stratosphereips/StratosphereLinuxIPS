@@ -88,17 +88,17 @@ class DBManager:
         await instance.init_clients()
         return instance
 
-    def is_db_malformed(self, db_path: str) -> bool:
+    async def is_db_malformed(self, db_path: str) -> bool:
         try:
             with sqlite3.connect(db_path, timeout=3) as conn:
                 cursor = conn.execute("PRAGMA integrity_check;")
                 result = cursor.fetchone()
                 return result[0] != "ok"
         except sqlite3.DatabaseError as e:
-            self.print(f"Database error during integrity_check: {e}")
+            await self.print(f"Database error during integrity_check: {e}")
             return True
 
-    def backup_db(self, db_path: str):
+    async def backup_db(self, db_path: str):
         """
         Backs up the database file to a new file with a timestamp. and
         deleted the file at db_path if successfully backed up.
@@ -115,7 +115,7 @@ class DBManager:
             backup_short = (
                 Path(backup_path).parent.name + "/" + Path(backup_path).name
             )
-            self.print(
+            await self.print(
                 f"{db_short} backup is at {backup_short}. "
                 f"Creating a new one at {db_short}."
             )
@@ -126,8 +126,9 @@ class DBManager:
                 f"restart Slips."
             )
 
-    def init_p2ptrust_db(self) -> str:
-        """Initializes and returns the path to a valid trustdb inside p2ptrust_runtime_dir."""
+    async def init_p2ptrust_db(self) -> str:
+        """Initializes and returns the path to a valid trustdb inside
+        p2ptrust_runtime_dir."""
         p2ptrust_runtime_dir = os.path.join(os.getcwd(), "p2ptrust_runtime/")
         Path(p2ptrust_runtime_dir).mkdir(parents=True, exist_ok=True)
         db_path = os.path.join(p2ptrust_runtime_dir, "trustdb.db")
@@ -135,23 +136,23 @@ class DBManager:
 
         if os.path.exists(db_path):
             if self.is_db_malformed(db_path):
-                self.print(
+                await self.print(
                     "trustdb.db is malformed. Backing it up and "
                     "creating another one..."
                 )
-                self.backup_db(db_path)
+                await self.backup_db(db_path)
             if not self.has_write_access_to_sqlite(db_path):
-                self.print(
+                await self.print(
                     "trustdb.db is not writable. Backing it up and "
                     "creating another one..."
                 )
-                self.backup_db(db_path)
+                await self.backup_db(db_path)
                 # TODO LAST THING HERE IS WE'RE NOT CREATING A NEW DB AFTER
                 #  BACKING UP THE OLDONE??
 
         return db_path
 
-    def has_write_access_to_sqlite(self, db_path: str) -> bool:
+    async def has_write_access_to_sqlite(self, db_path: str) -> bool:
         """Check if the current process has write access to the
         SQLite database file."""
         try:
@@ -184,27 +185,27 @@ class DBManager:
         ):
             return False
 
-    def get_p2ptrust_dir(self) -> str:
+    async def get_p2ptrust_dir(self) -> str:
         return self.p2ptrust_runtime_dir
 
-    def get_p2ptrust_db_path(self) -> str:
+    async def get_p2ptrust_db_path(self) -> str:
         return self.trust_db_path
 
-    def print(self, *args, **kwargs):
-        return self.printer.print(*args, **kwargs)
+    async def print(self, *args, **kwargs):
+        return await self.printer.print(*args, **kwargs)
 
     @classmethod
-    def read_configuration(cls):
+    async def read_configuration(cls):
         conf = ConfigParser()
         cls.width = conf.get_tw_width_as_float()
 
-    def get_sqlite_db_path(self) -> str:
+    async def get_sqlite_db_path(self) -> str:
         return self.sqlite.get_db_path()
 
-    def iterate_flows(self, *args, **kwargs):
+    async def iterate_flows(self, *args, **kwargs):
         return self.sqlite.iterate_flows(*args, **kwargs)
 
-    def get_columns(self, *args, **kwargs):
+    async def get_columns(self, *args, **kwargs):
         return self.sqlite.get_columns(*args, **kwargs)
 
     async def publish(self, *args, **kwargs):
@@ -216,7 +217,7 @@ class DBManager:
     async def publish_stop(self, *args, **kwargs):
         return await self.rdb.publish_stop(*args, **kwargs)
 
-    def pubsub(self, *args, **kwargs):
+    async def pubsub(self, *args, **kwargs):
         return self.rdb.pubsub(*args, **kwargs)
 
     async def get_message(self, *args, **kwargs):
@@ -539,7 +540,7 @@ class DBManager:
     async def store_std_file(self, *args, **kwargs):
         return await self.rdb.store_std_file(*args, **kwargs)
 
-    def get_stdfile(self, *args, **kwargs):
+    async def get_stdfile(self, *args, **kwargs):
         return self.rdb.get_stdfile(*args, **kwargs)
 
     async def set_evidence_causing_alert(self, *args, **kwargs):
@@ -592,7 +593,7 @@ class DBManager:
             uids: List[str] = await self.rdb.get_flows_causing_evidence(
                 evidence_id
             )
-            self.set_flow_label(uids, "malicious")
+            await self.set_flow_label(uids, "malicious")
         return
 
     async def get_user_agents_count(self, *args, **kwargs):
@@ -784,25 +785,22 @@ class DBManager:
     async def add_port(self, *args, **kwargs):
         return await self.rdb.add_port(*args, **kwargs)
 
-    async def get_final_state_from_flags(self, *args, **kwargs):
-        return await self.rdb.get_final_state_from_flags(*args, **kwargs)
-
     async def add_ips(self, *args, **kwargs):
         return await self.rdb.add_ips(*args, **kwargs)
 
     async def get_altflow_from_uid(self, *args, **kwargs):
         return self.sqlite.get_altflow_from_uid(*args, **kwargs)
 
-    def get_all_flows_in_profileid_twid(self, *args, **kwargs):
+    async def get_all_flows_in_profileid_twid(self, *args, **kwargs):
         return self.sqlite.get_all_flows_in_profileid_twid(*args, **kwargs)
 
-    def get_all_flows_in_profileid(self, *args, **kwargs):
+    async def get_all_flows_in_profileid(self, *args, **kwargs):
         return self.sqlite.get_all_flows_in_profileid(*args, **kwargs)
 
-    def get_all_flows(self, *args, **kwargs):
+    async def get_all_flows(self, *args, **kwargs):
         return self.sqlite.get_all_flows(*args, **kwargs)
 
-    def get_all_contacted_ips_in_profileid_twid(self, *args, **kwargs):
+    async def get_all_contacted_ips_in_profileid_twid(self, *args, **kwargs):
         """
         Get all the contacted IPs in a given profile and TW
         """
@@ -1051,16 +1049,16 @@ class DBManager:
     async def get_malicious_label(self):
         return await self.rdb.malicious_label
 
-    def init_tables(self, *args, **kwargs):
+    async def init_tables(self, *args, **kwargs):
         return self.sqlite.init_tables(*args, **kwargs)
 
-    def create_table(self, *args, **kwargs):
+    async def create_table(self, *args, **kwargs):
         return self.sqlite.create_table(*args, **kwargs)
 
-    def set_flow_label(self, *args, **kwargs):
+    async def set_flow_label(self, *args, **kwargs):
         return self.sqlite.set_flow_label(*args, **kwargs)
 
-    def get_flow(self, *args, **kwargs):
+    async def get_flow(self, *args, **kwargs):
         """returns the raw flow as read from the log file"""
         return self.sqlite.get_flow(*args, **kwargs)
 
@@ -1072,25 +1070,25 @@ class DBManager:
             flow, profileid=profileid, twid=twid, label=label
         )
 
-    def get_slips_start_time(self):
+    async def get_slips_start_time(self):
         return self.rdb.get_slips_start_time()
 
     async def set_slips_internal_time(self, ts):
         return await self.rdb.set_slips_internal_time(ts)
 
-    def add_altflow(self, *args, **kwargs):
+    async def add_altflow(self, *args, **kwargs):
         return self.sqlite.add_altflow(*args, **kwargs)
 
-    def insert(self, *args, **kwargs):
+    async def insert(self, *args, **kwargs):
         return self.sqlite.insert(*args, **kwargs)
 
-    def update(self, *args, **kwargs):
+    async def update(self, *args, **kwargs):
         return self.sqlite.update(*args, **kwargs)
 
-    def delete(self, *args, **kwargs):
+    async def delete(self, *args, **kwargs):
         return self.sqlite.delete(*args, **kwargs)
 
-    def select(self, *args, **kwargs):
+    async def select(self, *args, **kwargs):
         return self.sqlite.select(*args, **kwargs)
 
     async def get_pid_of(self, *args, **kwargs):
@@ -1108,7 +1106,7 @@ class DBManager:
     async def get_evidence_detection_threshold(self, *args, **kwargs):
         return await self.rdb.get_evidence_detection_threshold(*args, **kwargs)
 
-    def get_flows_count(self, *args, **kwargs):
+    async def get_flows_count(self, *args, **kwargs):
         return self.sqlite.get_flows_count(*args, **kwargs)
 
     async def get_redis_pid(self, *args, **kwargs):
@@ -1117,7 +1115,7 @@ class DBManager:
     async def increment_attack_counter(self, *args, **kwargs):
         return await self.rdb.increment_attack_counter(*args, **kwargs)
 
-    def export_labeled_flows(self, *args, **kwargs):
+    async def export_labeled_flows(self, *args, **kwargs):
         """
         exports the labeled flows and altflows stored in sqlite
         db to json or csv based on the config file
@@ -1138,14 +1136,14 @@ class DBManager:
     async def get_tw_limits(self, *args, **kwargs):
         return await self.rdb.get_tw_limits(*args, **kwargs)
 
-    def close_sqlite(self, *args, **kwargs):
+    async def close_sqlite(self, *args, **kwargs):
         # when stopping the daemon using -S, slips doesn't start the sqlite db
         if self.sqlite:
             self.sqlite.close(*args, **kwargs)
 
     async def close_all_dbs(self, *args, **kwargs):
         await self.rdb.close()
-        self.close_sqlite()
+        await self.close_sqlite()
         if self.trust_db:
             self.trust_db.close()
 

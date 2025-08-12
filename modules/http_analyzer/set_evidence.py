@@ -20,7 +20,7 @@ class SetEvidenceHelper:
     def __init__(self, db):
         self.db = db
 
-    def weird_http_method(
+    async def weird_http_method(
         self, twid: str, weird_flow: Weird, flow: dict
     ) -> None:
         confidence = 0.9
@@ -57,9 +57,9 @@ class SetEvidenceHelper:
             confidence=confidence,
         )
 
-        self.db.set_evidence(evidence)
+        await self.db.set_evidence(evidence)
 
-    def pastebin_downloads(self, flow, twid):
+    async def pastebin_downloads(self, flow, twid):
         confidence: float = 1
         threat_level: ThreatLevel = ThreatLevel.INFO
         response_body_len = int(flow.response_body_len)
@@ -84,9 +84,9 @@ class SetEvidenceHelper:
             timestamp=flow.starttime,
         )
 
-        self.db.set_evidence(evidence)
+        await self.db.set_evidence(evidence)
 
-    def multiple_user_agents_in_a_row(self, flow, ua, twid):
+    async def multiple_user_agents_in_a_row(self, flow, ua, twid):
         description: str = (
             f"Using multiple user-agents:" f' "{ua}" then "{flow.user_agent}"'
         )
@@ -107,9 +107,9 @@ class SetEvidenceHelper:
             timestamp=flow.starttime,
         )
 
-        self.db.set_evidence(evidence)
+        await self.db.set_evidence(evidence)
 
-    def multiple_empty_connections(self, flow, host, uids, twid):
+    async def multiple_empty_connections(self, flow, host, uids, twid):
         confidence: float = 1
         description: str = f"Multiple empty HTTP connections to {host}"
         twid_number = twid.replace("timewindow", "")
@@ -129,9 +129,9 @@ class SetEvidenceHelper:
             timestamp=flow.starttime,
         )
 
-        self.db.set_evidence(evidence)
+        await self.db.set_evidence(evidence)
 
-    def suspicious_user_agent(self, flow, profileid, twid):
+    async def suspicious_user_agent(self, flow, profileid, twid):
         confidence: float = 1
         saddr = profileid.split("_")[1]
         description: str = (
@@ -155,9 +155,9 @@ class SetEvidenceHelper:
             timestamp=flow.starttime,
         )
 
-        self.db.set_evidence(evidence)
+        await self.db.set_evidence(evidence)
 
-    def non_http_port_80_conn(self, twid, flow) -> None:
+    async def non_http_port_80_conn(self, twid, flow) -> None:
         twid_number: int = int(twid.replace("timewindow", ""))
         # to add a correlation between the 2 evidence in alerts.json
         evidence_id_of_dstip_as_the_attacker = str(uuid4())
@@ -189,7 +189,7 @@ class SetEvidenceHelper:
             src_port=flow.sport,
             dst_port=flow.dport,
         )
-        self.db.set_evidence(evidence)
+        await self.db.set_evidence(evidence)
 
         evidence: Evidence = Evidence(
             id=evidence_id_of_dstip_as_the_attacker,
@@ -219,9 +219,9 @@ class SetEvidenceHelper:
             dst_port=flow.dport,
         )
 
-        self.db.set_evidence(evidence)
+        await self.db.set_evidence(evidence)
 
-    def http_traffic(self, twid, flow):
+    async def http_traffic(self, twid, flow):
         confidence: float = 1
         description = (
             f"Unencrypted HTTP traffic from {flow.saddr} to" f" {flow.daddr}."
@@ -248,11 +248,11 @@ class SetEvidenceHelper:
             ),
         )
 
-        self.db.set_evidence(evidence)
+        await self.db.set_evidence(evidence)
 
         return True
 
-    def incompatible_user_agent(self, twid, flow, user_agent, vendor):
+    async def incompatible_user_agent(self, twid, flow, user_agent, vendor):
 
         os_type: str = user_agent.get("os_type", "").lower()
         os_name: str = user_agent.get("os_name", "").lower()
@@ -282,9 +282,9 @@ class SetEvidenceHelper:
             timestamp=flow.starttime,
         )
 
-        self.db.set_evidence(evidence)
+        await self.db.set_evidence(evidence)
 
-    def executable_mime_type(self, twid, flow):
+    async def executable_mime_type(self, twid, flow):
         description: str = (
             f"Download of an executable with MIME type: {flow.resp_mime_types} "
             f"by {flow.saddr} from {flow.daddr}."
@@ -311,7 +311,7 @@ class SetEvidenceHelper:
             timestamp=flow.starttime,
         )
 
-        self.db.set_evidence(evidence)
+        await self.db.set_evidence(evidence)
 
         evidence: Evidence = Evidence(
             id=evidence_id_of_dstip_as_the_attacker,
@@ -331,4 +331,4 @@ class SetEvidenceHelper:
             timestamp=flow.starttime,
         )
 
-        self.db.set_evidence(evidence)
+        await self.db.set_evidence(evidence)

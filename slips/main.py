@@ -9,11 +9,10 @@ import shutil
 import signal
 import subprocess
 import sys
-import time
+import asyncio
 from datetime import datetime
+import time
 from distutils.dir_util import copy_tree
-from typing import Set
-import logging
 
 from managers.host_ip_manager import HostIPManager
 from managers.metadata_manager import MetadataManager
@@ -28,17 +27,24 @@ from slips_files.common.style import green
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.checker import Checker
 
+import warnings
 
-logging.basicConfig(level=logging.WARNING)
+warnings.simplefilter("always", RuntimeWarning)
+
+# logging.basicConfig(level=logging.WARNING)
 
 DAEMONIZED_MODE = "daemonized"
+INTERACTIVE_MODE = "interactive"
+# Default Redis port for Slips. Slips always have a server on that port
+# opened for the cache db
+SLIPS_MAIN_REDIS_PORT = 6379
 
 
 class Main:
     def __init__(self, testing=False):
         self.name = "Main"
         self.alerts_default_path = "output/"
-        self.mode = "interactive"
+        self.mode = INTERACTIVE_MODE
         # objects to manage various functionality
         self.checker = Checker(self)
         self.redis_man = RedisManager(self)
@@ -62,13 +68,11 @@ class Main:
             self.checker.check_given_flags()
             self.prepare_locks_dir()
             if not self.args.stopdaemon:
-                # Check the type of input
                 (
                     self.input_type,
                     self.input_information,
                     self.line_type,
                 ) = self.checker.check_input_type()
-                # If we need zeek (bro), test if we can run it.
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
                 # this is the zeek dir slips will be using
@@ -381,7 +385,7 @@ class Main:
         """
         updates the statistics printed every 5s
         """
-        if not self.mode == "interactive":
+        if not self.mode == INTERACTIVE_MODE:
             return
 
         # only update the stats every 5s
@@ -400,6 +404,7 @@ class Main:
         profiles_len = await self.db.get_profiles_len()
         evidence_number = await self.db.get_evidence_number() or 0
         flow_per_min = await self.db.get_flows_analyzed_per_minute()
+
         stats = (
             f"\r[{now}] Total analyzed IPs: {green(profiles_len)}. "
             f"{await self.get_analyzed_flows_percentage()}"
@@ -444,22 +449,24 @@ class Main:
     def get_slips_logfile(self) -> str:
         if self.mode == "daemonized":
             return self.daemon.stdout
-        elif self.mode == "interactive":
+        elif self.mode == INTERACTIVE_MODE:
             return os.path.join(self.args.output, "slips.log")
+        return ""
 
     def get_slips_error_file(self) -> str:
         if self.mode == "daemonized":
             return self.daemon.stderr
-        elif self.mode == "interactive":
+        elif self.mode == INTERACTIVE_MODE:
             return os.path.join(self.args.output, "errors.log")
+        return ""
 
     async def print_gw_info(self):
         if self.gw_info_printed:
             return
-        if ip := await self.db.get_gateway_ip():
-            self.print(f"Detected gateway IP: {green(ip)}")
+
         if mac := await self.db.get_gateway_mac():
             self.print(f"Detected gateway MAC: {green(mac)}")
+
         self.gw_info_printed = True
 
     def prepare_locks_dir(self):
@@ -495,21 +502,24 @@ class Main:
             self.printer = Printer(self.logger, self.name)
             self.print(f"Storing Slips logs in {self.args.output}")
             self.redis_port: int = self.redis_man.get_redis_port()
-            # dont start the redis server if it's already started
-            start_redis_server = not utils.is_port_in_use(self.redis_port)
+            # dont start the redis server if it's already started, unless
+            # it's SLIPS_MAIN_REDIS_PORT.
+            start_redis_server = (
+                self.redis_port == SLIPS_MAIN_REDIS_PORT
+            ) or not utils.is_port_in_use(self.redis_port)
 
             try:
-                self.db = DBManager(
+                self.db = await DBManager.create(
                     logger=self.logger,
                     output_dir=self.args.output,
                     redis_port=self.redis_port,
                     conf=self.conf,
-                    args=self.args,
+                    slips_args=self.args,
                     main_pid=int(self.pid),
-                    caller_pid=int(self.pid),
+                    flush_db=True,
                     start_redis_server=start_redis_server,
                 )
-                self.pubsub = self.db.pubsub()
+                self.pubsub = await self.db.pubsub()
             except RuntimeError as e:
                 self.print(str(e), 1, 1)
                 self.terminate_slips()
@@ -528,7 +538,7 @@ class Main:
             # to be able to use the host IP as analyzer IP in alerts.json
             # should be after setting the input metadata with "input_type"
             # TLDR; dont change the order of this line
-            host_ip = self.host_ip_man.store_host_ip()
+            host_ip = await self.host_ip_man.store_host_ip()
 
             self.print(
                 f"Using redis server on port: {green(self.redis_port)}",
@@ -611,22 +621,18 @@ class Main:
             # The signals SIGKILL and SIGSTOP cannot be caught,
             # blocked, or ignored.
             signal.signal(signal.SIGTERM, sig_handler)
-
             await self.proc_man.start_evidence_process()
+
             await self.proc_man.start_profiler_process()
-
             await self.db.subscribe(self.pubsub, ["control_channel"])
-
             await self.metadata_man.add_metadata_if_enabled()
 
             self.input_process = await self.proc_man.start_input_process()
             # obtain the list of active processes
             children = multiprocessing.active_children()
             self.proc_man.set_slips_processes(children)
-
             await self.db.store_pid("main", int(self.pid))
             await self.metadata_man.set_input_metadata()
-
             # warn about unused open redis servers
             open_servers = len(self.redis_man.get_open_redis_servers())
             if open_servers > 1:
@@ -648,8 +654,7 @@ class Main:
             while not await self.proc_man.stop_slips():
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
-                time.sleep(5)
-                await self.db.check_health()
+                await asyncio.sleep(5)
                 await self.print_gw_info()
 
                 # if you remove the below logic anywhere before the
@@ -660,11 +665,14 @@ class Main:
                 await self.update_stats()
                 await self.db.check_tw_to_close()
 
-                modified_profiles: Set[str] = (
-                    await self.metadata_man.update_slips_stats_in_the_db()[1]
-                )
+                (
+                    _,
+                    modified_profiles,
+                ) = await self.metadata_man.update_slips_stats_in_the_db()
 
-                self.host_ip_man.update_host_ip(host_ip, modified_profiles)
+                await self.host_ip_man.update_host_ip(
+                    host_ip, modified_profiles
+                )
 
         except KeyboardInterrupt:
             # the EINTR error code happens if a signal occurred while

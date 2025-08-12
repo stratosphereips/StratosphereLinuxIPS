@@ -176,7 +176,7 @@ class FlowProcessor:
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
 
-    async def add_flow_to_profile(self, flow, whitelist):
+    async def add_flow_to_profile(self, flow):
         """
         This is the main function that takes the columns of a flow
         and does all the magic to convert it into a working data in slips.
@@ -203,7 +203,7 @@ class FlowProcessor:
         await self.get_gateway_info(flow)
 
         # Check if the flow is whitelisted and we should not process it
-        if whitelist.is_whitelisted_flow(flow):
+        if await self.whitelist.is_whitelisted_flow(flow):
             return True
 
         # 5th. Store the data according to the paremeters
@@ -355,7 +355,7 @@ class FlowProcessor:
         # set the pcap/file start time in the analysis key
         # this db.get() is here to see if another FlowProcessor instance
         # already set the ts
-        if self.first_flow and not self.db.get_first_flow_time():
+        if self.first_flow and not await self.db.get_first_flow_time():
             await self.db.set_input_metadata({"file_start": ts})
             self.first_flow = False
 
@@ -386,11 +386,11 @@ class FlowProcessor:
         }
         try:
             # call the function that handles this flow
-            cases[flow.type_]()
+            await cases[flow.type_]()
         except KeyError:
             for supported_type in cases:
                 if supported_type in flow.type_:
-                    cases[supported_type]()
+                    await cases[supported_type]()
             return False
 
         # if the flow type matched any of the ifs above,
@@ -417,7 +417,7 @@ class FlowProcessor:
         else:
             return
 
-        symbol = self.symbol_handler.compute(flow, twid, "InTuples")
+        symbol = await self.symbol_handler.compute(flow, twid, "InTuples")
 
         saddr_as_obj = ipaddress.ip_address(flow.saddr)
         # Add the src tuple using the src ip, and dst port
@@ -475,12 +475,12 @@ class FlowProcessor:
             or ip_obj.is_reserved
         )
 
-    def should_set_localnet(self, flow) -> bool:
+    async def should_set_localnet(self, flow) -> bool:
         """
         returns true only if the saddr of the current flow is ipv4, private
         and we don't have the local_net set already
         """
-        if self.is_localnet_set:
+        if self.is_localnet_set or not await self.db.get_local_network():
             return False
 
         if flow.saddr == "0.0.0.0":
@@ -601,7 +601,7 @@ class FlowProcessor:
         """
         stores the local network if possible
         """
-        if not self.should_set_localnet(flow):
+        if not await self.should_set_localnet(flow):
             return
 
         local_net: str = self.get_local_net(flow)
@@ -636,7 +636,7 @@ class FlowProcessor:
                 if not flow:
                     continue
 
-                await self.add_flow_to_profile(flow, self.whitelist)
+                await self.add_flow_to_profile(flow)
                 await self.handle_setting_local_net(flow)
                 await self.db.increment_processed_flows()
             except Exception as e:

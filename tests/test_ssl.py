@@ -10,6 +10,8 @@ from unittest.mock import (
 )
 import json
 import pytest
+
+from slips_files.common.slips_utils import get_final_state_from_flags
 from slips_files.core.flows.zeek import (
     SSL,
     Conn,
@@ -614,7 +616,7 @@ def test_is_tcp_established_443_non_empty_flow(
         dbytes=dbytes,
     )
 
-    ssl.db.get_final_state_from_flags.return_value = final_state
+    get_final_state_from_flags.return_value = final_state
 
     result = ssl.is_tcp_established_443_non_empty_flow(flow)
     assert result == expected

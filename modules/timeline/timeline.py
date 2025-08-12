@@ -185,7 +185,7 @@ class Timeline(IAsyncModule):
             "dns_resolution": self.get_dns_resolution(flow.daddr),
             "daddr": flow.daddr,
             "dport/proto": f"{str(flow.dport)}/{flow.proto.upper()}",
-            "state": self.db.get_final_state_from_flags(flow.state, flow.pkts),
+            "state": utils.get_final_state_from_flags(flow.state, flow.pkts),
             "warning": (
                 "No data exchange!" if not (flow.sbytes + flow.dbytes) else ""
             ),

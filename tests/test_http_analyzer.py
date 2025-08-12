@@ -12,6 +12,7 @@ from unittest.mock import (
 )
 import requests
 
+from slips_files.common.slips_utils import get_final_state_from_flags
 from slips_files.core.flows.zeek import (
     HTTP,
     Weird,
@@ -715,7 +716,7 @@ def test_is_tcp_established_port_80_non_empty_flow(
         sbytes=sbytes,
         dbytes=dbytes,
     )
-    analyzer.db.get_final_state_from_flags.return_value = final_state
+    get_final_state_from_flags.return_value = final_state
     result = analyzer.is_tcp_established_port_80_non_empty_flow(flow)
     assert result == expected
 

@@ -416,8 +416,9 @@ class IoCHandler:
         3- Domain is not in the DB. Return False
         """
         data = await self.rcache.hget(self.constants.DOMAINS_INFO, domain)
-        data = json.loads(data) if data or data == {} else False
-        return data
+        if data or data == {}:
+            return json.loads(data)
+        return False
 
     async def _set_new_domain(self, domain: str):
         """
@@ -449,10 +450,8 @@ class IoCHandler:
         # Get the previous info already stored
         domain_data = await self.get_domain_data(domain)
         if not domain_data:
-            # This domain is not in the dictionary, add it first
             await self._set_new_domain(domain)
-            # Now get the data, which should be empty, but just in case
-            domain_data = await self.get_domain_data(domain)
+            domain_data = {}
 
         # Let's check each key stored for this domain
         for key in iter(info_to_set):
@@ -497,12 +496,11 @@ class IoCHandler:
                 else:
                     domain_data[key] = data_to_store
 
-            # Store
-            domain_data = json.dumps(domain_data)
-            await self.rcache.hset(
-                self.constants.DOMAINS_INFO, domain, domain_data
-            )
-            await self.r.publish(self.channels.DNS_INFO_CHANGE, domain)
+        domain_data = json.dumps(domain_data)
+        await self.rcache.hset(
+            self.constants.DOMAINS_INFO, domain, domain_data
+        )
+        await self.r.publish(self.channels.DNS_INFO_CHANGE, domain)
 
     async def cache_url_info_by_virustotal(self, url: str, urldata: dict):
         """

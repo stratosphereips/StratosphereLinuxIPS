@@ -59,7 +59,6 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
             urlhaus (URLhaus): An instance of the URLhaus module for
             querying URLhaus data.
         """
-        self.separator = self.db.get_field_separator()
         self.c1 = self.db.subscribe("give_threat_intelligence")
         self.c2 = self.db.subscribe("new_downloaded_file")
         self.channels = {
@@ -1797,7 +1796,7 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
             return False
         return True
 
-    def pre_main(self):
+    async def pre_main(self):
         utils.drop_root_privs_permanently()
         # Load the local Threat Intelligence files that are
         # stored in the local folder self.path_to_local_ti_files
@@ -1811,7 +1810,7 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
         for local_file in local_files:
             self.update_local_file(local_file)
 
-        utils.start_thread(self.pending_circllu_calls_thread, self.db)
+        await utils.start_thread(self.pending_circllu_calls_thread, self.db)
 
     def main(self):
         # The channel can receive an IP address or a domain name

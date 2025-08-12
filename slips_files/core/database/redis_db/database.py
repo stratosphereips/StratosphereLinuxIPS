@@ -620,9 +620,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             await pipe.execute()
             return
 
-    async def get_message(
-        self, pubsub: redis.client.PubSub, timeout=0.0000001
-    ):
+    async def get_message(self, pubsub: redis.client.PubSub, timeout=0.001):
         """
         Wrapper for redis' get_message() to be able to handle
         redis.exceptions.ConnectionError
@@ -660,7 +658,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                         0,
                         1,
                     )
-                time.sleep(self.backoff)
+                await asyncio.sleep(self.backoff)
                 self.backoff = self.backoff * 2
                 self.connection_retry += 1
                 return await self.get_message(pubsub, timeout)

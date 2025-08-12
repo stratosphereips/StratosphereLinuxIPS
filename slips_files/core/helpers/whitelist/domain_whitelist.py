@@ -36,10 +36,9 @@ class DomainAnalyzer(IWhitelistAnalyzer):
                 domains.append(sni_info.get("server_name", ""))
 
         try:
-            resolution = await self.db.get_dns_resolution(ip).get(
-                "domains", []
-            )
-            domains.extend(iter(resolution))
+            resolution = await self.db.get_dns_resolution(ip)
+            resolution_domains = resolution.get("domains", [])
+            domains.extend(iter(resolution_domains))
         except (KeyError, TypeError):
             pass
 

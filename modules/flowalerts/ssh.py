@@ -77,11 +77,11 @@ class SSH(IFlowalertsAnalyzer):
         Function to check if an SSH connection logged in successfully
         """
         # this is the ssh flow read from conn.log not ssh.log
-        conn_log_flow = utils.get_original_conn_flow(flow, self.db)
+        conn_log_flow = await utils.get_original_conn_flow(flow, self.db)
 
         if not conn_log_flow:
             await asyncio.sleep(15)
-            conn_log_flow = utils.get_original_conn_flow(flow, self.db)
+            conn_log_flow = await utils.get_original_conn_flow(flow, self.db)
             if not conn_log_flow:
                 return
 

@@ -715,12 +715,12 @@ class DNS(IFlowalertsAnalyzer):
 
         self.pending_dns_without_conn.close()
 
-    def pre_analyze(self):
+    async def pre_analyze(self):
         """Code that shouldnt be run in a loop. runs only once in
         flowalerts' pre_main"""
         # we didnt put this in __init__ because it uses self.flowalerts
         # attributes that are not initialized yet in __init__
-        utils.start_thread(
+        await utils.start_thread(
             self.dns_without_connection_timeout_checker_thread, self.db
         )
 

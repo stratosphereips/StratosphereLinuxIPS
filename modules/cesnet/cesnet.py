@@ -99,7 +99,7 @@ class CESNET(IAsyncModule):
         """
         return "Source" in evidence_in_IDEA or "Target" in evidence_in_IDEA
 
-    def export_evidence(self, evidence: dict):
+    async def export_evidence(self, evidence: dict):
         """
         Exports evidence to warden server
         """
@@ -135,7 +135,7 @@ class CESNET(IAsyncModule):
             args=[[evidence_in_idea], q],
             name="cesnet_sender_thread",
         )
-        utils.start_thread(self.sender_thread, self.db)
+        await utils.start_thread(self.sender_thread, self.db)
         self.sender_thread.join()
         result = q.get()
 

@@ -3,6 +3,7 @@
 import base64
 import binascii
 import hashlib
+import traceback
 from datetime import datetime, timedelta
 from re import findall
 from threading import Thread
@@ -131,9 +132,9 @@ class Utils(object):
         return threat_level in self.threat_levels
 
     @staticmethod
-    def get_original_conn_flow(altflow, db) -> Optional[dict]:
+    async def get_original_conn_flow(altflow, db) -> Optional[dict]:
         """Returns the original conn.log of the given altflow"""
-        original_conn_flow = db.get_flow(altflow.uid)
+        original_conn_flow = await db.get_flow(altflow.uid)
         original_flow_uid = next(iter(original_conn_flow))
         if original_conn_flow[original_flow_uid]:
             return json.loads(original_conn_flow[original_flow_uid])
@@ -339,7 +340,7 @@ class Utils(object):
             filename = filename.rsplit(".", 1)[0]
         return filename not in SUPPORTED_LOGFILES
 
-    def start_thread(self, thread: Thread, db):
+    async def start_thread(self, thread: Thread, db):
         """
         A wrapper for threading.Thread().start()
         starts the given thread and keeps track of its TID/PID in the db
@@ -347,7 +348,7 @@ class Utils(object):
         :param db: a DBManager obj to store the thread PID
         """
         thread.start()
-        db.store_pid(thread.name, int(thread._native_id))
+        await db.store_pid(thread.name, int(thread._native_id))
 
     def convert_ts_format(self, ts, required_format: str):
         """
@@ -772,6 +773,142 @@ class Utils(object):
             return {k: self.to_json_serializable(v) for k, v in obj.items()}
         else:
             return obj
+
+    def get_final_state_from_flags(self, state, pkts):
+        """
+        Analyze the flags given and return a summary of the state. Should work
+        with Argus and Zeek flags
+        We receive the packets to distinguish some Reset connections
+        """
+        try:
+            pre = state.split("_")[0]
+            try:
+                # Try Suricata states
+                """
+                There are different states in which a flow can be.
+                Suricata distinguishes three flow-states for TCP and two for UDP. For TCP,
+                these are: New, Established and Closed, for UDP only new and established.
+                For each of these states Suricata can employ different timeouts.
+                """
+                if "new" in state or "established" in state:
+                    return "Established"
+                elif "closed" in state:
+                    return "Not Established"
+
+                # We have various types of states depending on the type of flow.
+                # For Zeek
+                if state in ("S0", "REJ", "RSTOS0", "RSTRH", "SH", "SHR"):
+                    return "Not Established"
+                elif state in ("S1", "SF", "S2", "S3", "RSTO", "RSTP", "OTH"):
+                    return "Established"
+
+                # For Argus
+                suf = state.split("_")[1]
+                if "S" in pre and "A" in pre and "S" in suf and "A" in suf:
+                    """
+                    Examples:
+                    SA_SA
+                    SR_SA
+                    FSRA_SA
+                    SPA_SPA
+                    SRA_SPA
+                    FSA_FSA
+                    FSA_FSPA
+                    SAEC_SPA
+                    SRPA_SPA
+                    FSPA_SPA
+                    FSRPA_SPA
+                    FSPA_FSPA
+                    FSRA_FSPA
+                    SRAEC_SPA
+                    FSPA_FSRPA
+                    FSAEC_FSPA
+                    FSRPA_FSPA
+                    SRPAEC_SPA
+                    FSPAEC_FSPA
+                    SRPAEC_FSRPA
+                    """
+                    return "Established"
+                elif "PA" in pre and "PA" in suf:
+                    # Typical flow that was reported in the middle
+                    """
+                    Examples:
+                    PA_PA
+                    FPA_FPA
+                    """
+                    return "Established"
+                elif "ECO" in pre:
+                    return "ICMP Echo"
+                elif "ECR" in pre:
+                    return "ICMP Reply"
+                elif "URH" in pre:
+                    return "ICMP Host Unreachable"
+                elif "URP" in pre:
+                    return "ICMP Port Unreachable"
+                else:
+                    """
+                    Examples:
+                    S_RA
+                    S_R
+                    A_R
+                    S_SA
+                    SR_SA
+                    FA_FA
+                    SR_RA
+                    SEC_RA
+                    """
+                    return "Not Established"
+            except IndexError:
+                # suf does not exist, which means that this is some ICMP or no response was sent for UDP or TCP
+                if "ECO" in pre:
+                    # ICMP
+                    return "Established"
+                elif "UNK" in pre:
+                    # ICMP6 unknown upper layer
+                    return "Established"
+                elif "CON" in pre:
+                    # UDP
+                    return "Established"
+                elif "INT" in pre:
+                    # UDP trying to connect, NOT precisely not established but also NOT 'Established'. So we considered not established because there
+                    # is no confirmation of what happened.
+                    return "Not Established"
+                elif "EST" in pre:
+                    # TCP
+                    return "Established"
+                elif "RST" in pre:
+                    # TCP. When -z B is not used in Argus, states are single words. Most connections are reset when finished and therefore are established
+                    # It can happen that it is reset being not established, but we can't tell without -z b.
+                    # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
+                    return (
+                        "Not Established" if int(pkts) <= 3 else "Established"
+                    )
+                elif "FIN" in pre:
+                    # TCP. When -z B is not used in Argus, states are single words. Most connections are finished with FIN when finished and therefore are established
+                    # It can happen that it is finished being not established, but we can't tell without -z b.
+                    # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
+                    return (
+                        "Not Established" if int(pkts) <= 3 else "Established"
+                    )
+                else:
+                    """
+                    Examples:
+                    S_
+                    FA_
+                    PA_
+                    FSA_
+                    SEC_
+                    SRPA_
+                    """
+                    return "Not Established"
+        except Exception:
+            exception_line = sys.exc_info()[2].tb_lineno
+            print(
+                f"Error in getFinalStateFromFlags() in database.py line {exception_line}",
+                0,
+                1,
+            )
+            print(traceback.format_exc(), 0, 1)
 
 
 utils = Utils()

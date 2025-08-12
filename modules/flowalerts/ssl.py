@@ -48,10 +48,12 @@ class SSL(IFlowalertsAnalyzer):
         if "pastebin" not in ssl_flow.server_name:
             return False
 
-        conn_log_flow = utils.get_original_conn_flow(ssl_flow, self.db)
+        conn_log_flow = await utils.get_original_conn_flow(ssl_flow, self.db)
         if not conn_log_flow:
             await self.wait_for_new_flows_or_timeout(40)
-            conn_log_flow = utils.get_original_conn_flow(ssl_flow, self.db)
+            conn_log_flow = await utils.get_original_conn_flow(
+                ssl_flow, self.db
+            )
             if not conn_log_flow:
                 return False
 
@@ -132,7 +134,7 @@ class SSL(IFlowalertsAnalyzer):
         self.set_evidence.incompatible_cn(twid, flow, org_found_in_cn)
 
     def is_tcp_established_443_non_empty_flow(self, flow) -> bool:
-        state = self.db.get_final_state_from_flags(flow.state, flow.pkts)
+        state = utils.get_final_state_from_flags(flow.state, flow.pkts)
         return (
             str(flow.dport) == "443"
             and flow.proto.lower() == "tcp"

@@ -9,7 +9,6 @@ import pickle
 import pandas as pd
 import json
 import traceback
-import warnings
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -32,11 +31,7 @@ from slips_files.core.structures.evidence import (
 
 
 # This horrible hack is only to stop sklearn from printing those warnings
-def warn(*args, **kwargs):
-    pass
-
-
-warnings.warn = warn
+# warnings.filterwarnings("ignore", module="sklearn")
 
 
 class FlowMLDetection(IAsyncModule):

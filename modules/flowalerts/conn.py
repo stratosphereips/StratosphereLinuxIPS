@@ -808,7 +808,7 @@ class Conn(IFlowalertsAnalyzer):
             profileid = msg["profileid"]
             twid = msg["twid"]
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
-            flow.interpreted_state = self.db.get_final_state_from_flags(
+            flow.interpreted_state = utils.get_final_state_from_flags(
                 flow.state, flow.pkts
             )
             self.check_long_connection(twid, flow)

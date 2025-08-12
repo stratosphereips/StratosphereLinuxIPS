@@ -29,6 +29,7 @@ from typing import (
 
 
 from slips_files.common.abstracts.iobserver import IObservable
+from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
 from slips_files.common.abstracts.iasync_module import IAsyncModule
 from slips_files.core.helpers.flow_processor import FlowProcessor
@@ -116,12 +117,12 @@ class Profiler(IAsyncModule, IObservable):
         except Exception:
             return None
 
-    def start_profiler_threads(self):
+    async def start_profiler_threads(self):
         """starts 3 profiler threads for faster processing of the flows"""
         num_of_profiler_threads = 3
-        for _ in range(num_of_profiler_threads):
+        for i in range(num_of_profiler_threads):
             t = self.create_thread(self.process_flow)
-            t.start()
+            await utils.start_thread(t, self.db)
             self.profiler_threads.append(t)
 
     async def process_flow(self):
@@ -183,11 +184,11 @@ class Profiler(IAsyncModule, IObservable):
         ]
         self.client_ips = self.conf.client_ips()
 
-    def pre_main(self):
+    async def pre_main(self):
         client_ips = [str(ip) for ip in self.client_ips]
         if client_ips:
             self.print(f"Used client IPs: {green(', '.join(client_ips))}")
-        self.start_profiler_threads()
+        await self.start_profiler_threads()
 
     async def new_reload_whitelist_msg_handler(self):
         """

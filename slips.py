@@ -23,7 +23,6 @@ from __future__ import print_function
 
 import os
 import sys
-import time
 import warnings
 import asyncio
 
@@ -48,7 +47,7 @@ async def main():
         daemon_status: dict = Daemon(slips).stop()
         # it takes about 5 seconds for the stop_slips msg
         # to arrive in the channel, so give slips time to stop
-        time.sleep(3)
+        await asyncio.sleep(3)
         if daemon_status["stopped"]:
             print("Daemon stopped.")
         else:

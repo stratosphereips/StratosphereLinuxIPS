@@ -33,11 +33,11 @@ class StixExporter(IExporter):
                 name="stix_exporter_to_taxii_thread",
             )
 
-    def start_exporting_thread(self):
+    async def start_exporting_thread(self):
         # This thread is responsible for waiting n seconds before
         # each push to the stix server
         # it starts the timer when the first alert happens
-        utils.start_thread(self.export_to_taxii_thread, self.db)
+        await utils.start_thread(self.export_to_taxii_thread, self.db)
 
     @property
     def name(self):

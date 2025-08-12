@@ -3,6 +3,8 @@
 from dataclasses import asdict
 from unittest.mock import patch, MagicMock, call, Mock
 import json
+
+from slips_files.common.slips_utils import get_final_state_from_flags
 from tests.module_factory import ModuleFactory
 from slips_files.core.flows.zeek import HTTP, DNS, Conn
 from unittest.mock import ANY
@@ -163,9 +165,7 @@ def test_set_dhcp_flow(cached_flows, expected_hset_call):
     ],
 )
 def test_get_final_state_from_flags(flags, packet_count, expected_state):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    final_state = handler.get_final_state_from_flags(flags, packet_count)
+    final_state = get_final_state_from_flags(flags, packet_count)
     assert final_state == expected_state
 
 

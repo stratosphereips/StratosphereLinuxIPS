@@ -527,10 +527,10 @@ class ARP(IAsyncModule):
             return
         self.db.set_evidence(evidence)
 
-    def pre_main(self):
+    async def pre_main(self):
         """runs once before the main() is executed in a loop"""
         utils.drop_root_privs_permanently()
-        utils.start_thread(self.timer_thread_arp_scan, self.db)
+        await utils.start_thread(self.timer_thread_arp_scan, self.db)
 
     def main(self):
         self.clear_arp_logfile()

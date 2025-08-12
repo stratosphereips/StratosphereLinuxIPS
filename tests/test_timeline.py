@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import Mock, patch
 
+from slips_files.common.slips_utils import get_final_state_from_flags
 from slips_files.core.flows.suricata import (
     SuricataFlow,
 )
@@ -477,7 +478,7 @@ def test_process_tcp_udp_flow(saddr, flow, expected_activity):
     timeline.is_human_timestamp = False
     timeline.analysis_direction = "all"
     timeline.db.get_dns_resolution.return_value = {"domains": []}
-    timeline.db.get_final_state_from_flags.return_value = "Established"
+    get_final_state_from_flags.return_value = "Established"
     flow = SuricataFlow(
         uid="1234",
         saddr=saddr,

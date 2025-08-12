@@ -21,7 +21,7 @@ import signal
 import subprocess
 import sys
 import threading
-import time
+import queue
 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -102,9 +102,6 @@ class Input(IAsyncModule):
         self.open_file_handlers = {}
         self.open_file_handlers_lock = threading.Lock()
         self.is_running_non_stop: bool = await self.db.is_running_non_stop()
-        # just a way to tell IAsyncModule that the main() of this module
-        # shouldn't be run in a loop
-        self.should_run_in_a_loop = False
 
     def mark_self_as_done_processing(self):
         """
@@ -638,9 +635,9 @@ class Input(IAsyncModule):
         """
         print("@@@@@@@@@@@@@@@@ start_observer is called")
         # FileEventHandler (the observer) puts events in this queue,
-        # FileMonitorHelper
-        # executes them.
-        self.file_monitor_events_queue = asyncio.Queue()
+        # FileMonitorHelper executes them.
+        #  queue instad of asyncio queue bcus it's process-safe
+        self.file_monitor_events_queue = queue.Queue()
         self.event_queue_termination_event = asyncio.Event()
 
         # Now start the observer of new files.
@@ -694,11 +691,11 @@ class Input(IAsyncModule):
         # run zeek
         self.zeek_thread.start()
         # Give Zeek some time to generate at least 1 file.
-        time.sleep(3)
-
+        await asyncio.sleep(3)
         await self.db.store_pid("Zeek", self.zeek_pid)
         if not hasattr(self, "is_zeek_tabs"):
             self.is_zeek_tabs = False
+
         self.lines = await self.read_zeek_files()
         print("@@@@@@@@@@@@@@@@ read zile files returned!!")
         self.print_lines_read()
