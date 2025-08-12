@@ -117,7 +117,8 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         except KeyError:
             return False
 
-        return await self._is_asn_in_org(ip_asn, org)
+        asn_in_org = await self._is_asn_in_org(ip_asn, org)
+        return asn_in_org
 
     async def _is_asn_in_org(self, asn: str, org: str) -> bool:
         """
@@ -125,6 +126,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         """
         if not (asn and asn != "Unknown"):
             return False
+
         # because all ASN stored in slips organization_info/ are uppercase
         asn: str = asn.upper()
         if org.upper() in asn:
@@ -175,7 +177,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         part of the hardcoded IPs as part of this org in
         slips_files/organizations_info
         """
-        if self.is_ip_asn_in_org_asn(ip, org):
+        if await self.is_ip_asn_in_org_asn(ip, org):
             return True
 
         # search in the list of organization IPs
