@@ -90,7 +90,7 @@ jobs:
           - test_fides_bridge.py
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         ref: ${{ github.ref }}
         fetch-depth: 0
