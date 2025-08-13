@@ -213,7 +213,7 @@ flowmldetection:
   # You should have trained at least once with 'Normal' data and once with
   # 'Malicious' data in order for the test to work.
 
-  mode: test
+  mode: train
   # mode: test
   # mode: train
 

@@ -31,7 +31,7 @@ replace_line() {
 }
 
 cleanup_docker() {
-    docker rm -f slips >/dev/null 2>&1 || true
+    docker rm -f jan_slips >/dev/null 2>&1 || true
 }
 
 trap cleanup_docker EXIT
@@ -113,13 +113,15 @@ replace_line "$CONFIG_FILE" "$MODE_LINE_NUMBER" "  mode: train"
 
 # Run training
 echo "Running training on $TRAIN_DIR" | tee -a "$LOGFILE"
-if ! docker run --rm \
-        --network="host" \
-        --cap-add=NET_ADMIN \
-        --name slips \
+if ! docker run -dit --rm \
         -v "${PWD}:/StratosphereLinuxIPS" \
-        slips_image \
-        bash -c "python3 -W ignore slips.py -f '$UNIX_TRAIN_DIR'" \
+        --name jan_slips \
+        --net=host \
+        --cpu-shares 700 \
+        --memory=8g \
+        --memory-swap=8g \
+        --shm-size=512m \
+     stratosphereips/slips:latest bash -c "python3 -W ignore slips.py -f '$UNIX_TEST_DIR'" \
         >> "$LOGFILE" 2>&1; then
     echo "Docker training run failed:" >&2
     cleanup_docker
