@@ -17,7 +17,7 @@ parameters:
 
   # The debugging is related to errors, warnings and cases that may cause
   # errors.
-  debug: 2
+  debug: 1
 
   # The width of the time window (TW) used by Slips. All traffic is separated in
   # TW to be analyzed. This is so old detections can be forgoten.
@@ -213,7 +213,7 @@ flowmldetection:
   # You should have trained at least once with 'Normal' data and once with
   # 'Malicious' data in order for the test to work.
 
-  mode: train
+  mode: test
   # mode: test
   # mode: train
 
@@ -221,11 +221,11 @@ flowmldetection:
   # ouptput dir with performance metrics depending on the mode.
   create_performance_metrics_log_files: True
 
-  validate_on_train: True
+  validate_on_train: False
     # If set to True, the module will validate the model on the training data
   # Take off 10% of the batch and use it for validation,
   # store only the validation results in the log file
-  batch_size: 200
+  batch_size: 500
   # The batch size is the number of flows that will be used for training at once.
   # training trigerred every batch_size new flows
 
