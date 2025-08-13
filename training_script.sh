@@ -69,7 +69,7 @@ echo "Starting training script..."
 
 # Find dataset folders with 'data' subdir
 mapfile -t DATASETS < <(find "$DATASET_DIR" -mindepth 1 -maxdepth 1 -type d \
-    -exec test -d "{}/data" \; -print | xargs -n1 basename)
+    -exec test -d "{}/data" \; -print | xargs -n1 basename | sort)
 
 if [ ${#DATASETS[@]} -eq 0 ]; then
     echo "No datasets found in $DATASET_DIR" >&2
@@ -95,7 +95,6 @@ echo "Deleted: $FILE_TO_DELETE_1, $FILE_TO_DELETE_2"
 TRAIN_FOLDER="${DATASETS[$dataset_index]}"
 TRAIN_DIR="$DATASET_DIR/$TRAIN_FOLDER/data"
 TRAIN_ID="$dataset_index"
-UNIX_TRAIN_DIR="$TRAIN_DIR"  # already Linux path
 
 # Generate timestamped logfile name
 TIMESTAMP=$(date +"%d-%m_%H-%M")
@@ -113,7 +112,7 @@ replace_line "$CONFIG_FILE" "$MODE_LINE_NUMBER" "  mode: train"
 
 # Run training
 echo "Running training on $TRAIN_DIR" | tee -a "$LOGFILE"
-if ! docker run -dit --rm \
+if ! docker run --rm \
         -v "${PWD}:/StratosphereLinuxIPS" \
         --name jan_slips \
         --net=host \
@@ -121,7 +120,7 @@ if ! docker run -dit --rm \
         --memory=8g \
         --memory-swap=8g \
         --shm-size=512m \
-     stratosphereips/slips:latest bash -c "python3 -W ignore slips.py -f '$UNIX_TEST_DIR'" \
+     stratosphereips/slips:latest bash -c "python3 -W ignore slips.py -f '$TRAIN_DIR'" \
         >> "$LOGFILE" 2>&1; then
     echo "Docker training run failed:" >&2
     cleanup_docker
@@ -138,19 +137,20 @@ replace_line "$CONFIG_FILE" "$MODE_LINE_NUMBER" "  mode: test"
 # Run testing on all datasets
 for TEST_FOLDER in "${DATASETS[@]}"; do
     TEST_DIR="$DATASET_DIR/$TEST_FOLDER/data"
-    UNIX_TEST_DIR="$TEST_DIR"
 
     echo "----------------------------------------" | tee -a "$LOGFILE"
     echo "Testing on dataset: $TEST_FOLDER" | tee -a "$LOGFILE"
     echo "Running test on $TEST_DIR" | tee -a "$LOGFILE"
 
     if ! docker run --rm \
-            --network="host" \
-            --cap-add=NET_ADMIN \
-            --name slips \
             -v "${PWD}:/StratosphereLinuxIPS" \
-            slips_image \
-            bash -c "python3 -W ignore slips.py -f '$UNIX_TEST_DIR'" \
+            --name jan_slips \
+            --net=host \
+            --cpu-shares 700 \
+            --memory=8g \
+            --memory-swap=8g \
+            --shm-size=512m \
+            stratosphereips/slips:latest bash -c "python3 -W ignore slips.py -f '$TEST_DIR'" \
             >> "$LOGFILE" 2>&1; then
         echo "Docker testing run failed:" >&2
         cleanup_docker
