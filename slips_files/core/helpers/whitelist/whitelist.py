@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import asyncio
 from typing import (
     Dict,
     List,
@@ -138,16 +139,45 @@ class Whitelist:
     async def is_whitelisted_flow(self, flow) -> bool:
         """
         Checks if the src IP, dst IP, domain, dns answer, or organization
-         of this flow is whitelisted.
+        of this flow is whitelisted.
+        Runs the first three checks concurrently with early return.
         """
-        if await self._check_if_whitelisted_domains_of_flow(flow):
-            return True
 
-        if await self._flow_contains_whitelisted_ip(flow):
-            return True
+        async def check_domains():
+            return await self._check_if_whitelisted_domains_of_flow(flow)
 
-        if await self._flow_contains_whitelisted_mac(flow):
-            return True
+        async def check_ips():
+            return await self._flow_contains_whitelisted_ip(flow)
+
+        async def check_macs():
+            return await self._flow_contains_whitelisted_mac(flow)
+
+        # Start the first three checks concurrently
+        tasks = [
+            asyncio.create_task(check_domains()),
+            asyncio.create_task(check_ips()),
+            asyncio.create_task(check_macs()),
+        ]
+
+        done, pending = await asyncio.wait(
+            tasks, return_when=asyncio.FIRST_COMPLETED
+        )
+
+        try:
+            for t in done:
+                if t.result():
+                    for p in pending:
+                        p.cancel()
+                    return True
+
+            # No early success — complete remaining tasks
+            for p in pending:
+                if await p:
+                    return True
+
+        finally:
+            for p in pending:
+                p.cancel()
 
         if self.match.is_ignored_flow_type(flow.type_):
             return False
@@ -183,14 +213,32 @@ class Whitelist:
 
     async def is_whitelisted_evidence(self, evidence: Evidence) -> bool:
         """
-        Checks if an evidence is whitelisted
+        Checks if an evidence is whitelisted, running attacker/victim checks concurrently
+        and returning immediately if either is True.
         """
-        if await self._is_whitelisted_entity(evidence, "attacker"):
-            return True
 
-        if await self._is_whitelisted_entity(evidence, "victim"):
-            return True
-        return False
+        async def check(role: str):
+            return await self._is_whitelisted_entity(evidence, role)
+
+        task_attacker = asyncio.create_task(check("attacker"))
+        task_victim = asyncio.create_task(check("victim"))
+
+        done, pending = await asyncio.wait(
+            [task_attacker, task_victim], return_when=asyncio.FIRST_COMPLETED
+        )
+
+        try:
+            for t in done:
+                if t.result():
+                    # Cancel remaining tasks to save resources
+                    for p in pending:
+                        p.cancel()
+                    return True
+            return False
+        finally:
+            # Ensure pending tasks are cancelled
+            for p in pending:
+                p.cancel()
 
     def extract_ips_from_entity(
         self, entity: Union[Attacker, Victim]
