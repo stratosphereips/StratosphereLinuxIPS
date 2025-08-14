@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
+import asyncio
 
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -186,22 +187,26 @@ class EvidenceHandler(IAsyncModule):
         except Exception:
             self.handle_unable_to_log()
 
-    def add_to_log_file(self, data):
+    async def add_to_log_file(self, data):
         """
         Add a new evidence line to the alerts.log and other log files if
-        logging is enabled.
+        logging is enabled. Non-blocking.
         """
         try:
-            # write to alerts.log
-            self.logfile.write(data)
-            if not data.endswith("\n"):
-                self.logfile.write("\n")
-            self.logfile.flush()
+            # Offload file operations to a thread to avoid blocking the event loop
+            await asyncio.to_thread(self._write_log, data)
         except KeyboardInterrupt:
             return True
         except Exception:
             self.print("Error in add_to_log_file()")
             self.print(traceback.format_exc(), 0, 1)
+
+    def _write_log(self, data):
+        """Actual sync file writing logic."""
+        self.logfile.write(data)
+        if not data.endswith("\n"):
+            self.logfile.write("\n")
+        self.logfile.flush()
 
     async def log_alert(self, alert: Alert, blocked=False):
         """
@@ -227,7 +232,7 @@ class EvidenceHandler(IAsyncModule):
             f"{alert.timewindow.number}. (real time {now})"
         )
         # log to alerts.log
-        self.add_to_log_file(alert_description)
+        await self.add_to_log_file(alert_description)
         # log to alerts.json
         await self.add_alert_to_json_log_file(alert)
 
@@ -484,8 +489,10 @@ class EvidenceHandler(IAsyncModule):
             evidence_threat_level,
         )
 
-    def show_popup(self, alert: Alert):
-        alert_description: str = self.formatter.get_printable_alert(alert)
+    async def show_popup(self, alert: Alert):
+        alert_description: str = await self.formatter.get_printable_alert(
+            alert
+        )
         self.notify.show_popup(alert_description)
 
     def should_stop(self) -> bool:
@@ -527,7 +534,6 @@ class EvidenceHandler(IAsyncModule):
         # so that get_evidence_for_tw() call below won't return
         # unprocessed evidence.
         await self.db.mark_evidence_as_processed(evidence.id)
-
         if await self.whitelist.is_whitelisted_evidence(evidence):
             await self.db.cache_whitelisted_evidence_id(evidence.id)
             # Modules add evidence to the db before
@@ -550,7 +556,7 @@ class EvidenceHandler(IAsyncModule):
             flow_datetime,
         )
         # Add the evidence to alerts.log
-        self.add_to_log_file(evidence_to_log)
+        await self.add_to_log_file(evidence_to_log)
 
         await self.increment_attack_counter(
             evidence.profile.ip, evidence.victim, evidence_type

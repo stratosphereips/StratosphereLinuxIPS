@@ -392,7 +392,7 @@ class ProcessManager:
         modules_to_call = self.get_modules()[0]
         for module_name in modules_to_call:
             # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-            if module_name.replace(" ", "") != "HTTP Analyzer":
+            if module_name.replace(" ", "") != "HTTPAnalyzer":
                 continue
 
             module_class = modules_to_call[module_name]["obj"]

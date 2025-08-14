@@ -364,7 +364,6 @@ class FlowProcessor:
         function for adding the features going out of the profile
         """
         await self.store_first_seen_ts(flow.starttime)
-
         cases = {
             "flow": flow_parser.handle_conn,
             "conn": flow_parser.handle_conn,
@@ -391,7 +390,8 @@ class FlowProcessor:
             for supported_type in cases:
                 if supported_type in flow.type_:
                     await cases[supported_type]()
-            return False
+            else:
+                return False
 
         # if the flow type matched any of the ifs above,
         # mark this profile as modified
@@ -635,7 +635,6 @@ class FlowProcessor:
                 flow = self.input_handler_obj.process_line(line)
                 if not flow:
                     continue
-
                 await self.add_flow_to_profile(flow)
                 await self.handle_setting_local_net(flow)
                 await self.db.increment_processed_flows()
