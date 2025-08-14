@@ -1385,7 +1385,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
     async def get_gateway_ip(self):
         ip = await self.r.hget(self.constants.DEFAULT_GATEWAY, "IP")
-        print(f"@@@@@@@@@@@ DEBUG: Raw Redis returned: {ip!r}")
         return ip
 
     async def get_gateway_mac(self):

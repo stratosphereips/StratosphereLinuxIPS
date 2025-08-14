@@ -136,13 +136,13 @@ class IAsyncModule(ABC, Process):
         self.print(f"Problem in line {exception_line}", 0, 1)
         self.print(traceback.format_exc(), 0, 1)
 
-    def create_task(self, func, *args) -> Task:
+    def create_task(self, func, *args, **kwargs) -> Task:
         """
         wrapper for asyncio.create_task
         The goal here is to add a callback to tasks to be able to handle
         exceptions. because asyncio Tasks do not raise exceptions
         """
-        task = asyncio.create_task(func(*args))
+        task = asyncio.create_task(func(*args, **kwargs))
         task.add_done_callback(self.handle_task_exception)
         self.tasks.append(task)
         return task

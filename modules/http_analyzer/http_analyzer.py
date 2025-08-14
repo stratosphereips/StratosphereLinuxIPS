@@ -387,7 +387,7 @@ class HTTPAnalyzer(IAsyncModule):
         ):
             return False
 
-        await self.set_evidence.pastebin_downloads(flow, twid)
+        self.create_task(self.set_evidence.pastebin_downloads, flow, twid)
         return True
 
     async def check_weird_http_method(self, msg: Dict[str, str]):
@@ -403,9 +403,7 @@ class HTTPAnalyzer(IAsyncModule):
         conn_log_flow: Optional[dict]
         conn_log_flow = await utils.get_original_conn_flow(flow, self.db)
         if not conn_log_flow:
-            print("@@@@@@@@@@@@@@@@ !!!!!!!!!!!!!!1 sleeping 15 ")
             await asyncio.sleep(15)
-            print("@@@@@@@@@@@@@@@@ !!!!!!!!!! done sleeping 15!")
             conn_log_flow = await utils.get_original_conn_flow(flow, self.db)
             if not conn_log_flow:
                 return
@@ -620,27 +618,24 @@ class HTTPAnalyzer(IAsyncModule):
             self.http_recognized_flows = clean_http_recognized_flows
         self.ts_of_last_cleanup_of_http_recognized_flows = now
 
-    async def shutdown_gracefully(self):
-        """wait for all the tasks created by self.create_task()"""
-        await asyncio.gather(*self.tasks, return_exceptions=True)
-
     def pre_main(self):
         utils.drop_root_privs_permanently()
 
     async def new_http_msg_handler(self, msg: dict):
-        print("@@@@@@@@@@@@@@@@ new http msg handerrr")
         msg = json.loads(msg["data"])
-        print(f"@@@@@@@@@@@@@@@@ msg :{msg}")
         profileid = msg["profileid"]
         twid = msg["twid"]
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
-        await self.check_suspicious_user_agents(profileid, twid, flow)
-        await self.check_multiple_empty_connections(twid, flow)
+        self.create_task(
+            self.check_suspicious_user_agents, profileid, twid, flow
+        )
+        self.create_task(self.check_multiple_empty_connections, twid, flow)
         # find the UA of this profileid if we don't have it
         # get the last used ua of this profile
         cached_ua = await self.db.get_user_agent_from_profile(profileid)
         if cached_ua:
-            await self.check_multiple_user_agents_in_a_row(
+            self.create_task(
+                self.check_multiple_user_agents_in_a_row,
                 flow,
                 twid,
                 cached_ua,
@@ -653,17 +648,21 @@ class HTTPAnalyzer(IAsyncModule):
         ):
             # only UAs of type dict are browser UAs,
             # skips str UAs as they are SSH clients
-            await self.get_user_agent_info(flow.user_agent, profileid)
+            self.create_task(
+                self.get_user_agent_info, flow.user_agent, profileid
+            )
 
-        await self.extract_info_from_ua(flow.user_agent, profileid)
-        await self.detect_executable_mime_types(twid, flow)
-        await self.check_incompatible_user_agent(profileid, twid, flow)
-        await self.check_pastebin_downloads(twid, flow)
-        await self.set_evidence.http_traffic(twid, flow)
+        self.create_task(self.extract_info_from_ua, flow.user_agent, profileid)
+        self.create_task(self.detect_executable_mime_types, twid, flow)
+        self.create_task(
+            self.check_incompatible_user_agent, profileid, twid, flow
+        )
+        self.create_task(self.check_pastebin_downloads, twid, flow)
+        self.create_task(self.set_evidence.http_traffic, twid, flow)
 
     async def new_weird_msg_handler(self, msg: dict):
         msg = json.loads(msg["data"])
-        await self.check_weird_http_method(msg)
+        self.create_task(self.check_weird_http_method, msg)
 
     async def new_flow_msg_handler(self, msg: dict):
         msg = json.loads(msg["data"])
