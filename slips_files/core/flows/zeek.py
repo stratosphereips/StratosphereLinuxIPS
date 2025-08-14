@@ -237,6 +237,9 @@ class SMTP:
     saddr: str
     daddr: str
 
+    sport: int
+    dport: int
+
     last_reply: str
 
     ground_truth_label: str = ""
