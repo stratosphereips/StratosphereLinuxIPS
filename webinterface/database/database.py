@@ -1,8 +1,8 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import asyncio
 from typing import (
     Dict,
-    Optional,
 )
 import os
 
@@ -21,15 +21,11 @@ class Database(object):
     connects to the latest opened redis server on init
     """
 
-    def __init__(self):
-        # connect to the db manager
-        self.db: DBManager = self.get_db_manager_obj()
-
-    def set_db(self, port):
+    async def set_db(self, port):
         """changes the redis db we're connected to"""
-        self.db = self.get_db_manager_obj(port)
+        self.db = await self.create(port)
 
-    def get_db_manager_obj(self, port: int = False) -> Optional[DBManager]:
+    async def create(self, port: int = False):
         """
         Connects to redis db through the DBManager
         connects to the latest opened redis server if no port is given
@@ -52,20 +48,23 @@ class Database(object):
         )
         conf = ConfigParser()
         try:
-            return DBManager(
-                logger,
-                output_dir,
-                port,
-                conf,
+            self.db = await DBManager.create(
+                logger=logger,
+                output_dir=output_dir,
+                redis_port=port,
+                conf=conf,
+                slips_args=conf.get_args(),
                 start_redis_server=False,
                 start_sqlite=True,
                 flush_db=False,
+                main_pid=int(os.getppid()),
             )
+            return self
         except RuntimeError:
             return
 
 
-db_obj = Database()
+db_obj: Database = asyncio.run(Database().create())
 db: DBManager = db_obj.db
 
 
@@ -73,4 +72,4 @@ db: DBManager = db_obj.db
 def update_db(port):
     """is called when the user changes the used redis server from the web
     interface"""
-    db_obj.set_db(port)
+    asyncio.create_task(db_obj.set_db(port))
