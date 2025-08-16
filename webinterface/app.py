@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import uvicorn
 from flask import Flask, render_template, g, current_app
 
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -114,4 +115,9 @@ if __name__ == "__main__":
     app.register_blueprint(analysis, url_prefix="/analysis")
     app.register_blueprint(general, url_prefix="/general")
     app.register_blueprint(documentation, url_prefix="/documentation")
-    app.run(host="0.0.0.0", port=ConfigParser().web_interface_port)
+    # app.run(host="0.0.0.0", port=ConfigParser().web_interface_port)
+
+    # Use uvicorn to run the app in an asynchronous context
+    host = "0.0.0.0"
+    port = ConfigParser().web_interface_port
+    uvicorn.run(app, host=host, port=port)
