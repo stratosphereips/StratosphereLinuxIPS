@@ -1625,6 +1625,10 @@ class ProfileHandler:
         return data, last_index
 
     async def get_profiled_tw_timeline(self, profileid, timewindow):
+        print(
+            "@@@@@@@@@@@@@@@@ profilehandler.py: "
+            "get_profiled_tw_timeline is called.. "
+        )
         return await self.r.zrange(f"{profileid}_{timewindow}_timeline", 0, -1)
 
     async def mark_profile_as_gateway(self, profileid):

@@ -51,7 +51,14 @@ function hideAnalysisTable(tableID) {
 
 function updateIPInfo(row, field) {
     let data = row.data();
-    let url = '/analysis/info/' + data[field];
+    let ip_value = data[field];
+
+    // If the field is 'profile', extract the IP from 'profile_x.x.x.x' format
+    if (field === 'profile' && ip_value && ip_value.startsWith('profile_')) {
+        ip_value = ip_value.substring(8); // Remove 'profile_' prefix
+    }
+
+    let url = '/analysis/info/' + ip_value;
     $("#table_ipinfo").DataTable().ajax.url(url).load();
 }
 

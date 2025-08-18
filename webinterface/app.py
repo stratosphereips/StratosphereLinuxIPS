@@ -6,7 +6,6 @@ import os
 # Add the parent directory to the Python path so we can import slips_files
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import uvicorn
 from quart import Quart, render_template, g, current_app
 from blinker import signal
 
@@ -19,6 +18,9 @@ from webinterface.utils import get_open_redis_ports_in_order
 
 # Create a signal for message sending
 message_sent = signal("message-sent")
+
+# Global database connection pool
+db_connection_pool = {}
 
 
 def get_the_last_used_redis_port() -> None | int:
@@ -41,37 +43,70 @@ def create_app():
 app = create_app()
 
 
+async def get_or_create_db_connection(redis_port):
+    """
+    Get an existing database connection from the pool or create a new one.
+    """
+    global db_connection_pool
+
+    # Check if we already have a connection for this port
+    if redis_port in db_connection_pool:
+        db_manager = db_connection_pool[redis_port]
+        # Verify the connection is still valid
+        try:
+            # Simple check to see if the connection is alive
+            if hasattr(db_manager, "rdb") and db_manager.rdb:
+                await db_manager.rdb.ping()
+                return db_manager
+        except Exception as e:
+            print(
+                f"Database connection for port {redis_port} is stale, recreating: {e}"
+            )
+            # Remove stale connection
+            if redis_port in db_connection_pool:
+                try:
+                    await db_connection_pool[redis_port].close_all_dbs()
+                except Exception as e:
+                    pass
+                del db_connection_pool[redis_port]
+
+    # Create new connection
+    try:
+        print(
+            f"@@@@@@@@@@@@@@@@ creating db factory on port {redis_port} "
+            f"{type(redis_port)}"
+        )
+        db_manager = await DatabaseFactory().create(port=int(redis_port))
+        if db_manager is not None:
+            db_connection_pool[redis_port] = db_manager
+            print(f"Created new database connection for port {redis_port}")
+        return db_manager
+    except Exception as e:
+        print(f"Error creating DBManager for port {redis_port}: {e}")
+        return None
+
+
 @app.before_request
 async def before_request_db_connection():
     """
-    Connect to the database before each request and store the
-    connection object on Flask's 'g' object.
+    Get or reuse database connection from the pool and store it on Flask's 'g' object.
     """
     redis_port = current_app.config["CURRENT_REDIS_PORT"]
 
-    # Ensure required directories exist
-    import os
-
-    os.makedirs("/tmp/slips", exist_ok=True)
-
-    try:
-        g.db_manager = await DatabaseFactory().create(port=redis_port)
-        if g.db_manager is None:
-            print(f"Warning: Could not create DBManager for port {redis_port}")
-    except Exception as e:
-        print(f"Error creating DBManager: {e}")
-        g.db_manager = None
+    g.db_manager = await get_or_create_db_connection(redis_port)
+    if g.db_manager is None:
+        print(f"Warning: Could not get DBManager for port {redis_port}")
 
 
 @app.teardown_appcontext
 async def teardown_db_connection(exception):
     """
-    Close the Redis connection after each request.
-    This function is called even if an exception occurs.
+    Clean up the request context.
+    We don't close the database connection here as it's pooled.
     """
-    db_manager = g.pop("db_manager", None)
-    if db_manager:
-        await db_manager.close_all_dbs()
+    # Just remove the reference from g, but don't close the connection
+    # as it's managed by the connection pool
+    g.pop("db_manager", None)
 
 
 @app.route("/redis")
@@ -99,6 +134,10 @@ async def get_post_javascript_data(new_port):
     # Update the app's config so that the next request
     # uses the new port.
     current_app.config["CURRENT_REDIS_PORT"] = int(new_port)
+
+    # Pre-create connection for the new port to ensure it's ready
+    await get_or_create_db_connection(int(new_port))
+
     # This signal might be used by other parts of the system
     # but the Flask app now manages its own state via app.config.
     message_sent.send(int(new_port))
@@ -150,12 +189,40 @@ async def set_pcap_info():
         }
 
 
+async def cleanup_db_connections():
+    """
+    Clean up all database connections in the pool.
+    Called when the application shuts down.
+    """
+    global db_connection_pool
+    for port, db_manager in db_connection_pool.items():
+        try:
+            await db_manager.close_all_dbs()
+            print(f"Closed database connection for port {port}")
+        except Exception as e:
+            print(f"Error closing database connection for port {port}: {e}")
+    db_connection_pool.clear()
+
+
+@app.before_serving
+async def startup():
+    """Initialize database connection for the default port on startup."""
+    initial_port = current_app.config["CURRENT_REDIS_PORT"]
+    await get_or_create_db_connection(initial_port)
+
+
+@app.after_serving
+async def shutdown():
+    """Clean up database connections on shutdown."""
+    await cleanup_db_connections()
+
+
 if __name__ == "__main__":
     app.register_blueprint(analysis, url_prefix="/analysis")
     app.register_blueprint(general, url_prefix="/general")
     app.register_blueprint(documentation, url_prefix="/documentation")
 
-    # Quart is natively ASGI, no need for ASGIMiddleware
+    # Use Quart's built-in development server
     host = "0.0.0.0"
     port = ConfigParser().web_interface_port
-    uvicorn.run(app, host=host, port=port)
+    app.run(host=host, port=port, debug=True)

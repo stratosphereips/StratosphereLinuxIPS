@@ -13,7 +13,9 @@ let analysisSubTableDefs = {
         paging: false,
         searching: false,
         columns: [
-            {data: 'name'}
+            {data: 'name'},
+            {data: 'tw', visible: false},  // Hidden column for tw data
+            {data: 'blocked', visible: false}  // Hidden column for blocked status
         ],
         fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
             switch(aData['blocked']){

@@ -28,13 +28,28 @@ class DatabaseFactory:
         Connects to redis db through the DBManager and returns the DBManager instance.
         Connects to the last opened redis server if no port is given.
         """
+        # Validate port parameter
+        if not port or not isinstance(port, int):
+            print(f"Error: Invalid port parameter: {port}")
+            return None
+
+        # returns the opened redis servers read from running_slips.info.txt
         dbs: Dict[int, dict] = get_open_redis_servers()
-        # Ensure the port exists in the list of open servers
+        # Ensure the port exists in the list of open servers, because to
+        # use the web interface, there must be previous slips data in that
+        # port to display
         if str(port) not in dbs:
             print(f"Error: Redis port {port} is not among the open servers.")
+            print(f"Available servers: {list(dbs.keys())}")
             return None
 
         output_dir = dbs[str(port)]["output_dir"]
+
+        # Validate output directory exists
+        if not os.path.exists(output_dir):
+            print(f"Error: Output directory {output_dir} does not exist")
+            return None
+
         logger = Output(
             stdout=os.path.join(output_dir, "slips.log"),
             stderr=os.path.join(output_dir, "errors.log"),
@@ -43,6 +58,9 @@ class DatabaseFactory:
         )
         conf = ConfigParser()
         try:
+            print(
+                f"Creating DBManager for port {port} with output_dir {output_dir}"
+            )
             # Return the DBManager instance directly
             db_manager_instance = await DBManager.create(
                 logger=logger,
@@ -59,7 +77,14 @@ class DatabaseFactory:
                 flush_db=False,
                 main_pid=int(os.getppid()),
             )
+
+            # Validate the created instance
+            if db_manager_instance is None:
+                print(f"Error: DBManager.create returned None for port {port}")
+                return None
+
             return db_manager_instance
+
         except RuntimeError as e:
             print(f"RuntimeError creating DBManager for port {port}: {e}")
             return None
@@ -67,4 +92,7 @@ class DatabaseFactory:
             print(
                 f"An unexpected error occurred creating DBManager for port {port}: {e}"
             )
+            import traceback
+
+            traceback.print_exc()
             return None
