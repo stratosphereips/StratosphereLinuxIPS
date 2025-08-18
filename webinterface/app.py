@@ -1,19 +1,24 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import sys
+import os
+
+# Add the parent directory to the Python path so we can import slips_files
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import uvicorn
-from flask import Flask, render_template, g, current_app
+from quart import Quart, render_template, g, current_app
+from blinker import signal
 
 from slips_files.common.parsers.config_parser import ConfigParser
-from .database.databasefactory import DatabaseFactory, message_sent
-from .analysis.analysis import analysis
-from .general.general import general
-from .documentation.documentation import documentation
-from .utils import get_open_redis_ports_in_order
+from webinterface.database.databasefactory import DatabaseFactory
+from webinterface.analysis.analysis import analysis
+from webinterface.general.general import general
+from webinterface.documentation.documentation import documentation
+from webinterface.utils import get_open_redis_ports_in_order
 
-
-# Global instance of the Database factory helper.
-# This is a factory, not the DBManager instance itself.
-db_factory = DatabaseFactory()
+# Create a signal for message sending
+message_sent = signal("message-sent")
 
 
 def get_the_last_used_redis_port() -> None | int:
@@ -23,7 +28,7 @@ def get_the_last_used_redis_port() -> None | int:
 
 
 def create_app():
-    app = Flask(__name__)
+    app = Quart(__name__)
     app.config["JSON_SORT_KEYS"] = False  # disable sorting of timewindows
 
     # Use the last opened port as the initial port for the web interface
@@ -43,7 +48,19 @@ async def before_request_db_connection():
     connection object on Flask's 'g' object.
     """
     redis_port = current_app.config["CURRENT_REDIS_PORT"]
-    g.db_manager = await DatabaseFactory().create(port=redis_port)
+
+    # Ensure required directories exist
+    import os
+
+    os.makedirs("/tmp/slips", exist_ok=True)
+
+    try:
+        g.db_manager = await DatabaseFactory().create(port=redis_port)
+        if g.db_manager is None:
+            print(f"Warning: Could not create DBManager for port {redis_port}")
+    except Exception as e:
+        print(f"Error creating DBManager: {e}")
+        g.db_manager = None
 
 
 @app.teardown_appcontext
@@ -68,12 +85,12 @@ async def read_redis_port():
 
 
 @app.route("/")
-def index():
-    return render_template("app.html", title="Slips")
+async def index():
+    return await render_template("app.html", title="Slips")
 
 
 @app.route("/db/<new_port>")
-def get_post_javascript_data(new_port):
+async def get_post_javascript_data(new_port):
     """
     is called when the user chooses another db to connect to from the
     button at the top right (from /redis)
@@ -99,25 +116,46 @@ async def set_pcap_info():
     # Access the DBManager from the global context
     db_manager = g.db_manager
 
-    # Assuming these methods are async and await their Redis operations
-    info = await db_manager.get_analysis_info()
+    # Handle case when db_manager is None
+    if db_manager is None:
+        return {
+            "num_profiles": 0,
+            "num_alerts": 0,
+            "analysis_start_time": "N/A",
+            "analysis_end_time": "N/A",
+            "duration": "N/A",
+        }
 
-    profiles = await db_manager.get_profiles()
-    info["num_profiles"] = len(profiles) if profiles else 0
+    try:
+        # Assuming these methods are async and await their Redis operations
+        info = await db_manager.get_analysis_info()
+        if info is None:
+            info = {}
 
-    alerts_number = await db_manager.get_number_of_alerts_so_far()
-    info["num_alerts"] = int(alerts_number) if alerts_number else 0
+        profiles = await db_manager.get_profiles()
+        info["num_profiles"] = len(profiles) if profiles else 0
 
-    return info
+        alerts_number = await db_manager.get_number_of_alerts_so_far()
+        info["num_alerts"] = int(alerts_number) if alerts_number else 0
+
+        return info
+    except Exception as e:
+        print(f"Error getting pcap info: {e}")
+        return {
+            "num_profiles": 0,
+            "num_alerts": 0,
+            "analysis_start_time": "N/A",
+            "analysis_end_time": "N/A",
+            "duration": "N/A",
+        }
 
 
 if __name__ == "__main__":
     app.register_blueprint(analysis, url_prefix="/analysis")
     app.register_blueprint(general, url_prefix="/general")
     app.register_blueprint(documentation, url_prefix="/documentation")
-    # app.run(host="0.0.0.0", port=ConfigParser().web_interface_port)
 
-    # Use uvicorn to run the app in an asynchronous context
+    # Quart is natively ASGI, no need for ASGIMiddleware
     host = "0.0.0.0"
     port = ConfigParser().web_interface_port
     uvicorn.run(app, host=host, port=port)

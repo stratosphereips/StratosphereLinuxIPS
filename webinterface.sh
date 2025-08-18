@@ -1,2 +1,4 @@
 #!/bin/bash
-python3 -m webinterface.app
+# Start the web interface
+echo "Starting Slips Web Interface..."
+python webinterface/app.py

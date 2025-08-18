@@ -29,6 +29,8 @@ exclusiveprocess==0.9.4
 pytest-dependency==0.6.0
 whois==1.20240129.2
 flask[async]
+quart
+blinker
 tldextract==5.3.0
 termcolor==3.1.0
 yappi==1.6.10

@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-from flask import Blueprint
-from flask import render_template
+from quart import Blueprint
+from quart import render_template
 
 documentation = Blueprint(
     "documentation",
@@ -13,5 +13,5 @@ documentation = Blueprint(
 
 
 @documentation.route("/")
-def index():
-    return render_template("documentation.html")
+async def index():
+    return await render_template("documentation.html")
