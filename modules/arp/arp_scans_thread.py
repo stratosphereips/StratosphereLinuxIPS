@@ -1,5 +1,7 @@
 import asyncio
+import queue
 
+from modules.arp.set_evidence import ARPSetEvidenceHelper
 from slips_files.common.abstracts.ithread import IThread
 
 
@@ -10,9 +12,10 @@ class ARPScansProcessor(IThread):
     evidence
     """
 
-    async def init(self):
+    async def init(self, pending_arp_scan_evidence: queue.Queue):
         # wait 10s for mmore arp scan evidence to come
         self.time_to_wait = 10
+        self.set_evidence = ARPSetEvidenceHelper(self.db)
 
     async def start(self):
         # this evidence is the one that triggered this thread
@@ -57,4 +60,4 @@ class ARPScansProcessor(IThread):
                         scans_ctr = 0
                         break
 
-            self.set_evidence_arp_scan(ts, profileid, twid, uids)
+            self.set_evidence.arp_scan(ts, profileid, twid, uids)
