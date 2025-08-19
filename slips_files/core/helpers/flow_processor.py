@@ -61,7 +61,6 @@ class FlowProcessor(IThread):
         This is called by the parent IThread class during initialization.
         """
         self.flows_to_process_q = kwargs.get("flows_to_process_q")
-        self.pending_flows_queue_lock = kwargs.get("pending_flows_queue_lock")
 
         self.input_type = False
         self.rec_lines = 0
@@ -86,7 +85,7 @@ class FlowProcessor(IThread):
         ]
         self.client_ips = self.conf.client_ips()
 
-    def get_msg_from_q(self, q: multiprocessing.Queue, thread_safe=False):
+    def get_msg_from_q(self, q: multiprocessing.Queue):
         """
         retrieves a msg from the given queue
         :kwarg thread_safe: set it to true if the queue passed is used by
@@ -94,11 +93,7 @@ class FlowProcessor(IThread):
          when set to true, this function uses the pending flows queue lock.
         """
         try:
-            if thread_safe:
-                with self.pending_flows_queue_lock:
-                    return q.get(timeout=1, block=False)
-            else:
-                return q.get(timeout=1, block=False)
+            return q.get(timeout=1, block=False)
         except queue.Empty:
             return None
         except Exception:
@@ -566,9 +561,7 @@ class FlowProcessor(IThread):
 
     async def start(self):
         while not self.stop_profiler_thread():
-            msg = self.get_msg_from_q(
-                self.flows_to_process_q, thread_safe=True
-            )
+            msg = self.get_msg_from_q(self.flows_to_process_q)
             if not msg:
                 # wait for msgs
                 continue

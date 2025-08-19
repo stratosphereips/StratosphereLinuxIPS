@@ -88,9 +88,6 @@ class Profiler(IAsyncModule, IObservable):
         # and exits, and the rest of the 2 threads AND the main() keep
         # waiting for new msgs
         self.flows_to_process_q = queue.Queue()
-        # that queue will be used in 4 different threads. the 3 profilers
-        # and main().
-        self.pending_flows_queue_lock = threading.Lock()
 
     def is_stop_msg(self, msg: str) -> bool:
         """
@@ -99,19 +96,12 @@ class Profiler(IAsyncModule, IObservable):
         """
         return msg == "stop"
 
-    def get_msg_from_q(self, q: multiprocessing.Queue, thread_safe=False):
+    def get_msg_from_q(self, q: multiprocessing.Queue):
         """
         retrieves a msg from the given queue
-        :kwarg thread_safe: set it to true if the queue passed is used by
-        the profiler threads (e.g pending_flows_queue).
-         when set to true, this function uses the pending flows queue lock.
         """
         try:
-            if thread_safe:
-                with self.pending_flows_queue_lock:
-                    return q.get(timeout=1, block=False)
-            else:
-                return q.get(timeout=1, block=False)
+            return q.get(timeout=1, block=False)
         except queue.Empty:
             return None
         except Exception:
@@ -136,7 +126,6 @@ class Profiler(IAsyncModule, IObservable):
         processor = await FlowProcessor.create(
             stop_signal=self.stop_profiler_threads,
             flows_to_process_q=self.flows_to_process_q,
-            pending_flows_queue_lock=self.pending_flows_queue_lock,
             logger=self.logger,
             output_dir=self.output_dir,
             redis_port=self.redis_port,
@@ -236,5 +225,4 @@ class Profiler(IAsyncModule, IObservable):
             # function returns 1
             return 1
 
-        with self.pending_flows_queue_lock:
-            self.flows_to_process_q.put(msg)
+        self.flows_to_process_q.put(msg)
