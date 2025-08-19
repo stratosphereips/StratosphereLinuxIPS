@@ -4,27 +4,16 @@ import asyncio
 import json
 import ipaddress
 import os
+from queue import Queue
 import threading
 import time
-from asyncio import Queue
-from typing import List
 
-from modules.arp.filter import ARPEvidenceFilter
+from modules.arp.arp_scans_thread import ARPScansProcessor
+from modules.arp.set_evidence import ARPSetEvidenceHelper
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.iasync_module import IAsyncModule
-from slips_files.core.structures.evidence import (
-    Evidence,
-    ProfileID,
-    TimeWindow,
-    Victim,
-    Attacker,
-    ThreatLevel,
-    EvidenceType,
-    IoCType,
-    Direction,
-)
 
 
 class ARP(IAsyncModule):
@@ -39,7 +28,7 @@ class ARP(IAsyncModule):
             "tw_closed": self.tw_closed_msg_handler,
         }
         await self.db.subscribe(self.pubsub, self.channels.keys())
-
+        self.set_evidence = ARPSetEvidenceHelper(self.db)
         self.read_configuration()
         self.classifier = FlowClassifier()
         # this dict will categorize arp requests by profileid_twid
@@ -63,10 +52,11 @@ class ARP(IAsyncModule):
         )
         self.pending_arp_scan_evidence = Queue()
         self.alerted_once_arp_scan = False
-        # wait 10s for mmore arp scan evidence to come
-        self.time_to_wait = 10
+
         self.is_zeek_running: bool = self.is_running_zeek()
-        self.evidence_filter = ARPEvidenceFilter(self.conf, self.args, self.db)
+
+        # a way to tell the threads of this module to stop
+        self.stop_signal = threading.Event()
 
     async def new_arp_msg_handler(self, msg):
         """Handler for new_arp channel messages"""
@@ -138,49 +128,20 @@ class ARP(IAsyncModule):
         This thread waits for 10s then checks if more
         arp scans happened to reduce the number of evidence
         """
-        # this evidence is the one that triggered this thread
-        scans_ctr = 0
-        while not self.should_stop():
-            try:
-                evidence: dict = await asyncio.wait_for(
-                    self.pending_arp_scan_evidence.get(), timeout=0.5
-                )
-            except asyncio.TimeoutError:
-                # nothing in queue
-                await asyncio.sleep(5)
-                continue
-            # unpack the evidence that triggered the task
-            (ts, profileid, twid, uids) = evidence
+        loop = asyncio.get_event_loop()
+        loop.set_exception_handler(self.handle_loop_exception)
 
-            # wait 10s if a new evidence arrived
-            await asyncio.sleep(self.time_to_wait)
-
-            while True:
-                try:
-                    new_evidence = self.pending_arp_scan_evidence.get(
-                        timeout=0.5
-                    )
-                except Exception:
-                    # queue is empty
-                    break
-
-                (ts2, profileid2, twid2, uids2) = new_evidence
-                if profileid == profileid2 and twid == twid2:
-                    # this should be combined with the past alert
-                    ts = ts2
-                    uids += uids2
-                else:
-                    # this is an ip performing arp scan in a diff
-                    # profile or a diff twid, we shouldn't accumulate its
-                    # evidence  store it back in the queue until we're done
-                    # with the current one
-                    scans_ctr += 1
-                    self.pending_arp_scan_evidence.put(new_evidence)
-                    if scans_ctr == 3:
-                        scans_ctr = 0
-                        break
-
-            self.set_evidence_arp_scan(ts, profileid, twid, uids)
+        processor = await ARPScansProcessor.create(
+            stop_signal=self.stop_signal,
+            logger=self.logger,
+            output_dir=self.output_dir,
+            redis_port=self.redis_port,
+            conf=self.conf,
+            slips_args=self.args,
+            main_pid=self.ppid,
+            start_redis_server=False,
+        )
+        await processor.start()
 
     def check_arp_scan(self, profileid, twid, flow):
         """
@@ -262,7 +223,7 @@ class ARP(IAsyncModule):
                 # we are sure this is an arp scan
                 if not self.alerted_once_arp_scan:
                     self.alerted_once_arp_scan = True
-                    self.set_evidence_arp_scan(
+                    self.set_evidence.arp_scan(
                         flow.starttime, profileid, twid, uids
                     )
                 else:
@@ -274,41 +235,6 @@ class ARP(IAsyncModule):
 
                 return True
         return False
-
-    def set_evidence_arp_scan(self, ts, profileid, twid, uids: List[str]):
-        confidence: float = 0.8
-        threat_level: ThreatLevel = ThreatLevel.LOW
-        saddr: str = profileid.split("_")[1]
-
-        description: str = f"performing an arp scan. Confidence {confidence}."
-        attacker: Attacker = Attacker(
-            direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
-        )
-
-        evidence: Evidence = Evidence(
-            evidence_type=EvidenceType.ARP_SCAN,
-            attacker=attacker,
-            threat_level=threat_level,
-            confidence=confidence,
-            description=description,
-            profile=ProfileID(ip=saddr),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-            uid=uids,
-            timestamp=ts,
-        )
-
-        self.set_evidence(evidence)
-        # after we set evidence, clear the dict so we can detect if it
-        # does another scan
-        try:
-            self.cache_arp_requests.pop(f"{profileid}_{twid}")
-        except KeyError:
-            # when a tw is closed, we clear all its' entries from the
-            # cache_arp_requests dict
-            # having keyerr is a result of closing a timewindow before
-            # setting an evidence
-            # ignore it
-            pass
 
     def check_dstip_outside_localnet(self, twid, flow):
         """Function to setEvidence when daddr is outside the local network"""
@@ -332,44 +258,7 @@ class ARP(IAsyncModule):
         # to prevent arp alerts from one IP to itself
         first_octet = flow.saddr.split(".")[0]
         if not flow.daddr.startswith(first_octet):
-            # comes here if the IP isn't in any of the local networks
-            confidence: float = 0.6
-            threat_level: ThreatLevel = ThreatLevel.LOW
-            description: str = (
-                f"{flow.saddr} sending ARP packet to a destination "
-                f"address outside of local network: {flow.daddr}. "
-            )
-
-            attacker: Attacker = Attacker(
-                direction=Direction.SRC,
-                ioc_type=IoCType.IP,
-                value=flow.saddr,
-            )
-            victim = Victim(
-                direction=Direction.DST,
-                ioc_type=IoCType.IP,
-                value=flow.daddr,
-            )
-
-            evidence: Evidence = Evidence(
-                evidence_type=EvidenceType.ARP_OUTSIDE_LOCALNET,
-                attacker=attacker,
-                threat_level=threat_level,
-                confidence=confidence,
-                description=description,
-                profile=ProfileID(ip=flow.saddr),
-                timewindow=TimeWindow(
-                    number=int(twid.replace("timewindow", ""))
-                ),
-                uid=[flow.uid],
-                timestamp=flow.starttime,
-                victim=victim,
-            )
-            # no need to go through the arp filter here, so use
-            # self.db.set_evidence instead of self.set_evidence
-            # because the filter is only to filter attacks that can be done
-            # using the arp_poisoner, but this one isnt done there.
-            self.db.set_evidence(evidence)
+            self.set_evidence.dstip_outside_localnet(flow, twid)
             return True
 
         return False
@@ -385,33 +274,7 @@ class ARP(IAsyncModule):
             and flow.smac != "00:00:00:00:00:00"
             and flow.src_hw != "00:00:00:00:00:00"
         ):
-            # We're sure this is unsolicited arp
-            # it may be arp spoofing
-            confidence: float = 0.8
-            threat_level: ThreatLevel = ThreatLevel.LOW
-            description: str = "broadcasting unsolicited ARP reply."
-
-            attacker = Attacker(
-                direction=Direction.SRC,
-                ioc_type=IoCType.IP,
-                value=flow.saddr,
-            )
-
-            evidence: Evidence = Evidence(
-                evidence_type=EvidenceType.UNSOLICITED_ARP_REPLY,
-                attacker=attacker,
-                threat_level=threat_level,
-                confidence=confidence,
-                description=description,
-                profile=ProfileID(ip=flow.saddr),
-                timewindow=TimeWindow(
-                    number=int(twid.replace("timewindow", ""))
-                ),
-                uid=[flow.uid],
-                timestamp=flow.starttime,
-            )
-
-            self.set_evidence(evidence)
+            self.set_evidence.unsolicited_arp(flow, twid)
             return True
 
     def detect_mitm_arp_attack(self, twid: str, flow):
@@ -451,70 +314,7 @@ class ARP(IAsyncModule):
         # src_mac is associated
         # with another IP (original_IP)?
         if flow.saddr != original_ip:
-            # From our db we know that:
-            # original_IP has src_MAC
-            # now saddr has src_MAC and saddr isn't the same as original_IP
-            # so this is either a MITM arp attack or the IP
-            # address of this src_mac simply changed
-            # todo how to find out which one is it??
-            # Assuming that 'threat_level' and 'category'
-            # are from predefined enums or constants
-            confidence: float = 0.2  # low confidence for now
-            threat_level: ThreatLevel = ThreatLevel.CRITICAL
-
-            attackers_ip = flow.saddr
-            victims_ip = original_ip
-
-            gateway_ip = self.db.get_gateway_ip()
-            gateway_mac = self.db.get_gateway_mac()
-            if flow.saddr == gateway_ip:
-                saddr = f"The gateway {flow.saddr}"
-            else:
-                saddr = flow.saddr
-
-            if flow.smac == gateway_mac:
-                src_mac = f"of the gateway {flow.smac}"
-            else:
-                src_mac = flow.smac
-
-            original_ip = f"IP {original_ip}"
-            if original_ip == gateway_ip:
-                original_ip = f"the gateway IP {original_ip}"
-
-            attacker: Attacker = Attacker(
-                direction=Direction.SRC,
-                ioc_type=IoCType.IP,
-                value=attackers_ip,
-            )
-
-            victim = Victim(
-                direction=Direction.DST,  #  TODO not really dst
-                ioc_type=IoCType.IP,
-                value=victims_ip,
-            )
-
-            description = (
-                f"{saddr} performing a MITM ARP attack. "
-                f"The MAC {src_mac}, now belonging to "
-                f"{saddr}, was seen before for {original_ip}."
-            )
-
-            evidence: Evidence = Evidence(
-                evidence_type=EvidenceType.MITM_ARP_ATTACK,
-                attacker=attacker,
-                threat_level=threat_level,
-                confidence=confidence,
-                description=description,
-                profile=ProfileID(ip=attackers_ip),
-                timewindow=TimeWindow(
-                    number=int(twid.replace("timewindow", ""))
-                ),
-                uid=[flow.uid],
-                timestamp=flow.starttime,
-                victim=victim,
-            )
-
-            self.set_evidence(evidence)
+            self.set_evidence.mitm_arp_attack(flow, twid, original_ip)
             return True
 
     def check_if_gratutitous_arp(self, flow):
@@ -526,12 +326,7 @@ class ARP(IAsyncModule):
         its IP to MAC mapping to the entire network.
         Gratuitous ARP shouldn't be marked as an arp scan
         Check https://www.practicalnetworking.net/series/arp/gratuitous-arp/
-        dst_mac is the real MAC used to deliver the packet
-        src_mac is the real MAC used to deliver the packet
-        dst_hw is the MAC in the headers of the ARP packet
-        src_hw is the MAC in the headers of the ARP packet
-        saddr is the IP in the headers of the ARP packet
-        daddr is the IP in the headers of the ARP packet
+
 
         Gratuitous ARP can be used for (1) Updating ARP Mapping,
         (2) Announcing a Node’s Existence,
@@ -567,13 +362,6 @@ class ARP(IAsyncModule):
             open(arp_log_file_path, "w").close()
             # update ts of the new arp.log
             self.arp_log_creation_time = time.time()
-
-    def set_evidence(self, evidence: Evidence):
-        """the goal of this function is to discard evidence of other slips
-        peers doing arp scans because that's slips attacking back attackers"""
-        if self.evidence_filter.should_discard_evidence(evidence.profile.ip):
-            return
-        self.db.set_evidence(evidence)
 
     async def pre_main(self):
         """runs once before the main() is executed in a loop"""
