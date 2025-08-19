@@ -6,7 +6,6 @@
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
-import traceback
 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,22 +22,19 @@ import queue
 import ipaddress
 import pprint
 import json
-import threading
 import multiprocessing
 from typing import (
     List,
     Union,
     Optional,
 )
-import sys
 import netifaces
 import validators
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 
-from slips_files.common.printer import Printer
+from slips_files.common.abstracts.ithread import IThread
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
-from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
@@ -46,7 +42,6 @@ from slips_files.core.input_profilers.argus import Argus
 from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
-from slips_files.core.output import Output
 
 SUPPORTED_INPUT_TYPES = {
     "zeek": ZeekJSON,
@@ -58,37 +53,16 @@ SUPPORTED_INPUT_TYPES = {
 }
 
 
-class FlowProcessor:
+class FlowProcessor(IThread):
     name = "FlowProcessor"
 
-    def __init__(
-        self,
-        stop_profiler_threads_event: threading.Event,
-        flows_to_process_q: queue.Queue,
-        pending_flows_queue_lock: threading.Lock,
-        logger: Output,
-        output_dir=None,
-        redis_port=None,
-        conf=None,
-        slips_args=None,
-        main_pid=None,
-        flush_db=False,
-        start_redis_server=False,
-    ):
+    async def init(self, **kwargs):
+        """
+        This is called by the parent IThread class during initialization.
+        """
+        self.flows_to_process_q = kwargs.get("flows_to_process_q")
+        self.pending_flows_queue_lock = kwargs.get("pending_flows_queue_lock")
 
-        self.conf = conf
-        self.read_configuration()
-        self.logger = logger
-        self.output_dir = output_dir
-        self.redis_port = redis_port
-        self.slips_args = slips_args
-        self.flush_db = flush_db
-        self.main_pid = main_pid
-        self.start_redis_server = start_redis_server
-        self.printer = Printer(self.logger, self.name)
-        self.stop_profiler_threads_event = stop_profiler_threads_event
-        self.flows_to_process_q = flows_to_process_q
-        self.pending_flows_queue_lock = pending_flows_queue_lock
         self.input_type = False
         self.rec_lines = 0
         self.is_localnet_set = False
@@ -97,24 +71,9 @@ class FlowProcessor:
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
 
-    @classmethod
-    async def create(cls, **kwargs):
-        """Factory method to asynchronously create and initialize
-        the class instance."""
-        instance = cls(**kwargs)
-        instance.db = await DBManager.create(
-            logger=instance.logger,
-            output_dir=instance.slips_args.output,
-            redis_port=instance.redis_port,
-            conf=instance.conf,
-            slips_args=instance.slips_args,
-            main_pid=instance.main_pid,
-            flush_db=instance.flush_db,
-            start_redis_server=instance.start_redis_server,
-        )
-        instance.whitelist = Whitelist(instance.logger, instance.db)
-        instance.symbol_handler = SymbolHandler(instance.logger, instance.db)
-        return instance
+        self.read_configuration()
+        self.whitelist = Whitelist(self.logger, self.db)
+        self.symbol_handler = SymbolHandler(self.logger, self.db)
 
     def read_configuration(self):
         self.local_whitelist_path = self.conf.local_whitelist_path()
@@ -151,7 +110,7 @@ class FlowProcessor:
         # another indicator that we are at the end of the flows. aka the
         # stop_profiler_threads event
         return (
-            self.stop_profiler_threads_event.is_set()
+            self.stop()  # use the interface's stop method
             and not self.flows_to_process_q.qsize()
         )
 
@@ -172,9 +131,6 @@ class FlowProcessor:
         # the rest of the flows will use the same input handler
         if not hasattr(self, "input_handler_obj"):
             self.input_handler_obj = SUPPORTED_INPUT_TYPES[self.input_type]()
-
-    def print(self, *args, **kwargs):
-        return self.printer.print(*args, **kwargs)
 
     async def add_flow_to_profile(self, flow):
         """
@@ -607,11 +563,6 @@ class FlowProcessor:
         local_net: str = self.get_local_net(flow)
         self.print(f"Used local network: {green(local_net)}")
         await self.db.set_local_network(local_net)
-
-    def print_traceback(self):
-        exception_line = sys.exc_info()[2].tb_lineno
-        self.print(f"Problem in line {exception_line}", 0, 1)
-        self.print(traceback.format_exc(), 0, 1)
 
     async def start(self):
         while not self.stop_profiler_thread():

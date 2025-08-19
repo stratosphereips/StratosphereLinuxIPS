@@ -134,7 +134,7 @@ class Profiler(IAsyncModule, IObservable):
         loop.set_exception_handler(self.handle_loop_exception)
 
         processor = await FlowProcessor.create(
-            stop_profiler_threads_event=self.stop_profiler_threads,
+            stop_signal=self.stop_profiler_threads,
             flows_to_process_q=self.flows_to_process_q,
             pending_flows_queue_lock=self.pending_flows_queue_lock,
             logger=self.logger,
