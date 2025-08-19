@@ -108,15 +108,15 @@ class FlowMLDetection(IModule):
         self.ground_truth_config_label = conf.label()
         self.enable_logs: bool = conf.create_performance_metrics_log_files()
 
-        batch_size: int = conf.flow_ml_detection_training_batch_size()
+        self.batch_size: int = conf.flow_ml_detection_training_batch_size()
         # Minum amount of new labels needed to start the train (first train)
-        self.minimum_labels_to_start_train = batch_size
+        self.minimum_labels_to_start_train = self.batch_size
         # Minum amount of new labels needed to retrain
-        self.minimum_labels_to_retrain = batch_size
+        self.minimum_labels_to_retrain = self.batch_size
 
         # if I end and have more than this flows, I triger the final training
         # to not lose those.
-        self.minimum_labels_to_finalize_train = int(batch_size / 4)
+        self.minimum_labels_to_finalize_train = int(self.batch_size / 4)
 
         self.validate_on_train = conf.validate_on_train()
 
@@ -138,7 +138,6 @@ class FlowMLDetection(IModule):
         y_flow,
         y_pred,
         sum_labeled_flows,
-        epoch_label_counts,
         testing_size,
     ):
         # Initialize per-batch metrics
@@ -368,13 +367,6 @@ class FlowMLDetection(IModule):
                     1,
                 )
 
-            # Count the number of labels of each type in this epoch
-            epoch_label_counts = {
-                BACKGROUND: (y_flow == BACKGROUND).sum(),
-                MALICIOUS: (y_flow == MALICIOUS).sum(),
-                BENIGN: (y_flow == BENIGN).sum(),
-            }
-
             # Train
             try:
                 unique_labels = numpy.unique(y_flow)
@@ -401,7 +393,9 @@ class FlowMLDetection(IModule):
 
             # Predict on the training data
             testing_size = 0
-            if self.validate_on_train and X_val is not None:  # validation part
+            if self.validate_on_train and (
+                X_val is not None
+            ):  # validation part
                 X_val = self.scaler.transform(X_val)
                 y_pred = self.clf.predict(X_val)
                 y_ground_truth = y_val
@@ -416,7 +410,6 @@ class FlowMLDetection(IModule):
                 y_ground_truth,
                 y_pred,
                 sum_labeled_flows,
-                epoch_label_counts,
                 testing_size,
             )
 
@@ -551,6 +544,15 @@ class FlowMLDetection(IModule):
             flows = self.db.get_all_flows()
             # Only process new flows since last training
             new_flows = flows[last_number_of_flows_when_trained:]
+            if len(new_flows) != self.batch_size:
+                self.print(
+                    f"Expected {self.batch_size} new flows, "
+                    f"but got {len(new_flows)}. "
+                    "Skipping training.",
+                    0,
+                    1,
+                )
+                return None
 
             # Convert to pandas df
             df_flows = pd.DataFrame(new_flows)
@@ -594,6 +596,18 @@ class FlowMLDetection(IModule):
         """
 
         # Scale the flow, then predict. not learning here!
+        if (
+            not self.classifier_initialized
+            or not hasattr(self.scaler, "mean_")
+            or self.scaler.mean_ is None
+        ):
+            self.print(
+                "Classifier/scaler is not initialized. "
+                "Please train the model before detecting.",
+                0,
+                1,
+            )
+            return None
         try:
             x_flow: numpy.ndarray = self.scaler.transform(x_flow)
             pred: numpy.ndarray = self.clf.predict(x_flow)
@@ -675,7 +689,7 @@ class FlowMLDetection(IModule):
                     0,
                     2,
                 )
-            self.scaler = StandardScaler()  # RobustScaler()?
+            self.scaler = StandardScaler()  # RobustScaler()? others?
 
     def set_evidence_malicious_flow(self, flow: dict, twid: str):
         confidence: float = 0.1
@@ -724,9 +738,18 @@ class FlowMLDetection(IModule):
                 flows_left > 0
                 and flows_left > self.minimum_labels_to_finalize_train
             ):
-                self.print("Training on the last flows before shutdown.", 0, 2)
+                self.print(
+                    f"Training on the last {flows_left} flows before shutdown.",
+                    0,
+                    1,
+                )
                 self.process_training_flows(
                     self.last_number_of_flows_when_trained
+                )
+                self.print(
+                    f"Size of the last training batch: {self.flows.shape[0]}",
+                    0,
+                    1,
                 )
                 self.train(
                     sum_labeled_flows,
@@ -793,7 +816,7 @@ class FlowMLDetection(IModule):
                     self.last_number_of_flows_when_trained
                 )
 
-                # Train an algorithm
+                # Train a model
                 self.train(
                     sum_labeled_flows,
                     self.last_number_of_flows_when_trained,
@@ -840,7 +863,6 @@ class FlowMLDetection(IModule):
                     # only for evaluating a testing
                     log_testing_data = True
                     if log_testing_data:
-
                         self.store_testing_data(
                             original_label,
                             pred[0],

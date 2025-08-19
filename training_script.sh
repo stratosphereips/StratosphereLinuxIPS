@@ -120,7 +120,7 @@ if ! docker run --rm \
         --memory=8g \
         --memory-swap=8g \
         --shm-size=512m \
-     stratosphereips/slips:latest bash -c "python3 -W ignore slips.py -f '$TRAIN_DIR'" \
+     stratosphereips/slips:latest bash -c "python3 -W ignore slips.py -f '$TRAIN_DIR' -m " \
         >> "$LOGFILE" 2>&1; then
     echo "Docker training run failed:" >&2
     cleanup_docker
@@ -150,7 +150,7 @@ for TEST_FOLDER in "${DATASETS[@]}"; do
             --memory=8g \
             --memory-swap=8g \
             --shm-size=512m \
-            stratosphereips/slips:latest bash -c "python3 -W ignore slips.py -f '$TEST_DIR'" \
+            stratosphereips/slips:latest bash -c "python3 -W ignore slips.py -f '$TEST_DIR' -m" \
             >> "$LOGFILE" 2>&1; then
         echo "Docker testing run failed:" >&2
         cleanup_docker
