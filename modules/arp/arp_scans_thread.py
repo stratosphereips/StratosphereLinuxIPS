@@ -12,29 +12,32 @@ class ARPScansProcessor(IThread):
     evidence
     """
 
-    async def init(self, pending_arp_scan_evidence: queue.Queue):
+    async def init(self, **kwargs):
         # wait 10s for mmore arp scan evidence to come
         self.time_to_wait = 10
-        self.set_evidence = ARPSetEvidenceHelper(self.db)
+        self.set_evidence = ARPSetEvidenceHelper(self.db, self.conf, self.args)
+        self.pending_arp_scan_evidence: queue.Queue = kwargs.get(
+            "pending_arp_scan_evidence"
+        )
 
     async def start(self):
-        # this evidence is the one that triggered this thread
         scans_ctr = 0
         while not self.should_stop():
             try:
-                evidence: dict = await asyncio.wait_for(
+                evidence: dict = self.get_msg_from_q(
                     self.pending_arp_scan_evidence.get(), timeout=0.5
                 )
-            except asyncio.TimeoutError:
-                # nothing in queue
-                await asyncio.sleep(5)
+            except Exception:
                 continue
+            print(f"@@@@@@@@@@@@@@@@ evidence {evidence}")
             # unpack the evidence that triggered the task
             (ts, profileid, twid, uids) = evidence
 
             # wait 10s if a new evidence arrived
             await asyncio.sleep(self.time_to_wait)
-
+            # now keep getting evidence from the queue and combine all
+            # similar ones, and put back in the queue all the ones that
+            # wont be combined.
             while True:
                 try:
                     new_evidence = self.pending_arp_scan_evidence.get(
@@ -60,4 +63,17 @@ class ARPScansProcessor(IThread):
                         scans_ctr = 0
                         break
 
+            # done combining similar ones, now that the queue is empty, set
+            # the evidence
             self.set_evidence.arp_scan(ts, profileid, twid, uids)
+            # after we set evidence, clear the dict so we can detect if it
+            # does another scan
+            try:
+                self.cache_arp_requests.pop(f"{profileid}_{twid}")
+            except KeyError:
+                # when a tw is closed, we clear all its' entries from the
+                # cache_arp_requests dict
+                # having keyerr is a result of closing a timewindow before
+                # setting an evidence
+                # ignore it
+                pass
