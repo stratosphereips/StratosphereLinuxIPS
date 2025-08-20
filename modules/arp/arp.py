@@ -34,6 +34,8 @@ class ARP(IAsyncModule):
         self.classifier = FlowClassifier()
         # this dict will categorize arp requests by profileid_twid
         self.cache_arp_requests = {}
+        self.cache_arp_lock = threading.Lock()
+
         # Threshold to use to detect a port scan. How many arp minimum
         # are required?
         self.arp_scan_threshold = 5
@@ -101,7 +103,8 @@ class ARP(IAsyncModule):
             cache_copy = self.cache_arp_requests.copy()
             for key in cache_copy:
                 if profileid_tw in key:
-                    self.cache_arp_requests.pop(key)
+                    with self.cache_arp_lock:
+                        self.cache_arp_requests.pop(key)
                     # don't break, keep looking for more
                     # keys that belong to the same tw
         except Exception as e:
@@ -143,6 +146,8 @@ class ARP(IAsyncModule):
             main_pid=self.ppid,
             start_redis_server=False,
             pending_arp_scan_evidence=self.pending_arp_scan_evidence,
+            cache_arp_requests=self.cache_arp_requests,
+            cache_arp_lock=self.cache_arp_lock,
         )
         await processor.start()
 
@@ -184,23 +189,25 @@ class ARP(IAsyncModule):
             return False
 
         daddr_info = {flow.daddr: {"uids": [flow.uid], "ts": flow.starttime}}
-        try:
-            # Get together all the arp requests to IPs in this TW
-            cached_requests = self.cache_arp_requests[f"{profileid}_{twid}"]
+        with self.cache_arp_lock:
+            try:
+                # Get together all the arp requests to IPs in this TW
+                cached_requests = self.cache_arp_requests[
+                    f"{profileid}_{twid}"
+                ]
 
-            if flow.daddr in cached_requests:
-                cached_requests[flow.daddr]["uids"].append(flow.uid)
-                cached_requests[flow.daddr]["ts"] = flow.starttime
-                self.cache_arp_requests[f"{profileid}_{twid}"] = (
-                    cached_requests
-                )
-            else:
-                cached_requests.update(daddr_info)
-        except KeyError:
-            # create the key for this profileid_twid if it doesn't exist
-            self.cache_arp_requests[f"{profileid}_{twid}"] = daddr_info
-
-            return True
+                if flow.daddr in cached_requests:
+                    cached_requests[flow.daddr]["uids"].append(flow.uid)
+                    cached_requests[flow.daddr]["ts"] = flow.starttime
+                    self.cache_arp_requests[f"{profileid}_{twid}"] = (
+                        cached_requests
+                    )
+                else:
+                    cached_requests.update(daddr_info)
+            except KeyError:
+                # create the key for this profileid_twid if it doesn't exist
+                self.cache_arp_requests[f"{profileid}_{twid}"] = daddr_info
+                return True
 
         # the list of daddrs that are scanned by the current
         # profileid in the curr tw
@@ -229,15 +236,16 @@ class ARP(IAsyncModule):
                     )
                     # after we set evidence, clear the dict so we can detect if it
                     # does another scan
-                    try:
-                        self.cache_arp_requests.pop(f"{profileid}_{twid}")
-                    except KeyError:
-                        # when a tw is closed, we clear all its' entries from the
-                        # cache_arp_requests dict
-                        # having keyerr is a result of closing a timewindow before
-                        # setting an evidence
-                        # ignore it
-                        pass
+                    with self.cache_arp_lock:
+                        try:
+                            self.cache_arp_requests.pop(f"{profileid}_{twid}")
+                        except KeyError:
+                            # when a tw is closed, we clear all its' entries from the
+                            # cache_arp_requests dict
+                            # having keyerr is a result of closing a timewindow before
+                            # setting an evidence
+                            # ignore it
+                            pass
 
                 else:
                     # after alerting once, wait 10s to see

@@ -1,5 +1,6 @@
 import asyncio
 import queue
+import threading
 
 from modules.arp.set_evidence import ARPSetEvidenceHelper
 from slips_files.common.abstracts.ithread import IThread
@@ -19,6 +20,8 @@ class ARPScansProcessor(IThread):
         self.pending_arp_scan_evidence: queue.Queue = kwargs.get(
             "pending_arp_scan_evidence"
         )
+        self.cache_arp_requests = kwargs.get("cache_arp_requests")
+        self.cache_arp_lock: threading.Lock = kwargs.get("cache_arp_lock")
 
     async def start(self):
         scans_ctr = 0
@@ -66,14 +69,15 @@ class ARPScansProcessor(IThread):
             # done combining similar ones, now that the queue is empty, set
             # the evidence
             self.set_evidence.arp_scan(ts, profileid, twid, uids)
-            # after we set evidence, clear the dict so we can detect if it
-            # does another scan
-            try:
-                self.cache_arp_requests.pop(f"{profileid}_{twid}")
-            except KeyError:
-                # when a tw is closed, we clear all its' entries from the
-                # cache_arp_requests dict
-                # having keyerr is a result of closing a timewindow before
-                # setting an evidence
-                # ignore it
-                pass
+            with self.cache_arp_lock:
+                # after we set evidence, clear the dict so we can detect if it
+                # does another scan
+                try:
+                    self.cache_arp_requests.pop(f"{profileid}_{twid}")
+                except KeyError:
+                    # when a tw is closed, we clear all its' entries from the
+                    # cache_arp_requests dict
+                    # having keyerr is a result of closing a timewindow before
+                    # setting an evidence
+                    # ignore it
+                    pass
