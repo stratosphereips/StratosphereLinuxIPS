@@ -196,7 +196,6 @@ class ARP(IAsyncModule):
                 ]
 
                 if flow.daddr in cached_requests:
-                    print(f"@@@@@@@@@@@@@@@@ {flow}")
                     cached_requests[flow.daddr]["uids"].append(flow.uid)
                     cached_requests[flow.daddr]["ts"] = flow.starttime
                     self.cache_arp_requests[f"{profileid}_{twid}"] = (

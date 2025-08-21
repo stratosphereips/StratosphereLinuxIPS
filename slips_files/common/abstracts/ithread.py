@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-
+import queue
 import sys
 import traceback
 import threading
@@ -71,7 +71,7 @@ class IThread(ABC):
         instance.output_dir = output_dir
         instance.redis_port = redis_port
         instance.conf = conf
-        instance.slips_args = slips_args
+        instance.args = slips_args
         instance.main_pid = main_pid
         instance.flush_db = flush_db
         instance.start_redis_server = start_redis_server
@@ -113,7 +113,19 @@ class IThread(ABC):
         """
         pass
 
-    def stop(self) -> bool:
+    def get_msg_from_q(self, q):
+        """
+        retrieves a msg from the given queue
+        :param q: a multiprocessing.Queue or queue.Queue
+        """
+        try:
+            return q.get(timeout=1, block=False)
+        except queue.Empty:
+            return None
+        except Exception:
+            return None
+
+    def should_stop(self) -> bool:
         """
         Check if the stop signal is set.
 

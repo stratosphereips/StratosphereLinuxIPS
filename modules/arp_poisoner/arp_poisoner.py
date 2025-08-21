@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import asyncio
 import logging
 import os
 import subprocess
 import time
-from threading import Lock
 import json
 import ipaddress
 from typing import Set, Tuple
@@ -30,17 +30,17 @@ class ARPPoisoner(IAsyncModule):
     description = "ARP poisons attackers to isolate them from the network."
     authors = ["Alya Gomaa"]
 
-    def init(self):
-        self.c1 = self.db.subscribe("new_blocking")
-        self.c2 = self.db.subscribe("tw_closed")
+    async def init(self):
         self.channels = {
-            "new_blocking": self.c1,
-            "tw_closed": self.c2,
+            "new_blocking": self.new_blocking_msg_handler,
+            "tw_closed": self.tw_closed_msg_handler,
         }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
+
         self._time_since_last_repoison = {}
         self._time_since_last_internet_cut = {}
         self.log_file_path = os.path.join(self.output_dir, "arp_poisoning.log")
-        self.blocking_logfile_lock = Lock()
+        self.blocking_logfile_lock = asyncio.Lock()
         # clear it
         try:
             open(self.log_file_path, "w").close()
@@ -239,7 +239,7 @@ class ARPPoisoner(IAsyncModule):
             )
             sendp(pkt, verbose=0)
 
-    def _cut_targets_internet(
+    async def _cut_targets_internet(
         self, target_ip: str, target_mac: str, fake_mac: str
     ):
         """
@@ -248,7 +248,7 @@ class ARPPoisoner(IAsyncModule):
         the target is at a fake mac.
         """
         # in ap mode, this gw ip is the same as our own ip
-        gateway_ip: str = self.db.get_gateway_ip()
+        gateway_ip: str = await self.db.get_gateway_ip()
 
         # we use replies, not requests, because we wanna anser ARP requests
         # sent to the network instead of waiting for the attacker to answer
@@ -269,7 +269,7 @@ class ARPPoisoner(IAsyncModule):
         # poison the gw, tell it the victim is at a fake mac so traffic
         # from it wont reach the victim
         # attacker -> gw: im at a fake mac.
-        gateway_mac = self.db.get_gateway_mac()
+        gateway_mac = await self.db.get_gateway_mac()
         pkt = Ether(dst=gateway_mac) / ARP(
             op=2,
             psrc=target_ip,
@@ -279,7 +279,7 @@ class ARPPoisoner(IAsyncModule):
         )
         sendp(pkt, iface=self.args.interface, verbose=0)
 
-    def _attack(self, target_ip: str, first_time=False):
+    async def _attack(self, target_ip: str, first_time=False):
         """
         Prevents the target from accessing the internet and isolates it
         from the rest of the network.
@@ -300,7 +300,7 @@ class ARPPoisoner(IAsyncModule):
             if not target_mac:
                 return
 
-        self._cut_targets_internet(target_ip, target_mac, fake_mac)
+        await self._cut_targets_internet(target_ip, target_mac, fake_mac)
         self._isolate_target_from_localnet(target_ip, fake_mac)
 
         # we repoison every 10s, we dont wanna log every 10s.
@@ -315,46 +315,49 @@ class ARPPoisoner(IAsyncModule):
         except ValueError:
             return False
 
-    def can_poison_ip(self, ip) -> bool:
+    async def _can_poison_ip(self, ip) -> bool:
         """
         Checks if the ip is in out localnet, isnt the router
         """
         if utils.is_public_ip(ip):
             return False
 
-        localnet = self.db.get_local_network()
+        localnet = await self.db.get_local_network()
         if ipaddress.ip_address(ip) not in ipaddress.ip_network(localnet):
             return False
 
         if self.is_broadcast(ip, localnet):
             return False
 
-        if ip == self.db.get_gateway_ip():
+        if ip == await self.db.get_gateway_ip():
             return False
 
         # no need to check if the ip is in our ips because all our ips are
         # excluded from the new_blocking channel
         return True
 
-    def main(self):
-        self.keep_attackers_poisoned()
-
-        if msg := self.get_msg("new_blocking"):
+    async def new_blocking_msg_handler(self, msg):
+        """Handler for new_blocking channel messages"""
+        try:
             data = json.loads(msg["data"])
             ip = data.get("ip")
             tw: int = data.get("tw")
 
-            if not self.can_poison_ip(ip):
+            if not await self._can_poison_ip(ip):
                 return
 
-            self._attack(ip, first_time=True)
+            await self._attack(ip, first_time=True)
 
             # whether this ip is blocked now, or was already blocked, make an
             # unblocking request to either extend its
             # blocking period, or block it until the next timewindow is over.
-            self.unblocker.unblock_request(ip, tw)
+            await self.unblocker.unblock_request(ip, tw)
+        except Exception as e:
+            self.print(f"Error processing new_blocking message: {e}")
 
-        if msg := self.get_msg("tw_closed"):
+    async def tw_closed_msg_handler(self, msg):
+        """Handler for tw_closed channel messages"""
+        try:
             # this channel receives requests for closed tws for every ip
             # slips sees.
             # if slips saw 3 ips, this channel will receive 3 msgs with tw1
@@ -364,4 +367,12 @@ class ARPPoisoner(IAsyncModule):
             twid = profileid_tw[-1]
             if self.last_closed_tw != twid:
                 self.last_closed_tw = twid
-                self.unblocker.update_requests()
+                await self.unblocker.update_requests()
+        except Exception as e:
+            self.print(f"Error processing tw_closed message: {e}")
+
+    async def main(self):
+        """Main loop function"""
+        await self.keep_attackers_poisoned()
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
