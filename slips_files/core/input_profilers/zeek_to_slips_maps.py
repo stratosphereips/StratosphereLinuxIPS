@@ -182,7 +182,6 @@ files_fields_to_slips_fields_map = {
 
 arp_fields_to_slips_fields_map = {
     "ts": "starttime",
-    "uid": "uid",
     "orig_h": "saddr",
     "resp_h": "daddr",
     "orig_hw": "src_hw",

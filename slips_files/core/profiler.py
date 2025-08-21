@@ -111,7 +111,9 @@ class Profiler(IAsyncModule, IObservable):
         """starts 3 profiler threads for faster processing of the flows"""
         num_of_profiler_threads = 3
         for i in range(num_of_profiler_threads):
-            t = self.create_thread(self.process_flow)
+            t = utils.create_thread(
+                self.process_flow, name=f"flow_processor_{i}"
+            )
             await utils.start_thread(t, self.db)
             self.profiler_threads.append(t)
 
@@ -212,6 +214,7 @@ class Profiler(IAsyncModule, IObservable):
     async def main(self):
         # we use the double queue thing here because we cant have
         msg = self.get_msg_from_q(self.profiler_queue)
+
         if not msg:
             # this function is called in a loop in IAsyncModule,
             # so if there's no msg, it will wait for a new one

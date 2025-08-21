@@ -27,12 +27,14 @@ class ARPScansProcessor(IThread):
         scans_ctr = 0
         while not self.should_stop():
             try:
-                evidence: dict = self.get_msg_from_q(
-                    self.pending_arp_scan_evidence.get(), timeout=0.5
+                evidence = self.pending_arp_scan_evidence.get(
+                    timeout=1, block=True
                 )
+            except queue.Empty:
+                continue
             except Exception:
                 continue
-            print(f"@@@@@@@@@@@@@@@@ evidence {evidence}")
+
             # unpack the evidence that triggered the task
             (ts, profileid, twid, uids) = evidence
 

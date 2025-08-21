@@ -141,6 +141,9 @@ class Zeek:
         # always use the type_ field of the slips class, this is not gonna
         # be given to slips by zeek:D
         flow_values["type_"] = getattr(slips_class, "type_")
+        # some zeek flows dont come with a uid like arp, randomly
+        # generated one
+        flow_values["uid"] = flow_values.get("uid") or utils.generate_uid()
 
         return flow_values
 
@@ -180,7 +183,7 @@ class ZeekJSON(IInputType, Zeek):
 
             if file_type == "conn.log":
                 flow_values["dur"] = float(flow_values.get("dur", 0) or 0)
-                for fld in (
+                for field in (
                     "sbytes",
                     "dbytes",
                     "spkts",
@@ -188,13 +191,13 @@ class ZeekJSON(IInputType, Zeek):
                     "sport",
                     "dport",
                 ):
-                    flow_values[fld] = int(flow_values.get(fld, 0) or 0)
+                    flow_values[field] = int(flow_values.get(field, 0) or 0)
 
             flow_values = self.fill_empty_class_fields(
                 flow_values, slips_class
             )
-            self.flow = slips_class(**flow_values)
-            return self.flow
+            flow = slips_class(**flow_values)
+            return flow
 
         print(f"[Profiler] Invalid file_type: {file_type}, line: {line}")
         return False
@@ -250,7 +253,7 @@ class ZeekTabs(IInputType, Zeek):
         and caches them for later use.
 
         caching is done to avoid doing this step for each given log line.
-        we only do it once for each #field line read
+        we only do it once for each #field line we encounter
 
         :param fields_line: dict with "data": a line that starts with
         #fields as read from the given zeek.log file
@@ -344,14 +347,12 @@ class ZeekTabs(IInputType, Zeek):
 
             # Conn, SSH, Notice, etc.
             slips_class = LINE_TYPE_TO_SLIPS_CLASS[log_type]
-
             flow_values = self.fill_empty_class_fields(
                 flow_values, slips_class
             )
-
             # create the corresponding object using the mapped class
-            self.flow = slips_class(**flow_values)
-            return self.flow
+            flow = slips_class(**flow_values)
+            return flow
 
         print(f"[Profiler] Invalid file_type: {log_type}, line: {line}")
         return False

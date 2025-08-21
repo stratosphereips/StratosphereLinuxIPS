@@ -222,6 +222,9 @@ class FTP:
     saddr: str
     daddr: str
 
+    sport: int
+    dport: int
+
     used_port: int
 
     ground_truth_label: str = ""
@@ -352,7 +355,6 @@ class Files:
 @dataclass
 class ARP:
     starttime: str
-    uid: str
     saddr: str
     daddr: str
 
@@ -382,6 +384,9 @@ class ARP:
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
+    # arp flows dont have uids by default in zeek, so slips generates one
+    # for them
+    uid: str = field(default_factory=utils.generate_uid)
     type_: str = "arp"
 
 
