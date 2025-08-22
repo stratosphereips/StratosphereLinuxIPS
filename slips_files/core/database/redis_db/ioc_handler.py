@@ -290,7 +290,13 @@ class IoCHandler:
 
     def _match_exact_domain(self, domain: str) -> Optional[Dict[str, str]]:
         """checks if the given domain is blacklisted.
-        checks only the exact given domain, no subdomains"""
+        checks only the exact given domain, no subdomains
+        returns something like
+        {"description": "x.com",
+         "source": "own_malicious_iocs.csv",
+         "threat_level": "medium",
+         "tags": "local TI file"}
+        """
         domain_description = self.rcache.hget(
             self.constants.IOC_DOMAINS, domain
         )
