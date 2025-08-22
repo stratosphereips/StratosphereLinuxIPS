@@ -1670,7 +1670,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         profileid,
         twid,
         set_evidence=True,
-    ) -> Tuple[dict, bool] | False:
+    ) -> Tuple[dict, bool] | bool:
         """Evaluates a domain to determine if it is recognized as
         malicious based on
         threat intelligence data stored offline. If the domain is
