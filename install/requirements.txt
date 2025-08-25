@@ -36,7 +36,7 @@ aid_hash
 black==24.10.0
 ruff==0.12.2
 pre-commit==4.0.1
-coverage==7.9.1
+coverage==7.10.5
 netifaces==0.11.0
 scapy==2.6.1
 pyyaml
