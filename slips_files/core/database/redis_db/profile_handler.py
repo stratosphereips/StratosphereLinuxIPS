@@ -248,7 +248,7 @@ class ProfileHandler:
             )
             # send each dns answer to TI module
             for answer in flow.answers:
-                if "TXT" in answer:
+                if "TXT" in answer or answer == "":
                     continue
 
                 extra_info = {

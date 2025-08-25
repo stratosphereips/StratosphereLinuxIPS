@@ -3,11 +3,11 @@ numpy==1.26.4
 watchdog==5.0.0
 redis==5.2.1
 urllib3==2.5.0
-pandas==2.3.0
+pandas==2.3.1
 tzlocal==5.3.1
 cabby==0.1.23
 stix2==3.0.1
-certifi==2025.6.15
+certifi==2025.8.3
 tensorflow==2.16.1
 Keras
 validators==0.35.0
@@ -22,7 +22,7 @@ pytest-mock==3.14.0
 pytest-xdist==3.8.0
 scipy==1.15.1
 scikit-learn==1.6.1
-GitPython==3.1.44
+GitPython==3.1.45
 protobuf==4.25.8
 exclusiveprocess==0.9.4
 pytest-dependency==0.6.0

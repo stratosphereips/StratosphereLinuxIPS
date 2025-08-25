@@ -1669,26 +1669,20 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         timestamp,
         profileid,
         twid,
-    ):
+        set_evidence=True,
+    ) -> Tuple[dict, bool] | bool:
         """Evaluates a domain to determine if it is recognized as
         malicious based on
         threat intelligence data stored offline. If the domain is
-        identified as
-        malicious, it records an evidence entry and marks the
+        identified as malicious, it records an evidence entry and marks the
         domain in the database.
+        setting an evidence is optional here determined by the set_evidence
+        flag
 
         Returns:
             bool: False if the domain is ignored or not found in the
-            offline threat intelligence data, indicating no further action
-             is required. Otherwise, it does not explicitly return
-             a value but performs operations to record the
-              malicious domain evidence.
-
-        Side Effects:
-            - Generates and stores an evidence entry for the malicious
-            domain in the database.
-            - Marks the domain as malicious in the database, enhancing
-            the system's future recognition of this threat.
+            offline threat intelligence data, and the malicious domain TI
+            info if its malicious.
         """
         if self.is_ignored_domain(domain):
             return False
@@ -1697,19 +1691,21 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         if not domain_info:
             return False
 
-        self.set_evidence_malicious_domain(
-            domain,
-            uid,
-            timestamp,
-            domain_info,
-            is_subdomain,
-            profileid,
-            twid,
-        )
+        if set_evidence:
+            self.set_evidence_malicious_domain(
+                domain,
+                uid,
+                timestamp,
+                domain_info,
+                is_subdomain,
+                profileid,
+                twid,
+            )
 
         # mark this domain as malicious in our database
         domain_info = {"threatintelligence": domain_info}
         self.db.set_info_for_domains(domain, domain_info)
+        return domain_info, is_subdomain
 
     def update_local_file(self, filename):
         """Checks for updates to a specified local threat intelligence
@@ -1797,6 +1793,93 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             return False
         return True
 
+    def is_dns_answer_of_a_malicious_query(
+        self,
+        answer,
+        uid,
+        timestamp,
+        profileid,
+        twid,
+        dns_query,
+    ):
+        """
+        Detects the DNS answers of malicious DNS queries.
+        even if the IPs returned in the answer is not in one of slips' TI feeds.
+        :param answer: the ip coming in the dns answer
+        """
+        if utils.is_ignored_ip(answer):
+            return False
+
+        malicious_query_feed_info = self.is_malicious_domain(
+            dns_query, uid, timestamp, profileid, twid, set_evidence=False
+        )
+
+        if not malicious_query_feed_info:
+            return False
+
+        # was the subdomain of the query malicious, or the domain?
+        domain_info, is_subdomain = malicious_query_feed_info
+
+        try:
+            domain_info = domain_info["threatintelligence"]
+        except KeyError:
+            return False
+
+        confidence: float = 0.7 if is_subdomain else 1
+
+        srcip = profileid.split("_")[-1]
+        threat_level: float = utils.threat_levels[
+            domain_info.get("threat_level", "high")
+        ]
+        threat_level: ThreatLevel = ThreatLevel(threat_level)
+        description: str = (
+            f"DNS answer of a blacklisted query. Query: {dns_query}. "
+            f"Answer: {answer}, "
+            f"Description: {domain_info.get('description', '')}, "
+            f"Query found in feed: {domain_info['source']}, "
+            f"Confidence: {confidence}"
+        )
+
+        tags = domain_info.get("tags", None)
+        if tags:
+            description += f", Tags: {tags}. "
+
+        evidence = Evidence(
+            evidence_type=EvidenceType.THREAT_INTELLIGENCE_ANSWER_OF_BLACKLISTED_QUERY,
+            attacker=Attacker(
+                direction=Direction.DST, ioc_type=IoCType.IP, value=answer
+            ),
+            victim=Victim(
+                ioc_type=IoCType.IP,
+                direction=Direction.SRC,
+                value=srcip,
+            ),
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=answer),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=[uid],
+            timestamp=utils.convert_ts_format(timestamp, utils.alerts_format),
+        )
+
+        self.db.set_evidence(evidence)
+
+        evidence = Evidence(
+            evidence_type=EvidenceType.THREAT_INTELLIGENCE_ANSWER_OF_BLACKLISTED_QUERY,
+            attacker=Attacker(
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
+            ),
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=srcip),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=[uid],
+            timestamp=utils.convert_ts_format(timestamp, utils.alerts_format),
+        )
+        self.db.set_evidence(evidence)
+
     def pre_main(self):
         utils.drop_root_privs_permanently()
         # Load the local Threat Intelligence files that are
@@ -1832,13 +1915,22 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             to_lookup = data.get("to_lookup", "")
             # detect the type given because sometimes,
             # http.log host field has ips OR domains
-            type_ = utils.detect_ioc_type(to_lookup)
+            ioc_type = utils.detect_ioc_type(to_lookup)
 
             # ip_state can be "srcip" or "dstip"
             ip_state = data.get("ip_state")
-            if type_ == "ip":
+            if ioc_type == "ip":
                 ip = to_lookup
                 if self.should_lookup(ip, protocol, ip_state):
+                    if is_dns_response:
+                        self.is_dns_answer_of_a_malicious_query(
+                            ip,
+                            uid,
+                            timestamp,
+                            profileid,
+                            twid,
+                            dns_query,
+                        )
                     self.is_malicious_ip(
                         ip,
                         uid,
@@ -1861,7 +1953,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                         twid,
                         is_dns_response=is_dns_response,
                     )
-            elif type_ == "domain":
+            elif ioc_type == "domain":
                 if is_dns_response:
                     self.is_malicious_cname(
                         dns_query, to_lookup, uid, timestamp, profileid, twid
@@ -1870,7 +1962,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                     self.is_malicious_domain(
                         to_lookup, uid, timestamp, profileid, twid
                     )
-            elif type_ == "url":
+            elif ioc_type == "url":
                 self.is_malicious_url(
                     to_lookup, uid, timestamp, daddr, profileid, twid
                 )
