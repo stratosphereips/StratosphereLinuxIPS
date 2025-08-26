@@ -24,11 +24,13 @@ class ARPSetEvidenceHelper:
     this evidence filter should only be used here:D
     """
 
-    def __init__(self, db: DBManager):
+    def __init__(self, db: DBManager, conf, slips_args):
         self.db = db
+        self.conf = conf
+        self.args = slips_args
         self.evidence_filter = ARPEvidenceFilter(self.conf, self.args, self.db)
 
-    def dstip_outside_localnet(self, flow, twid):
+    async def dstip_outside_localnet(self, flow, twid):
         # comes here if the IP isn't in any of the local networks
         confidence: float = 0.6
         threat_level: ThreatLevel = ThreatLevel.LOW
@@ -63,9 +65,9 @@ class ARPSetEvidenceHelper:
         # no need to go through the arp filter here,
         # because the filter is only to filter attacks that can be done
         # using the arp_poisoner, but this one isnt done there.
-        self.db.set_evidence(evidence)
+        await self.db.set_evidence(evidence)
 
-    def unsolicited_arp(self, flow, twid):
+    async def unsolicited_arp(self, flow, twid):
         # We're sure this is unsolicited arp
         # it may be arp spoofing
         confidence: float = 0.8
@@ -90,9 +92,9 @@ class ARPSetEvidenceHelper:
             timestamp=flow.starttime,
         )
 
-        self._decide_setting_evidence(evidence)
+        await self._decide_setting_evidence(evidence)
 
-    def arp_scan(self, ts, profileid, twid, uids: List[str]):
+    async def arp_scan(self, ts, profileid, twid, uids: List[str]):
         confidence: float = 0.8
         threat_level: ThreatLevel = ThreatLevel.LOW
         saddr: str = profileid.split("_")[1]
@@ -114,20 +116,9 @@ class ARPSetEvidenceHelper:
             timestamp=ts,
         )
 
-        self._decide_setting_evidence(evidence)
-        # after we set evidence, clear the dict so we can detect if it
-        # does another scan
-        try:
-            self.cache_arp_requests.pop(f"{profileid}_{twid}")
-        except KeyError:
-            # when a tw is closed, we clear all its' entries from the
-            # cache_arp_requests dict
-            # having keyerr is a result of closing a timewindow before
-            # setting an evidence
-            # ignore it
-            pass
+        await self._decide_setting_evidence(evidence)
 
-    def mitm_arp_attack(self, flow, twid, original_ip):
+    async def mitm_arp_attack(self, flow, twid, original_ip):
         # From our db we know that:
         # original_IP has src_MAC
         # now saddr has src_MAC and saddr isn't the same as original_IP
@@ -189,11 +180,13 @@ class ARPSetEvidenceHelper:
             victim=victim,
         )
 
-        self.set_evidence(evidence)
+        await self._decide_setting_evidence(evidence)
 
     async def _decide_setting_evidence(self, evidence: Evidence):
         """the goal of this function is to discard evidence of other slips
         peers doing arp scans because that's slips attacking back attackers"""
-        if self.evidence_filter.should_discard_evidence(evidence.profile.ip):
+        if await self.evidence_filter.should_discard_evidence(
+            evidence.profile.ip
+        ):
             return
         await self.db.set_evidence(evidence)

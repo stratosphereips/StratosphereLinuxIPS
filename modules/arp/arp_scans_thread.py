@@ -1,6 +1,7 @@
 import asyncio
 import queue
 import threading
+from typing import Dict
 
 from modules.arp.set_evidence import ARPSetEvidenceHelper
 from slips_files.common.abstracts.ithread import IThread
@@ -20,16 +21,19 @@ class ARPScansProcessor(IThread):
         self.pending_arp_scan_evidence: queue.Queue = kwargs.get(
             "pending_arp_scan_evidence"
         )
-        self.cache_arp_requests = kwargs.get("cache_arp_requests")
+        self.cache_arp_requests: Dict = kwargs.get("cache_arp_requests")
         self.cache_arp_lock: threading.Lock = kwargs.get("cache_arp_lock")
 
     async def start(self):
         scans_ctr = 0
         while not self.should_stop():
+            # wait 10s if a new evidence arrived
+            await asyncio.sleep(self.time_to_wait)
             try:
                 evidence = self.pending_arp_scan_evidence.get(
                     timeout=1, block=True
                 )
+                print("@@@@@@@@@@@@@@@@ got an evidence to accumulate")
             except queue.Empty:
                 continue
             except Exception:
@@ -38,8 +42,6 @@ class ARPScansProcessor(IThread):
             # unpack the evidence that triggered the task
             (ts, profileid, twid, uids) = evidence
 
-            # wait 10s if a new evidence arrived
-            await asyncio.sleep(self.time_to_wait)
             # now keep getting evidence from the queue and combine all
             # similar ones, and put back in the queue all the ones that
             # wont be combined.
