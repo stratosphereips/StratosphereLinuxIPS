@@ -4,7 +4,6 @@ import sys
 import traceback
 import asyncio
 import os
-import threading
 from asyncio import Task
 from typing import (
     Dict,
@@ -157,6 +156,7 @@ class IAsyncModule(ABC, Process):
             traceback.print_exception(type(exc), exc, exc.__traceback__)
 
     def handle_loop_exception(self, loop, context):
+        """A common loop exception handler"""
         exception = context.get("exception")
         future = context.get("future")
 
@@ -203,10 +203,14 @@ class IAsyncModule(ABC, Process):
 
     async def call_msg_handler(self, channel: str, data: dict):
         handler: Callable = self.channel_tracker[channel]["handler"]
-        if asyncio.iscoroutinefunction(handler):
-            self.create_task(handler, data)
-        else:
-            handler(data)
+        try:
+            if asyncio.iscoroutinefunction(handler):
+                self.create_task(handler, data)
+            else:
+                handler(data)
+        except Exception:
+            self.print(f"Error processing {channel} message", 0, 1)
+            self.print_traceback()
 
     async def dispatch_msgs(self):
         """
@@ -217,22 +221,6 @@ class IAsyncModule(ABC, Process):
             if msg is None or channel is None:
                 return
             await self.call_msg_handler(channel, data)
-
-    def create_thread(self, func: Callable, *args, **kwargs):
-        """
-        to ensure all created threads by all modules have their own
-        event loop
-        """
-
-        # each call to asyncio.run() creates a new, separate loop.
-        def wrapper(*args, **kwargs):
-            asyncio.run(func(*args, **kwargs))
-
-        t = threading.Thread(
-            target=wrapper, args=args, kwargs=kwargs, name=func.__name__
-        )
-        t.daemon = True
-        return t
 
     def should_stop(self) -> bool:
         """
