@@ -256,54 +256,7 @@ class Blocking(IAsyncModule):
             self.log,
         )
 
-    def main(self):
-        if msg := self.get_msg("new_blocking"):
-            # message['data'] in the new_blocking channel is a dictionary that contains
-            # the ip and the blocking options
-            # Example of the data dictionary to block or unblock an ip:
-            # (notice you have to specify from,to,dport,sport,protocol or at
-            # least 2 of them when unblocking)
-            #   blocking_data = {
-            #       "ip"       : "0.0.0.0"
-            #       "tw"       : 1
-            #       "block"    : True to block  - False to unblock
-            #       "from"     : True to block traffic from ip (default) - False does nothing
-            #       "to"       : True to block traffic to ip  (default)  - False does nothing
-            #       "dport"    : Optional destination port number
-            #       "sport"    : Optional source port number
-            #       "protocol" : Optional protocol
-            #   }
-            # Example of passing blocking_data to this module:
-            #   blocking_data = json.dumps(blocking_data)
-            #   self.db.publish('new_blocking', blocking_data )
-
-            data = json.loads(msg["data"])
-            ip = data.get("ip")
-            tw: int = data.get("tw")
-            block = data.get("block")
-
-            flags = {
-                "from_": data.get("from"),
-                "to": data.get("to"),
-                "dport": data.get("dport"),
-                "sport": data.get("sport"),
-                "protocol": data.get("protocol"),
-            }
-            if block:
-                self._block_ip(ip, flags)
-            # whether this ip is blocked now, or was already blocked, make an
-            # unblocking request to either extend its
-            # blocking period, or block it until the next timewindow is over.
-            self.unblocker.unblock_request(ip, tw, flags)
-
-        if msg := self.get_msg("tw_closed"):
-            # this channel receives requests for closed tws for every ip
-            # slips sees.
-            # if slips saw 3 ips, this channel will receive 3 msgs with tw1
-            # as closed. we're not interested in the ips, we just wanna
-            # know when slips advances to the next tw.
-            profileid_tw = msg["data"].split("_")
-            twid = profileid_tw[-1]
-            if self.last_closed_tw != twid:
-                self.last_closed_tw = twid
-                self.unblocker.update_requests()
+    async def main(self):
+        """Main loop function"""
+        await self.unblocker.check_if_time_to_unblock()
+        await asyncio.sleep(10)
