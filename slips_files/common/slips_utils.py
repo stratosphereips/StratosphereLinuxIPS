@@ -1,12 +1,13 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import asyncio
 import base64
 import binascii
 import hashlib
+import threading
 import traceback
 from datetime import datetime, timedelta
 from re import findall
-from threading import Thread
 import netifaces
 from uuid import UUID
 import tldextract
@@ -20,7 +21,7 @@ import os
 import sys
 import ipaddress
 import aid_hash
-from typing import Any, Optional, Union, List
+from typing import Any, Optional, Union, List, Callable
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 from dataclasses import is_dataclass, asdict
 from enum import Enum
@@ -340,7 +341,7 @@ class Utils(object):
             filename = filename.rsplit(".", 1)[0]
         return filename not in SUPPORTED_LOGFILES
 
-    async def start_thread(self, thread: Thread, db):
+    async def start_thread(self, thread: threading.Thread, db):
         """
         A wrapper for threading.Thread().start()
         starts the given thread and keeps track of its TID/PID in the db
@@ -909,6 +910,27 @@ class Utils(object):
                 1,
             )
             print(traceback.format_exc(), 0, 1)
+
+    def create_thread(self, func: Callable, name: str, *args, **kwargs):
+        """
+        Wrapper for threading.Thread() to be able to start async funcs in a
+        thread AND to ensure all created threads by all modules have their own
+         event loop
+        :param func: async function
+        :param name:"""
+
+        # each call to asyncio.run() creates a new, separate loop.
+        def wrapper(*args, **kwargs):
+            asyncio.run(func(*args[1:], **kwargs))
+
+        t = threading.Thread(
+            target=wrapper,
+            args=args,
+            kwargs=kwargs,
+            name=name or func.__name__,
+        )
+        t.daemon = True
+        return t
 
 
 utils = Utils()
