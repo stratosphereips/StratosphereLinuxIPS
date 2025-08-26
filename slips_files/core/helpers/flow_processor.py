@@ -18,11 +18,9 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz,
 # stratosphere@aic.fel.cvut.cz
 from dataclasses import asdict
-import queue
 import ipaddress
 import pprint
 import json
-import multiprocessing
 from typing import (
     List,
     Union,
@@ -85,27 +83,13 @@ class FlowProcessor(IThread):
         ]
         self.client_ips = self.conf.client_ips()
 
-    def get_msg_from_q(self, q: multiprocessing.Queue):
-        """
-        retrieves a msg from the given queue
-        :kwarg thread_safe: set it to true if the queue passed is used by
-        the profiler threads (e.g pending_flows_queue).
-         when set to true, this function uses the pending flows queue lock.
-        """
-        try:
-            return q.get(timeout=1, block=False)
-        except queue.Empty:
-            return None
-        except Exception:
-            return None
-
     def stop_profiler_thread(self) -> bool:
         # cant use while self.flows_to_process_q.qsize() != 0 only here
         # because when the thread starts, this qsize is 0, so we need
         # another indicator that we are at the end of the flows. aka the
         # stop_profiler_threads event
         return (
-            self.stop()  # use the interface's stop method
+            self.should_stop()  # use the interface's stop method
             and not self.flows_to_process_q.qsize()
         )
 
@@ -496,7 +480,7 @@ class FlowProcessor(IThread):
         returns the local network of the given interface only if slips is
         running with -i
         """
-        addrs = netifaces.ifaddresses(self.slips_args.interface).get(
+        addrs = netifaces.ifaddresses(self.args.interface).get(
             netifaces.AF_INET
         )
         if not addrs:
@@ -519,7 +503,7 @@ class FlowProcessor(IThread):
         """
         # For now the local network is only ipv4, but it
         # could be ipv6 in the future. Todo.
-        if self.slips_args.interface:
+        if self.args.interface:
             self.is_localnet_set = True
             return self.get_localnet_of_given_interface()
 

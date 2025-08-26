@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from abc import ABC, abstractmethod
-from threading import Thread
 
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
@@ -21,11 +20,6 @@ class IUnblocker(ABC):
 
     def __init__(self, db: DBManager):
         self.db = db
-        self.checker = Thread(
-            target=self.check_if_time_to_unblock,
-            daemon=True,
-            name=f"{self.name}_unblocking_checker",
-        )
         self.requests = {}
 
     @abstractmethod
@@ -45,7 +39,7 @@ class IUnblocker(ABC):
 
     @abstractmethod
     def check_if_time_to_unblock(self):
-        """a bg thread that unblocks ips once their ts is reached"""
+        """unblocks ips once their ts is reached"""
         ...
 
     async def _get_tw_to_unblock_at(
