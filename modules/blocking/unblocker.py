@@ -1,6 +1,4 @@
-from threading import Lock
 import time
-import threading
 from typing import Dict, Callable
 from slips_files.common.abstracts.iunblocker import IUnblocker
 from slips_files.common.printer import Printer
@@ -13,39 +11,25 @@ class Unblocker(IUnblocker):
     """
     For every blocking module in slips, there should be an unblocker
     implemented
-    this is the one for the firewall blocker.
+    this is the one for the firewall blocker in blocking.py.
     """
 
     name = "iptables_unblocker"
 
-    def __init__(self, db, sudo, should_stop: Callable, logger, log: Callable):
+    def __init__(self, db, sudo, logger, log: Callable):
         IUnblocker.__init__(self, db)
-        # this is the blocking module's should_stop method
-        # the goal is to stop the threads started by this module when the
-        # blocking module's should_stop returns True
-        self.should_stop = should_stop
         # this logger's main purpose is to start the printer
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
         self.sudo = sudo
         # this log method is used to log unblocking requests to blocking.log
         self.log = log
-        self.requests_lock = Lock()
         self.requests = {}
-        self._start_checker_thread()
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
 
-    def _start_checker_thread(self):
-        self.unblocker_thread = threading.Thread(
-            target=self.check_if_time_to_unblock,
-            daemon=True,
-            name="iptables_unblocker_thread",
-        )
-        await utils.start_thread(self.unblocker_thread, self.db)
-
-    def unblock_request(
+    async def unblock_request(
         self,
         ip: str,
         current_tw: int,
@@ -62,43 +46,44 @@ class Unblocker(IUnblocker):
             # measured in tws
             block_this_ip_for = 1
 
-        tw_to_unblock_at: TimeWindow = self._get_tw_to_unblock_at(
+        tw_to_unblock_at: TimeWindow = await self._get_tw_to_unblock_at(
             ip, current_tw, block_this_ip_for
         )
         self._add_req(ip, tw_to_unblock_at, flags, block_this_ip_for)
 
-    def check_if_time_to_unblock(self):
+    async def check_if_time_to_unblock(self):
         """
-        This method should be called in a thread that checks the timestamps
-        in self.requests regularly.
-        Each time a ts is reached, it should call _unblock()
+        Unblocks IPs when their probation period is over.
+        checks the timestamps in self.requests regularly, Each time a ts is
+        reached, it calls _unblock()
         """
-        while not self.should_stop():
-            now = time.time()
-            requests_to_del = []
+        now = time.time()
+        requests_to_del = []
 
-            for ip, request in self.requests.items():
-                ts: str = request["tw_to_unblock"].end_time
-                ts: float = utils.convert_ts_format(ts, "unixtimestamp")
-                if now >= ts:
-                    flags: Dict[str, str] = request["flags"]
-                    if self._unblock(ip, flags):
-                        self._log_successful_unblock(ip)
-                        self.db.del_blocked_ip(ip)
-                        requests_to_del.append(ip)
+        for ip, request in self.requests.items():
+            ts: str = request["tw_to_unblock"].end_time
+            ts: float = utils.convert_ts_format(ts, "unixtimestamp")
 
-            for ip in requests_to_del:
-                self.del_request(ip)
-            time.sleep(10)
+            if now >= ts:
+                flags: Dict[str, str] = request["flags"]
+                print(f"@@@@@@@@@@@@@@@@ ok cool unblocking {ip}")
+                if await self._unblock(ip, flags):
+                    print("@@@@@@@@@@@@@@@@ all good unblocked.")
+                    await self._log_successful_unblock(ip)
+                    await self.db.del_blocked_ip(ip)
+                    requests_to_del.append(ip)
 
-    def _log_successful_unblock(self, ip):
-        blocking_ts: float = self.db.get_blocking_timestamp(ip)
+        for ip in requests_to_del:
+            self.del_request(ip)
+
+    async def _log_successful_unblock(self, ip):
+        blocking_ts: float = await self.db.get_blocking_timestamp(ip)
         now = time.time()
 
         blocking_hrs: int = utils.get_time_diff(blocking_ts, now, "hours")
         blocking_hrs = round(blocking_hrs, 1)
 
-        blocking_tws: int = self.db.get_equivalent_tws(blocking_hrs)
+        blocking_tws: int = await self.db.get_equivalent_tws(blocking_hrs)
         printable_blocking_ts = utils.convert_ts_format(
             blocking_ts, utils.alerts_format
         )
@@ -119,15 +104,14 @@ class Unblocker(IUnblocker):
         "how many extra tws should IP X stay blocked in?"
         """
         new_requests = {}
-        with self.requests_lock:
-            for ip, req in self.requests.items():
-                if req["block_this_ip_for"] == 0:
-                    # the ip is unblocked, we dont need to keep track of it
-                    continue
-                new_req = req
-                new_req["block_this_ip_for"] = req["block_this_ip_for"] - 1
-                new_requests[ip] = new_req
-            self.requests = new_requests
+        for ip, req in self.requests.items():
+            if req["block_this_ip_for"] == 0:
+                # the ip is unblocked, we dont need to keep track of it
+                continue
+            new_req = req
+            new_req["block_this_ip_for"] = req["block_this_ip_for"] - 1
+            new_requests[ip] = new_req
+        self.requests = new_requests
 
     def _add_req(
         self,
@@ -142,12 +126,11 @@ class Unblocker(IUnblocker):
         :param block_this_ip_for: number of following timewindows this ip
         will remain blocked in.
         """
-        with self.requests_lock:
-            self.requests[ip] = {
-                "tw_to_unblock": tw_to_unblock_at,
-                "block_this_ip_for": block_this_ip_for,
-                "flags": flags,
-            }
+        self.requests[ip] = {
+            "tw_to_unblock": tw_to_unblock_at,
+            "block_this_ip_for": block_this_ip_for,
+            "flags": flags,
+        }
 
         interval = self.requests[ip]["block_this_ip_for"]
         self.log(
@@ -159,11 +142,9 @@ class Unblocker(IUnblocker):
 
     def del_request(self, ip):
         """Delete an unblocking request from self.requests"""
-        if ip in self.requests:
-            with self.requests_lock:
-                del self.requests[ip]
+        self.requests.pop(ip, None)
 
-    def _unblock(
+    async def _unblock(
         self,
         ip_to_unblock,
         flags: Dict[str, str],
@@ -213,7 +194,7 @@ class Unblocker(IUnblocker):
             )
 
         if unblocked:
-            cur_timewindow = self.db.get_timewindow(
+            cur_timewindow = await self.db.get_timewindow(
                 time.time(), f"profile_{ip_to_unblock}"
             )
             txt = f"IP {ip_to_unblock} is unblocked in {cur_timewindow}."
