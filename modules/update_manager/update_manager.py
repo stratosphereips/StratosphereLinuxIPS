@@ -1725,7 +1725,7 @@ class UpdateManager(IModule):
                     task = asyncio.create_task(
                         self.update_ti_file(file_to_download)
                     )
-                    task.add_done_callback(self.handle_exception)
+                    task.add_done_callback(self.handle_task_exception)
             #######################################################
             # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
             # check if we have a username and api key and a week has passed since we last updated
@@ -1753,7 +1753,7 @@ class UpdateManager(IModule):
         # create_task is used to run update() function
         # concurrently instead of serially
         self.update_finished: Task = asyncio.create_task(self.update())
-        self.update_finished.add_done_callback(self.handle_exception)
+        self.update_finished.add_done_callback(self.handle_task_exception)
 
         await self.update_finished
         self.print(
