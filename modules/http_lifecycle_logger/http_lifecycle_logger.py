@@ -32,20 +32,45 @@ class HTTPLifeCycleLogger(IModule):
         with self.csv_file.open("w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=self.headers)
             writer.writeheader()
+        # Buffer for incomplete lifecycles
+        self.lifecycle_buffer = {}
 
     def pre_main(self):
         utils.drop_root_privs_permanently()
 
     def main(self):
         if msg := self.get_msg("http_lifecycle_logger"):
+
             msg = json.loads(msg["data"])
-            with self.csv_file.open("a", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=self.headers)
-                writer.writerow(
-                    {
-                        "uid": msg.get("uid", ""),
-                        "operation": msg.get("operation", ""),
-                        "time_it_took": msg.get("time_it_took", ""),
-                        "comment": msg.get("comment", ""),
-                    }
-                )
+            uid = msg.get("uid", "")
+            operation = msg.get("operation", "")
+            time_it_took = msg.get("time_it_took", "")
+            comment = msg.get("comment", "")
+
+            if not uid:
+                return  # skip invalid
+
+            # Initialize buffer for this uid if missing
+            if uid not in self.lifecycle_buffer:
+                self.lifecycle_buffer[uid] = []
+
+            # Append current operation to buffer
+            self.lifecycle_buffer[uid].append(
+                {
+                    "uid": uid,
+                    "operation": operation,
+                    "time_it_took": round(time_it_took, 2),
+                    "comment": comment,
+                }
+            )
+            import pprint
+
+            pprint.pp(self.lifecycle_buffer)
+            # If operation is "done", flush buffer to CSV and clear it
+            if operation == "done":
+                with self.csv_file.open(
+                    "a", newline="", encoding="utf-8"
+                ) as f:
+                    writer = csv.DictWriter(f, fieldnames=self.headers)
+                    writer.writerows(self.lifecycle_buffer[uid])
+                del self.lifecycle_buffer[uid]
