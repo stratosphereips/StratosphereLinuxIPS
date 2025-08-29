@@ -264,8 +264,6 @@ class ProcessManager:
         plugins = {}
         failed_to_load_modules = 0
         for module_name in self._discover_module_names():
-            if "http" not in module_name.lower():
-                continue
             if not self._should_load_module(module_name):
                 continue
 
