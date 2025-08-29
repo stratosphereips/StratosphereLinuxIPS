@@ -369,10 +369,11 @@ class Input(ICore):
 
                 # self.print('	> Sent Line: {}'.format(earliest_line), 0, 3)
 
-                self.give_profiler(earliest_line)
                 if "http" in earliest_line["type"]:
                     http_flow = earliest_line["data"]
-                    time_it_took_to_reach_input = time.time() - http_flow["ts"]
+                    now = time.time()
+                    time_it_took_to_reach_input = now - http_flow["ts"]
+                    self.db.set_http_last_operation_ts(http_flow["uid"], now)
                     self.db.publish(
                         "http_lifecycle_logger",
                         json.dumps(
@@ -383,6 +384,8 @@ class Input(ICore):
                             }
                         ),
                     )
+                self.give_profiler(earliest_line)
+
                 self.lines += 1
                 # when testing, no need to read the whole file!
                 if self.lines == 10 and self.testing:

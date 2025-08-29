@@ -194,6 +194,12 @@ class DBManager:
     def publish_stop(self, *args, **kwargs):
         return self.rdb.publish_stop(*args, **kwargs)
 
+    def set_http_last_operation_ts(self, *args, **kwargs):
+        return self.rdb.set_http_last_operation_ts(*args, **kwargs)
+
+    def get_http_last_operation_ts(self, *args, **kwargs):
+        return self.rdb.get_http_last_operation_ts(*args, **kwargs)
+
     def get_message(self, *args, **kwargs):
         return self.rdb.get_message(*args, **kwargs)
 

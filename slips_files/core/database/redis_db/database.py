@@ -1138,6 +1138,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """Return the field separator"""
         return self.separator
 
+    def set_http_last_operation_ts(self, uid, ts):
+        self.r.hset("http_last_op_ts", uid, ts)
+
+    def get_http_last_operation_ts(self, uid):
+        return float(self.r.hget("http_last_op_ts", uid))
+
     def store_tranco_whitelisted_domain(self, domain):
         """
         store whitelisted domain from tranco whitelist in the db

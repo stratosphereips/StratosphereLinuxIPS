@@ -8,6 +8,7 @@
 # of the License, or (at your option) any later version.
 import json
 import threading
+import time
 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -660,6 +661,24 @@ class Profiler(ICore, IObservable):
 
             line: dict = msg["line"]
             input_type: str = msg["input_type"]
+
+            if "http" in line["type"]:
+                http_flow = line["data"]
+                uid = http_flow["uid"]
+                now = time.time()
+                print(f"@@@@@@@@@@@@@@@@ getting uid o f{uid} {line}")
+                dur = now - self.db.get_http_last_operation_ts(uid)
+                self.db.publish(
+                    "http_lifecycle_logger",
+                    json.dumps(
+                        {
+                            "uid": uid,
+                            "operation": "from_input_to_profiler",
+                            "time_it_took": dur,
+                        }
+                    ),
+                )
+                self.db.set_http_last_operation_ts(uid, now)
 
             # TODO who is putting this True here?
             if line is True:
