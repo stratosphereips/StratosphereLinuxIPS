@@ -86,6 +86,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         "fides2slips",
         "slips2fides",
         "iris_internal",
+        "http_lifecycle_logger",
     }
     # channels that recv actual flows, not msgs that we need to pass between
     # modules.

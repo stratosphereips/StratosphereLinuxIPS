@@ -390,6 +390,9 @@ class ProcessManager:
         """responsible for starting all the modules in the modules/ dir"""
         modules_to_call = self.get_modules()[0]
         for module_name in modules_to_call:
+            if "http" not in module_name.lower():
+                continue
+
             module_class = modules_to_call[module_name]["obj"]
             module = module_class(
                 self.main.logger,
