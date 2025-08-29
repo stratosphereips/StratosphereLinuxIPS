@@ -1653,22 +1653,14 @@ class UpdateManager(IModule):
                 )
         self.loaded_ti_files -= 1
 
-    def handle_exception(self, task):
-        """
-        in asyncmodules we use Async.Task to run some of the functions
-        If an exception occurs in a coroutine that was wrapped in a Task
-        (e.g., asyncio.create_task), the exception does not crash the program
-         but remains in the task.
-        This function is used to handle the exception in the task
-        """
+    def handle_task_exception(self, task):
         try:
-            # Access task result to raise the exception if it occurred
-            task.result()
-        except asyncio.exceptions.CancelledError:
-            # like pressing ctrl+c
-            return
-        except Exception as e:
-            self.print(e, 0, 1)
+            exception = task.exception()
+        except asyncio.CancelledError:
+            return  # Task was cancelled, not an error
+        if exception:
+            self.print(f"Unhandled exception in task: {exception}")
+            self.print_traceback()
 
     async def update(self) -> bool:
         """
