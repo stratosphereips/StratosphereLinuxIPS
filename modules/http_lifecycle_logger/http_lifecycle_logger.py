@@ -1,12 +1,12 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import os
-
-from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.imodule import IModule
 import json
 import csv
 from pathlib import Path
+
+from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.imodule import IModule
 
 
 class HTTPLifeCycleLogger(IModule):
@@ -27,50 +27,70 @@ class HTTPLifeCycleLogger(IModule):
 
         filename = os.path.join(self.output_dir, "http_lifecycle_logger.csv")
         self.csv_file = Path(filename)
-        self.headers = ["uid", "feature", "time_it_took", "comment"]
 
-        with self.csv_file.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=self.headers)
-            writer.writeheader()
+        # Start with only "uid", will expand dynamically with operations
+        self.headers = ["uid"]
+        self.ensure_csv_file()
+
         # Buffer for incomplete lifecycles
         self.lifecycle_buffer = {}
+
+    def ensure_csv_file(self):
+        """Ensure CSV file exists with current headers"""
+        if not self.csv_file.exists():
+            with self.csv_file.open("w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=self.headers)
+                writer.writeheader()
 
     def pre_main(self):
         utils.drop_root_privs_permanently()
 
     def main(self):
         if msg := self.get_msg("http_lifecycle_logger"):
-
             msg = json.loads(msg["data"])
             uid = msg.get("uid", "")
             operation = msg.get("operation", "")
-            time_it_took = msg.get("time_it_took", "")
-            comment = msg.get("comment", "")
+            time_it_took = msg.get("time_it_took", 0)
 
             if not uid:
                 return  # skip invalid
 
-            # Initialize buffer for this uid if missing
+            # Init buffer dict for this UID
             if uid not in self.lifecycle_buffer:
-                self.lifecycle_buffer[uid] = []
+                self.lifecycle_buffer[uid] = {"uid": uid}
 
-            # Append current operation to buffer
-            self.lifecycle_buffer[uid].append(
-                {
-                    "uid": uid,
-                    "operation": operation,
-                    "time_it_took": round(time_it_took, 2),
-                    "comment": comment,
-                }
+            # Save time in its column
+            self.lifecycle_buffer[uid][operation] = round(
+                float(time_it_took), 2
             )
-            import pprint
 
-            pprint.pp(self.lifecycle_buffer)
-            # If operation is "done", flush buffer to CSV and clear it
+            # If "done", flush row to CSV
             if operation == "done":
+                row = self.lifecycle_buffer[uid]
+                # Extend headers dynamically if new operations appear
+                new_ops = [op for op in row.keys() if op not in self.headers]
+                if new_ops:
+                    self.headers.extend(new_ops)
+                    # rewrite file with new headers
+                    old_rows = []
+                    if self.csv_file.exists():
+                        with self.csv_file.open(
+                            "r", newline="", encoding="utf-8"
+                        ) as f:
+                            old_rows = list(csv.DictReader(f))
+                    with self.csv_file.open(
+                        "w", newline="", encoding="utf-8"
+                    ) as f:
+                        writer = csv.DictWriter(f, fieldnames=self.headers)
+                        writer.writeheader()
+                        for r in old_rows:
+                            writer.writerow(r)
+
+                # Append the row
                 with self.csv_file.open(
                     "a", newline="", encoding="utf-8"
                 ) as f:
                     writer = csv.DictWriter(f, fieldnames=self.headers)
-                    writer.writerows(self.lifecycle_buffer[uid])
+                    writer.writerow(row)
+
                 del self.lifecycle_buffer[uid]
