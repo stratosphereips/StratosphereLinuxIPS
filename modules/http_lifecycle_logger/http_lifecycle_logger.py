@@ -21,9 +21,7 @@ class HTTPLifeCycleLogger(IModule):
 
     def init(self):
         self.c1 = self.db.subscribe("http_lifecycle_logger")
-        self.channels = {
-            "http_lifecycle_logger": self.c1,
-        }
+        self.channels = {"http_lifecycle_logger": self.c1}
 
         filename = os.path.join(self.output_dir, "http_lifecycle_logger.csv")
         self.csv_file = Path(filename)
@@ -37,10 +35,9 @@ class HTTPLifeCycleLogger(IModule):
 
     def ensure_csv_file(self):
         """Ensure CSV file exists with current headers"""
-        if not self.csv_file.exists():
-            with self.csv_file.open("w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=self.headers)
-                writer.writeheader()
+        with self.csv_file.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=self.headers)
+            writer.writeheader()
 
     def pre_main(self):
         utils.drop_root_privs_permanently()
@@ -54,6 +51,9 @@ class HTTPLifeCycleLogger(IModule):
 
             if not uid:
                 return  # skip invalid
+
+            if isinstance(uid, list):
+                uid = uid[0]
 
             # Init buffer dict for this UID
             if uid not in self.lifecycle_buffer:

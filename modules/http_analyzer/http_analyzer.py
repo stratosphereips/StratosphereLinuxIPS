@@ -697,12 +697,6 @@ class HTTPAnalyzer(AsyncModule):
             self.set_evidence.http_traffic(twid, flow)
             self.log_time(uid, "set_evidence_http_traffic")
 
-            # self.db.publish("http_lifecycle_logger", json.dumps(
-            #         {
-            #             "uid": uid,
-            #             "operation": "done",
-            #         }))
-
         if msg := self.get_msg("new_weird"):
             msg = json.loads(msg["data"])
             await self.check_weird_http_method(msg)
