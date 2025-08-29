@@ -370,6 +370,19 @@ class Input(ICore):
                 # self.print('	> Sent Line: {}'.format(earliest_line), 0, 3)
 
                 self.give_profiler(earliest_line)
+                if "http" in earliest_line["type"]:
+                    http_flow = earliest_line["data"]
+                    time_it_took_to_reach_input = time.time() - http_flow["ts"]
+                    self.db.publish(
+                        "http_lifecycle_logger",
+                        json.dumps(
+                            {
+                                "uid": http_flow["uid"],
+                                "operation": "from_zeek_to_input",
+                                "time_it_took": time_it_took_to_reach_input,
+                            }
+                        ),
+                    )
                 self.lines += 1
                 # when testing, no need to read the whole file!
                 if self.lines == 10 and self.testing:
