@@ -42,6 +42,12 @@ class HTTPLifeCycleLogger(IModule):
     def pre_main(self):
         utils.drop_root_privs_permanently()
 
+    def shutdown_gracefully(self):
+        self.print("Incomplete life cycles:")
+        import pprint
+
+        pprint.pp(self.lifecycle_buffer)
+
     def main(self):
         if msg := self.get_msg("http_lifecycle_logger"):
             msg = json.loads(msg["data"])
