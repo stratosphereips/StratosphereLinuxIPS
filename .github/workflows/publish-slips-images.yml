@@ -60,7 +60,7 @@ jobs:
 
       # clone slips and checkout branch
       # By default it checks out only one commit
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: 'master'
           # Fetch all history for all tags and branches

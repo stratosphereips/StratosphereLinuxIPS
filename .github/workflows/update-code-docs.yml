@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: 'code-docs-branch'
           fetch-depth: 0 # otherwise, you will fail to push refs to the dest repo
