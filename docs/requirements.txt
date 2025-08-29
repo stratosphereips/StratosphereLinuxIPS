@@ -1,0 +1,7 @@
+# sphinx and markdown support
+sphinx-rtd-theme
+sphinx>=7.0
+myst-parser>=2.0.0
+
+# required for the `linkify` extension
+linkify-it-py>=2.0.0

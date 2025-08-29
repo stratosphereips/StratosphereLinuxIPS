@@ -1,0 +1,87 @@
+name: CI-production-publishing-slips-images
+
+on:
+  push:
+    branches:
+      - 'master'
+      - '!develop'
+
+jobs:
+  setup:
+    runs-on: ubuntu-22.04
+    # 2 hours timeout
+    timeout-minutes: 120
+    outputs:
+      slips_version: ${{ steps.get_version.outputs.slips_version }}
+      builder_name: ${{ steps.create_builder.outputs.name }}
+
+    steps:
+      - name: Get slips version
+        id: get_version
+        run: |
+          ver=$(curl -s https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
+          echo "slips_version=$ver" >> $GITHUB_OUTPUT
+
+      # should come before buildx action
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # Set up Docker Buildx with docker-container driver is required
+      # at the moment to be able to use a subdirectory with Git context
+      - name: Create and use Buildx builder
+        id: create_builder
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container  #  allows multi-platform builds
+          #  allows you to enable special permissions for the build environment that are normally considered insecure,
+          # such as:network.host
+          buildkitd-flags: --allow-insecure-entitlement network.host
+          name: slips_multi_arch_builder
+          use: true
+
+  publish_images:
+    needs: setup
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        image_type:
+          - name: slips
+            dockerfile: ./docker/Dockerfile
+          - name: slips_light
+            dockerfile: ./docker/light/Dockerfile
+
+    steps:
+      - name: Use existing Buildx builder
+        uses: docker/setup-buildx-action@v3
+        with:
+          name: slips_multi_arch_builder
+          install: true
+          use: true
+
+      # clone slips and checkout branch
+      # By default it checks out only one commit
+      - uses: actions/checkout@v5
+        with:
+          ref: 'master'
+          # Fetch all history for all tags and branches
+          fetch-depth: 0
+          # submodules are needed for local and global p2p
+          submodules: true
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: stratosphereips
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Build and push ${{ matrix.image_type.name }} image
+        uses: docker/build-push-action@v6
+        with:
+          allow: network.host
+          context: ./
+          file: ${{ matrix.image_type.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            stratosphereips/${{ matrix.image_type.name }}:latest
+            stratosphereips/${{ matrix.image_type.name }}:${{ needs.setup.outputs.slips_version }}
+          push: true

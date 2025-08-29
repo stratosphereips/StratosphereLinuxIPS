@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 # This file is from the Stratosphere Testing Framework
 # See the file 'LICENSE' for copying permission.
 
@@ -45,7 +47,7 @@ class Matrix(dict):
                     # The transition is not in the matrix
                     # print '\t\twalk key error. The transition is not in the matrix'
                     # prob12 = float('-inf')
-                    cum_prob = float('-inf')
+                    cum_prob = float("-inf")
                     break
                 # except IndexError:
                 # print '\t\twalk index error'

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+//SPDX-License-Identifier: GPL-2.0-only
 const { redis, blessed, blessed_contrib, async, color, stripAnsi } = require("../kalipso_widgets/libraries.js");
 
 class ListBar{
@@ -26,7 +28,7 @@ class ListBar{
     initWidget(){
     return this.grid.set(5.7,0,0.4,6, blessed.listbar,{
           keys: false,
-          style: 
+          style:
                 {
             prefix: {fg: 'yellow'},
             item: {},
@@ -36,7 +38,7 @@ class ListBar{
           commands:
            {
                 'main':{ keys : ' '},
-                
+
                 'srcPortClient': { keys: ['e'] },
 
                 'dstIPsClient': { keys: ['d'] },
@@ -46,13 +48,13 @@ class ListBar{
                 'dstPortsClient': { keys: ['p'] },
 
                 'dstPortsClientIPs': { keys: ['t'] },
-                
+
                 'OutTuples': { keys: ['i'] },
 
                 'InTuples': { keys: ['y'] },
 
                 'ProfileEvidences':{ keys : ['z'] },
-           
+
                 'reload':{ keys : ['o'] },
 
                 'quit hotkey':{ keys : ['ESC'] },

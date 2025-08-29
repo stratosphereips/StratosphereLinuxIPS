@@ -1,0 +1,53 @@
+repos:
+-   repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+        - id: detect-secrets
+          args: ['--baseline', '.secrets.baseline']
+          exclude: '.*dataset/.*|^config/local_ti_files/own_malicious_JA3.csv$|.*test.*|.*\.md$'
+
+
+-     repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v5.0.0
+      hooks:
+        - id: trailing-whitespace
+        - id: check-added-large-files
+          exclude: ^config/local_ti_files/known_fp_hashes\.csv$
+        - id: check-docstring-first
+        - id: check-merge-conflict
+        - id: end-of-file-fixer
+        - id: detect-private-key
+          exclude: '.*dataset/.*|^config/local_ti_files/own_malicious_JA3.csv$|.*test.*|.*\.md$'
+
+-     repo: https://github.com/astral-sh/ruff-pre-commit
+      rev: v0.9.6
+      hooks:
+        # Run the linter.
+        - id: ruff
+          args: [ --fix ]
+          # excludes formatting slips_files/common/imports.py
+          exclude: (imports|sqlite_db.*|conftest.py)
+
+-     repo: https://github.com/psf/black-pre-commit-mirror
+      rev: 25.1.0
+      hooks:
+        - id: black
+          args: ['--line-length' , '79']
+          language_version: python3.12.3
+          # excludes formatting slips_files/common/imports.py
+          exclude: (imports|conftest.py|tests/*.py)
+
+-     repo: https://github.com/adrienverge/yamllint.git
+      rev: v1.35.1
+      hooks:
+        - id: yamllint
+          args: ["-d", "{rules: {line-length: {max: 100}}}"]
+          files: "slips.yaml"
+
+- repo: local
+  hooks:
+    - id: vulture
+      name: vulture dead code check
+      entry: bash -c 'files=$(git diff --cached --name-only --diff-filter=ACM | grep -E "\.py$" | grep -vE "^(tests/|migrations/)"); [ -n "$files" ] && vulture --exclude "tests/*,venv/*" $files || true'
+      language: system
+      types: [python]

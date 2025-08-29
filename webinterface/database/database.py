@@ -1,42 +1,77 @@
-import redis
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
+from typing import (
+    Dict,
+    Optional,
+)
+import os
+
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.core.database.database_manager import DBManager
+from slips_files.core.output import Output
 from .signals import message_sent
-from utils import *
+from webinterface.utils import (
+    get_open_redis_ports_in_order,
+    get_open_redis_servers,
+)
 
 
 class Database(object):
+    """
+    connects to the latest opened redis server on init
+    """
+
     def __init__(self):
-        self.db = self.init_db()
-        self.cachedb = self.connect_to_database(port=6379, db_number=1) # default cache
+        # connect to the db manager
+        self.db: DBManager = self.get_db_manager_obj()
 
-    def set_db(self, port, db_number):
-        self.db = self.connect_to_database(port, db_number)
+    def set_db(self, port):
+        """changes the redis db we're connected to"""
+        self.db = self.get_db_manager_obj(port)
 
-    def set_cachedb(self, port, db_number):
-        self.cachedb = self.connect_to_database(port, db_number)
+    def get_db_manager_obj(self, port: int = False) -> Optional[DBManager]:
+        """
+        Connects to redis db through the DBManager
+        connects to the latest opened redis server if no port is given
+        """
+        if not port:
+            # connect to the last opened port if no port is chosen by the
+            # user
+            last_opened_port = get_open_redis_ports_in_order()[-1][
+                "redis_port"
+            ]
+            port = last_opened_port
 
-    def init_db(self):
-        available_dbs = read_db_file()
-        port, db_number = 6379, 0
-   
-        if len(available_dbs) >= 1:
-            port = available_dbs[-1]["redis_port"]
-        
-        return self.connect_to_database(port, db_number)
+        dbs: Dict[int, dict] = get_open_redis_servers()
+        output_dir = dbs[str(port)]["output_dir"]
+        logger = Output(
+            stdout=os.path.join(output_dir, "slips.log"),
+            stderr=os.path.join(output_dir, "errors.log"),
+            slips_logfile=os.path.join(output_dir, "slips.log"),
+            create_logfiles=False,
+        )
+        conf = ConfigParser()
+        try:
+            return DBManager(
+                logger,
+                output_dir,
+                port,
+                conf,
+                os.getpid(),  # main_pid doesnt matter here
+                start_redis_server=False,
+                start_sqlite=True,
+                flush_db=False,
+            )
+        except RuntimeError:
+            return
 
-    def connect_to_database(self, port=6379, db_number=0):
 
-        return redis.StrictRedis(host='localhost',
-                                 port=port,
-                                 db=db_number,
-                                 charset="utf-8",
-                                 socket_keepalive=True,
-                                 retry_on_timeout=True,
-                                 decode_responses=True,
-                                 health_check_interval=30)
+db_obj = Database()
+db: DBManager = db_obj.db
 
-
-__database__ = Database()
 
 @message_sent.connect
-def update_db(app, port, dbnumber):
-    __database__.set_db(port, dbnumber)
+def update_db(port):
+    """is called when the user changes the used redis server from the web
+    interface"""
+    db_obj.set_db(port)

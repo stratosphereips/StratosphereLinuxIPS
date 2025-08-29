@@ -1,4 +1,8 @@
-from dataclasses import dataclass
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
+from dataclasses import dataclass, field
+from slips_files.common.slips_utils import utils
+
 
 @dataclass
 class NfdumpConn:
@@ -22,13 +26,12 @@ class NfdumpConn:
 
     sbytes: int
     dbytes: int
-    # required to be able to add_flow
+    uid: str = field(default_factory=utils.generate_uid)
+    # required to be able to call self.db.add_flow() in profiler
     smac = False
     dmac = False
     appproto = False
-    uid = False
-    type_: str = 'nfdump'
-
+    type_: str = "nfdump"
 
     def __post_init__(self):
         self.pkts = self.spkts + self.dpkts

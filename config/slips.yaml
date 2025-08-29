@@ -1,0 +1,516 @@
+# This configuration file controls several aspects of the working of Slips.
+
+---
+modes:
+  # Define the file names for the default output.
+  stdout: slips.log
+  stderr: errors.log
+  logsfile: slips.log
+
+#############################
+# Parameters that can be also specified with modifiers in the command line
+
+parameters:
+  # The verbosity is related to how much data you want to see about the
+  # detections.
+  verbose: 1
+
+  # The debugging is related to errors, warnings and cases that may cause
+  # errors.
+  debug: 0
+
+  # The width of the time window (TW) used by Slips. All traffic is separated in
+  # TW to be analyzed. This is so old detections can be forgoten.
+  # For 1 minute
+  # time_window_width : 60
+  # For 5 min
+  # time_window_width : 300
+  # For 1 hour
+  time_window_width: 3600
+  # For 1 day
+  # time_window_width = 86400
+  # Make Slips use only one time window (also like if no TW is used)
+  # (If you use this, the names of files will use a -100 years for the TW)
+  # time_window_width : 'only_one_tw'
+
+  # Export the strato letters used for detecting C&C by the RNN model
+  # to the file strato_letters.tsv in the current output directory.
+  # These letters are used for re-training the model.
+  export_strato_letters: false
+
+  # The 'analysis_direction' has two options: out or all. The 'out' option
+  # determines whether to analyze only the traffic that goes 'out' from the
+  # local network to other networks. 'Out' is mean to analyze if your
+  # computers are infected.
+  # In the 'out' configuration, Slips creates profiles for local IPs and
+  # public IPs, but only analyzes the outgoing traffic from the private IPs
+  # to public destinations.
+  # Any inbound traffic or attacks from external IPs are not processed.
+  #
+  # The 'all' option makes Slips also analyze what is coming IN to the
+  # local network.
+  # In the 'all' configuration, Slips creates profiles for both private and
+  # public IPs, and analyzes traffic in both directions, inbound and outbound.
+  # It processes traffic originating from private IP addresses, as well as
+  # external public IP addresses.
+  # 'All' is mean to also analze attacks to your network.
+  # This mode provides comprehensive network monitoring, allowing you to detect
+  # outgoing as well as incoming attacks and connections.
+  # analysis_direction : all
+  analysis_direction: out
+
+  # Delete zeek log files after stopping slips.
+  # this parameter deletes arp.log every 1h. useful for saving disk space
+  delete_zeek_files: false
+
+  # Store a copy of zeek files in the output dir after the analysis is done.
+  # shouldn't be set to yes if delete_zeek_files is set to yes, because if the
+  # zeek files
+  # are deleted after slips is done, there's no way to store a copy of them
+  # anywhere
+  store_a_copy_of_zeek_files: false
+
+  # store the generated zeek files in the output dir while the slips is running.
+  store_zeek_files_in_the_output_dir: true
+
+  # Create a metadata dir in output/metadata/ that has a copy of slips.yaml,
+  # whitelist file, current commit and date
+  metadata_dir: true
+
+  # Default pcap packet filter. Used with zeek pcapfilter : 'ip or not ip'
+  # If you want more important traffic and forget the multicast and broadcast
+  # traffic, you can use
+  # pcapfilter: 'not icmp and not multicast and not broadcast and not arp and
+  # not port 5353 and not port 67'
+  pcapfilter: false
+
+  # Defines for Zeek how much is the TCP inactivity timeout.
+  # This means when will Zeek consider a TCP connection timeout after no
+  # packets are seen?
+  # Defined in minutes.
+  # Zeek default timeout is 5m, but because sometimes the delay between
+  # packets is more than 5 mins, zeek usually breaks the connection into
+  # smaller connections, which is not good.
+  # Zeek does this to have more data sooner and not to wait 1hs for
+  # detections, but the TCP standard defines 1hs.
+  tcp_inactivity_timeout: 60
+
+  # Should Slips delete the previously stored data in the Redis DB when
+  # it starts?
+  # If Slips does not delete the DB, it can remember all the past
+  # detections and TI information.
+  # Redis will keep the data as long as it is not stopped.
+  # The persistence is in memory, not disk.
+  # deletePrevdb : false
+  deletePrevdb: true
+
+  # Set the label for all the flows that are being read.
+  # For now only normal and malware directly. No option for setting labels
+  # with a filter
+  # The purpose is to be used in the training of ML models and to output
+  # flows with labels for other tools.
+  # label: malicious
+  # label: unknown
+  label: normal
+  # If Zeek files are rotated or not to avoid running out of disk.
+  # Zeek rotation is enabled by default when using an interface,
+  # which means Slips will delete all Zeek log files after 1 day
+  # of running
+  # rotation : false
+  rotation: true
+
+  # How often to rotate and delete Zeek files if rotation is enabled.
+  # Can be written as a numeric constant followed by a time unit where
+  # the time unit is one of usec, msec, sec, min, hr, or day which respectively
+  # represent microseconds, milliseconds, seconds, minutes, hours, and days.
+  # Whitespace between the numeric constant and time unit is optional.
+  # Appending the letter s to the time unit in order to
+  # pluralize it is also optional
+  # rotation_period = 30min
+  # rotation_period = 2hr
+  # rotation_period = 30sec
+  rotation_period: 1day
+
+  # How many days Slips keeps the rotated Zeek files before deleting them.
+  # Value should be in days
+  # set it to 0 day if you want to delete them immediately
+  # keep_rotated_files_for : 1 day
+  # keep_rotated_files_for : 2 day
+  # keep_rotated_files_for : 3 day
+  keep_rotated_files_for: 1 day
+
+  # How many minutes to wait for all modules to finish before killing them
+  # wait_for_modules_to_finish : 15 mins
+  # By default 1 week
+  wait_for_modules_to_finish: 10080 mins
+
+  # Flows are labeled to normal/malicious by Slips and added to the sqlite
+  # db in the output dir.
+  export_labeled_flows: false
+
+  # Which format to use for the exported flows
+  # Export_format can be tsv or json. this parameter is ignored if
+  # export_labeled_flows is set to false
+  export_format: json
+
+  # Client IPs are the IPs that Slips will consider to be part of the local
+  # network.
+  # For example, this can be your own local IP or some computer you’re monitoring
+  # When Slips analyses a network interface, the client IP is automatically set as
+  # the IP of the interface.
+  # It is useful to specify it when analyzing pcaps or Zeek logs.
+  # All private client ips should belong to the same local network
+  # client_ips : [10.0.0.1, 11.0.0.0/24]
+  client_ips: []
+
+#############################
+detection:
+
+  # Evidence detection threshold is the minimum accumulated threat level per
+  # time window needed to generate an alert for that IP.
+  # It controls how sensitive Slips is.
+  # The default 0.25 value gives you balanced detections with
+  # the optimal false positive rate and TPR.
+  # Here are more options
+  #
+  # - 0.08: Use this threshold If you want Slips to be super sensitive with
+  # higher FPR. Using this means you are less likely to miss a detection but
+  # more likely to get false positives
+  #
+  # - 0.25: Optimal threshold, has the most optimal and balanced FPR and TPR.
+  # - 0.43: Use this threshold If you want Slips to be insensitive.
+  #        Using this means Slips will need so many evidence to trigger an alert
+  #        May lead to false negatives
+  evidence_detection_threshold: 0.25
+
+  # Make Slips pop up alerts? Both Linux and Macos
+  popup_alerts: false
+
+#############################
+modules:
+  # List of modules to ignore. By default we always ignore the template,
+  # do not remove it from the list
+  # Add the names of other modules that you want to disable
+  # (they all should be lowercase with no special characters). Example,
+  # threatintelligence, blocking, networkdiscovery, timeline, virustotal,
+  # rnnccdetection, flowmldetection, updatemanager
+  disable: [template]
+
+  # For each line in timeline file there is a timestamp.
+  # By default the timestamp is seconds in unix time. However
+  # by setting this variable to "true" value the time will be human readable.
+  timeline_human_timestamp: true
+
+#############################
+flowmldetection:
+  # This is a module that uses machine learning for detection.
+  # It can be used in train mode or test mode.
+  # The mode 'train' should be used to tell the flowmldetection module
+  # that the flows received are all for training.
+  # A label should be provided in the [Parameters] section
+  # mode : train
+  # The mode 'test' should be used for normal Slips usage and  after
+  # training the models, to test in unknown data.
+  # You should have trained at least once with 'Normal' data and once with
+  # 'Malicious' data in order for the test to work.
+  mode: test
+
+#############################
+virustotal:
+  # This is the path to the API key. The file should contain the key at the
+  # start of the first line, and nothing more.
+  # If no key is found, VT module will not be started.
+  api_key_file: config/vt_api_key
+
+  # Update period of virustotal for each IP in the cache
+  # The expected value in seconds.
+  # 3 day = 259200 seconds
+  virustotal_update_period: 259200
+
+#############################
+threatintelligence:
+
+  # By default, slips starts without the TI files, and runs the Update Manager
+  # in the background. If this option is set to true, slips will not start
+  # analyzing the flows until the update manager finished and all TI files are
+  # loaded successfully.
+  # Putting wait in true is usefull to ensure that slips # doesn't miss the
+  # detection of any blacklisted IPs.
+  # However, it can take up to 10minutes, so bare that in mind.
+  # If you put it in false, Slips will start right away analyzing, and
+  # when the update manager finishs it will continue using the TI in case
+  # new detections are done.
+  # So no detection will be missied, just it will take longer to start if
+  # you use true.
+  wait_for_TI_to_finish: false
+
+  # Default path to the folder with files holding malcious IPs as defined
+  # locally by the user. So the user can define its own malicious TI.
+  # All the files in this folder are read and the IPs are considered malicious
+  # The format of the files must be, per line:
+  # "Number","IP address","Rating","Description"
+  # For example:  "1","191.101.31.25","100","NSO IP by Amnesty"
+  local_threat_intelligence_files: config/local_ti_files/
+
+  # yamllint disable-line rule:line-length
+  # The remote TI files will be temporaly stored in this directory
+  download_path_for_remote_threat_intelligence: modules/threat_intelligence/remote_data_files/
+
+  # Update period of Threat Intelligence files. How often should Slips update
+  # the IoCs.
+  # The expected value is in seconds.
+  # 1 day = 86400 seconds
+  TI_files_update_period: 86400
+
+  # Update period of mac db. How often should we update the db?
+  # The expected value in seconds.
+  # 1 week = 604800 seconds
+  # 2 weeks = 1209600 seconds
+  mac_db_update: 1209600
+  mac_db: https://maclookup.app/downloads/json-database/get-db
+
+  # File that contains all the preconfigured TI feeds URLs and their
+  # threat level.
+  # Here is you can find the URLs of the more than 45 TI feeds used by Slips
+  ti_files: config/TI_feeds.csv
+
+  # File that contains all the JA3 feeds URLs and their threat level
+  # These feeds contain JA3 fingerprints that are identified as malicious.
+  ja3_feeds: config/JA3_feeds.csv
+
+  # File that contains all our SHA1 SSL fingerprints feeds and
+  # their threat level
+  # These feeds contain SHA1 SSL fingerprints that are identified as malicious.
+  ssl_feeds: config/SSL_feeds.csv
+
+  # Slips supports an optional RiskIQ feeds as an additional sources of TI data
+  # This file should contain your email and your 64 char API key,
+  # Each one in it's own line.
+  # However, since RiskIQ was bought this is not possible anymore.
+  RiskIQ_credentials_path: config/RiskIQ_credentials
+
+  # Update period for RisqIQ is set to 1 week by default, if you're not a premium riskIQ
+  # user check your quota limit before changing this value
+  # 1 week = 604800 second
+  riskiq_update_period: 604800
+
+#############################
+whitelists:
+  # Used to enable/disable the tranco whitelist https://tranco-list.eu/
+  enable_online_whitelist: True
+  # Update period of tranco online whitelist. How often should we re-download \
+  # and update the list?
+  # The expected value is in seconds.
+  # 1 day = 86400 seconds
+  # 1 week = 604800 seconds
+  # 2 weeks = 1209600 seconds
+  online_whitelist_update_period: 86400
+  online_whitelist: https://tranco-list.eu/download/X5QNN/10000
+
+  # if this parameter is set to false, Slips runs with no whitelists at all.
+  # May cause a lot of false positives
+  enable_local_whitelist: True
+  # The default path of whitelist.conf,
+  # This file is where the user defines what to whitelist or not.
+  # It works with
+  # IPs, domains, MAC
+  # It also works with Organizations such as Microsoft, Twitter, etc.
+  # It works by searching the official list of ASN, domains and IPs
+  # of those organizations.
+  local_whitelist_path: config/whitelist.conf
+
+#############################
+flowalerts:
+  # For the flowalerts module
+  # We need a thrshold to determine a long connection in seconds.
+  # In Slips by default is 25 minutes
+  long_connection_threshold: 1500
+
+  # Detection of successful SSH connections (correct password)
+  # Number of bytes sent from 1 IP to another in SSH to trigger an
+  # SSH successful alert.
+  # This detection belongs to a research of Slips
+  ssh_succesful_detection_threshold: 4290
+
+  # For data exfiltration, the threshold in MBs
+  data_exfiltration_threshold: 500
+
+  # For DNS over TXT, which is the entropy threshold above which Slips
+  # considers any answer as malicious.
+  entropy_threshold: 5
+
+  # how many bytes downloaded from pastebin should trigger an alert?
+  pastebin_download_threshold: 700
+
+#############################
+exporting_alerts:
+
+  # Configuer all the methods Slips will export data with
+  # Available options are slack or stix
+  # export_to : [stix]
+  # export_to : [slack]
+  export_to: []
+
+  # Slack
+  # In case of Slack export, use this channel to send alerts
+  slack_channel_name: proj_slips_alerting_module
+
+  # This name will be used to identify which alert belongs to which device
+  # in your slack channel
+  sensor_name: sensor1
+
+  # Filepath where the slack token should be
+  slack_api_path: config/slack_bot_token_secret
+
+  # Stix
+  # Server to use if you enable exporting STIX
+  TAXII_server: localhost
+
+  # Ff your TAXII server is a remote server,
+  # you can set the port to 443 or 80.
+  port: 1234
+
+  # For Stix, if Slips should use TLS
+  use_https: false
+
+  # TAXII
+  discovery_path: /services/discovery-a
+  inbox_path: /services/inbox-a
+
+  # Collection on the server you want to push stix data to
+  collection_name: collection-a
+
+  # This value is only used when Slips is running non-stop (e.g with -i )
+  # push_delay is the time to wait before pushing STIX data to server
+  # (in seconds)
+  # If running on a file not an interface
+  # Slips will export to server after analysis is done.
+  # 3600 = 1h
+  push_delay: 3600
+
+  # TAXII server credentials
+  taxii_username: admin
+  taxii_password: admin
+
+  # URL used to obtain JWT token. set this to '' if you don't want to use it
+  # is required for JWT based authentication.
+  # (JWT based authentication is Optional)
+  # It's usually /management/auth
+  jwt_auth_path: /management/auth
+
+#############################
+CESNET:
+  # Slips also supports exporting and importing evidence in the IDEA format to/from
+  # warden servers of CESNET organization in Czech Republic.
+  send_alerts: false
+  receive_alerts: false
+
+  # Warden configuration file. For format instructions check
+  # yamllint disable-line rule:line-length
+  # https://stratospherelinuxips.readthedocs.io/en/develop/exporting.html?highlight=exporting# cesnet-sharing
+  configuration_file: config/warden.conf
+
+  # Time to wait before receiving alerts from warden server (in seconds)
+  # By default receive alerts every 1 day
+  receive_delay: 86400
+
+#############################
+DisabledAlerts:
+
+  # All the following detections are turned on by default
+  # Turn them off by adding any of the following detections to the
+  # disabled_detections list
+  # ARP_SCAN, ARP_OUTSIDE_LOCALNET, UNSOLICITED_ARP, MITM_ARP_ATTACK,
+  # YOUNG_DOMAIN, MULTIPLE_SSH_VERSIONS, DIFFERENT_LOCALNET,
+  # DEVICE_CHANGING_IP, NON_HTTP_PORT_80_CONNECTION, NON_SSL_PORT_443_CONNECTION
+  # WEIRD_HTTP_METHOD, INCOMPATIBLE_CN, DGA_NXDOMAINS, DNS_WITHOUT_CONNECTION,
+  # PASTEBIN_DOWNLOAD, CONNECTION_WITHOUT_DNS, DNS_ARPA_SCAN, UNKNOWN_PORT,
+  # PASSWORD_GUESSING, HORIZONTAL_PORT_SCAN, CONNECTION_TO_PRIVATE_IP,
+  # GRE_TUNNEL, VERTICAL_PORT_SCAN, SSH_SUCCESSFUL, LONG_CONNECTION,
+  # SELF_SIGNED_CERTIFICATE, MULTIPLE_RECONNECTION_ATTEMPTS,
+  # CONNECTION_TO_MULTIPLE_PORTS, HIGH_ENTROPY_DNS_ANSWER,
+  # INVALID_DNS_RESOLUTION, PORT_0_CONNECTION, MALICIOUS_JA3, MALICIOUS_JA3S,
+  # DATA_UPLOAD, BAD_SMTP_LOGIN, SMTP_LOGIN_BRUTEFORCE, MALICIOUS_SSL_CERT,
+  # MALICIOUS_FLOW, SUSPICIOUS_USER_AGENT, EMPTY_CONNECTIONS,
+  # INCOMPATIBLE_USER_AGENT, EXECUTABLE_MIME_TYPE, MULTIPLE_USER_AGENT,
+  # HTTP_TRAFFIC, MALICIOUS_JARM, NETWORK_GPS_LOCATION_LEAKED,
+  # ICMP_TIMESTAMP_SCAN, ICMP_ADDRESS_SCAN, ICMP_ADDRESS_MASK_SCAN,
+  #  DHCP_SCAN, MALICIOUS_IP_FROM_P2P_NETWORK, P2P_REPORT,
+  # COMMAND_AND_CONTROL_CHANNEL, THREAT_INTELLIGENCE_BLACKLISTED_ASN,
+  # THREAT_INTELLIGENCE_BLACKLISTED_IP, THREAT_INTELLIGENCE_BLACKLISTED_DOMAIN,
+  # MALICIOUS_DOWNLOADED_FILE, MALICIOUS_URL
+  # disabled_detections = [THREAT_INTELLIGENCE_BLACKLISTED_IP]
+  disabled_detections: []
+
+#############################
+Docker:
+  # ID and group id of the user who started to docker container
+  # the purpose of using them is to change the ownership of the docker created
+  # files to be able to rwx the files from
+  # outside docker too, for example the files in the output/ dir
+  UID: 0
+  GID: 0
+
+#############################
+Profiling:
+  # CPU profiling
+  # enable cpu profiling [true/false]
+  # NOTE: the cpu profiler uses port 9001 to show the results.
+  cpu_profiler_enable: false
+
+  # Available options are [dev,live]
+  # dev for deterministic profiling. this will give precise information
+  # about the CPU usage
+  # throughout the program runtime. This module cannot give live updates
+  # live mode is for sampling data stream. To track the function stack in real
+  # time. it is accessible from web interface
+  cpu_profiler_mode: dev
+
+  # decides whether the profiler tracks all processes or only one.
+  # only used  in dev mode [true,false].
+  cpu_profiler_multiprocess: false
+
+  # set number of tracer entries (dev mode only)
+  # VizTracer uses a circular buffer to store the entries.
+  # When there are too many entries, it will only store the latest ones
+  # so you know what happened recently.
+  # the more the entries, the more RAM viztracer is going to use.
+  # https://viztracer.readthedocs.io/en/latest/basic_usage.html#circular-buffer-size
+  cpu_profiler_dev_mode_entries: 500000
+
+  # set maximum output lines (live mode only)
+  cpu_profiler_output_limit: 20
+
+  # set the wait time between sampling sequences in seconds (live mode only)
+  cpu_profiler_sampling_interval: 20
+
+  # enable memory profiling [true,false]
+  memory_profiler_enable: false
+
+  # set profiling mode [dev,live]
+  memory_profiler_mode: live
+
+  # profile all subprocesses [true,false]
+  memory_profiler_multiprocess: true
+
+#############################
+web_interface:
+  # Slips has a web interface
+  # Define the port to use
+  port: 55000
+
+#############################
+global_p2p:
+   # this is the global p2p's trust model + global P2P
+   # network handler combination. can only be enabled when
+   # running slips on an interface
+   use_global_p2p: False
+   iris_conf: config/iris_config.yaml
+   bootstrapping_node: False
+   bootstrapping_modules: ["fidesModule", "irisModule"]
+
+#############################
+local_p2p:
+   # create p2p.log with additional info about peer communications?
+   create_p2p_logfile : False
+   use_p2p : False

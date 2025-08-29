@@ -1,0 +1,9 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	telemetry
+#open	2024-08-16-09-45-01
+#fields	ts	peer	metric_type	name	labels	label_values	value	label	detailedlabel
+#types	time	string	string	string	vector[string]	vector[string]	double	string	string
+#close	2024-08-16-09-45-01

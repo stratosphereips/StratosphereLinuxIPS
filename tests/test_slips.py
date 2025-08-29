@@ -1,14 +1,20 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 """Unit test for ../slips.py"""
-from tests.common_test_utils import do_nothing, IS_IN_A_DOCKER_CONTAINER
+
 from tests.module_factory import ModuleFactory
-from ..slips import *
+
 
 def test_load_modules():
     proc_manager = ModuleFactory().create_process_manager_obj()
-    failed_to_load_modules = proc_manager.get_modules(
-        ['template', 'mldetection-1', 'ensembling']
-    )[1]
+    proc_manager.modules_to_ignore = [
+        "template",
+        "mldetection-1",
+    ]
+    failed_to_load_modules = proc_manager.get_modules()[1]
     assert failed_to_load_modules == 0
+
+
 #
 # @pytest.mark.skipif(IS_IN_A_DOCKER_CONTAINER, reason='This functionality is not supported in docker')
 # def test_save():
@@ -39,9 +45,7 @@ def test_load_modules():
 #     x = database.r.hgetall('profile_10.0.2.2_timewindow1_flows')
 #     assert 'CDm47v3jrYL8lx0cOh' in str(x)
 
+
 def test_clear_redis_cache_database():
-    main = ModuleFactory().create_main_obj('test.pcap')
-    redis_manager = ModuleFactory().create_redis_manager_obj(main)
-    assert redis_manager.clear_redis_cache_database() == True
-
-
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    assert redis_manager.clear_redis_cache_database()

@@ -1,213 +1,257 @@
-from slips_files.common.imports import *
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 import ipaddress
+from typing import List
 
-class HorizontalPortscan():
+import validators
+
+from slips_files.common.slips_utils import utils
+from slips_files.core.structures.evidence import (
+    Evidence,
+    ProfileID,
+    TimeWindow,
+    Attacker,
+    Proto,
+    ThreatLevel,
+    EvidenceType,
+    IoCType,
+    Direction,
+)
+
+BROADCAST_ADDR = "255.255.255.255"
+
+
+class HorizontalPortscan:
+    """
+    Horizontal scanning sends requests to the same port
+    on different hosts.
+    """
+
     def __init__(self, db):
         self.db = db
-        # We need to know that after a detection, if we receive another flow
-        # that does not modify the count for the detection, we are not
-        # re-detecting again only because the threshold was overcomed last time.
-        self.cache_det_thresholds = {}
-        # the separator used to separate the IP and the word profile
-        self.fieldseparator = self.db.get_field_separator()
+        # to keep track of the max dports reported per timewindow
+        self.cached_thresholds_per_tw = {}
+        # The minimum amount of scanned dstips to trigger an evidence
+        # is increased exponentially every evidence, and is reset each timewindow
+        self.minimum_dstips_to_set_evidence = 5
 
-        # The minimum amount of ips to scan horizontal scan
-        self.port_scan_minimum_dips = 5
-        self.pending_horizontal_ps_evidence = {}
-        # we should alert once we find 1 horizontal ps evidence then combine the rest of evidence every x seconds
-        # format is { scanned_port: True/False , ...}
-        self.alerted_once_horizontal_ps = {}
-
-    def calculate_confidence(self, pkts_sent):
-        if pkts_sent > 10:
-            confidence = 1
-        elif pkts_sent == 0:
-            return 0.3
-        else:
-            # Between threshold and 10 pkts compute a kind of linear grow
-            confidence = pkts_sent / 10.0
-        return confidence
-
-    def combine_evidence(self):
+    def get_not_estab_dst_ports(
+        self, protocol: str, state: str, profileid: str, twid: str
+    ) -> dict:
         """
-        Combines all the evidence in pending_horizontal_ps_evidence into 1 evidence and calls set_evidence
-        this function is called every 3 pending ev
+        Get the list of dstports that we tried to connect
+         to (not established flows)
+         here, the profileid given is the client.
+         :return: the following dict
+         #TODO this is wrong, fix it
+         {
+             dst_ip: {
+                 totalflows: total flows seen by the profileid
+                 totalpkt: total packets seen by the profileid
+                 totalbytes: total bytes sent by the profileid
+                 stime: timestamp of the first flow seen from this
+                    profileid -> this dstip
+                 uid: list of uids where the given profileid was
+                        contacting the dst_ip on this dstport
+                 dstports: dst ports seen in all flows where the given
+                    profileid was srcip
+                     {
+                         <str port>: < int spkts sent to this port>
+                     }
+             }
         """
-        for key, evidence_list in self.pending_horizontal_ps_evidence.items():
-            # each key here is {profileid}-{twid}-{state}-{protocol}-{dport}
-            # each value here is a list of evidence that should be combined
-            profileid, twid, state, protocol, dport = key.split('-')
-            final_evidence_uids = []
-            final_pkts_sent = 0
-            # combine all evidence that share the above key
-            for evidence in evidence_list:
-                # each evidence is a tuple of (timestamp, pkts_sent, uids, amount_of_dips)
-                # in the final evidence, we'll be using the ts of the last evidence
-                timestamp, pkts_sent, evidence_uids, amount_of_dips = evidence
-                # since we're combining evidence, we want the uids of the final evidence
-                # to be the sum of all the evidence we combined
-                final_evidence_uids += evidence_uids
-                final_pkts_sent += pkts_sent
+        # Get the list of dports that we connected as client
+        # using TCP not established
+        direction = "Dst"
+        role = "Client"
+        type_data = "Ports"
+        dports: dict = self.db.get_data_from_profile_tw(
+            profileid, twid, direction, state, protocol, role, type_data
+        )
+        return dports
 
-            self.set_evidence_horizontal_portscan(
-                timestamp,
-                final_pkts_sent,
-                protocol,
-                profileid,
-                twid,
-                final_evidence_uids,
-                dport,
-                amount_of_dips
-            )
-        # reset the dict since we already combined the evidence
-        self.pending_horizontal_ps_evidence = {}
+    def get_twid_identifier(self, profileid: str, twid: str, dport) -> str:
+        if not dport:
+            return False
 
-    def get_resolved_ips(self, dstips: dict) -> list:
+        return f"{profileid}:{twid}:dport:{dport}"
+
+    def get_packets_sent(self, dstips: dict) -> int:
         """
-        returns the list of dstips that have dns resolution, we will discard them when checking for
-        horizontal portscans
+        returns the total amount of packets sent to all dst IPs
+        :param dstips: dict with info about  in the following format
+        { dstip:  {
+                        'pkts': src+dst packets sent to this dstip,
+                       'spkts': src packets sent to this dstip,
+                       'stime': timestamp of the first flow in the uid list,
+                       'uid': [uids of flows to this ip]
+                   }
+        }
         """
-        dstips_to_discard = []
-        # Remove dstips that have DNS resolution already
-        for dip in dstips:
-            dns_resolution = self.db.get_dns_resolution(dip)
-            dns_resolution = dns_resolution.get('domains', [])
-            if dns_resolution:
-                dstips_to_discard.append(dip)
-        return dstips_to_discard
+        pkts_sent = 0
+        for dstip in dstips:
+            if "spkts" not in dstips[dstip]:
+                # In argus files there are no src pkts, only pkts.
+                # So it is better to have the total pkts than
+                # to have no packets count
+                pkts_sent += int(dstips[dstip]["pkts"])
+            else:
+                pkts_sent += int(dstips[dstip]["spkts"])
+        return pkts_sent
 
-    def check(self, profileid, twid):
-        def get_uids():
-            """
-            returns all the uids of flows to this port
-            """
-            uids = []
-            for dip in dstips:
-                for uid in dstips[dip]['uid']:
-                     uids.append(uid)
-            return uids
+    def are_dstips_greater_or_eq_minimum_dstips(self, dstips) -> bool:
+        return dstips >= self.minimum_dstips_to_set_evidence
 
-        saddr = profileid.split(self.fieldseparator)[1]
-        try:
-            saddr_obj = ipaddress.ip_address(saddr)
-            if saddr == '255.255.255.255' or saddr_obj.is_multicast:
-                # don't report port scans on the broadcast or multicast addresses
-                return False
-        except ValueError:
-            # it's a mac
-            pass
+    @staticmethod
+    def are_ips_greater_or_eq_last_evidence(
+        dstips: int, ips_reported_last_evidence: int
+    ) -> bool:
+        """
+        Makes sure the amount of dports reported
+         each evidence is higher than the previous one +15
+        so the first alert will always report 5 dstips,
+        and then 20+,35+. etc
 
-        # Get the list of dports that we connected as client using TCP not established
-        direction = 'Dst'
-        role = 'Client'
-        type_data = 'Ports'
-        for state in ('Established', 'Not Established'):
-            for protocol in ('TCP', 'UDP'):
-                dports = self.db.getDataFromProfileTW(
-                    profileid, twid, direction, state, protocol, role, type_data
-                )
+        :param dstips: dstips to report in the current evidence
+        :param ips_reported_last_evidence: the amount of
+            ips reported in the last evidence in the current
+            evidence's timewindow
+        """
+        # the goal is to never get an evidence that's 1 or 2 ports
+        #  more than the previous one so we dont have so many
+        #  portscan evidence
+        if ips_reported_last_evidence == 0:
+            # first portscan evidence in this threshold, no past evidence
+            # to compare with
+            return True
 
-                # For each port, see if the amount is over the threshold
-                for dport in dports.keys():
-                    # PortScan Type 2. Direction OUT
-                    dstips: dict = dports[dport]['dstips']
+        return dstips >= ips_reported_last_evidence + 15
 
-                    # remove the resolved dstips from dstips dict
-                    for ip in self.get_resolved_ips(dstips):
-                        dstips.pop(ip)
+    def should_set_evidence(self, dstips: int, twid_threshold: int) -> bool:
+        more_than_min = self.are_dstips_greater_or_eq_minimum_dstips(dstips)
+        exceeded_twid_threshold = self.are_ips_greater_or_eq_last_evidence(
+            dstips, twid_threshold
+        )
+        return more_than_min and exceeded_twid_threshold
 
-                    amount_of_dips = len(dstips)
-                    # If we contacted more than 3 dst IPs on this port with not established
-                    # connections, we have evidence.
+    def check_if_enough_dstips_to_trigger_an_evidence(
+        self, twid_identifier: str, amount_of_dips: int
+    ) -> bool:
+        """
+        checks if the scanned dst ips are enough to trigger and
+        evidence
+        to make sure the amount of scanned dst ips reported each
+        evidence is higher than the previous one +15
+        """
+        twid_threshold = self.cached_thresholds_per_tw.get(twid_identifier, 0)
 
-                    cache_key = f'{profileid}:{twid}:dport:{dport}:HorizontalPortscan'
-                    prev_amount_dips = self.cache_det_thresholds.get(cache_key, 0)
-                    # We detect a scan every Threshold. So, if the threshold is 3,
-                    # we detect when there are 3, 6, 9, 12, etc. dips per port.
+        if self.should_set_evidence(amount_of_dips, twid_threshold):
+            self.cached_thresholds_per_tw[twid_identifier] = amount_of_dips
+            return True
+        return False
 
-                    # we make sure the amount of dstips reported each evidence is higher than the previous one +5
-                    # so the first alert will always report 5 dstips, and then 10+,15+,20+ etc
-                    # the goal is to never get an evidence that's 1 or 2 ports more than the previous one so we dont
-                    # have so many portscan evidence
-                    if (
-                        amount_of_dips >= self.port_scan_minimum_dips
-                        and prev_amount_dips + 5 <= amount_of_dips
-                    ):
-                        # Get the total amount of pkts sent to the same port from all IPs
-                        pkts_sent = 0
-                        for dip in dstips:
-                            if 'spkts' not in dstips[dip]:
-                                # In argus files there are no src pkts, only pkts.
-                                # So it is better to have the total pkts than to have no packets count
-                                pkts_sent += int(dstips[dip]["pkts"])
-                            else:
-                                pkts_sent += int(dstips[dip]["spkts"])
+    def get_uids(self, dstips: dict) -> List[str]:
+        """
+        returns all the uids of flows sent on a sigle port
+        to different destination IPs
+        """
+        return [uid for dstip in dstips for uid in dstips[dstip]["uid"]]
 
-                        uids: list = get_uids()
-                        timestamp = next(iter(dstips.values()))['stime']
+    def set_evidence_horizontal_portscan(self, evidence: dict):
+        threat_level = ThreatLevel.HIGH
+        confidence = utils.calculate_confidence(evidence["pkts_sent"])
+        srcip = evidence["profileid"].split("_")[-1]
 
-                        self.cache_det_thresholds[cache_key] = amount_of_dips
-
-                        if not self.alerted_once_horizontal_ps.get(cache_key, False):
-                            #  from now on, we will be combining the next horizontal ps evidence targeting this
-                            # dport
-                            self.alerted_once_horizontal_ps[cache_key] = True
-                            self.set_evidence_horizontal_portscan(
-                                timestamp,
-                                pkts_sent,
-                                protocol,
-                                profileid,
-                                twid,
-                                uids,
-                                dport,
-                                amount_of_dips
-                            )
-                        else:
-                            # we will be combining further alerts to avoid alerting many times every portscan
-                            evidence_details = (timestamp, pkts_sent, uids, amount_of_dips)
-                            # for all the combined alerts, the following params should be equal
-                            key = f'{profileid}-{twid}-{state}-{protocol}-{dport}'
-
-                            try:
-                                self.pending_horizontal_ps_evidence[key].append(evidence_details)
-                            except KeyError:
-                                # first time seeing this key
-                                self.pending_horizontal_ps_evidence[key] = [evidence_details]
-
-                            # combine evidence every 3 new portscans to the same dport
-                            if len(self.pending_horizontal_ps_evidence[key]) == 3:
-                                self.combine_evidence()
-
-    def set_evidence_horizontal_portscan(
-            self,
-            timestamp,
-            pkts_sent,
-            protocol,
-            profileid,
-            twid,
-            uid,
-            dport,
-            amount_of_dips
-    ):
-        evidence_type = 'HorizontalPortscan'
-        attacker_direction = 'srcip'
-        source_target_tag = 'Recon'
-        srcip = profileid.split('_')[-1]
-        attacker = srcip
-        threat_level = 'medium'
-        category = 'Recon.Scanning'
-        portproto = f'{dport}/{protocol}'
-        port_info = self.db.get_port_info(portproto)
-        port_info = port_info or ""
-        confidence = self.calculate_confidence(pkts_sent)
+        attacker = Attacker(
+            direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
+        )
+        portproto = f'{evidence["dport"]}/{evidence["protocol"]}'
+        port_info = self.db.get_port_info(portproto) or ""
         description = (
-            f'horizontal port scan to port {port_info} {portproto}. '
-            f'From {srcip} to {amount_of_dips} unique dst IPs. '
-            f'Total packets sent: {pkts_sent}. '
-            f'Threat Level: {threat_level}. '
-            f'Confidence: {confidence}. by Slips'
+            f"Horizontal port scan to port {port_info} {portproto}. "
+            f'From {srcip} to {evidence["amount_of_dips"]} '
+            f"unique destination IPs. "
+            f'Total packets sent: {evidence["pkts_sent"]}. '
+            f"Confidence: {confidence}. by Slips"
         )
 
-        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, conn_count=pkts_sent,
-                                 port=dport, proto=protocol, profileid=profileid, twid=twid, uid=uid)
+        evidence = Evidence(
+            evidence_type=EvidenceType.HORIZONTAL_PORT_SCAN,
+            attacker=attacker,
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=srcip),
+            timewindow=TimeWindow(
+                number=int(evidence["twid"].replace("timewindow", ""))
+            ),
+            uid=evidence["uids"],
+            timestamp=evidence["timestamp"],
+            proto=Proto(evidence["protocol"].lower()),
+            dst_port=evidence["dport"],
+        )
+
+        self.db.set_evidence(evidence)
+
+    @staticmethod
+    def is_valid_saddr(profileid: str):
+        """
+        to avoid reporting port scans on the
+        broadcast or multicast addresses or invalid values
+        """
+        saddr = profileid.split("_")[1]
+        if validators.ipv4(saddr) or validators.ipv6(saddr):
+            saddr_obj = ipaddress.ip_address(saddr)
+            return not saddr_obj.is_multicast and saddr != BROADCAST_ADDR
+
+        return False
+
+    @staticmethod
+    def is_valid_twid(twid: str) -> bool:
+        return not (twid in ("", None) or "timewindow" not in twid)
+
+    def check(self, profileid: str, twid: str):
+        if not self.is_valid_saddr(profileid) or not self.is_valid_twid(twid):
+            return False
+
+        # if you're portscaning a port that is open it's gonna be established
+        # the amount of open ports we find is gonna be so small
+        # theoretically this is incorrect bc we'll be ignoring
+        # established evidence,
+        # but usually open ports are very few compared to the whole range
+        # so, practically this is correct to avoid FP
+        state = "Not Established"
+        for protocol in ("TCP", "UDP"):
+            dports: dict = self.get_not_estab_dst_ports(
+                protocol, state, profileid, twid
+            )
+
+            # For each port, see if the amount is over the threshold
+            for dport in dports.keys():
+                # PortScan Type 2. Direction OUT
+                dstips: dict = dports[dport]["dstips"]
+
+                twid_identifier: str = self.get_twid_identifier(
+                    profileid, twid, dport
+                )
+                if not twid_identifier:
+                    continue
+
+                amount_of_dips = len(dstips)
+
+                if self.check_if_enough_dstips_to_trigger_an_evidence(
+                    twid_identifier, amount_of_dips
+                ):
+                    evidence = {
+                        "protocol": protocol,
+                        "profileid": profileid,
+                        "twid": twid,
+                        "uids": self.get_uids(dstips),
+                        "dport": dport,
+                        "pkts_sent": self.get_packets_sent(dstips),
+                        "timestamp": next(iter(dstips.values()))["stime"],
+                        "state": state,
+                        "amount_of_dips": amount_of_dips,
+                    }
+
+                    self.set_evidence_horizontal_portscan(evidence)

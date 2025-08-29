@@ -1,0 +1,33 @@
+{
+  "name": "kalipso",
+  "version": "1.0.0",
+  "description": "Kalipso is a graphical user interface based on Nodejs. To create a colorful interface  in the command-line, Kalipso uses two javascript libraries: blessed and blessed-contrib.",
+  "main": "kalipso.js",
+  "scripts": {
+    "start": "node kalipso.js"
+  },
+  "author": "Stratosphere IPS",
+  "license": "GPL-2.0-only",
+  "dependencies": {
+    "ansi-colors": "^4.1.1",
+    "async": "^3.2.0",
+    "blessed": "^0.1.81",
+    "blessed-contrib": "^4.10.0",
+    "chalk": "^4.1.2",
+    "clipboardy": "^2.3.0",
+    "fs": "^0.0.1-security",
+    "redis": "^3.1.2",
+    "sorted-array-async": "^0.0.7",
+    "strip-ansi": "^6.0.0",
+    "yargs": "^17.0.1"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stratosphereips/StratosphereLinuxIPS.git"
+  },
+  "bugs": {
+    "url": "https://github.com/stratosphereips/StratosphereLinuxIPS/issues"
+  },
+  "homepage": "https://github.com/stratosphereips/StratosphereLinuxIPS#readme"
+}

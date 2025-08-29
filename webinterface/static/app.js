@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+//SPDX-License-Identifier: GPL-2.0-only
 // import { update } from './analysis.js';
 import {update} from '../analysis/analysis/static/js/analysis.js';
 
@@ -11,7 +13,7 @@ function round(value, precision) {
     return Math.round(value * multiplier) / multiplier;
 }
 function calcDur(analysis_start, analysis_end){
-    /* 
+    /*
         Calcuialte duration in seconds
     */
     let start = new Date(analysis_start)
@@ -87,4 +89,3 @@ function initPage() {
 $(document).ready(function () {
     initPage();
 });
-

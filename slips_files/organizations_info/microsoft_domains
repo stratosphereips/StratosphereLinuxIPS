@@ -1,5 +1,5 @@
+microsoft.com
 aadrm.com
-account.activedirectory.windowsazure.com
 account.live.com
 account.office.net
 accounts.accesscontrol.windows.net
@@ -15,7 +15,6 @@ admin.sharepoint.com
 adminwebservice.microsoftonline.com
 ajax.aspnetcdn.com
 aka.ms
-amp.azure.net
 api.dropboxapi.com
 api.login.yahoo.com
 api.meetup.com
@@ -32,28 +31,17 @@ assets-yammer.com
 assets.onestore.ms
 attachments.office.net
 auth.gfx.ms
-autologon.microsoftazuread-sso.com
-azure-apim.net
-azureedge.net
-azurerms.com
 becws.microsoftonline.com
 bit.ly
 blob.core.windows.net
 afx.ms
 akadns.net
 aspnetcdn.com
-azure-int.net
-azure-mobile.net
-azure.com
-azure.net
-azurewebsites.net
 bing-exp.com
 bing-int.com
 bing.com
 bing.net
 ceipmsn.com
-cloudapp.azure.com
-cloudapp.azure.net
 cloudapp.net
 codeplex.com
 discoverbing.com
@@ -83,7 +71,6 @@ lync.com
 mesh.com
 mgmt.live
 microsoft-int.com
-microsoft.com
 microsoft.com.au
 microsoft.com.tr
 microsoft.fr
@@ -116,7 +103,6 @@ office.net
 office365.com
 officeppe.com
 officeppe.net
-onedrive.com
 onenote.com
 onenote.net
 outlook.com
@@ -133,7 +119,6 @@ sharepointonline.com
 skype.com
 skype.net
 skypeassets.com
-sqlazurelabs.com
 surface.com
 syncxp.net
 trouter.io
@@ -143,7 +128,6 @@ vo.msecnd.net
 windows-int.net
 windows.com
 windows.net
-windowsazure.com
 windowsmedia.com
 windowsphone-int.com
 windowsphone-int.net
@@ -159,15 +143,6 @@ zune.net
 003-1-d.outlook.com
 003-1-d.prod.outlook.com
 azdns-migration-ns-validation.cn
-azure-api.net
-azure-devices.net
-azurebiganalytics.net
-azuredatacatalog.com
-azuredatalake.net
-azuredatalakeanalytics.net
-azuredatalakestore.net
-azurehdinsight-stage.net
-azurehdinsight.net
 cloudapp-int.net
 cloudapp-preview.com
 cloudapp-preview.net
@@ -183,8 +158,6 @@ iespdytst
 iespdytst.redmond.corp.microsoft.com
 ieta-wa-24
 insidersurveys.windows.com
-management-azure-devices.net
-mgmt-azure-api.net
 microsoftcrmportals.com
 microsoftcrmportalstest.com
 microsoftkonacompute.net
@@ -200,7 +173,6 @@ powerbi.com
 powerusers-staging.microsoft.com
 powerusers.microsoft.com
 remotewebaccess.com
-stage-azurewebsites.net
 stage-o365apps.net
 telecommand.telemetry.microsoft.com
 vortex-sandbox.data.microsoft.com
@@ -264,8 +236,6 @@ graph.windows.net
 helpshift.com
 hip.live.com
 hockeyapp.net
-informationprotection.azure.com
-informationprotection.hosting.portal.azure.net
 insertmedia.bing.office.net
 isrg.trustid.ocsp.identrust.com
 itunes.apple.com
@@ -285,12 +255,9 @@ m.facebook.com
 mail.google.com
 mail.protection.outlook.com
 manage.microsoft.com
-management.azure.com
-media.azure.net
 mem.gfx.ms
 microsoftusercontent.com
 mlccdn.blob.core.windows.net
-mlccdnprod.azureedge.net
 msauth.net
 msauthimages.net
 mscrl.microsoft.com
@@ -306,7 +273,6 @@ myanalytics-gcc.microsoft.com
 myanalytics.microsoft.com
 myfiles.sharepoint.com
 nexus.microsoftonline-p.com
-nps.onyx.azure.net
 o15.officeredir.microsoft.com
 o365weve.com
 ocos-office365-s2s.msedge.net
@@ -404,7 +370,6 @@ www.evernote.com
 www.google-analytics.com
 www.googleapis.com
 www.microsoft.com
-www.onedrive.com
 www.outlook.com
 www.sway.com
 yammer.com
@@ -440,9 +405,6 @@ atlassolutions.com
 audible.com
 autodiscover.microsoft.com
 axis.microsoft.com
-azure-test.net
-azure.microsoft.com
-azuredns-cloud.net
 bbsindex.com
 bcentral-int.com
 bcentral-ppe.com
@@ -1207,7 +1169,6 @@ windows2000.com.br
 windows7download.com
 windows8downloads.com
 windows8downloadscdn.com
-windowsazure.org
 windowsdna.com.br
 windowsembeddeddevices.com
 windowsembeddedkit.com

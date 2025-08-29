@@ -1,6 +1,9 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 """
 Close all redis-servers opened by the unit tests
 """
+
 import os
 import redis
 
@@ -10,7 +13,7 @@ def get_pid_of_redis_server(port: int) -> str:
     Gets the pid of the redis server running on this port
     Returns str(port) or false if there's no redis-server running on this port
     """
-    cmd = 'ps aux | grep redis-server'
+    cmd = "ps aux | grep redis-server"
     cmd_output = os.popen(cmd).read()
     for line in cmd_output.splitlines():
         if str(port) in line:
@@ -18,7 +21,8 @@ def get_pid_of_redis_server(port: int) -> str:
             return pid
     return False
 
-def flush_redis_server(port: str=''):
+
+def flush_redis_server(port: str = ""):
     """
     Flush the redis server on this pid, only 1 param should be given, pid or port
     :param pid: can be False if port is given
@@ -29,24 +33,25 @@ def flush_redis_server(port: str=''):
     try:
         # if connected := __database__.connect_to_redis_server(port):
         # noinspection PyTypeChecker
-        #todo move this to the db
+        # todo move this to the db
         r = redis.StrictRedis(
-                host='localhost',
-                port=port,
-                db=0,
-                charset='utf-8',
-                socket_keepalive=True,
-                decode_responses=True,
-                retry_on_timeout=True,
-                health_check_interval=20,
-                )
+            host="localhost",
+            port=port,
+            db=0,
+            charset="utf-8",
+            socket_keepalive=True,
+            decode_responses=True,
+            retry_on_timeout=True,
+            health_check_interval=20,
+        )
         r.flushall()
         r.flushdb()
         r.script_flush()
         return True
-    except redis.exceptions.ConnectionError:
+    except (redis.exceptions.ConnectionError, RuntimeError):
         # server already killed!
         return False
+
 
 def kill_redis_server(pid):
     """
@@ -79,7 +84,7 @@ def kill_redis_server(pid):
     return True
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     redis_server_ports = [65531, 6380, 6381, 1234]
     closed_servers = 0
     for redis_port in redis_server_ports:
@@ -93,17 +98,16 @@ if __name__ == '__main__':
         # print(f'Redis port: {redis_port} is found using PID {redis_pid} ')
         try:
             flush_redis_server(str(redis_port))
-            print(f'Flushed redis-server opened on port: {redis_port}')
+            print(f"Flushed redis-server opened on port: {redis_port}")
             kill_redis_server(redis_pid)
-            print(f'Killed redis-server on port {redis_port} PID: {redis_pid}')
+            print(f"Killed redis-server on port {redis_port} PID: {redis_pid}")
             closed_servers += 1
         except redis.exceptions.ConnectionError:
             continue
 
-    print(f'Closed {closed_servers} unused redis-servers')
+    print(f"Closed {closed_servers} unused redis-servers")
 
-
-    zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing')
+    zeek_tmp_dir = os.path.join(os.getcwd(), "zeek_dir_for_testing")
     try:
         os.rmdir(zeek_tmp_dir)
     except (FileNotFoundError, OSError):

@@ -13,6 +13,9 @@ We provide the analysis of the network traffic of the RAT06-Saefko [download her
 
 The capture contains different actions done by the RAT controller (e.g. upload a file, get GPS location, monitor files, etc.). For detailed analysis, check Kamila Babayeva's blog [Dissecting a RAT. Analysis of the Saefko RAT](https://www.stratosphereips.org/blog/2021/6/2/dissecting-a-rat-analysis-of-the-saefko-rat).
 
+Disclaimer: The used Slips version in this demo is 1.0.2, alerts and evidence generated in this demo may be different
+than the alerts you may see using the latest version of Slips.
+
 From the analysis we know that:
 -  The controller IP address: 192.168.131.1 and 2001:718:2:903:f410:3340:d02b:b918
 -  The victim's IP address: 192.168.131.2 and 2001:718:2:903:b877:48ae:9531:fbfc
@@ -22,7 +25,7 @@ First we run slips using the following command:
     ./slips.py -e 1 -f RAT06_Saefko.pcap
 
 
-First, Slips will start by updating all the remote TI feeds added in slips.conf
+First, Slips will start by updating all the remote TI feeds added in slips.yaml
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/updating_remote_feeds.png" title="Slips updating remote TI feeds">
 
@@ -35,9 +38,9 @@ Afetr updating, slips modules start and print the PID of every successfully star
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/modules_starting.png" title="Slips modules starting">
 
-Then, we see the get alert
+Then, we see the alert
 
-saefko_first_alert.png
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/saefko_first_alert.png" title="Saefko First Alert">
 
 Alerts are printed by the evidence module, Slips detected IP `2001:718:2:903:b877:48ae:9531:fbfc`  as infected due to the above evidence See the difference between alerts and evidence [here](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)
 
@@ -248,23 +251,3 @@ Each flow is described with a specific letter which description can be found [he
 Slips did not detect periodic connection over 1337/UDP because the LSTM module focuses on TCP. But from the behavioral model of the connections over 1337/UDP shown below, we can conclude that the model is periodic and most of connections are of a small size.
 
 <img src="https://images.squarespace-cdn.com/content/v1/5a01100f692ebe0459a1859f/1611308530585-BKXFXAQXGFIPXPRLSSVF/image5.png" title="Behavioral model created by Slips for the connection between phone and server using 1337/UDP.">
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

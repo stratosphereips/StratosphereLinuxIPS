@@ -1,5 +1,14 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
+import base64
+import binascii
 import hashlib
 from datetime import datetime, timedelta
+from re import findall
+from threading import Thread
+import netifaces
+from uuid import UUID
+import tldextract
 import validators
 from git import Repo
 import socket
@@ -9,72 +18,111 @@ import platform
 import os
 import sys
 import ipaddress
+import aid_hash
+from typing import Any, Optional, Union, List
+from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
+from dataclasses import is_dataclass, asdict
+from enum import Enum
 
-IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
+from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
+
+IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
+
 
 class Utils(object):
-    name = 'utils'
-    description = 'Common functions used by different modules of slips.'
-    authors = ['Alya Gomaa']
-
+    name = "utils"
+    description = "Common functions used by different modules of slips."
+    authors = ["Alya Gomaa"]
 
     def __init__(self):
         self.home_network_ranges_str = (
-            '192.168.0.0/16',
-            '172.16.0.0/12',
-            '10.0.0.0/8',
+            "192.168.0.0/16",
+            "172.16.0.0/12",
+            "10.0.0.0/8",
         )
         # IPv4Network objs
-        self.home_network_ranges = list(map(ipaddress.ip_network, self.home_network_ranges_str))
-        self.supported_orgs = (
-            'google',
-            'microsoft',
-            'apple',
-            'facebook',
-            'twitter',
+        self.home_network_ranges = list(
+            map(ipaddress.ip_network, self.home_network_ranges_str)
         )
-        self.home_networks = ('192.168.0.0', '172.16.0.0', '10.0.0.0')
+        self.supported_orgs = (
+            "google",
+            "microsoft",
+            "apple",
+            "facebook",
+            "twitter",
+        )
+        self.home_networks = ("192.168.0.0", "172.16.0.0", "10.0.0.0")
         self.threat_levels = {
-            'info': 0,
-            'low': 0.2,
-            'medium': 0.5,
-            'high': 0.8,
-            'critical': 1,
+            "info": 0,
+            "low": 0.2,
+            "medium": 0.5,
+            "high": 0.8,
+            "critical": 1,
         }
+        # why are we not using /var/lock? bc we need it to be r/w/x by
+        # everyone
+        self.slips_locks_dir = "/tmp/slips"
         self.time_formats = (
-            '%Y-%m-%dT%H:%M:%S.%f%z',
-            '%Y-%m-%d %H:%M:%S.%f',
-            '%Y-%m-%d %H:%M:%S',
-            '%Y-%m-%d %H:%M:%S.%f%z',
-            '%Y/%m/%d %H:%M:%S.%f%z',
-            '%Y/%m/%d %H:%M:%S.%f',
-            '%Y/%m/%d %H:%M:%S',
-            '%Y-%m-%d %H:%M:%S%z',
+            "%Y-%m-%dT%H:%M:%S.%f%z",
+            "%Y-%m-%d %H:%M:%S.%f",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M:%S.%f%z",
+            "%Y/%m/%d %H:%M:%S.%f%z",
+            "%Y/%m/%d %H:%M:%S.%f",
+            "%Y/%m/%d %H:%M:%S",
+            "%Y-%m-%d %H:%M:%S%z",
             "%Y-%m-%dT%H:%M:%S",
-            '%Y-%m-%dT%H:%M:%S%z',
-            '%Y/%m/%d-%H:%M:%S',
-            '%Y-%m-%dT%H:%M:%S'
-
-         )
-        # this format will be used accross all modules and logfiles of slips
-        self.alerts_format = '%Y/%m/%d %H:%M:%S.%f%z'
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y/%m/%d-%H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+        )
+        # this format will be used across all modules and logfiles of slips
+        # its timezone aware
+        self.alerts_format = "%Y/%m/%d %H:%M:%S.%f%z"
         self.local_tz = self.get_local_timezone()
+        self.aid = aid_hash.AID()
 
-    def get_cidr_of_ip(self, ip):
+    def generate_uid(self):
+        """Generates a UID similar to what Zeek uses."""
+        return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode(
+            "utf-8"
+        )
+
+    def is_iso_format(self, date_time: str) -> bool:
+        try:
+            datetime.fromisoformat(date_time)
+            return True
+        except (ValueError, TypeError):
+            return False
+
+    def extract_hostname(self, url: str) -> str:
+        """
+        extracts the parent domain from the given domain/url
+        """
+        parsed_url = tldextract.extract(url)
+        return f"{parsed_url.domain}.{parsed_url.suffix}"
+
+    def is_localhost(self, ip: str) -> bool:
+        try:
+            return ipaddress.ip_address(ip).is_loopback
+        except ValueError:
+            # Invalid IP address
+            return False
+
+    def get_cidr_of_private_ip(self, ip):
         """
         returns the cidr/range of the given private ip
-        :param ip: should be  a private ips
+        :param ip: should be a private ipv4
         """
         if validators.ipv4(ip):
-            first_octet = ip.split('.')[0]
+            first_octet = ip.split(".")[0]
             # see if the first octet of the given ip matches any of the
             # home network ranges
             for network_range in self.home_network_ranges_str:
                 if first_octet in network_range:
                     return network_range
 
-
-    def threat_level_to_string(self, threat_level: float):
+    def threat_level_to_string(self, threat_level: float) -> str:
         for str_lvl, int_value in self.threat_levels.items():
             if threat_level <= int_value:
                 return str_lvl
@@ -82,85 +130,176 @@ class Utils(object):
     def is_valid_threat_level(self, threat_level):
         return threat_level in self.threat_levels
 
-    def sanitize(self, string):
+    @staticmethod
+    def get_original_conn_flow(altflow, db) -> Optional[dict]:
+        """Returns the original conn.log of the given altflow"""
+        original_conn_flow = db.get_flow(altflow.uid)
+        original_flow_uid = next(iter(original_conn_flow))
+        if original_conn_flow[original_flow_uid]:
+            return json.loads(original_conn_flow[original_flow_uid])
+
+    @staticmethod
+    def is_ip_in_client_ips(ip_to_check: str, client_ips: List) -> bool:
+        ip = ipaddress.ip_address(ip_to_check)
+        for entry in client_ips:
+            if isinstance(entry, ipaddress.IPv4Network) or isinstance(
+                entry, ipaddress.IPv6Network
+            ):
+                if ip in entry:
+                    return True
+
+            elif isinstance(entry, ipaddress.IPv4Address) or isinstance(
+                entry, ipaddress.IPv6Address
+            ):
+                if ip == entry:
+                    return True
+        return False
+
+    @staticmethod
+    def sanitize(input_string):
         """
         Sanitize strings taken from the user
         """
-        string = string.replace(';', '')
-        string = string.replace('\`', '')
-        string = string.replace('&', '')
-        string = string.replace('|', '')
-        string = string.replace('$(', '')
-        string = string.replace('\n', '')
-        return string
+        characters_to_remove = set(";`&|$\n()")
+        input_string = input_string.strip()
+        remove_characters = str.maketrans(
+            "", "", "".join(characters_to_remove)
+        )
+        sanitized_string = input_string.translate(remove_characters)
 
-    def detect_data_type(self, data):
+        return sanitized_string
+
+    def to_dict(self, obj):
         """
-        Detects the type of incoming data: ipv4, ipv6, domain, ip range, asn, md5, etc
+        Converts an Evidence object to a dictionary (aka json serializable)
+        :param obj: object of any type.
         """
+        if is_dataclass(obj):
+            # run this function on each value of the given dataclass
+            return {k: self.to_dict(v) for k, v in asdict(obj).items()}
+
+        if isinstance(obj, Enum):
+            return obj.name
+
+        if isinstance(obj, list):
+            return [self.to_dict(item) for item in obj]
+
+        if isinstance(obj, dict):
+            return {k: self.to_dict(v) for k, v in obj.items()}
+
+        return obj
+
+    def is_valid_uuid4(self, uuid_string: str) -> bool:
+        """Validate that the given str in UUID4"""
+        try:
+            UUID(uuid_string, version=4)
+            return True
+        except ValueError:
+            return False
+
+    def is_valid_domain(self, domain: str) -> bool:
+        extracted = tldextract.extract(domain)
+        return bool(extracted.domain) and bool(extracted.suffix)
+
+    def detect_ioc_type(self, data) -> str:
+        """
+        Detects the type of incoming data:
+        ipv4, ipv6, domain, ip range, asn, md5, etc
+        """
+
+        objs_map = {
+            IPv4Network: "ip",
+            IPv6Network: "ip",
+            IPv4Address: "ip_range",
+            IPv6Address: "ip_range",
+        }
+
+        for obj, obj_type in objs_map.items():
+            if isinstance(data, obj):
+                return obj_type
+
         data = data.strip()
         try:
             ipaddress.ip_address(data)
-            return 'ip'
+            return "ip"
         except (ipaddress.AddressValueError, ValueError):
             pass
 
         try:
             ipaddress.ip_network(data)
-            return 'ip_range'
+            return "ip_range"
         except ValueError:
             pass
 
         if validators.md5(data):
-            return 'md5'
+            return "md5"
 
-        if validators.domain(data):
-            return 'domain'
+        if validators.url(data):
+            return "url"
 
-        # some ti files have / at the end of domains, remove it
-        if data.endswith('/'):
-            data = data[:-1]
-
-        domain = data
-        if domain.startswith('http://'):
-            data = data[7:]
-        elif domain.startswith('https://'):
-            data = data[8:]
-
-        if validators.domain(data):
-            return 'domain'
-        elif '/' in data:
-            return 'url'
+        if self.is_valid_domain(data):
+            return "domain"
 
         if validators.sha256(data):
-            return 'sha256'
+            return "sha256"
 
         if data.startswith("AS"):
-            return 'asn'
+            return "asn"
 
     def get_first_octet(self, ip):
         # the ranges stored are sorted by first octet
-        if '.' in ip:
-            return ip.split('.')[0]
-        elif ':' in ip:
-            return ip.split(':')[0]
+        if "." in ip:
+            return ip.split(".")[0]
+        elif ":" in ip:
+            return ip.split(":")[0]
         else:
             # invalid ip
             return
 
+    def calculate_confidence(self, pkts_sent):
+        """
+        calculates the evidence confidence based on the pkts sent
+        """
+        if pkts_sent > 10:
+            confidence = 1
+        elif pkts_sent == 0:
+            return 0.3
+        else:
+            # Between threshold and 10 pkts compute a kind of linear grow
+            confidence = pkts_sent / 10.0
+        return confidence
 
-    def drop_root_privs(self):
+    def drop_root_privs_temporarily(self) -> int:
+        """returns the uid of the user that launched sudo"""
+        if platform.system() != "Linux":
+            return
+        try:
+            self.sudo_uid = int(os.getenv("SUDO_UID"))
+            self.sudo_gid = int(os.getenv("SUDO_GID"))
+        except (TypeError, ValueError):
+            return  # Not running as root with sudo
+
+        # Drop only effective privileges
+        os.setegid(self.sudo_gid)
+        os.seteuid(self.sudo_uid)
+        return self.sudo_uid
+
+    def regain_root_privs(self):
+        os.seteuid(0)
+        os.setegid(0)
+
+    def drop_root_privs_permanently(self):
         """
         Drop root privileges if the module doesn't need them
         Shouldn't be called from __init__ because then, it affects the parent process too
         """
 
-        if platform.system() != 'Linux':
+        if platform.system() != "Linux":
             return
         try:
             # Get the uid/gid of the user that launched sudo
-            sudo_uid = int(os.getenv('SUDO_UID'))
-            sudo_gid = int(os.getenv('SUDO_GID'))
+            sudo_uid = int(os.getenv("SUDO_UID"))
+            sudo_gid = int(os.getenv("SUDO_GID"))
         except TypeError:
             # env variables are not set, you're not root
             return
@@ -170,28 +309,69 @@ class Utils(object):
         os.setresuid(sudo_uid, sudo_uid, -1)
         return
 
+    def is_public_ip(self, ip_str) -> bool:
+        try:
+            ip = ipaddress.ip_address(ip_str)
+            return not (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_reserved
+                or ip.is_multicast
+                or ip.is_link_local
+            )
+        except ValueError:
+            return False  # invalid IP
 
-    def convert_format(self, ts, required_format: str):
+    def is_ignored_zeek_log_file(self, filepath: str) -> bool:
+        """
+        Returns true if the given file ends with .log or .log.labeled and
+        is in SUPPORTED_LOGFILES list
+        :param filepath: a zeek log file
+        """
+        if not (
+            filepath.endswith(".log") or filepath.endswith(".log.labeled")
+        ):
+            return True
+
+        filename = os.path.basename(filepath)
+        # remove all extensions from filename
+        while "." in filename:
+            filename = filename.rsplit(".", 1)[0]
+        return filename not in SUPPORTED_LOGFILES
+
+    def start_thread(self, thread: Thread, db):
+        """
+        A wrapper for threading.Thread().start()
+        starts the given thread and keeps track of its TID/PID in the db
+        :param thread: the thread to start
+        :param db: a DBManager obj to store the thread PID
+        """
+        thread.start()
+        db.store_pid(thread.name, int(thread._native_id))
+
+    def convert_ts_format(self, ts, required_format: str):
         """
         Detects and converts the given ts to the given format
-        :param required_format: can be any format like '%Y/%m/%d %H:%M:%S.%f' or 'unixtimestamp', 'iso'
+        PS: it sets iso format datetime in the local timezone
+        :param required_format: can be any format like '%Y/%m/%d %H:%M:%S.%f'
+        or 'unixtimestamp', 'iso'
         """
-        given_format = self.define_time_format(ts)
+        given_format = self.get_time_format(ts)
         if given_format == required_format:
             return ts
 
-        if given_format == 'datetimeobj':
+        if given_format == "datetimeobj":
             datetime_obj = ts
         else:
             datetime_obj = self.convert_to_datetime(ts)
 
         # convert to the req format
-        if required_format == 'iso':
-            return datetime_obj.astimezone().isoformat()
-        elif required_format == 'unixtimestamp':
+        if required_format == "iso":
+            return datetime_obj.astimezone(tz=self.local_tz).isoformat()
+        elif required_format == "unixtimestamp":
             return datetime_obj.timestamp()
-        else:
-            return datetime_obj.strftime(required_format)
+
+        return datetime_obj.strftime(required_format)
 
     def get_local_timezone(self):
         """
@@ -209,41 +389,36 @@ class Utils(object):
         datetime_obj = self.convert_to_datetime(ts)
         return datetime_obj.astimezone(self.local_tz)
 
-    def is_datetime_obj(self, ts):
+    def is_datetime_obj(self, ts) -> bool:
         """
         checks if the given ts is a datetime obj
         """
         try:
-            ts.strftime('%Y-%m-%dT%H:%M:%S.%f%z')
-            return True
-        except AttributeError:
+            return isinstance(ts, datetime)
+        except Exception:
             return False
 
     def convert_to_datetime(self, ts):
         if self.is_datetime_obj(ts):
             return ts
 
-        given_format = self.define_time_format(ts)
-
+        given_format = self.get_time_format(ts)
         return (
             datetime.fromtimestamp(float(ts))
-            if given_format == 'unixtimestamp'
+            if given_format == "unixtimestamp"
             else datetime.strptime(ts, given_format)
         )
 
-
-    def define_time_format(self, time: str) -> str:
-
+    def get_time_format(self, time) -> Optional[str]:
         if self.is_datetime_obj(time):
-            return 'datetimeobj'
+            return "datetimeobj"
 
         try:
             # Try unix timestamp in seconds.
             datetime.fromtimestamp(float(time))
-            return 'unixtimestamp'
+            return "unixtimestamp"
         except ValueError:
             pass
-
 
         for time_format in self.time_formats:
             try:
@@ -257,92 +432,164 @@ class Utils(object):
     def to_delta(self, time_in_seconds):
         return timedelta(seconds=int(time_in_seconds))
 
-    def get_own_IPs(self) -> list:
+    def get_human_readable_datetime(self, format=None) -> str:
+        return utils.convert_ts_format(
+            datetime.now(), format or self.alerts_format
+        )
+
+    def get_mac_for_ip_using_cache(self, ip: str) -> str | None:
+        """gets the mac of the given local ip using the local arp cache"""
+        try:
+            with open("/proc/net/arp") as f:
+                next(f)  # skip header
+                for line in f:
+                    parts = line.split()
+                    if parts[0] == ip:
+                        return parts[3]
+        except FileNotFoundError:
+            pass
+        return None
+
+    def get_public_ip(self) -> str | None:
         """
-        Returns a list of our local and public IPs
+        fetch public IP from ipinfo.io
+        returns either an IPv4 or IPv6 address as a string, or None if unavailable
         """
-        if '-i' not in sys.argv:
+        try:
+            response = requests.get("http://ipinfo.io/json", timeout=5)
+            if response.status_code == 200:
+                data = json.loads(response.text)
+                if "ip" in data:
+                    return data["ip"]
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+            requests.exceptions.ReadTimeout,
+            json.decoder.JSONDecodeError,
+        ):
+            return None
+
+    def get_own_ips(self, ret="Dict") -> dict[str, list[str]] | list[str]:
+        """
+        returns a dict of our private IPs from all interfaces and our public
+        IPs. return a dict by default
+        e.g. { "ipv4": [..], "ipv6": [..] }
+        :kwarg ret: "Dict" or "List"
+        and returns a list of all the ips combined if ret=List is given
+        """
+        if "-i" not in sys.argv and "-g" not in sys.argv:
             # this method is only valid when running on an interface
             return []
 
-        IPs = []
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            s.connect(('10.255.255.255', 1))
-            IPs.append(s.getsockname()[0])
-        except Exception:
-            IPs.append('127.0.0.1')
-        finally:
-            s.close()
+        ips = {"ipv4": [], "ipv6": []}
 
-        # get public ip
+        for interface in netifaces.interfaces():
+            try:
+                addrs = netifaces.ifaddresses(interface)
 
-        try:
-            response = requests.get(
-                'http://ipinfo.io/json',
-                timeout=5,
-            )
-        except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ChunkedEncodingError,
-                requests.exceptions.ReadTimeout
-        ):
-            return IPs
+                if netifaces.AF_INET in addrs:
+                    for addr in addrs[netifaces.AF_INET]:
+                        ips["ipv4"].append(addr["addr"])
 
-        if response.status_code != 200:
-            return IPs
-        if 'Connection timed out' in response.text:
-            return IPs
-        try:
-            response = json.loads(response.text)
-        except json.decoder.JSONDecodeError:
-            return IPs
-        public_ip = response['ip']
-        IPs.append(public_ip)
-        return IPs
+                if netifaces.AF_INET6 in addrs:
+                    for addr in addrs[netifaces.AF_INET6]:
+                        # remove interface suffix
+                        ip = addr["addr"].split("%")[0]
+                        ips["ipv6"].append(ip)
+
+            except Exception as e:
+                print(f"Error processing interface {interface}: {e}")
+
+        public_ip = self.get_public_ip()
+        if public_ip:
+            if validators.ipv4(public_ip):
+                ips["ipv4"].append(public_ip)
+            elif validators.ipv6(public_ip):
+                ips["ipv6"].append(public_ip)
+
+        if ret == "Dict":
+            return ips
+        elif ret == "List":
+            return [ip for sublist in ips.values() for ip in sublist]
 
     def convert_to_mb(self, bytes):
-        return int(bytes)/(10**6)
+        return int(bytes) / (10**6)
 
-    def is_ignored_ip(self, ip) -> bool:
+    def is_port_in_use(self, port: int) -> bool:
+        """
+        return True if the given port is used by another app
+        """
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if sock.connect_ex(("localhost", port)) != 0:
+            # not used
+            sock.close()
+            return False
+
+        sock.close()
+        return True
+
+    def is_private_ip(
+        self, ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address, str]
+    ) -> bool:
+        ip_classes = {IPv4Network, IPv6Network, IPv4Address, IPv6Address}
+        for class_ in ip_classes:
+            if isinstance(ip, class_):
+                return ip and ip.is_private
+
+        if self.detect_ioc_type(ip) != "ip":
+            return False
+        # convert the given str ip to obj
+        ip_obj = ipaddress.ip_address(ip)
+        return ip_obj.is_private
+
+    def is_ignored_ip(self, ip: str) -> bool:
         """
         This function checks if an IP is a special list of IPs that
         should not be alerted for different reasons
         """
-        ip_obj = ipaddress.ip_address(ip)
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+        except (ipaddress.AddressValueError, ValueError):
+            return True
+
         # Is the IP multicast, private? (including localhost)
-        # local_link or reserved?
         # The broadcast address 255.255.255.255 is reserved.
-        return bool(
-            (
-                ip_obj.is_multicast
-                or ip_obj.is_private
-                or ip_obj.is_link_local
-                or ip_obj.is_reserved
-                or '.255' in ip_obj.exploded
-            )
+        return (
+            ip_obj.is_multicast
+            or self.is_private_ip(ip_obj)
+            or ip_obj.is_link_local
+            or ip_obj.is_loopback
+            or ip_obj.is_reserved
         )
 
-    def get_hash_from_file(self, filename):
+    def get_md5_hash(self, data: Any) -> str:
+        return hashlib.md5(str(data).encode()).hexdigest()
+
+    def get_sha256_hash_of_file_contents(self, filename: str):
         """
         Compute the sha256 hash of a file
         """
         # The size of each read from the file
-        BLOCK_SIZE = 65536
-        # Create the hash object, can use something other
-        # than `.sha256()` if you wish
+        block_size = 65536
+        # Create the hash object
         file_hash = hashlib.sha256()
-        # Open the file to read it's bytes
-        with open(filename, 'rb') as f:
-            # Read from the file. Take in the amount declared above
-            fb = f.read(BLOCK_SIZE)
-            # While there is still data being read from the file
-            while len(fb) > 0:
-                # Update the hash
-                file_hash.update(fb)
+        with open(filename, "rb") as f:
+            file_bytes = f.read(block_size)
+            while len(file_bytes) > 0:
+                file_hash.update(file_bytes)
                 # Read the next block from the file
-                fb = f.read(BLOCK_SIZE)
+                file_bytes = f.read(block_size)
+
         return file_hash.hexdigest()
+
+    def get_sudo_according_to_env(self) -> str:
+        """
+        Check if running in host or in docker and sets sudo string accordingly.
+        There's no sudo in docker so we need to execute all commands without it
+        """
+        # This env variable is defined in the Dockerfile
+        running_in_docker = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
+        return "" if running_in_docker else "sudo"
 
     def is_msg_intended_for(self, message, channel):
         """
@@ -350,17 +597,25 @@ class Utils(object):
             1. If the given message is intended for this channel
             2. The msg has valid data
         """
-
         return (
             message
-            and type(message['data']) == str
-            and message['channel'] == channel
+            and isinstance(message["data"], str)
+            and message["channel"] == channel
         )
+
+    def get_slips_version(self) -> str:
+        version_file = "VERSION"
+        with open(version_file, "r") as f:
+            version = f.read()
+        version = version.replace("\n", "")
+        return version
 
     def change_logfiles_ownership(self, file: str, UID, GID):
         """
-        if slips is running in docker, the owner of the alerts log files is always root
-        this function changes it to the user ID and GID in slips.conf to be able to
+        if slips is running in docker, the owner of the alerts log files
+        is always root
+        this function changes it to the user ID and GID in slips.yaml to be
+         able to
         rwx the files from outside of docker
         """
         if not (IS_IN_A_DOCKER_CONTAINER and UID and GID):
@@ -369,23 +624,49 @@ class Utils(object):
 
         os.system(f"chown {UID}:{GID} {file}")
 
+    def get_ip_identification_as_str(self, ip_identification: dict) -> str:
+        id = ""
+        if "DNS_resolution" in ip_identification:
+            resolutions = ip_identification.get("DNS_resolution", [])
+            for domain in resolutions:
+                id += f"{domain}, "
+            ip_identification.pop("DNS_resolution")
+
+        for piece_of_info in ip_identification.values():
+            if not piece_of_info:
+                continue
+            id += f"{piece_of_info}, "
+        return id
+
     def get_branch_info(self):
         """
         Returns a tuple containing (commit,branch)
         """
         try:
-            repo = Repo('.')
+            repo = Repo(".")
             # add branch name and commit
             branch = repo.active_branch.name
             commit = repo.active_branch.commit.hexsha
-            return (commit, branch)
+            return commit, branch
         except Exception:
             # when in docker, we copy the repo instead of clone it so there's no .git files
             # we can't add repo metadata
             return False
 
+    def convert_ts_to_tz_aware(self, naive_datetime: datetime) -> datetime:
+        """adds the current local tz (self.local_tz) to the given dt obj"""
+        naive_datetime = utils.convert_to_datetime(naive_datetime)
+        return naive_datetime.replace(tzinfo=self.local_tz)
 
-    def get_time_diff(self, start_time: float, end_time: float, return_type='seconds') -> float:
+    def is_aware(self, dt: datetime) -> bool:
+        """
+        checks if the given datetime object is timemzone aware or not
+        """
+        return dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
+
+    def get_time_diff(
+        self, start_time: float, end_time: float, return_type="seconds"
+    ) -> float:
         """
         Both times can be in any format
         returns difference in seconds
@@ -399,180 +680,98 @@ class Utils(object):
         end_time = self.convert_to_datetime(end_time)
 
         diff = str(end_time - start_time)
-        # if there are days diff between the flows, diff will be something like 1 day, 17:25:57.458395
+        # if there are days diff between the flows, diff will be something
+        # like 1 day, 17:25:57.458395
         try:
             # calculate the days difference
-            diff_in_days = float(
-                diff.split(', ')[0].split(' ')[0]
-            )
-            diff = diff.split(', ')[1]
+            diff_in_days = float(diff.split(", ")[0].split(" ")[0])
+            diff = diff.split(", ")[1]
         except (IndexError, ValueError):
             # no days different
-            diff = diff.split(', ')[0]
+            diff = diff.split(", ")[0]
             diff_in_days = 0
 
-        diff_in_hrs, diff_in_mins, diff_in_seconds = [float(i) for i in diff.split(':')]
+        diff_in_hrs, diff_in_mins, diff_in_seconds = [
+            float(i) for i in diff.split(":")
+        ]
 
-
-        diff_in_seconds = diff_in_seconds  + (24 * diff_in_days * 60 + diff_in_hrs * 60 + diff_in_mins)*60
+        diff_in_seconds = (
+            diff_in_seconds
+            + (24 * diff_in_days * 60 + diff_in_hrs * 60 + diff_in_mins) * 60
+        )
         units = {
-            'days': diff_in_seconds /(60*60*24),
-            'hours':diff_in_seconds/(60*60),
-            'minutes': diff_in_seconds/60,
-            'seconds':  diff_in_seconds
+            "days": diff_in_seconds / (60 * 60 * 24),
+            "hours": diff_in_seconds / (60 * 60),
+            "minutes": diff_in_seconds / 60,
+            "seconds": diff_in_seconds,
         }
 
         return units[return_type]
 
-
-    def IDEA_format(
-        self,
-        srcip,
-        evidence_type,
-        attacker_direction,
-        attacker,
-        description,
-        confidence,
-        category,
-        conn_count,
-        source_target_tag,
-        port,
-        proto,
-        evidence_id
-    ):
+    def remove_milliseconds_decimals(self, ts: str) -> str:
         """
-        Function to format our evidence according to Intrusion Detection Extensible Alert (IDEA format).
-        Detailed explanation of IDEA categories: https://idea.cesnet.cz/en/classifications
+        remove the milliseconds from the given ts
+        :param ts: time in unix format
         """
-        IDEA_dict = {
-            'Format': 'IDEA0',
-            'ID': evidence_id,
-            # both times represet the time of the detection, we probably don't need flow_datetime
-            'DetectTime': datetime.now(self.local_tz).isoformat(),
-            'EventTime': datetime.now(self.local_tz).isoformat(),
-            'Category': [category],
-            'Confidence': confidence,
-            'Source': [{}],
+        return str(ts).split(".")[0]
+
+    def assert_microseconds(self, ts: str):
+        """
+        adds microseconds to the given ts if not present
+        :param ts: unix ts
+        :return: ts
+        """
+        ts = self.convert_ts_format(ts, "unixtimestamp")
+
+        ts = str(ts)
+        # pattern of unix ts with microseconds
+        pattern = r"\b\d+\.\d{6}\b"
+        matches = findall(pattern, ts)
+
+        if not matches:
+            # fill the missing microseconds and milliseconds with 0
+            # 6 is the decimals we need after the . in the unix ts
+            ts = ts + "0" * (6 - len(ts.split(".")[-1]))
+        return ts
+
+    def get_aid(self, flow):
+        """
+        calculates the  AID hash of the flow aka All-ID of the flow
+        """
+        # TODO document this
+        proto = flow.proto.lower()
+
+        # aid_hash lib only accepts unix ts
+        ts = utils.convert_ts_format(flow.starttime, "unixtimestamp")
+        ts: str = self.assert_microseconds(ts)
+
+        cases = {
+            "tcp": aid_hash.FlowTuple.make_tcp,
+            "udp": aid_hash.FlowTuple.make_udp,
+            "icmp": aid_hash.FlowTuple.make_icmp,
         }
+        try:
+            tpl = cases[proto](
+                ts, flow.saddr, flow.daddr, flow.sport, flow.dport
+            )
+            return self.aid.calc(tpl)
+        except KeyError:
+            # proto doesn't have an aid.FlowTuple  method
+            return ""
 
-        # is the srcip ipv4/ipv6 or mac?
-        if validators.ipv4(srcip):
-            IDEA_dict['Source'][0].update({'IP4': [srcip]})
-        elif validators.ipv6(srcip):
-            IDEA_dict['Source'][0].update({'IP6': [srcip]})
-        elif validators.mac_address(srcip):
-            IDEA_dict['Source'][0].update({'MAC': [srcip]})
-        elif validators.url(srcip):
-            IDEA_dict['Source'][0].update({'URL': [srcip]})
+    def to_json_serializable(self, obj: Any) -> Any:
+        if is_dataclass(obj):
+            return {
+                k: self.to_json_serializable(v) for k, v in asdict(obj).items()
+            }
+        elif isinstance(obj, Enum):
+            return obj.value
+        elif isinstance(obj, list):
+            return [self.to_json_serializable(item) for item in obj]
+        elif isinstance(obj, dict):
+            return {k: self.to_json_serializable(v) for k, v in obj.items()}
+        else:
+            return obj
 
-
-        # When someone communicates with C&C, both sides of communication are
-        # sources, differentiated by the Type attribute, 'C&C' or 'Botnet'
-        if evidence_type == 'Command-and-Control-channels-detection':
-            # get the destination IP
-            dstip = description.split('destination IP: ')[1].split(' ')[0]
-
-            if validators.ipv4(dstip):
-                ip_version = 'IP4'
-            elif validators.ipv6(dstip):
-                ip_version = 'IP6'
-
-            IDEA_dict['Source'].append({ip_version: [dstip], 'Type': ['CC']})
-
-        # some evidence have a dst ip
-        if 'dstip' in attacker_direction or 'dip' in attacker_direction:
-            # is the dstip ipv4/ipv6 or mac?
-            if validators.ipv4(attacker):
-                IDEA_dict['Target'] = [{'IP4': [attacker]}]
-            elif validators.ipv6(attacker):
-                IDEA_dict['Target'] = [{'IP6': [attacker]}]
-            elif validators.mac_address(attacker):
-                IDEA_dict['Target'] = [{'MAC': [attacker]}]
-            elif validators.url(attacker):
-                IDEA_dict['Target'][0].update({'URL': [srcip]})
-
-            # try to extract the hostname/SNI/rDNS of the dstip form the description if available
-            hostname = False
-            try:
-                hostname = description.split('rDNS: ')[1]
-            except IndexError:
-                pass
-            try:
-                hostname = description.split('SNI: ')[1]
-            except IndexError:
-                pass
-            if hostname:
-                IDEA_dict['Target'][0].update({'Hostname': [hostname]})
-
-            # update the dstip description if specified in the evidence
-            if source_target_tag:    # https://idea.cesnet.cz/en/classifications#sourcetargettagsourcetarget_classification
-                IDEA_dict['Target'][0].update({'Type': [source_target_tag]})
-
-        elif 'domain' in attacker_direction:
-            # the ioc is a domain
-            attacker_type = 'Hostname' if validators.domain(attacker) else 'URL'
-            target_info = {attacker_type: [attacker]}
-            IDEA_dict['Target'] = [target_info]
-
-            # update the dstdomain description if specified in the evidence
-            if source_target_tag:
-                IDEA_dict['Target'][0].update({'Type': [source_target_tag]})
-        elif source_target_tag:
-            # the ioc is the srcip, therefore the tag is desscribing the source
-            IDEA_dict['Source'][0].update({'Type': [source_target_tag]})
-
-
-
-        # add the port/proto
-        # for all alerts, the srcip is in IDEA_dict['Source'][0] and the dstip is in IDEA_dict['Target'][0]
-        # for alert that only have a source, this is the port/proto of the source ip
-        key = 'Source'
-        idx = 0   # this idx is used for selecting the right dict to add port/proto
-
-        if 'Target' in IDEA_dict:
-            # if the alert has a target, add the port/proto to the target(dstip)
-            key = 'Target'
-            idx = 0
-
-        # for C&C alerts IDEA_dict['Source'][0] is the Botnet aka srcip and IDEA_dict['Source'][1] is the C&C aka dstip
-        if evidence_type == 'Command-and-Control-channels-detection':
-            # idx of the dict containing the dstip, we'll use this to add the port and proto to this dict
-            key = 'Source'
-            idx = 1
-
-        if port:
-            IDEA_dict[key][idx].update({'Port': [int(port)]})
-        if proto:
-            IDEA_dict[key][idx].update({'Proto': [proto.lower()]})
-
-        # add the description
-        attachment = {
-            'Attach': [
-                {
-                    'Content': description,
-                    'ContentType': 'text/plain',
-                }
-            ]
-        }
-        IDEA_dict.update(attachment)
-
-        # only evidence of type scanning have conn_count
-        if conn_count:
-            IDEA_dict['ConnCount'] = conn_count
-
-        if 'MaliciousDownloadedFile' in evidence_type:
-            IDEA_dict['Attach'] = [
-                {
-                    'Type': ['Malware'],
-                    'Hash': [f'md5:{attacker}'],
-                }
-
-            ]
-            if 'size' in description:
-                IDEA_dict.update(
-                    {'Size': int(description.replace(".",'').split('size:')[1].split('from')[0])}
-                )
-
-        return IDEA_dict
 
 utils = Utils()

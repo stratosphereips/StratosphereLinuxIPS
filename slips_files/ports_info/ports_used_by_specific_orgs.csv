@@ -80,6 +80,7 @@ Apple,"",5100,tcp
 Apple,"",5297,tcp
 Apple,"",9100,tcp
 Apple,"",9418,tcp
+Apple,"",61161,tcp
 Apple,"",478–3497,udp
 Apple,"",16384-16403,udp
 Apple,"",16384-16387,udp

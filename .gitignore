@@ -134,7 +134,8 @@ logs/
 dump.rdb
 package-lock.json
 modules/blessed/node_modules/
-alerts.*
+alerts.log
+alerts.json
 errors.log
 nohup.out
 modules/threat_intelligence/remote_data_files/*
@@ -146,12 +147,12 @@ modules/leak_detector/yara_rules/compiled
 # Ignore all data from Jetbrains IDE
 .idea
 
-# ignore warden configuration file
+# user configs
 config/warden.conf
-
-# For RisqIQ credentinals
-credentials
-
+config/RiskIQ_credentials
+config/slack_bot_token_secret
+config/logstash.conf
+config/vt_api_key
 
 # ignore logs from pigeon
 pigeon_logs
@@ -163,12 +164,17 @@ trustdb.db
 running_slips_info.txt
 
 # ignore changes to redis.conf
-redis.conf
+config/redis.conf
 modules/flowmldetection/scaler.bin
 modules/flowmldetection/model.bin
 databases/macaddress-db.json
-modules/flowmldetection/model.bin
 output/
 config-live-macos-*
 dataset-private/*
 appendonly.aof
+/slipsOut/flows.sqlite
+/slipsOut/metadata/info.txt
+/slipsOut/metadata/slips.yaml
+/slipsOut/metadata/whitelist.conf
+/p2p_db.sqlite
+

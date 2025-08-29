@@ -1,3 +1,16 @@
 [submodule "p2p4slips"]
 	path = p2p4slips
 	url = https://github.com/stratosphereips/p2p4slips
+    branch = master
+[submodule "iris"]
+	path = iris
+	url = https://github.com/stratosphereips/iris
+    branch = main
+[submodule "fides"]
+	path = fides
+	url = https://github.com/stratosphereips/fides
+    branch = master
+[submodule "feel_project"]
+	path = feel_project
+	url = https://github.com/stratosphereips/feel_project
+    branch = main

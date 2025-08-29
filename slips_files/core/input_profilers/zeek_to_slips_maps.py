@@ -1,0 +1,216 @@
+conn_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "uid": "uid",
+    "id.orig_h": "saddr",
+    "id.orig_p": "sport",
+    "id.resp_h": "daddr",
+    "id.resp_p": "dport",
+    "proto": "proto",
+    "service": "appproto",
+    "duration": "dur",
+    "orig_bytes": "sbytes",
+    "resp_bytes": "dbytes",
+    "conn_state": "state",
+    "history": "history",
+    "orig_pkts": "spkts",
+    "resp_pkts": "dpkts",
+    "label": "ground_truth_label",
+    "detailedlabel": "detailed_ground_truth_label",
+}
+
+dns_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "uid": "uid",
+    "id.orig_h": "saddr",
+    "id.orig_p": "sport",
+    "id.resp_h": "daddr",
+    "id.resp_p": "dport",
+    "proto": "proto",
+    "query": "query",
+    "qclass_name": "qclass_name",
+    "qtype_name": "qtype_name",
+    "rcode_name": "rcode_name",
+    "answers": "answers",
+    "TTLs": "TTLs",
+    "label": "ground_truth_label",
+    "detailedlabel": "detailed_ground_truth_label",
+}
+
+http_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "uid": "uid",
+    "id.orig_h": "saddr",
+    # slips is not using them
+    # "id.orig_p": "sport",
+    # "id.resp_p": "dport",
+    "id.resp_h": "daddr",
+    "method": "method",
+    "host": "host",
+    "uri": "uri",
+    "version": "version",
+    "user_agent": "user_agent",
+    "request_body_len": "request_body_len",
+    "response_body_len": "response_body_len",
+    "status_code": "status_code",
+    "status_msg": "status_msg",
+    "resp_mime_types": "resp_mime_types",
+    "resp_fuids": "resp_fuids",
+    "label": "ground_truth_label",
+    "detailedlabel": "detailed_ground_truth_label",
+}
+
+ssl_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "uid": "uid",
+    "id.orig_h": "saddr",
+    "id.orig_p": "sport",
+    "id.resp_h": "daddr",
+    "id.resp_p": "dport",
+    "version": "version",
+    "cipher": "cipher",
+    "resumed": "resumed",
+    "established": "established",
+    "cert_chain_fps": "cert_chain_fuids",
+    "client_cert_chain_fps": "client_cert_chain_fuids",
+    "subject": "subject",
+    "server_name": "server_name",
+    "validation_status": "validation_status",
+    "curve": "curve",
+    "ja3": "ja3",
+    "ja3s": "ja3s",
+    "label": "ground_truth_label",
+    "detailedlabel": "detailed_ground_truth_label",
+}
+
+ssh_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "uid": "uid",
+    "id.orig_h": "saddr",
+    "id.resp_h": "daddr",
+    "version": "version",
+    "auth_success": "auth_success",
+    "client": "client",
+    "server": "server",
+    "cipher_alg": "cipher_alg",
+    "mac_alg": "mac_alg",
+    "compression_alg": "compression_alg",
+    "kex_alg": "kex_alg",
+    "host_key_alg": "host_key_alg",
+    "host_key": "host_key",
+    "label": "ground_truth_label",
+    "detailedlabel": "detailed_ground_truth_label",
+}
+
+dhcp_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "uids": "uids",
+    "client_addr": "client_addr",
+    "server_addr": "server_addr",
+    "mac": "smac",
+    "host_name": "host_name",
+    "requested_addr": "requested_addr",
+    "label": "ground_truth_label",
+    "detailedlabel": "detailed_ground_truth_label",
+}
+
+ftp_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "uid": "uid",
+    "id.orig_h": "saddr",
+    "id.orig_p": "sport",
+    "id.resp_h": "daddr",
+    "id.resp_p": "dport",
+    "data_channel.resp_p": "used_port",
+    "label": "ground_truth_label",
+    "detailedlabel": "detailed_ground_truth_label",
+}
+
+smtp_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "uid": "uid",
+    "id.orig_h": "saddr",
+    "id.orig_p": "sport",
+    "id.resp_h": "daddr",
+    "id.resp_p": "dport",
+    "last_reply": "last_reply",
+    "label": "ground_truth_label",
+    "detailedlabel": "detailed_ground_truth_label",
+}
+
+tunnel_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "uid": "uid",
+    "id.orig_h": "saddr",
+    "id.orig_p": "sport",
+    "id.resp_h": "daddr",
+    "id.resp_p": "dport",
+    "tunnel_type": "tunnel_type",
+    "action": "action",
+    "label": "ground_truth_label",
+    "detailedlabel": "detailed_ground_truth_label",
+}
+
+notice_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "uid": "uid",
+    "id.orig_h": "saddr",
+    "id.orig_p": "sport",
+    "id.resp_h": "daddr",
+    "id.resp_p": "dport",
+    "note": "note",
+    "msg": "msg",
+    "src": "scanning_ip",
+    "dst": "dst",
+    "p": "scanned_port",
+    "label": "ground_truth_label",
+    "detailedlabel": "detailed_ground_truth_label",
+}
+
+files_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "fuid": "uid",
+    "tx_hosts": "tx_hosts",
+    "rx_hosts": "rx_hosts",
+    "source": "source",
+    "analyzers": "analyzers",
+    "md5": "md5",
+    "sha1": "sha1",
+    "total_bytes": "size",
+    "label": "ground_truth_label",
+    "detailedlabel": "detailed_ground_truth_label",
+}
+
+arp_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "uid": "uid",
+    "orig_h": "saddr",
+    "resp_h": "daddr",
+    "orig_hw": "src_hw",
+    "resp_hw": "dst_hw",
+    "src_mac": "smac",
+    "dst_mac": "dmac",
+    "operation": "operation",
+    "label": "ground_truth_label",
+    "detailedlabel": "detailed_ground_truth_label",
+}
+
+software_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "host": "saddr",
+    "host_p": "sport",
+    "name": "software",
+    "version.major": "version_major",
+    "version.minor": "version_minor",
+    "unparsed_version": "unparsed_version",
+    "label": "ground_truth_label",
+    "detailedlabel": "detailed_ground_truth_label",
+}
+
+weird_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "uid": "uid",
+    "id.orig_h": "saddr",
+    "id.resp_h": "daddr",
+    "name": "name",
+    "addl": "addl",
+}

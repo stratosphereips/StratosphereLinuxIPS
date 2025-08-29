@@ -1,4 +1,9 @@
-from dataclasses import dataclass
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
+from dataclasses import dataclass, field
+
+from slips_files.common.slips_utils import utils
+
 
 @dataclass
 class ArgusConn:
@@ -20,7 +25,7 @@ class ArgusConn:
     sbytes: int
     dbytes: int
     # required to be able to add_flow
-    smac: str = ''
-    dmac: str = ''
-    uid = False
-    type_: str = 'argus'
+    uid: str = field(default_factory=utils.generate_uid)
+    smac: str = ""
+    dmac: str = ""
+    type_: str = "argus"

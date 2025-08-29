@@ -1,0 +1,34 @@
+name: CI-production-update-code-docs
+
+on:
+  push:
+    branches:
+    - 'master'
+    - '!develop'
+
+jobs:
+  update_code_docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: 'code-docs-branch'
+          fetch-depth: 0 # otherwise, you will fail to push refs to the dest repo
+
+      - name: install doxygen and python
+        run: |
+          sudo apt update
+          sudo apt install python3 doxygen
+
+      # deletes old docs, generates new ones, and adds all new files to git
+      - name: update docs
+        run: python3 docs/generate_docs.py
+
+      # commit and push to code docs branch
+      - name: Commit & Push changes
+        uses: actions-js/push@master
+        with:
+          github_token: ${{ secrets.GH_TOKEN_FOR_COMMITTING_AND_PUSHING_CODE_DOCS }}
+          message: '[Github actions] Update code docs'
+          branch: 'code-docs-branch'

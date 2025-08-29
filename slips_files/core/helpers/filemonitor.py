@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
 
@@ -20,51 +22,55 @@ import os
 import json
 import time
 from watchdog.events import RegexMatchingEventHandler
-from slips_files.common.imports import *
 
 
 class FileEventHandler(RegexMatchingEventHandler):
-    REGEX = [r'.*\.log$', r'.*\.conf$']
+    REGEX = [r".*\.log$", r".*\.conf$"]
 
     def __init__(self, dir_to_monitor, input_type, db):
-        super().__init__(self.REGEX)
+        super().__init__(regexes=self.REGEX)
         self.dir_to_monitor = dir_to_monitor
-        utils.drop_root_privs()
         self.db = db
         self.input_type = input_type
 
     def on_created(self, event):
+        """this will be triggered everytime zeek creates a log file"""
         filename, ext = os.path.splitext(event.src_path)
-        if 'log' in ext:
+        if "log" in ext:
             self.db.add_zeek_file(filename + ext)
 
     def on_moved(self, event):
-        """this will be triggered everytime zeek renames all log files"""
+        """
+        this will be triggered everytime zeek renames all log files
+        """
         # tell inputProcess to change open handles
-        if event.dest_path != 'True':
-            to_send = {'old_file': event.dest_path, 'new_file': event.src_path}
+        if event.dest_path != "True":
+            to_send = {"old_file": event.dest_path, "new_file": event.src_path}
             to_send = json.dumps(to_send)
-            self.db.publish('remove_old_files', to_send)
+            self.db.publish("remove_old_files", to_send)
+
             # give inputProc.py time to close the handle or delete the file
             time.sleep(1)
 
     def on_modified(self, event):
-        """this will be triggered everytime zeek modifies a log file"""
+        """
+        this will be triggered everytime zeek modifies a log file
+        """
         # we only need to know modifications to reporter.log,
-        # so if zeek recieves a termination signal,
+        # so if zeek receives a termination signal,
         # slips would know about it
         filename, ext = os.path.splitext(event.src_path)
-        if 'reporter' in filename:
+        if "reporter" in filename:
             # check if it's a termination signal
             # get the exact file name (a ts is appended to it)
             for file in os.listdir(self.dir_to_monitor):
-                if 'reporter' not in file:
+                if "reporter" not in file:
                     continue
-                with open(os.path.join(self.dir_to_monitor, file), 'r') as f:
+                with open(os.path.join(self.dir_to_monitor, file), "r") as f:
                     while line := f.readline():
-                        if 'termination' in line:
-                            # this is how modules tell slips to terminate
-                            self.db.publish('control_channel', 'stop_slips')
+                        if "termination" in line:
+                            # tell slips to terminate
+                            self.db.publish_stop()
                             break
-        elif 'whitelist' in filename:
-            self.db.publish('reload_whitelist', 'reload')
+        elif "whitelist" in filename:
+            self.db.publish("reload_whitelist", "reload")

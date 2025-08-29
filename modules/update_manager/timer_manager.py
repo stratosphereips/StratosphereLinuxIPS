@@ -1,5 +1,8 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 from threading import Timer
 import asyncio
+
 
 class InfiniteTimer:
     """
@@ -22,7 +25,7 @@ class InfiniteTimer:
     def _start_timer(self):
         if (
             self.timer_running
-        ):   # Code could have been running when cancel was called.
+        ):  # Code could have been running when cancel was called.
             self.thread = Timer(self.seconds, self._handle_target)
             self.thread.start()
 

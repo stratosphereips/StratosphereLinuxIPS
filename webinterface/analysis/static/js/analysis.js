@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+//SPDX-License-Identifier: GPL-2.0-only
 import { analysisTableDefs, analysisSubTableDefs } from "./tableDefs.js"
 
 /*---------GLOBALS---------*/
@@ -149,7 +151,7 @@ function initHideProfileTWButtonListener() {
             document.getElementById('profiles').style.display = "none";
             document.getElementById('filter_profiles').style.display = "none";
             // document.getElementById('profile-tw-hide-btn').innerHTML = ">";
-            
+
             $('#col_profiles').removeClass('col-2');
             $('#col_profiles').addClass('col-0');
             $('#col_analysis').removeClass('col-10');
@@ -217,12 +219,12 @@ function initProfileTwListeners() {
     let t_profile = $('#table_profiles').DataTable();
     t_profile.on('xhr', function () {
         t_profile.one('draw', function () {
-            if(profilesScrollTop > 0){            
+            if(profilesScrollTop > 0){
                 profilesScrollingContainer.scrollTop(profilesScrollTop);
             }
             if (childRowsProfile != null) {
                 childRowsProfile.every(function ( rowIdx, tableLoop, rowLoop ) {
-                    let profile_id = this.data().profile; 
+                    let profile_id = this.data().profile;
                     let profile_id_dash = convertDotToDash(profile_id)
                     $("#" + profile_id_dash).DataTable().clear().destroy();
                     this.child(addTableTWs(profile_id_dash)).show();
@@ -328,7 +330,7 @@ function initAlertListeners() {
                 });
             }
             childRowsAnalysis = null;
-        });       
+        });
     });
 }
 /*--------------------------------------------------------------*/
@@ -351,7 +353,7 @@ function initAllAnalysisTables() {
         // custom search
         $('[type=search]').each(function () {
             $(this).attr("placeholder", "Search...");
-            // $(this).attr("size", 30); // hardcoded 
+            // $(this).attr("size", 30); // hardcoded
 
             // to display search icon
             // $(this).before('<span class="fa fa-search"></span>');
@@ -373,7 +375,7 @@ function update(){
     // Update analysis table
     if (active_profile && active_timewindow) {
         childRowsAnalysis = $("#table_" + active_analysisTable).DataTable().rows('.shown');
-        $("#table_" + active_analysisTable).DataTable().ajax.reload(null, false); 
+        $("#table_" + active_analysisTable).DataTable().ajax.reload(null, false);
     }
 
     // Update IpInfo
@@ -400,5 +402,3 @@ $(document).ready(function () {
 });
 
 export { update };
-
-

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
 import base64
 import configparser
 import ipaddress
@@ -30,12 +32,13 @@ def validate_ip_address(ip: str) -> bool:
 
 
 threat_levels = {
-            'info': 0,
-            'low': 0.2,
-            'medium': 0.5,
-            'high': 0.8,
-            'critical': 1,
-        }
+    "info": 0,
+    "low": 0.2,
+    "medium": 0.5,
+    "high": 0.8,
+    "critical": 1,
+}
+
 
 def validate_timestamp(timestamp: str) -> Union[int, None]:
     """
@@ -50,11 +53,11 @@ def validate_timestamp(timestamp: str) -> Union[int, None]:
         # int() function turns it into int, so any floating point stuff is removed.
         int_timestamp = int(timestamp)
     except ValueError:
-        print('Timestamp is not a number')
+        print("Timestamp is not a number")
         return None
 
     if int_timestamp > time.time() or int_timestamp < 0:
-        print('Invalid timestamp value')
+        print("Invalid timestamp value")
         return None
 
     return int_timestamp
@@ -72,11 +75,11 @@ def validate_go_reports(data: str) -> list:
     try:
         reports = json.loads(data)
     except json.decoder.JSONDecodeError:
-        print('Go send invalid json')
+        print("Go send invalid json")
         return []
 
-    if type(reports) != list:
-        print('Expected list, got something else')
+    if not isinstance(reports, list):
+        print("Expected list, got something else")
         return []
 
     return reports
@@ -96,7 +99,7 @@ def get_ip_info_from_slips(ip_address: str, db) -> (float, float):
     """
 
     # poll new info from redis
-    ip_info = db.getIPData(ip_address)
+    ip_info = db.get_ip_info(ip_address)
 
     # There is a bug in the database where sometimes False is returned when key is not found. Correctly, dictionary
     # should be always returned, even if it is empty. This check cannot be simplified to `if not ip_info`, because I
@@ -108,7 +111,11 @@ def get_ip_info_from_slips(ip_address: str, db) -> (float, float):
     slips_score, slips_confidence = read_data_from_ip_info(ip_info)
     # check that both values were provided
     # TODO by Martin: Dita does not handle scenario when only confidence is None, is it intentional?
-    return (None, None) if slips_score is None else (slips_score, slips_confidence)
+    return (
+        (None, None)
+        if slips_score is None
+        else (slips_score, slips_confidence)
+    )
 
 
 # parse data from redis
@@ -122,14 +129,14 @@ def read_data_from_ip_info(ip_info: dict) -> (float, float):
     """
     # the higher the score, the more malicious this ip
     try:
-        if 'threat_level' in ip_info:
-            score = threat_levels[ip_info['threat_level']]
+        if "threat_level" in ip_info:
+            score = threat_levels[ip_info["threat_level"]]
         else:
-            score = ip_info['score']
+            score = ip_info["score"]
 
-        confidence = ip_info['confidence']
+        confidence = ip_info["confidence"]
         try:
-            confidence  = float(confidence)
+            confidence = float(confidence)
         except ValueError:
             # sometimes the confidence is stored as a float,
             # and sometimes it's stored like this 'confidence: 0.6'
@@ -137,29 +144,8 @@ def read_data_from_ip_info(ip_info: dict) -> (float, float):
             confidence = float(confidence.split()[-1])
 
         return float(score), confidence
-    except KeyError:
+    except (KeyError, TypeError):
         return None, None
-
-
-
-def save_ip_report_to_db(ip, score, confidence, network_trust, db, timestamp=None):
-    if timestamp is None:
-        timestamp = time.time()
-
-    report_data = {
-        'score': score,
-        'confidence': confidence,
-        'network_score': network_trust,
-        'timestamp': timestamp,
-    }
-
-    # store it in p2p_reports key
-    # print(f"*** [debugging p2p] ***  stored a report about {ip} in p2p_Reports and IPsInfo keys")
-    db.store_p2p_report(ip, report_data)
-
-    # store it in IPsInfo key
-    wrapped_data = {'p2p4slips': report_data}
-    db.setInfoForIPs(ip, wrapped_data)
 
 
 #
@@ -173,24 +159,27 @@ def build_go_message(
     evaluation=None,
 ) -> dict:
     """
-    Assemble parameters to one dictionary, with keys that are expected by the remote peer.
+    Assemble parameters to one dictionary, with keys that are expected by the
+    remote peer.
 
     :param message_type: Type of message (request, report, blame...)
     :param key_type: Type of key, usually "ip"
     :param key: The key the message is about
-    :param evaluation_type: Type of evaluation that is reported (for report and blame) or expected (for request message)
-    :param evaluation: The score that is being reported (for report and blame). This can be left out for request message
+    :param evaluation_type: Type of evaluation that is reported (for report
+    and blame) or expected (for request message)
+    :param evaluation: The score that is being reported (for report and
+    blame). This can be left out for request message
     :return: A dictionary with proper values set.
     """
 
     message = {
-        'message_type': message_type,
-        'key_type': key_type,
-        'key': key,
-        'evaluation_type': evaluation_type,
+        "message_type": message_type,
+        "key_type": key_type,
+        "key": key,
+        "evaluation_type": evaluation_type,
     }
-    if message_type != 'request':
-        message['evaluation'] = evaluation
+    if message_type != "request":
+        message["evaluation"] = evaluation
     return message
 
 
@@ -203,11 +192,16 @@ def build_score_confidence(score: float, confidence: float) -> dict:
     :return: The evaluation dictionary
     """
 
-    return {'score': score, 'confidence': confidence}
+    return {"score": score, "confidence": confidence}
 
 
 def send_evaluation_to_go(
-    ip: str, score: float, confidence: float, recipient: str, channel_name: str, db
+    ip: str,
+    score: float,
+    confidence: float,
+    recipient: str,
+    channel_name: str,
+    db,
 ) -> None:
     """
     Take data and send it to a peer as report.
@@ -221,30 +215,15 @@ def send_evaluation_to_go(
 
     evaluation_raw = build_score_confidence(score, confidence)
     message_raw = build_go_message(
-        'report', 'ip', ip, 'score_confidence', evaluation=evaluation_raw
+        "report", "ip", ip, "score_confidence", evaluation=evaluation_raw
     )
 
     send_message_to_go(ip, recipient, channel_name, message_raw, db)
 
 
-def send_empty_evaluation_to_go(
-    ip: str, recipient: str, channel_name: str
-) -> None:
-    """
-    Creates empty message and sends it to recipient;ip
-
-    :param ip: The IP that is being reported
-    :param recipient: The peer that should receive the report.
-    Use "*" wildcard to broadcast to everyone
-    :return: None
-    """
-    message_raw = build_go_message(
-        'report', 'ip', ip, 'score_confidence', evaluation=None
-    )
-    send_message_to_go(ip, recipient, channel_name, message_raw, db)
-
-
-def send_message_to_go(ip: str, recipient: str, channel_name: str, msg: Dict, db):
+def send_message_to_go(
+    ip: str, recipient: str, channel_name: str, msg: Dict, db
+):
     """
     Send raw msg as json and b64 to other peer.
 
@@ -255,7 +234,7 @@ def send_message_to_go(ip: str, recipient: str, channel_name: str, msg: Dict, db
     :return: None
     """
     message_json = json.dumps(msg)
-    message_b64 = base64.b64encode(bytes(message_json, 'ascii')).decode()
+    message_b64 = base64.b64encode(bytes(message_json, "ascii")).decode()
 
     send_b64_to_go(message_b64, recipient, channel_name, db)
 
@@ -272,14 +251,14 @@ def send_blame_to_go(
     :return: None
     """
 
-    recipient = '*'
+    recipient = "*"
     evaluation_raw = build_score_confidence(score, confidence)
     message_raw = build_go_message(
-        'blame', 'ip', ip, 'score_confidence', evaluation=evaluation_raw
+        "blame", "ip", ip, "score_confidence", evaluation=evaluation_raw
     )
 
     message_json = json.dumps(message_raw)
-    message_b64 = base64.b64encode(bytes(message_json, 'ascii')).decode()
+    message_b64 = base64.b64encode(bytes(message_json, "ascii")).decode()
 
     send_b64_to_go(message_b64, recipient, channel_name, db)
 
@@ -294,16 +273,18 @@ def send_request_to_go(ip: str, channel_name: str, db) -> None:
     :return: None
     """
 
-    recipient = '*'
-    message_raw = build_go_message('request', 'ip', ip, 'score_confidence')
+    recipient = "*"
+    message_raw = build_go_message("request", "ip", ip, "score_confidence")
 
     message_json = json.dumps(message_raw)
-    message_b64 = base64.b64encode(bytes(message_json, 'ascii')).decode()
+    message_b64 = base64.b64encode(bytes(message_json, "ascii")).decode()
 
     send_b64_to_go(message_b64, recipient, channel_name, db)
 
 
-def send_b64_to_go(message: str, recipient: str, channel_name: str, db) -> None:
+def send_b64_to_go(
+    message: str, recipient: str, channel_name: str, db
+) -> None:
     """
     Send message to a peer
 
@@ -317,12 +298,12 @@ def send_b64_to_go(message: str, recipient: str, channel_name: str, db) -> None:
     :return: None
     """
 
-    data_raw = {'message': message, 'recipient': recipient}
+    data_raw = {"message": message, "recipient": recipient}
     data_json = json.dumps(data_raw)
     db.publish(channel_name, data_json)
     # only channel used right now is self.pygo_channel defined in p2ptrst.py
     decoded_data = base64.b64decode(message)
-    data_json = json.loads(decoded_data.decode('utf-8'))
+    data_json = json.loads(decoded_data.decode("utf-8"))
 
 
 def read_configuration(config, section: str, name: str) -> str:
