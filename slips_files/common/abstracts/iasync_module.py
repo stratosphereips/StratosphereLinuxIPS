@@ -30,7 +30,7 @@ class AsyncModule(IModule):
         exceptions. because asyncio Tasks do not raise exceptions
         """
         task = asyncio.create_task(func(*args))
-        task.add_done_callback(self.handle_exception)
+        task.add_done_callback(self.handle_task_exception)
 
         # Allow the event loop to run the scheduled task
         # await asyncio.sleep(0)
@@ -39,20 +39,13 @@ class AsyncModule(IModule):
         self.tasks.append(task)
         return task
 
-    def handle_exception(self, task):
-        """
-        in asyncmodules we use Async.Task to run some of the functions
-        If an exception occurs in a coroutine that was wrapped in a Task
-        (e.g., asyncio.create_task), the exception does not crash the program
-         but remains in the task.
-        This function is used to handle the exception in the task
-        """
+    def handle_task_exception(self, task: asyncio.Task):
         try:
-            # Access task result to raise the exception if it occurred
-            task.result()
-        except (KeyboardInterrupt, asyncio.exceptions.CancelledError):
-            pass
-        except Exception:
+            exception = task.exception()
+        except asyncio.CancelledError:
+            return  # Task was cancelled, not an error
+        if exception:
+            self.print(f"Unhandled exception in task: {exception}")
             self.print_traceback()
 
     async def main(self): ...
@@ -74,28 +67,45 @@ class AsyncModule(IModule):
         Returns the Future’s result or raise its exception.
         """
         loop = asyncio.get_event_loop()
-        loop.set_exception_handler(self.handle_exception)
+        loop.set_exception_handler(self.handle_loop_exception)
         return loop.run_until_complete(func())
 
+    def handle_loop_exception(self, loop, context):
+        """A common loop exception handler"""
+        exception = context.get("exception")
+        future = context.get("future")
+
+        if future:
+            try:
+                future.result()
+            except Exception:
+                self.print_traceback()
+        elif exception:
+            self.print(f"Unhandled loop exception: {exception}")
+        else:
+            self.print(f"Unhandled loop error: {context.get('message')}")
+
     def run(self):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        asyncio.run(self._run_pre_main_and_main())
+
+    async def _run_pre_main_and_main(self):
+        """
+        runs pre_main() once, then runs main() in a loop
+        """
+        loop = asyncio.get_event_loop()
+        loop.set_exception_handler(self.handle_loop_exception)
 
         try:
             error: bool = self.pre_main()
             if error or self.should_stop():
-                self.run_async_function(
-                    self.gather_tasks_and_shutdown_gracefully
-                )
+                await self.gather_tasks_and_shutdown_gracefully()
                 return
         except KeyboardInterrupt:
-            self.run_async_function(self.gather_tasks_and_shutdown_gracefully)
+            await self.gather_tasks_and_shutdown_gracefully()
             return
         except RuntimeError as e:
             if "Event loop stopped before Future completed" in str(e):
-                self.run_async_function(
-                    self.gather_tasks_and_shutdown_gracefully
-                )
+                await self.gather_tasks_and_shutdown_gracefully()
                 return
         except Exception:
             self.print_traceback()
@@ -104,18 +114,14 @@ class AsyncModule(IModule):
         while True:
             try:
                 if self.should_stop():
-                    self.run_async_function(
-                        self.gather_tasks_and_shutdown_gracefully
-                    )
+                    await self.gather_tasks_and_shutdown_gracefully()
                     return
 
                 # if a module's main() returns 1, it means there's an
                 # error and it needs to stop immediately
-                error: bool = self.run_async_function(self.main)
+                error: bool | None = await self.main()
                 if error:
-                    self.run_async_function(
-                        self.gather_tasks_and_shutdown_gracefully
-                    )
+                    await self.gather_tasks_and_shutdown_gracefully()
                     return
 
             except KeyboardInterrupt:
@@ -128,9 +134,7 @@ class AsyncModule(IModule):
                 continue
             except RuntimeError as e:
                 if "Event loop stopped before Future completed" in str(e):
-                    self.run_async_function(
-                        self.gather_tasks_and_shutdown_gracefully
-                    )
+                    await self.gather_tasks_and_shutdown_gracefully()
                     return
             except Exception:
                 self.print_traceback()
