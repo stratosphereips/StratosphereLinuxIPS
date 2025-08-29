@@ -39,6 +39,7 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.icore import ICore
 from slips_files.common.style import green
+from slips_files.core.flows.zeek import HTTP
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
@@ -278,9 +279,41 @@ class Profiler(ICore, IObservable):
 
         self.get_gateway_info(flow)
 
+        if isinstance(flow, HTTP):
+            uid = flow.uid
+            now = time.time()
+            dur = now - self.db.get_http_last_operation_ts(uid)
+            self.db.publish(
+                "http_lifecycle_logger",
+                json.dumps(
+                    {
+                        "uid": uid,
+                        "operation": "init_the_FlowHandler",
+                        "time_it_took": dur,
+                    }
+                ),
+            )
+            self.db.set_http_last_operation_ts(uid, now)
+
         # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(flow):
             return True
+
+        if isinstance(flow, HTTP):
+            uid = flow.uid
+            now = time.time()
+            dur = now - self.db.get_http_last_operation_ts(uid)
+            self.db.publish(
+                "http_lifecycle_logger",
+                json.dumps(
+                    {
+                        "uid": uid,
+                        "operation": "checking_if_whitelisted_flow",
+                        "time_it_took": dur,
+                    }
+                ),
+            )
+            self.db.set_http_last_operation_ts(uid, now)
 
         # 5th. Store the data according to the paremeters
         # Now that we have the profileid and twid, add the data from the flow
@@ -343,6 +376,22 @@ class Profiler(ICore, IObservable):
                 if supported_type in flow.type_:
                     cases[supported_type]()
             return False
+
+        if isinstance(flow, HTTP):
+            uid = flow.uid
+            now = time.time()
+            dur = now - self.db.get_http_last_operation_ts(uid)
+            self.db.publish(
+                "http_lifecycle_logger",
+                json.dumps(
+                    {
+                        "uid": uid,
+                        "operation": "time_spent_handling_http",
+                        "time_it_took": dur,
+                    }
+                ),
+            )
+            self.db.set_http_last_operation_ts(uid, now)
 
         # if the flow type matched any of the ifs above,
         # mark this profile as modified
@@ -666,7 +715,6 @@ class Profiler(ICore, IObservable):
                 http_flow = line["data"]
                 uid = http_flow["uid"]
                 now = time.time()
-                print(f"@@@@@@@@@@@@@@@@ getting uid o f{uid} {line}")
                 dur = now - self.db.get_http_last_operation_ts(uid)
                 self.db.publish(
                     "http_lifecycle_logger",
