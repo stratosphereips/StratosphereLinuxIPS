@@ -438,45 +438,6 @@ class AlertHandler:
 
         return old_max_threat_level_float
 
-    def update_past_threat_levels(self, profileid, threat_level, confidence):
-        """
-        updates the past_threat_levels key of the given profileid
-        if the past threat level and confidence
-        are the same as the ones we wanna store, we replace the timestamp only
-        """
-        now = utils.convert_ts_format(time.time(), utils.alerts_format)
-        confidence = f"confidence: {confidence}"
-        # this is what we'll be storing in the db, tl, ts, and confidence
-        threat_level_data = (threat_level, now, confidence)
-
-        past_threat_levels: str = self.r.hget(profileid, "past_threat_levels")
-        if past_threat_levels:
-            # get the list of ts and past threat levels
-            past_threat_levels: List[Tuple] = json.loads(past_threat_levels)
-
-            latest: Tuple = past_threat_levels[-1]
-            latest_threat_level: str = latest[0]
-            latest_confidence: str = latest[2]
-
-            if (
-                latest_threat_level == threat_level
-                and latest_confidence == confidence
-            ):
-                # if the past threat level and confidence
-                # are the same as the ones we wanna store,
-                # replace the timestamp only
-                past_threat_levels[-1] = threat_level_data
-                # dont change the old max tl
-            else:
-                # add this threat level to the list of past threat levels
-                past_threat_levels.append(threat_level_data)
-        else:
-            # first time setting a threat level for this profile
-            past_threat_levels = [threat_level_data]
-
-        past_threat_levels = json.dumps(past_threat_levels)
-        self.r.hset(profileid, "past_threat_levels", past_threat_levels)
-
     def update_ips_info(self, profileid, max_threat_lvl, confidence):
         """
         sets the score and confidence of the given ip in the db
@@ -507,10 +468,7 @@ class AlertHandler:
         Do not call this function directy from the db, always call it user
         dbmanager.update_threat_level() to update the trustdb too:D
         """
-
         self.r.hset(profileid, "threat_level", threat_level)
-
-        self.update_past_threat_levels(profileid, threat_level, confidence)
 
         max_threat_lvl: float = self.update_max_threat_level(
             profileid, threat_level
