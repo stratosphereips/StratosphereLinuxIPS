@@ -100,7 +100,7 @@ class AsyncModule(IModule):
             if error or self.should_stop():
                 await self.gather_tasks_and_shutdown_gracefully()
                 return
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, asyncio.CancelledError):
             await self.gather_tasks_and_shutdown_gracefully()
             return
         except RuntimeError as e:
@@ -124,7 +124,7 @@ class AsyncModule(IModule):
                     await self.gather_tasks_and_shutdown_gracefully()
                     return
 
-            except KeyboardInterrupt:
+            except (KeyboardInterrupt, asyncio.CancelledError):
                 self.keyboard_int_ctr += 1
                 if self.keyboard_int_ctr >= 2:
                     # on the second ctrl+c Slips immediately stops
