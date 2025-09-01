@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from flask import Blueprint
 from flask import render_template
+from flask import escape
 import json
 from collections import defaultdict
 from typing import Dict, List
@@ -330,10 +331,10 @@ def set_alerts(ip, timewindow):
 
             data.append(
                 {
-                    "alert": timestamp,
-                    "alert_id": alert_id,
-                    "profileid": profile_ip,
-                    "timewindow": twid,
+                    "alert": escape(timestamp),
+                    "alert_id": escape(alert_id),
+                    "profileid": escape(profile_ip),
+                    "timewindow": escape(twid),
                     "evidence_count": evidence_count,
                 }
             )
