@@ -63,6 +63,9 @@ class EvidenceFormatter:
         """
         returns the printable alert.
         aka the start and end time of the timewindow causing the alert
+        e.g.
+        1970/01/01 02:11:25.111957 IP 10.0.2.119 detected as malicious in
+        timewindow 1 (start 1970/01/01 02:00:06, stop 1970/01/01 03:00:06)
         """
         time_format = "%Y/%m/%d %H:%M:%S"
         twid_start_time: str = utils.convert_ts_format(
@@ -81,7 +84,7 @@ class EvidenceFormatter:
 
         alert_to_print += (
             f"detected as malicious in timewindow {alert.timewindow.number} "
-            f"(start {twid_start_time}, stop {tw_stop_time}) \n"
+            f"(start {twid_start_time}, stop {tw_stop_time})"
         )
 
         return alert_to_print
@@ -100,14 +103,14 @@ class EvidenceFormatter:
         # Now instead of printing the last evidence only,
         # we print all of them
         alert_to_print: str = red(self.get_printable_alert(alert))
-        alert_to_print += red("given the following evidence:\n")
+        alert_to_print += red(" given the following evidence:\n")
 
         for evidence in all_evidence.values():
             evidence: Evidence = self.add_threat_level_to_evidence_description(
                 evidence
             )
             evidence_string = self.line_wrap(
-                f"Detected {evidence.description}"
+                f"Detected {evidence.description.strip()}"
             )
             alert_to_print += cyan(f"\t- {evidence_string}\n")
 
