@@ -52,7 +52,9 @@ from slips_files.core.structures.evidence import (
 from slips_files.core.structures.alerts import (
     Alert,
 )
-from slips_files.core.text_formatters.evidence import EvidenceFormatter
+from slips_files.core.text_formatters.evidence_formatter import (
+    EvidenceFormatter,
+)
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
