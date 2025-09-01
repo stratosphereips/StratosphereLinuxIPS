@@ -1,7 +1,7 @@
 1.1.13 (Sep 1st, 2025)
 - Add detection for DNS answers of malicious DNS queries.
-- Support using Zeek latest version (v8.0.0).
-- Slight speedup of evidence setting in Slips.
+- Support using Zeek v8.0.0.
+- Speedup of evidence processing in Slips.
 - Update Python dependencies.
 
 
