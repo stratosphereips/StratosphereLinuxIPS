@@ -182,7 +182,7 @@ def test_add_threat_level_to_evidence_description(
             1625097600,
             "example.com",
             "IP 192.168.1.1 (example.com) detected as malicious in timewindow"
-            " 1 (start converted_time, stop converted_time) \n",
+            " 1 (start converted_time, stop converted_time)",
         ),
         # testcase2: No hostname
         (
@@ -191,7 +191,7 @@ def test_add_threat_level_to_evidence_description(
             1625184000,
             None,
             "IP 10.0.0.1 detected as malicious in timewindow 2 "
-            "(start converted_time, stop converted_time) \n",
+            "(start converted_time, stop converted_time)",
         ),
         # testcase3: Different time window
         (
@@ -200,7 +200,7 @@ def test_add_threat_level_to_evidence_description(
             1625270400,
             "test.local",
             "IP 172.16.0.1 (test.local) detected as malicious in timewindow 3 "
-            "(start converted_time, stop converted_time) \n",
+            "(start converted_time, stop converted_time)",
         ),
     ],
 )
