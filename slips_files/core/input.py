@@ -369,11 +369,12 @@ class Input(ICore):
 
                 # self.print('	> Sent Line: {}'.format(earliest_line), 0, 3)
 
-                if "http" in earliest_line["type"]:
+                if "http.log" in earliest_line["type"]:
                     http_flow = earliest_line["data"]
                     now = time.time()
                     time_it_took_to_reach_input = now - http_flow["ts"]
                     self.db.set_http_last_operation_ts(http_flow["uid"], now)
+
                     self.db.publish(
                         "http_lifecycle_logger",
                         json.dumps(
@@ -660,7 +661,7 @@ class Input(ICore):
 
     def handle_pcap_and_interface(self) -> int:
         """Returns the number of zeek lines read"""
-
+        print("@@@@@@@@@@@@@@@@ handle_pcap_and_interface is called")
         # Create zeek_folder if does not exist.
         if not os.path.exists(self.zeek_dir):
             os.makedirs(self.zeek_dir)
@@ -945,17 +946,17 @@ class Input(ICore):
             "CYST": self.handle_cyst,
         }
 
-        try:
-            # Process the file that was given
-            input_handlers[self.input_type]()
-        except KeyError:
-            self.print(
-                f'Error: Unrecognized file type "{self.input_type}". '
-                f"Stopping.",
-                0,
-                1,
-            )
-            return False
+        # try:
+        # Process the file that was given
+        input_handlers[self.input_type]()
+        # except KeyError:
+        #     self.print(
+        #         f'Error: Unrecognized file type "{self.input_type}". '
+        #         f"Stopping.",
+        #         0,
+        #         1,
+        #     )
+        #     return False
 
         # no logic should be put here
         # because some of the above handlers never return

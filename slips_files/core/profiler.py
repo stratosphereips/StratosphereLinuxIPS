@@ -711,13 +711,13 @@ class Profiler(ICore, IObservable):
             line: dict = msg["line"]
             input_type: str = msg["input_type"]
 
-            if "http" in line["type"]:
+            if "http.log" in line["type"]:
                 http_flow = line["data"]
                 uid = http_flow["uid"]
                 now = time.time()
                 dur = now - self.db.get_http_last_operation_ts(uid)
                 self.db.publish(
-                    "http_lifecycle_logger",
+                    "done" "http_lifecycle_logger",
                     json.dumps(
                         {
                             "uid": uid,

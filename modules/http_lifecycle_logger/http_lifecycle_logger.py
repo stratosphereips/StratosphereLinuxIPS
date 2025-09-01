@@ -74,9 +74,14 @@ class HTTPLifeCycleLogger(IModule):
             if operation == "done":
                 row = self.lifecycle_buffer[uid]
                 # Extend headers dynamically if new operations appear
-                new_ops = [op for op in row.keys() if op not in self.headers]
+                new_ops = [
+                    op
+                    for op in row.keys()
+                    if op not in self.headers and op != "done"
+                ]
                 if new_ops:
                     self.headers.extend(new_ops)
+
                     # rewrite file with new headers
                     old_rows = []
                     if self.csv_file.exists():
@@ -84,6 +89,7 @@ class HTTPLifeCycleLogger(IModule):
                             "r", newline="", encoding="utf-8"
                         ) as f:
                             old_rows = list(csv.DictReader(f))
+
                     with self.csv_file.open(
                         "w", newline="", encoding="utf-8"
                     ) as f:
