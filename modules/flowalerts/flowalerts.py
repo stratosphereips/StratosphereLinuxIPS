@@ -97,7 +97,7 @@ class FlowAlerts(AsyncModule):
                     loop = asyncio.get_event_loop()
                     task = loop.create_task(analyzer.analyze(msg))
                     # because Async Tasks swallow exceptions.
-                    task.add_done_callback(self.handle_exception)
+                    task.add_done_callback(self.handle_task_exception)
                     # to wait for these functions before flowalerts shuts down
                     self.tasks.append(task)
                     # Allow the event loop to run the scheduled task

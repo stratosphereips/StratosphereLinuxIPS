@@ -1,5 +1,5 @@
 <h1 align="center">
-Slips v1.1.12
+Slips v1.1.13
 </h1>
 
 

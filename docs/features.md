@@ -640,7 +640,8 @@ File hashes and URLs aren't supported.
 
 Slips gets every IP it can find in the network and tries to see if it is in any blacklist.
 
-If a match is found, it generates an evidence, if no exact match is found, it searches the Blacklisted ranges taken from different TI feeds
+If a match is found, it generates an evidence, if no exact match is found,
+it searches the Blacklisted ranges taken from different TI feeds
 
 
 #### Matching of Domains

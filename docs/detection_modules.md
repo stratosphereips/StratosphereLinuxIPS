@@ -394,6 +394,9 @@ For example, if the domain in the traffic is _here.testing.com_,
 Slips first checks if the exact domain _here.testing.com_ is in any blacklist,
 and if there is no match, it checks if the domain _testing.com_ is in any blacklists too.
 
+Slips also sets evidence about DNS answers of blacklisted domains. If test.com is blacklisted, and test.com resolves to 1.2.3.4, slips sets
+an evidence when it encouters the DNS answer with 1.2.3.4.
+
 ### Matching of JA3 Hashes
 
 Every time Slips encounters an TLS flow,

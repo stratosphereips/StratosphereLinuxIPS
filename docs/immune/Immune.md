@@ -9,3 +9,4 @@
 - [LLM RPI Finetuning Frameworks](https://stratospherelinuxips.readthedocs.io/en/develop/immune/finetuning_frameworks_rpi_5.html)
 - [ARP Poisoning](https://stratospherelinuxips.readthedocs.io/en/develop/immune/arp_poisoning.html)
 - [ARP Poisoning Risks](https://stratospherelinuxips.readthedocs.io/en/develop/immune/arp_poisoning_risks.html)
+- [Blocking with Slips as an Access Point](https://stratospherelinuxips.readthedocs.io/en/develop/immune/blocking_in_slips.html)

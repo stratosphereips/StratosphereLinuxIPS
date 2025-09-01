@@ -1,3 +1,10 @@
+1.1.13 (Sep 1st, 2025)
+- Add detection for DNS answers of malicious DNS queries.
+- Support using Zeek v8.0.0.
+- Speedup of evidence processing in Slips.
+- Update Python dependencies.
+
+
 1.1.12 (July 31st, 2025)
 - Better filtering of attacks in the ARP poisoner filter and excluded poisoning the gateway.
 - Cache ARP scan results to avoid flooding the network with ARP packets.
