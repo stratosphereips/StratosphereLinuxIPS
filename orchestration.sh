@@ -1,6 +1,7 @@
 #!/bin/bash
 
-for num in 0 1 2 3 4 5 6 7 ; do
+numbers=( 0 1) # Add more numbers as needed 0..7?
+for num in "${numbers[@]}"; do
     ./training_script.sh "$num"
     if [ $? -ne 0 ]; then
         exit 1

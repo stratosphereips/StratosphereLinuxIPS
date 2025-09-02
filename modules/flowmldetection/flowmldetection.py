@@ -53,7 +53,8 @@ class FlowMLDetection(IModule):
     def init(self):
         # Subscribe to the channel
         self.c1 = self.db.subscribe("new_flow")
-        self.channels = {"new_flow": self.c1}
+        self.c2 = self.db.subscribe("tw_closed")
+        self.channels = {"new_flow": self.c1, "tw_closed": self.c2}
         self.fieldseparator = self.db.get_field_separator()
         # Set the output queue of our database instance
         # Read the configuration
@@ -135,68 +136,132 @@ class FlowMLDetection(IModule):
 
     def store_training_results(
         self,
-        y_flow,
-        y_pred,
+        y_pred_train,
+        y_gt_train,
+        y_pred_val,
+        y_gt_val,
         sum_labeled_flows,
-        testing_size,
     ):
-        # Initialize per-batch metrics
-        seen_labels = {BACKGROUND: 0, MALICIOUS: 0, BENIGN: 0}
-        predicted_labels = {BACKGROUND: 0, MALICIOUS: 0, BENIGN: 0}
-        class_metrics = {}
-        for label in self.all_classes:
-            class_metrics[label] = {
-                "TP": 0,
-                "FP": 0,
-                "TN": 0,
-                "FN": 0,
+        # Determine which set is being evaluated (validation or training)
+        if y_gt_val is not None and y_pred_val is not None:
+            testing_size = len(y_pred_val)
+            assert len(y_gt_val) == len(
+                y_pred_val
+            ), "y_gt_val and y_pred_val must have the same length"
+
+        # If validation set is present and different from training set, calculate metrics for both
+        if (
+            y_pred_val is not None
+            and y_gt_val is not None
+            and y_pred_train is not None
+            and y_gt_train is not None
+            and not numpy.array_equal(y_gt_train, y_gt_val)
+        ):
+            # Validation metrics
+            seen_labels_val = {
+                label: numpy.sum(y_gt_val == label)
+                for label in self.all_classes
+            }
+            predicted_labels_val = {
+                label: numpy.sum(y_pred_val == label)
+                for label in self.all_classes
+            }
+            class_metrics_val = {
+                label: {
+                    "TP": numpy.sum(
+                        (y_pred_val == label) & (y_gt_val == label)
+                    ),
+                    "FP": numpy.sum(
+                        (y_pred_val == label) & (y_gt_val != label)
+                    ),
+                    "FN": numpy.sum(
+                        (y_pred_val != label) & (y_gt_val == label)
+                    ),
+                    "TN": numpy.sum(
+                        (y_pred_val != label) & (y_gt_val != label)
+                    ),
+                }
+                for label in self.all_classes
             }
 
-        # Count seen and predicted labels in this batch
-        for label in self.all_classes:
-            seen_labels[label] = numpy.sum(y_flow == label)
-            predicted_labels[label] = numpy.sum(y_pred == label)
+            # Training metrics
+            seen_labels_train = {
+                label: numpy.sum(y_gt_train == label)
+                for label in self.all_classes
+            }
+            predicted_labels_train = {
+                label: numpy.sum(y_pred_train == label)
+                for label in self.all_classes
+            }
+            class_metrics_train = {
+                label: {
+                    "TP": numpy.sum(
+                        (y_pred_train == label) & (y_gt_train == label)
+                    ),
+                    "FP": numpy.sum(
+                        (y_pred_train == label) & (y_gt_train != label)
+                    ),
+                    "FN": numpy.sum(
+                        (y_pred_train != label) & (y_gt_train == label)
+                    ),
+                    "TN": numpy.sum(
+                        (y_pred_train != label) & (y_gt_train != label)
+                    ),
+                }
+                for label in self.all_classes
+            }
 
-        # Calculate TP, FP, TN, FN for each class
-        for label in self.all_classes:
-            class_metrics[label]["TP"] = numpy.sum(
-                (y_pred == label) & (y_flow == label)
-            )
-            class_metrics[label]["FP"] = numpy.sum(
-                (y_pred == label) & (y_flow != label)
-            )
-            class_metrics[label]["FN"] = numpy.sum(
-                (y_pred != label) & (y_flow == label)
-            )
-            class_metrics[label]["TN"] = numpy.sum(
-                (y_pred != label) & (y_flow != label)
-            )
+            self.store_model()
 
-        # Store the models on disk
-        self.store_model()
-
-        # Log training information
-        # Store summary statistics in consistent class order
-        seen_labels_ordered = {
-            label: seen_labels.get(label, 0) for label in self.all_classes
-        }
-        predicted_labels_ordered = {
-            label: predicted_labels.get(label, 0) for label in self.all_classes
-        }
-        class_metrics_ordered = {
-            label: class_metrics.get(
-                label, {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
+            self.write_to_log(
+                f"Total labels: {sum_labeled_flows}, "
+                f"Testing size: {testing_size}, "
+                f"Seen labels: {seen_labels_val}, "
+                f"Predicted labels: {predicted_labels_val}, "
+                f"Per-class metrics: {class_metrics_val}, "
+                f"Training errors: "
+                f"Training size: {len(y_gt_train)}, "
+                f"Training seen labels: {seen_labels_train}, "
+                f"Training predicted labels: {predicted_labels_train}, "
+                f"Training per-class metrics: {class_metrics_train}"
             )
-            for label in self.all_classes
-        }
+        else:
+            # Only one set (train == val), calculate metrics once
+            seen_labels = {
+                label: numpy.sum(y_gt_val == label)
+                for label in self.all_classes
+            }
+            predicted_labels = {
+                label: numpy.sum(y_pred_val == label)
+                for label in self.all_classes
+            }
+            class_metrics = {
+                label: {
+                    "TP": numpy.sum(
+                        (y_pred_val == label) & (y_gt_val == label)
+                    ),
+                    "FP": numpy.sum(
+                        (y_pred_val == label) & (y_gt_val != label)
+                    ),
+                    "FN": numpy.sum(
+                        (y_pred_val != label) & (y_gt_val == label)
+                    ),
+                    "TN": numpy.sum(
+                        (y_pred_val != label) & (y_gt_val != label)
+                    ),
+                }
+                for label in self.all_classes
+            }
 
-        self.write_to_log(
-            f"Total labels: {sum_labeled_flows}, "
-            f"Testing size: {testing_size}, "
-            f"Seen labels: {seen_labels_ordered}, "
-            f"Predicted labels: {predicted_labels_ordered}, "
-            f"Per-class metrics: {class_metrics_ordered}"
-        )
+            self.store_model()
+
+            self.write_to_log(
+                f"Total labels: {sum_labeled_flows}, "
+                f"Testing size: {testing_size}, "
+                f"Seen labels: {seen_labels}, "
+                f"Predicted labels: {predicted_labels}, "
+                f"Per-class metrics: {class_metrics}"
+            )
 
     def store_testing_data(self, original_label, predicted_label):
         # Initialize per-class metrics if not already done
@@ -315,32 +380,51 @@ class FlowMLDetection(IModule):
         Train a model based on the flows we receive and the labels
         """
         try:
-            # Create y_flow with the label
-            y_flow = numpy.full(
-                self.flows.shape[0], self.flows.ground_truth_label
-            )
-            # Create X_flow with the current flows minus the label
-            X_flow = self.flows.copy()
-            X_flow = self.drop_labels(X_flow)
+            # Create y_gt_train with the label
+            if hasattr(self.flows, "ground_truth_label"):
+                gt = self.flows.ground_truth_label
+                if hasattr(gt, "iloc"):  # a Series-like column
+                    # if the column contains per-row labels, prefer the array of values
+                    try:
+                        y_gt_train = numpy.asarray(
+                            self.flows["ground_truth_label"]
+                        )
+                    except Exception:
+                        y_gt_train = numpy.full(
+                            self.flows.shape[0], gt.iloc[0]
+                        )
+                else:
+                    y_gt_train = numpy.full(self.flows.shape[0], gt)
+            else:
+                # fallback to global config label
+                y_gt_train = numpy.full(
+                    self.flows.shape[0], self.ground_truth_config_label
+                )
 
-            # Take random 10% of data for validation if validating on train set!
-            X_val = None
-            y_val = None
+            # Create X_train with the current flows minus the label
+            X_train = self.flows.copy()
+            X_train = self.drop_labels(X_train)
+
+            # Take random 10% of data for validation if validating while training!
+            X_val = X_train  # default - validate on all training data
+            y_gt_val = y_gt_train
             if self.validate_on_train:
                 validation_indices = numpy.random.choice(
-                    X_flow.shape[0],
-                    size=int(self.percentage_validation * X_flow.shape[0]),
+                    X_train.shape[0],
+                    size=int(self.percentage_validation * X_train.shape[0]),
                     replace=False,
                 )
                 train_indices = numpy.array(
-                    list(set(range(X_flow.shape[0])) - set(validation_indices))
+                    list(
+                        set(range(X_train.shape[0])) - set(validation_indices)
+                    )
                 )
 
                 # Split into train and validation sets
-                X_val = X_flow.iloc[validation_indices]
-                y_val = y_flow[validation_indices]
-                X_flow = X_flow.iloc[train_indices]
-                y_flow = y_flow[train_indices]
+                X_val = X_train.iloc[validation_indices]
+                y_gt_val = y_gt_train[validation_indices]
+                X_train = X_train.iloc[train_indices]
+                y_gt_train = y_gt_train[train_indices]
 
             try:  # when not fitted, the scaler.mean_ is None, try fitting it
                 if (
@@ -351,14 +435,14 @@ class FlowMLDetection(IModule):
                     self.print(
                         "First fitting the scaler to the training data.", 0, 2
                     )
-                    self.scaler.fit(X_flow)
+                    self.scaler.fit(X_train)
                 else:
                     self.print(
                         "updating the scaler with the training data.", 0, 2
                     )
-                    self.scaler.partial_fit(X_flow)
+                    self.scaler.partial_fit(X_train)
 
-                X_flow = self.scaler.transform(X_flow)
+                X_train = self.scaler.transform(X_train)
 
             except Exception as e:
                 self.print(
@@ -369,9 +453,10 @@ class FlowMLDetection(IModule):
 
             # Train
             try:
-                unique_labels = numpy.unique(y_flow)
+                unique_labels = numpy.unique(y_gt_train)
                 label_counts = {
-                    label: (y_flow == label).sum() for label in unique_labels
+                    label: (y_gt_train == label).sum()
+                    for label in unique_labels
                 }
                 self.print(f"Training label counts: {label_counts}", 0, 1)
 
@@ -382,35 +467,37 @@ class FlowMLDetection(IModule):
                         1,
                     )
                     self.clf.partial_fit(
-                        X_flow, y_flow, classes=[BACKGROUND, MALICIOUS, BENIGN]
+                        X_train,
+                        y_gt_train,
+                        classes=[BACKGROUND, MALICIOUS, BENIGN],
                     )
                     self.classifier_initialized = True
                 else:
-                    self.clf.partial_fit(X_flow, y_flow)
+                    self.clf.partial_fit(X_train, y_gt_train)
             except Exception:
                 self.print("Error while calling clf.train()")
                 self.print(traceback.format_exc(), 1, 1)
 
             # Predict on the training data
-            testing_size = 0
+            y_pred_train = self.clf.predict(X_train)
+
             if self.validate_on_train and (
                 X_val is not None
             ):  # validation part
                 X_val = self.scaler.transform(X_val)
-                y_pred = self.clf.predict(X_val)
-                y_ground_truth = y_val
-                testing_size = X_val.shape[0]
-            else:  # predict on the original training batch
-                y_pred = self.clf.predict(X_flow)
-                y_ground_truth = y_flow
-                testing_size = X_flow.shape[0]
+                y_pred_val = self.clf.predict(X_val)
+
+            else:
+                y_pred_val = y_pred_train
 
             # Store the training results (housekeeping..: logs, calculationg metrics)
+            # y_gt_val already definaed, either for val set or same as training set
             self.store_training_results(
-                y_ground_truth,
-                y_pred,
-                sum_labeled_flows,
-                testing_size,
+                y_pred_train=y_pred_train,  # depends on X_train, depends on validation (yes/no,%,random split?), calculated every time
+                y_gt_train=y_gt_train,  #  handled above while splitting data
+                y_pred_val=y_pred_val,  # same as pred_train or predicted on val set, handled here
+                y_gt_val=y_gt_val,  #  handled above while splitting data
+                sum_labeled_flows=sum_labeled_flows,
             )
 
         except Exception:
@@ -424,6 +511,25 @@ class FlowMLDetection(IModule):
         Clean the dataset
         """
         try:
+            # numeric conversions
+            cols = [
+                "proto",
+                "dport",
+                "sport",
+                "dur",
+                "pkts",
+                "spkts",
+                "bytes",
+                "sbytes",
+                "state",
+            ]
+            for col in cols:
+                if col in dataset.columns:
+                    try:
+                        dataset[col] = dataset[col].astype("float64")
+                    except (ValueError, AttributeError):
+                        pass
+
             # Discard some type of flows that dont have ports
             to_discard = ["arp", "ARP", "icmp", "igmp", "ipv6-icmp", ""]
             for proto in to_discard:
@@ -544,7 +650,7 @@ class FlowMLDetection(IModule):
             flows = self.db.get_all_flows()
             # Only process new flows since last training
             new_flows = flows[last_number_of_flows_when_trained:]
-            if len(new_flows) != self.batch_size:
+            if len(new_flows) > self.batch_size:
                 self.print(
                     f"Expected {self.batch_size} new flows, "
                     f"but got {len(new_flows)}. "
@@ -728,36 +834,41 @@ class FlowMLDetection(IModule):
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         if self.mode == "train":
-            # Train on the last bunch of flows before shutdown
-            labels = self.db.get_labels()
-            sum_labeled_flows = sum(i[1] for i in labels)
-            flows_left = (
-                sum_labeled_flows - self.last_number_of_flows_when_trained
-            )
-            if (
-                flows_left > 0
-                and flows_left > self.minimum_labels_to_finalize_train
-            ):
-                self.print(
-                    f"Training on the last {flows_left} flows before shutdown.",
-                    0,
-                    1,
-                )
-                self.process_training_flows(
-                    self.last_number_of_flows_when_trained
-                )
-                self.print(
-                    f"Size of the last training batch: {self.flows.shape[0]}",
-                    0,
-                    1,
-                )
-                self.train(
-                    sum_labeled_flows,
-                    self.last_number_of_flows_when_trained,
-                )
-
             self.store_model()  # model AND scaler
         self.log_file.flush()
+
+    def last_training_in_window(self):
+        # Train on the last bunch of flows before new window/end of capture
+        if not self.classifier_initialized:
+            self.print(
+                "Classifier is not initialized. " "No training will be done.",
+                0,
+                1,
+            )
+            return
+        labels = self.db.get_labels()
+        sum_labeled_flows = sum(i[1] for i in labels)
+        flows_left = sum_labeled_flows - self.last_number_of_flows_when_trained
+        if (
+            flows_left > 0
+            and flows_left > self.minimum_labels_to_finalize_train
+        ):
+            self.print(
+                f"Training on the last {flows_left} flows in the window",
+                0,
+                1,
+            )
+            self.process_training_flows(self.last_number_of_flows_when_trained)
+            self.print(
+                f"Size of the last training batch: {self.flows.shape[0]}",
+                0,
+                1,
+            )
+            self.train(
+                sum_labeled_flows,
+                self.last_number_of_flows_when_trained,
+            )
+            self.last_number_of_flows_when_trained = sum_labeled_flows
 
     def pre_main(self):
         utils.drop_root_privs_permanently()
@@ -765,6 +876,13 @@ class FlowMLDetection(IModule):
         self.read_model()
 
     def main(self):
+        if (
+            msg := self.get_msg("tw_closed")
+            and not self.termination_event.is_set()
+        ):
+            if self.mode == "train":
+                self.last_training_in_window()  # train on flows from the end of the capture
+
         if msg := self.get_msg("new_flow"):
             # When a new flow arrives
             msg = json.loads(msg["data"])
@@ -841,8 +959,9 @@ class FlowMLDetection(IModule):
                     # Predict, normalize flows before
                     processed_flow = self.drop_labels(processed_flow)
                     pred: numpy.ndarray = self.detect(processed_flow)
-                    if not pred:
-                        # an error occurred
+
+                    if pred is None or getattr(pred, "size", 0) == 0:
+                        # an error occurred or empty prediction
                         return
 
                     if pred[0] == MALICIOUS:
