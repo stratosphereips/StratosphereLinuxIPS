@@ -74,6 +74,7 @@ class FlowMLDetection(IModule):
         self.classifier_initialized = False
 
         self.init_log_file()
+        self.add_dummy_flows()
 
     def init_log_file(self):
         """
@@ -100,6 +101,59 @@ class FlowMLDetection(IModule):
             1,
             1,
         )
+
+    def add_dummy_flows(self):
+        """
+        Add dummy flows for each class to ensure the classifier can be trained
+        even if the first batch does not contain all classes.
+        """
+        # Add dummy flows for each class to ensure classifier can be trained
+        # even if the first batch does not contain all classes.
+
+        # Dummy malicious flow (from previous code)
+        self.dummy_malicious_flow = numpy.array(
+            [
+                0.0,  # proto (tcp)
+                443.0,  # dport
+                49733.0,  # sport
+                1.9424750804901123,  # dur
+                44.0,  # pkts (spkts + dpkts)
+                17.0,  # spkts
+                42764.0,  # bytes (sbytes + dbytes)
+                25517.0,  # sbytes
+                1.0,  # state (Established)
+            ]
+        ).reshape(1, -1)
+
+        # Dummy benign flow (from previous code)
+        self.dummy_benign_flow = numpy.array(
+            [
+                0.0,  # proto (tcp)
+                80.0,  # dport
+                47956.0,  # sport
+                10.896695,  # dur
+                1.0,  # pkts (spkts + dpkts)
+                1.0,  # spkts
+                67696.0,  # bytes (sbytes + dbytes)
+                100.0,  # sbytes
+                1.0,  # state (Established)
+            ]
+        ).reshape(1, -1)
+
+        # Dummy background flow (ICMP, not established)
+        self.dummy_background_flow = numpy.array(
+            [
+                2.0,  # proto (icmp)
+                0.0,  # dport
+                0.0,  # sport
+                0.1,  # dur
+                1.0,  # pkts
+                1.0,  # spkts
+                100.0,  # bytes
+                100.0,  # sbytes
+                0.0,  # state (Not Established)
+            ]
+        ).reshape(1, -1)
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -452,6 +506,7 @@ class FlowMLDetection(IModule):
                 )
 
             # Train
+
             try:
                 unique_labels = numpy.unique(y_gt_train)
                 label_counts = {
@@ -466,6 +521,40 @@ class FlowMLDetection(IModule):
                         0,
                         1,
                     )
+                    # Ensure at least one flow from each class in the first batch
+                    missing_labels = [
+                        label
+                        for label in [BACKGROUND, MALICIOUS, BENIGN]
+                        if label not in unique_labels
+                    ]
+                    if missing_labels:
+                        for label in missing_labels:
+                            if label == MALICIOUS and hasattr(
+                                self, "dummy_malicious_flow"
+                            ):
+                                X_train = numpy.vstack(
+                                    [X_train, self.dummy_malicious_flow]
+                                )
+                                y_gt_train = numpy.append(
+                                    y_gt_train, [MALICIOUS]
+                                )
+                            elif label == BENIGN and hasattr(
+                                self, "dummy_benign_flow"
+                            ):
+                                X_train = numpy.vstack(
+                                    [X_train, self.dummy_benign_flow]
+                                )
+                                y_gt_train = numpy.append(y_gt_train, [BENIGN])
+                            elif label == BACKGROUND and hasattr(
+                                self, "dummy_background_flow"
+                            ):
+                                X_train = numpy.vstack(
+                                    [X_train, self.dummy_background_flow]
+                                )
+                                y_gt_train = numpy.append(
+                                    y_gt_train, [BACKGROUND]
+                                )
+
                     self.clf.partial_fit(
                         X_train,
                         y_gt_train,
