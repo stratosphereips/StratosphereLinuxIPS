@@ -47,7 +47,7 @@ jobs:
         key: apt-cache
 
     - name: Set up Python with caching enabled
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ inputs.python-version }}
         cache: 'pip'
