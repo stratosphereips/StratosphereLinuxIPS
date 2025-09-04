@@ -46,6 +46,12 @@ DATASET_DIR="./dataset-private"
 CONFIG_FILE="config/slips.yaml"
 MODE_LINE_NUMBER=216  # 1-indexed for sed
 
+# Create log directory if it does not exist
+if [ ! -d "$LOG_DIR" ]; then
+    mkdir -p "$LOG_DIR"
+    echo "Created log directory: $LOG_DIR"
+fi
+
 # ========================== CHECKS =========================
 echo "Running checks..."
 
