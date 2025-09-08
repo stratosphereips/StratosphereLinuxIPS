@@ -21,3 +21,10 @@ yara
 libnotify-bin
 wireless-tools
 arp-scan
+python3-watchdog
+curl
+gnupg
+ca-certificates
+redis
+wget
+npm
