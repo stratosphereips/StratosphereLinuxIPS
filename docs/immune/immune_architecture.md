@@ -14,33 +14,27 @@ For this version of Slips we chose to implement only some of the human immune sy
 
 This is a summary of the design changes to the current Slips architecture to incorporate immunology concepts:
 - Clear separation of the innate system for generic fast detection, and the adaptive system for slower-to-activate but very precise and powerful detection.
-
 - Use of two-pathway activation of the adaptive system to reduce false positives.
-
 - Use, in the innate system, of PAMP-type signals as the first pathway for activating the adaptive system. This corresponds to detectors of generic malicious attacks and TTPs of malicious actors (based on standard immunology theory).
-
 - Use, in the innate system, of DAMP-type signals as the second pathway for activating the adaptive system. This corresponds to stress or danger signals detected by anomaly detection in the P2P system (based on the danger theory of immunology).
-
 - Creation, in the adaptive system, of semi-random precise detectors, using negative selection and genetic-based adaptation.
-
 - Implementation, in the adaptive system, of memorization for activated and successful detectors, allowing them to be reused very quickly in the future.
-
 - Implementation of mechanisms to stop threats in two modalities: firewall blocks and ARP poisoning attacks in the local network.
-
 - Implementation of communication signals on top of the current P2P communication network, including DAMP and PAMP signals.
 
 ## General Diagram of Slips Immune Architecture
 
 ![alt text](../images/immune/c1/slips_immune_general_architecture_v1.png)
 
+
 ## From Immunology to Cybersecurity
-The human immune system is an evolved, vast, complex, and not fully understood system of millions of interacting parts that produce emergent behaviours to protect humans and help the species survive.
+The human immune system is an evolved, vast, complex, and not fully understood network of millions of interacting parts that produce emergent behaviours to protect humans and help the species survive.
 
-The first proposal to apply immunology concepts to cybersecurity appeared in the 1987 paper "Computer Viruses, Theory and Practice", which described malicious software as a “virus” [1]. In the 1980s and 1990s, many papers, software projects, and companies proposed, implemented, and described a “computer immune system,” “cybersecurity immune system,” or even an “Internet immune system.” These proposals explored different ways to protect computers by learning from the human immune system.
+The first proposal to apply immunology concepts to cybersecurity appeared in the 1987 paper Computer Viruses, Theory and Practice, which described malicious software as a “virus” [1]. In the 1980s and 1990s, many papers, software projects, and companies proposed, implemented, and described a “computer immune system,” “cybersecurity immune system,” or even an “Internet immune system.” These proposals explored different ways to protect computers by attempting to learn from the human immune system.
 
-However, although many papers exist in the area, most only adopt a very simple and small part of immunology ideas—or merely call their technique “immunology” because they use anomaly detection algorithms. We do not consider any of these proposals to be a real, complete, and valid transcription and implementation of immunology concepts into cybersecurity. To the best of our knowledge in 2025, there is no software that can be downloaded, run, or purchased that truly uses immunology concepts and not just anomaly detection.
+However, although many papers exist in the area, most only adopt a very simple and limited part of immunology ideas—or merely call their technique “immunology” because they use anomaly detection algorithms. We do not consider any of these proposals to be a real, complete, or valid transcription and implementation of immunology concepts into cybersecurity. To the best of our knowledge, as of 2025, there is no software that can be downloaded, run, or purchased that truly uses immunology concepts and not just anomaly detection.
 
-Our own ideas of how immunology can be used as an analogy for computer security are at best simple, and at worst completely wrong.
+Our own ideas of how immunology can be used as an analogy for computer security are at best simplistic, and at worst completely wrong.
 
  # First Concept: Innate and Adaptive Systems in Slips
 In Slips, the innate and adaptive systems are implemented through a separation of functions inside the modules and capabilities of Slips. Slips tries to resemble a single cell in its operation, but current network communication and operation technologies are not strong enough in most networks to support multiple Slips instances playing different cell roles. For now, therefore, Slips will also play the role of different immune cells inside a single host.
@@ -49,9 +43,7 @@ In Slips, the innate and adaptive systems are implemented through a separation o
 The human innate system is composed of a large group of cells and activities, but in principle it is able to:
 
 - React very quickly.
-
 - Detect generic traits of pathogens based on the detection of specific Pathogen-Associated Molecular Patterns (PAMPs).
-
 - Regulate and sense Damage-Associated Molecular Patterns (DAMPs).
 
 The non-self detection theory of the human immune system says that there is no such thing as detecting the concept of self in cells. The only concept of self is trained during weak matching in the training of new T-cells and B-cells, to ensure they only receive pathogen parts from MHC Class II molecules. Apart from this, the human immune system does not have a concept of self. What it has is a concept of non-self, achieved by explicitly detecting the PAMPs of known pathogens.
@@ -78,24 +70,26 @@ We decided that DAMPs in Slips will be represented in two ways:
 - By computing the behavioural profile of all other hosts in the network and identifying anomalies in their behaviour.
 
 ### DAMPs as Damage signals in the P2P Network
-Each peer in the P2P network is currently connected to the rest and capable of exchanging information. Each peer also computes how much it trusts each of the other peers.
+Each peer in the P2P network is connected to the others and capable of exchanging information. Each peer also computes how much it trusts each of the other peers.
 
-In the current Slips, this is already implemented, and Slips exchanges alerts with its peers. Slips has its own definition of what _alert_ and _evidence_ are. An _alert_ is a signal to block or stop a computer after enough evidence of maliciousness has been observed. An _evidence_ is the output of a specific detector, with a confidence value and numerical threat level. When enough evidence is collected to pass the threshold, an alert is generated for that host. Therefore, Slips currently exchanges alerts (e.g., “block host A”) but not evidences (e.g., “unknown HTTP User-Agent”).
+In the current version of Slips, this is already implemented: Slips exchanges alerts with its peers. Slips also defines its own terminology for alerts and evidences. An alert is a signal to block or stop a computer after enough evidence of maliciousness has been observed. An evidence is the output of a specific detector, with a confidence value and numerical threat level. When enough evidence is collected to pass the threshold, an alert is generated for that host. Therefore, Slips currently exchanges alerts (e.g., “block host A”) but not evidences (e.g., “unknown HTTP User-Agent”).
 
-These alerts between peers provide an initial view of what is happening elsewhere in the network and which attacks are being received. This allows for faster protection, since peers can defend against attackers that have not yet targeted them, based only on reports from others.
+These alerts between peers provide an initial view of what is happening elsewhere in the network and which attacks are being received. This enables faster protection, since peers can defend against attackers that have not yet targeted them, based solely on reports from others.
 
 ### DAMPs as Anomaly Detection on Behaviours
 One of the most innovative additions to Slips will be the analysis of behavioural changes in known hosts across the network, used as a proxy to measure damage and stress.
 
-Slips currently tracks each host it communicates with or from, and divides this traffic into time windows. A time window (typically one hour) holds all the summarized flows, communications, services, evidences, and alerts for that host. Each time window for each host contains around 15 features.
+Slips currently tracks each host it communicates with or receives traffic from, and divides this traffic into time windows. A time window (typically one hour) holds all the summarized flows, communications, services, evidences, and alerts for that host. Each time window for each host contains around 15 features.
 
-The new idea is to use anomaly detection algorithms to track and study the behaviour of all known hosts to see when their behaviour changes.
+The new idea is to use anomaly detection algorithms to track and study the behaviour of all known hosts in order to detect when their behaviour changes.
 
-A change in behaviour is not enough on its own to prove something bad has happened, but it is enough to show that something has changed. The algorithm will be trained with new data so it adapts over time. Training will occur when no alerts are present for that host over several consecutive time windows.
+A change in behaviour is not sufficient on its own to prove that something bad has happened, but it is enough to show that something has changed. The algorithm will be trained with new data so it adapts over time. Training will occur when no alerts are present for that host over several consecutive time windows.
 
-Anomalies in behaviour will be considered DAMPs, since we assume that after an attack the host’s traffic pattern will change.
+Anomalies in behaviour will be considered DAMPs, since we assume that after an attack a host’s traffic pattern will change.
 
-These behavioural changes may also be sent as a special type of evidence in the P2P network, because each peer only has a partial view of the traffic. It is especially useful when this information is shared with others.
+These behavioural changes may also be sent as a special type of evidence in the P2P network, since each peer only has a partial view of the traffic. Sharing this information with others is particularly valuable.
+
+
 
 
 ### Trained Immunity
@@ -120,37 +114,6 @@ The human adaptive immune system has many characteristics described, but for the
 
 
 ### Guided-random new detectors
-For the adaptive immune system, Slips implements the creation of many Zeek detection scripts that are guided-randomly adapted (not evolved and not using a genetic algorithm) to obtain very precise, fast, rule-based detectors with context information.
-
-Negative selection will be performed using a local offline database of benign traffic (described later).
-
-The idea of guided-random creation is as follows:
-
-Create many guided-random detection scripts for Zeek using the new local LLM module. Randomness is applied only to certain parts of the Zeek script.
-
-A basic template of the detector is provided.
-
-The LLM chooses each part of the template according to what is expected. For example, if a URL is expected, it inserts a URL; if a domain is expected, it inserts a domain.
-
-Positive Selection. Each script must:
-
-Recognize some traffic.
-
-Be syntactically correct.
-
-Compile and load.
-
-Execute successfully.
-
-Negative Selection. Each script must:
-
-Be tested against a large database of benign traffic.
-
-Be discarded if it generates any matches.
-
-
-
-
 For the adaptive immune system, Slips implements the creation of many Zeek detection scripts that are guided-randomly adapted (not evolved and not a genetic algorithm) to get very precise fast rule-based detectors with context information.
 
 The negative selection will be done using a local offline database of benign traffic (described later). 
@@ -168,26 +131,28 @@ The idea of the guided-random creation is to:
 	1. Be tested against a large DB of benign traffic.
 	2. If any match happens the script is discarded.
 
+The following is a more detail diagram of how the innate and adaptive system relate to the new ideas of generating new detectors.
+
 ![alt text](../images/immune/c1/slips_guided_random_new_detectors.png)
 
 
 ### Negative Selection
-The negative selection will be done in the following way
-1. Get a global predefined DB of benign traffic. It will be in the shape of Zeek text flows. Sometimes it will be a unique flow alone, sometimes a whole time-window of traffic.
-2. The crucial part is that also the benign traffic of the local computer should be used. This will be done by waiting for the following conditions:
-	1. The user uses Slips in _train_ mode with label _benign_.
-	2. There are no alerts generated in this mode.
-3. Each created zeek script is run against each of this traffic, and if the script generates a detection, it is discarded.
-4. Each Zeek script will also have a time-to-live value that will be use to decommission it later as a false positve reduction technique done by the human immune system.
+Negative selection will be carried out as follows:
 
-
+1. Obtain a global predefined database of benign traffic. This will be in the form of Zeek text flows. Sometimes it will consist of a single isolated flow, and sometimes an entire time window of traffic.
+2. It is crucial to also include the benign traffic of the local computer. This will be done by waiting for the following conditions:
+    1. The user runs Slips in train mode with the label benign.
+    2. No alerts are generated in this mode.
+3. Each created Zeek script is run against all of this traffic, and if the script generates a detection, it is discarded.
+4. Each Zeek script will also have a time-to-live value, which will be used to decommission it later as a false positive reduction technique, inspired by the behaviour of the human immune system.
 
 ### Confirmed Activation, Fast Strong Action
-The detectors of the adaptive system must be confirmed before being activated because their answer is very strong and can have impactful consequences. This is done with a [[#Two Pathway Activation]]. 
+The detectors of the adaptive system must be confirmed before activation because their response is very strong and can have significant consequences. This is achieved through [Two Pathway Activation]([url](https://github.com/stratosphereips/StratosphereLinuxIPS/edit/develop/docs/immune/immune_architecture.md#two-pathway-activation)).
 
-In order for the action to be fast it needs to be directly injected as a Zeek script in the running Zeek process. These scripts are designed to be very fast, simple and very performant. This is done directly by Zeek
+For the action to be fast, the detector must be directly injected as a Zeek script into the running Zeek process. These scripts are designed to be very fast, simple, and highly performant. This is handled directly by Zeek.
 
-In order to be a strong action, Slips will block and isolate the attacker in the local network with an ARP poison attack [[#Attacking the Threats]].
+For the action to be strong, Slips will block and isolate the attacker in the local network using an ARP poisoning attack.
+
 #### Two Pathway Activation
 The two pathway activation works like this
 1. The first activation are the PAMPs detected by the innate system. These are the alerts in Slips, built from most evidences of the current modules in Slips. Slips also may share these PAMPs in the P2P network.
