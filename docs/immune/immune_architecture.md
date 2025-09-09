@@ -147,7 +147,7 @@ Negative selection will be carried out as follows:
 4. Each Zeek script will also have a time-to-live value, which will be used to decommission it later as a false positive reduction technique, inspired by the behaviour of the human immune system.
 
 ### Confirmed Activation, Fast Strong Action
-The detectors of the adaptive system must be confirmed before activation because their response is very strong and can have significant consequences. This is achieved through [Two Pathway Activation]([url](https://github.com/stratosphereips/StratosphereLinuxIPS/edit/develop/docs/immune/immune_architecture.md#two-pathway-activation)).
+The detectors of the adaptive system must be confirmed before activation because their response is very strong and can have significant consequences. This is achieved through [Two Pathway Activation](#Two-Pathway-Activation).
 
 For the action to be fast, the detector must be directly injected as a Zeek script into the running Zeek process. These scripts are designed to be very fast, simple, and highly performant. This is handled directly by Zeek.
 
