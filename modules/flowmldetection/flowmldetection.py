@@ -254,10 +254,10 @@ class FlowMLDetection(IModule):
 
             self.write_to_log(
                 f"Total labels: {sum_labeled_flows}, "
-                f"Testing size: {len(y_pred_val_filt)}, "
-                f"Seen labels: {seen_labels}, "
-                f"Predicted labels: {predicted_labels}, "
-                f"Metrics: {metrics}"
+                f"Training size: {len(y_pred_val_filt)}, "
+                f"Training seen labels: {seen_labels}, "
+                f"Training predicted labels: {predicted_labels}, "
+                f"Training metrics: {metrics}"
             )
 
     def store_testing_results(self, original_label, predicted_label):
