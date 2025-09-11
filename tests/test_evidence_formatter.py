@@ -39,7 +39,7 @@ from tests.module_factory import ModuleFactory
             ProfileID("192.168.1.1"),
             TimeWindow(1),
             "IP 192.168.1.1 detected as malicious in timewindow 1"
-            " (start 2023/07/01 12:00:00, stop 2023/07/01 12:05:00) \n"
+            " (start 2023/07/01 12:00:00, stop 2023/07/01 12:05:00) "
             "given the following evidence:\n"
             "\t- Detected Port scan detected threat level: medium.\n",
         ),
@@ -74,7 +74,7 @@ from tests.module_factory import ModuleFactory
             ProfileID("192.168.1.1"),
             TimeWindow(1),
             "IP 192.168.1.1 detected as malicious in timewindow 1"
-            " (start 2023/07/01 12:00:00, stop 2023/07/01 12:05:00) \n"
+            " (start 2023/07/01 12:00:00, stop 2023/07/01 12:05:00) "
             "given the following evidence:\n"
             "\t- Detected Port scan detected threat level: medium.\n"
             "\t- Detected Malicious JA3 fingerprint threat level: high.\n",
@@ -95,7 +95,7 @@ def test_format_evidence_for_printing(
         mock_get_alert_time.return_value = (
             f"IP {profileid.ip} detected as malicious "
             f"in timewindow {twid.number} (start 2023/07/01 12:00:00, "
-            f"stop 2023/07/01 12:05:00) \n"
+            f"stop 2023/07/01 12:05:00)"
         )
         alert = Alert(
             profile=profileid,
@@ -117,6 +117,7 @@ def test_format_evidence_for_printing(
             .replace("\033[36m", "")
             .replace("\033[0m", "")
         )
+
         assert expected_output in result
         assert "converted_time" in result
 
@@ -182,7 +183,7 @@ def test_add_threat_level_to_evidence_description(
             1625097600,
             "example.com",
             "IP 192.168.1.1 (example.com) detected as malicious in timewindow"
-            " 1 (start converted_time, stop converted_time) \n",
+            " 1 (start converted_time, stop converted_time)",
         ),
         # testcase2: No hostname
         (
@@ -191,7 +192,7 @@ def test_add_threat_level_to_evidence_description(
             1625184000,
             None,
             "IP 10.0.0.1 detected as malicious in timewindow 2 "
-            "(start converted_time, stop converted_time) \n",
+            "(start converted_time, stop converted_time)",
         ),
         # testcase3: Different time window
         (
@@ -200,7 +201,7 @@ def test_add_threat_level_to_evidence_description(
             1625270400,
             "test.local",
             "IP 172.16.0.1 (test.local) detected as malicious in timewindow 3 "
-            "(start converted_time, stop converted_time) \n",
+            "(start converted_time, stop converted_time)",
         ),
     ],
 )

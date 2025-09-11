@@ -205,12 +205,11 @@ You can read more about it [here](https://stratospherelinuxips.readthedocs.io/en
 
 Slips is dependent on three major elements:
 
-Python 3.10.12
-Zeek
-Redis database 7.0.4
+- Python 3.10.12
+- Zeek
+- Redis database 7.0.4
 
 To install these elements we will use APT package manager. After that, we will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node.JS and several npm packages.
-
 
 
 
@@ -231,10 +230,9 @@ Update the repository of packages so you see the latest versions:
 
 	apt-get update
 
-Install the required packages (-y to install without asking for approval):
+Install apt dependencies:
 
-    apt-get -y install tshark iproute2 python3.10.12 python3-tzlocal net-tools python3-dev build-essential python3-certifi curl git gnupg ca-certificates redis wget python3-minimal python3-redis python3-pip python3-watchdog nodejs redis-server npm lsof file iptables nfdump zeek whois yara
-    apt install -y --no-install-recommends nodejs
+    cat install/apt_dependencies.txt | xargs apt-get -y install
 
 Even though we just installed pip3, the package installer for Python (3.10.12), we need to upgrade it to its latest version:
 
@@ -242,7 +240,7 @@ Even though we just installed pip3, the package installer for Python (3.10.12), 
 
 Now that pip3 is upgraded, we can proceed to install all required packages via pip3 python packet manager:
 
-	sudo pip3 install -r install/requirements.txt
+	python3 -m pip3 install -r install/requirements.txt
 
 _Note: for those using a different base image, you need to also install tensorflow==2.16.1r via pip3._
 
@@ -254,8 +252,15 @@ As we mentioned before, the GUI of Slips known as Kalipso relies on NodeJs v19. 
 
 ####  Installing Zeek
 
-The last requirement to run Slips is Zeek. Zeek is not directly available on Ubuntu or Debian. To install it, we will first add the repository source to our apt package manager source list.
-The following two commands are for Ubuntu, check the repositories for the correct version if you are using a different OS:
+The last requirement to run Slips is Zeek.
+Zeek is not directly available on Ubuntu or Debian.
+To install it, we will first add the repository source to our apt package manager source list.
+The following two commands are for Ubuntu 18.04:
+
+check the repositories for the correct version if you are using a different OS:
+
+https://software.opensuse.org//download.html?project=security%3Azeek&package=zeek
+
 
 	echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_18.04/ /' | tee /etc/apt/sources.list.d/security:zeek.list
 
@@ -271,6 +276,10 @@ Finally, we will update the package manager repositories and install zeek
 To make sure that zeek can be found in the system we will add its link to a known path:
 
 	ln -s /opt/zeek/bin/zeek /usr/local/bin
+
+
+PS: Slips supports the latest zeek release by default, make sure you install it and not the LTS.
+
 
 #### Running Slips for the First Time
 

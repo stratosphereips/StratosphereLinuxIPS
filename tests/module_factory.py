@@ -84,7 +84,9 @@ from slips_files.core.structures.evidence import (
     Victim,
 )
 from modules.fidesModule.fidesModule import FidesModule
-from slips_files.core.text_formatters.evidence import EvidenceFormatter
+from slips_files.core.text_formatters.evidence_formatter import (
+    EvidenceFormatter,
+)
 
 import unittest.mock as mock
 

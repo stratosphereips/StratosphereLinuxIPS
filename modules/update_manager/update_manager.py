@@ -1653,22 +1653,14 @@ class UpdateManager(IModule):
                 )
         self.loaded_ti_files -= 1
 
-    def handle_exception(self, task):
-        """
-        in asyncmodules we use Async.Task to run some of the functions
-        If an exception occurs in a coroutine that was wrapped in a Task
-        (e.g., asyncio.create_task), the exception does not crash the program
-         but remains in the task.
-        This function is used to handle the exception in the task
-        """
+    def handle_task_exception(self, task):
         try:
-            # Access task result to raise the exception if it occurred
-            task.result()
-        except asyncio.exceptions.CancelledError:
-            # like pressing ctrl+c
-            return
-        except Exception as e:
-            self.print(e, 0, 1)
+            exception = task.exception()
+        except asyncio.CancelledError:
+            return  # Task was cancelled, not an error
+        if exception:
+            self.print(f"Unhandled exception in task: {exception}")
+            self.print_traceback()
 
     async def update(self) -> bool:
         """
@@ -1725,7 +1717,7 @@ class UpdateManager(IModule):
                     task = asyncio.create_task(
                         self.update_ti_file(file_to_download)
                     )
-                    task.add_done_callback(self.handle_exception)
+                    task.add_done_callback(self.handle_task_exception)
             #######################################################
             # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
             # check if we have a username and api key and a week has passed since we last updated
@@ -1753,7 +1745,7 @@ class UpdateManager(IModule):
         # create_task is used to run update() function
         # concurrently instead of serially
         self.update_finished: Task = asyncio.create_task(self.update())
-        self.update_finished.add_done_callback(self.handle_exception)
+        self.update_finished.add_done_callback(self.handle_task_exception)
 
         await self.update_finished
         self.print(
