@@ -1,14 +1,12 @@
-"""
-ZeekDataset loader specialized for conn.log.labeled files with caching.
-
-Behavior:
- - Only reads conn.log.labeled (or falls back to conn.log).
- - Casts columns according to Zeek #types header.
- - Skips flows with BACKGROUND label.
- - Defaults unlabeled flows to BENIGN.
- - Supports batching with shuffle/reset at epoch boundaries.
- - For large files (>50k valid flows), stores index in cache/ directory and reloads it automatically.
-"""
+# Author: Jan Svoboda
+# functionality: ZeekDataset loader specialized for conn.log.labeled files with caching. Handles casting, label mapping, batching, and efficient indexing for large files.
+# behavior:
+#   - Reads conn.log.labeled (or falls back to conn.log).
+#   - Casts columns according to Zeek #types header.
+#   - Skips flows with BACKGROUND label.
+#   - Defaults unlabeled flows to BENIGN.
+#   - Supports batching with shuffle/reset at epoch boundaries.
+#   - Stores index in cache/ directory for large files (>50k valid flows) and reloads automatically.
 
 from commons import BENIGN, MALICIOUS, BACKGROUND
 import random
@@ -46,6 +44,12 @@ class ZeekDataset:
         self._batch_pos: int = 0
         self.epoch: int = 0
 
+    def __len__(self):
+        return self.total_lines
+
+    def batches(self):
+        return (self.total_lines + self.batch_size - 1) // self.batch_size
+
     def _cache_path(self):
         base = Path(__file__).parent / "cache"
         base.mkdir(exist_ok=True)
@@ -53,6 +57,12 @@ class ZeekDataset:
             :16
         ]
         return base / f"{file_hash}.json"
+
+    def clear_cache(self):
+        """Remove the cache file for this dataset only."""
+        cache_file = self._cache_path()
+        if cache_file.exists():
+            cache_file.unlink()
 
     def _index_file(self):
         cache_file = self._cache_path()
@@ -140,14 +150,12 @@ class ZeekDataset:
                     f,
                 )
 
-    def __len__(self):
-        return self.total_lines
-
     def _iter_lines(self):
         headers, types = self.headers, self.types
         valid_set = set(self.valid_indices)
         labels = {
-            idx: label for idx, label in zip(self.valid_indices, self.labels)
+            index: label
+            for index, label in zip(self.valid_indices, self.labels)
         }
 
         with open(

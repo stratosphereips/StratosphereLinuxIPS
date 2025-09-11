@@ -6,16 +6,21 @@ import os
 class Logger:
     def __init__(
         self,
-        path_to_logging_dir: str = "./logs",
+        experiment_name: str = "default_experiment",
+        path_to_logging_dir: str = "logs",
         path_to_logfile: str = "training.log",
     ):
         self.path_to_logfile = path_to_logfile
         self.path_to_logging_dir = path_to_logging_dir
-        self.name = "Logger"
+        self.name = experiment_name
 
         os.makedirs(self.path_to_logging_dir, exist_ok=True)
+        os.makedirs(
+            os.path.join(self.path_to_logging_dir, self.name),
+            exist_ok=True,
+        )
         self.full_logfile_path = os.path.join(
-            self.path_to_logging_dir, self.path_to_logfile
+            self.path_to_logging_dir, self.name, self.path_to_logfile
         )
 
         if os.path.exists(self.full_logfile_path):
@@ -25,7 +30,6 @@ class Logger:
             raise FileExistsError(
                 f"Logfile '{self.full_logfile_path}' already exists."
             )
-
         with open(self.full_logfile_path, "w") as f:
             f.write("")
 
