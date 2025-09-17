@@ -218,6 +218,12 @@ class DBManager:
     def ask_for_ip_info(self, *args, **kwargs):
         return self.rdb.ask_for_ip_info(*args, **kwargs)
 
+    def set_ap_mode(self, *args, **kwargs):
+        return self.rdb.set_ap_mode(*args, **kwargs)
+
+    def is_running_as_ap(self, *args, **kwargs):
+        return self.rdb.is_running_as_ap(*args, **kwargs)
+
     @classmethod
     def discard_obj(cls):
         """

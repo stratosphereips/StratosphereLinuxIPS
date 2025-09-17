@@ -690,6 +690,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     def get_slips_internal_time(self):
         return self.r.get(self.constants.SLIPS_INTERNAL_TIME) or 0
 
+    def set_ap_mode(self):
+        """the main slips instance call this func for the modules to be
+        aware that slips is running as an access point"""
+        return self.r.set(self.constants.IS_RUNNING_AS_AP, True)
+
+    def is_running_as_ap(self) -> bool:
+        return True if self.r.get(self.constants.IS_RUNNING_AS_AP) else False
+
     def get_redis_keys_len(self) -> int:
         """returns the length of all keys in the db"""
         return self.r.dbsize()

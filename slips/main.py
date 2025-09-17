@@ -471,6 +471,27 @@ class Main:
             # but probably root has already set the permissions
             pass
 
+    def check_if_running_as_ap(self) -> bool:
+        """
+        check is slips is running as an access point using iwconfig
+        e.g.
+        https://stratospherelinuxips.readthedocs.io/en/develop/immune/installing_slips_in_the_rpi.html#protect-your-local-network-with-slips-on-the-rpi
+        """
+        interface: str = getattr(self.args, "interface", None)
+        try:
+            output = subprocess.check_output(
+                ["iwconfig", interface], text=True, stderr=subprocess.DEVNULL
+            )
+            for line in output.splitlines():
+                if "Mode:" in line:
+                    mode = line.split("Mode:")[1].split()[0]
+                    if mode.lower() == "master":
+                        self.db.set_ap_mode()
+                        return True
+        except Exception:
+            pass
+        return False
+
     def start(self):
         """Main Slips Function"""
         try:
@@ -504,7 +525,7 @@ class Main:
             except RuntimeError as e:
                 self.print(str(e), 1, 1)
                 self.terminate_slips()
-
+            self.check_if_running_as_an_ap()
             self.db.set_input_metadata(
                 {
                     "output_dir": self.args.output,

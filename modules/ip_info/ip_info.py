@@ -336,23 +336,6 @@ class IPInfo(AsyncModule):
                     return gw
         return None
 
-    def is_ap_mode_iwconfig(self) -> bool:
-        """
-        check is slips is running as an AP
-        """
-        interface: str = getattr(self.args, "interface", None)
-        try:
-            output = subprocess.check_output(
-                ["iwconfig", interface], text=True, stderr=subprocess.DEVNULL
-            )
-            for line in output.splitlines():
-                if "Mode:" in line:
-                    mode = line.split("Mode:")[1].split()[0]
-                    return mode.lower() == "master"
-        except Exception:
-            pass
-        return False
-
     def get_default_gateway(self) -> str:
         gws = netifaces.gateways()
         default = gws.get("default", {})
@@ -362,7 +345,7 @@ class IPInfo(AsyncModule):
         """
         returns the gateway ip of the given interface if running on an
         interface.
-        and returns own ip if running as an AP (aka the given interface
+        and returns own ip if running as an AP (if the given interface
         is NATing/bridging traffic to another interface).
         """
         if not self.is_running_non_stop:
@@ -552,7 +535,7 @@ class IPInfo(AsyncModule):
         utils.drop_root_privs_permanently()
         self.wait_for_dbs()
 
-        self.is_running_in_ap_mode: bool = self.is_ap_mode_iwconfig()
+        self.is_running_in_ap_mode: bool = self.db.is_running_as_ap()
         # the following method only works when running on an interface
         if ip := self.get_gateway_ip_if_interface():
             self.db.set_default_gateway("IP", ip)
