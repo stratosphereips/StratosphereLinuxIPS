@@ -46,6 +46,7 @@ class Blocking(IModule):
             open(self.blocking_log_path, "w").close()
         except FileNotFoundError:
             pass
+        self.is_running_in_ap_mode: bool = self.db.is_running_as_ap()
 
     def log(self, text: str):
         """Logs the given text to the blocking log file"""
@@ -192,12 +193,45 @@ class Blocking(IModule):
                 self.db.set_blocked_ip(ip_to_block)
         return blocked
 
+    def protect_ap_clients(self):
+        """
+        If slips is running as an access point in bridged mode,
+        https://stratospherelinuxips.readthedocs.io/en/develop/immune/installing_slips_in_the_rpi.html#protect-your-local-network-with-slips-on-the-rpi
+        This func adds firewall rules to protect the AP clients from
+        clients in the router's main network.
+        The goal is to mimic NAT isolation without using NAT.
+        why not just use NAT? for more traffic visibility.
+        """
+        if not self.is_running_in_ap_mode:
+            return
+
+        # todo make it optional to protect the ap clients
+        # Set the default policy for the FORWARD chain to DROP.
+        os.system(self.sudo + " iptables -P FORWARD DROP >/dev/null 2>&1")
+        # 1. Allow traffic originating from the Wi-Fi clients to go anywhere.
+        # sudo iptables -A FORWARD -m physdev --physdev-in wlan0 -j ACCEPT
+        # todo how to get the RPI aP interface
+        os.system(
+            self.sudo
+            + " iptables -P -A FORWARD -m physdev --physdev-in wlan0 "
+            "-j ACCEPT >/dev/null 2>&1"
+        )
+        # 2. Allow return traffic (ESTABLISHED, RELATED) back to the Wi-Fi clients.
+        # sudo iptables -A FORWARD -m physdev --physdev-in eth0 -m state --state RELATED,ESTA
+        # todo how to get the RPI phy interface
+        os.system(
+            self.sudo
+            + " iptables -A FORWARD -m physdev --physdev-in eth0 -m state "
+            "--state RELATED,ESTA >/dev/null 2>&1"
+        )
+
     def shutdown_gracefully(self):
         self.unblocker.unblocker_thread.join(30)
         if self.unblocker.unblocker_thread.is_alive():
             self.print("Problem shutting down unblocker thread.")
 
     def pre_main(self):
+        self.protect_ap_clients()
         self.unblocker = Unblocker(
             self.db, self.sudo, self.should_stop, self.logger, self.log
         )
