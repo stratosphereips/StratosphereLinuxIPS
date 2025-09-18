@@ -168,7 +168,9 @@ class ARPPoisoner(IModule):
         # --retry=0 to avoid redundant retries.
         cmd = ["arp-scan", f"--interface={interface}", "--localnet"]
         try:
+            print("@@@@@@@@@@@@@@@@ doing aro scan!")
             output = subprocess.check_output(cmd, text=True)
+            print("@@@@@@@@@@@@@@@@ all good!")
         except subprocess.CalledProcessError as e:
             self.print(
                 f"arp-scan failed: {e.stderr or str(e)} using last "
