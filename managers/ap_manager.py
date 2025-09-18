@@ -22,7 +22,7 @@ class APManager:
         """
         Given an Ethernet interface (e.g., 'eth0'),
         returns a dict with {"wifi_interface": <wifi>,
-        "ethernet_interface": eth}
+        "ethernet_interface": <eth0>}
         if the wifi interface is running as AP in a bridge with the eth.
         Otherwise, return None.
         sets AP interface info in the db if found.
@@ -86,7 +86,7 @@ class APManager:
                         "wifi_interface": wifi_iface,
                         "ethernet_interface": eth_interface,
                     }
-                    self.db.set_ap_mode(interfaces)
+                    self.db.set_ap_info(interfaces)
                     return
 
             return None

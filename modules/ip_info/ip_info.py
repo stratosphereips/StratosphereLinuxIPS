@@ -3,6 +3,7 @@
 from typing import (
     Union,
     Optional,
+    Dict,
 )
 from uuid import uuid4, getnode
 import datetime
@@ -535,7 +536,8 @@ class IPInfo(AsyncModule):
         utils.drop_root_privs_permanently()
         self.wait_for_dbs()
 
-        self.is_running_in_ap_mode: bool = self.db.is_running_as_ap()
+        ap_info: None | Dict[str, str] = self.db.get_ap_info()
+        self.is_running_in_ap_mode = True if ap_info else False
         # the following method only works when running on an interface
         if ip := self.get_gateway_ip_if_interface():
             self.db.set_default_gateway("IP", ip)
