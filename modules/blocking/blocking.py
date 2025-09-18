@@ -16,7 +16,7 @@ from .exec_iptables_cmd import exec_iptables_command
 from modules.blocking.unblocker import Unblocker
 
 
-OUTPUT_TO_DEV_NULL = "{OUTPUT_TO_DEV_NULL}"
+OUTPUT_TO_DEV_NULL = ">/dev/null 2>&1"
 
 
 class Blocking(IModule):
@@ -115,19 +115,18 @@ class Blocking(IModule):
         # FORWARD chains
         if "slipsBlocking" not in input_chain_rules:
             os.system(
-                self.sudo
-                + f" iptables -I INPUT -j slipsBlocking {OUTPUT_TO_DEV_NULL}"
+                f"{self.sudo} iptables -I INPUT -j slipsBlocking "
+                f"{OUTPUT_TO_DEV_NULL}"
             )
         if "slipsBlocking" not in output_chain_rules:
             os.system(
-                self.sudo
-                + f" iptables -I OUTPUT -j slipsBlocking {OUTPUT_TO_DEV_NULL}"
+                f"{self.sudo} iptables -I OUTPUT -j slipsBlocking "
+                f"{OUTPUT_TO_DEV_NULL}"
             )
         if "slipsBlocking" not in forward_chain_rules:
             os.system(
-                self.sudo
-                + f" iptables -I FORWARD -j slipsBlocking {
-                OUTPUT_TO_DEV_NULL}"
+                f"{self.sudo} iptables -I FORWARD -j slipsBlocking"
+                f" {OUTPUT_TO_DEV_NULL}"
             )
 
     def _is_ip_already_blocked(self, ip) -> bool:
@@ -214,7 +213,13 @@ class Blocking(IModule):
         if not self.is_running_in_ap_mode:
             return
 
-        # todo make it optional to protect the ap clients?
+        self.print(
+            f"Slips is running in AP bridged mode. Adding iptables "
+            f"rules to protect AP clients on "
+            f"{self.ap_info['wifi_interface']} from the router's "
+            f"network users on {self.ap_info['ethernet_interface']}."
+        )
+
         # Set the default policy for the FORWARD chain to DROP.
         os.system(
             self.sudo + f" iptables -P FORWARD DROP {OUTPUT_TO_DEV_NULL}"
