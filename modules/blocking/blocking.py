@@ -16,6 +16,9 @@ from .exec_iptables_cmd import exec_iptables_command
 from modules.blocking.unblocker import Unblocker
 
 
+OUTPUT_TO_DEV_NULL = "{OUTPUT_TO_DEV_NULL}"
+
+
 class Blocking(IModule):
     """Data should be passed to this module as a json encoded python dict,
     by default this module flushes all slipsBlocking chains before it starts"""
@@ -46,7 +49,9 @@ class Blocking(IModule):
             open(self.blocking_log_path, "w").close()
         except FileNotFoundError:
             pass
-        self.is_running_in_ap_mode: bool = self.db.is_running_as_ap()
+
+        self.ap_info: None | Dict[str, str] = self.db.get_ap_info()
+        self.is_running_in_ap_mode = True if self.ap_info else False
 
     def log(self, text: str):
         """Logs the given text to the blocking log file"""
@@ -90,7 +95,9 @@ class Blocking(IModule):
         # self.delete_iptables_chain()
         self.print('Executing "sudo iptables -N slipsBlocking"', 6, 0)
         # Add a new chain to iptables
-        os.system(f"{self.sudo} iptables -N slipsBlocking >/dev/null 2>&1")
+        os.system(
+            f"{self.sudo} iptables -N slipsBlocking {OUTPUT_TO_DEV_NULL}"
+        )
 
         # Check if we're already redirecting to slipsBlocking chain
         input_chain_rules = self._get_cmd_output(
@@ -109,17 +116,18 @@ class Blocking(IModule):
         if "slipsBlocking" not in input_chain_rules:
             os.system(
                 self.sudo
-                + " iptables -I INPUT -j slipsBlocking >/dev/null 2>&1"
+                + f" iptables -I INPUT -j slipsBlocking {OUTPUT_TO_DEV_NULL}"
             )
         if "slipsBlocking" not in output_chain_rules:
             os.system(
                 self.sudo
-                + " iptables -I OUTPUT -j slipsBlocking >/dev/null 2>&1"
+                + f" iptables -I OUTPUT -j slipsBlocking {OUTPUT_TO_DEV_NULL}"
             )
         if "slipsBlocking" not in forward_chain_rules:
             os.system(
                 self.sudo
-                + " iptables -I FORWARD -j slipsBlocking >/dev/null 2>&1"
+                + f" iptables -I FORWARD -j slipsBlocking {
+                OUTPUT_TO_DEV_NULL}"
             )
 
     def _is_ip_already_blocked(self, ip) -> bool:
@@ -200,29 +208,34 @@ class Blocking(IModule):
         This func adds firewall rules to protect the AP clients from
         clients in the router's main network.
         The goal is to mimic NAT isolation without using NAT.
-        why not just use NAT? for more traffic visibility.
+        why not just use NAT? to be able to monitor the traffic of the RPI
+        to the router and back on eth0
         """
         if not self.is_running_in_ap_mode:
             return
 
-        # todo make it optional to protect the ap clients
+        # todo make it optional to protect the ap clients?
         # Set the default policy for the FORWARD chain to DROP.
-        os.system(self.sudo + " iptables -P FORWARD DROP >/dev/null 2>&1")
-        # 1. Allow traffic originating from the Wi-Fi clients to go anywhere.
-        # sudo iptables -A FORWARD -m physdev --physdev-in wlan0 -j ACCEPT
-        # todo how to get the RPI aP interface
         os.system(
-            self.sudo
-            + " iptables -P -A FORWARD -m physdev --physdev-in wlan0 "
-            "-j ACCEPT >/dev/null 2>&1"
+            self.sudo + f" iptables -P FORWARD DROP {OUTPUT_TO_DEV_NULL}"
         )
-        # 2. Allow return traffic (ESTABLISHED, RELATED) back to the Wi-Fi clients.
-        # sudo iptables -A FORWARD -m physdev --physdev-in eth0 -m state --state RELATED,ESTA
-        # todo how to get the RPI phy interface
+        # 1. Allow traffic originating from the Wi-Fi clients to go anywhere.
         os.system(
-            self.sudo
-            + " iptables -A FORWARD -m physdev --physdev-in eth0 -m state "
-            "--state RELATED,ESTA >/dev/null 2>&1"
+            self.sudo + f" iptables -P -A FORWARD -m physdev --physdev-in "
+            f"{self.ap_info['wifi_interface']} "
+            f"-j ACCEPT {OUTPUT_TO_DEV_NULL}"
+        )
+
+        # 2. Allow return traffic (ESTABLISHED, RELATED) back to the Wi-Fi clients.
+        # when in AP bridge mode we excpect the users to always monitor
+        # the physical interface with -i
+        os.system(
+            self.sudo + f" iptables -A FORWARD "
+            f"-m physdev --physdev-in "
+            f"{self.ap_info['ethernet_interface']} "
+            f"-m state "
+            f"--state RELATED,ESTA "
+            f"{OUTPUT_TO_DEV_NULL}"
         )
 
     def shutdown_gracefully(self):
