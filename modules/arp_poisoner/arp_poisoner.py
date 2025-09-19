@@ -257,6 +257,35 @@ class ARPPoisoner(IModule):
             )
             sendp(pkt, verbose=0)
 
+    def _get_gateway_ip_with_ip_route(self):
+        """
+        Finds the default gateway IP address on Linux using the 'ip' command.
+        sets self.gw_ip
+        """
+        try:
+            output = subprocess.check_output(["ip", "route"]).decode("utf-8")
+
+            for line in output.split("\n"):
+                if "default via" in line:
+                    # Example line: 'default via 192.168.1.1 dev eth0'
+                    ip = line.split()[2]
+                    self.gw_ip = ip
+                    return ip
+
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # Handles cases where the 'ip' command is not found or fails
+            return None
+
+    def _get_gateway_ip(self) -> str | None:
+        if self.gw_ip:
+            gateway_ip = self.gw_ip
+        else:
+            gateway_ip: str = (
+                self.db.get_gateway_ip()
+                or self._get_gateway_ip_with_ip_route()
+            )
+        return gateway_ip
+
     def _cut_targets_internet(
         self, target_ip: str, target_mac: str, fake_mac: str
     ):
@@ -269,7 +298,13 @@ class ARPPoisoner(IModule):
             f"@@@@@@@@@@@@@@@@ cutting the internet of {target_ip} at "
             f"{target_mac} "
         )
-        gateway_ip: str = self.db.get_gateway_ip()
+        gateway_ip = self._get_gateway_ip()
+
+        if not gateway_ip:
+            self.print(
+                f"Unable to cut the internet of attacker at"
+                f" {target_ip}. Gateway IP is not found."
+            )
         # we use replies, not requests, because we wanna answer ARP requests
         # sent to the network instead of waiting for the attacker to answer
         # them.
@@ -362,7 +397,7 @@ class ARPPoisoner(IModule):
         if self.is_broadcast(ip, localnet):
             return False
 
-        if ip == self.db.get_gateway_ip():
+        if ip == self._get_gateway_ip():
             return False
 
         # no need to check if the ip is in our ips because all our ips are
