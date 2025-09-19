@@ -52,14 +52,19 @@ class HostIPManager:
         if not self.main.db.is_running_non_stop():
             return
 
-        if host_ip := self.get_host_ip():
-            self.main.db.set_host_ip(host_ip)
-            self.main.print(f"Detected host IP: {green(host_ip)}")
-            return host_ip
+        while 1:
+            host_ip = self.get_host_ip()
+            if host_ip:
+                self.main.db.set_host_ip(host_ip)
+                self.main.print(f"Detected host IP: {green(host_ip)}")
+                return host_ip
+            elif self.main.args.interface and not host_ip:
+                self.main.print("Running on interface without IP Address. Not setting host IP.")
+                return None 
+            else:
+                self.main.print("Not connected to the internet. Reconnecting in 10s.")
+                time.sleep(10)
 
-        self.main.print("Not Connected to the internet. Reconnecting in 10s.")
-        time.sleep(10)
-        self.store_host_ip()
 
     def update_host_ip(
         self, host_ip: str, modified_profiles: Set[str]
