@@ -169,6 +169,15 @@ class Utils(object):
 
         return sanitized_string
 
+    def get_gateway_of_interface(self, iface):
+        """returns the gw of a specific interface"""
+        gws = netifaces.gateways()
+        default = gws.get("default", {})
+        gw_ip, gw_iface = default.get(netifaces.AF_INET, (None, None))
+        if gw_iface == iface:
+            return gw_ip
+        return None
+
     def to_dict(self, obj):
         """
         Converts an Evidence object to a dictionary (aka json serializable)
