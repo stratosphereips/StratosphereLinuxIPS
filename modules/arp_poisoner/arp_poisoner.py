@@ -55,6 +55,7 @@ class ARPPoisoner(IModule):
         self.last_arp_scan_output = set()
         self.ap_info: None | Dict[str, str] = self.db.get_ap_info()
         self.is_running_in_ap_mode = True if self.ap_info else False
+        self.gw_ip = None
 
     def log(self, text):
         """Logs the given text to the blocking log file"""
