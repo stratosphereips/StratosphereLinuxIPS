@@ -223,6 +223,9 @@ class ARPPoisoner(IModule):
         at fake_mac using unsolicited arp replies.
         """
         # send gratuitous arp request to update caches
+        print(
+            "@@@@@@@@@@@@@@@@ send gratuitous arp request to update " "caches"
+        )
         gratuitous_pkt = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(
             op=1,
             pdst=target_ip,
@@ -240,7 +243,10 @@ class ARPPoisoner(IModule):
         for ip, mac in all_hosts:
             if ip == target_ip:
                 continue
-
+            print(
+                f"@@@@@@@@@@@@@@@@ telling {ip} that {target_ip} is at a "
+                f"fake mac!"
+            )
             pkt = Ether(dst=mac) / ARP(
                 op=2,
                 pdst=ip,  # which dst ip are we sending this pkt to?
@@ -259,6 +265,10 @@ class ARPPoisoner(IModule):
         is at fake_mac using unsolicited arp reply AND telling the gw that
         the target is at a fake mac.
         """
+        print(
+            f"@@@@@@@@@@@@@@@@ cutting the internet of {target_ip} at "
+            f"{target_mac} "
+        )
         gateway_ip: str = self.db.get_gateway_ip()
         # we use replies, not requests, because we wanna answer ARP requests
         # sent to the network instead of waiting for the attacker to answer
@@ -267,6 +277,11 @@ class ARPPoisoner(IModule):
         # We use Ether() before ARP() to explicitly construct a complete Ethernet frame
         # poison the target: tell it the gateway is at fake_mac
         # gw -> attacker: im at a fake mac.
+        print(
+            f"@@@@@@@@@@@@@@@@ gw {gateway_ip} -> attacker {target_ip}: im at a "
+            f"fake "
+            f"mac. {fake_mac}"
+        )
         pkt = Ether(dst=target_mac) / ARP(
             op=2,
             psrc=gateway_ip,
@@ -280,6 +295,14 @@ class ARPPoisoner(IModule):
         # from it wont reach the victim
         # attacker -> gw: im at a fake mac.
         gateway_mac = self.db.get_gateway_mac()
+
+        print(
+            f"@@@@@@@@@@@@@@@@ attacker {target_ip}  -> gw {gateway_ip}: "
+            f"im at a "
+            f"fake "
+            f"mac. {fake_mac}"
+        )
+
         pkt = Ether(dst=gateway_mac) / ARP(
             op=2,
             psrc=target_ip,

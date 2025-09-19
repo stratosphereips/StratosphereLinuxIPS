@@ -49,6 +49,7 @@ class Blocking(IModule):
             open(self.blocking_log_path, "w").close()
         except FileNotFoundError:
             pass
+        self.last_closed_tw = None
 
         self.ap_info: None | Dict[str, str] = self.db.get_ap_info()
         self.is_running_in_ap_mode = True if self.ap_info else False
