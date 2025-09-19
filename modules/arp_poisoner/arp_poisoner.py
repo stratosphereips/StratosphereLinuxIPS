@@ -162,15 +162,23 @@ class ARPPoisoner(IModule):
         # network even if slips never saw them.
 
         if not self._is_time_to_rescan():
-            # use the cached output if it's not time to rescan
+            # will use the cached output if it's not time to rescan
             return self.last_arp_scan_output
 
-        # --retry=0 to avoid redundant retries.
-        cmd = ["arp-scan", f"--interface={interface}", "--localnet"]
+        # we are explicitly giving arp-scan the ip to avoid giving docker
+        # RAW_SOCKET permissions for arp-scan to be able to auto detect the ip
+        host_ip = self.db.get_host_ip()
+        cmd = [
+            "arp-scan",
+            f"--interface={interface}",
+            "--localnet",
+            f"--arpspa={host_ip}",
+        ]
+
         try:
-            print("@@@@@@@@@@@@@@@@ doing aro scan!")
+            print("@@@@@@@@@@@@@@@@ doing arp scan!")
             output = subprocess.check_output(cmd, text=True)
-            print("@@@@@@@@@@@@@@@@ all good!")
+            print(f"@@@@@@@@@@@@@@@@ all good! .. {output}")
         except subprocess.CalledProcessError as e:
             self.print(
                 f"arp-scan failed: {e.stderr or str(e)} using last "
