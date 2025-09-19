@@ -3,7 +3,6 @@
 from typing import (
     Union,
     Optional,
-    Dict,
 )
 from uuid import uuid4, getnode
 import datetime
@@ -66,7 +65,6 @@ class IPInfo(AsyncModule):
         self.whitelist = Whitelist(self.logger, self.db)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.valid_tlds = whois.validTlds()
-        self.is_running_in_ap_mode = False
 
     async def open_dbs(self):
         """Function to open the different offline databases used in this
@@ -346,33 +344,14 @@ class IPInfo(AsyncModule):
         """
         returns the gateway ip of the given interface if running on an
         interface.
-        and returns own ip if running as an AP (if the given interface
-        is NATing/bridging traffic to another interface).
         """
         if not self.is_running_non_stop:
             # only works if running on an interface
             return
 
         interface: str = getattr(self.args, "interface", None)
-        if self.is_running_in_ap_mode:
-            # ok why?? because when slips is running on normal hosts, we want
-            # the ip of the default gateway which is probably going to be the
-            # gw of the given interface and in the localnet of that interface.
-            # BUT when Slips is running as an AP, we dont want the ip of the
-            # default gateway, we want the ip of the AP. because in this case,
-            # the AP is the gateway of the computers connected to it. we don't
-            # want the ip of the actual gateway that is probably present in
-            # another localnet (the eth0).
-            # return the own IP. because slips is "the gw" for connected clients
-            try:
-                return netifaces.ifaddresses(interface)[netifaces.AF_INET][0][
-                    "addr"
-                ]
-            except KeyError:
-                return  # No IP assigned
-        else:
-            # get the gw of the given interface
-            return self.get_gateway_for_iface(interface)
+        # get the gw of the given interface
+        return self.get_gateway_for_iface(interface)
 
     @staticmethod
     def get_own_mac() -> str:
@@ -388,7 +367,7 @@ class IPInfo(AsyncModule):
         """
         Given the gw_ip, this function tries to get the MAC
          from arp.log, using ip neigh or from arp tables
-         PS: returns own MAc address if running in AP mode
+
         """
         # we keep a cache of the macs and their IPs
         # In case of a zeek dir or a pcap,
@@ -403,13 +382,6 @@ class IPInfo(AsyncModule):
             # so it's up to the db.is_gw_mac() function to determine the gw mac
             # if it's seen associated with a public IP
             return
-
-        if self.is_running_in_ap_mode:
-            # when running in AP mode, we are the GW for the connected
-            # clients, this makes our mac the GW mac.
-            # in AP mode, the given gw_ip is our own ip anyway, so it wont
-            # be found in arp tables or ip neigh command anyway.
-            return self.get_own_mac()
 
         # Obtain the MAC address by using the hosts ARP table
         # First, try the ip command
@@ -536,8 +508,6 @@ class IPInfo(AsyncModule):
         utils.drop_root_privs_permanently()
         self.wait_for_dbs()
 
-        ap_info: None | Dict[str, str] = self.db.get_ap_info()
-        self.is_running_in_ap_mode = True if ap_info else False
         # the following method only works when running on an interface
         if ip := self.get_gateway_ip_if_interface():
             self.db.set_default_gateway("IP", ip)
