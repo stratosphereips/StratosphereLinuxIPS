@@ -7,8 +7,7 @@ import time
 from threading import Lock
 import json
 import ipaddress
-from typing import Set, Tuple, Dict, re, List
-
+from typing import Set, Tuple, Dict
 from scapy.all import ARP, Ether
 from scapy.sendrecv import sendp, srp
 import random
@@ -252,59 +251,6 @@ class ARPPoisoner(IModule):
             )
             sendp(pkt, verbose=0)
 
-    def _get_connected_macs(self, interface: str) -> List[str]:
-        """
-        Uses 'iw dev <interface> station dump' to get a list of connected MAC addresses.
-
-        Args:
-            interface (str): The wireless network interface to check.
-
-        Returns:
-            list: A list of MAC addresses (as strings) of connected stations.
-                  Returns an empty list if the command fails or no stations are found.
-        """
-        mac_addresses = []
-        command = ["iw", "dev", interface, "station", "dump"]
-        try:
-            result = subprocess.run(
-                command, capture_output=True, text=True, check=True
-            )
-            output = result.stdout
-
-            mac_pattern = re.compile(
-                r"Station\s+([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})"
-            )
-            mac_addresses = mac_pattern.findall(output)
-
-        except Exception as e:
-            print(
-                f"Error trying to get connected MAC addresses on "
-                f"{interface}: {e}"
-            )
-
-        return mac_addresses
-
-    def _get_gateway_of_attacker(self, attacker_mac: str) -> str:
-        """
-        the gateway depends on the target, if the target is
-        1. connected to the AP -> slips ip is the gw ip
-        2. connected to the router's wifi -> the router's ip is the gw ip
-        """
-        if self.is_running_in_ap_mode:
-            # is the target connected to the AP or to the router directly?
-            ap_clients = self._get_connected_macs(
-                self.ap_info["wifi_interface"]
-            )
-            if attacker_mac in ap_clients:
-                # attacker is an AP client, Slips is his GW
-                gateway_ip: str = self.db.get_host_ip()
-                return gateway_ip
-
-        gateway_ip: str = utils.get_gateway_of_interface(
-            self.ap_info["ethernet_interface"]
-        )
-        return gateway_ip
-
     def _cut_targets_internet(
         self, target_ip: str, target_mac: str, fake_mac: str
     ):
@@ -313,11 +259,7 @@ class ARPPoisoner(IModule):
         is at fake_mac using unsolicited arp reply AND telling the gw that
         the target is at a fake mac.
         """
-        gateway_ip: str = self._get_gateway_of_attacker(target_mac)
-        print(
-            f"@@@@@@@@@@@@@@@@ Attacker ip : {target_ip} at {target_mac} "
-            f"has {gateway_ip} as the GW.. cutting their internet!!!"
-        )
+        gateway_ip: str = self.db.get_gateway_ip()
         # we use replies, not requests, because we wanna answer ARP requests
         # sent to the network instead of waiting for the attacker to answer
         # them.
