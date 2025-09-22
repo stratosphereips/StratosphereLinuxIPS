@@ -498,6 +498,16 @@ web_interface:
   # Slips has a web interface
   # Define the port to use
   port: 55000
+#############################
+access_point:
+  # Special configurations for when slips is running in the RPI as an AP.
+      #   https://stratospherelinuxips.readthedocs.io/en/develop/immune/installing_slips_in_the_rpi.html#protect-your-local-network-with-slips-on-the-rpi
+
+  # since users should eb connected to the RPI wifi,
+  #  should slips drop incoming traffic from local devices that are not connected to the RPI wifi?
+  trust_local_network: False
+
+
 
 #############################
 global_p2p:

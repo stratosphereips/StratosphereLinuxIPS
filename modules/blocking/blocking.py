@@ -31,6 +31,7 @@ class Blocking(IModule):
     def init(self):
         self.c1 = self.db.subscribe("new_blocking")
         self.c2 = self.db.subscribe("tw_closed")
+        self.read_configuration()
         self.channels = {
             "new_blocking": self.c1,
             "tw_closed": self.c2,
@@ -53,6 +54,9 @@ class Blocking(IModule):
 
         self.ap_info: None | Dict[str, str] = self.db.get_ap_info()
         self.is_running_in_ap_mode = True if self.ap_info else False
+
+    def read_configuration(self):
+        self.trust_local_network: bool = self.conf.get_trust_local_network()
 
     def log(self, text: str):
         """Logs the given text to the blocking log file"""
@@ -212,6 +216,11 @@ class Blocking(IModule):
         to the router and back on eth0
         """
         if not self.is_running_in_ap_mode:
+            return
+
+        if self.trust_local_network:
+            # then user trusts the local network, no need to add these
+            # strict FW rules
             return
 
         self.print(

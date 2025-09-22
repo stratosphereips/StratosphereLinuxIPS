@@ -745,3 +745,10 @@ class ConfigParser(object):
             "bootstrapping_modules",
             ["fidesModule", "irisModule"],
         )
+
+    def get_trust_local_network(self):
+        return self.read_configuration(
+            "access_point",
+            "trust_local_network",
+            False,
+        )
