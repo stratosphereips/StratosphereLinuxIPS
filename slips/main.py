@@ -507,7 +507,8 @@ class Main:
                 self.print(str(e), 1, 1)
                 self.terminate_slips()
 
-            self.ap_manager.set_ap_bridge_interfaces()
+            if self.ap_manager.is_running_as_ap():
+                self.ap_manager.set_ap_bridge_interfaces()
 
             self.db.set_input_metadata(
                 {
