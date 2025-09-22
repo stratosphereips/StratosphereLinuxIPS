@@ -507,8 +507,16 @@ class Main:
                 self.print(str(e), 1, 1)
                 self.terminate_slips()
 
-            if self.ap_manager.is_running_as_ap():
-                self.ap_manager.set_ap_bridge_interfaces()
+            if self.ap_manager.is_ap_running():
+                if self.ap_manager.is_ap_in_bridge_mode():
+                    self.ap_manager.set_ap_bridge_interfaces()
+                else:
+                    # now we're sure it's running an AP and not in bridge mode
+                    self.print(
+                        "Slips supports running in access point "
+                        "bridge mode only. Stopping."
+                    )
+                    self.terminate_slips()
 
             self.db.set_input_metadata(
                 {

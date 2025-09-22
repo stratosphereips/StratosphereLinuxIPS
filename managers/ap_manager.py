@@ -16,7 +16,27 @@ class APManager:
         self.bridge_name = None
         self.eth_interface = None
 
-    def is_running_as_ap(self) -> bool:
+    def is_ap_running(self):
+        """returns true if a running AP is detected"""
+        command = ["iw", "dev"]
+        try:
+            result = subprocess.run(
+                command, capture_output=True, text=True, check=True
+            )
+            lines = result.stdout.splitlines()
+            for line in lines:
+                if "type AP" in line:
+                    return True
+            return False
+        except subprocess.CalledProcessError:
+            return False
+        except FileNotFoundError:
+            return False
+
+    def is_ap_in_bridge_mode(self) -> bool:
+        """
+        determines if the running AP is in bridge mode or not
+        """
         eth_interface = self.is_slips_running_on_interface()
         if not eth_interface:
             return False
