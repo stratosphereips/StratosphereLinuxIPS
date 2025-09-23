@@ -93,48 +93,47 @@ class APManager:
 
         requires self.bridge_name and self.eth_interface  to be set.
         """
-        try:
-            if not self.bridge_name or not self.eth_interface:
-                return None
-
-            # get all interfaces in that bridge
-            bridge_ifaces = []
-            bridge_interfaces_cmd = subprocess.run(
-                ["bridge", "link"], capture_output=True, text=True, check=True
-            )
-            for line in bridge_interfaces_cmd.stdout.splitlines():
-                if f"master {self.bridge_name}" in line:
-                    iface = line.split()[1].split("@")[0][:-1]
-                    bridge_ifaces.append(iface)
-
-            # pick the wifi interface (not the given eth)
-            wifi_iface = None
-            for iface in bridge_ifaces:
-                if iface != self.eth_interface and os.path.exists(
-                    f"/sys/class/net/{iface}/wireless"
-                ):
-                    wifi_iface = iface
-                    break
-
-            if not wifi_iface:
-                return None
-
-            # confirm wifi_iface is in AP mode
-            iw = subprocess.run(
-                ["iw", "dev"], capture_output=True, text=True, check=True
-            )
-            blocks = iw.stdout.split("Interface ")
-            for block in blocks:
-                if block.startswith(wifi_iface) and re.search(
-                    r"type\s+AP", block
-                ):
-                    interfaces = {
-                        "wifi_interface": wifi_iface,
-                        "ethernet_interface": self.eth_interface,
-                    }
-                    self.db.set_ap_info(interfaces)
-                    return
-
+        if not self.bridge_name or not self.eth_interface:
+            print("@@@@@@@@@@@@@@@@ missing dependencies")
             return None
-        except Exception:
+
+        # get all interfaces in that bridge
+        bridge_ifaces = []
+        bridge_interfaces_cmd = subprocess.run(
+            ["bridge", "link"], capture_output=True, text=True, check=True
+        )
+        for line in bridge_interfaces_cmd.stdout.splitlines():
+            if f"master {self.bridge_name}" in line:
+                iface = line.split()[1].split("@")[0][:-1]
+                bridge_ifaces.append(iface)
+
+        # pick the wifi interface (not the given eth)
+        wifi_iface = None
+        for iface in bridge_ifaces:
+            if iface != self.eth_interface and os.path.exists(
+                f"/sys/class/net/{iface}/wireless"
+            ):
+                wifi_iface = iface
+                break
+
+        if not wifi_iface:
+            print("@@@@@@@@@@@@@@@@ no wifi interface?")
             return None
+
+        # confirm wifi_iface is in AP mode
+        iw = subprocess.run(
+            ["iw", "dev"], capture_output=True, text=True, check=True
+        )
+        blocks = iw.stdout.split("Interface ")
+        for block in blocks:
+            if block.startswith(wifi_iface) and re.search(r"type\s+AP", block):
+                interfaces = {
+                    "wifi_interface": wifi_iface,
+                    "ethernet_interface": self.eth_interface,
+                }
+                self.main.db.set_ap_info(interfaces)
+                return interfaces
+        else:
+            print("@@@@@@@@@@@@@@@@ cant confirm!!")
+
+        return None

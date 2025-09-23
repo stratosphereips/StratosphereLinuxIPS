@@ -223,6 +223,11 @@ class Blocking(IModule):
             # strict FW rules
             return
 
+        print(
+            f"@@@@@@@@@@@@@@@@ self.ap_info {self.ap_info} "
+            f"{type(self.ap_info)}"
+        )
+
         self.print(
             f"Slips is running in AP bridged mode. Adding iptables "
             f"rules to protect AP clients on "
