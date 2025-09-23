@@ -704,7 +704,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         "ethernet_interface": <eth0>}
         or None if slips is not running as an AP
         """
-        return self.r.get(self.constants.IS_RUNNING_AS_AP)
+        ap_info = self.r.get(self.constants.IS_RUNNING_AS_AP)
+        if not ap_info:
+            return None
+        return json.loads(ap_info)
 
     def get_redis_keys_len(self) -> int:
         """returns the length of all keys in the db"""
