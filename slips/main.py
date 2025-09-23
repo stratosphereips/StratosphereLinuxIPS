@@ -507,10 +507,15 @@ class Main:
                 self.print(str(e), 1, 1)
                 self.terminate_slips()
 
+            print("@@@@@@@@@@@@@@@@ checking AP!")
             if self.ap_manager.is_ap_running():
+                print("@@@@@@@@@@@@@@@@ yes AP is running")
                 if self.ap_manager.is_ap_in_bridge_mode():
-                    self.ap_manager.set_ap_bridge_interfaces()
+                    print("@@@@@@@@@@@@@@@@ yes we're in bridge mode")
+                    x = self.ap_manager.set_ap_bridge_interfaces()
+                    print(f"@@@@@@@@@@@@@@@@ {x}  got AP interfaces")
                 else:
+                    print("@@@@@@@@@@@@@@@@ no were not in bridge mode")
                     # now we're sure it's running an AP and not in bridge mode
                     self.print(
                         "Slips supports running in access point "
