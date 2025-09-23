@@ -72,7 +72,7 @@ class APManager:
 
     def is_slips_running_on_interface(self) -> str | None:
         """sets self.eth_interface"""
-        eth_interface: str = getattr(self.args, "interface", None)
+        eth_interface: str = getattr(self.main.args, "interface", None)
         self.eth_interface = eth_interface
         return eth_interface
 
