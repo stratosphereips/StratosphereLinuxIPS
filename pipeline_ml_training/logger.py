@@ -9,6 +9,7 @@ class Logger:
         experiment_name: str = "default_experiment",
         path_to_logging_dir: str = "logs",
         path_to_logfile: str = "training.log",
+        overwrite: bool = False,
     ):
         self.path_to_logfile = path_to_logfile
         self.path_to_logging_dir = path_to_logging_dir
@@ -23,7 +24,7 @@ class Logger:
             self.path_to_logging_dir, self.name, self.path_to_logfile
         )
 
-        if os.path.exists(self.full_logfile_path):
+        if os.path.exists(self.full_logfile_path) and not overwrite:
             print(
                 f"Logfile '{self.full_logfile_path}' already exists! Aborting to avoid overwrite."
             )

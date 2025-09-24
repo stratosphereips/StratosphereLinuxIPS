@@ -18,7 +18,9 @@ import json
 
 
 class ZeekDataset:
-    def __init__(self, root: Union[str, Path], seed: Optional[int] = None):
+    def __init__(
+        self, root: Union[str, Path], batch_size, seed: Optional[int] = None
+    ):
         self.root = Path(root)
         self.seed = seed
         self.rng = random.Random(seed)
@@ -40,9 +42,10 @@ class ZeekDataset:
         self._index_file()
 
         self.indices: List[int] = []
-        self.batch_size: int = 0
+        self.batch_size: int = batch_size
         self._batch_pos: int = 0
         self.epoch: int = 0
+        self.reset_epoch(batch_size=batch_size)
 
     def __len__(self):
         return self.total_lines
@@ -219,22 +222,66 @@ class ZeekDataset:
             return train_idx, val_idx
 
     def next_batch(self):
+        # ensure index built
+        if not hasattr(self, "valid_indices") or self.total_lines == 0:
+            raise RuntimeError("Dataset empty or not indexed")
+
+        # If we finished an epoch, reshuffle and start a new one
         if self._batch_pos >= len(self.indices):
             self.epoch += 1
             self.rng.shuffle(self.indices)
             self._batch_pos = 0
 
-        batch_idx = self.indices[
+        # get the *relative* valid-flow indices for this batch (values 0..total_lines-1)
+        rel_inds = self.indices[
             self._batch_pos : self._batch_pos + self.batch_size
         ]
         self._batch_pos += self.batch_size
 
+        # if nothing requested, return empty (shouldn't happen normally)
+        if not rel_inds:
+            return []
+
+        # Map relative indices -> actual file data-line positions
+        # (self.valid_indices stores file positions for each relative index)
+        target_positions = {self.valid_indices[r] for r in rel_inds}
+        # map position -> relative index label (for label lookup)
+        pos_to_label = {
+            self.valid_indices[r]: self.labels[r] for r in rel_inds
+        }
+
         records = []
-        for i, rec in enumerate(self._iter_lines()):
-            if i in batch_idx:
-                records.append(rec)
-                if len(records) == len(batch_idx):
-                    break
+        found = 0
+        with open(
+            self.current_file, "r", encoding="utf-8", errors="ignore"
+        ) as fh:
+            file_idx = 0  # counts data lines (non-# lines)
+            for line in fh:
+                if line.startswith("#"):
+                    continue
+                if file_idx in target_positions:
+                    parts = line.strip().split("\t")
+                    record = {
+                        h: self._cast(
+                            parts[i],
+                            self.types[i] if i < len(self.types) else None,
+                        )
+                        for i, h in enumerate(self.headers)
+                    }
+                    record["label"] = pos_to_label.get(file_idx, str(BENIGN))
+                    records.append(record)
+                    found += 1
+                    if found == len(target_positions):
+                        break
+                file_idx += 1
+
+        # defensive: if we didn't find all expected records, warn (shouldn't happen)
+        if found != len(target_positions):
+            # optional: raise or log; for now we print a short warning
+            print(
+                f"Warning: expected {len(target_positions)} records in batch but found {found}"
+            )
+
         return records
 
 
@@ -245,6 +292,7 @@ class ZeekDataset:
 
 def find_and_load_datasets(
     root_dir: Union[str, Path],
+    batch_size: int = 1000,
     prefix_regex: str = r"^\d{3}",
     data_subdir: str = "data",
     seed: Optional[int] = None,
@@ -266,7 +314,7 @@ def find_and_load_datasets(
         data_path = entry / data_subdir
         if not data_path.is_dir():
             continue
-        ds = ZeekDataset(data_path, seed=seed)
+        ds = ZeekDataset(data_path, batch_size=batch_size, seed=seed)
         loaders[entry.name] = ds
 
     return loaders
