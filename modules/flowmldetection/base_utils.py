@@ -1,250 +1,230 @@
-# base_utils.py
-
-import ast
+# base_utils.py  -- drop-in replacement
 import os
+import ast
+import re
+import traceback
+from typing import Dict, List, Optional
 
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
 
 
-def ensure_dir(path):
-    os.makedirs(path, exist_ok=True)
-    return path
-
-
-def parse_training_log_line(line):
+# ------------------------
+# Filesystem helpers
+# ------------------------
+def ensure_dir(path: str) -> str:
     """
-    Parse one line of training log, returning a dict:
-      {
-        'total_labels': float,
-        'testing_size': int,
-        'seen': {'Background':…, …},
-        'predicted': {…},
-        'per_class': {
-           'Background': {'TP':…, 'FP':…, 'TN':…, 'FN':…}, …
-        },
-        'training_size': int (optional, only if train/val split),
-        'training_seen': dict (optional, only if train/val split),
-        'training_predicted': dict (optional, only if train/val split),
-        'training_per_class': dict (optional, only if train/val split)
-      }
+    Ensure directory exists, return the normalized path.
     """
-    result = {}
+    p = os.path.abspath(path)
+    os.makedirs(p, exist_ok=True)
+    return p
 
+
+# ------------------------
+# Parsing helpers
+# ------------------------
+def _safe_literal_eval(s: str):
     try:
-        # Check if this line has training data (train/val split format)
-        has_training_data = "Training errors:" in line
+        return ast.literal_eval(s)
+    except Exception:
+        # fallback: try replacing single quotes with double quotes for malformed JSON-like strings
+        try:
+            return ast.literal_eval(s.replace("'", '"'))
+        except Exception:
+            raise
 
-        if has_training_data:
-            # Split the line into test part and training part
-            parts = line.split(", Training errors: ")
-            test_part = parts[0]
-            training_part = parts[1]
-        else:
-            # Only test data format
-            test_part = line
-            training_part = None
 
-        # Parse test data (always present)
-        parse_section(test_part, result, prefix="")
+def parse_training_log_line(line: str) -> Optional[Dict]:
+    """
+    Parse one line of the 'new' training log format you provided.
 
-        # Parse training data if present
-        if training_part:
-            parse_section(training_part, result, prefix="training_")
+    Expected example format (single line):
+      Total labels: 500, Validation size: 49, Validation seen labels: {'Malicious': 36, 'Benign': 13},
+      Validation predicted labels: {'Malicious': 38, 'Benign': 11}, Validation metrics: {'TP': 36, 'FP': 2, 'FN': 0, 'TN': 11},
+      Training size: 450, Training seen labels: {...}, Training predicted labels: {...}, Training metrics: {...}
 
+    Returns a dict with keys:
+      - 'total_labels' (float) if present
+      - 'testing_size' (int) if present
+      - 'training_size' (int) if present
+      - 'seen' (dict) : validation seen labels (if present)
+      - 'predicted' (dict) : validation predicted labels (if present)
+      - 'per_class' (dict) : per-class counts for validation in canonical form:
+            {'Malicious': {'TP':..., 'FP':..., 'TN':..., 'FN':...}, 'Benign': {...}}
+      - 'training_seen', 'training_predicted', 'training_per_class' similarly for training section if present.
+
+    Returns None if parsing fails.
+    """
+    out = {}
+    try:
+        s = line.strip()
+
+        # total labels (float or int)
+        m_total = re.search(
+            r"Total labels\s*:\s*([0-9]+(?:\.[0-9]+)?)", s, re.IGNORECASE
+        )
+        if m_total:
+            val = m_total.group(1)
+            out["total_labels"] = float(val) if "." in val else int(val)
+
+        # Testing/Validation size (two variants: 'Validation size' or 'Testing size')
+        m_test_size = re.search(
+            r"(?:Validation|Testing) size\s*:\s*(\d+)", s, re.IGNORECASE
+        )
+        if m_test_size:
+            out["testing_size"] = int(m_test_size.group(1))
+
+        # Training size (optional)
+        m_train_size = re.search(
+            r"Training size\s*:\s*(\d+)", s, re.IGNORECASE
+        )
+        if m_train_size:
+            out["training_size"] = int(m_train_size.group(1))
+
+        # Validation Seen labels / Predicted labels
+        m_seen = re.search(
+            r"(?:Validation|Testing) seen labels\s*:\s*(\{.*?\})", s
+        )
+        if m_seen:
+            out["seen"] = _safe_literal_eval(m_seen.group(1))
+
+        m_pred = re.search(
+            r"(?:Validation|Testing) predicted labels\s*:\s*(\{.*?\})", s
+        )
+        if m_pred:
+            out["predicted"] = _safe_literal_eval(m_pred.group(1))
+
+        # Validation metrics: dictionary with TP/FP/TN/FN
+        m_metrics = re.search(
+            r"(?:Validation|Testing) metrics\s*:\s*(\{.*?\})", s
+        )
+        if m_metrics:
+            metrics = _safe_literal_eval(m_metrics.group(1))
+            tp = int(metrics.get("TP", 0))
+            fp = int(metrics.get("FP", 0))
+            fn = int(metrics.get("FN", 0))
+            tn = int(metrics.get("TN", 0))
+            # canonical per_class with Malicious entry (and inverted Benign)
+            per_class = {
+                "Malicious": {"TP": tp, "FP": fp, "TN": tn, "FN": fn},
+                "Benign": {"TP": tn, "FP": fn, "TN": tp, "FN": fp},
+            }
+            out["per_class"] = per_class
+
+        # Training part (if present). Use "Training seen labels", "Training predicted labels", "Training metrics"
+        m_seen_tr = re.search(r"Training seen labels\s*:\s*(\{.*?\})", s)
+        if m_seen_tr:
+            out["training_seen"] = _safe_literal_eval(m_seen_tr.group(1))
+
+        m_pred_tr = re.search(r"Training predicted labels\s*:\s*(\{.*?\})", s)
+        if m_pred_tr:
+            out["training_predicted"] = _safe_literal_eval(m_pred_tr.group(1))
+
+        m_metrics_tr = re.search(r"Training metrics\s*:\s*(\{.*?\})", s)
+        if m_metrics_tr:
+            metrics = _safe_literal_eval(m_metrics_tr.group(1))
+            tp = int(metrics.get("TP", 0))
+            fp = int(metrics.get("FP", 0))
+            fn = int(metrics.get("FN", 0))
+            tn = int(metrics.get("TN", 0))
+            training_per_class = {
+                "Malicious": {"TP": tp, "FP": fp, "TN": tn, "FN": fn},
+                "Benign": {"TP": tn, "FP": fn, "TN": tp, "FN": fp},
+            }
+            out["training_per_class"] = training_per_class
+
+        # If per_class is still missing but we have seen/predicted entries with class names,
+        # create zero-count placeholders (can't infer TP/FP/TN/FN without explicit metrics).
+        if "per_class" not in out and "seen" in out and "predicted" in out:
+            seen_keys = set(out["seen"].keys())
+            if seen_keys:
+                pc = {}
+                for k in seen_keys:
+                    pc[k] = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
+                out["per_class"] = pc
+
+        return out
     except Exception as e:
-        print(f"Failed to parse log line: {e}")
+        print("[WARN] parse_training_log_line failed:", e)
+        traceback.print_exc()
         return None
 
-    return result
 
-
-def parse_section(section_text, result_dict, prefix=""):
+def parse_testing_log_line(line: str) -> Optional[Dict]:
     """
-    Helper function to parse a section (either test or training data)
+    Parse one line of the testing log (single format).
+
+    Expected example:
+    Total flows: 54; Seen labels: {'Malicious': 42, 'Benign': 12}; Predicted labels: {'Malicious': 42, 'Benign': 12}; Malware metrics (TP/FP/TN/FN): {'TP': 42, 'FP': 0, 'TN': 12, 'FN': 0};
+
+    Returns dict with:
+      - total_flows (int)
+      - seen (dict)
+      - predicted (dict)
+      - per_class: canonical per-class counts dict (Malicious/Benign)
+      - binary_summary: raw TP/FP/TN/FN for Malicious class
     """
-    # Extract Total/Training labels
-    labels_key = "Training size:" if prefix else "Total labels:"
-    result_key = f"{prefix}total_labels" if not prefix else f"{prefix}size"
+    out = {}
+    try:
+        s = line.strip()
+        m_total = re.search(r"Total flows\s*:\s*(\d+)", s, re.IGNORECASE)
+        if m_total:
+            out["total_flows"] = int(m_total.group(1))
 
-    if labels_key in section_text:
-        if prefix:  # Training size is an integer
-            size_str = (
-                section_text.split(labels_key, 1)[1].split(",")[0].strip()
-            )
-            result_dict[result_key] = int(size_str)
-        else:  # Total labels is a float
-            total_str = (
-                section_text.split(labels_key, 1)[1].split(",")[0].strip()
-            )
-            result_dict[result_key] = float(total_str)
+        m_seen = re.search(r"Seen labels\s*:\s*(\{.*?\})", s)
+        if m_seen:
+            out["seen"] = _safe_literal_eval(m_seen.group(1))
 
-    # Extract Testing/Training size (only for test section when no training data)
-    if not prefix and "Testing size:" in section_text:
-        test_str = (
-            section_text.split("Testing size:", 1)[1].split(",")[0].strip()
+        m_pred = re.search(r"Predicted labels\s*:\s*(\{.*?\})", s)
+        if m_pred:
+            out["predicted"] = _safe_literal_eval(m_pred.group(1))
+
+        # Malware metrics dict
+        m_metrics = re.search(
+            r"Malware metrics(?:\s*\(.*?\))?\s*[:=]\s*(\{.*?\})",
+            s,
+            re.IGNORECASE,
         )
-        result_dict["testing_size"] = int(test_str)
-
-    # Extract Seen/Training seen labels
-    seen_key = "Training seen labels:" if prefix else "Seen labels:"
-    predicted_key = (
-        "Training predicted labels:" if prefix else "Predicted labels:"
-    )
-
-    if seen_key in section_text:
-        if predicted_key in section_text:
-            seen_str = (
-                section_text.split(seen_key, 1)[1]
-                .split(f", {predicted_key}")[0]
-                .strip()
-            )
-        else:
-            # Fallback - split on next comma-space pattern that looks like a key
-            seen_str = (
-                section_text.split(seen_key, 1)[1].split(", ")[0].strip()
-            )
-            # Remove any trailing comma
-            if seen_str.endswith(","):
-                seen_str = seen_str[:-1]
-
-        result_dict[f"{prefix}seen"] = ast.literal_eval(seen_str)
-
-    # Extract Predicted/Training predicted labels
-    if predicted_key in section_text:
-        per_class_key = (
-            "Training per-class metrics:" if prefix else "Per-class metrics:"
-        )
-
-        if per_class_key in section_text:
-            pred_str = (
-                section_text.split(predicted_key, 1)[1]
-                .split(f", {per_class_key}")[0]
-                .strip()
-            )
-        else:
-            # Fallback
-            pred_str = (
-                section_text.split(predicted_key, 1)[1].split(", ")[0].strip()
-            )
-            if pred_str.endswith(","):
-                pred_str = pred_str[:-1]
-
-        result_dict[f"{prefix}predicted"] = ast.literal_eval(pred_str)
-
-    # Extract Per-class/Training per-class metrics
-    per_class_key = (
-        "Training per-class metrics:" if prefix else "Per-class metrics:"
-    )
-
-    if per_class_key in section_text:
-        per_class_str = section_text.split(per_class_key, 1)[1].strip()
-        # Remove any trailing content that's not part of the dict
-        if per_class_str.endswith("}"):
-            # Find the matching closing brace
-            brace_count = 0
-            end_pos = 0
-            for i, char in enumerate(per_class_str):
-                if char == "{":
-                    brace_count += 1
-                elif char == "}":
-                    brace_count -= 1
-                    if brace_count == 0:
-                        end_pos = i + 1
-                        break
-            per_class_str = per_class_str[:end_pos]
-
-        result_dict[f"{prefix}per_class"] = ast.literal_eval(per_class_str)
+        if m_metrics:
+            bm = _safe_literal_eval(m_metrics.group(1))
+            tp = int(bm.get("TP", 0))
+            fp = int(bm.get("FP", 0))
+            tn = int(bm.get("TN", 0))
+            fn = int(bm.get("FN", 0))
+            out["per_class"] = {
+                "Malicious": {"TP": tp, "FP": fp, "TN": tn, "FN": fn},
+                "Benign": {"TP": tn, "FP": fn, "TN": tp, "FN": fp},
+            }
+            out["binary_summary"] = {"TP": tp, "FP": fp, "TN": tn, "FN": fn}
+        return out
+    except Exception as e:
+        print("[WARN] parse_testing_log_line failed:", e)
+        traceback.print_exc()
+        return None
 
 
-def parse_testing_log_line(line):
+# ------------------------
+# Metric computations
+# ------------------------
+def compute_binary_metrics(counts: Dict[str, int]) -> Dict[str, float]:
     """
-    Parse one line of testing log, returning a dict:
-      {
-        'total_flows': int,
-        'seen': {...},
-        'predicted': {...},
-        'per_class': {…},
-        'binary_summary': {'TP':…, 'FP':…, 'TN':…, 'FN':…}   # for benign/malicious only
-      }
+    Given a dict with integer counts: {'TP':..., 'FP':..., 'TN':..., 'FN':...}
+    return a dict with:
+      accuracy, precision, recall, f1
     """
-    # split on semicolons
-    segments = line.strip().split(";")
-    data = {}
-    for seg in segments:
-        seg = seg.strip()
-        if seg.startswith("Total flows:"):
-            data["total_flows"] = int(seg.split(":")[1])
-        elif seg.startswith("Seen labels:"):
-            data["seen"] = eval(seg.split(":", 1)[1].strip())
-        elif seg.startswith("Predicted labels:"):
-            data["predicted"] = eval(seg.split(":", 1)[1].strip())
-        elif seg.startswith("Per-class metrics:"):
-            data["per_class"] = eval(seg.split(":", 1)[1].strip())
-        elif seg.startswith("Benign/Malicious only:"):
-            bm = seg.split(":", 1)[1].strip()
-            # e.g. TP=214, FP=0, TN=8, FN=7
-            kv = dict(item.split("=") for item in bm.split(", "))
-            data["binary_summary"] = {k: int(v) for k, v in kv.items()}
-    return data
+    tp = int(counts.get("TP", 0))
+    fp = int(counts.get("FP", 0))
+    tn = int(counts.get("TN", 0))
+    fn = int(counts.get("FN", 0))
 
+    total = tp + tn + fp + fn
+    accuracy = (tp + tn) / total if total > 0 else 0.0
 
-def compute_multi_metrics(per_class):
-    """
-    Given per_class dict, return dict with
-      accuracy, macro_precision, macro_recall, macro_f1,
-      micro_precision, micro_recall, micro_f1
-    """
-    # accumulate counts
-    TP = FP = TN = FN = 0
-    precisions = []
-    recalls = []
-    f1s = []
-    for cls, m in per_class.items():
-        tp, fp, tn, fn = m["TP"], m["FP"], m["TN"], m["FN"]
-        TP += tp
-        FP += fp
-        TN += tn
-        FN += fn
-        p = tp / (tp + fp) if tp + fp > 0 else 0.0
-        r = tp / (tp + fn) if tp + fn > 0 else 0.0
-        f1 = 2 * p * r / (p + r) if p + r > 0 else 0.0
-        precisions.append(p)
-        recalls.append(r)
-        f1s.append(f1)
-    accuracy = (
-        (TP + TN) / (TP + TN + FP + FN) if TP + TN + FP + FN > 0 else 0.0
-    )
-    prec = TP / (TP + FP) if TP + FP > 0 else 0.0
-    rec = TP / (TP + FN) if TP + FN > 0 else 0.0
-    f1 = (2 * prec * rec) / (prec + rec) if prec + rec > 0 else 0.0
-    return {
-        "accuracy": accuracy,
-        "macro_precision": np.mean(precisions),
-        "macro_recall": np.mean(recalls),
-        "macro_f1": np.mean(f1s),
-        "micro_precision": prec,
-        "micro_recall": rec,
-        "micro_f1": f1,
-    }
-
-
-def compute_binary_metrics(binary_counts_dict):
-    """
-    Given a dict with keys TP, FP, TN, FN, compute accuracy, precision, recall, f1.
-    """
-    tp = binary_counts_dict.get("TP", 0)
-    fp = binary_counts_dict.get("FP", 0)
-    tn = binary_counts_dict.get("TN", 0)
-    fn = binary_counts_dict.get("FN", 0)
-
-    accuracy = (
-        (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0.0
-    )
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     f1 = (
-        2 * precision * recall / (precision + recall)
+        (2 * precision * recall / (precision + recall))
         if (precision + recall) > 0
         else 0.0
     )
@@ -257,179 +237,167 @@ def compute_binary_metrics(binary_counts_dict):
     }
 
 
+def compute_multi_metrics(
+    per_class: Dict[str, Dict[str, int]],
+) -> Dict[str, float]:
+    """
+    Given a per_class dict:
+      {class_name: {'TP':..., 'FP':..., 'TN':..., 'FN':...}, ...}
+    returns:
+      {
+        "accuracy",
+        "macro_precision", "macro_recall", "macro_f1",
+        "micro_precision", "micro_recall", "micro_f1"
+      }
+    """
+    # accumulate counts
+    TP_total = 0
+    FP_total = 0
+    TN_total = 0
+    FN_total = 0
+    precisions = []
+    recalls = []
+    f1s = []
+
+    for cls, c in per_class.items():
+        tp = int(c.get("TP", 0))
+        fp = int(c.get("FP", 0))
+        tn = int(c.get("TN", 0))
+        fn = int(c.get("FN", 0))
+        TP_total += tp
+        FP_total += fp
+        TN_total += tn
+        FN_total += fn
+
+        p = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        r = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = (2 * p * r / (p + r)) if (p + r) > 0 else 0.0
+        precisions.append(p)
+        recalls.append(r)
+        f1s.append(f1)
+
+    total = TP_total + FP_total + TN_total + FN_total
+    accuracy = (TP_total + TN_total) / total if total > 0 else 0.0
+
+    micro_precision = (
+        TP_total / (TP_total + FP_total) if (TP_total + FP_total) > 0 else 0.0
+    )
+    micro_recall = (
+        TP_total / (TP_total + FN_total) if (TP_total + FN_total) > 0 else 0.0
+    )
+    micro_f1 = (
+        (2 * micro_precision * micro_recall / (micro_precision + micro_recall))
+        if (micro_precision + micro_recall) > 0
+        else 0.0
+    )
+
+    macro_precision = float(np.mean(precisions)) if precisions else 0.0
+    macro_recall = float(np.mean(recalls)) if recalls else 0.0
+    macro_f1 = float(np.mean(f1s)) if f1s else 0.0
+
+    return {
+        "accuracy": accuracy,
+        "macro_precision": macro_precision,
+        "macro_recall": macro_recall,
+        "macro_f1": macro_f1,
+        "micro_precision": micro_precision,
+        "micro_recall": micro_recall,
+        "micro_f1": micro_f1,
+    }
+
+
+# ------------------------
+# Plotting helpers
+# ------------------------
 def plot_major_metrics_together(
-    series, outpath, title="Metrics over tests", xvals=None, xlabel="Test #"
+    series: List[Dict[str, float]],
+    outpath: str,
+    title: str = "Metrics over tests",
+    xvals: Optional[List] = None,
+    xlabel: str = "Index",
 ):
     """
-    Plots multiple metrics from a series of dictionaries on a single graph and saves the plot to a file.
-    Backwards-compatible, but robust to:
-      - xvals being numeric or string labels (including many empty labels),
-      - missing metric keys in some series entries,
-      - series that represent counts (values > 1).
+    Plot multiple named metrics from a series of dicts.
+    series: list where each entry is a dict {metric_name: numeric_value, ...}
+    Example:
+      series = [{'accuracy':0.9,'precision':0.8}, {'accuracy':0.92,'precision':0.85},...]
+    or combined series where keys are 'Validation'/'Training' and values numeric.
     """
-
-    if series is None or not series:
-        print("No data to plot for", title)
+    if series is None or len(series) == 0:
+        print(f"[INFO] plot_major_metrics_together: no data for {outpath}")
         return
 
-    # collect metric keys and ensure deterministic order
-    what_metrics = list(series[0].keys())
-    # build a dict metric -> list of values (use np.nan if missing to avoid wrong connections)
-    print_dict = {metric: [] for metric in what_metrics}
-    n = len(series)
-    for metric in what_metrics:
-        vals = []
-        for s in series:
-            # use get to avoid KeyError; if key missing, use np.nan so matplotlib breaks line
-            v = s.get(metric, np.nan)
-            # ensure numeric or nan
-            vals.append(np.nan if v is None else v)
-        print_dict[metric] = vals
+    # Ensure output directory exists
+    outdir = os.path.dirname(os.path.abspath(outpath))
+    if outdir:
+        os.makedirs(outdir, exist_ok=True)
 
-    # Determine numeric x positions for plotting and tick positions/labels
-    # If xvals is None -> use 1..n (1-based to match previous behavior)
+    # Determine the full set of metric names across all entries (preserve order from first entry)
+    metric_names = []
+    first_keys = list(series[0].keys())
+    for k in first_keys:
+        if k not in metric_names:
+            metric_names.append(k)
+    # Add any other keys that appear later
+    for entry in series[1:]:
+        for k in entry.keys():
+            if k not in metric_names:
+                metric_names.append(k)
+
+    # Build lists of values for each metric
+    metric_values = {m: [] for m in metric_names}
+    for entry in series:
+        for m in metric_names:
+            metric_values[m].append(entry.get(m, 0.0))
+
+    # X axis
+    n = len(next(iter(metric_values.values())))
     if xvals is None:
-        x_positions = list(range(1, n + 1))
-        # show all ticks if not too crowded; otherwise sparsify (show subset)
-        tick_positions = x_positions
-        tick_labels = [str(x) for x in x_positions]
+        x_axis = list(range(1, n + 1))
     else:
-        # If all elements of xvals are numeric (int/float), use them as x positions
-        all_numeric = (
-            all(
-                isinstance(v, (int, float, np.integer, np.floating))
-                for v in xvals
-            )
-            and len(xvals) == n
-        )
-
-        if all_numeric:
-            # use numeric x axis exactly as provided
-            x_positions = list(map(float, xvals))
-            # sparsify ticks if many points
-            if n <= 20:
-                tick_positions = x_positions
-                tick_labels = [
-                    str(int(x)) if float(x).is_integer() else str(x)
-                    for x in x_positions
-                ]
+        # if xvals length doesn't match n, fallback to indices
+        try:
+            if len(xvals) == n:
+                x_axis = xvals
             else:
-                # pick ~15 ticks including last
-                max_ticks = 15
-                step = max(1, n // max_ticks)
-                indices = list(range(0, n, step))
-                if indices[-1] != n - 1:
-                    indices.append(n - 1)
-                tick_positions = [x_positions[i] for i in indices]
-                tick_labels = [
-                    (
-                        str(int(x_positions[i]))
-                        if float(x_positions[i]).is_integer()
-                        else str(x_positions[i])
-                    )
-                    for i in indices
-                ]
-        else:
-            # xvals are labels (strings or mixed) -> plot at indices 0..n-1
-            x_positions = list(range(n))
-            # choose tick indices where label is non-empty, or sparsify if none or too many
-            provided_labels = ["" if v is None else str(v) for v in xvals]
-            non_empty_indices = [
-                i for i, lab in enumerate(provided_labels) if lab.strip() != ""
-            ]
-            if len(non_empty_indices) == 0:
-                # no labels provided -> fallback: show a sparse set of batch numbers
-                if n <= 20:
-                    tick_positions = x_positions
-                    tick_labels = [str(i) for i in x_positions]
-                else:
-                    max_ticks = 15
-                    step = max(1, n // max_ticks)
-                    indices = list(range(0, n, step))
-                    if indices[-1] != n - 1:
-                        indices.append(n - 1)
-                    tick_positions = indices
-                    tick_labels = [str(i) for i in indices]
-            else:
-                # show only the non-empty labels (this avoids label crowding)
-                tick_positions = non_empty_indices
-                tick_labels = [provided_labels[i] for i in non_empty_indices]
+                x_axis = list(range(1, n + 1))
+        except Exception:
+            x_axis = list(range(1, n + 1))
 
-    # Plotting: always use numeric x_positions for plotting; missing values are np.nan
-    plt.figure()
-    for metric, values in print_dict.items():
-        # ensure length matches n by trunc/pad with np.nan if needed
-        vals = list(values)
-        if len(vals) < n:
-            vals = vals + [np.nan] * (n - len(vals))
-        elif len(vals) > n:
-            vals = vals[:n]
-        # Convert to numpy array (matplotlib will break lines at np.nan)
-        y = np.array(vals, dtype=float)
-        plt.plot(x_positions, y, label=metric)
+    # Plot
+    plt.figure(figsize=(8, 4.5))
+    for m in metric_names:
+        vals = metric_values[m]
+        plt.plot(x_axis, vals, label=m, linewidth=1.5, marker=None)
 
     plt.xlabel(xlabel)
     plt.ylabel("Value")
-
-    # compute global min/max ignoring NaNs
-    all_values = [
-        v
-        for values in print_dict.values()
-        for v in values
-        if (not (isinstance(v, float) and np.isnan(v)))
-    ]
-    if len(all_values) == 0:
-        min_val, max_val = 0.0, 1.0
-    else:
-        min_val = float(min(all_values))
-        max_val = float(max(all_values))
-
-    # y-limits: if values are metrics (<=1) keep previous zoom behaviour; if counts (>1), autoscale to counts
-    if max_val <= 1.0:
-        margin = 0.05 * (max_val - min_val) if max_val > min_val else 0.05
-        lower = max(0.0, min_val - margin)
-        upper = min(1.0, max_val + margin)
-        # keep tight window only when the spread is small; otherwise keep [0,1]
-        if upper - lower < 0.5:
-            plt.ylim(lower, upper)
-        else:
-            plt.ylim(0, 1)
-    else:
-        # counts / large values: start from 0 up to a little above max
-        upper = max_val * 1.05 if max_val > 0 else 1.0
-        plt.ylim(0, upper)
-
     plt.title(title)
-    plt.legend()
+    plt.legend(loc="best", fontsize=8)
 
-    # set ticks & labels
-    try:
-        # if tick_positions were created as indices but x_positions are 1..n, map indices accordingly
-        if xvals is None:
-            plt.xticks(tick_positions, tick_labels, rotation=45, ha="right")
+    # Adjust y-limits: if values within [0,1] zoom, otherwise allow full range
+    all_vals = [v for vals in metric_values.values() for v in vals]
+    finite_vals = [float(x) for x in all_vals if np.isfinite(x)]
+    if finite_vals:
+        min_val = min(finite_vals)
+        max_val = max(finite_vals)
+        if max_val > min_val:
+            margin = 0.05 * (max_val - min_val)
         else:
-            # when x_positions are range(n) (0..n-1) but user expects 1-based, that's handled by caller preparing xvals
-            plt.xticks(tick_positions, tick_labels, rotation=45, ha="right")
-    except Exception:
-        # fallback: default ticks
-        plt.xticks(rotation=45, ha="right")
+            margin = 0.05
+        lower = min_val - margin
+        upper = max_val + margin
+        # If metrics mostly probabilities (0..1) and the span is small, restrict axis to [0,1]
+        if 0 <= min_val and max_val <= 1:
+            if upper - lower < 0.5:
+                plt.ylim(max(0, lower), min(1, upper))
+            else:
+                plt.ylim(0, 1)
+        else:
+            plt.ylim(lower, upper)
 
+    plt.grid(axis="y", linestyle=":", linewidth=0.5)
     plt.tight_layout()
     plt.savefig(outpath)
     plt.close()
-
-
-def plot_metric_types_over_classes(per_class_series, testing_dir):
-    metrics_types = ["TP", "FP", "TN", "FN"]
-    for metric in metrics_types:
-        plt.figure()
-        for cls, metrics in per_class_series.items():
-            plt.plot(metrics[metric], label=cls)
-        plt.xlabel("Test #")
-        plt.ylabel(f"{metric} Count (log scale)")
-        plt.yscale("log")
-        plt.title(f"{metric} over tests for all classes")
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(os.path.join(testing_dir, f"all_classes_{metric}_log.png"))
-        plt.close()
+    print(f"[SAVED] {outpath}")

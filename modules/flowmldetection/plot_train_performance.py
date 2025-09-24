@@ -1,4 +1,5 @@
-# plot_train_performance.py
+#!/usr/bin/env python3
+# plot_train_performance.py (drop-in replacement)
 import argparse
 import os
 import traceback
@@ -15,28 +16,48 @@ from base_utils import (
 
 def read_all_batches(logfile):
     entries = []
-    with open(logfile) as f:
-        for line in f:
-            if not line.strip():
+    print(f"[INFO] Reading logfile: {logfile}")
+    with open(logfile, "r") as f:
+        for i, line in enumerate(f):
+            line = line.strip()
+            if not line:
                 continue
             try:
                 data = parse_training_log_line(line)
+                if data is None:
+                    print(f"[WARN] Skipping unparsable line {i}: {line[:200]}")
+                    continue
+                # remove Background if present
+                if "per_class" in data:
+                    data["per_class"] = {
+                        k: v
+                        for k, v in data["per_class"].items()
+                        if k.lower() not in ("background", "bg")
+                    }
+                if "training_per_class" in data:
+                    data["training_per_class"] = {
+                        k: v
+                        for k, v in data["training_per_class"].items()
+                        if k.lower() not in ("background", "bg")
+                    }
                 entries.append(data)
             except Exception:
-                print(f"Failed to parse line: {line.strip()}")
+                print(f"[WARN] Failed to parse line {i}: {line[:200]}")
                 traceback.print_exc()
                 continue
+    print(f"[INFO] Parsed {len(entries)} batches from logfile")
     return entries
 
 
 def compute_multi_metrics_custom(per_class):
+    # reuse base compute_multi_metrics and add benign/malicious accuracy excluding background
     metrics = compute_multi_metrics(per_class)
     total_tp_fn = 0
     total_tp = 0
     for cls_name, counts in per_class.items():
-        if cls_name.lower() not in ["background", "bg"]:
-            total_tp_fn += counts["TP"] + counts["FN"]
-            total_tp += counts["TP"]
+        if cls_name.lower() not in ("background", "bg"):
+            total_tp_fn += counts.get("TP", 0) + counts.get("FN", 0)
+            total_tp += counts.get("TP", 0)
     metrics["benign_malicious_accuracy"] = (
         (total_tp / total_tp_fn) if total_tp_fn > 0 else 0.0
     )
@@ -47,7 +68,7 @@ def compute_malware_metrics(per_class):
     malware_metrics = {}
     malware_key = None
     for cls_name in per_class.keys():
-        if cls_name.lower() in ["malware", "malicious"]:
+        if cls_name.lower() in ("malware", "malicious"):
             malware_key = cls_name
             break
 
@@ -59,19 +80,21 @@ def compute_malware_metrics(per_class):
         fn = counts.get("FN", 0)
 
         malware_metrics["malware_fpr"] = (
-            fp / (fp + tn) if (fp + tn) > 0 else 0.0
+            (fp / (fp + tn)) if (fp + tn) > 0 else 0.0
         )
         malware_metrics["malware_fnr"] = (
-            fn / (fn + tp) if (fn + tp) > 0 else 0.0
+            (fn / (fn + tp)) if (fn + tp) > 0 else 0.0
         )
         malware_metrics["malware_fp_over_predicted"] = (
-            fp / (tp + fp) if (tp + fp) > 0 else 0.0
+            (fp / (tp + fp)) if (tp + fp) > 0 else 0.0
         )
 
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        malware_metrics["malware_precision"] = precision
+        malware_metrics["malware_recall"] = recall
         malware_metrics["malware_f1"] = (
-            2 * precision * recall / (precision + recall)
+            (2 * precision * recall / (precision + recall))
             if (precision + recall) > 0
             else 0.0
         )
@@ -79,6 +102,8 @@ def compute_malware_metrics(per_class):
         malware_metrics["malware_fpr"] = 0.0
         malware_metrics["malware_fnr"] = 0.0
         malware_metrics["malware_fp_over_predicted"] = 0.0
+        malware_metrics["malware_precision"] = 0.0
+        malware_metrics["malware_recall"] = 0.0
         malware_metrics["malware_f1"] = 0.0
 
     return malware_metrics
@@ -113,8 +138,9 @@ def process_cumulative_metrics(cumul_class_counters, class_names):
 
 
 def accumulate_metrics(entries):
+    print("[INFO] Accumulating batch and cumulative metrics...")
     has_training_data = any(
-        "training_seen" in entry for entry in entries if entry
+        "training_per_class" in entry for entry in entries if entry
     )
 
     batch_metrics_per_class = []
@@ -139,7 +165,10 @@ def accumulate_metrics(entries):
         }
 
     for data in entries:
-        per_class = data["per_class"]
+        per_class = data.get(
+            "per_class",
+            {cls: {"TP": 0, "FP": 0, "TN": 0, "FN": 0} for cls in class_names},
+        )
         batch_per_class, batch_multi = process_batch_metrics(
             per_class, class_names
         )
@@ -148,7 +177,9 @@ def accumulate_metrics(entries):
 
         for cls in class_names:
             for k in ["TP", "FP", "TN", "FN"]:
-                cumul_class_counters[cls][k] += per_class[cls][k]
+                cumul_class_counters[cls][k] += int(
+                    per_class.get(cls, {}).get(k, 0)
+                )
 
         cumul_per_class, cumul_multi = process_cumulative_metrics(
             cumul_class_counters, class_names
@@ -166,9 +197,9 @@ def accumulate_metrics(entries):
 
             for cls in class_names:
                 for k in ["TP", "FP", "TN", "FN"]:
-                    cumul_class_counters_training[cls][
-                        k
-                    ] += training_per_class[cls][k]
+                    cumul_class_counters_training[cls][k] += int(
+                        training_per_class.get(cls, {}).get(k, 0)
+                    )
 
             cumul_per_class_training, cumul_multi_training = (
                 process_cumulative_metrics(
@@ -178,6 +209,7 @@ def accumulate_metrics(entries):
             cumul_metrics_per_class_training.append(cumul_per_class_training)
             cumul_metrics_multi_training.append(cumul_multi_training)
 
+    print("[INFO] Done accumulating metrics.")
     if has_training_data:
         return (
             batch_metrics_per_class,
@@ -241,12 +273,12 @@ def plot_counts_series(
     series_of_dicts, outpath, title, xlabels=None, xlabel="Batch"
 ):
     if series_of_dicts is None or not series_of_dicts:
-        print("No data to plot for", title)
+        print("[INFO] No data to plot for", title)
         return
 
     classes = list(next(iter(series_of_dicts)).keys())
     values_per_class = {
-        c: [entry[c] for entry in series_of_dicts] for c in classes
+        c: [entry.get(c, 0) for entry in series_of_dicts] for c in classes
     }
     batch_count = len(series_of_dicts)
     x_positions = list(range(batch_count))
@@ -278,16 +310,12 @@ def plot_counts_series(
     top = max_val * 1.05 if max_val > 0 else 1
     plt.ylim(0, top)
 
-    if "\n" in title:
-        main, sub = title.split("\n", 1)
-        plt.suptitle(main, fontsize=10)
-        plt.title(sub, fontsize=9)
-    else:
-        plt.title(title)
+    plt.title(title)
     plt.legend(loc="best", fontsize=8)
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.savefig(outpath)
     plt.close()
+    print(f"[SAVED] {outpath}")
 
 
 def get_stepping_sizes(entries, batch_count, size_key):
@@ -369,35 +397,28 @@ def plot_malware_metrics(metrics_data, output_path, title, xvals, xlabel):
                 ),
             }
         )
-
-    if "\n" in title:
-        main_title, subtitle = title.split("\n", 1)
-        full_title = f"{main_title}\n{subtitle}"
-    else:
-        full_title = title
-
+    print(f"[INFO] Plotting metrics -> {output_path}")
     plot_major_metrics_together(
         malware_metrics_data,
         output_path,
-        title=full_title,
+        title=title,
         xvals=xvals,
         xlabel=xlabel,
     )
+    print(f"[SAVED] {output_path}")
 
 
 def plot_accuracy_metrics(metrics_data, output_path, title, xvals, xlabel):
     accuracy_data = []
     for entry in metrics_data:
         accuracy_data.append(
-            {
-                "Benign-Malicious Acc": entry.get(
-                    "benign_malicious_accuracy", 0
-                ),
-            }
+            {"Benign-Malicious Acc": entry.get("benign_malicious_accuracy", 0)}
         )
+    print(f"[INFO] Plotting accuracy -> {output_path}")
     plot_major_metrics_together(
         accuracy_data, output_path, title=title, xvals=xvals, xlabel=xlabel
     )
+    print(f"[SAVED] {output_path}")
 
 
 def plot_comparison_metrics(
@@ -410,13 +431,8 @@ def plot_comparison_metrics(
     cumulative_total_sizes,
     batch_count,
 ):
-    """
-    Save aggregated comparison plots to base_dir/aggregated and per-batch comparisons to base_dir/per_batch.
-    base_dir should be the top-level comparison folder for the experiment.
-    """
     agg_dir = ensure_dir(os.path.join(base_dir, "aggregated"))
     batch_dir = ensure_dir(os.path.join(base_dir, "per_batch"))
-
     metrics = [
         (
             "benign_malicious_accuracy",
@@ -425,8 +441,6 @@ def plot_comparison_metrics(
         ),
         ("malware_f1", "Malware F1", "train_val_malware_f1.png"),
     ]
-
-    # Aggregated
     for metric, short_title, filename in metrics:
         combined = []
         for i in range(batch_count):
@@ -436,15 +450,15 @@ def plot_comparison_metrics(
                     "Training": cumul_metrics_multi_training[i].get(metric, 0),
                 }
             )
+        out = os.path.join(agg_dir, filename)
         plot_major_metrics_together(
             combined,
-            os.path.join(agg_dir, filename),
+            out,
             title=f"{short_title}\n(Validation vs Training — Aggregated)",
             xvals=cumulative_total_sizes,
             xlabel="Aggregated samples",
         )
-
-    # Per-batch
+        print(f"[SAVED] {out}")
     for metric, short_title, filename in metrics:
         combined = []
         for i in range(batch_count):
@@ -454,13 +468,15 @@ def plot_comparison_metrics(
                     "Training": batch_metrics_multi_training[i].get(metric, 0),
                 }
             )
+        out = os.path.join(batch_dir, filename.replace(".png", "_batch.png"))
         plot_major_metrics_together(
             combined,
-            os.path.join(batch_dir, filename.replace(".png", "_batch.png")),
+            out,
             title=f"{short_title}\n(Validation vs Training — Per-batch)",
             xvals=stepping_total_sizes,
             xlabel="Batch",
         )
+        print(f"[SAVED] {out}")
 
 
 def plot_comparison_metrics_for_series(
@@ -472,13 +488,9 @@ def plot_comparison_metrics_for_series(
     batch_count,
     name_prefix,
 ):
-    """
-    Save comparison plots for last-K into base_dir (which should be comparison/lastK).
-    """
     if start_index is None:
         print(f"Skipping comparison {name_prefix}: not enough batches")
         return
-
     ensure_dir(base_dir)
     metrics = [
         (
@@ -502,14 +514,15 @@ def plot_comparison_metrics_for_series(
                     "Training": series_train[i].get(metric, 0),
                 }
             )
+        out = os.path.join(base_dir, filename)
         plot_major_metrics_together(
             combined,
-            os.path.join(base_dir, filename),
+            out,
             title=f"{short_title}\n(Validation vs Training — {name_prefix})",
             xvals=xvals,
             xlabel="Batch",
         )
-
+        print(f"[SAVED] {out}")
     fn_data = []
     fp_data = []
     for i in range(length):
@@ -529,20 +542,24 @@ def plot_comparison_metrics_for_series(
                 ),
             }
         )
+    out1 = os.path.join(base_dir, f"train_val_fn_rate_{name_prefix}.png")
     plot_major_metrics_together(
         fn_data,
-        os.path.join(base_dir, f"train_val_fn_rate_{name_prefix}.png"),
+        out1,
         title=f"FN Rate\n(Validation vs Training — {name_prefix})",
         xvals=xvals,
         xlabel="Batch",
     )
+    print(f"[SAVED] {out1}")
+    out2 = os.path.join(base_dir, f"train_val_fp_rate_{name_prefix}.png")
     plot_major_metrics_together(
         fp_data,
-        os.path.join(base_dir, f"train_val_fp_rate_{name_prefix}.png"),
+        out2,
         title=f"FP Rate (predicted+)\n(Validation vs Training — {name_prefix})",
         xvals=xvals,
         xlabel="Batch",
     )
+    print(f"[SAVED] {out2}")
 
 
 def plot_malware_fn_rate_comparison(
@@ -565,13 +582,15 @@ def plot_malware_fn_rate_comparison(
                 ),
             }
         )
+    out = os.path.join(agg_dir, "train_val_fn_rate.png")
     plot_major_metrics_together(
         fn_rate_data,
-        os.path.join(agg_dir, "train_val_fn_rate.png"),
+        out,
         title="FN Rate\n(Validation vs Training — Aggregated)",
         xvals=cumulative_total_sizes,
         xlabel="Aggregated samples",
     )
+    print(f"[SAVED] {out}")
 
 
 def plot_malware_fp_over_predicted_comparison(
@@ -594,13 +613,15 @@ def plot_malware_fp_over_predicted_comparison(
                 ),
             }
         )
+    out = os.path.join(agg_dir, "train_val_fp_rate.png")
     plot_major_metrics_together(
         fp_over_pred,
-        os.path.join(agg_dir, "train_val_fp_rate.png"),
+        out,
         title="FP Rate\n(Validation vs Training — Aggregated)",
         xvals=cumulative_total_sizes,
         xlabel="Aggregated samples",
     )
+    print(f"[SAVED] {out}")
 
 
 def print_summary_section(lines, title, metrics_data):
@@ -620,6 +641,12 @@ def print_summary_section(lines, title, metrics_data):
     lines.append(
         f"Macro F1:             {metrics_data.get('macro_f1', 0):.4f}"
     )
+    lines.append(
+        f"Precision:             {metrics_data.get('malware_precision', 0):.4f}"
+    )
+    lines.append(
+        f"Recall:                {metrics_data.get('malware_recall', 0):.4f}"
+    )
 
 
 def print_per_class_table(lines, title, cum_metrics_per_class):
@@ -627,11 +654,9 @@ def print_per_class_table(lines, title, cum_metrics_per_class):
     lines.append(
         f"{'Class':<15} {'TP':>8} {'TN':>8} {'FP':>8} {'FN':>8} {'Acc':>8} {'Prec':>8} {'Rec':>8} {'F1':>8}"
     )
-
     for cls, m in cum_metrics_per_class.items():
         lines.append(
-            f"{cls:<15} {m.get('TP', 0):8d} {m.get('TN', 0):8d} {m.get('FP', 0):8d} {m.get('FN', 0):8d} "
-            f"{m.get('accuracy', 0.0):8.4f} {m.get('precision', 0.0):8.4f} {m.get('recall', 0.0):8.4f} {m.get('f1', 0.0):8.4f}"
+            f"{cls:<15} {m.get('TP', 0):8d} {m.get('TN', 0):8d} {m.get('FP', 0):8d} {m.get('FN', 0):8d} {m.get('accuracy', 0.0):8.4f} {m.get('precision', 0.0):8.4f} {m.get('recall', 0.0):8.4f} {m.get('f1', 0.0):8.4f}"
         )
 
 
@@ -644,14 +669,9 @@ def ensure_plot_subdirs(base_dir):
 
 
 def _plot_lastk_class_counts(series_per_class_k, outpath, title, xlabels=None):
-    """
-    Given a sliding-window per-class series (each element: {class: {TP,FP,TN,FN,...}}),
-    compute TP+FN per class for each window and plot counts.
-    """
     if not series_per_class_k:
         print(f"No class-counts to plot for {outpath}")
         return
-    # transform to list of dicts {class: TP+FN}
     counts_series = []
     for entry in series_per_class_k:
         counts_series.append(
@@ -670,26 +690,34 @@ def main():
         description="Plot training performance metrics."
     )
     parser.add_argument(
-        "-f", "--file", required=True, help="Path to training log file"
+        "-f",
+        "--file",
+        required=True,
+        help="Path to training log file or directory",
     )
     parser.add_argument(
         "-e", "--exp", required=True, help="Experiment identifier"
     )
     args = parser.parse_args()
 
-    if not args.file.endswith(".log"):
-        args.file = os.path.join(args.file, "training.log")
-    if not os.path.isfile(args.file):
-        raise FileNotFoundError(f"Log file not found: {args.file}")
+    file_path = args.file
+    if os.path.isdir(file_path):
+        file_path = os.path.join(file_path, "training.log")
+        print(f"[INFO] -f is a directory, using: {file_path}")
+
+    if not os.path.isfile(file_path):
+        raise FileNotFoundError(f"Log file not found: {file_path}")
 
     base_dir = ensure_dir("performance_metrics")
     folder_dir = ensure_dir(os.path.join(base_dir, "training", args.exp))
+    print(f"[INFO] Output folder: {folder_dir}")
 
-    entries = read_all_batches(args.file)
+    entries = read_all_batches(file_path)
+    if not entries:
+        print("[ERROR] No entries parsed; exiting.")
+        return
 
-    has_training_data = any(
-        "training_seen" in entry for entry in entries if entry
-    )
+    has_training_data = any("training_per_class" in e for e in entries)
 
     if has_training_data:
         (
@@ -723,10 +751,10 @@ def main():
         comparison_dir = None
         print(f"Training plots will be saved to: {train_dir}")
 
-    def get_dir(data_type):
-        if data_type == "validation" and validation_dir is not None:
+    def get_dir(dt):
+        if dt == "validation" and validation_dir is not None:
             return validation_dir
-        elif data_type == "training":
+        elif dt == "training":
             return train_dir
         else:
             return train_dir
@@ -734,14 +762,14 @@ def main():
     class_names = list(entries[0]["per_class"].keys()) if entries else []
     batch_count = len(entries)
 
-    # Ensure subdirectories exist for validation and training
+    # ensure subdirs
     if validation_dir:
         ensure_plot_subdirs(validation_dir)
     ensure_plot_subdirs(train_dir)
     if comparison_dir:
         ensure_plot_subdirs(comparison_dir)
 
-    # class counts plots -> per_batch and aggregated folders (validation or training)
+    # class counts
     batch_class_counts, cumul_class_counts_per_batch = calculate_class_counts(
         entries, "per_class", class_names
     )
@@ -756,7 +784,6 @@ def main():
         xlabels=[str(i) for i in range(batch_count)],
         xlabel="Batch",
     )
-
     plot_counts_series(
         cumul_class_counts_per_batch,
         os.path.join(
@@ -796,7 +823,7 @@ def main():
             xlabel="Batch",
         )
 
-    # prepare x-axis labels for metric plots
+    # stepping sizes
     if has_training_data:
         cumulative_sizes = []
         total = 0
@@ -818,7 +845,7 @@ def main():
             entries, batch_count, "training_size"
         )
 
-    # Per-batch and aggregated (cumulative) plots go to per_batch/ and aggregated/
+    # malware & accuracy plots
     plot_malware_metrics(
         batch_metrics_multi,
         os.path.join(
@@ -830,7 +857,6 @@ def main():
         stepping_sizes,
         "Batch",
     )
-
     plot_malware_metrics(
         cumul_metrics_multi,
         os.path.join(
@@ -842,7 +868,6 @@ def main():
         xvals=cumulative_sizes,
         xlabel="Aggregated samples",
     )
-
     plot_accuracy_metrics(
         batch_metrics_multi,
         os.path.join(
@@ -854,7 +879,6 @@ def main():
         stepping_sizes,
         "Batch",
     )
-
     plot_accuracy_metrics(
         cumul_metrics_multi,
         os.path.join(
@@ -867,7 +891,7 @@ def main():
         xlabel="Aggregated samples",
     )
 
-    # helper to make last-K sliding windows, save metrics and class-counts into base_dir/lastK
+    # sliding windows and last-k plots
     def make_lastk_and_plot(
         k, per_class_batch, multi_batch, base_dir, stepping_sizes_all, label
     ):
@@ -878,14 +902,13 @@ def main():
         )
         if start_idx is None or len(series_multi_k) == 0:
             print(
-                f"Not enough batches for last-{k} (need at least {k}) for {label}, skipping."
+                f"[INFO] Not enough batches for last-{k} ({label}), skipping."
             )
             return None, None, None
         n = len(per_class_batch)
         xvals = list(range(start_idx, n))
         folder = os.path.join(base_dir, f"last{k}")
         ensure_dir(folder)
-        # metrics plots
         plot_malware_metrics(
             series_multi_k,
             os.path.join(folder, f"malware_metrics_last{k}_{label}.png"),
@@ -900,7 +923,6 @@ def main():
             xvals,
             "Batch",
         )
-        # class-counts aggregated over window (TP + FN per class)
         _plot_lastk_class_counts(
             series_per_class_k,
             os.path.join(folder, f"class_counts_last{k}_{label}.png"),
@@ -909,7 +931,6 @@ def main():
         )
         return series_per_class_k, series_multi_k, start_idx
 
-    # Validation/single-mode last-k
     label_val = "validation" if has_training_data else "training"
     last5_per_class_val, last5_multi_val, last5_start = make_lastk_and_plot(
         5,
@@ -936,7 +957,7 @@ def main():
         label_val,
     )
 
-    # Training-specific plots & sliding windows
+    # training-specific plots
     if has_training_data:
         cumulative_training_sizes = []
         total_training = 0
@@ -944,7 +965,6 @@ def main():
             size = entry.get("training_size", 0)
             total_training += size
             cumulative_training_sizes.append(total_training)
-
         stepping_training_sizes = get_stepping_sizes(
             entries, batch_count, "training_size"
         )
@@ -960,7 +980,6 @@ def main():
             stepping_training_sizes,
             "Batch",
         )
-
         plot_malware_metrics(
             cumul_metrics_multi_training,
             os.path.join(
@@ -972,7 +991,6 @@ def main():
             xvals=cumulative_training_sizes,
             xlabel="Aggregated samples",
         )
-
         plot_accuracy_metrics(
             batch_metrics_multi_training,
             os.path.join(
@@ -982,7 +1000,6 @@ def main():
             stepping_training_sizes,
             "Batch",
         )
-
         plot_accuracy_metrics(
             cumul_metrics_multi_training,
             os.path.join(
@@ -1026,7 +1043,7 @@ def main():
             )
         )
 
-        # comparison x-axis / stepping sizes
+        # comparison x-axis
         batch_total_sizes = [
             entry.get("training_size", 0) + entry.get("testing_size", 0)
             for entry in entries
@@ -1046,7 +1063,6 @@ def main():
             total_so_far += size
             cumulative_total_sizes.append(total_so_far)
 
-        # comparison plots saved under comparison/aggregated and comparison/per_batch
         plot_comparison_metrics(
             batch_metrics_multi,
             cumul_metrics_multi,
@@ -1057,8 +1073,6 @@ def main():
             cumulative_total_sizes,
             batch_count,
         )
-
-        # error comparisons (FN and FP-over-predicted) - saved under comparison/aggregated
         plot_malware_fn_rate_comparison(
             cumul_metrics_multi,
             cumul_metrics_multi_training,
@@ -1066,7 +1080,6 @@ def main():
             cumulative_total_sizes,
             batch_count,
         )
-
         plot_malware_fp_over_predicted_comparison(
             cumul_metrics_multi,
             cumul_metrics_multi_training,
@@ -1075,7 +1088,7 @@ def main():
             batch_count,
         )
 
-        # comparison plots for last-5/last-10/last-20 -> saved under comparison/lastk/
+        # comparison for last-k
         def maybe_plot_compare(
             last_multi_val,
             last_start_val,
@@ -1138,7 +1151,7 @@ def main():
             "last20",
         )
 
-    # summary text (include last-5/10/20)
+    # summary
     lines = []
     if has_training_data:
         print_summary_section(
@@ -1151,7 +1164,6 @@ def main():
             "TRAINING Multi-class (Aggregated)",
             cumul_metrics_multi_training[-1],
         )
-
         print_per_class_table(
             lines,
             "Per-class metrics (Aggregated) - VALIDATION",
@@ -1162,35 +1174,6 @@ def main():
             "Per-class metrics (Aggregated) - TRAINING",
             cumul_metrics_per_class_training[-1],
         )
-
-        def add_lastk_summary(lines, tag, multi):
-            if multi and len(multi) > 0:
-                lines.append(f"\n{tag}:")
-                lines.append(
-                    f"  Benign-Malicious Acc: {multi[-1].get('benign_malicious_accuracy', 0):.4f}"
-                )
-                lines.append(
-                    f"  Malware F1:           {multi[-1].get('malware_f1', 0):.4f}"
-                )
-                lines.append(
-                    f"  Malware FPR:          {multi[-1].get('malware_fpr', 0):.4f}"
-                )
-                lines.append(
-                    f"  Malware FNR:          {multi[-1].get('malware_fnr', 0):.4f}"
-                )
-            else:
-                lines.append(f"\n{tag}: not available (insufficient batches)")
-
-        lines.append("\n=== Last-window summaries (Validation) ===")
-        add_lastk_summary(lines, "Last-5", last5_multi_val)
-        add_lastk_summary(lines, "Last-10", last10_multi_val)
-        add_lastk_summary(lines, "Last-20", last20_multi_val)
-
-        lines.append("\n=== Last-window summaries (Training) ===")
-        add_lastk_summary(lines, "Last-5", last5_multi_train)
-        add_lastk_summary(lines, "Last-10", last10_multi_train)
-        add_lastk_summary(lines, "Last-20", last20_multi_train)
-
     else:
         print_summary_section(
             lines, "TRAINING Multi-class (Aggregated)", cumul_metrics_multi[-1]
@@ -1200,21 +1183,6 @@ def main():
             "Per-class metrics (Aggregated) - TRAINING",
             cumul_metrics_per_class[-1],
         )
-
-        """ def add_lastk_summary(lines, tag, multi):
-            if multi and len(multi) > 0:
-                lines.append(f"\n{tag}:")
-                lines.append(f"  Benign-Malicious Acc: {multi[-1].get('benign_malicious_accuracy', 0):.4f}")
-                lines.append(f"  Malware F1:           {multi[-1].get('malware_f1', 0):.4f}")
-                lines.append(f"  Malware FPR:          {multi[-1].get('malware_fpr', 0):.4f}")
-                lines.append(f"  Malware FNR:          {multi[-1].get('malware_fnr', 0):.4f}")
-            else:
-                lines.append(f"\n{tag}: not available (insufficient batches)")
-
-        lines.append("\n=== Last-window summaries ===")
-        add_lastk_summary(lines, "Last-5", last5_multi_val)
-        add_lastk_summary(lines, "Last-10", last10_multi_val)
-        add_lastk_summary(lines, "Last-20", last20_multi_val) """
 
     lines.append(f"\nSummary for Experiment {args.exp}:")
     lines.append(f"Total batches processed: {batch_count}")
@@ -1228,6 +1196,7 @@ def main():
     summary_path = os.path.join(folder_dir, "summary.txt")
     with open(summary_path, "w") as f:
         f.write(summary_txt)
+    print(f"[SAVED] {summary_path}")
     print(summary_txt)
 
 
