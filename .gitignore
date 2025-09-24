@@ -179,8 +179,8 @@ appendonly.aof
 /p2p_db.sqlite
 
 performance_metrics/
-pipeline_ml_training/__pycache__/
-pipeline_ml_training/results/
-pipeline_ml_training/models/
-pipeline_ml_training/cache/
-pipeline_ml_training/logs/
+modules/flowmldetection/pipeline_ml_training/__pycache__/
+modules/flowmldetection/pipeline_ml_training/results/
+modules/flowmldetection/pipeline_ml_training/models/
+modules/flowmldetection/pipeline_ml_training/cache/
+modules/flowmldetection/pipeline_ml_training/logs/
