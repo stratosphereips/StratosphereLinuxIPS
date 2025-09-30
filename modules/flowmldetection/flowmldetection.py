@@ -183,6 +183,7 @@ class FlowMLDetection(IModule):
         y_gt_val,
         sum_labeled_flows,
     ):
+
         # Only consider MALICIOUS and BENIGN labels for metrics
         relevant_labels = [MALICIOUS, BENIGN]
 
@@ -325,6 +326,9 @@ class FlowMLDetection(IModule):
         """
         Train a model based on the flows we receive and the labels
         """
+        if self.flows is None or self.flows.empty:
+            self.print("No flows to train on. Skipping training.", 0, 1)
+            return
         try:
             # Create y_gt_train with the label
             if hasattr(self.flows, "ground_truth_label"):
@@ -351,16 +355,17 @@ class FlowMLDetection(IModule):
             X_train = self.flows.copy()
             X_train = self.drop_labels(X_train)
 
-            # Take random 10% of data for validation if validating while training!
             X_val = X_train  # default - validate on all training data
             y_gt_val = y_gt_train
+
+            # Take random 10% of data for validation if validating while training!
             if self.validate_on_train:
                 validation_indices = numpy.random.choice(
                     X_train.shape[0],
                     size=int(self.percentage_validation * X_train.shape[0]),
                     replace=False,
                 )
-                train_indices = numpy.array(
+                train_indices = numpy.array(  # the rest is training
                     list(
                         set(range(X_train.shape[0])) - set(validation_indices)
                     )
@@ -453,17 +458,23 @@ class FlowMLDetection(IModule):
             # Predict on the training data
             y_pred_train = self.clf.predict(X_train)
 
-            if self.validate_on_train and (
-                X_val is not None
-            ):  # validation part
-                X_val = self.scaler.transform(X_val)
-                y_pred_val = self.clf.predict(X_val)
-
+            if self.validate_on_train:  # validation part
+                if X_val.shape[0] == 0:
+                    self.print(
+                        "Validation set is empty after split. "
+                        "Skipping validation.",
+                        0,
+                        1,
+                    )
+                    y_pred_val = numpy.array([])
+                else:
+                    X_val = self.scaler.transform(X_val)
+                    y_pred_val = self.clf.predict(X_val)
             else:
                 y_pred_val = y_pred_train
 
             # Store the training results (housekeeping..: logs, calculationg metrics)
-            # y_gt_val already definaed, either for val set or same as training set
+            # y_gt_val already defined, either for val set or same as training set
             self.store_training_results(
                 y_pred_train=y_pred_train,  # depends on X_train, depends on validation (yes/no,%,random split?), calculated every time
                 y_gt_train=y_gt_train,  #  handled above while splitting data
