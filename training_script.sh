@@ -135,7 +135,8 @@ fi
 
 # After training, run the training performance plotting script on the latest slips output logfile
 LATEST_SLIPS_LOG=$(ls -1t ./output/ | head -n1)
-TRAIN_ID_PADDED=$(printf "%03d" "$TRAIN_ID")
+TRAIN_NUMBER= $((TRAIN_ID + 8)) #adjust to start at 008, which is our first dataset
+TRAIN_ID_PADDED=$(printf "%03d" "$TRAIN_NUMBER")
 if [ -n "$LATEST_SLIPS_LOG" ]; then
     python3 modules/flowmldetection/plot_train_performance.py \
         -f "./output/$LATEST_SLIPS_LOG" \
@@ -195,8 +196,10 @@ for TEST_INDEX in "${!DATASETS[@]}"; do
     fi
 
     # After each test, run the plotting script on the latest slips output logfile
-    TRAIN_ID_PADDED=$(printf "%03d" "$TRAIN_ID")
-    TEST_ID_PADDED=$(printf "%03d" "$TEST_INDEX")
+    TRAIN_ID_PADDED=$(printf "%03d" "$TRAIN_NUMBER")
+
+    TEST_NUMBER=$((TEST_INDEX + 8)) #adjust to start at 008, which is our first dataset
+    TEST_ID_PADDED=$(printf "%03d" "$TEST_NUMBER")
     LATEST_SLIPS_LOG=$(ls -1t ./output/ | head -n1)
     if [ -n "$LATEST_SLIPS_LOG" ]; then
         python3 modules/flowmldetection/plot_training_performance.py \
@@ -206,8 +209,6 @@ for TEST_INDEX in "${!DATASETS[@]}"; do
         echo "Warning: No slips output logfile found in ./output/ after testing $TEST_FOLDER." | tee -a "$LOGFILE"
     fi
 done
-
-
 
 echo "Docker container cleaned up."
 echo "Training and testing completed." | tee -a "$LOGFILE"
