@@ -78,6 +78,9 @@ class FlowMLDetection(IModule):
         self.labeled_counter = 0
         self.training_flows = []
 
+        # Set the random seed for reproducibility
+        numpy.random.seed(1111)
+
     def init_log_file(self):
         """
         Init the log file for training or testing
