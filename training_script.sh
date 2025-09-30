@@ -133,6 +133,36 @@ if ! docker run --rm \
     exit 1
 fi
 
+# After training, run the training performance plotting script on the latest slips output logfile
+LATEST_SLIPS_LOG=$(ls -1t ./output/ | head -n1)
+TRAIN_ID_PADDED=$(printf "%03d" "$TRAIN_ID")
+if [ -n "$LATEST_SLIPS_LOG" ]; then
+    python3 modules/flowmldetection/plot_train_performance.py \
+        -f "./output/$LATEST_SLIPS_LOG" \
+        -e "train_${TRAIN_ID_PADDED}"
+else
+    echo "Warning: No slips output logfile found in ./output/ after training." | tee -a "$LOGFILE"
+fi
+
+# Copy model and scaler with dataset identifier (do not delete originals)
+DATASET_ID_PADDED=$(printf "%03d" "$TRAIN_ID")
+MODEL_DEST="model_${DATASET_ID_PADDED}.bin"
+SCALER_DEST="scaler_${DATASET_ID_PADDED}.bin"
+
+if [ -f "$FILE_TO_DELETE_1" ]; then
+    cp "$FILE_TO_DELETE_1" "$MODEL_DEST"
+    echo "Copied $FILE_TO_DELETE_1 to $MODEL_DEST" | tee -a "$LOGFILE"
+else
+    echo "Warning: $FILE_TO_DELETE_1 not found after training." | tee -a "$LOGFILE"
+fi
+
+if [ -f "$FILE_TO_DELETE_2" ]; then
+    cp "$FILE_TO_DELETE_2" "$SCALER_DEST"
+    echo "Copied $FILE_TO_DELETE_2 to $SCALER_DEST" | tee -a "$LOGFILE"
+else
+    echo "Warning: $FILE_TO_DELETE_2 not found after training." | tee -a "$LOGFILE"
+fi
+
 echo "Training completed." | tee -a "$LOGFILE"
 echo "-----------------------------------------------------" >> "$LOGFILE"
 echo "" | tee -a "$LOGFILE"
@@ -141,7 +171,8 @@ echo "" | tee -a "$LOGFILE"
 replace_line "$CONFIG_FILE" "$MODE_LINE_NUMBER" "  mode: test"
 
 # Run testing on all datasets
-for TEST_FOLDER in "${DATASETS[@]}"; do
+for TEST_INDEX in "${!DATASETS[@]}"; do
+    TEST_FOLDER="${DATASETS[$TEST_INDEX]}"
     TEST_DIR="$DATASET_DIR/$TEST_FOLDER/data"
 
     echo "----------------------------------------" | tee -a "$LOGFILE"
@@ -162,7 +193,21 @@ for TEST_FOLDER in "${DATASETS[@]}"; do
         cleanup_docker
         exit 1
     fi
+
+    # After each test, run the plotting script on the latest slips output logfile
+    TRAIN_ID_PADDED=$(printf "%03d" "$TRAIN_ID")
+    TEST_ID_PADDED=$(printf "%03d" "$TEST_INDEX")
+    LATEST_SLIPS_LOG=$(ls -1t ./output/ | head -n1)
+    if [ -n "$LATEST_SLIPS_LOG" ]; then
+        python3 modules/flowmldetection/plot_training_performance.py \
+            -f "./output/$LATEST_SLIPS_LOG" \
+            -e "${TRAIN_ID_PADDED}_test_${TEST_ID_PADDED}"
+    else
+        echo "Warning: No slips output logfile found in ./output/ after testing $TEST_FOLDER." | tee -a "$LOGFILE"
+    fi
 done
+
+
 
 echo "Docker container cleaned up."
 echo "Training and testing completed." | tee -a "$LOGFILE"
