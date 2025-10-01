@@ -1,8 +1,7 @@
 # Author: Jan Svoboda
 # functionality: Minimal converter from Zeek conn log format to canonical SLIPS flow format.
 # This is used to normalize Zeek conn logs before feeding them to FeatureExtraction.
-from typing import Dict, Any, Iterable, List
-
+from typing import Iterable, List, Any, Mapping, Dict
 
 # Minimal mapping taken from your original map (Zeek -> SLIPS)
 CONN_FIELDS_TO_SLIPS_FIELDS_MAP = {
@@ -80,7 +79,10 @@ class ConnToSlipsConverter:
             "sbytes",
             "dbytes",
         }
-        self._float_fields = {"dur"}
+        self._float_fields = {
+            "dur",
+            "state",
+        }  # state is float after conversion!
 
     def _safe_int(self, x: Any, default: int = 0) -> int:
         try:
@@ -94,6 +96,32 @@ class ConnToSlipsConverter:
             return float(x)
         except Exception:
             return default
+
+    def _infer_state(self, row: Mapping[str, Any]) -> float:
+        state = row.get("state", "")
+        pkts = self._safe_int(row.get("pkts", 0))
+        pre = str(state).split("_")[0]
+
+        st = str(state).lower()
+        if "new" in st or st == "established":
+            return 1.0
+        if "closed" in st or st == "not established":
+            return 0.0
+        if state in ("S0", "REJ", "RSTOS0", "RSTRH", "SH", "SHR"):
+            return 0.0
+        if state in ("S1", "SF", "S2", "S3", "RSTO", "RSTP", "OTH"):
+            return 1.0
+        if "S" in pre and "A" in pre:
+            return 1.0
+        if "PA" in pre:
+            return 1.0
+        if "ECO" in pre or "ECR" in pre or "URH" in pre or "URP" in pre:
+            return 1.0
+        if "EST" in pre:
+            return 1.0
+        if "RST" in pre or "FIN" in pre:
+            return 0.0 if pkts <= 3 else 1.0
+        return 0.0
 
     def normalize(self, flow: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -126,19 +154,18 @@ class ConnToSlipsConverter:
         # Ensure labels exist (use provided default if missing/empty)
         if not out.get("ground_truth_label"):
             out["ground_truth_label"] = self.default_label
-        if not out.get("detailed_ground_truth_label"):
-            out["detailed_ground_truth_label"] = self.default_label
+
+        # Handle 'state' field: convert to float using _infer_state logic
+        if "state" in out:
+            out["state"] = self._infer_state(out)
+        else:
+            out["state"] = 0.0
 
         # Coerce numeric fields safely
         for i in self._int_fields:
             out[i] = self._safe_int(out.get(i, 0), default=0)
         for f in self._float_fields:
             out[f] = self._safe_float(out.get(f, 0.0), default=0.0)
-
-        # Keep state as-is (textual conn state like 'S0' or 'Established').
-        # If you prefer numeric treatment here, transform it in FeatureExtraction.
-        # But ensure it's a string so processing won't crash if it's None.
-        out["state"] = "" if out["state"] is None else str(out["state"])
 
         return out
 

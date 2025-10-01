@@ -2,28 +2,33 @@
 # Author: Jan Svoboda
 # functionality: Robust feature extraction tailored for Zeek conn logs with built-in
 #               "final state" inference and protocol filtering.
-# Returns (X, y) where X is a label-less DataFrame and y is a pd.Series.
+# Class ConnToSlipsConverter, which normalizes conn flows into slips format of flows, we can then use featureExtraction we want
 
+# Returns (X, y) where X is a label-less DataFrame and y is a pd.Series.
+# Works on batcher or individual flows
+# feature_extraction_v2.py
 import pandas as pd
 import traceback
-from typing import Iterable, List, Optional, Tuple, Union, Any, Mapping
+from typing import Iterable, List, Optional, Tuple, Union
 
+from conn_normalizer import ConnToSlipsConverter  # <-- your converter
 from commons import BENIGN, MALICIOUS
 
 
 class FeatureExtraction:
     def __init__(
         self,
+        default_label: str = "Benign",
         protocols_to_discard: Optional[Iterable[str]] = None,
         columns_to_discard: Optional[Iterable[str]] = None,
         column_types: Optional[dict] = None,
     ):
         """
-        protocols_to_discard: iterable of protocol names (strings) to remove (case-insensitive).
-            If None, defaults to the list used in the old project.
-        columns_to_discard: additional columns to drop (in addition to built-in drops).
-        column_types: dict of {col: dtype} to enforce with astype (errors ignored).
+        Minimal FeatureExtraction that relies on ConnToSlipsConverter to
+        normalize Zeek conn flows into canonical SLIPS fields.
         """
+        self.converter = ConnToSlipsConverter(default_label=default_label)
+
         self.protocols_to_discard = (
             list(protocols_to_discard)
             if protocols_to_discard is not None
@@ -34,6 +39,7 @@ class FeatureExtraction:
         )
         self.column_types = column_types if column_types is not None else {}
 
+        # fields to drop eventually (non-feature, identifiers)
         self._builtin_drop = [
             "appproto",
             "daddr",
@@ -49,8 +55,8 @@ class FeatureExtraction:
             "flow_source",
         ]
 
+        # core numeric columns we want to ensure are numeric for ML
         self._numeric_cols = [
-            "proto",
             "dport",
             "sport",
             "dur",
@@ -58,22 +64,46 @@ class FeatureExtraction:
             "spkts",
             "bytes",
             "sbytes",
-            "state",
+        ]
+
+        # proto mapping patterns -> numeric values
+        self._proto_mapping_patterns = [
+            (r"tcp", 0.0),
+            (r"udp", 1.0),
+            (r"icmp-ipv6", 3.0),
+            (r"icmp", 2.0),
+            (r"arp", 4.0),
         ]
 
     def process_batch(
         self, data: Union[pd.DataFrame, List[dict], Iterable[dict]]
     ) -> Tuple[pd.DataFrame, pd.Series]:
         """
-        Process a whole batch of flows and return (X, y).
+        Process a batch of flows and return (X, y).
         X: pd.DataFrame without label columns
         y: pd.Series with values from commons BENIGN / MALICIOUS
         """
         try:
+            # Normalize / ensure canonical SLIPS fields first
             if isinstance(data, pd.DataFrame):
                 df = data.copy()
+                # detect raw Zeek fields (simple heuristic).
+                raw_zeek_field_signatures = {
+                    "id.orig_p",
+                    "orig_bytes",
+                    "conn_state",
+                    "id.resp_p",
+                    "orig_pkts",
+                }
+                if any(col in df.columns for col in raw_zeek_field_signatures):
+                    # convert rows to canonical slips dicts
+                    records = df.to_dict(orient="records")
+                    norm = self.converter.normalize_batch(records)
+                    df = pd.DataFrame(norm)
             else:
-                df = pd.DataFrame(list(data))
+                records = list(data) if not isinstance(data, dict) else [data]
+                norm = self.converter.normalize_batch(records)
+                df = pd.DataFrame(norm)
 
             if df.empty:
                 return pd.DataFrame([], columns=[]), pd.Series(
@@ -81,6 +111,7 @@ class FeatureExtraction:
                 )
 
             y = self._extract_labels(df)
+
             df = self._process_features(df)
 
             if df.empty:
@@ -88,9 +119,10 @@ class FeatureExtraction:
                     [], dtype="object"
                 )
 
+            # finally remove label columns from X (keep y separately)
             df = self.drop_labels(df)
 
-            # enforce user-specified column dtypes
+            # enforce user-specified column dtypes (best-effort)
             for col, dtype in self.column_types.items():
                 if col in df.columns:
                     try:
@@ -98,17 +130,18 @@ class FeatureExtraction:
                     except Exception:
                         pass
 
-            # enforce numeric coercion for critical numeric cols
+            # ensure numeric coercion on critical numeric cols
             for col in self._numeric_cols:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
 
-            # keep y aligned
+            # align y with df
             y.index = df.index[: len(y)] if len(y) <= len(df) else y.index
 
             return df.reset_index(drop=True), y.loc[df.index].reset_index(
                 drop=True
             )
+
         except Exception:
             print("Error in FeatureExtraction.process_batch():")
             print(traceback.format_exc())
@@ -116,23 +149,19 @@ class FeatureExtraction:
 
     def process_item(self, flow_dict: dict) -> Optional[Tuple[dict, object]]:
         """
-        Process a single flow (dict). Returns (flow_without_label_dict, label)
+        Process a single flow dict. Returns (flow_without_label_dict, label)
         or None if the flow gets dropped by filtering.
         """
-        df = pd.DataFrame([flow_dict])
-        X, y = self.process_batch(df)
+        X, y = self.process_batch([flow_dict])
         if X.empty or y.empty:
             return None
         return X.iloc[0].to_dict(), y.iloc[0]
 
-    # -------------------------
-    # Helpers
-    # -------------------------
     def _extract_labels(self, df: pd.DataFrame) -> pd.Series:
         """
         Extract label column from df, mapping into BENIGN/MALICIOUS.
         Prefer ground_truth_label, detailed_ground_truth_label, label, module_labels.
-        Default to BENIGN if missing.
+        Default to converter.default_label if missing.
         """
         label_cols = [
             "ground_truth_label",
@@ -143,11 +172,13 @@ class FeatureExtraction:
         found = [c for c in label_cols if c in df.columns]
         if not found:
             return pd.Series(
-                [BENIGN] * len(df), index=df.index, dtype="object"
+                [self.converter.default_label] * len(df),
+                index=df.index,
+                dtype="object",
             )
 
         col = found[0]
-        raw = df[col].fillna(str(BENIGN)).astype(str)
+        raw = df[col].fillna(str(self.converter.default_label)).astype(str)
 
         def map_label(val: str) -> str:
             v = val.strip().upper()
@@ -166,15 +197,16 @@ class FeatureExtraction:
                 "detailed_ground_truth_label",
                 "label",
                 "module_labels",
+                "detailed_label",
             ],
             axis=1,
             errors="ignore",
         )
 
-    def _process_features(self, dataset: pd.DataFrame) -> pd.DataFrame:
-        df = dataset.copy()
+    def _process_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
 
-        # normalize proto
+        # normalize proto string early
         if "proto" in df.columns:
             df["proto"] = df["proto"].astype(str).str.lower()
 
@@ -186,7 +218,25 @@ class FeatureExtraction:
         if df.empty:
             return df
 
-        # drop irrelevant columns
+        # ensure numeric sbytes/dbytes/spkts/dpkts exist and are numeric (safe)
+        df["sbytes"] = pd.to_numeric(
+            df.get("sbytes", 0), errors="coerce"
+        ).fillna(0)
+        df["dbytes"] = pd.to_numeric(
+            df.get("dbytes", 0), errors="coerce"
+        ).fillna(0)
+        df["spkts"] = pd.to_numeric(
+            df.get("spkts", 0), errors="coerce"
+        ).fillna(0)
+        df["dpkts"] = pd.to_numeric(
+            df.get("dpkts", 0), errors="coerce"
+        ).fillna(0)
+
+        # compute bytes & pkts
+        df["bytes"] = df["sbytes"] + df["dbytes"]
+        df["pkts"] = df["spkts"] + df["dpkts"]
+
+        # drop irrelevant columns (identifiers, etc.)
         df = df.drop(
             columns=[
                 c
@@ -196,82 +246,19 @@ class FeatureExtraction:
             errors="ignore",
         )
 
-        # compute bytes & pkts
-        sbytes = pd.to_numeric(df.get("sbytes", 0), errors="coerce").fillna(0)
-        dbytes = pd.to_numeric(df.get("dbytes", 0), errors="coerce").fillna(0)
-        df["bytes"] = sbytes + dbytes
-
-        spkts = pd.to_numeric(df.get("spkts", 0), errors="coerce").fillna(0)
-        dpkts = pd.to_numeric(df.get("dpkts", 0), errors="coerce").fillna(0)
-        df["pkts"] = spkts + dpkts
-
-        # state inference
-        def _safe_int(x, default=0):
-            try:
-                return int(float(x))
-            except Exception:
-                return default
-
-        def _infer_state(row: Mapping[str, Any]) -> float:
-            state = row.get("state", "")
-            pkts = _safe_int(row.get("pkts", 0))
-            pre = str(state).split("_")[0]
-
-            st = str(state).lower()
-            if "new" in st or st == "established":
-                return 1.0
-            if "closed" in st or st == "not established":
-                return 0.0
-            if state in ("S0", "REJ", "RSTOS0", "RSTRH", "SH", "SHR"):
-                return 0.0
-            if state in ("S1", "SF", "S2", "S3", "RSTO", "RSTP", "OTH"):
-                return 1.0
-            if "S" in pre and "A" in pre:
-                return 1.0
-            if "PA" in pre:
-                return 1.0
-            if "ECO" in pre or "ECR" in pre or "URH" in pre or "URP" in pre:
-                return 1.0
-            if "EST" in pre:
-                return 1.0
-            if "RST" in pre or "FIN" in pre:
-                return 0.0 if pkts <= 3 else 1.0
-            return 0.0
-
-        if "state" in df.columns:
-            df["state"] = df.apply(_infer_state, axis=1)
-        else:
-            df["state"] = 0.0
-
-        # proto mapping
+        # proto mapping -> numeric codes
         if "proto" in df.columns:
             proto_series = df["proto"].astype(str).fillna("")
-            mapping_patterns = [
-                (r"tcp", 0.0),
-                (r"udp", 1.0),
-                (r"icmp-ipv6", 3.0),
-                (r"icmp", 2.0),
-                (r"arp", 4.0),
-            ]
             mapped = pd.Series(index=proto_series.index, dtype="float64")
-            for patt, val in mapping_patterns:
+            for patt, val in self._proto_mapping_patterns:
                 mask = proto_series.str.contains(
                     patt, case=False, regex=True, na=False
                 )
                 mapped.loc[mask] = val
             df["proto"] = pd.to_numeric(mapped, errors="coerce").fillna(0.0)
 
-        # enforce numeric coercion
-        for c in [
-            "dport",
-            "sport",
-            "dur",
-            "pkts",
-            "spkts",
-            "bytes",
-            "sbytes",
-            "state",
-        ]:
+        # numeric coercion for the defined numeric fields
+        for c in self._numeric_cols:
             if c in df.columns:
                 df[c] = pd.to_numeric(df[c], errors="coerce")
 
