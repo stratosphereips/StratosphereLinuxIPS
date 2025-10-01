@@ -37,8 +37,8 @@ cleanup_docker() {
 trap cleanup_docker EXIT
 
 # ===================== USER CONFIGURATION =========================
-FILE_TO_DELETE_1="/modules/flowmldetection/model.bin"
-FILE_TO_DELETE_2="/modules/flowmldetection/scaler.bin"
+FILE_TO_DELETE_1="./modules/flowmldetection/model.bin"
+FILE_TO_DELETE_2="./modules/flowmldetection/scaler.bin"
 
 LOG_DIR="./performance_metrics/comparison_logs"
 DATASET_DIR="./dataset-private"
@@ -95,8 +95,14 @@ mkdir -p "$LOG_DIR"
 
 # Delete model and scaler
 echo "Deleting pre-run files..."
-rm -f "$FILE_TO_DELETE_1" "$FILE_TO_DELETE_2"
-echo "Deleted: $FILE_TO_DELETE_1, $FILE_TO_DELETE_2"
+for file in "$FILE_TO_DELETE_1" "$FILE_TO_DELETE_2"; do
+    if [ -f "$file" ]; then
+        rm -f "$file"
+        echo "Deleted: $file"
+    else
+        echo "Warning: $file does not exist, skipping deletion."
+    fi
+done
 
 TRAIN_FOLDER="${DATASETS[$dataset_index]}"
 TRAIN_DIR="$DATASET_DIR/$TRAIN_FOLDER/data"
@@ -135,10 +141,10 @@ fi
 
 # After training, run the training performance plotting script on the latest slips output logfile
 LATEST_SLIPS_LOG=$(ls -1t ./output/ | head -n1)
-TRAIN_NUMBER= $((TRAIN_ID + 8)) #adjust to start at 008, which is our first dataset
+TRAIN_NUMBER=$(($TRAIN_ID+8)) # adjust to start at 008, which is our first dataset
 TRAIN_ID_PADDED=$(printf "%03d" "$TRAIN_NUMBER")
 if [ -n "$LATEST_SLIPS_LOG" ]; then
-    python3 modules/flowmldetection/plot_train_performance.py \
+    python3 ./modules/flowmldetection/plot_train_performance.py \
         -f "./output/$LATEST_SLIPS_LOG" \
         -e "train_${TRAIN_ID_PADDED}"
 else
@@ -146,9 +152,8 @@ else
 fi
 
 # Copy model and scaler with dataset identifier (do not delete originals)
-DATASET_ID_PADDED=$(printf "%03d" "$TRAIN_ID")
-MODEL_DEST="model_${DATASET_ID_PADDED}.bin"
-SCALER_DEST="scaler_${DATASET_ID_PADDED}.bin"
+MODEL_DEST="./modules/flowmldetection/model_${TRAIN_ID_PADDED}.bin"
+SCALER_DEST="./modules/flowmldetection/scaler_${TRAIN_ID_PADDED}.bin"
 
 if [ -f "$FILE_TO_DELETE_1" ]; then
     cp "$FILE_TO_DELETE_1" "$MODEL_DEST"
@@ -198,11 +203,11 @@ for TEST_INDEX in "${!DATASETS[@]}"; do
     # After each test, run the plotting script on the latest slips output logfile
     TRAIN_ID_PADDED=$(printf "%03d" "$TRAIN_NUMBER")
 
-    TEST_NUMBER=$((TEST_INDEX + 8)) #adjust to start at 008, which is our first dataset
+    TEST_NUMBER=$(($TEST_INDEX+8)) #adjust to start at 008, which is our first dataset
     TEST_ID_PADDED=$(printf "%03d" "$TEST_NUMBER")
     LATEST_SLIPS_LOG=$(ls -1t ./output/ | head -n1)
     if [ -n "$LATEST_SLIPS_LOG" ]; then
-        python3 modules/flowmldetection/plot_training_performance.py \
+        python3 ./modules/flowmldetection/plot_testing_performance.py \
             -f "./output/$LATEST_SLIPS_LOG" \
             -e "${TRAIN_ID_PADDED}_test_${TEST_ID_PADDED}"
     else
