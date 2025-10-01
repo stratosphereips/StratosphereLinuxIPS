@@ -18,32 +18,37 @@ class ClassifierWrapper:
         self.fill_dummy()
 
     def fill_dummy(self):
+        # these dummy flows are taken from slips itself
         dummy_malicious_flow = numpy.array(
             [
-                0.0,  # proto (tcp)
-                443.0,  # dport
-                49733.0,  # sport
                 1.9424750804901123,  # dur
-                44.0,  # pkts (spkts + dpkts)
+                0.0,  # proto (tcp)
+                49733.0,  # sport
+                443.0,  # dport
                 17.0,  # spkts
-                42764.0,  # bytes (sbytes + dbytes)
+                27.0,  # dpkts (44 - 17)
                 25517.0,  # sbytes
+                17247.0,  # dbytes (42764 - 25517)
                 1.0,  # state (Established)
+                42764.0,  # bytes (sbytes + dbytes)
+                44.0,  # pkts (spkts + dpkts)
             ]
         ).reshape(1, -1)
 
-        # Dummy benign flow (from previous code)
+        # Dummy benign flow
         dummy_benign_flow = numpy.array(
             [
-                0.0,  # proto (tcp)
-                80.0,  # dport
-                47956.0,  # sport
                 10.896695,  # dur
-                1.0,  # pkts (spkts + dpkts)
+                0.0,  # proto (tcp)
+                47956.0,  # sport
+                80.0,  # dport
                 1.0,  # spkts
-                67696.0,  # bytes (sbytes + dbytes)
+                0.0,  # dpkts (dummy value)
                 100.0,  # sbytes
+                67596.0,  # dbytes (67696 - 100)
                 1.0,  # state (Established)
+                67696.0,  # bytes (sbytes + dbytes)
+                1.0,  # pkts (spkts + dpkts)
             ]
         ).reshape(1, -1)
 
@@ -70,7 +75,7 @@ class ClassifierWrapper:
             self.classifier = pickle.load(f)
         self.is_trained = True
 
-    def fit(self, X, y):
+    def partial_fit(self, X, y):
         if not hasattr(self.classifier, "partial_fit"):
             raise NotImplementedError(
                 "The underlying classifier does not support partial_fit."
@@ -93,8 +98,8 @@ class ClassifierWrapper:
                     raise ValueError(
                         f"No dummy sample provided for missing class {cls} in self.dummy_flows."
                     )
-                X = X.append(self.dummy_flows[cls][0])
-                y = y.append(self.dummy_flows[cls][1])
+                X = numpy.concatenate([X, self.dummy_flows[cls][0]], axis=0)
+                y = numpy.concatenate([y, numpy.array([cls])], axis=0)
 
             self.classifier.partial_fit(X, y, classes=self.classes)
         else:

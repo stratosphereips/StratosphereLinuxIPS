@@ -32,7 +32,6 @@ class PreprocessingWrapper:
             try:
                 if hasattr(transformer, "partial_fit"):
                     transformer.partial_fit(X, y)
-                    X = transformer.transform(X)
                     self.is_fitted[name] = True
                 else:
                     if not self.is_fitted[name]:
@@ -41,19 +40,16 @@ class PreprocessingWrapper:
                             transformer, "transform"
                         ):
                             transformer.fit(X, y)
-                            X = transformer.transform(X)
                             self.is_fitted[name] = True
                         else:
                             raise AttributeError(
                                 f"Transformer {name} does not implement partial_fit or fit/transform."
                             )
-                    else:
-                        X = transformer.transform(X)
+
             except Exception as e:
                 print(f"[ERROR] Partial fitting step '{name}' failed: {e}")
                 raise
         self._has_been_fitted_once = True
-        return X
 
     def transform(self, X):
         """Apply fitted transformations in sequence."""
@@ -103,3 +99,8 @@ class PreprocessingWrapper:
 
     def get_steps(self):
         return self.steps
+
+
+# way to load multiple transformers from files
+# make new instance with the same list of steps
+# call load to populate them from a folder, need to have the same name!
