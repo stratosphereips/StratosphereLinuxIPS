@@ -128,9 +128,17 @@ class Logger:
                 f"Training metrics: {metrics}"
             )
 
-    def save_test_results(self, original_label, predicted_label):
-        if original_label == BACKGROUND:
-            return  # Ignore flows with BACKGROUND label, here for redundancy
+    def save_test_results(self, original_labels, predicted_labels):
+        # Convert to numpy arrays if not already
+        original_labels = numpy.array(original_labels)
+        predicted_labels = numpy.array(predicted_labels)
+
+        # Discard rows where either label is BACKGROUND
+        mask = (original_labels != BACKGROUND) & (
+            predicted_labels != BACKGROUND
+        )
+        filtered_orig = original_labels[mask]
+        filtered_pred = predicted_labels[mask]
 
         # Initialize metrics if not already done
         if not hasattr(self, "malware_metrics"):
@@ -141,25 +149,23 @@ class Logger:
             self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
 
         # Update counters for true and predicted labels
-        if original_label in self.seen_labels:
-            self.seen_labels[original_label] += 1
-        else:
-            self.seen_labels[original_label] = 1
-
-        if predicted_label in self.predicted_labels:
-            self.predicted_labels[predicted_label] += 1
-        else:
-            self.predicted_labels[predicted_label] = 1
+        for label in [MALICIOUS, BENIGN]:
+            self.seen_labels[label] += numpy.sum(filtered_orig == label)
+            self.predicted_labels[label] += numpy.sum(filtered_pred == label)
 
         # Calculate TP, FP, TN, FN from malware perspective
-        if original_label == MALICIOUS and predicted_label == MALICIOUS:
-            self.malware_metrics["TP"] += 1
-        elif original_label == BENIGN and predicted_label == MALICIOUS:
-            self.malware_metrics["FP"] += 1
-        elif original_label == MALICIOUS and predicted_label == BENIGN:
-            self.malware_metrics["FN"] += 1
-        elif original_label == BENIGN and predicted_label == BENIGN:
-            self.malware_metrics["TN"] += 1
+        self.malware_metrics["TP"] += numpy.sum(
+            (filtered_orig == MALICIOUS) & (filtered_pred == MALICIOUS)
+        )
+        self.malware_metrics["FP"] += numpy.sum(
+            (filtered_orig == BENIGN) & (filtered_pred == MALICIOUS)
+        )
+        self.malware_metrics["FN"] += numpy.sum(
+            (filtered_orig == MALICIOUS) & (filtered_pred == BENIGN)
+        )
+        self.malware_metrics["TN"] += numpy.sum(
+            (filtered_orig == BENIGN) & (filtered_pred == BENIGN)
+        )
 
         total_flows = sum(self.seen_labels.values())
         log_str = (
