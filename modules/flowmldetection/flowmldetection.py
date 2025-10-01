@@ -449,7 +449,7 @@ class FlowMLDetection(IModule):
                                     [X_train, self.dummy_benign_flow]
                                 )
                                 y_gt_train = numpy.append(y_gt_train, [BENIGN])
-
+                    # print("before training: ", X_train.shape)
                     self.clf.partial_fit(
                         X_train,
                         y_gt_train,
@@ -899,7 +899,7 @@ class FlowMLDetection(IModule):
                 }
             )
 
-            print("unchanged_flow: ", self.flow)
+            # print("unchanged_flow: ", self.flow)
 
             if (not self.flow.get("ground_truth_label")) or (
                 self.flow.get("ground_truth_label") == ""
@@ -953,11 +953,11 @@ class FlowMLDetection(IModule):
 
                 # We are testing, -> using the scaler and model to detect
                 processed_flow = self.process_flow(self.flow)
-                print("processed: ", processed_flow)
                 # After processing the flow, it may happen that we
                 # delete icmp/arp/etc so the dataframe can be empty !!
                 if processed_flow is not None and not processed_flow.empty:
                     try:
+                        # print("processed: ", processed_flow.shape, processed_flow.columns)
                         original_label = processed_flow[
                             "ground_truth_label"
                         ].iloc[0]
