@@ -69,9 +69,10 @@ class PreprocessingWrapper:
         base_path = Path(base_path) / self.experiment_name / "preprocessing"
         base_path.mkdir(parents=True, exist_ok=True)
         for name, transformer in self.steps:
-            model_path = base_path / f"{name}.pkl"
+            model_path = base_path / f"{name}.bin"
             with open(model_path, "wb") as f:
-                pickle.dump(transformer, f)
+                data = pickle.dumps(transformer)
+                f.write(data)
 
     def load(self, base_path: Union[str, Path] = "./models"):
         base_path = Path(base_path) / self.experiment_name / "preprocessing"

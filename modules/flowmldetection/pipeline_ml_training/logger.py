@@ -74,13 +74,12 @@ class Logger:
 
         relevant_labels = self.relevant_labels
 
-        # Validation metrics if validation set is present and different from training set
         if (
             y_pred_val is not None
             and y_gt_val is not None
             and y_pred_train is not None
             and y_gt_train is not None
-            and not numpy.array_equal(y_gt_train, y_gt_val)
+            and (not numpy.array_equal(y_gt_train, y_gt_val))
         ):
             y_gt_val_filt, y_pred_val_filt = self._filter_labels(
                 y_gt_val, y_pred_val, relevant_labels
@@ -113,11 +112,11 @@ class Logger:
             )
         else:
             # Only one set (train == val), calculate metrics once
-            y_gt_val_filt, y_pred_val_filt = self._filter_labels(
-                y_gt_val, y_pred_val, relevant_labels
+            y_gt_train_filt, y_pred_train_filt = self._filter_labels(
+                y_gt_train, y_pred_train, relevant_labels
             )
             metrics, seen_labels, predicted_labels = self.compute_metrics(
-                y_gt_val_filt, y_pred_val_filt, relevant_labels
+                y_gt_train_filt, y_pred_train_filt, relevant_labels
             )
 
             self.write_to_log(
