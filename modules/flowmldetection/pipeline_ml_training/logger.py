@@ -112,6 +112,7 @@ class Logger:
             )
         else:
             # Only one set (train == val), calculate metrics once
+
             y_gt_train_filt, y_pred_train_filt = self._filter_labels(
                 y_gt_train, y_pred_train, relevant_labels
             )
@@ -121,7 +122,7 @@ class Logger:
 
             self.write_to_log(
                 f"Total labels: {sum_labeled_flows}, "
-                f"Training size: {len(y_pred_val_filt)}, "
+                f"Training size: {len(y_pred_train_filt)}, "
                 f"Training seen labels: {seen_labels}, "
                 f"Training predicted labels: {predicted_labels}, "
                 f"Training metrics: {metrics}"
