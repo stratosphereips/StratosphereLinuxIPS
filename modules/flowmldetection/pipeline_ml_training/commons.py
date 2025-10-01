@@ -1,12 +1,12 @@
-from enum import Enum, auto
+from enum import Enum
 
 
 class Label(Enum):
-    BENIGN = auto()
-    MALICIOUS = auto()
-    BACKGROUND = auto()
+    MALICIOUS = "Malicious"
+    BENIGN = "Benign"
+    BACKGROUND = "Background"
 
 
-BENIGN = Label.BENIGN
-MALICIOUS = Label.MALICIOUS
-BACKGROUND = Label.BACKGROUND
+BENIGN = Label.BENIGN.value
+MALICIOUS = Label.MALICIOUS.value
+BACKGROUND = Label.BACKGROUND.value
