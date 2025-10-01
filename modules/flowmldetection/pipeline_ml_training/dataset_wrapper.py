@@ -206,20 +206,12 @@ class ZeekDataset:
             if start <= i < stop
         ]
 
-    def reset_epoch(
-        self, batch_size: int, train_val_split: Optional[float] = None
-    ):
+    def reset_epoch(self, batch_size: int):
         self.indices = list(range(self.total_lines))
         self.rng.shuffle(self.indices)
         self.batch_size = batch_size
         self._batch_pos = 0
         self.epoch = 0
-
-        if train_val_split is not None:
-            split_idx = int(self.total_lines * train_val_split)
-            train_idx = self.indices[:split_idx]
-            val_idx = self.indices[split_idx:]
-            return train_idx, val_idx
 
     def next_batch(self):
         # ensure index built
