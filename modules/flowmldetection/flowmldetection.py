@@ -118,30 +118,34 @@ class FlowMLDetection(IModule):
         # Dummy malicious flow (from previous code)
         self.dummy_malicious_flow = numpy.array(
             [
-                0.0,  # proto (tcp)
-                443.0,  # dport
-                49733.0,  # sport
                 1.9424750804901123,  # dur
-                44.0,  # pkts (spkts + dpkts)
+                0.0,  # proto (tcp)
+                49733.0,  # sport
+                443.0,  # dport
                 17.0,  # spkts
-                42764.0,  # bytes (sbytes + dbytes)
+                27.0,  # dpkts (44 - 17)
                 25517.0,  # sbytes
+                17247.0,  # dbytes (42764 - 25517)
                 1.0,  # state (Established)
+                42764.0,  # bytes (sbytes + dbytes)
+                44.0,  # pkts (spkts + dpkts)
             ]
         ).reshape(1, -1)
 
         # Dummy benign flow (from previous code)
         self.dummy_benign_flow = numpy.array(
             [
-                0.0,  # proto (tcp)
-                80.0,  # dport
-                47956.0,  # sport
                 10.896695,  # dur
-                1.0,  # pkts (spkts + dpkts)
+                0.0,  # proto (tcp)
+                47956.0,  # sport
+                80.0,  # dport
                 1.0,  # spkts
-                67696.0,  # bytes (sbytes + dbytes)
+                0.0,  # dpkts (dummy value)
                 100.0,  # sbytes
+                67596.0,  # dbytes (67696 - 100)
                 1.0,  # state (Established)
+                67696.0,  # bytes (sbytes + dbytes)
+                1.0,  # pkts (spkts + dpkts)
             ]
         ).reshape(1, -1)
 
@@ -895,6 +899,8 @@ class FlowMLDetection(IModule):
                 }
             )
 
+            print("unchanged_flow: ", self.flow)
+
             if (not self.flow.get("ground_truth_label")) or (
                 self.flow.get("ground_truth_label") == ""
             ):
@@ -945,8 +951,9 @@ class FlowMLDetection(IModule):
 
             elif self.mode == "test":
 
-                # We are testing, which means using the model to detect
+                # We are testing, -> using the scaler and model to detect
                 processed_flow = self.process_flow(self.flow)
+                print("processed: ", processed_flow)
                 # After processing the flow, it may happen that we
                 # delete icmp/arp/etc so the dataframe can be empty !!
                 if processed_flow is not None and not processed_flow.empty:
