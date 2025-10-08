@@ -45,7 +45,7 @@ Right now, the configuration is done inside pipeline.ipynb by changing:
     - Influences where logs, results, models are stored
     - Cell \[2\] in pipeline.ipynb
 
-### 2.Specify commands
+### 2. Specify commands
 In cell \[5\], you can fill a list of commands in a form of \commands = [{},{},{}\]
 - keys:
     - "command" --> "train" or "test" , mode of the pipeline
@@ -53,13 +53,13 @@ In cell \[5\], you can fill a list of commands in a form of \commands = [{},{},{
     - "validation": --> True, False. To see if we should use train/validation split during the training
 If you specify the "test" command first, but the model isnt fitted, the pipeline ends.
 
-### 2. Run the pipeline
+### 3. Run the pipeline
 In pipeline.ipynb, do "run all" to make sure everything is correctly loaded.
 Cell \[6\] runs the train/test loops on datasets specified by the commands list from previous point
 Cell \[7\] runs the visualisation scripts on each log produced in the training/testing portion
 Cell \[8\] loads the saved model and preprocessing steps as a PoC
 
-### 3. Evaluate results
+### 4. Evaluate results
 Model metrics and logs are saved under:
 ```
 ./results/<experiment name> with training and testing folders.
@@ -152,7 +152,23 @@ The preprocessing models are saved with the classifier.
 Preprocessing steps are executed in order in which they are added.
 
 #### Adding different datasets, loaders
-The pipeline works well with our in-house datasets from https://github.com/stratosphereips/security-datasets-for-testing, but you can for sure
+The pipeline works well with our in-house datasets from https://github.com/stratosphereips/security-datasets-for-testing
+You can add loaders in the beginning of the pipeline, but then cell \[6\] should be changed to be able to find the dataset in the loaded datasets.
+To find where, see the code below:
+```
+  #find the dataset we wanted to use
+    ds = command_dict["dataset_prefix"]
+    try:
+        selected_dataset = next(name for name in found_datasets if ds in name)
+        loader = loaders[selected_dataset]
+    except StopIteration:
+        print(f"No dataset found for {ds}, skipping")
+        if command_idx == 0 and not is_fitted:
+            print("No dataset for the first training command, exiting")
+            exit(1)
+        continue
+```
+
 ## Author
-**Jan Svoboda**
+**Jan Svoboda** **Stratosphere Lab**
 GitHub: [@jsvobo](https://github.com/jsvobo)

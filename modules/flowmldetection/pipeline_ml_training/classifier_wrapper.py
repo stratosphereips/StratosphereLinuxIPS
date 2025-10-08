@@ -64,14 +64,15 @@ class ClassifierWrapper:
             raise FileNotFoundError(f"Directory {path} does not exist")
         model_path = path / name
         if not model_path.exists():
-            pkl_files = list(path.glob("*.pkl"))
+            pkl_files = list(path.glob("*.bin"))
             available = [f.name for f in pkl_files]
             print(
-                f"Classifier file {model_path} does not exist. Available .pkl files: {available}"
+                f"Classifier file {model_path} does not exist. Available .bin files: {available}"
             )
             raise FileNotFoundError(
                 f"Classifier file {model_path} does not exist"
             )
+
         with open(model_path, "rb") as f:
             self.classifier = pickle.load(f)
         self.is_trained = True

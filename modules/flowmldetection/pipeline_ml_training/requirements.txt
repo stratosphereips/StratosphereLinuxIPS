@@ -1,0 +1,8 @@
+python_version == 3.10
+numpy
+pandas
+scikit-learn
+matplotlib
+notebook
+ipykernel
+ipython
