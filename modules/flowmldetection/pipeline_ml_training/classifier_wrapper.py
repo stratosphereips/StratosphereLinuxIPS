@@ -11,6 +11,7 @@ import numpy
 #
 class ClassifierWrapper:
     def __init__(self, classifier):
+
         self.classifier = classifier
         self.is_trained = False
         self.classes = [BENIGN, MALICIOUS]
