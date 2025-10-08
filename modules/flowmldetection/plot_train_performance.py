@@ -45,7 +45,7 @@ def read_all_batches(logfile):
                 print(f"[WARN] Failed to parse line {i}: {line[:200]}")
                 traceback.print_exc()
                 continue
-    print(f"[INFO] Parsed {len(entries)} batches from logfile")
+    # print(f"[INFO] Parsed {len(entries)} batches from logfile")
     return entries
 
 
@@ -387,7 +387,7 @@ def plot_counts_series(
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.savefig(outpath)
     plt.close()
-    print(f"[SAVED] {outpath}")
+    # print(f"[SAVED] {outpath}")
 
 
 def get_stepping_sizes(entries, batch_count, size_key):
@@ -469,7 +469,7 @@ def plot_malware_metrics(metrics_data, output_path, title, xvals, xlabel):
                 ),
             }
         )
-    print(f"[INFO] Plotting metrics -> {output_path}")
+    # print(f"[INFO] Plotting metrics -> {output_path}")
     plot_major_metrics_together(
         malware_metrics_data,
         output_path,
@@ -477,7 +477,7 @@ def plot_malware_metrics(metrics_data, output_path, title, xvals, xlabel):
         xvals=xvals,
         xlabel=xlabel,
     )
-    print(f"[SAVED] {output_path}")
+    # print(f"[SAVED] {output_path}")
 
 
 def plot_accuracy_metrics(metrics_data, output_path, title, xvals, xlabel):
@@ -486,11 +486,11 @@ def plot_accuracy_metrics(metrics_data, output_path, title, xvals, xlabel):
         accuracy_data.append(
             {"Benign-Malicious Acc": entry.get("benign_malicious_accuracy", 0)}
         )
-    print(f"[INFO] Plotting accuracy -> {output_path}")
+    # print(f"[INFO] Plotting accuracy -> {output_path}")
     plot_major_metrics_together(
         accuracy_data, output_path, title=title, xvals=xvals, xlabel=xlabel
     )
-    print(f"[SAVED] {output_path}")
+    # print(f"[SAVED] {output_path}")
 
 
 def plot_comparison_metrics(
@@ -530,7 +530,7 @@ def plot_comparison_metrics(
             xvals=cumulative_total_sizes,
             xlabel="Aggregated samples",
         )
-        print(f"[SAVED] {out}")
+        # print(f"[SAVED] {out}")
     for metric, short_title, filename in metrics:
         combined = []
         for i in range(batch_count):
@@ -548,7 +548,7 @@ def plot_comparison_metrics(
             xvals=stepping_total_sizes,
             xlabel="Batch",
         )
-        print(f"[SAVED] {out}")
+        # print(f"[SAVED] {out}")
 
 
 def plot_comparison_metrics_for_series(
@@ -594,7 +594,7 @@ def plot_comparison_metrics_for_series(
             xvals=xvals,
             xlabel="Batch",
         )
-        print(f"[SAVED] {out}")
+        # print(f"[SAVED] {out}")
     fn_data = []
     fp_data = []
     for i in range(length):
@@ -622,7 +622,7 @@ def plot_comparison_metrics_for_series(
         xvals=xvals,
         xlabel="Batch",
     )
-    print(f"[SAVED] {out1}")
+    # print(f"[SAVED] {out1}")
     out2 = os.path.join(base_dir, f"train_val_fp_rate_{name_prefix}.png")
     plot_major_metrics_together(
         fp_data,
@@ -631,7 +631,7 @@ def plot_comparison_metrics_for_series(
         xvals=xvals,
         xlabel="Batch",
     )
-    print(f"[SAVED] {out2}")
+    # print(f"[SAVED] {out2}")
 
 
 def plot_malware_fn_rate_comparison(
@@ -662,7 +662,7 @@ def plot_malware_fn_rate_comparison(
         xvals=cumulative_total_sizes,
         xlabel="Aggregated samples",
     )
-    print(f"[SAVED] {out}")
+    # print(f"[SAVED] {out}")
 
 
 def plot_malware_fp_over_predicted_comparison(
@@ -693,7 +693,7 @@ def plot_malware_fp_over_predicted_comparison(
         xvals=cumulative_total_sizes,
         xlabel="Aggregated samples",
     )
-    print(f"[SAVED] {out}")
+    # print(f"[SAVED] {out}")
 
 
 def print_summary_section(lines, title, metrics_data):
@@ -794,7 +794,7 @@ def main():
         raise FileNotFoundError(f"Log file not found: {file_path}")
 
     folder_dir = ensure_dir(os.path.join(base_dir, "training", args.exp))
-    print(f"[INFO] Output folder: {folder_dir}")
+    # print(f"[INFO] Output folder: {folder_dir}")
 
     entries = read_all_batches(file_path)
     if not entries:
@@ -1285,7 +1285,7 @@ def main():
     summary_path = os.path.join(folder_dir, "summary.txt")
     with open(summary_path, "w") as f:
         f.write(summary_txt)
-    print(f"[SAVED] {summary_path}")
+    # print(f"[SAVED] {summary_path}")
     print(summary_txt)
 
 
