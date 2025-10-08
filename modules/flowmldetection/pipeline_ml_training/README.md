@@ -11,7 +11,7 @@ Training is done in a similar way to SLIPS. We train model in batches, produce l
 - conn_normalizer.py processes conn.log rows by renaming columns, so the names are compatible with slips, filling NaNs, converting to the correct types and adding "established" column.
 - features.py is used for filtering and further processing features (dataset columns), e.g. proto to categorical based on hard coded rules.
 - dataset_loader.py contains dataset loader, which is given directory, finds every dataset which has conn.log.labeled in it. The wrapper also filters out flows with unwanted labels and caches the result for larger datasets
-- logger.py handles where and how training/testing results are written. It does not calculate metrics
+- logger.py handles where and how training/testing results are written. It calculates metrics from the passed TP,FP,TN,FN
 - classifier_wrapper.py and preprocessing_wrapper.py contain class definitions for wrappers of ML models and pre-processing steps. The interface of the classes is
 - commons.py contains only enum with classes used in the pipeline
 - pipeline.py contains the main ipynb notebook used for training and testing models.
@@ -25,6 +25,9 @@ Create a virtual environment and install dependencies:
    source venv/bin/activate
    pip install -r requirements.txt
    ```
+
+# Results
+After running the pipeline, you'll find directories created with the experiment name in "./logs" , "./models" and "./results" . results have training and testing directory. each contains plots and summary of the training/testing runs from different datasets.
 
 # Usage
 Steps of training own model, tweaking parameters, specifying train and test datasets.
