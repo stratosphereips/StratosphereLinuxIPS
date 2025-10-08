@@ -208,7 +208,6 @@ class ZeekDataset:
 
     def reset_epoch(self, batch_size: int):
         self.indices = list(range(self.total_lines))
-        self.rng.shuffle(self.indices)
         self.batch_size = batch_size
         self._batch_pos = 0
         self.epoch = 0
@@ -218,10 +217,9 @@ class ZeekDataset:
         if not hasattr(self, "valid_indices") or self.total_lines == 0:
             raise RuntimeError("Dataset empty or not indexed")
 
-        # If we finished an epoch, reshuffle and start a new one
+        # If we finished an epoch, and start a new one
         if self._batch_pos >= len(self.indices):
             self.epoch += 1
-            self.rng.shuffle(self.indices)
             self._batch_pos = 0
 
         # get the *relative* valid-flow indices for this batch (values 0..total_lines-1)
