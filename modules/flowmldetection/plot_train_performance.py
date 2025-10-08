@@ -137,96 +137,168 @@ def process_cumulative_metrics(cumul_class_counters, class_names):
     return cumul_metrics_per_class, cumul_multi
 
 
-def accumulate_metrics(entries):
+def accumulate_metrics(entries, has_validation_data):
+    """
+    Accumulate batch and cumulative metrics.
+
+    - If has_validation_data is False, returns 4 training lists:
+        (batch_metrics_per_class_train,
+         batch_metrics_multi_train,
+         cumul_metrics_multi_train,
+         cumul_metrics_per_class_train)
+
+    - If has_validation_data is True, returns 8 lists **(validation first, training second)**:
+        (batch_metrics_per_class_val,
+         batch_metrics_multi_val,
+         cumul_metrics_multi_val,
+         cumul_metrics_per_class_val,
+         batch_metrics_per_class_train,
+         batch_metrics_multi_train,
+         cumul_metrics_multi_train,
+         cumul_metrics_per_class_train)
+    """
     print("[INFO] Accumulating batch and cumulative metrics...")
-    has_training_data = any(
-        "training_per_class" in entry for entry in entries if entry
-    )
 
-    batch_metrics_per_class = []
-    batch_metrics_multi = []
-    cumul_metrics_multi = []
-    cumul_metrics_per_class = []
+    # training outputs (always used)
+    batch_metrics_per_class_train = []
+    batch_metrics_multi_train = []
+    cumul_metrics_multi_train = []
+    cumul_metrics_per_class_train = []
 
-    if has_training_data:
-        batch_metrics_per_class_training = []
-        batch_metrics_multi_training = []
-        cumul_metrics_multi_training = []
-        cumul_metrics_per_class_training = []
+    # validation outputs (only if has_validation_data)
+    if has_validation_data:
+        batch_metrics_per_class_val = []
+        batch_metrics_multi_val = []
+        cumul_metrics_multi_val = []
+        cumul_metrics_per_class_val = []
 
-    class_names = list(entries[0]["per_class"].keys()) if entries else []
+    if not entries:
+        # nothing to do; return correct shape
+        if has_validation_data:
+            return (
+                batch_metrics_per_class_val,
+                batch_metrics_multi_val,
+                cumul_metrics_multi_val,
+                cumul_metrics_per_class_val,
+                batch_metrics_per_class_train,
+                batch_metrics_multi_train,
+                cumul_metrics_multi_train,
+                cumul_metrics_per_class_train,
+            )
+        else:
+            return (
+                batch_metrics_per_class_train,
+                batch_metrics_multi_train,
+                cumul_metrics_multi_train,
+                cumul_metrics_per_class_train,
+            )
 
-    cumul_class_counters = {
+    first = entries[0]
+    class_name_sets = []
+    # training_predicted (if present)
+    if "training_predicted" in first and isinstance(
+        first["training_predicted"], dict
+    ):
+        class_name_sets.append(set(first["training_predicted"].keys()))
+    # training_per_class (explicit training per-class counts)
+    if "training_per_class" in first and isinstance(
+        first["training_per_class"], dict
+    ):
+        class_name_sets.append(set(first["training_per_class"].keys()))
+    # per_class (your parser's validation-per-class)
+    if "per_class" in first and isinstance(first["per_class"], dict):
+        class_name_sets.append(set(first["per_class"].keys()))
+    # validation_per_class (in case the parser used that name)
+    if "validation_per_class" in first and isinstance(
+        first["validation_per_class"], dict
+    ):
+        class_name_sets.append(set(first["validation_per_class"].keys()))
+
+    # union all discovered names; if nothing found, fall back to empty list
+    if class_name_sets:
+        class_names = sorted(set().union(*class_name_sets))
+    else:
+        class_names = []
+
+    # cumulative counters
+    cumul_class_counters_train = {
         cls: {"TP": 0, "FP": 0, "TN": 0, "FN": 0} for cls in class_names
     }
-    if has_training_data:
-        cumul_class_counters_training = {
+    if has_validation_data:
+        cumul_class_counters_val = {
             cls: {"TP": 0, "FP": 0, "TN": 0, "FN": 0} for cls in class_names
         }
 
+    # iterate entries and accumulate
     for data in entries:
-        per_class = data.get(
-            "per_class",
-            {cls: {"TP": 0, "FP": 0, "TN": 0, "FN": 0} for cls in class_names},
-        )
-        batch_per_class, batch_multi = process_batch_metrics(
-            per_class, class_names
-        )
-        batch_metrics_per_class.append(batch_per_class)
-        batch_metrics_multi.append(batch_multi)
-
-        for cls in class_names:
-            for k in ["TP", "FP", "TN", "FN"]:
-                cumul_class_counters[cls][k] += int(
-                    per_class.get(cls, {}).get(k, 0)
-                )
-
-        cumul_per_class, cumul_multi = process_cumulative_metrics(
-            cumul_class_counters, class_names
-        )
-        cumul_metrics_per_class.append(cumul_per_class)
-        cumul_metrics_multi.append(cumul_multi)
-
-        if has_training_data and "training_per_class" in data:
-            training_per_class = data["training_per_class"]
-            batch_per_class_training, batch_multi_training = (
-                process_batch_metrics(training_per_class, class_names)
+        # VALIDATION split (expected key: "per_class")
+        if has_validation_data:
+            validation_per_class = data.get(
+                "per_class",
+                {
+                    cls: {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
+                    for cls in class_names
+                },
             )
-            batch_metrics_per_class_training.append(batch_per_class_training)
-            batch_metrics_multi_training.append(batch_multi_training)
+            batch_per_class_val, batch_multi_val = process_batch_metrics(
+                validation_per_class, class_names
+            )
+            batch_metrics_per_class_val.append(batch_per_class_val)
+            batch_metrics_multi_val.append(batch_multi_val)
 
             for cls in class_names:
-                for k in ["TP", "FP", "TN", "FN"]:
-                    cumul_class_counters_training[cls][k] += int(
-                        training_per_class.get(cls, {}).get(k, 0)
+                for k in ("TP", "FP", "TN", "FN"):
+                    cumul_class_counters_val[cls][k] += int(
+                        validation_per_class.get(cls, {}).get(k, 0)
                     )
 
-            cumul_per_class_training, cumul_multi_training = (
-                process_cumulative_metrics(
-                    cumul_class_counters_training, class_names
-                )
+            cumul_per_class_val, cumul_multi_val = process_cumulative_metrics(
+                cumul_class_counters_val, class_names
             )
-            cumul_metrics_per_class_training.append(cumul_per_class_training)
-            cumul_metrics_multi_training.append(cumul_multi_training)
+            cumul_metrics_per_class_val.append(cumul_per_class_val)
+            cumul_metrics_multi_val.append(cumul_multi_val)
 
-    print("[INFO] Done accumulating metrics.")
-    if has_training_data:
+        # TRAINING split (expected key: "training_per_class")
+        training_per_class = data.get(
+            "training_per_class",
+            {cls: {"TP": 0, "FP": 0, "TN": 0, "FN": 0} for cls in class_names},
+        )
+        batch_per_class_train, batch_multi_train = process_batch_metrics(
+            training_per_class, class_names
+        )
+        batch_metrics_per_class_train.append(batch_per_class_train)
+        batch_metrics_multi_train.append(batch_multi_train)
+
+        for cls in class_names:
+            for k in ("TP", "FP", "TN", "FN"):
+                cumul_class_counters_train[cls][k] += int(
+                    training_per_class.get(cls, {}).get(k, 0)
+                )
+
+        cumul_per_class_train, cumul_multi_train = process_cumulative_metrics(
+            cumul_class_counters_train, class_names
+        )
+        cumul_metrics_per_class_train.append(cumul_per_class_train)
+        cumul_metrics_multi_train.append(cumul_multi_train)
+
+    # Return order: **validation first** (if present), then training — this matches your plotting code.
+    if has_validation_data:
         return (
-            batch_metrics_per_class,
-            batch_metrics_multi,
-            cumul_metrics_multi,
-            cumul_metrics_per_class,
-            batch_metrics_per_class_training,
-            batch_metrics_multi_training,
-            cumul_metrics_multi_training,
-            cumul_metrics_per_class_training,
+            batch_metrics_per_class_val,
+            batch_metrics_multi_val,
+            cumul_metrics_multi_val,
+            cumul_metrics_per_class_val,
+            batch_metrics_per_class_train,
+            batch_metrics_multi_train,
+            cumul_metrics_multi_train,
+            cumul_metrics_per_class_train,
         )
     else:
         return (
-            batch_metrics_per_class,
-            batch_metrics_multi,
-            cumul_metrics_multi,
-            cumul_metrics_per_class,
+            batch_metrics_per_class_train,
+            batch_metrics_multi_train,
+            cumul_metrics_multi_train,
+            cumul_metrics_per_class_train,
         )
 
 
@@ -698,7 +770,20 @@ def main():
     parser.add_argument(
         "-e", "--exp", required=True, help="Experiment identifier"
     )
+    parser.add_argument(
+        "--save_folder", required=False, help="Output folder", default=None
+    )
     args = parser.parse_args()
+
+    save_folder = args.save_folder
+    if save_folder is not None:
+        if not os.path.isdir(save_folder):
+            raise NotADirectoryError(
+                f"Output folder does not exist: {save_folder}"
+            )
+        base_dir = ensure_dir(save_folder)
+    else:
+        base_dir = ensure_dir("performance_metrics")
 
     file_path = args.file
     if os.path.isdir(file_path):
@@ -708,7 +793,6 @@ def main():
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"Log file not found: {file_path}")
 
-    base_dir = ensure_dir("performance_metrics")
     folder_dir = ensure_dir(os.path.join(base_dir, "training", args.exp))
     print(f"[INFO] Output folder: {folder_dir}")
 
@@ -717,9 +801,14 @@ def main():
         print("[ERROR] No entries parsed; exiting.")
         return
 
-    has_training_data = any("training_per_class" in e for e in entries)
+    has_validation_data = any(
+        ("per_class" in e and bool(e["per_class"]))
+        or ("validation_per_class" in e and bool(e["validation_per_class"]))
+        or (e.get("testing_size", 0) > 0)
+        for e in entries
+    )
 
-    if has_training_data:
+    if has_validation_data:
         (
             batch_metrics_per_class,
             batch_metrics_multi,
@@ -729,16 +818,16 @@ def main():
             batch_metrics_multi_training,
             cumul_metrics_multi_training,
             cumul_metrics_per_class_training,
-        ) = accumulate_metrics(entries)
+        ) = accumulate_metrics(entries, has_validation_data)
     else:
         (
             batch_metrics_per_class,
             batch_metrics_multi,
             cumul_metrics_multi,
             cumul_metrics_per_class,
-        ) = accumulate_metrics(entries)
+        ) = accumulate_metrics(entries, has_validation_data)
 
-    if has_training_data:
+    if has_validation_data:
         validation_dir = ensure_dir(os.path.join(folder_dir, "validation"))
         train_dir = ensure_dir(os.path.join(folder_dir, "training"))
         comparison_dir = ensure_dir(os.path.join(folder_dir, "comparison"))
@@ -759,7 +848,7 @@ def main():
         else:
             return train_dir
 
-    class_names = list(entries[0]["per_class"].keys()) if entries else []
+    class_names = list(entries[0]["training_predicted"].keys())
     batch_count = len(entries)
 
     # ensure subdirs
@@ -776,9 +865,9 @@ def main():
     plot_counts_series(
         batch_class_counts,
         os.path.join(
-            get_dir("validation" if has_training_data else "training"),
+            get_dir("validation" if has_validation_data else "training"),
             "per_batch",
-            f"class_counts_batch_{'validation' if has_training_data else 'training'}.png",
+            f"class_counts_batch_{'validation' if has_validation_data else 'training'}.png",
         ),
         title="Per-batch class counts\n(Number of samples per batch)",
         xlabels=[str(i) for i in range(batch_count)],
@@ -787,16 +876,16 @@ def main():
     plot_counts_series(
         cumul_class_counts_per_batch,
         os.path.join(
-            get_dir("validation" if has_training_data else "training"),
+            get_dir("validation" if has_validation_data else "training"),
             "aggregated",
-            f"class_counts_aggregated_{'validation' if has_training_data else 'training'}.png",
+            f"class_counts_aggregated_{'validation' if has_validation_data else 'training'}.png",
         ),
         title="Aggregated class counts\n(Total samples seen so far)",
         xlabels=[str(i) for i in range(batch_count)],
         xlabel="Batch",
     )
 
-    if has_training_data:
+    if has_validation_data:
         batch_class_counts_training, cumul_class_counts_training_per_batch = (
             calculate_class_counts(entries, "training_per_class", class_names)
         )
@@ -824,7 +913,7 @@ def main():
         )
 
     # stepping sizes
-    if has_training_data:
+    if has_validation_data:
         cumulative_sizes = []
         total = 0
         for entry in entries:
@@ -849,44 +938,44 @@ def main():
     plot_malware_metrics(
         batch_metrics_multi,
         os.path.join(
-            get_dir("validation" if has_training_data else "training"),
+            get_dir("validation" if has_validation_data else "training"),
             "per_batch",
-            f"malware_metrics_batch_{'validation' if has_training_data else 'training'}.png",
+            f"malware_metrics_batch_{'validation' if has_validation_data else 'training'}.png",
         ),
-        f"Malware metrics (per-batch)\n({'Validation' if has_training_data else 'Training'})",
+        f"Malware metrics (per-batch)\n({'Validation' if has_validation_data else 'Training'})",
         stepping_sizes,
         "Batch",
     )
     plot_malware_metrics(
         cumul_metrics_multi,
         os.path.join(
-            get_dir("validation" if has_training_data else "training"),
+            get_dir("validation" if has_validation_data else "training"),
             "aggregated",
-            f"malware_metrics_aggregated_{'validation' if has_training_data else 'training'}.png",
+            f"malware_metrics_aggregated_{'validation' if has_validation_data else 'training'}.png",
         ),
-        f"Malware metrics (Aggregated)\n({'Validation' if has_training_data else 'Training'})",
+        f"Malware metrics (Aggregated)\n({'Validation' if has_validation_data else 'Training'})",
         xvals=cumulative_sizes,
         xlabel="Aggregated samples",
     )
     plot_accuracy_metrics(
         batch_metrics_multi,
         os.path.join(
-            get_dir("validation" if has_training_data else "training"),
+            get_dir("validation" if has_validation_data else "training"),
             "per_batch",
-            f"accuracy_batch_{'validation' if has_training_data else 'training'}.png",
+            f"accuracy_batch_{'validation' if has_validation_data else 'training'}.png",
         ),
-        f"Benign-Malicious Acc (per-batch)\n({'Validation' if has_training_data else 'Training'})",
+        f"Benign-Malicious Acc (per-batch)\n({'Validation' if has_validation_data else 'Training'})",
         stepping_sizes,
         "Batch",
     )
     plot_accuracy_metrics(
         cumul_metrics_multi,
         os.path.join(
-            get_dir("validation" if has_training_data else "training"),
+            get_dir("validation" if has_validation_data else "training"),
             "aggregated",
-            f"accuracy_aggregated_{'validation' if has_training_data else 'training'}.png",
+            f"accuracy_aggregated_{'validation' if has_validation_data else 'training'}.png",
         ),
-        f"Benign-Malicious Acc (Aggregated)\n({'Validation' if has_training_data else 'Training'})",
+        f"Benign-Malicious Acc (Aggregated)\n({'Validation' if has_validation_data else 'Training'})",
         xvals=cumulative_sizes,
         xlabel="Aggregated samples",
     )
@@ -931,12 +1020,12 @@ def main():
         )
         return series_per_class_k, series_multi_k, start_idx
 
-    label_val = "validation" if has_training_data else "training"
+    label_val = "validation" if has_validation_data else "training"
     last5_per_class_val, last5_multi_val, last5_start = make_lastk_and_plot(
         5,
         batch_metrics_per_class,
         batch_metrics_multi,
-        get_dir("validation" if has_training_data else "training"),
+        get_dir("validation" if has_validation_data else "training"),
         stepping_sizes,
         label_val,
     )
@@ -944,7 +1033,7 @@ def main():
         10,
         batch_metrics_per_class,
         batch_metrics_multi,
-        get_dir("validation" if has_training_data else "training"),
+        get_dir("validation" if has_validation_data else "training"),
         stepping_sizes,
         label_val,
     )
@@ -952,13 +1041,13 @@ def main():
         20,
         batch_metrics_per_class,
         batch_metrics_multi,
-        get_dir("validation" if has_training_data else "training"),
+        get_dir("validation" if has_validation_data else "training"),
         stepping_sizes,
         label_val,
     )
 
     # training-specific plots
-    if has_training_data:
+    if has_validation_data:
         cumulative_training_sizes = []
         total_training = 0
         for entry in entries:
@@ -1153,7 +1242,7 @@ def main():
 
     # summary
     lines = []
-    if has_training_data:
+    if has_validation_data:
         print_summary_section(
             lines,
             "VALIDATION Multi-class (Aggregated)",
@@ -1188,7 +1277,7 @@ def main():
     lines.append(f"Total batches processed: {batch_count}")
     lines.append(
         "Data type: Training/Validation split"
-        if has_training_data
+        if has_validation_data
         else "Data type: Training only"
     )
 

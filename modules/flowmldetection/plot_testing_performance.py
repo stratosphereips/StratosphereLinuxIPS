@@ -262,7 +262,20 @@ def main():
     parser.add_argument(
         "-e", "--exp", required=True, help="Experiment identifier"
     )
+    parser.add_argument(
+        "--save_folder", required=False, help="Output folder", default=None
+    )
     args = parser.parse_args()
+
+    save_folder = args.save_folder
+    if save_folder is not None:
+        if not os.path.isdir(save_folder):
+            raise NotADirectoryError(
+                f"Output folder does not exist: {save_folder}"
+            )
+        base_dir = ensure_dir(save_folder)
+    else:
+        base_dir = ensure_dir("performance_metrics")
 
     file_path = args.file
     if os.path.isdir(file_path):
@@ -272,7 +285,6 @@ def main():
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"Log file not found: {file_path}")
 
-    base_dir = ensure_dir("performance_metrics")
     testing_dir = ensure_dir(os.path.join(base_dir, "testing", args.exp))
     print(f"[INFO] Output folder: {testing_dir}")
 
