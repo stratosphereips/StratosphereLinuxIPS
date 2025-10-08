@@ -1,4 +1,4 @@
-# base_utils.py  -- drop-in replacement
+# base_utils.py
 import os
 import ast
 import re
@@ -9,9 +9,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-# ------------------------
-# Filesystem helpers
-# ------------------------
 def ensure_dir(path: str) -> str:
     """
     Ensure directory exists, return the normalized path.
@@ -21,9 +18,6 @@ def ensure_dir(path: str) -> str:
     return p
 
 
-# ------------------------
-# Parsing helpers
-# ------------------------
 def _safe_literal_eval(s: str):
     try:
         return ast.literal_eval(s)

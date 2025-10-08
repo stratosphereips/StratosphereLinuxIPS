@@ -46,16 +46,18 @@ class Logger:
         self, y_true, y_pred, relevant_labels=[MALICIOUS, BENIGN]
     ):
         metrics = {
-            "TP": numpy.sum((y_pred == MALICIOUS) & (y_true == MALICIOUS)),
-            "FP": numpy.sum((y_pred == MALICIOUS) & (y_true == BENIGN)),
-            "FN": numpy.sum((y_pred == BENIGN) & (y_true == MALICIOUS)),
-            "TN": numpy.sum((y_pred == BENIGN) & (y_true == BENIGN)),
+            "TP": int(
+                numpy.sum((y_pred == MALICIOUS) & (y_true == MALICIOUS))
+            ),
+            "FP": int(numpy.sum((y_pred == MALICIOUS) & (y_true == BENIGN))),
+            "FN": int(numpy.sum((y_pred == BENIGN) & (y_true == MALICIOUS))),
+            "TN": int(numpy.sum((y_pred == BENIGN) & (y_true == BENIGN))),
         }
         seen_labels = {
-            label: numpy.sum(y_true == label) for label in relevant_labels
+            label: int(numpy.sum(y_true == label)) for label in relevant_labels
         }
         predicted_labels = {
-            label: numpy.sum(y_pred == label) for label in relevant_labels
+            label: int(numpy.sum(y_pred == label)) for label in relevant_labels
         }
         return metrics, seen_labels, predicted_labels
 
@@ -150,21 +152,25 @@ class Logger:
 
         # Update counters for true and predicted labels
         for label in [MALICIOUS, BENIGN]:
-            self.seen_labels[label] += numpy.sum(filtered_orig == label)
-            self.predicted_labels[label] += numpy.sum(filtered_pred == label)
+            self.seen_labels[label] += int(numpy.sum(filtered_orig == label))
+            self.predicted_labels[label] += int(
+                numpy.sum(filtered_pred == label)
+            )
 
         # Calculate TP, FP, TN, FN from malware perspective
-        self.malware_metrics["TP"] += numpy.sum(
-            (filtered_orig == MALICIOUS) & (filtered_pred == MALICIOUS)
+        self.malware_metrics["TP"] += int(
+            numpy.sum(
+                (filtered_orig == MALICIOUS) & (filtered_pred == MALICIOUS)
+            )
         )
-        self.malware_metrics["FP"] += numpy.sum(
-            (filtered_orig == BENIGN) & (filtered_pred == MALICIOUS)
+        self.malware_metrics["FP"] += int(
+            numpy.sum((filtered_orig == BENIGN) & (filtered_pred == MALICIOUS))
         )
-        self.malware_metrics["FN"] += numpy.sum(
-            (filtered_orig == MALICIOUS) & (filtered_pred == BENIGN)
+        self.malware_metrics["FN"] += int(
+            numpy.sum((filtered_orig == MALICIOUS) & (filtered_pred == BENIGN))
         )
-        self.malware_metrics["TN"] += numpy.sum(
-            (filtered_orig == BENIGN) & (filtered_pred == BENIGN)
+        self.malware_metrics["TN"] += int(
+            numpy.sum((filtered_orig == BENIGN) & (filtered_pred == BENIGN))
         )
 
         total_flows = sum(self.seen_labels.values())
