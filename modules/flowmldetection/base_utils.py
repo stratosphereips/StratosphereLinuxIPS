@@ -400,4 +400,4 @@ def plot_major_metrics_together(
     plt.tight_layout()
     plt.savefig(outpath)
     plt.close()
-    print(f"[SAVED] {outpath}")
+    # print(f"[SAVED] {outpath}")
