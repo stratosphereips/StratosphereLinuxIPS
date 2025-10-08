@@ -3,9 +3,11 @@
 ## Overview
 This project provides a modular and scalable **machine learning pipeline** built in **Python** for data preprocessing, model training, evaluation for purpose of offline training models to be used in SLIPS ML modules. The models we are interested in support online learning and are able to be "extended" by partial fit, transfer learning and alike.
 
+### Datasets:
 The pipeline works on network flows loaded from zeek dataset with added labels benign and malicious. Other labels are discarded.
 The datasets used for testing the pipeline are from https://github.com/stratosphereips/security-datasets-for-testing
 Training is done in a similar way to SLIPS. We train model in batches, produce logs with the same structure.
+Guide to adding datasets with differnt name and structure to the pipeline is at the end of the README.md
 
 ## Parts of the pipeline
 - conn_normalizer.py processes conn.log rows by renaming columns, so the names are compatible with slips, filling NaNs, converting to the correct types and adding "established" column.
@@ -16,18 +18,19 @@ Training is done in a similar way to SLIPS. We train model in batches, produce l
 - commons.py contains only enum with classes used in the pipeline
 - pipeline.py contains the main ipynb notebook used for training and testing models.
 
-../plot_train_performance.py and ../plot_testing_performance.py are reused for plotting metrics and summarising results.
+../plot_train_performance.py and ../plot_testing_performance.py are reused from modules/flowmldetection for plotting metrics and summarising results.
 
 ## Installation
 Create a virtual environment and install dependencies:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
+Call from modules/flowmldetection/pipeline_ml_training
+```bash
+    conda create -n slips-ml-pipeline python=3.10 pip
+    conda activate slips-ml-pipeline
+    pip install -r requirements.txt
+```
 
 # Results
-After running the pipeline, you'll find directories created with the experiment name in "./logs" , "./models" and "./results" . results have training and testing directory. each contains plots and summary of the training/testing runs from different datasets.
+After running the pipeline, you'll find directories created with the experiment name in "./logs/(experiment_name)" , "./models/(experiment_name)" and "./results/(experiment_name)" . results/(experiment_name)/ have training and testing directory. Each contains plots and summary of the training/testing runs from different datasets in the same experiment.
 
 # Usage
 Steps of training own model, tweaking parameters, specifying train and test datasets.
@@ -156,21 +159,8 @@ Preprocessing steps are executed in order in which they are added.
 
 #### Adding different datasets, loaders
 The pipeline works well with our in-house datasets from https://github.com/stratosphereips/security-datasets-for-testing
-You can add loaders in the beginning of the pipeline, but then cell \[6\] should be changed to be able to find the dataset in the loaded datasets.
-To find where, see the code below:
-```
-  #find the dataset we wanted to use
-    ds = command_dict["dataset_prefix"]
-    try:
-        selected_dataset = next(name for name in found_datasets if ds in name)
-        loader = loaders[selected_dataset]
-    except StopIteration:
-        print(f"No dataset found for {ds}, skipping")
-        if command_idx == 0 and not is_fitted:
-            print("No dataset for the first training command, exiting")
-            exit(1)
-        continue
-```
+You can add our loaders in the beginning of the pipeline, then put them into dictionary indexed with 001,002 etc. You'll be then able to use 001, 002 in commands.
+
 
 ## Author
 **Jan Svoboda** **Stratosphere Lab**
