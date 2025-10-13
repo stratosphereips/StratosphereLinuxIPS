@@ -17,7 +17,7 @@ scikit_learn
 slackclient==2.9.4
 psutil==7.0.0
 six==1.17.0
-pytest==8.3.5
+pytest==8.4.2
 pytest-mock==3.15.0
 pytest-xdist==3.8.0
 scipy==1.15.1
@@ -34,7 +34,7 @@ yappi==1.6.10
 pytest-sugar==1.1.1
 aid_hash
 black==24.10.0
-ruff==0.12.11
+ruff==0.14.0
 pre-commit==4.3.0
 coverage==7.10.6
 netifaces==0.11.0
