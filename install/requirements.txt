@@ -3,7 +3,7 @@ numpy==1.26.4
 watchdog==5.0.0
 redis==5.2.1
 urllib3==2.5.0
-pandas==2.3.1
+pandas==2.3.2
 tzlocal==5.3.1
 cabby==0.1.23
 stix2==3.0.1
@@ -17,8 +17,8 @@ scikit_learn
 slackclient==2.9.4
 psutil==7.0.0
 six==1.17.0
-pytest==8.3.5
-pytest-mock==3.14.0
+pytest==8.4.2
+pytest-mock==3.15.0
 pytest-xdist==3.8.0
 scipy==1.15.1
 scikit-learn==1.6.1
@@ -31,12 +31,12 @@ flask
 tldextract==5.3.0
 termcolor==3.1.0
 yappi==1.6.10
-pytest-sugar==1.0.0
+pytest-sugar==1.1.1
 aid_hash
 black==24.10.0
-ruff==0.12.11
+ruff==0.14.0
 pre-commit==4.3.0
-coverage==7.10.5
+coverage==7.10.6
 netifaces==0.11.0
 scapy==2.6.1
 pyyaml

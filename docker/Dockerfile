@@ -78,12 +78,13 @@ RUN apt update && apt install -y --no-install-recommends \
 # to support running slips on the rpi (arm64). the rpi uses jemmalloc by default, which expects a different page size
 # than the default on x86_64
 RUN pip3 install --no-cache-dir --upgrade pip \
-    && git clone https://github.com/redis/redis \
-    && cd redis \
+    && curl -O https://download.redis.io/redis-stable.tar.gz \
+    && tar xzf redis-stable.tar.gz \
+    && cd redis-stable \
     && make distclean \
     && make MALLOC=libc
 
-ENV PATH="$PATH:/redis/src"
+ENV PATH="$PATH:/redis-stable/src"
 
 
 # Switch to Slips installation dir on login.
