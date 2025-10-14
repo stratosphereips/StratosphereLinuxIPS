@@ -1,3 +1,6 @@
+1.1.14 (Oct 14th, 2025)
+- Security Patch for CVE-2025-49844: Force use of Redis version 8.2.2
+
 1.1.13 (Sep 1st, 2025)
 - Add detection for DNS answers of malicious DNS queries.
 - Support using Zeek v8.0.0.
