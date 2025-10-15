@@ -72,7 +72,7 @@ def test_check_given_flags(args, expected_calls, monkeypatch):
     checker.main.redis_man.check_redis_database.return_value = False
     checker.input_module_exists = mock.MagicMock(return_value=False)
 
-    checker.check_given_flags()
+    checker.verify_given_flags()
 
     for method_name in expected_calls:
         method = getattr(checker.main, method_name)
@@ -118,7 +118,7 @@ def test_check_given_flags_root_user(monkeypatch):
     ) as mock_delete, mock.patch.object(
         checker.main, "terminate_slips"
     ) as mock_term:
-        checker.check_given_flags()
+        checker.verify_given_flags()
         mock_delete.assert_called_once()
         mock_term.assert_called_once()
 
@@ -131,7 +131,7 @@ def test_check_input_type_interface():
     checker.main.args.db = None
     checker.main.args.input_module = None
 
-    result = checker.check_input_type()
+    result = checker.get_input_type()
     assert result == ("interface", "eth0", False)
 
 
@@ -145,7 +145,7 @@ def test_check_input_type_db():
 
     checker.main.redis_man.load_db = mock.MagicMock()
 
-    result = checker.check_input_type()
+    result = checker.get_input_type()
     assert result is None
     checker.main.redis_man.load_db.assert_called_once()
 
@@ -158,7 +158,7 @@ def test_check_input_type_input_module():
     checker.main.args.db = None
     checker.main.args.input_module = "zeek"
 
-    result = checker.check_input_type()
+    result = checker.get_input_type()
     assert result == ("zeek", "input_module", "zeek")
 
 
@@ -184,7 +184,7 @@ def test_check_input_type_filepath(filepath, is_file, is_dir, expected_result):
         checker.main, "get_input_file_type", return_value="mock_type"
     ):
 
-        result = checker.check_input_type()
+        result = checker.get_input_type()
         assert result == expected_result
 
 
@@ -204,7 +204,7 @@ def test_check_input_type_stdin():
         return_value=("mock_type", "mock_line_type"),
     ):
 
-        result = checker.check_input_type()
+        result = checker.get_input_type()
         assert result == ("mock_type", "stdin-type", "mock_line_type")
 
 
@@ -217,7 +217,7 @@ def test_check_input_type_no_input():
     checker.main.args.input_module = None
 
     with pytest.raises(SystemExit) as excinfo:
-        checker.check_input_type()
+        checker.get_input_type()
 
     assert excinfo.value.code == -1
 

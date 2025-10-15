@@ -28,7 +28,7 @@ class ARPEvidenceFilter:
 
     def is_self_defense(self, ip: str):
         """
-        slips uses arp poison to defend itself and th enetwork,
+        slips uses arp poison to defend itself and the network,
         check arp_poison.py for more details.
         goal of this function is to discard evidence about slips doing arp
         attacks when it's just attacking attackers

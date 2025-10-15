@@ -16,6 +16,7 @@ from typing import Set
 import logging
 
 from managers.host_ip_manager import HostIPManager
+from managers.ap_manager import APManager
 from managers.metadata_manager import MetadataManager
 from managers.process_manager import ProcessManager
 from managers.profilers_manager import ProfilersManager
@@ -59,7 +60,7 @@ class Main:
             self.args = self.conf.get_args()
             self.profilers_manager = ProfilersManager(self)
             self.pid = os.getpid()
-            self.checker.check_given_flags()
+            self.checker.verify_given_flags()
             self.prepare_locks_dir()
             if not self.args.stopdaemon:
                 # Check the type of input
@@ -67,7 +68,7 @@ class Main:
                     self.input_type,
                     self.input_information,
                     self.line_type,
-                ) = self.checker.check_input_type()
+                ) = self.checker.get_input_type()
                 # If we need zeek (bro), test if we can run it.
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
@@ -76,6 +77,7 @@ class Main:
                 self.twid_width = self.conf.get_tw_width()
                 # should be initialised after self.input_type is set
                 self.host_ip_man = HostIPManager(self)
+                self.ap_manager = APManager(self)
 
     def check_zeek_or_bro(self):
         """
@@ -504,6 +506,16 @@ class Main:
             except RuntimeError as e:
                 self.print(str(e), 1, 1)
                 self.terminate_slips()
+
+            if self.ap_manager.is_ap_running():
+                if not self.main.args.access_point():
+                    self.print(
+                        "AP running but slips was not started with "
+                        "-ap. Please restart Slips. Stopping."
+                    )
+                    self.terminate_slips()
+                else:
+                    self.ap_manager.store_ap_interfaces(self.input_information)
 
             self.db.set_input_metadata(
                 {
