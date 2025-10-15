@@ -50,17 +50,27 @@ def read_all_batches(logfile):
 
 
 def compute_multi_metrics_custom(per_class):
-    # reuse base compute_multi_metrics and add benign/malicious accuracy excluding background
+    # Reuse base metrics
     metrics = compute_multi_metrics(per_class)
+
+    # Calculate benign_malicious_accuracy (excluding Background if any)
     total_tp_fn = 0
     total_tp = 0
+
     for cls_name, counts in per_class.items():
         if cls_name.lower() not in ("background", "bg"):
-            total_tp_fn += counts.get("TP", 0) + counts.get("FN", 0)
-            total_tp += counts.get("TP", 0)
-    metrics["benign_malicious_accuracy"] = (
-        (total_tp / total_tp_fn) if total_tp_fn > 0 else 0.0
-    )
+            tp = counts.get("TP", 0)
+            fn = counts.get("FN", 0)
+            total_tp_fn += tp + fn
+            total_tp += tp
+
+    # FIXED: Explicit handling of edge cases
+    if total_tp_fn > 0:
+        metrics["benign_malicious_accuracy"] = total_tp / total_tp_fn
+    else:
+        # No actual samples - this shouldn't happen but handle gracefully
+        metrics["benign_malicious_accuracy"] = 0.0
+
     return metrics
 
 
@@ -627,7 +637,7 @@ def plot_comparison_metrics_for_series(
     plot_major_metrics_together(
         fp_data,
         out2,
-        title=f"FP Rate (predicted+)\n(Validation vs Training — {name_prefix})",
+        title=f"FP Rate\n(Validation vs Training — {name_prefix})",
         xvals=xvals,
         xlabel="Batch",
     )

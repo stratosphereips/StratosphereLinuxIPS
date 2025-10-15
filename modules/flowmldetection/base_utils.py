@@ -310,46 +310,33 @@ def plot_major_metrics_together(
     xvals: Optional[List] = None,
     xlabel: str = "Index",
 ):
-    """
-    Plot multiple named metrics from a series of dicts.
-    series: list where each entry is a dict {metric_name: numeric_value, ...}
-    Example:
-      series = [{'accuracy':0.9,'precision':0.8}, {'accuracy':0.92,'precision':0.85},...]
-    or combined series where keys are 'Validation'/'Training' and values numeric.
-    """
     if series is None or len(series) == 0:
         print(f"[INFO] plot_major_metrics_together: no data for {outpath}")
         return
 
-    # Ensure output directory exists
     outdir = os.path.dirname(os.path.abspath(outpath))
     if outdir:
         os.makedirs(outdir, exist_ok=True)
 
-    # Determine the full set of metric names across all entries (preserve order from first entry)
     metric_names = []
     first_keys = list(series[0].keys())
     for k in first_keys:
         if k not in metric_names:
             metric_names.append(k)
-    # Add any other keys that appear later
     for entry in series[1:]:
         for k in entry.keys():
             if k not in metric_names:
                 metric_names.append(k)
 
-    # Build lists of values for each metric
     metric_values = {m: [] for m in metric_names}
     for entry in series:
         for m in metric_names:
             metric_values[m].append(entry.get(m, 0.0))
 
-    # X axis
     n = len(next(iter(metric_values.values())))
     if xvals is None:
         x_axis = list(range(1, n + 1))
     else:
-        # if xvals length doesn't match n, fallback to indices
         try:
             if len(xvals) == n:
                 x_axis = xvals
@@ -358,7 +345,6 @@ def plot_major_metrics_together(
         except Exception:
             x_axis = list(range(1, n + 1))
 
-    # Plot
     plt.figure(figsize=(8, 4.5))
     for m in metric_names:
         vals = metric_values[m]
@@ -369,29 +355,43 @@ def plot_major_metrics_together(
     plt.title(title)
     plt.legend(loc="best", fontsize=8)
 
-    # Adjust y-limits: if values within [0,1] zoom, otherwise allow full range
     all_vals = [v for vals in metric_values.values() for v in vals]
     finite_vals = [float(x) for x in all_vals if np.isfinite(x)]
+
     if finite_vals:
         min_val = min(finite_vals)
         max_val = max(finite_vals)
-        if max_val > min_val:
-            margin = 0.05 * (max_val - min_val)
-        else:
-            margin = 0.05
-        lower = min_val - margin
-        upper = max_val + margin
-        # If metrics mostly probabilities (0..1) and the span is small, restrict axis to [0,1]
+        value_range = max_val - min_val
+
+        # Check if values look like probabilities/rates (0-1 range)
         if 0 <= min_val and max_val <= 1:
-            if upper - lower < 0.5:
-                plt.ylim(max(0, lower), min(1, upper))
+            # If the range is very small (< 0.05), we have high accuracy scenario
+            if value_range < 0.05:
+                # Show it's a zoomed view by using a tighter range
+                # but DON'T make it look like the full scale
+                margin = max(0.002, value_range * 0.2)
+                lower = max(0, min_val - margin)
+                upper = min(1, max_val + margin)
+                plt.ylim(lower, upper)
+                # Add annotation to show this is zoomed
+                plt.text(
+                    0.02,
+                    0.98,
+                    "Zoomed view",
+                    transform=plt.gca().transAxes,
+                    fontsize=8,
+                    verticalalignment="top",
+                    bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.3),
+                )
             else:
-                plt.ylim(0, 1)
+                # Normal range - show full 0 to 1
+                plt.ylim(0, 1.05)
         else:
-            plt.ylim(lower, upper)
+            # Not probability metrics - use natural range
+            margin = 0.05 * value_range if value_range > 0 else 0.05
+            plt.ylim(min_val - margin, max_val + margin)
 
     plt.grid(axis="y", linestyle=":", linewidth=0.5)
     plt.tight_layout()
     plt.savefig(outpath)
     plt.close()
-    # print(f"[SAVED] {outpath}")
