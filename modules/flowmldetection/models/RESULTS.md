@@ -1,4 +1,3 @@
-|                         |     |             |            ||||                         |          |           |           |         |         |         |             |      |    |    |      |
 |-------------------------|-----|-------------|------------||||-------------------------|----------|-----------|-----------|---------|---------|---------|-------------|------|----|----|------|
 |ID                       |Type |Train Dataset|Test Dataset||||Benign-malicious Accuracy|Malware F1|Malware FPR|Malware FNR|Macro F1 |Precision|Recall   |Relevant data|TP    |TN  |FP  |FN    |
 |train_008-validation     |Train|8            |X           ||||0.987                    |0.9913    |0.0355     |0.005      |0.9831   |0.9876   |0.995    |540          |397   |136 |5   |2     |
