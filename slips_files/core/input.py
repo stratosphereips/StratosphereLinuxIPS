@@ -93,9 +93,8 @@ class Input(ICore):
         self.timeout = None
         # zeek rotated files to be deleted after a period of time
         self.to_be_deleted = []
-        self.zeek_thread = threading.Thread(
-            target=self.run_zeek, daemon=True, name="run_zeek_thread"
-        )
+        self.zeek_threads = []
+
         # is set by the profiler to tell this proc that we it is done processing
         # the input process and shut down and close the profiler queue no issue
         self.is_profiler_done_event = is_profiler_done_event
@@ -433,7 +432,7 @@ class Input(ICore):
             self.bro_timeout = float("inf")
 
         self.zeek_dir = self.given_path
-        self.start_observer()
+        self.start_observer(self.zeek_dir)
 
         # if 1 file is zeek tabs the rest should be the same
         if not hasattr(self, "is_zeek_tabs"):
@@ -622,21 +621,20 @@ class Input(ICore):
         self.mark_self_as_done_processing()
         return True
 
-    def start_observer(self):
+    def start_observer(self, zeek_dir: str):
+        """
+        :param zeek_dir: directory to monitor
+        """
         # Now start the observer of new files. We need the observer because Zeek does not create all the files
         # at once, but when the traffic appears. That means that we need
         # some process to tell us which files to read in real time when they appear
         # Get the file eventhandler
         # We have to set event_handler and event_observer before running zeek.
-        event_handler = FileEventHandler(
-            self.zeek_dir, self.input_type, self.db
-        )
-        # Create an observer
+        event_handler = FileEventHandler(zeek_dir, self.input_type, self.db)
+
         self.event_observer = Observer()
         # Schedule the observer with the callback on the file handler
-        self.event_observer.schedule(
-            event_handler, self.zeek_dir, recursive=True
-        )
+        self.event_observer.schedule(event_handler, zeek_dir, recursive=True)
         # monitor changes to whitelist
         self.event_observer.schedule(event_handler, "config/", recursive=True)
         # Start the observer
@@ -644,50 +642,91 @@ class Input(ICore):
 
     def handle_pcap_and_interface(self) -> int:
         """Returns the number of zeek lines read"""
-
-        # Create zeek_folder if does not exist.
         if not os.path.exists(self.zeek_dir):
             os.makedirs(self.zeek_dir)
         self.print(f"Storing zeek log files in {self.zeek_dir}")
-        self.start_observer()
 
         if self.input_type == "interface":
             # We don't want to stop bro if we read from an interface
             self.bro_timeout = float("inf")
+            # format is {interface: zeek_dir_path}
+            interfaces_to_monitor = {}
+            if self.args.interface:
+                interfaces_to_monitor.append(
+                    {
+                        self.args.interface: {
+                            "dir": self.zeek_dir,
+                            "type": "main_interface",
+                        }
+                    }
+                )
+
+            elif self.args.access_point:
+                # slips is running in AP mode, we need to monitor the 2
+                # interfaces, wifi and eth.
+                for _type, interface in self.db.get_ap_info().items():
+                    dir_to_store_interface_logs = os.path.join(
+                        self.zeek_dir, interface
+                    )
+                    interfaces_to_monitor.append(
+                        {
+                            interface: {
+                                "dir": dir_to_store_interface_logs,
+                                "type": _type,
+                            }
+                        }
+                    )
+            for interface, interface_info in interfaces_to_monitor.items():
+                self.start_zeek(interface_info["dir"], interface)
         elif self.input_type == "pcap":
             # This is for stopping the inputprocess
             # if bro does not receive any new line while reading a pcap
             self.bro_timeout = 30
+            self.start_zeek(self.zeek_dir, self.given_path)
 
-        zeek_files = os.listdir(self.zeek_dir)
-        if len(zeek_files) > 0:
-            # First clear the zeek folder of old .log files
-            for f in zeek_files:
-                os.remove(os.path.join(self.zeek_dir, f))
-
-        # run zeek
-        self.zeek_thread.start()
-        # Give Zeek some time to generate at least 1 file.
-        time.sleep(3)
-
-        self.db.store_pid("Zeek", self.zeek_pid)
-        if not hasattr(self, "is_zeek_tabs"):
-            self.is_zeek_tabs = False
         self.lines = self.read_zeek_files()
         self.print_lines_read()
         self.mark_self_as_done_processing()
-
-        connlog_path = os.path.join(self.zeek_dir, "conn.log")
-
-        self.print(
-            f"Number of zeek generated flows in conn.log: "
-            f"{self.get_flows_number(connlog_path)}",
-            2,
-            0,
-        )
-
         self.stop_observer()
         return True
+
+    def start_zeek(self, zeek_dir: str, pcap_or_interface: str):
+        """
+        :param pcap_or_interface: name of the pcap or interface zeek
+        is going to run on
+        PS: this function contains a call to self.read_zeek_files that
+        keeps running until slips stops
+        """
+        self.start_observer(zeek_dir)
+
+        zeek_files = os.listdir(zeek_dir)
+        if len(zeek_files) > 0:
+            # First clear the zeek folder of old .log files
+            for f in zeek_files:
+                os.remove(os.path.join(zeek_dir, f))
+
+        zeek_thread = threading.Thread(
+            target=self.run_zeek,
+            args=(zeek_dir,),
+            daemon=True,
+            name="run_zeek_thread",
+        )
+        zeek_thread.start()
+        self.zeek_threads.append(zeek_thread)
+        # Give Zeek some time to generate at least 1 file.
+        time.sleep(3)
+
+        self.db.store_pid(f"Zeek_{pcap_or_interface}", self.zeek_pid)
+        if not hasattr(self, "is_zeek_tabs"):
+            self.is_zeek_tabs = False
+
+        zeek_thread = threading.Thread(
+            target=self.run_zeek,
+            args=(zeek_dir,),
+            daemon=True,
+            name="run_zeek_thread",
+        )
+        zeek_thread.start()
 
     def stop_observer(self):
         # Stop the observer
@@ -756,7 +795,8 @@ class Input(ICore):
         except Exception:
             pass
         try:
-            self.zeek_thread.join(3)
+            for zeek_thread in self.zeek_threads:
+                zeek_thread.join(3)
         except Exception:
             pass
 
@@ -775,7 +815,7 @@ class Input(ICore):
 
         return True
 
-    def run_zeek(self):
+    def run_zeek(self, zeek_dir):
         """
         This thread sets the correct zeek parameters and starts zeek
         """
@@ -844,7 +884,7 @@ class Input(ICore):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             stdin=subprocess.PIPE,
-            cwd=self.zeek_dir,
+            cwd=zeek_dir,
             start_new_session=True,
         )
         # you have to get the pid before communicate()
