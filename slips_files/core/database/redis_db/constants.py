@@ -52,6 +52,7 @@ class Constants:
     SLIPS_START_TIME = "slips_start_time"
     USED_FTP_PORTS = "used_ftp_ports"
     SLIPS_INTERNAL_TIME = "slips_internal_time"
+    IS_RUNNING_AS_AP = "is_slips_running_as_an_ap"
     WARDEN_INFO = "Warden"
     MODE = "mode"
     ANALYSIS = "analysis"
