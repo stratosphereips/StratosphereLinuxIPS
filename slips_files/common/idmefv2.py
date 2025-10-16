@@ -63,11 +63,14 @@ class IDMEFv2:
         self.version = "2.0.3"
 
     def get_host_ip(self) -> str:
-        if not self.db.is_running_non_stop():
-            return DEFAULT_ADDRESS
-        if host_ip := self.db.get_host_ip():
-            return host_ip
+        # @@@@@@@@@@@@@@@@@@@@@@@@@@@
         return DEFAULT_ADDRESS
+
+        # if not self.db.is_running_non_stop():
+        #     return DEFAULT_ADDRESS
+        # if host_ip := self.db.get_host_ip():
+        #     return host_ip
+        # return DEFAULT_ADDRESS
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
