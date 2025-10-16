@@ -7,12 +7,8 @@ class APManager:
     https://stratospherelinuxips.readthedocs.io/en/develop/immune/installing_slips_in_the_rpi.html#protect-your-local-network-with-slips-on-the-rpi
     """
 
-    def __init__(self, main, input_information: str):
+    def __init__(self, main):
         self.main = main
-        # can be the filepath given to slips, interface or
-        #     comma separated access point interfaces like wlan0,eth0
-        if self.main.args.access_point:
-            self.ap_interfaces = input_information
 
     def store_ap_interfaces(self, input_information):
         """

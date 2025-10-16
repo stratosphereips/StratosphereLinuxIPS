@@ -531,7 +531,7 @@ class Main:
             # to be able to use the host IP as analyzer IP in alerts.json
             # should be after setting the input metadata with "input_type"
             # TLDR; dont change the order of this line
-            host_ip = self.host_ip_man.store_host_ip()
+            host_ips = self.host_ip_man.store_host_ip()
 
             self.print(
                 f"Using redis server on port: {green(self.redis_port)}",
@@ -666,7 +666,7 @@ class Main:
                     self.metadata_man.update_slips_stats_in_the_db()[1]
                 )
 
-                self.host_ip_man.update_host_ip(host_ip, modified_profiles)
+                self.host_ip_man.update_host_ip(host_ips, modified_profiles)
 
         except KeyboardInterrupt:
             # the EINTR error code happens if a signal occurred while

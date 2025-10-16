@@ -1400,20 +1400,35 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         data = json.dumps(data)
         self.r.hset(f"{profileid}_{twid}", "Reconnections", str(data))
 
-    def get_host_ip(self) -> Optional[str]:
+    def get_host_ip(self, interface) -> Optional[str]:
         """returns the latest added host ip"""
-        host_ip: List[str] = self.r.zrevrange(
-            "host_ip", 0, 0, withscores=False
-        )
+        key = f"host_ip_{interface}"
+        host_ip: List[str] = self.r.zrevrange(key, 0, 0, withscores=False)
         return host_ip[0] if host_ip else None
 
-    def set_host_ip(self, ip):
+    def get_all_host_ips(self) -> List[str]:
+        """returns the latest added host ip of all interfaces"""
+        ip_keys = self.r.scan_iter(match="host_ip_*")
+
+        all_ips: List[str] = []
+        for key in ip_keys:
+            host_ip_list: List[bytes] = self.r.zrevrange(
+                key, 0, 0, withscores=False
+            )
+            if host_ip_list:
+                # Decode the bytes to a string before appending
+                latest_ip: str = host_ip_list[0]
+                all_ips.append(latest_ip)
+        return all_ips
+
+    def set_host_ip(self, ip, interface: str):
         """Store the IP address of the host in a db.
         There can be more than one"""
         # stored them in a sorted set to be able to retrieve the latest one
         # of them as the host ip
-        host_ips_added = self.r.zcard("host_ip")
-        self.r.zadd("host_ip", {ip: host_ips_added + 1})
+        key = f"host_ip_{interface}"
+        host_ips_added = self.r.zcard(key)
+        self.r.zadd(key, {ip: host_ips_added + 1})
 
     def set_asn_cache(self, org: str, asn_range: str, asn_number: str) -> None:
         """

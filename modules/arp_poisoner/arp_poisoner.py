@@ -7,7 +7,7 @@ import time
 from threading import Lock
 import json
 import ipaddress
-from typing import Set, Tuple
+from typing import Set, Tuple, Dict
 from scapy.all import ARP, Ether
 from scapy.sendrecv import sendp, srp
 import random
@@ -53,6 +53,9 @@ class ARPPoisoner(IModule):
         self._scan_delay = 30
         self._last_scan_time = 0
         self.last_arp_scan_output = set()
+        self.ap_info: None | Dict[str, str] = self.db.get_ap_info()
+        self.is_running_in_ap_mode = True if self.ap_info else False
+        self.gw_ip = None
 
     def log(self, text):
         """Logs the given text to the blocking log file"""
@@ -165,10 +168,20 @@ class ARPPoisoner(IModule):
             # use the cached output if it's not time to rescan
             return self.last_arp_scan_output
 
-        # --retry=0 to avoid redundant retries.
-        cmd = ["arp-scan", f"--interface={interface}", "--localnet"]
+        # we are explicitly giving arp-scan the ip to avoid giving docker
+        # RAW_SOCKET permissions for arp-scan to be able to auto detect the ip
+        host_ip = self.db.get_host_ip()
+        cmd = [
+            "arp-scan",
+            f"--interface={interface}",
+            "--localnet",
+            f"--arpspa={host_ip}",
+        ]
+
         try:
+            print("@@@@@@@@@@@@@@@@ doing arp scan!")
             output = subprocess.check_output(cmd, text=True)
+            print(f"@@@@@@@@@@@@@@@@ all good! .. {output}")
         except subprocess.CalledProcessError as e:
             self.print(
                 f"arp-scan failed: {e.stderr or str(e)} using last "
@@ -211,6 +224,9 @@ class ARPPoisoner(IModule):
         at fake_mac using unsolicited arp replies.
         """
         # send gratuitous arp request to update caches
+        print(
+            "@@@@@@@@@@@@@@@@ send gratuitous arp request to update " "caches"
+        )
         gratuitous_pkt = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(
             op=1,
             pdst=target_ip,
@@ -228,7 +244,10 @@ class ARPPoisoner(IModule):
         for ip, mac in all_hosts:
             if ip == target_ip:
                 continue
-
+            print(
+                f"@@@@@@@@@@@@@@@@ telling {ip} that {target_ip} is at a "
+                f"fake mac!"
+            )
             pkt = Ether(dst=mac) / ARP(
                 op=2,
                 pdst=ip,  # which dst ip are we sending this pkt to?
@@ -239,6 +258,36 @@ class ARPPoisoner(IModule):
             )
             sendp(pkt, verbose=0)
 
+    def _get_gateway_ip_with_ip_route(self):
+        """
+        Finds the default gateway IP address on Linux using the 'ip route'
+        command.
+        sets self.gw_ip
+        """
+        try:
+            output = subprocess.check_output(["ip", "route"]).decode("utf-8")
+
+            for line in output.split("\n"):
+                if "default via" in line:
+                    # Example line: 'default via 192.168.1.1 dev eth0'
+                    ip = line.split()[2]
+                    self.gw_ip = ip
+                    return ip
+
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # Handles cases where the 'ip' command is not found or fails
+            return None
+
+    def _get_gateway_ip(self) -> str | None:
+        if self.gw_ip:
+            gateway_ip = self.gw_ip
+        else:
+            gateway_ip: str = (
+                self.db.get_gateway_ip()
+                or self._get_gateway_ip_with_ip_route()
+            )
+        return gateway_ip
+
     def _cut_targets_internet(
         self, target_ip: str, target_mac: str, fake_mac: str
     ):
@@ -247,16 +296,29 @@ class ARPPoisoner(IModule):
         is at fake_mac using unsolicited arp reply AND telling the gw that
         the target is at a fake mac.
         """
-        # in ap mode, this gw ip is the same as our own ip
-        gateway_ip: str = self.db.get_gateway_ip()
+        print(
+            f"@@@@@@@@@@@@@@@@ cutting the internet of {target_ip} at "
+            f"{target_mac} "
+        )
+        gateway_ip = self._get_gateway_ip()
 
-        # we use replies, not requests, because we wanna anser ARP requests
+        if not gateway_ip:
+            self.print(
+                f"Unable to cut the internet of attacker at"
+                f" {target_ip}. Gateway IP is not found."
+            )
+        # we use replies, not requests, because we wanna answer ARP requests
         # sent to the network instead of waiting for the attacker to answer
         # them.
 
         # We use Ether() before ARP() to explicitly construct a complete Ethernet frame
         # poison the target: tell it the gateway is at fake_mac
         # gw -> attacker: im at a fake mac.
+        print(
+            f"@@@@@@@@@@@@@@@@ gw {gateway_ip} -> attacker {target_ip}: im at a "
+            f"fake "
+            f"mac. {fake_mac}"
+        )
         pkt = Ether(dst=target_mac) / ARP(
             op=2,
             psrc=gateway_ip,
@@ -270,6 +332,14 @@ class ARPPoisoner(IModule):
         # from it wont reach the victim
         # attacker -> gw: im at a fake mac.
         gateway_mac = self.db.get_gateway_mac()
+
+        print(
+            f"@@@@@@@@@@@@@@@@ attacker {target_ip}  -> gw {gateway_ip}: "
+            f"im at a "
+            f"fake "
+            f"mac. {fake_mac}"
+        )
+
         pkt = Ether(dst=gateway_mac) / ARP(
             op=2,
             psrc=target_ip,
@@ -329,7 +399,7 @@ class ARPPoisoner(IModule):
         if self.is_broadcast(ip, localnet):
             return False
 
-        if ip == self.db.get_gateway_ip():
+        if ip == self._get_gateway_ip():
             return False
 
         # no need to check if the ip is in our ips because all our ips are
