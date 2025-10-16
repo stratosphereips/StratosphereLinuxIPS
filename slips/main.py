@@ -507,14 +507,17 @@ class Main:
                 self.print(str(e), 1, 1)
                 self.terminate_slips()
 
-            if self.ap_manager.is_ap_running():
-                if not self.main.args.access_point():
+            if self.args.access_point:
+                # is -ap given but no AP running?
+                if not self.ap_manager.is_ap_running():
                     self.print(
-                        "AP running but slips was not started with "
-                        "-ap. Please restart Slips. Stopping."
+                        "Slips was started with -ap but can't detect a "
+                        "running access point. Please start an access point "
+                        "and restart Slips. Stopping."
                     )
                     self.terminate_slips()
                 else:
+                    # -ap is given and an AP is running
                     self.ap_manager.store_ap_interfaces(self.input_information)
 
             self.db.set_input_metadata(
