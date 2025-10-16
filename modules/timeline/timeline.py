@@ -31,7 +31,8 @@ class Timeline(IModule):
             "new_flow": self.c1,
         }
         self.classifier = FlowClassifier()
-        self.host_ip: str = self.db.get_host_ip()
+        self.host_ips: str = self.db.get_all_host_ips()
+        print(f"@@@@@@@@@@@@@@@@ all host ips {self.host_ips}")
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -55,7 +56,7 @@ class Timeline(IModule):
             # slips only detects inbound traffic in the "all" direction
             return False
 
-        return flow.daddr == self.host_ip or utils.is_ip_in_client_ips(
+        return flow.daddr in self.host_ips or utils.is_ip_in_client_ips(
             flow.daddr, self.client_ips
         )
 
