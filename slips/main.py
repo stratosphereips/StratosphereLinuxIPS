@@ -198,6 +198,7 @@ class Main:
 
         # self.args.output is the same as self.alerts_default_path
         self.input_information = os.path.normpath(self.input_information)
+        self.input_information = self.input_information.replace(",", "_")
         # now that slips can run several instances,
         # each created dir will be named after the instance
         # that created it

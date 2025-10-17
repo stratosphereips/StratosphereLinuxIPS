@@ -652,7 +652,7 @@ class Input(ICore):
             # format is {interface: zeek_dir_path}
             interfaces_to_monitor = {}
             if self.args.interface:
-                interfaces_to_monitor.append(
+                interfaces_to_monitor.update(
                     {
                         self.args.interface: {
                             "dir": self.zeek_dir,
@@ -668,7 +668,7 @@ class Input(ICore):
                     dir_to_store_interface_logs = os.path.join(
                         self.zeek_dir, interface
                     )
-                    interfaces_to_monitor.append(
+                    interfaces_to_monitor.update(
                         {
                             interface: {
                                 "dir": dir_to_store_interface_logs,
@@ -678,6 +678,7 @@ class Input(ICore):
                     )
             for interface, interface_info in interfaces_to_monitor.items():
                 self.start_zeek(interface_info["dir"], interface)
+
         elif self.input_type == "pcap":
             # This is for stopping the inputprocess
             # if bro does not receive any new line while reading a pcap
