@@ -677,7 +677,10 @@ class Input(ICore):
                         }
                     )
             for interface, interface_info in interfaces_to_monitor.items():
-                self.start_zeek(interface_info["dir"], interface)
+                interface_dir = interface_info["dir"]
+                if not os.path.exists(interface_dir):
+                    os.makedirs(interface_dir)
+                self.start_zeek(interface_dir, interface)
 
         elif self.input_type == "pcap":
             # This is for stopping the inputprocess
@@ -698,6 +701,7 @@ class Input(ICore):
         PS: this function contains a call to self.read_zeek_files that
         keeps running until slips stops
         """
+        print(f"@@@@@@@@@@@@@@@@ starting observer on {zeek_dir}")
         self.start_observer(zeek_dir)
 
         zeek_files = os.listdir(zeek_dir)
@@ -708,7 +712,7 @@ class Input(ICore):
 
         zeek_thread = threading.Thread(
             target=self.run_zeek,
-            args=(zeek_dir,),
+            args=(zeek_dir, pcap_or_interface),
             daemon=True,
             name="run_zeek_thread",
         )
@@ -720,14 +724,6 @@ class Input(ICore):
         self.db.store_pid(f"Zeek_{pcap_or_interface}", self.zeek_pid)
         if not hasattr(self, "is_zeek_tabs"):
             self.is_zeek_tabs = False
-
-        zeek_thread = threading.Thread(
-            target=self.run_zeek,
-            args=(zeek_dir,),
-            daemon=True,
-            name="run_zeek_thread",
-        )
-        zeek_thread.start()
 
     def stop_observer(self):
         # Stop the observer
@@ -816,7 +812,7 @@ class Input(ICore):
 
         return True
 
-    def run_zeek(self, zeek_dir):
+    def run_zeek(self, zeek_logs_dir, pcap_or_interface):
         """
         This thread sets the correct zeek parameters and starts zeek
         """
@@ -833,29 +829,30 @@ class Input(ICore):
         # rotation is disabled unless it's an interface
         rotation = []
         if self.input_type == "interface":
+            interface = pcap_or_interface
             if self.enable_rotation:
                 # how often to rotate zeek files? taken from slips.yaml
                 rotation = [
                     "-e",
                     f"redef Log::default_rotation_interval = {self.rotation_period} ;",
                 ]
-            bro_parameter = ["-i", self.given_path]
+            bro_parameter = ["-i", interface]
 
         elif self.input_type == "pcap":
             # Find if the pcap file name was absolute or relative
-            given_path = self.given_path
-            if not os.path.isabs(self.given_path):
+            pcap = pcap_or_interface
+            if not os.path.isabs(pcap):
                 # now the given pcap is relative to slips main dir
                 # slips can store the zeek logs dir either in the
                 # output dir (by default in Slips/output/<filename>_<date>/zeek_files/),
                 # or in any dir specified with -o
                 # construct an abs path from the given path so slips can find the given pcap
                 # no matter where the zeek dir is placed
-                given_path = os.path.join(os.getcwd(), self.given_path)
+                pcap = os.path.join(os.getcwd(), pcap)
 
             # using a list of params instead of a str for storing the cmd
             # becaus ethe given path may contain spaces
-            bro_parameter = ["-r", given_path]
+            bro_parameter = ["-r", pcap]
 
         # Run zeek on the pcap or interface. The redef is to have json files
         zeek_scripts_dir = os.path.join(os.getcwd(), "zeek-scripts")
@@ -879,13 +876,15 @@ class Input(ICore):
         command += packet_filter
 
         self.print(f'Zeek command: {" ".join(command)}', 3, 0)
+        x = " ".join(command)
+        print(f"@@@@@@@@@@@@@@@@ f'Zeek command: {x}' ")
 
         zeek = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             stdin=subprocess.PIPE,
-            cwd=zeek_dir,
+            cwd=zeek_logs_dir,
             start_new_session=True,
         )
         # you have to get the pid before communicate()
