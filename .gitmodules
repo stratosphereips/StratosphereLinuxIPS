@@ -17,3 +17,6 @@
 [submodule "dataset-private"]
 	path = dataset-private
 	url = https://github.com/stratosphereips/security-datasets-for-testing
+[submodule "modules/flowmldetection/models"]
+	path = modules/flowmldetection/models
+	url = https://github.com/stratosphereips/StratosphereSlipsModels
