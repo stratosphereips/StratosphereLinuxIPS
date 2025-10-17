@@ -29,11 +29,14 @@ class ZeekDataset:
             raise FileNotFoundError(f"Root path {self.root} does not exist")
 
         labeled = self.root / "conn.log.labeled"
+        alt_labeled = self.root / "labeled-conn.log"
         plain = self.root / "conn.log"
         if labeled.exists():
             self.current_file = labeled
         elif plain.exists():
             self.current_file = plain
+        elif alt_labeled.exists():
+            self.current_file = alt_labeled
         else:
             raise FileNotFoundError(
                 f"No conn.log.labeled or conn.log in {self.root}"

@@ -28,7 +28,11 @@ Call from modules/flowmldetection/pipeline_ml_training
     conda activate slips-ml-pipeline
     pip install -r requirements.txt
 ```
-
+For dataset download, you'll nbeed lfs (large file system) extension installed
+    git lfs install
+Then download the dataset to /StratosphereLinuxIPS (for default path) via:
+    git submodule add https://github.com/stratosphereips/security-datasets-for-testing dataset-private
+This creates directory at the top level of the slips repository with name dataset-private
 # Results
 After running the pipeline, you'll find directories created with the experiment name in "./logs/(experiment_name)" , "./models/(experiment_name)" and "./results/(experiment_name)" . results/(experiment_name)/ have training and testing directory. Each contains plots and summary of the training/testing runs from different datasets in the same experiment.
 
