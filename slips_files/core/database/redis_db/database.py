@@ -1319,13 +1319,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             self.constants.ORGANIZATIONS_PORTS, portproto.lower()
         )
 
-    def add_zeek_file(self, filename):
+    def add_zeek_file(self, filename, interface):
         """Add an entry to the list of zeek files"""
-        self.r.sadd(self.constants.ZEEK_FILES, filename)
+        self.r.hset(self.constants.ZEEK_FILES, filename, interface)
 
     def get_all_zeek_files(self) -> set:
         """Return all entries from the list of zeek files"""
-        return self.r.smembers(self.constants.ZEEK_FILES)
+        return self.r.hgetall(self.constants.ZEEK_FILES)
 
     def get_gateway_ip(self):
         return self.r.hget(self.constants.DEFAULT_GATEWAY, "IP")
@@ -1405,6 +1405,16 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         key = f"host_ip_{interface}"
         host_ip: List[str] = self.r.zrevrange(key, 0, 0, withscores=False)
         return host_ip[0] if host_ip else None
+
+    def get_wifi_interface(self):
+        """
+        return sthe wifi interface if running as an AP, and the user
+        supplied interfcae if not.
+        """
+        if ap_info := self.get_ap_info():
+            return ap_info["wifi_interface"]
+        else:
+            return self.get_interface()
 
     def get_all_host_ips(self) -> List[str]:
         """returns the latest added host ip of all interfaces"""

@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import json
 import os
 import shutil
 import sqlite3
@@ -445,6 +446,9 @@ class DBManager:
     def get_host_ip(self, *args, **kwargs):
         return self.rdb.get_host_ip(*args, **kwargs)
 
+    def get_wifi_interface(self, *args, **kwargs):
+        return self.rdb.get_wifi_interface(*args, **kwargs)
+
     def get_all_host_ips(self, *args, **kwargs):
         return self.rdb.get_all_host_ips(*args, **kwargs)
 
@@ -551,8 +555,34 @@ class DBManager:
         """returns the list of uids of the flows causing evidence"""
         return self.rdb.get_flows_causing_evidence(*args, **kwargs)
 
+    def _get_evidence_interface(self, evidence: Evidence) -> str | None:
+        try:
+            # get any flow uid of this evidence, to get the interface of it
+            uid = evidence.uid[0]
+            print("@@@@@@@@@@@@@@@@ _get_evidence_interface")
+            try:
+                flow: str = self.get_flow(uid)[uid]
+                if isinstance(flow, str):
+                    flow: dict = json.loads(flow)
+                print(f"@@@@@@@@@@@@@@@@ got flow {flow} {type(flow)}")
+            except KeyError:
+                flow: dict = self.get_altflow_from_uid(uid)
+                if not flow:
+                    print("@@@@@@@@@@@@@@@@ cant get flow!!!!")
+                    return
+                print(f"@@@@@@@@@@@@@@@@ got altflow {flow}")
+            print(
+                f"@@@@@@@@@@@@@@@@ OK ALL GOOD!! {flow['interface']}"
+                f" {type(flow)}"
+            )
+            return flow["interface"]
+
+        except KeyError:
+            pass
+
     def set_evidence(self, evidence: Evidence):
-        evidence_set = self.rdb.set_evidence(evidence)
+        interface: str | None = self._get_evidence_interface(evidence)
+        evidence_set = self.rdb.set_evidence(evidence, interface)
         if evidence_set:
             # an evidence is generated for this profile
             # update the threat level of this profile
