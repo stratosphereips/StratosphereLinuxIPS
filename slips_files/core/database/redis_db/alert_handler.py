@@ -194,11 +194,13 @@ class AlertHandler:
         except (KeyError, TypeError):
             return
 
-    def _get_more_info_about_evidence(self, evidence) -> Evidence:
+    def _get_more_info_about_evidence(self, evidence, interface) -> Evidence:
         """
         sets the SNI, rDNS, TI, AS of the given evidence's attacker and
         victim IPs
         """
+        setattr(evidence, "interface", interface)
+
         for entity_type in ("victim", "attacker"):
             entity: Union[Attacker, Victim]
             entity = getattr(evidence, entity_type, None)
@@ -234,10 +236,9 @@ class AlertHandler:
                     break
 
             setattr(evidence, entity_type, entity)
-
         return evidence
 
-    def set_evidence(self, evidence: Evidence):
+    def set_evidence(self, evidence: Evidence, interface: str | None):
         """
         Set the evidence for this Profile and Timewindow.
         :param evidence: an Evidence obj (defined in
@@ -254,7 +255,7 @@ class AlertHandler:
             return False
 
         self.set_flow_causing_evidence(evidence.uid, evidence.id)
-        evidence = self._get_more_info_about_evidence(evidence)
+        evidence = self._get_more_info_about_evidence(evidence, interface)
 
         evidence_to_send: dict = utils.to_dict(evidence)
         evidence_to_send: str = json.dumps(evidence_to_send)

@@ -27,17 +27,18 @@ from watchdog.events import RegexMatchingEventHandler
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r".*\.log$", r".*\.conf$"]
 
-    def __init__(self, dir_to_monitor, input_type, db):
+    def __init__(self, dir_to_monitor, db, pcap_or_interface):
         super().__init__(regexes=self.REGEX)
         self.dir_to_monitor = dir_to_monitor
+        # name of the pcap or interface zeek is monitoring
+        self.pcap_or_interface = pcap_or_interface
         self.db = db
-        self.input_type = input_type
 
     def on_created(self, event):
         """this will be triggered everytime zeek creates a log file"""
         filename, ext = os.path.splitext(event.src_path)
         if "log" in ext:
-            self.db.add_zeek_file(filename + ext)
+            self.db.add_zeek_file(filename + ext, self.pcap_or_interface)
 
     def on_moved(self, event):
         """
@@ -60,6 +61,7 @@ class FileEventHandler(RegexMatchingEventHandler):
         # so if zeek receives a termination signal,
         # slips would know about it
         filename, ext = os.path.splitext(event.src_path)
+
         if "reporter" in filename:
             # check if it's a termination signal
             # get the exact file name (a ts is appended to it)

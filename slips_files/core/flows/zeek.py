@@ -14,7 +14,14 @@ from slips_files.common.slips_utils import utils
 
 
 @dataclass
-class Conn:
+class BaseFlow:
+    """A base class for zeek flows, containing common fields."""
+
+    interface: str
+
+
+@dataclass
+class Conn(BaseFlow):
     starttime: str
     uid: str
     saddr: str
@@ -62,7 +69,7 @@ class Conn:
 
 
 @dataclass
-class DNS:
+class DNS(BaseFlow):
     starttime: str
     uid: str
     saddr: str
@@ -94,7 +101,7 @@ class DNS:
 
 
 @dataclass
-class HTTP:
+class HTTP(BaseFlow):
     starttime: str
     uid: str
     saddr: str
@@ -126,7 +133,7 @@ class HTTP:
 
 
 @dataclass
-class SSL:
+class SSL(BaseFlow):
     starttime: str
     uid: str
     saddr: str
@@ -161,7 +168,7 @@ class SSL:
 
 
 @dataclass
-class SSH:
+class SSH(BaseFlow):
     starttime: float
     uid: str
     saddr: str
@@ -189,7 +196,7 @@ class SSH:
 
 
 @dataclass
-class DHCP:
+class DHCP(BaseFlow):
     starttime: float
     uids: List[str]
     client_addr: str
@@ -216,7 +223,7 @@ class DHCP:
 
 
 @dataclass
-class FTP:
+class FTP(BaseFlow):
     starttime: float
     uid: str
     saddr: str
@@ -231,7 +238,7 @@ class FTP:
 
 
 @dataclass
-class SMTP:
+class SMTP(BaseFlow):
     starttime: float
     uid: str
     saddr: str
@@ -246,7 +253,7 @@ class SMTP:
 
 
 @dataclass
-class Tunnel:
+class Tunnel(BaseFlow):
     starttime: str
     uid: str
     saddr: str
@@ -265,7 +272,7 @@ class Tunnel:
 
 
 @dataclass
-class Notice:
+class Notice(BaseFlow):
     starttime: str
     saddr: str
     daddr: str
@@ -312,7 +319,7 @@ class Notice:
 
 
 @dataclass
-class Files:
+class Files(BaseFlow):
     starttime: str
     uid: str
     saddr: str
@@ -347,7 +354,7 @@ class Files:
 
 
 @dataclass
-class ARP:
+class ARP(BaseFlow):
     starttime: str
     uid: str
     saddr: str
@@ -383,7 +390,7 @@ class ARP:
 
 
 @dataclass
-class Software:
+class Software(BaseFlow):
     starttime: str
     uid: str
     saddr: str
@@ -408,7 +415,7 @@ class Software:
 
 
 @dataclass
-class Weird:
+class Weird(BaseFlow):
     starttime: str
     uid: str
     saddr: str

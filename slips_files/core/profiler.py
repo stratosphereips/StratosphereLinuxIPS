@@ -660,7 +660,6 @@ class Profiler(ICore, IObservable):
 
             line: dict = msg["line"]
             input_type: str = msg["input_type"]
-
             # TODO who is putting this True here?
             if line is True:
                 continue
@@ -676,7 +675,6 @@ class Profiler(ICore, IObservable):
                 flow = self.input_handler_obj.process_line(line)
                 if not flow:
                     continue
-
                 self.add_flow_to_profile(flow)
                 self.handle_setting_local_net(flow)
                 self.db.increment_processed_flows()

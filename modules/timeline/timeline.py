@@ -32,7 +32,6 @@ class Timeline(IModule):
         }
         self.classifier = FlowClassifier()
         self.host_ips: str = self.db.get_all_host_ips()
-        print(f"@@@@@@@@@@@@@@@@ all host ips {self.host_ips}")
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -136,9 +135,7 @@ class Timeline(IModule):
         return {"info": ssh_activity}
 
     def process_altflow(self, profileid, twid, flow) -> dict:
-        alt_flow: dict = self.db.get_altflow_from_uid(
-            profileid, twid, flow.uid
-        )
+        alt_flow: dict = self.db.get_altflow_from_uid(flow.uid)
         altflow_info = {"info": ""}
 
         if not alt_flow:

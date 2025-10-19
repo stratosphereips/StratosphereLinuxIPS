@@ -518,7 +518,7 @@ class Main:
                     )
                     self.terminate_slips()
                 else:
-                    # -ap is given and an AP is running
+                    self.print("Slips is running in AP mode.")
                     self.ap_manager.store_ap_interfaces(self.input_information)
 
             self.db.set_input_metadata(

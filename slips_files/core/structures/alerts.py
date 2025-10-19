@@ -44,6 +44,7 @@ def normalize(value: float):
 
 @dataclass
 class Alert:
+    interface: str
     profile: ProfileID
     # this should have the fields start_Time and end_time set #TODO force it
     timewindow: TimeWindow

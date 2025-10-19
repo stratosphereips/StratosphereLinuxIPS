@@ -210,9 +210,7 @@ def test_process_line(
     if flow_type == "conn":
         flow_added = profiler.db.get_flow(flow.uid, twid=twid)[flow.uid]
     else:
-        flow_added = profiler.db.get_altflow_from_uid(
-            profileid, twid, flow.uid
-        )
+        flow_added = profiler.db.get_altflow_from_uid(flow.uid)
 
     assert flow_added
 
