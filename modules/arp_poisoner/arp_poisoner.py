@@ -170,7 +170,7 @@ class ARPPoisoner(IModule):
 
         # we are explicitly giving arp-scan the ip to avoid giving docker
         # RAW_SOCKET permissions for arp-scan to be able to auto detect the ip
-        host_ip = self.db.get_host_ip()
+        host_ip = self.db.get_host_ip(interface)
         cmd = [
             "arp-scan",
             f"--interface={interface}",

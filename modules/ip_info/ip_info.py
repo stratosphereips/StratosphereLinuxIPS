@@ -3,6 +3,7 @@
 from typing import (
     Union,
     Optional,
+    Dict,
 )
 from uuid import uuid4, getnode
 import datetime
@@ -65,7 +66,9 @@ class IPInfo(AsyncModule):
         self.whitelist = Whitelist(self.logger, self.db)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.valid_tlds = whois.validTlds()
-        self.is_running_in_ap_mode = False
+        self.is_running_in_ap_mode: bool = (
+            True if self.args.access_point else False
+        )
 
     async def open_dbs(self):
         """Function to open the different offline databases used in this
@@ -327,7 +330,8 @@ class IPInfo(AsyncModule):
 
     # GW
     @staticmethod
-    def get_gateway_for_iface(iface) -> Optional[str]:
+    def get_gateway_for_iface(iface: str) -> Optional[str]:
+        """returns the default gateway for the given interface"""
         gws = netifaces.gateways()
         for family in (netifaces.AF_INET, netifaces.AF_INET6):
             if "default" in gws and gws["default"][family]:
@@ -336,29 +340,12 @@ class IPInfo(AsyncModule):
                     return gw
         return None
 
-    def is_ap_mode_iwconfig(self) -> bool:
-        """
-        check is slips is running as an AP
-        """
-        interface: str = getattr(self.args, "interface", None)
-        try:
-            output = subprocess.check_output(
-                ["iwconfig", interface], text=True, stderr=subprocess.DEVNULL
-            )
-            for line in output.splitlines():
-                if "Mode:" in line:
-                    mode = line.split("Mode:")[1].split()[0]
-                    return mode.lower() == "master"
-        except Exception:
-            pass
-        return False
-
     def get_default_gateway(self) -> str:
         gws = netifaces.gateways()
         default = gws.get("default", {})
         return default.get(netifaces.AF_INET, (None,))[0]
 
-    def get_gateway_ip_if_interface(self) -> Optional[str]:
+    def get_gateway_ip_if_interface(self) -> Dict[str, str] | None:
         """
         returns the gateway ip of the given interface if running on an
         interface.
@@ -369,7 +356,7 @@ class IPInfo(AsyncModule):
             # only works if running on an interface
             return
 
-        interface: str = getattr(self.args, "interface", None)
+        interfaces = []
         if self.is_running_in_ap_mode:
             # ok why?? because when slips is running on normal hosts, we want
             # the ip of the default gateway which is probably going to be the
@@ -380,15 +367,19 @@ class IPInfo(AsyncModule):
             # want the ip of the actual gateway that is probably present in
             # another localnet (the eth0).
             # return the own IP. because slips is "the gw" for connected clients
-            try:
-                return netifaces.ifaddresses(interface)[netifaces.AF_INET][0][
-                    "addr"
-                ]
-            except KeyError:
-                return  # No IP assigned
+            interfaces = self.args.acess_point.split(",")
         else:
-            # get the gw of the given interface
-            return self.get_gateway_for_iface(interface)
+            interface: str = getattr(self.args, "interface", None)
+            interfaces.append(interface)
+
+        gw_ips = {}
+        for interface in interfaces:
+            try:
+                gw_ip = self.get_gateway_for_iface(interface)
+                gw_ips.update({interface: gw_ip})
+            except KeyError:
+                pass
+        return gw_ips
 
     @staticmethod
     def get_own_mac() -> str:
@@ -552,14 +543,14 @@ class IPInfo(AsyncModule):
         utils.drop_root_privs_permanently()
         self.wait_for_dbs()
 
-        self.is_running_in_ap_mode: bool = self.is_ap_mode_iwconfig()
         # the following method only works when running on an interface
-        if ip := self.get_gateway_ip_if_interface():
-            self.db.set_default_gateway("IP", ip)
+        if gw_ips := self.get_gateway_ip_if_interface():
+            # TODO
+            self.db.set_default_gateway("IP", gw_ips)
             # whether we found the gw ip using dhcp in profiler
             # or using ip route using self.get_gateway_ip()
             # now that it's found, get and store the mac addr of it
-            if mac := self.get_gateway_mac(ip):
+            if mac := self.get_gateway_mac(gw_ips):
                 self.db.set_default_gateway("MAC", mac)
 
     def handle_new_ip(self, ip: str):
