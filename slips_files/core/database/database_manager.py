@@ -559,22 +559,14 @@ class DBManager:
         try:
             # get any flow uid of this evidence, to get the interface of it
             uid = evidence.uid[0]
-            print("@@@@@@@@@@@@@@@@ _get_evidence_interface")
             try:
                 flow: str = self.get_flow(uid)[uid]
                 if isinstance(flow, str):
                     flow: dict = json.loads(flow)
-                print(f"@@@@@@@@@@@@@@@@ got flow {flow} {type(flow)}")
             except KeyError:
                 flow: dict = self.get_altflow_from_uid(uid)
                 if not flow:
-                    print("@@@@@@@@@@@@@@@@ cant get flow!!!!")
                     return
-                print(f"@@@@@@@@@@@@@@@@ got altflow {flow}")
-            print(
-                f"@@@@@@@@@@@@@@@@ OK ALL GOOD!! {flow['interface']}"
-                f" {type(flow)}"
-            )
             return flow["interface"]
 
         except KeyError:

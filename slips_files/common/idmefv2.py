@@ -143,7 +143,9 @@ class IDMEFv2:
             msg.update(
                 {
                     "Version": self.version,
-                    "Analyzer": self._get_analyzer(alert.interface),
+                    # alerts aren't tied to a specific interface, and alert
+                    # is a combination of evidence from any interface
+                    "Analyzer": DEFAULT_ADDRESS,
                     "Source": [{"IP": alert.profile.ip}],
                     "ID": alert.id,
                     "Status": "Incident",
