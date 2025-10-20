@@ -24,6 +24,7 @@ from functools import lru_cache
 
 from modules.ip_info.jarm import JARM
 from slips_files.common.flow_classifier import FlowClassifier
+from slips_files.common.style import green
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from .asn_info import ASN
 from slips_files.common.abstracts.iasync_module import AsyncModule
@@ -381,35 +382,16 @@ class IPInfo(AsyncModule):
         )
         return mac
 
-    def get_gateway_mac(self, gw_ip: str) -> Optional[str]:
-        """
-        Given the gw_ip, this function tries to get the MAC
-         from arp.log, using ip neigh or from arp tables
-         PS: returns own MAc address if running in AP mode
-        """
-        # we keep a cache of the macs and their IPs
-        # In case of a zeek dir or a pcap,
-        # check if we have the mac of this ip already saved in the db.
-        if gw_mac := self.db.get_mac_addr_from_profile(f"profile_{gw_ip}"):
-            gw_mac: Union[str, None]
-            return gw_mac
+    def _get_wifi_interface_if_ap(self) -> str | None:
+        ap_interfaces: str = self.db.get_wifi_interface()
+        try:
+            # we're now sure that we're running in AP mode
+            wifi_interface = ap_interfaces["wifi_interface"]
+        except KeyError:
+            wifi_interface = None
+        return wifi_interface
 
-        if not self.is_running_non_stop:
-            # running on pcap or a given zeek file/dir
-            # no MAC in arp.log (in the db) and can't use arp tables,
-            # so it's up to the db.is_gw_mac() function to determine the gw mac
-            # if it's seen associated with a public IP
-            return
-
-        if self.is_running_in_ap_mode:
-            # when running in AP mode, we are the GW for the connected
-            # clients, this makes our mac the GW mac.
-            # in AP mode, the given gw_ip is our own ip anyway, so it wont
-            # be found in arp tables or ip neigh command anyway.
-            return self.get_own_mac()
-
-        # Obtain the MAC address by using the hosts ARP table
-        # First, try the ip command
+    def _get_mac_using_ip_neigh(self, gw_ip) -> str | None:
         try:
             ip_output = subprocess.run(
                 ["ip", "neigh", "show", gw_ip],
@@ -417,20 +399,60 @@ class IPInfo(AsyncModule):
                 check=True,
                 text=True,
             ).stdout
-            gw_mac = ip_output.split()[-2]
-
-            return gw_mac
+            mac = ip_output.split()[-2]
+            return mac
         except (subprocess.CalledProcessError, IndexError, FileNotFoundError):
-            # If the ip command doesn't exist or has failed, try using the
-            # arp command
-            try:
-                gw_mac = utils.get_mac_for_ip_using_cache(gw_ip)
-                return gw_mac
-            except (subprocess.CalledProcessError, IndexError):
-                # Could not find the MAC address of gw_ip
-                return
+            return
 
-        return gw_mac
+    def _get_mac_using_arp_cache(self, gw_ip) -> str | None:
+        try:
+            gw_mac = utils.get_mac_for_ip_using_cache(gw_ip)
+            return gw_mac
+        except (subprocess.CalledProcessError, IndexError):
+            # Could not find the MAC address of gw_ip
+            return
+
+    def get_gateway_mac(self, gw_ips: Dict[str, str]) -> Optional[str]:
+        """
+        Given the gw_ips, this function tries to get the MAC
+         from arp.log, using ip neigh or from arp tables
+        """
+        wifi_interface: str | None = self._get_wifi_interface_if_ap()
+
+        gw_macs = {}
+        for interface, gw_ip in gw_ips.items():
+            # we keep a cache of the macs and their IPs
+            # In case of a zeek dir or a pcap,
+            # check if we have the mac of this ip already saved in the db.
+            if gw_mac := self.db.get_mac_addr_from_profile(f"profile_{gw_ip}"):
+                gw_mac: Union[str, None]
+                gw_macs[interface] = gw_mac
+                continue
+
+            if not self.is_running_non_stop:
+                # ok now we are running on pcap or a given zeek file/dir
+                # and we have no MAC in arp.log (in the db) and can't use arp
+                # tables, so it's up to the db.is_gw_mac() function to
+                # determine the gw mac if it's seen associated with a
+                # public IP
+                continue
+
+            if interface == wifi_interface:
+                # this interface is the wifi interface of the AP
+                if own_mac := self.get_own_mac():
+                    gw_macs[interface] = own_mac
+                    continue
+
+            if gw_mac := self._get_mac_using_ip_neigh(gw_ip):
+                gw_macs[interface] = gw_mac
+                continue
+
+            if gw_mac := self._get_mac_using_arp_cache(gw_ip):
+                gw_macs[interface] = gw_mac
+                continue
+
+        if gw_macs:
+            return gw_macs
 
     def check_if_we_have_pending_offline_mac_queries(self):
         """
@@ -532,17 +554,25 @@ class IPInfo(AsyncModule):
     def pre_main(self):
         utils.drop_root_privs_permanently()
         self.wait_for_dbs()
-
         # the following method only works when running on an interface
         if gw_ips := self.get_gateway_ip_if_interface():
             for interface, gw_ip in gw_ips.items():
-                self.db.set_default_gateway("IP", gw_ips, interface)
+                self.db.set_default_gateway("IP", gw_ip, interface)
+                self.print(
+                    f"Detected Gateway IP {green(gw_ip)} for "
+                    f"{green(interface)}"
+                )
 
-                # whether we found the gw ip using dhcp in profiler
-                # or using ip route using self.get_gateway_ip()
-                # now that it's found, get and store the mac addr of it
-                if mac := self.get_gateway_mac(gw_ips):
-                    self.db.set_default_gateway("MAC", mac)
+            # whether we found the gw ip using dhcp in profiler
+            # or using ip route here (self.get_gateway_ip())
+            # now that it's found, get and store the mac addr of it
+            if gw_macs := self.get_gateway_mac(gw_ips):
+                for interface, gw_mac in gw_macs.items():
+                    self.db.set_default_gateway("MAC", gw_mac, interface)
+                    self.print(
+                        f"Detected Gateway MAC {green(gw_mac)} for "
+                        f"{green(interface)}"
+                    )
 
     def handle_new_ip(self, ip: str):
         try:
