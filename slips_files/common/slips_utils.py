@@ -189,6 +189,16 @@ class Utils(object):
 
         return obj
 
+    def get_gateway_for_iface(self, iface: str) -> Optional[str]:
+        """returns the default gateway for the given interface"""
+        gws = netifaces.gateways()
+        for family in (netifaces.AF_INET, netifaces.AF_INET6):
+            if "default" in gws and gws["default"][family]:
+                gw, gw_iface = gws["default"][family]
+                if gw_iface == iface:
+                    return gw
+        return None
+
     def is_valid_uuid4(self, uuid_string: str) -> bool:
         """Validate that the given str in UUID4"""
         try:

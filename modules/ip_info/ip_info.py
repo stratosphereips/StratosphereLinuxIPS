@@ -330,16 +330,6 @@ class IPInfo(AsyncModule):
 
     # GW
     @staticmethod
-    def get_gateway_for_iface(iface: str) -> Optional[str]:
-        """returns the default gateway for the given interface"""
-        gws = netifaces.gateways()
-        for family in (netifaces.AF_INET, netifaces.AF_INET6):
-            if "default" in gws and gws["default"][family]:
-                gw, gw_iface = gws["default"][family]
-                if gw_iface == iface:
-                    return gw
-        return None
-
     def get_default_gateway(self) -> str:
         gws = netifaces.gateways()
         default = gws.get("default", {})
@@ -375,7 +365,7 @@ class IPInfo(AsyncModule):
         gw_ips = {}
         for interface in interfaces:
             try:
-                gw_ip = self.get_gateway_for_iface(interface)
+                gw_ip = utils.get_gateway_for_iface(interface)
                 gw_ips.update({interface: gw_ip})
             except KeyError:
                 pass
@@ -545,13 +535,14 @@ class IPInfo(AsyncModule):
 
         # the following method only works when running on an interface
         if gw_ips := self.get_gateway_ip_if_interface():
-            # TODO
-            self.db.set_default_gateway("IP", gw_ips)
-            # whether we found the gw ip using dhcp in profiler
-            # or using ip route using self.get_gateway_ip()
-            # now that it's found, get and store the mac addr of it
-            if mac := self.get_gateway_mac(gw_ips):
-                self.db.set_default_gateway("MAC", mac)
+            for interface, gw_ip in gw_ips.items():
+                self.db.set_default_gateway("IP", gw_ips, interface)
+
+                # whether we found the gw ip using dhcp in profiler
+                # or using ip route using self.get_gateway_ip()
+                # now that it's found, get and store the mac addr of it
+                if mac := self.get_gateway_mac(gw_ips):
+                    self.db.set_default_gateway("MAC", mac)
 
     def handle_new_ip(self, ip: str):
         try:
