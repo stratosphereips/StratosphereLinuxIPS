@@ -24,7 +24,6 @@ from functools import lru_cache
 
 from modules.ip_info.jarm import JARM
 from slips_files.common.flow_classifier import FlowClassifier
-from slips_files.common.style import green
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from .asn_info import ASN
 from slips_files.common.abstracts.iasync_module import AsyncModule
@@ -558,10 +557,6 @@ class IPInfo(AsyncModule):
         if gw_ips := self.get_gateway_ip_if_interface():
             for interface, gw_ip in gw_ips.items():
                 self.db.set_default_gateway("IP", gw_ip, interface)
-                self.print(
-                    f"Detected Gateway IP {green(gw_ip)} for "
-                    f"{green(interface)}"
-                )
 
             # whether we found the gw ip using dhcp in profiler
             # or using ip route here (self.get_gateway_ip())
@@ -569,10 +564,6 @@ class IPInfo(AsyncModule):
             if gw_macs := self.get_gateway_mac(gw_ips):
                 for interface, gw_mac in gw_macs.items():
                     self.db.set_default_gateway("MAC", gw_mac, interface)
-                    self.print(
-                        f"Detected Gateway MAC {green(gw_mac)} for "
-                        f"{green(interface)}"
-                    )
 
     def handle_new_ip(self, ip: str):
         try:

@@ -186,7 +186,7 @@ class Profiler(ICore, IObservable):
         # all of them are ipv6, return the first
         return gw_ips[0]
 
-    def is_gw_info_detected(self, info_type: str) -> bool:
+    def is_gw_info_detected(self, info_type: str, interface: str) -> bool:
         """
         checks own attributes and the db for the gw mac/ip
         :param info_type: can be 'mac' or 'ip'
@@ -207,7 +207,7 @@ class Profiler(ICore, IObservable):
             return True
 
         # did some other module manage to get it?
-        if info := check_db_method():
+        if info := check_db_method(interface):
             setattr(self, attr, info)
             return True
 
@@ -226,7 +226,8 @@ class Profiler(ICore, IObservable):
             # some suricata flows dont have that, like SuricataFile objs
             return
 
-        gw_mac_found: bool = self.is_gw_info_detected("mac")
+        gw_mac_found: bool = self.is_gw_info_detected("mac", flow.interface)
+
         if not gw_mac_found:
             if (
                 utils.is_private_ip(flow.saddr)
@@ -234,7 +235,7 @@ class Profiler(ICore, IObservable):
                 and flow.dmac
             ):
                 self.gw_mac: str = flow.dmac
-                self.db.set_default_gateway("MAC", self.gw_mac)
+                self.db.set_default_gateway("MAC", self.gw_mac, flow.interface)
                 # self.print(
                 #     f"MAC address of the gateway detected: "
                 #     f"{green(self.gw_mac)}"
@@ -242,10 +243,10 @@ class Profiler(ICore, IObservable):
                 gw_mac_found = True
 
         # we need the mac to be set to be able to find the ip using it
-        if not self.is_gw_info_detected("ip") and gw_mac_found:
+        if not self.is_gw_info_detected("ip", flow.interface) and gw_mac_found:
             self.gw_ip: Optional[str] = self.get_gw_ip_using_gw_mac()
             if self.gw_ip:
-                self.db.set_default_gateway("IP", self.gw_ip)
+                self.db.set_default_gateway("IP", self.gw_ip, flow.interface)
                 self.print(
                     f"IP address of the gateway detected: "
                     f"{green(self.gw_ip)}"

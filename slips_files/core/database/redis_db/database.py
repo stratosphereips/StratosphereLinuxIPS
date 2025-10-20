@@ -1104,7 +1104,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """
         self.r.sadd(self.constants.SRCIPS_SEEN_IN_CONN_LOG, ip)
 
-    def _is_gw_mac(self, mac_addr: str) -> bool:
+    def _is_gw_mac(self, mac_addr: str, interface: str) -> bool:
         """
         Detects the MAC of the gateway if 1 mac is seen
         assigned to 1 public destination IP
@@ -1116,9 +1116,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
         if self._gateway_MAC_found:
             # gateway MAC already set using this function
-            return self.get_gateway_mac() == mac_addr
+            return self.get_gateway_mac(interface) == mac_addr
 
-    def _determine_gw_mac(self, ip, mac):
+    def _determine_gw_mac(self, ip, mac, interface: str):
         """
         sets the gw mac if the given ip is public and is assigned a mc
         """
@@ -1132,7 +1132,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             # belongs to it
             # we are sure this is the gw mac
             # set it if we don't already have it in the db
-            self.set_default_gateway(self.constants.MAC, mac)
+            self.set_default_gateway(self.constants.MAC, mac, interface)
 
             # mark the gw mac as found so we don't look for it again
             self._gateway_MAC_found = True
@@ -1430,8 +1430,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """
         if ap_info := self.get_ap_info():
             return ap_info["wifi_interface"]
-        else:
-            return self.get_interface()
+
+        return self.get_interface()
 
     def get_all_host_ips(self) -> List[str]:
         """returns the latest added host ip of all interfaces"""

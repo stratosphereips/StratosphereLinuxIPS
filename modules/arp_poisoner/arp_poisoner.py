@@ -314,7 +314,7 @@ class ARPPoisoner(IModule):
         # poison the gw, tell it the victim is at a fake mac so traffic
         # from it wont reach the victim
         # attacker -> gw: im at a fake mac.
-        gateway_mac = self.db.get_gateway_mac()
+        gateway_mac = self.db.get_gateway_mac(interface)
 
         print(
             f"@@@@@@@@@@@@@@@@ attacker {target_ip}  -> gw {gateway_ip}: "

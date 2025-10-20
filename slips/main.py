@@ -452,11 +452,13 @@ class Main:
     def print_gw_info(self):
         if self.gw_info_printed:
             return
-        if ip := self.db.get_gateway_ip():
-            self.print(f"Detected gateway IP: {green(ip)}")
-        if mac := self.db.get_gateway_mac():
-            self.print(f"Detected gateway MAC: {green(mac)}")
-        self.gw_info_printed = True
+
+        for interface in utils.get_all_interfaces(self.args):
+            if ip := self.db.get_gateway_ip(interface):
+                self.print(f"Detected gateway IP: {green(ip)}")
+            if mac := self.db.get_gateway_mac(interface):
+                self.print(f"Detected gateway MAC: {green(mac)}")
+            self.gw_info_printed = True
 
     def prepare_locks_dir(self):
         """

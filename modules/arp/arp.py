@@ -418,7 +418,7 @@ class ARP(IModule):
             victims_ip = original_ip
 
             gateway_ip = self.db.get_gateway_ip(flow.interface)
-            gateway_mac = self.db.get_gateway_mac()
+            gateway_mac = self.db.get_gateway_mac(flow.interface)
             if flow.saddr == gateway_ip:
                 saddr = f"The gateway {flow.saddr}"
             else:

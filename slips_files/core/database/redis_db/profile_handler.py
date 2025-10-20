@@ -1247,14 +1247,16 @@ class ProfileHandler:
         """Add the MAC addr to the given profileid key"""
         self.r.hset(profileid, self.constants.MAC, mac)
 
-    def _should_associate_this_mac_with_this_ip(self, ip, mac) -> bool:
+    def _should_associate_this_mac_with_this_ip(
+        self, ip, mac, interface
+    ) -> bool:
         return not (
             ip == "0.0.0.0"
             or not mac
             # sometimes we create profiles with the mac address.
             # don't save that in MAC hash
             or validators.mac_address(ip)
-            or self._is_gw_mac(mac)
+            or self._is_gw_mac(mac, interface)
             # we're trying to assign the gw mac to
             # an ip that isn't the gateway's
             # this happens bc any public IP probably has the gw MAC
@@ -1262,7 +1264,9 @@ class ProfileHandler:
             or ip == self.get_gateway_ip()
         )
 
-    def add_mac_addr_to_profile(self, profileid: str, mac_addr: str):
+    def add_mac_addr_to_profile(
+        self, profileid: str, mac_addr: str, interface: str
+    ):
         """
         Used to associate the given profile with the given MAC addr.
         stores this info in the 'MAC' key in the db
@@ -1276,12 +1280,12 @@ class ProfileHandler:
         incoming_ip: str = profileid.split("_")[1]
 
         if not self._should_associate_this_mac_with_this_ip(
-            incoming_ip, mac_addr
+            incoming_ip, mac_addr, interface
         ):
             return False
 
         # see if this is the gw mac
-        self._determine_gw_mac(incoming_ip, mac_addr)
+        self._determine_gw_mac(incoming_ip, mac_addr, interface)
 
         # get the ips that belong to this mac
         cached_ips: Optional[List] = self.r.hmget(
