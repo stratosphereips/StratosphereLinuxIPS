@@ -447,6 +447,16 @@ class Utils(object):
             datetime.now(), format or self.alerts_format
         )
 
+    def get_all_interfaces(self, args) -> List[str] | None:
+        """
+        returns a list of all interfaces slips is now monitoring
+        :param args: slips args
+        """
+        if args.interface:
+            return [args.interface]
+        if args.access_point:
+            return args.access_point.split(",")
+
     def get_mac_for_ip_using_cache(self, ip: str) -> str | None:
         """gets the mac of the given local ip using the local arp cache"""
         try:
