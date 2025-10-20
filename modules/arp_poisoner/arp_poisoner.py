@@ -55,7 +55,8 @@ class ARPPoisoner(IModule):
         self.last_arp_scan_output = set()
         self.ap_info: None | Dict[str, str] = self.db.get_ap_info()
         self.is_running_in_ap_mode = True if self.ap_info else False
-        self.gw_ip = None
+        # contains interfaces as keys and and their GW ip as values
+        self.gw_ip: Dict[str, str] = {}
 
     def log(self, text):
         """Logs the given text to the blocking log file"""
@@ -258,38 +259,20 @@ class ARPPoisoner(IModule):
             )
             sendp(pkt, verbose=0)
 
-    def _get_gateway_ip_with_ip_route(self):
-        """
-        Finds the default gateway IP address on Linux using the 'ip route'
-        command.
-        sets self.gw_ip
-        """
-        try:
-            output = subprocess.check_output(["ip", "route"]).decode("utf-8")
+    def _get_gateway_ip(self, interface: str) -> str | None:
+        """gets the GW ip using cache, using the DB, or using netifaces"""
+        if interface in self.gw_ip:
+            return self.gw_ip[interface]
 
-            for line in output.split("\n"):
-                if "default via" in line:
-                    # Example line: 'default via 192.168.1.1 dev eth0'
-                    ip = line.split()[2]
-                    self.gw_ip = ip
-                    return ip
-
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            # Handles cases where the 'ip' command is not found or fails
-            return None
-
-    def _get_gateway_ip(self) -> str | None:
-        if self.gw_ip:
-            gateway_ip = self.gw_ip
-        else:
-            gateway_ip: str = (
-                self.db.get_gateway_ip()
-                or self._get_gateway_ip_with_ip_route()
-            )
+        gateway_ip: str = self.db.get_gateway_ip(
+            interface
+        ) or utils.get_gateway_for_iface(interface)
+        # cache it for later
+        self.gw_ip[interface] = gateway_ip
         return gateway_ip
 
     def _cut_targets_internet(
-        self, target_ip: str, target_mac: str, fake_mac: str
+        self, target_ip: str, target_mac: str, fake_mac: str, interface: str
     ):
         """
         Cuts the target's internet by telling the target_ip that the gateway
@@ -300,7 +283,7 @@ class ARPPoisoner(IModule):
             f"@@@@@@@@@@@@@@@@ cutting the internet of {target_ip} at "
             f"{target_mac} "
         )
-        gateway_ip = self._get_gateway_ip()
+        gateway_ip: str = self._get_gateway_ip(interface)
 
         if not gateway_ip:
             self.print(
@@ -349,7 +332,7 @@ class ARPPoisoner(IModule):
         )
         sendp(pkt, iface=self.args.interface, verbose=0)
 
-    def _attack(self, target_ip: str, first_time=False):
+    def _attack(self, target_ip: str, interface: str, first_time=False):
         """
         Prevents the target from accessing the internet and isolates it
         from the rest of the network.
@@ -370,7 +353,7 @@ class ARPPoisoner(IModule):
             if not target_mac:
                 return
 
-        self._cut_targets_internet(target_ip, target_mac, fake_mac)
+        self._cut_targets_internet(target_ip, target_mac, fake_mac, interface)
         self._isolate_target_from_localnet(target_ip, fake_mac)
 
         # we repoison every 10s, we dont wanna log every 10s.
@@ -385,7 +368,7 @@ class ARPPoisoner(IModule):
         except ValueError:
             return False
 
-    def can_poison_ip(self, ip) -> bool:
+    def can_poison_ip(self, ip, interface: str) -> bool:
         """
         Checks if the ip is in out localnet, isnt the router
         """
@@ -399,7 +382,7 @@ class ARPPoisoner(IModule):
         if self.is_broadcast(ip, localnet):
             return False
 
-        if ip == self._get_gateway_ip():
+        if ip == self._get_gateway_ip(interface):
             return False
 
         # no need to check if the ip is in our ips because all our ips are
@@ -413,11 +396,12 @@ class ARPPoisoner(IModule):
             data = json.loads(msg["data"])
             ip = data.get("ip")
             tw: int = data.get("tw")
+            interface: str = data.get("interface")
 
-            if not self.can_poison_ip(ip):
+            if not self.can_poison_ip(ip, interface):
                 return
 
-            self._attack(ip, first_time=True)
+            self._attack(ip, interface, first_time=True)
 
             # whether this ip is blocked now, or was already blocked, make an
             # unblocking request to either extend its

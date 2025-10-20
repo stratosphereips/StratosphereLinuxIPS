@@ -378,7 +378,10 @@ class EvidenceHandler(ICore):
         ) and blocking_module_enabled
 
     def handle_new_alert(
-        self, alert: Alert, evidence_causing_the_alert: Dict[str, Evidence]
+        self,
+        alert: Alert,
+        evidence_causing_the_alert: Dict[str, Evidence],
+        interface: str,
     ):
         """
         saves alert details in the db and informs exporting modules about it
@@ -390,7 +393,7 @@ class EvidenceHandler(ICore):
 
         self.db.set_alert(alert, evidence_causing_the_alert)
         is_blocked: bool = self.decide_blocking(
-            alert.profile.ip, alert.timewindow
+            alert.profile.ip, alert.timewindow, interface
         )
         # like in the firewall
         profile_already_blocked: bool = self.db.is_blocked_profile_and_tw(
@@ -419,7 +422,10 @@ class EvidenceHandler(ICore):
         self.log_alert(alert, blocked=is_blocked)
 
     def decide_blocking(
-        self, ip_to_block: str, timewindow: TimeWindow
+        self,
+        ip_to_block: str,
+        timewindow: TimeWindow,
+        interface: str,
     ) -> bool:
         """
         Decide whether to block or not and send to the blocking module
@@ -444,6 +450,7 @@ class EvidenceHandler(ICore):
             "ip": ip_to_block,
             "block": True,
             "tw": timewindow.number,
+            "interface": interface,
         }
         blocking_data = json.dumps(blocking_data)
         self.db.publish("new_blocking", blocking_data)
@@ -517,6 +524,7 @@ class EvidenceHandler(ICore):
                 twid: str = str(evidence.timewindow)
                 evidence_type: EvidenceType = evidence.evidence_type
                 timestamp: str = evidence.timestamp
+                interface: str = evidence.interface
                 # the database naturally has evidence before they reach
                 # this module. and sometime when this module queries
                 # evidence for a specific timewindow, the db returns all
@@ -609,7 +617,7 @@ class EvidenceHandler(ICore):
                             accumulated_threat_level=accumulated_threat_level,
                             correl_id=list(tw_evidence.keys()),
                         )
-                        self.handle_new_alert(alert, tw_evidence)
+                        self.handle_new_alert(alert, tw_evidence, interface)
 
             if msg := self.get_msg("new_blame"):
                 data = msg["data"]
