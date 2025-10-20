@@ -1327,30 +1327,47 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """Return all entries from the list of zeek files"""
         return self.r.hgetall(self.constants.ZEEK_FILES)
 
-    def get_gateway_ip(self):
-        return self.r.hget(self.constants.DEFAULT_GATEWAY, "IP")
+    def _get_gw_info(self, interface: str) -> Dict[str, str] | None:
+        gw_info: str = self.r.hget(self.constants.DEFAULT_GATEWAY, interface)
+        if gw_info:
+            gw_info: Dict[str, str] = json.loads(gw_info)
+            return gw_info
 
-    def get_gateway_mac(self):
-        return self.r.hget(self.constants.DEFAULT_GATEWAY, self.constants.MAC)
+    def get_gateway_ip(self, interface: str) -> str | None:
+        if gw_info := self._get_gw_info(interface):
+            return gw_info.get("IP")
 
-    def get_gateway_mac_vendor(self):
-        return self.r.hget(self.constants.DEFAULT_GATEWAY, "Vendor")
+    def get_gateway_mac(self, interface):
+        if gw_info := self._get_gw_info(interface):
+            return gw_info.get(self.constants.MAC)
 
-    def set_default_gateway(self, address_type: str, address: str):
+    def get_gateway_mac_vendor(self, interface):
+        if gw_info := self._get_gw_info(interface):
+            return gw_info.get("Vendor")
+
+    def set_default_gateway(
+        self, address_type: str, address: str, interface: str
+    ):
         """
         :param address_type: can either be 'IP' or 'MAC'
         :param address: can be ip or mac, but always is a str
+        :param interface: which interface is the given address the GW to?
         """
         # make sure the IP or mac aren't already set before re-setting
         if (
-            (address_type == "IP" and not self.get_gateway_ip())
+            (address_type == "IP" and not self.get_gateway_ip(interface))
             or (
                 address_type == self.constants.MAC
-                and not self.get_gateway_mac()
+                and not self.get_gateway_mac(interface)
             )
-            or (address_type == "Vendor" and not self.get_gateway_mac_vendor())
+            or (
+                address_type == "Vendor"
+                and not self.get_gateway_mac_vendor(interface)
+            )
         ):
-            self.r.hset(self.constants.DEFAULT_GATEWAY, address_type, address)
+            gw_info = json.dumps({address_type: address})
+
+            self.r.hset(self.constants.DEFAULT_GATEWAY, interface, gw_info)
 
     def get_domain_resolution(self, domain) -> List[str]:
         """
