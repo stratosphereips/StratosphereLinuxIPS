@@ -1261,7 +1261,7 @@ class ProfileHandler:
             # an ip that isn't the gateway's
             # this happens bc any public IP probably has the gw MAC
             # in the zeek logs, so skip
-            or ip == self.get_gateway_ip()
+            or ip == self.get_gateway_ip(interface)
         )
 
     def add_mac_addr_to_profile(

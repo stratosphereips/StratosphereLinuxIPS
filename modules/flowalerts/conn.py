@@ -430,7 +430,7 @@ class Conn(IFlowalertsAnalyzer):
         """
         if (
             not flow.daddr
-            or self.is_ignored_ip_data_upload(flow.daddr)
+            or self.is_ignored_ip_data_upload(flow.daddr, flow.interface)
             or not flow.sbytes
         ):
             return False
