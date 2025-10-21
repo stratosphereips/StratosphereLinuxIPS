@@ -145,7 +145,7 @@ class IDMEFv2:
                     "Version": self.version,
                     # alerts aren't tied to a specific interface, and alert
                     # is a combination of evidence from any interface
-                    "Analyzer": DEFAULT_ADDRESS,
+                    "Analyzer": self._get_analyzer(None),
                     "Source": [{"IP": alert.profile.ip}],
                     "ID": alert.id,
                     "Status": "Incident",

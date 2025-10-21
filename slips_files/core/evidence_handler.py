@@ -136,8 +136,8 @@ class EvidenceHandler(ICore):
             open(logfile_path, "w").close()
         return open(logfile_path, "a")
 
-    def handle_unable_to_log(self):
-        self.print("Error logging evidence/alert.")
+    def handle_unable_to_log(self, failed_log, error=None):
+        self.print(f"Error logging evidence/alert: {error}. {failed_log}.")
 
     def add_alert_to_json_log_file(self, alert: Alert):
         """
@@ -145,7 +145,7 @@ class EvidenceHandler(ICore):
         """
         idmef_alert: dict = self.idmefv2.convert_to_idmef_alert(alert)
         if not idmef_alert:
-            self.handle_unable_to_log()
+            self.handle_unable_to_log(alert, "Can't convert to IDMEF alert")
             return
 
         try:
@@ -153,8 +153,8 @@ class EvidenceHandler(ICore):
             self.jsonfile.write("\n")
         except KeyboardInterrupt:
             return True
-        except Exception:
-            self.handle_unable_to_log()
+        except Exception as e:
+            self.handle_unable_to_log(alert, e)
 
     def add_evidence_to_json_log_file(
         self,
@@ -166,7 +166,9 @@ class EvidenceHandler(ICore):
         """
         idmef_evidence: dict = self.idmefv2.convert_to_idmef_event(evidence)
         if not idmef_evidence:
-            self.handle_unable_to_log()
+            self.handle_unable_to_log(
+                evidence, "Can't convert to IDMEF evidence"
+            )
             return
 
         try:
@@ -188,8 +190,8 @@ class EvidenceHandler(ICore):
             self.jsonfile.write("\n")
         except KeyboardInterrupt:
             return True
-        except Exception:
-            self.handle_unable_to_log()
+        except Exception as e:
+            self.handle_unable_to_log(evidence, e)
 
     def add_to_log_file(self, data):
         """
