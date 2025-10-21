@@ -38,7 +38,7 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import multiprocessing
 
-from slips_files.common.style import green
+from slips_files.common.style import yellow
 from slips_files.core.helpers.filemonitor import FileEventHandler
 from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
 from slips_files.core.zeek_cmd_builder import ZeekCommandBuilder
@@ -697,11 +697,12 @@ class Input(ICore):
                 tcpdump_filter = None
                 if interface_info["type"] == "ethernet_interface":
                     cidr = utils.get_cidr_of_interface(interface)
-                    self.print(
-                        f"Detected CIDR {green(cidr)} for "
-                        f"{green(interface)}."
-                    )
                     tcpdump_filter = f"dst net {cidr}"
+                    logline = yellow(
+                        f"Zeek is logging incoming traffic only "
+                        f"for interface: {interface}."
+                    )
+                    self.print(logline)
 
                 self.init_zeek(
                     interface_dir, interface, tcpdump_filter=tcpdump_filter
@@ -866,8 +867,6 @@ class Input(ICore):
         starting zeek with -f
         """
         command = self._construct_zeek_cmd(pcap_or_interface, tcpdump_filter)
-        print(f"@@@@@@@@@@@@@@@@ command ::::: {' '.join(command)}")
-
         self.print(f'Zeek command: {" ".join(command)}', 3, 0)
 
         zeek = subprocess.Popen(

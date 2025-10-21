@@ -21,8 +21,10 @@ from slips_files.core.structures.alerts import (
 
 
 class EvidenceFormatter:
-    def __init__(self, db):
+    def __init__(self, db, args):
         self.db = db
+        # args given to slips on startup
+        self.args = args
 
     def get_evidence_to_log(
         self, evidence: Evidence, flow_datetime: str

@@ -265,6 +265,9 @@ class Method(Enum):
 
 @dataclass
 class Evidence:
+    # IMPORTANT: remember to update dict_to_evidence() function based on the
+    # field you add to the evidence class, or any class used by the evidence
+    # class.
     evidence_type: EvidenceType
     description: str
     attacker: Attacker
@@ -341,6 +344,7 @@ def dict_to_evidence(evidence: dict) -> Evidence:
     evidence_attributes = {
         "evidence_type": EvidenceType[evidence["evidence_type"]],
         "description": evidence["description"],
+        "interface": evidence["interface"],
         "attacker": Attacker(**evidence["attacker"]),
         "threat_level": ThreatLevel[evidence["threat_level"].upper()],
         "victim": (

@@ -101,7 +101,7 @@ class EvidenceHandler(ICore):
         utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
         # this list will have our local and public ips when using -i
         self.our_ips: List[str] = utils.get_own_ips(ret="List")
-        self.formatter = EvidenceFormatter(self.db)
+        self.formatter = EvidenceFormatter(self.db, self.args)
         # thats just a tmp value, this variable will be set and used when
         # the
         # module is stopping.
