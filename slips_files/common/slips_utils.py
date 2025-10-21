@@ -447,6 +447,24 @@ class Utils(object):
             datetime.now(), format or self.alerts_format
         )
 
+    def get_cidr_of_interface(self, interface: str) -> str | None:
+        try:
+            addrs = netifaces.ifaddresses(interface)
+            ipv4_addrs = addrs.get(socket.AF_INET)
+
+            if ipv4_addrs:
+                for addr_info in ipv4_addrs:
+                    ip = addr_info.get("addr")
+                    netmask = addr_info.get("netmask")
+
+                    if ip and netmask:
+                        # Create an interface object from the IP and netmask
+                        iface = ipaddress.ip_interface(f"{ip}/{netmask}")
+                        network_cidr = str(iface.network)
+                        return network_cidr
+        except Exception:
+            return
+
     def get_all_interfaces(self, args) -> List[str] | None:
         """
         returns a list of all interfaces slips is now monitoring
