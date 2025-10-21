@@ -380,7 +380,7 @@ class EvidenceHandler(ICore):
     def handle_new_alert(
         self,
         alert: Alert,
-        evidence_causing_the_alert: Dict[str, Evidence],
+        evidence_causing_the_alert,
         interface: str,
     ):
         """
@@ -389,6 +389,7 @@ class EvidenceHandler(ICore):
         if a profile already generated an alert in this tw, we send a
         blocking request (to extend its blocking period), and log the alert
         in the db only, without printing it to cli.
+        :param evidence_causing_the_alert: Dict[str, Evidence]
         """
 
         self.db.set_alert(alert, evidence_causing_the_alert)

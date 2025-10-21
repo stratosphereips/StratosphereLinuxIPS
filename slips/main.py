@@ -25,7 +25,7 @@ from managers.ui_manager import UIManager
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
-from slips_files.common.style import green
+from slips_files.common.style import green, yellow
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.checker import Checker
 
@@ -520,7 +520,7 @@ class Main:
                     )
                     self.terminate_slips()
                 else:
-                    self.print("Slips is running in AP mode.")
+                    self.print(yellow("Slips is running in AP mode."))
                     self.ap_manager.store_ap_interfaces(self.input_information)
 
             self.db.set_input_metadata(

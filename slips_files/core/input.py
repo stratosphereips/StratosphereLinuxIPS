@@ -27,7 +27,7 @@ import time
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from re import split
-from typing import Dict
+from typing import Dict, List
 
 from watchdog.observers import Observer
 
@@ -37,8 +37,11 @@ from slips_files.common.abstracts.icore import ICore
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import multiprocessing
+
+from slips_files.common.style import green
 from slips_files.core.helpers.filemonitor import FileEventHandler
 from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
+from slips_files.core.zeek_cmd_builder import ZeekCommandBuilder
 
 
 class Input(ICore):
@@ -645,13 +648,17 @@ class Input(ICore):
         # Start the observer
         self.event_observer.start()
 
-    def handle_pcap_and_interface(self) -> int:
-        """Returns the number of zeek lines read"""
+    def handle_pcap_and_interface(self) -> bool:
+        """
+        runs when slips is given a pcap with -f, an interface with -i,
+        or 2 interfaces with -ap
+        """
         if not os.path.exists(self.zeek_dir):
             os.makedirs(self.zeek_dir)
         self.print(f"Storing zeek log files in {self.zeek_dir}")
 
         if self.input_type == "interface":
+            # slips is running with -i or -ap
             # We don't want to stop bro if we read from an interface
             self.bro_timeout = float("inf")
             # format is {interface: zeek_dir_path}
@@ -670,6 +677,7 @@ class Input(ICore):
                 # slips is running in AP mode, we need to monitor the 2
                 # interfaces, wifi and eth.
                 for _type, interface in self.db.get_ap_info().items():
+                    # _type can be 'wifi_interface' or "ethernet_interface"
                     dir_to_store_interface_logs = os.path.join(
                         self.zeek_dir, interface
                     )
@@ -685,13 +693,25 @@ class Input(ICore):
                 interface_dir = interface_info["dir"]
                 if not os.path.exists(interface_dir):
                     os.makedirs(interface_dir)
-                self.start_zeek(interface_dir, interface)
+
+                tcpdump_filter = None
+                if interface_info["type"] == "ethernet_interface":
+                    cidr = utils.get_cidr_of_interface(interface)
+                    self.print(
+                        f"Detected CIDR {green(cidr)} for "
+                        f"{green(interface)}."
+                    )
+                    tcpdump_filter = f"dst net {cidr}"
+
+                self.init_zeek(
+                    interface_dir, interface, tcpdump_filter=tcpdump_filter
+                )
 
         elif self.input_type == "pcap":
             # This is for stopping the inputprocess
             # if bro does not receive any new line while reading a pcap
             self.bro_timeout = 30
-            self.start_zeek(self.zeek_dir, self.given_path)
+            self.init_zeek(self.zeek_dir, self.given_path)
 
         self.lines = self.read_zeek_files()
         self.print_lines_read()
@@ -699,10 +719,13 @@ class Input(ICore):
         self.stop_observer()
         return True
 
-    def start_zeek(self, zeek_dir: str, pcap_or_interface: str):
+    def init_zeek(
+        self, zeek_dir: str, pcap_or_interface: str, tcpdump_filter=None
+    ):
         """
         :param pcap_or_interface: name of the pcap or interface zeek
         is going to run on
+
         PS: this function contains a call to self.read_zeek_files that
         keeps running until slips stops
         """
@@ -717,6 +740,7 @@ class Input(ICore):
         zeek_thread = threading.Thread(
             target=self.run_zeek,
             args=(zeek_dir, pcap_or_interface),
+            kwargs={"tcpdump_filter": tcpdump_filter},
             daemon=True,
             name="run_zeek_thread",
         )
@@ -816,68 +840,33 @@ class Input(ICore):
 
         return True
 
-    def run_zeek(self, zeek_logs_dir, pcap_or_interface):
+    def _construct_zeek_cmd(
+        self, pcap_or_interface: str, tcpdump_filter=None
+    ) -> List[str]:
         """
-        This thread sets the correct zeek parameters and starts zeek
+        constructs the zeek command based on the user given
+        pcap/interface/packet filter/etc.
         """
-
-        def detach_child():
-            """
-            Detach zeek from the parent process group(inputprocess), the child(zeek)
-             will no longer receive signals
-            """
-            # we're doing this to fix zeek rotating on sigint, not when zeek has it's own
-            # process group, it won't get the signals sent to slips.py
-            os.setpgrp()
-
-        # rotation is disabled unless it's an interface
-        rotation = []
-        if self.input_type == "interface":
-            interface = pcap_or_interface
-            if self.enable_rotation:
-                # how often to rotate zeek files? taken from slips.yaml
-                rotation = [
-                    "-e",
-                    f"redef Log::default_rotation_interval = {self.rotation_period} ;",
-                ]
-            bro_parameter = ["-i", interface]
-
-        elif self.input_type == "pcap":
-            # Find if the pcap file name was absolute or relative
-            pcap = pcap_or_interface
-            if not os.path.isabs(pcap):
-                # now the given pcap is relative to slips main dir
-                # slips can store the zeek logs dir either in the
-                # output dir (by default in Slips/output/<filename>_<date>/zeek_files/),
-                # or in any dir specified with -o
-                # construct an abs path from the given path so slips can find the given pcap
-                # no matter where the zeek dir is placed
-                pcap = os.path.join(os.getcwd(), pcap)
-
-            # using a list of params instead of a str for storing the cmd
-            # becaus ethe given path may contain spaces
-            bro_parameter = ["-r", pcap]
-
-        # Run zeek on the pcap or interface. The redef is to have json files
-        zeek_scripts_dir = os.path.join(os.getcwd(), "zeek-scripts")
-        packet_filter = (
-            ["-f ", self.packet_filter] if self.packet_filter else []
+        builder = ZeekCommandBuilder(
+            zeek_or_bro=self.zeek_or_bro,
+            input_type=self.input_type,
+            rotation_period=self.rotation_period,
+            enable_rotation=self.enable_rotation,
+            tcp_inactivity_timeout=self.tcp_inactivity_timeout,
+            packet_filter=self.packet_filter,
         )
 
-        # 'local' is removed from the command because it
-        # loads policy/protocols/ssl/expiring-certs and
-        # and policy/protocols/ssl/validate-certs and they have conflicts with our own
-        # zeek-scripts/expiring-certs and validate-certs
-        # we have our own copy pf local.zeek in __load__.zeek
-        command = [self.zeek_or_bro, "-C"]
-        command += bro_parameter
-        command += [
-            f"tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins",
-            "tcp_attempt_delay=1min",
-            zeek_scripts_dir,
-        ]
-        command += rotation
-        command += packet_filter
+        cmd = builder.build(pcap_or_interface, tcpdump_filter=tcpdump_filter)
+        return cmd
+
+    def run_zeek(self, zeek_logs_dir, pcap_or_interface, tcpdump_filter=None):
+        """
+        This thread sets the correct zeek parameters and starts zeek
+        :kwarg tcpdump_filter: optional tcp filter to use when
+        starting zeek with -f
+        """
+        command = self._construct_zeek_cmd(pcap_or_interface, tcpdump_filter)
+        print(f"@@@@@@@@@@@@@@@@ command ::::: {' '.join(command)}")
 
         self.print(f'Zeek command: {" ".join(command)}', 3, 0)
 
