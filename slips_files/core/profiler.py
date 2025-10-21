@@ -531,7 +531,7 @@ class Profiler(ICore, IObservable):
         running with -i
         """
         local_nets = {}
-        for interface in utils.get_all_interfaces():
+        for interface in utils.get_all_interfaces(self.args):
             addrs = netifaces.ifaddresses(interface).get(netifaces.AF_INET)
             if not addrs:
                 return

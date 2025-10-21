@@ -13,14 +13,14 @@ from datetime import timedelta
 from slips_files.common.slips_utils import utils
 
 
-@dataclass
+@dataclass(kw_only=True)
 class BaseFlow:
     """A base class for zeek flows, containing common fields."""
 
     interface: str = field(default="default")
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Conn(BaseFlow):
     starttime: str
     uid: str
@@ -68,7 +68,7 @@ class Conn(BaseFlow):
             self.proto = ""
 
 
-@dataclass
+@dataclass(kw_only=True)
 class DNS(BaseFlow):
     starttime: str
     uid: str
@@ -100,7 +100,7 @@ class DNS(BaseFlow):
         )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class HTTP(BaseFlow):
     starttime: str
     uid: str
@@ -132,7 +132,7 @@ class HTTP(BaseFlow):
         pass
 
 
-@dataclass
+@dataclass(kw_only=True)
 class SSL(BaseFlow):
     starttime: str
     uid: str
@@ -167,7 +167,7 @@ class SSL(BaseFlow):
     type_: str = "ssl"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class SSH(BaseFlow):
     starttime: float
     uid: str
@@ -195,7 +195,7 @@ class SSH(BaseFlow):
     type_: str = "ssh"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class DHCP(BaseFlow):
     starttime: float
     uids: List[str]
@@ -222,7 +222,7 @@ class DHCP(BaseFlow):
             self.saddr = self.smac
 
 
-@dataclass
+@dataclass(kw_only=True)
 class FTP(BaseFlow):
     starttime: float
     uid: str
@@ -237,7 +237,7 @@ class FTP(BaseFlow):
     type_: str = "ftp"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class SMTP(BaseFlow):
     starttime: float
     uid: str
@@ -252,7 +252,7 @@ class SMTP(BaseFlow):
     type_: str = "smtp"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Tunnel(BaseFlow):
     starttime: str
     uid: str
@@ -271,7 +271,7 @@ class Tunnel(BaseFlow):
     type_: str = "tunnel"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Notice(BaseFlow):
     starttime: str
     saddr: str
@@ -318,7 +318,7 @@ class Notice(BaseFlow):
             self.dport = self.dport
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Files(BaseFlow):
     starttime: str
     uid: str
@@ -353,7 +353,7 @@ class Files(BaseFlow):
             self.daddr = daddr
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ARP(BaseFlow):
     starttime: str
     uid: str
@@ -389,7 +389,7 @@ class ARP(BaseFlow):
     type_: str = "arp"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Software(BaseFlow):
     starttime: str
     uid: str
@@ -414,7 +414,7 @@ class Software(BaseFlow):
         self.http_browser = self.software == "HTTP::BROWSER"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Weird(BaseFlow):
     starttime: str
     uid: str
