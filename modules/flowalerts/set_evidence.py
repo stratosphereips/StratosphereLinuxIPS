@@ -233,7 +233,8 @@ class SetEvidenceHelper:
                 f"A connection from a private IP ({flow.saddr}) on port "
                 f"{flow.dport}/{flow.proto} "
                 f"outside of the used local network "
-                f"{self.db.get_local_network()}. To IP: {flow.daddr} "
+                f"{self.db.get_local_network(flow.interface)}. To IP:"
+                f" {flow.daddr} "
             )
         else:
             attacker = Attacker(
@@ -251,7 +252,7 @@ class SetEvidenceHelper:
                 f"A connection to a private IP ({flow.daddr}) on port"
                 f" {flow.dport}/{flow.proto} "
                 f"outside of the used local network "
-                f"{self.db.get_local_network()}. "
+                f"{self.db.get_local_network(flow.interface)}. "
                 f"From IP: {flow.saddr} "
             )
             proto = flow.proto.lower()

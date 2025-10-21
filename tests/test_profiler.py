@@ -384,14 +384,14 @@ def test_should_set_localnet(saddr, is_localnet_set, expected_result):
     profiler = ModuleFactory().create_profiler_obj()
     flow = Mock()
     flow.saddr = saddr
-    profiler.is_localnet_set = is_localnet_set
+    profiler.localnet_cache = is_localnet_set
 
     assert profiler.should_set_localnet(flow) == expected_result
 
 
 def test_should_set_localnet_already_set():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.is_localnet_set = True
+    profiler.localnet_cache = True
     flow = Mock(saddr="1.1.1.1")
     result = profiler.should_set_localnet(flow)
     assert result is False
@@ -596,14 +596,14 @@ def test_get_local_net(client_ips, saddr, expected_cidr):
         ):
             flow = Mock()
             flow.saddr = saddr
-            local_net = profiler.get_local_net(flow)
+            local_net = profiler.get_local_net_of_flow(flow)
     else:
         with patch.object(
             profiler, "get_private_client_ips", return_value=client_ips
         ):
             flow = Mock()
             flow.saddr = saddr
-            local_net = profiler.get_local_net(flow)
+            local_net = profiler.get_local_net_of_flow(flow)
 
     assert local_net == expected_cidr
 
@@ -619,14 +619,14 @@ def test_get_local_net_from_flow():
     ):
         flow = Mock()
         flow.saddr = "10.0.0.1"
-        local_net = profiler.get_local_net(flow)
+        local_net = profiler.get_local_net_of_flow(flow)
 
     assert local_net == "10.0.0.0/8"
 
 
 def test_handle_setting_local_net_when_already_set():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.is_localnet_set = True
+    profiler.localnet_cache = True
     flow = Mock()
     profiler.handle_setting_local_net(flow)
     profiler.db.set_local_network.assert_not_called()

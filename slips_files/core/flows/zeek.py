@@ -17,7 +17,7 @@ from slips_files.common.slips_utils import utils
 class BaseFlow:
     """A base class for zeek flows, containing common fields."""
 
-    interface: str
+    interface: str = field(default="default")
 
 
 @dataclass

@@ -28,6 +28,7 @@ from typing import (
     List,
     Union,
     Optional,
+    Dict,
 )
 
 import netifaces
@@ -87,7 +88,7 @@ class Profiler(ICore, IObservable):
         self.timeformat = None
         self.input_type = False
         self.rec_lines = 0
-        self.is_localnet_set = False
+        self.localnet_cache = {}
         self.whitelist = Whitelist(self.logger, self.db)
         self.read_configuration()
         self.symbol = SymbolHandler(self.logger, self.db)
@@ -431,8 +432,12 @@ class Profiler(ICore, IObservable):
         returns true only if the saddr of the current flow is ipv4, private
         and we don't have the local_net set already
         """
-        if self.is_localnet_set:
-            return False
+        if self.db.is_running_non_stop():
+            if flow.interface in self.localnet_cache:
+                return False
+        else:
+            if "default" in self.localnet_cache:
+                return False
 
         if flow.saddr == "0.0.0.0":
             return False
@@ -520,52 +525,46 @@ class Profiler(ICore, IObservable):
                 private_clients.append(ip)
         return private_clients
 
-    def get_localnet_of_given_interface(self) -> str | None:
+    def get_localnet_of_given_interface(self) -> Dict[str, str]:
         """
         returns the local network of the given interface only if slips is
         running with -i
         """
-        addrs = netifaces.ifaddresses(self.args.interface).get(
-            netifaces.AF_INET
-        )
-        if not addrs:
-            return
-        for addr in addrs:
-            ip = addr.get("addr")
-            netmask = addr.get("netmask")
-            if ip and netmask:
-                network = ipaddress.IPv4Network(
-                    f"{ip}/{netmask}", strict=False
-                )
-                return str(network)
-        return None
+        local_nets = {}
+        for interface in utils.get_all_interfaces():
+            addrs = netifaces.ifaddresses(interface).get(netifaces.AF_INET)
+            if not addrs:
+                return
+            for addr in addrs:
+                ip = addr.get("addr")
+                netmask = addr.get("netmask")
+                if ip and netmask:
+                    network = ipaddress.IPv4Network(
+                        f"{ip}/{netmask}", strict=False
+                    )
+                    local_nets[interface] = str(network)
+        return local_nets
 
-    def get_local_net(self, flow) -> Optional[str]:
+    def get_local_net_of_flow(self, flow) -> Dict[str, str]:
         """
         gets the local network from client_ip param in the config file,
         or by using the localnetwork of the first private
         srcip seen in the traffic
         """
+        local_net = {}
         # For now the local network is only ipv4, but it
         # could be ipv6 in the future. Todo.
-        if self.args.interface:
-            self.is_localnet_set = True
-            return self.get_localnet_of_given_interface()
-
-        # slips is running on a file, we either have a client ip or not
+        # slips is running on a file. we either have a client ip or not
         private_client_ips: List[
             Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
         ]
-        private_client_ips = self.get_private_client_ips()
-
-        if private_client_ips:
+        if private_client_ips := self.get_private_client_ips():
             # does the client ip from the config already have the localnet?
             for range_ in private_client_ips:
                 if isinstance(range_, IPv4Network) or isinstance(
                     range_, IPv6Network
                 ):
-                    self.is_localnet_set = True
-                    return str(range_)
+                    local_net["default"] = str(range_)
 
             # all client ips should belong to the same local network,
             # it doesn't make sense to have ips belonging to different
@@ -574,19 +573,28 @@ class Profiler(ICore, IObservable):
         else:
             ip: str = flow.saddr
 
-        self.is_localnet_set = True
-        return utils.get_cidr_of_private_ip(ip)
+        local_net["default"] = utils.get_cidr_of_private_ip(ip)
+        return local_net
 
     def handle_setting_local_net(self, flow):
         """
         stores the local network if possible
+        sets the self.localnet_cache dict
         """
         if not self.should_set_localnet(flow):
             return
 
-        local_net: str = self.get_local_net(flow)
-        self.print(f"Used local network: {green(local_net)}")
-        self.db.set_local_network(local_net)
+        if self.db.is_running_non_stop():
+            self.localnet_cache = self.get_localnet_of_given_interface()
+        else:
+            self.localnet_cache = self.get_local_net_of_flow(flow)
+
+        for interface, local_net in self.localnet_cache.items():
+            self.db.set_local_network(local_net, interface)
+            self.print(
+                f"Used local network for {green(interface)}:"
+                f" {green(local_net)}"
+            )
 
     def get_msg_from_input_proc(
         self, q: multiprocessing.Queue, thread_safe=False

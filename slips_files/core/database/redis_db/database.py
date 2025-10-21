@@ -726,14 +726,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """
         return int(hrs * 3600 / self.width)
 
-    def set_local_network(self, cidr):
+    def set_local_network(self, cidr, interface):
         """
         set the local network used in the db
         """
-        self.r.set(self.constants.LOCAL_NETWORK, cidr)
+        self.r.hset(self.constants.LOCAL_NETWORK, interface, cidr)
 
-    def get_local_network(self):
-        return self.r.get(self.constants.LOCAL_NETWORK)
+    def get_local_network(self, interface):
+        return self.r.hget(self.constants.LOCAL_NETWORK, interface)
 
     def get_used_port(self) -> int:
         return int(self.r.config_get(self.constants.REDIS_USED_PORT)["port"])

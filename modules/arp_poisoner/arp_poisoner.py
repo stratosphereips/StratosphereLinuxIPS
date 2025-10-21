@@ -375,7 +375,7 @@ class ARPPoisoner(IModule):
         if utils.is_public_ip(ip):
             return False
 
-        localnet = self.db.get_local_network()
+        localnet = self.db.get_local_network(interface)
         if ipaddress.ip_address(ip) not in ipaddress.ip_network(localnet):
             return False
 

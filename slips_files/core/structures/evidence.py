@@ -277,7 +277,7 @@ class Evidence:
     timestamp: str = field(
         metadata={"validate": lambda x: validate_timestamp(x)}
     )
-    interface: Optional[str] = field(default=None)
+    interface: str = field(default="default")
     victim: Optional[Victim] = field(default=False)
     proto: Optional[Proto] = field(default=False)
     dst_port: int = field(default=None)
