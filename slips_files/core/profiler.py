@@ -102,7 +102,9 @@ class Profiler(ICore, IObservable):
         # is set by this proc to tell input proc that we are done
         # processing and it can exit no issue
         self.is_profiler_done_event = is_profiler_done_event
-        self.gw_mac = None
+        # stores the MAC addresses of the gateway of each interface
+        # will have interfaces as keys, and MACs as values
+        self.gw_macs = {}
         self.gw_ip = None
         self.profiler_threads = []
         self.stop_profiler_threads = multiprocessing.Event()
@@ -163,14 +165,14 @@ class Profiler(ICore, IObservable):
         rev_twid: str = self.db.get_timewindow(flow.starttime, rev_profileid)
         return rev_profileid, rev_twid
 
-    def get_gw_ip_using_gw_mac(self) -> Optional[str]:
+    def get_gw_ip_using_gw_mac(self, gw_mac) -> Optional[str]:
         """
         gets the ip of the given mac from the db
         prioritizes returning the ipv4. if not found, the function returns
         the ipv6. or none if both are not found.
         """
         # the db returns a serialized list of IPs belonging to this mac
-        gw_ips: str = self.db.get_ip_of_mac(self.gw_mac)
+        gw_ips: str = self.db.get_ip_of_mac(gw_mac)
 
         if not gw_ips:
             return
@@ -193,8 +195,8 @@ class Profiler(ICore, IObservable):
         :param info_type: can be 'mac' or 'ip'
         """
         info_mapping = {
-            "mac": ("gw_mac", self.db.get_gateway_mac),
-            "ip": ("gw_ip", self.db.get_gateway_ip),
+            "mac": ("gw_macs", self.db.get_gateway_mac),
+            "ip": ("gw_ips", self.db.get_gateway_ip),
         }
 
         if info_type not in info_mapping:
@@ -202,14 +204,15 @@ class Profiler(ICore, IObservable):
 
         attr, check_db_method = info_mapping[info_type]
 
-        if getattr(self, attr):
+        # did we get this interface's GW IP/MAC yet?
+        if interface in getattr(self, attr, {}):
             # the reason we don't just check the db is we don't want a db
             # call per each flow
             return True
 
         # did some other module manage to get it?
         if info := check_db_method(interface):
-            setattr(self, attr, info)
+            getattr(self, attr, {}).update({interface: info})
             return True
 
         return False
@@ -230,13 +233,16 @@ class Profiler(ICore, IObservable):
         gw_mac_found: bool = self.is_gw_info_detected("mac", flow.interface)
 
         if not gw_mac_found:
+            # we didnt get the MAC of the GW of this flow's interface
+            # ok consider the GW MAC = any dst MAC of a flow
+            # going from a private srcip -> a public ip
             if (
                 utils.is_private_ip(flow.saddr)
                 and not utils.is_ignored_ip(flow.daddr)
                 and flow.dmac
             ):
-                self.gw_mac: str = flow.dmac
-                self.db.set_default_gateway("MAC", self.gw_mac, flow.interface)
+                self.gw_macs.update({flow.interface: flow.dmac})
+                self.db.set_default_gateway("MAC", flow.dmac, flow.interface)
                 # self.print(
                 #     f"MAC address of the gateway detected: "
                 #     f"{green(self.gw_mac)}"
@@ -245,9 +251,10 @@ class Profiler(ICore, IObservable):
 
         # we need the mac to be set to be able to find the ip using it
         if not self.is_gw_info_detected("ip", flow.interface) and gw_mac_found:
-            self.gw_ip: Optional[str] = self.get_gw_ip_using_gw_mac()
-            if self.gw_ip:
-                self.db.set_default_gateway("IP", self.gw_ip, flow.interface)
+            gw_ip: Optional[str] = self.get_gw_ip_using_gw_mac(flow.dmac)
+            if gw_ip:
+                self.gw_ips[flow.interface] = gw_ip
+                self.db.set_default_gateway("IP", gw_ip, flow.interface)
                 self.print(
                     f"IP address of the gateway detected: "
                     f"{green(self.gw_ip)}"

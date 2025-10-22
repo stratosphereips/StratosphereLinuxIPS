@@ -806,14 +806,14 @@ def test_is_gw_info_detected_when_attribute_is_already_set():
     profiler = ModuleFactory().create_profiler_obj()
 
     # set gw_mac attribute to a value
-    profiler.gw_mac = "00:1A:2B:3C:4D:5E"
+    profiler.gw_macs = "00:1A:2B:3C:4D:5E"
 
     # test with info_type "mac"
     result = profiler.is_gw_info_detected("mac")
 
     # assertions
     assert result
-    assert profiler.gw_mac == "00:1A:2B:3C:4D:5E"
+    assert profiler.gw_macs == "00:1A:2B:3C:4D:5E"
 
 
 def test_process_flow_no_msg():
