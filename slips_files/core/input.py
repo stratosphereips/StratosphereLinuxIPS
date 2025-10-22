@@ -84,6 +84,7 @@ class Input(ICore):
         self.testing = False
         # number of lines read
         self.lines = 0
+        self.zeek_pids = []
 
         # create the remover thread
         self.remover_thread = threading.Thread(
@@ -756,7 +757,7 @@ class Input(ICore):
         # Give Zeek some time to generate at least 1 file.
         time.sleep(3)
 
-        self.db.store_pid(f"Zeek_{pcap_or_interface}", self.zeek_pid)
+        self.db.store_pid(f"Zeek_{pcap_or_interface}", self.zeek_pids[-1])
         if not hasattr(self, "is_zeek_tabs"):
             self.is_zeek_tabs = False
 
@@ -835,13 +836,14 @@ class Input(ICore):
         if hasattr(self, "open_file_handlers"):
             self.close_all_handles()
 
-        if hasattr(self, "zeek_pid"):
-            # kill zeek manually if it started bc it's detached from this
-            # process and will never recv the sigint also withoutt this,
-            # inputproc will never shutdown and will always remain in memory
-            # causing 1000 bugs in proc_man:shutdown_gracefully()
+        # kill zeek manually if it started bc it's detached from this
+        # process and will never recv the sigint.
+        # also without this, inputproc will never shutdown and will
+        # always remain in memory causing 1000 bugs in
+        # proc_man:shutdown_gracefully()
+        for pid in self.zeek_pids:
             try:
-                os.kill(self.zeek_pid, signal.SIGKILL)
+                os.kill(pid, signal.SIGKILL)
             except Exception:
                 pass
 
@@ -884,7 +886,7 @@ class Input(ICore):
             start_new_session=True,
         )
         # you have to get the pid before communicate()
-        self.zeek_pid = zeek.pid
+        self.zeek_pids.append(zeek.pid)
 
         out, error = zeek.communicate()
         if out:
