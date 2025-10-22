@@ -57,6 +57,8 @@ class ARPPoisoner(IModule):
         self.is_running_in_ap_mode = True if self.ap_info else False
         # contains interfaces as keys and and their GW ip as values
         self.gw_ip: Dict[str, str] = {}
+        # keeps track of which interface were blocked ips attacking on
+        self.ip_interface_map = {}
 
     def log(self, text):
         """Logs the given text to the blocking log file"""
@@ -334,7 +336,16 @@ class ARPPoisoner(IModule):
         )
         sendp(pkt, iface=interface, verbose=0)
 
-    def _attack(self, target_ip: str, interface: str, first_time=False):
+    def _get_interface_of_ip(self, ip) -> str | None:
+        if ip in self.ip_interface_map:
+            return self.ip_interface_map[ip]
+
+        interface = utils.get_interface_of_ip(ip, self.db, self.args)
+        if interface:
+            self.ip_interface_map[ip] = interface
+            return interface
+
+    def _attack(self, target_ip: str, first_time=False):
         """
         Prevents the target from accessing the internet and isolates it
         from the rest of the network.
@@ -354,6 +365,14 @@ class ARPPoisoner(IModule):
             target_mac: str = self._get_mac_using_arp(target_ip)
             if not target_mac:
                 return
+
+        interface: str | None = self._get_interface_of_ip(target_ip)
+        if not interface:
+            self.print(
+                f"Can't get the interface of {target_ip}. "
+                f"Poisoning cancelled."
+            )
+            return
 
         self._cut_targets_internet(target_ip, target_mac, fake_mac, interface)
         self._isolate_target_from_localnet(target_ip, fake_mac, interface)
@@ -399,20 +418,18 @@ class ARPPoisoner(IModule):
             ip = data.get("ip")
             tw: int = data.get("tw")
             interface: str = data.get("interface")
-            print(
-                f"@@@@@@@@@@@@@@@@ we found that ip {ip} belongs to "
-                f"{interface}"
-            )
+            print(f"@@@@@@@@@@@@@@@@ we found that ip {ip} belongs to ")
 
             if not self.can_poison_ip(ip, interface):
                 return
 
-            self._attack(ip, interface, first_time=True)
+            self.ip_interface_map[ip] = interface
+            self._attack(ip, first_time=True)
 
             # whether this ip is blocked now, or was already blocked, make an
             # unblocking request to either extend its
             # blocking period, or block it until the next timewindow is over.
-            self.unblocker.unblock_request(ip, tw)
+            self.unblocker.unblock_request(ip, tw, interface)
 
         if msg := self.get_msg("tw_closed"):
             # this channel receives requests for closed tws for every ip

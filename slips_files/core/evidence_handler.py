@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
-import ipaddress
 
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -423,23 +422,6 @@ class EvidenceHandler(ICore):
 
         self.log_alert(alert, blocked=is_blocked)
 
-    def _get_interface_of_ip(self, ip_to_block: str):
-        """
-        Gets the interface this IP is attacking on
-        return s None if slips isnt running on an interface
-        """
-        if self.args.interface:
-            return self.args.interface
-
-        if self.args.access_point:
-            # we have 2 interfaces, win which interface is the ip_to_block?
-            for _type, interface in self.db.get_ap_info().items():
-                # _type can be 'wifi_interface' or "ethernet_interface"
-                local_net: str = self.db.get_local_network(interface)
-                ip_obj = ipaddress.ip_address(ip_to_block)
-                if ip_obj in ipaddress.IPv4Network(local_net):
-                    return interface
-
     def decide_blocking(
         self,
         ip_to_block: str,
@@ -469,9 +451,15 @@ class EvidenceHandler(ICore):
             "block": True,
             "tw": timewindow.number,
             # in which localnet is this IP? to which interface does it belong?
-            "interface": self._get_interface_of_ip(ip_to_block),
+            "interface": utils.get_interface_of_ip(
+                ip_to_block, self.db, self.args
+            ),
         }
         blocking_data = json.dumps(blocking_data)
+        print(
+            f"@@@@@@@@@@@@@@@@ detected interface {utils.get_interface_of_ip(
+                ip_to_block, self.db, self.args)} .. for {ip_to_block}"
+        )
         self.db.publish("new_blocking", blocking_data)
         return True
 
@@ -675,7 +663,9 @@ class EvidenceHandler(ICore):
                     "from": True,
                     # in which localnet is this IP?
                     # to which interface does it belong?
-                    "interface": self._get_interface_of_ip(key),
+                    "interface": self._get_interface_of_ip(
+                        key, self.db, self.args
+                    ),
                 }
                 blocking_data = json.dumps(blocking_data)
                 self.db.publish("new_blocking", blocking_data)

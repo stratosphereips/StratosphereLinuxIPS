@@ -189,6 +189,23 @@ class Utils(object):
 
         return obj
 
+    def get_interface_of_ip(self, ip, db, args) -> str:
+        """
+        Gets the interface this IP is attacking on
+        return s None if slips isnt running on an interface
+        """
+        if args.interface:
+            return args.interface
+
+        if args.access_point:
+            # we have 2 interfaces, in which interface is the ip_to_block?
+            for _type, interface in db.get_ap_info().items():
+                # _type can be 'wifi_interface' or "ethernet_interface"
+                local_net: str = db.get_local_network(interface)
+                ip_obj = ipaddress.ip_address(ip)
+                if ip_obj in ipaddress.IPv4Network(local_net):
+                    return interface
+
     def get_gateway_for_iface(self, iface: str) -> Optional[str]:
         """returns the default gateway for the given interface"""
         gws = netifaces.gateways()
