@@ -140,6 +140,16 @@ class Checker:
                     self.main.terminate_slips()
                     return
 
+    def _is_slips_running_non_stop(self) -> bool:
+        """determines if slips is monitoring real time traffic based oin
+        the giving params"""
+        return (
+            self.main.args.interface
+            or self.main.args.access_point
+            or self.main.args.growing
+            or self.main.args.input_module
+        )
+
     def verify_given_flags(self):
         """
         Checks the validity of the given flags.
@@ -206,9 +216,10 @@ class Checker:
             return
 
         # Clear cache if the parameter was included
-        if self.main.args.blocking and not self.main.args.interface:
+        if self.main.args.blocking and not self._is_slips_running_non_stop():
             print(
-                "Blocking is only allowed when running slips using an interface."
+                "Blocking is only allowed when running slips on real time "
+                "traffic. (running with -i, -ap, -im, or -g)"
             )
             self.main.terminate_slips()
             return

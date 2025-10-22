@@ -703,6 +703,12 @@ class Input(ICore):
                         f"for interface: {interface}."
                     )
                     self.print(logline)
+                else:
+                    logline = yellow(
+                        f"Zeek is logging all traffic on interface:"
+                        f" {interface}."
+                    )
+                    self.print(logline)
 
                 self.init_zeek(
                     interface_dir, interface, tcpdump_filter=tcpdump_filter
