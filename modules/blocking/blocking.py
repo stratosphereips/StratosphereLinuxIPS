@@ -143,7 +143,9 @@ class Blocking(IModule):
         This function determines the user's platform and firewall and calls
         the appropriate function to add the rules to the used firewall.
         By default this function blocks all traffic from and to the given ip.
-        return strue if the ip is successfully blocked
+        and it Blocks private IPs on the given interface, and block public
+        IPs on all interfaces
+        returns true if the ip is successfully blocked
         """
 
         if self.firewall != "iptables":
@@ -161,15 +163,25 @@ class Blocking(IModule):
         dport = flags.get("dport")
         sport = flags.get("sport")
         protocol = flags.get("protocol")
+        interface = flags.get("interface")
         # Set the default behaviour to block all traffic from and to an ip
         if from_ is None and to is None:
             from_, to = True, True
         # This dictionary will be used to construct the rule
         options = {
             "protocol": f" -p {protocol}" if protocol is not None else "",
-            "dport": f" --dport {str(dport)}" if dport is not None else "",
-            "sport": f" --sport {str(sport)}" if sport is not None else "",
+            "dport": f" --dport {dport}" if dport is not None else "",
+            "sport": f" --sport {sport}" if sport is not None else "",
         }
+
+        if utils.is_private_ip(ip_to_block) and interface:
+            # block all ingoing AND outgoing packet on the given interface
+            options.update(
+                {
+                    "interface": f" -i {interface} -o {interface}",
+                }
+            )
+
         blocked = False
         if from_:
             # Add rule to block traffic from source ip_to_block (-s)
@@ -243,6 +255,7 @@ class Blocking(IModule):
                 "dport": data.get("dport"),
                 "sport": data.get("sport"),
                 "protocol": data.get("protocol"),
+                "interface": data.get("interface"),
             }
             if block:
                 self._block_ip(ip, flags)

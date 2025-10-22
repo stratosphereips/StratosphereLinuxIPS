@@ -456,10 +456,6 @@ class EvidenceHandler(ICore):
             ),
         }
         blocking_data = json.dumps(blocking_data)
-        print(
-            f"@@@@@@@@@@@@@@@@ detected interface {utils.get_interface_of_ip(
-                ip_to_block, self.db, self.args)} .. for {ip_to_block}"
-        )
         self.db.publish("new_blocking", blocking_data)
         return True
 
@@ -663,7 +659,7 @@ class EvidenceHandler(ICore):
                     "from": True,
                     # in which localnet is this IP?
                     # to which interface does it belong?
-                    "interface": self._get_interface_of_ip(
+                    "interface": utils.get_interface_of_ip(
                         key, self.db, self.args
                     ),
                 }
