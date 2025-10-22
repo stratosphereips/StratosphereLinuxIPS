@@ -562,6 +562,11 @@ class Conn(IFlowalertsAnalyzer):
         """
         if flow.proto.lower() in ("igmp", "icmp", "ipv6-icmp", "arp"):
             return
+
+        if ipaddress.ip_address(flow.daddr).is_multicast:
+            # igmp
+            return
+
         try:
             flow.sport = int(flow.sport)
             flow.dport = int(flow.dport)
