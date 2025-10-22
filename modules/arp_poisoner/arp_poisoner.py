@@ -219,7 +219,9 @@ class ARPPoisoner(IModule):
             return result[0][1].hwsrc
         return None
 
-    def _isolate_target_from_localnet(self, target_ip: str, fake_mac: str):
+    def _isolate_target_from_localnet(
+        self, target_ip: str, fake_mac: str, interface: str
+    ):
         """
         Tells all the available hosts in the localnet that the target_ip is
         at fake_mac using unsolicited arp replies.
@@ -241,7 +243,7 @@ class ARPPoisoner(IModule):
         # found, FW blocking module handles blocking it through the fw,
         # plus we need our cache unpoisoned to be able to get the mac of
         # attackers to poison/reposion them.
-        all_hosts: Set[Tuple[str, str]] = self._arp_scan(self.args.interface)
+        all_hosts: Set[Tuple[str, str]] = self._arp_scan(interface)
         for ip, mac in all_hosts:
             if ip == target_ip:
                 continue
@@ -309,7 +311,7 @@ class ARPPoisoner(IModule):
             pdst=target_ip,
             hwdst=target_mac,
         )
-        sendp(pkt, iface=self.args.interface, verbose=0)
+        sendp(pkt, iface=interface, verbose=0)
 
         # poison the gw, tell it the victim is at a fake mac so traffic
         # from it wont reach the victim
@@ -330,7 +332,7 @@ class ARPPoisoner(IModule):
             pdst=gateway_ip,
             hwdst=gateway_mac,
         )
-        sendp(pkt, iface=self.args.interface, verbose=0)
+        sendp(pkt, iface=interface, verbose=0)
 
     def _attack(self, target_ip: str, interface: str, first_time=False):
         """
@@ -354,7 +356,7 @@ class ARPPoisoner(IModule):
                 return
 
         self._cut_targets_internet(target_ip, target_mac, fake_mac, interface)
-        self._isolate_target_from_localnet(target_ip, fake_mac)
+        self._isolate_target_from_localnet(target_ip, fake_mac, interface)
 
         # we repoison every 10s, we dont wanna log every 10s.
         if first_time:
@@ -397,6 +399,10 @@ class ARPPoisoner(IModule):
             ip = data.get("ip")
             tw: int = data.get("tw")
             interface: str = data.get("interface")
+            print(
+                f"@@@@@@@@@@@@@@@@ we found that ip {ip} belongs to "
+                f"{interface}"
+            )
 
             if not self.can_poison_ip(ip, interface):
                 return

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
+import ipaddress
 
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -383,7 +384,6 @@ class EvidenceHandler(ICore):
         self,
         alert: Alert,
         evidence_causing_the_alert,
-        interface: str,
     ):
         """
         saves alert details in the db and informs exporting modules about it
@@ -393,10 +393,9 @@ class EvidenceHandler(ICore):
         in the db only, without printing it to cli.
         :param evidence_causing_the_alert: Dict[str, Evidence]
         """
-
         self.db.set_alert(alert, evidence_causing_the_alert)
         is_blocked: bool = self.decide_blocking(
-            alert.profile.ip, alert.timewindow, interface
+            alert.profile.ip, alert.timewindow
         )
         # like in the firewall
         profile_already_blocked: bool = self.db.is_blocked_profile_and_tw(
@@ -424,11 +423,27 @@ class EvidenceHandler(ICore):
 
         self.log_alert(alert, blocked=is_blocked)
 
+    def _get_interface_of_ip(self, ip_to_block: str):
+        """
+        Gets the interface this IP is attacking on
+        return s None if slips isnt running on an interface
+        """
+        if self.args.interface:
+            return self.args.interface
+
+        if self.args.access_point:
+            # we have 2 interfaces, win which interface is the ip_to_block?
+            for _type, interface in self.db.get_ap_info().items():
+                # _type can be 'wifi_interface' or "ethernet_interface"
+                local_net: str = self.db.get_local_network(interface)
+                ip_obj = ipaddress.ip_address(ip_to_block)
+                if ip_obj in ipaddress.IPv4Network(local_net):
+                    return interface
+
     def decide_blocking(
         self,
         ip_to_block: str,
         timewindow: TimeWindow,
-        interface: str,
     ) -> bool:
         """
         Decide whether to block or not and send to the blocking module
@@ -453,7 +468,8 @@ class EvidenceHandler(ICore):
             "ip": ip_to_block,
             "block": True,
             "tw": timewindow.number,
-            "interface": interface,
+            # in which localnet is this IP? to which interface does it belong?
+            "interface": self._get_interface_of_ip(ip_to_block),
         }
         blocking_data = json.dumps(blocking_data)
         self.db.publish("new_blocking", blocking_data)
@@ -527,7 +543,7 @@ class EvidenceHandler(ICore):
                 twid: str = str(evidence.timewindow)
                 evidence_type: EvidenceType = evidence.evidence_type
                 timestamp: str = evidence.timestamp
-                interface: str = evidence.interface
+
                 # the database naturally has evidence before they reach
                 # this module. and sometime when this module queries
                 # evidence for a specific timewindow, the db returns all
@@ -620,7 +636,7 @@ class EvidenceHandler(ICore):
                             accumulated_threat_level=accumulated_threat_level,
                             correl_id=list(tw_evidence.keys()),
                         )
-                        self.handle_new_alert(alert, tw_evidence, interface)
+                        self.handle_new_alert(alert, tw_evidence)
 
             if msg := self.get_msg("new_blame"):
                 data = msg["data"]
@@ -657,6 +673,9 @@ class EvidenceHandler(ICore):
                     "block": True,
                     "to": True,
                     "from": True,
+                    # in which localnet is this IP?
+                    # to which interface does it belong?
+                    "interface": self._get_interface_of_ip(key),
                 }
                 blocking_data = json.dumps(blocking_data)
                 self.db.publish("new_blocking", blocking_data)

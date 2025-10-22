@@ -105,7 +105,7 @@ class Profiler(ICore, IObservable):
         # stores the MAC addresses of the gateway of each interface
         # will have interfaces as keys, and MACs as values
         self.gw_macs = {}
-        self.gw_ip = None
+        self.gw_ips = {}
         self.profiler_threads = []
         self.stop_profiler_threads = multiprocessing.Event()
         # each msg received from inputprocess will be put here, and each one
