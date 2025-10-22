@@ -598,10 +598,10 @@ class Profiler(ICore, IObservable):
 
         for interface, local_net in self.localnet_cache.items():
             self.db.set_local_network(local_net, interface)
-            self.print(
-                f"Used local network: {green(local_net)} "
-                f"for interface {green(interface)}"
-            )
+            to_print = f"Used local network: {green(local_net)}"
+            if interface != "default":
+                to_print += f" for interface {green(interface)}."
+            self.print(to_print)
 
     def get_msg_from_input_proc(
         self, q: multiprocessing.Queue, thread_safe=False

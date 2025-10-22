@@ -695,7 +695,6 @@ class Input(ICore):
                 if not os.path.exists(interface_dir):
                     os.makedirs(interface_dir)
 
-                tcpdump_filter = None
                 if interface_info["type"] == "ethernet_interface":
                     cidr = utils.get_cidr_of_interface(interface)
                     tcpdump_filter = f"dst net {cidr}"
@@ -705,6 +704,7 @@ class Input(ICore):
                     )
                     self.print(logline)
                 else:
+                    tcpdump_filter = None
                     logline = yellow(
                         f"Zeek is logging all traffic on interface:"
                         f" {interface}."
@@ -875,7 +875,8 @@ class Input(ICore):
         starting zeek with -f
         """
         command = self._construct_zeek_cmd(pcap_or_interface, tcpdump_filter)
-        self.print(f'Zeek command: {" ".join(command)}', 3, 0)
+        str_cmd = " ".join(command)
+        self.print(f"Zeek command: {str_cmd}", 3, 0)
 
         zeek = subprocess.Popen(
             command,

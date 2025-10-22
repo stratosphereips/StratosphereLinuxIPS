@@ -482,7 +482,7 @@ class Utils(object):
         except Exception:
             return
 
-    def get_all_interfaces(self, args) -> List[str] | None:
+    def get_all_interfaces(self, args) -> List[str]:
         """
         returns a list of all interfaces slips is now monitoring
         :param args: slips args
@@ -491,6 +491,7 @@ class Utils(object):
             return [args.interface]
         if args.access_point:
             return args.access_point.split(",")
+        return ["default"]
 
     def get_mac_for_ip_using_cache(self, ip: str) -> str | None:
         """gets the mac of the given local ip using the local arp cache"""
