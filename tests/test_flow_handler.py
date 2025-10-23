@@ -142,6 +142,7 @@ def test_handle_conn(flow):
     flow.daddr = "192.168.1.1"
     flow.dport = 80
     flow.proto = "tcp"
+    flow.interface = "eth0"
 
     mock_symbol = Mock()
     mock_symbol.compute.return_value = ("A", "B", "C")
@@ -182,7 +183,7 @@ def test_handle_conn(flow):
         flow, flow_handler.profileid, flow_handler.twid, "benign"
     )
     flow_handler.db.add_mac_addr_to_profile.assert_called_with(
-        flow_handler.profileid, flow.smac
+        flow_handler.profileid, flow.smac, flow.interface
     )
     if not flow_handler.running_non_stop:
         flow_handler.publisher.new_MAC.assert_has_calls(
@@ -217,6 +218,7 @@ def test_handle_arp(flow):
     flow.smac = "ff:ee:dd:cc:bb:aa"
     flow.daddr = "192.168.1.1"
     flow.saddr = "192.168.1.2"
+    flow.interface = "eth0"
     flow_handler.publisher = Mock()
     flow_handler.handle_arp()
 
@@ -229,7 +231,7 @@ def test_handle_arp(flow):
         "new_arp", json.dumps(expected_payload)
     )
     flow_handler.db.add_mac_addr_to_profile.assert_called_with(
-        flow_handler.profileid, flow.smac
+        flow_handler.profileid, flow.smac, flow.interface
     )
     flow_handler.publisher.new_MAC.assert_has_calls(
         [call(flow.dmac, flow.daddr), call(flow.smac, flow.saddr)]
@@ -281,6 +283,7 @@ def test_handle_notice(flow):
 
     flow.note = "Gateway_addr_identified: 192.168.1.1"
     flow.msg = "Gateway_addr_identified: 192.168.1.1"
+    flow.interface = "eth0"
 
     flow_handler.db.get_gateway_ip.return_value = False
     flow_handler.db.get_gateway_mac.return_value = False
@@ -291,8 +294,10 @@ def test_handle_notice(flow):
     flow_handler.db.add_out_notice.assert_called_with(
         flow_handler.profileid, flow_handler.twid, flow
     )
-    flow_handler.db.set_default_gateway.assert_any_call("IP", "192.168.1.1")
-    flow_handler.db.set_default_gateway.assert_any_call("MAC", "xyz")
+    flow_handler.db.set_default_gateway.assert_any_call(
+        "IP", "192.168.1.1", "eth0"
+    )
+    flow_handler.db.set_default_gateway.assert_any_call("MAC", "xyz", "eth0")
     flow_handler.db.add_altflow.assert_called_with(
         flow, flow_handler.profileid, flow_handler.twid, "benign"
     )
@@ -308,6 +313,7 @@ def test_handle_dhcp():
         client_addr="192.168.1.1",
         host_name="test-host",
         requested_addr="192.168.1.4",
+        interface="eth0",
     )
     flow_handler = ModuleFactory().create_flow_handler_obj(flow)
     flow_handler.publisher = Mock()
@@ -315,7 +321,7 @@ def test_handle_dhcp():
 
     flow_handler.publisher.new_MAC.assert_called_with(flow.smac, flow.saddr)
     flow_handler.db.add_mac_addr_to_profile.assert_called_with(
-        flow_handler.profileid, flow.smac
+        flow_handler.profileid, flow.smac, flow.interface
     )
     flow_handler.db.store_dhcp_server.assert_called_with("192.168.1.2")
     flow_handler.db.mark_profile_as_dhcp.assert_called_with(
