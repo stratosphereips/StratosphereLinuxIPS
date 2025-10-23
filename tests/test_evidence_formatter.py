@@ -38,10 +38,10 @@ from tests.module_factory import ModuleFactory
             },
             ProfileID("192.168.1.1"),
             TimeWindow(1),
-            "IP 192.168.1.1 detected as malicious in timewindow 1"
+            "converted_time IP 192.168.1.1 detected as malicious in timewindow 1"
             " (start 2023/07/01 12:00:00, stop 2023/07/01 12:05:00) "
             "given the following evidence:\n"
-            "\t- Detected Port scan detected threat level: medium.\n",
+            "\t- Detected Port scan detected threat level: medium. Interface: default.\n",
         ),
         # testcase2: Multiple evidence
         (
@@ -73,11 +73,11 @@ from tests.module_factory import ModuleFactory
             },
             ProfileID("192.168.1.1"),
             TimeWindow(1),
-            "IP 192.168.1.1 detected as malicious in timewindow 1"
+            "converted_time IP 192.168.1.1 detected as malicious in timewindow 1"
             " (start 2023/07/01 12:00:00, stop 2023/07/01 12:05:00) "
             "given the following evidence:\n"
-            "\t- Detected Port scan detected threat level: medium.\n"
-            "\t- Detected Malicious JA3 fingerprint threat level: high.\n",
+            "\t- Detected Port scan detected threat level: medium. Interface: default.\n"
+            "\t- Detected Malicious JA3 fingerprint threat level: high. Interface: default.\n",
         ),
     ],
 )
@@ -105,13 +105,12 @@ def test_format_evidence_for_printing(
             id="123",
             last_flow_datetime="",
         )
-        formatter.line_wrap = Mock()
         formatter.line_wrap = lambda x: x
         result = formatter.format_evidence_for_printing(
             alert,
             all_evidence,
         )
-
+        # remove colors
         result = (
             result.replace("\033[31m", "")
             .replace("\033[36m", "")
