@@ -127,6 +127,7 @@ def test_main_blocking_logic(block, expected_block_called):
         "dport": 80,
         "sport": 12345,
         "protocol": "tcp",
+        "interface": "eth0",
     }
 
     msg_block = {"data": json.dumps(blocking_data)}
@@ -152,6 +153,7 @@ def test_main_blocking_logic(block, expected_block_called):
                         "dport": 80,
                         "sport": 12345,
                         "protocol": "tcp",
+                        "interface": "eth0",
                     },
                 )
             else:
@@ -166,6 +168,7 @@ def test_main_blocking_logic(block, expected_block_called):
                     "dport": 80,
                     "sport": 12345,
                     "protocol": "tcp",
+                    "interface": "eth0",
                 },
             )
             mock_update.assert_not_called()

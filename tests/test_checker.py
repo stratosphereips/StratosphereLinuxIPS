@@ -124,7 +124,6 @@ def test_check_given_flags_root_user(monkeypatch):
 
 
 def test_check_input_type_interface():
-
     checker = ModuleFactory().create_checker_obj()
     checker.main.args.interface = "eth0"
     checker.main.args.filepath = None
@@ -136,12 +135,12 @@ def test_check_input_type_interface():
 
 
 def test_check_input_type_db():
-
     checker = ModuleFactory().create_checker_obj()
     checker.main.args.interface = None
     checker.main.args.filepath = None
-    checker.main.args.db = True
+    checker.main.args.access_point = None
     checker.main.args.input_module = None
+    checker.main.args.db = True
 
     checker.main.redis_man.load_db = mock.MagicMock()
 
@@ -151,11 +150,11 @@ def test_check_input_type_db():
 
 
 def test_check_input_type_input_module():
-
     checker = ModuleFactory().create_checker_obj()
     checker.main.args.interface = None
     checker.main.args.filepath = None
     checker.main.args.db = None
+    checker.main.args.access_point = None
     checker.main.args.input_module = "zeek"
 
     result = checker.get_input_type()
@@ -176,6 +175,7 @@ def test_check_input_type_filepath(filepath, is_file, is_dir, expected_result):
     checker.main.args.interface = None
     checker.main.args.filepath = filepath
     checker.main.args.db = None
+    checker.main.args.access_point = None
     checker.main.args.input_module = None
 
     with mock.patch("os.path.isfile", return_value=is_file), mock.patch(
@@ -189,9 +189,9 @@ def test_check_input_type_filepath(filepath, is_file, is_dir, expected_result):
 
 
 def test_check_input_type_stdin():
-
     checker = ModuleFactory().create_checker_obj()
     checker.main.args.interface = None
+    checker.main.args.access_point = None
     checker.main.args.filepath = "stdin-type"
     checker.main.args.db = None
     checker.main.args.input_module = None
@@ -209,9 +209,9 @@ def test_check_input_type_stdin():
 
 
 def test_check_input_type_no_input():
-
     checker = ModuleFactory().create_checker_obj()
     checker.main.args.interface = None
+    checker.main.args.access_point = None
     checker.main.args.filepath = None
     checker.main.args.db = None
     checker.main.args.input_module = None

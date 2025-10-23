@@ -344,9 +344,11 @@ def test_check_multiple_reconnection_attempts(
 )
 def test_is_ignored_ip_data_upload(ip_address, expected_result):
     conn = ModuleFactory().create_conn_analyzer_obj()
-    conn.gateway = "192.168.1.1"
+    conn.db.get_gateway_ip = Mock(return_value="192.168.1.1")
 
-    assert conn.is_ignored_ip_data_upload(ip_address) is expected_result
+    assert (
+        conn.is_ignored_ip_data_upload(ip_address, "eth0") is expected_result
+    )
 
 
 @pytest.mark.parametrize(
