@@ -182,9 +182,7 @@ class ARPPoisoner(IModule):
         ]
 
         try:
-            print("@@@@@@@@@@@@@@@@ doing arp scan!")
             output = subprocess.check_output(cmd, text=True)
-            print(f"@@@@@@@@@@@@@@@@ all good! .. {output}")
         except subprocess.CalledProcessError as e:
             self.print(
                 f"arp-scan failed: {e.stderr or str(e)} using last "
@@ -229,9 +227,6 @@ class ARPPoisoner(IModule):
         at fake_mac using unsolicited arp replies.
         """
         # send gratuitous arp request to update caches
-        print(
-            "@@@@@@@@@@@@@@@@ send gratuitous arp request to update " "caches"
-        )
         gratuitous_pkt = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(
             op=1,
             pdst=target_ip,
