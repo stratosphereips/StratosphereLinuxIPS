@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
+import traceback
 from asyncio import Task
 from typing import (
     Callable,
@@ -45,8 +46,34 @@ class AsyncModule(IModule):
         except asyncio.CancelledError:
             return  # Task was cancelled, not an error
         if exception:
-            self.print(f"Unhandled exception in task: {exception}")
-            self.print_traceback()
+            self.print(f"Unhandled exception in task: {exception!r} .. ")
+            self.print_traceback_from_exception(exception, task)
+
+    def print_traceback_from_exception(
+        self, exception: BaseException, task: asyncio.Task
+    ):
+        # Try to get the traceback directly from the task
+        tb = exception.__traceback__
+        if tb:
+            formatted_tb = "".join(
+                traceback.format_exception(type(exception), exception, tb)
+            )
+            # Get the last traceback line number
+            last_tb = traceback.extract_tb(tb)[-1]
+            self.print(
+                f"Problem in line {last_tb.lineno} of {last_tb.filename}", 0, 1
+            )
+            self.print(formatted_tb, 0, 1)
+        else:
+            # fallback: print stack if no traceback
+            stack = task.get_stack()
+            if stack:
+                formatted_stack = "".join(
+                    traceback.format_list(traceback.extract_stack(stack[-1]))
+                )
+                self.print(f"Task stack:\n{formatted_stack}", 0, 1)
+            else:
+                self.print("No traceback or stack available.", 0, 1)
 
     async def main(self): ...
 
