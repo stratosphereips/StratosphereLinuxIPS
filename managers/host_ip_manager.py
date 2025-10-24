@@ -74,6 +74,8 @@ class HostIPManager:
         If there was no modified TWs in the host IP, we check if the
         network was changed.
         :param modified_profiles: modified profiles since slips start time
+        :param host_ips: a dict with {interface: host_ip,..} for each
+        interface slips is monitoring
         """
         if not self.main.db.is_running_non_stop():
             return
@@ -84,5 +86,5 @@ class HostIPManager:
                 res[iface] = ip
         if res:
             return res
-
+        # there was no modified TWs in the host IPs, check if network changed
         return self.store_host_ip()
