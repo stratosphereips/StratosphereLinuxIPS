@@ -8,6 +8,7 @@ from typing import (
     Dict,
 )
 
+from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
 
 
@@ -16,12 +17,42 @@ class HostIPManager:
         self.main = main
         self.info_printed = False
 
+    def _get_default_host_ip(self) -> str | None:
+        """
+        Return the host IP of the default interface (IPv4).
+        usefull when slips is running using -g and the user didn't supply
+        an interface, so we need to infer it
+        """
+        try:
+            # Get the default gateway info (usually includes interface name)
+            interface = utils.infer_used_interface()
+            if not interface:
+                return None
+            addrs = netifaces.ifaddresses(interface)
+
+            # AF_INET is for IPv4 addresses
+            inet_info = addrs.get(netifaces.AF_INET)
+            if not inet_info:
+                return None
+
+            return inet_info[0]["addr"]
+        except Exception as e:
+            print(f"Error getting host IP: {e}")
+            return None
+
     def _get_host_ips(self) -> Dict[str, str]:
         """
         tries to determine the machine's IP.
         uses the intrfaces provided by the user with -i or -ap
         returns a dict with {interface_name: host_ip, ..}
         """
+        if self.main.args.growing:
+            # -g is used, user didn't supply the interface
+            # try to get the default interface
+            if default_host_ip := self._get_default_host_ip():
+                return {"default": default_host_ip}
+            return {}
+
         # we use all interfaces when -g is used, otherwise we use the given
         # interface
         interfaces: List[str] = (
@@ -80,11 +111,13 @@ class HostIPManager:
         if not self.main.db.is_running_non_stop():
             return
 
-        res = {}
-        for iface, ip in host_ips.items():
-            if ip in modified_profiles:
-                res[iface] = ip
-        if res:
-            return res
+        if host_ips:
+            res = {}
+            for iface, ip in host_ips.items():
+                if ip in modified_profiles:
+                    res[iface] = ip
+            if res:
+                return res
+
         # there was no modified TWs in the host IPs, check if network changed
         return self.store_host_ip()

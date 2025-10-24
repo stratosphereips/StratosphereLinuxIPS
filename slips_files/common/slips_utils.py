@@ -206,6 +206,21 @@ class Utils(object):
                 if ip_obj in ipaddress.IPv4Network(local_net):
                     return interface
 
+    def infer_used_interface(self) -> str | None:
+        """for when the user is using -g and didnt give slips an interface"""
+        # PS: make sure you neveer run this when slips is given a file or a
+        # pcap
+        try:
+            gateways = netifaces.gateways()
+            default_gateway = gateways.get("default", {})
+            if netifaces.AF_INET not in default_gateway:
+                return None
+
+            interface = default_gateway[netifaces.AF_INET][1]
+            return interface
+        except KeyError:
+            return
+
     def get_gateway_for_iface(self, iface: str) -> Optional[str]:
         """returns the default gateway for the given interface"""
         gws = netifaces.gateways()
