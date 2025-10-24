@@ -392,23 +392,24 @@ def test_get_sent_bytes(all_flows, expected_bytes_sent):
 
 
 @pytest.mark.parametrize(
-    "sbytes, daddr, expected_result, expected_call_count",
+    "sbytes, ignored_ip, daddr, expected_result, expected_call_count",
     [  # Testcase1: Exceeds threshold
-        (100 * 1024 * 1024 + 1, "192.168.1.2", True, 1),
+        (100 * 1024 * 1024 + 1, False, "192.168.1.2", True, 1),
         # Testcase2: Below threshold
-        (10 * 1024 * 1024, "192.168.1.2", False, 0),
+        (10 * 1024 * 1024, False, "192.168.1.2", False, 0),
         # Testcase3: Ignored IP
-        (100 * 1024 * 1024 + 1, "192.168.1.1", False, 0),
+        (100 * 1024 * 1024 + 1, True, "192.168.1.1", False, 0),
     ],
 )
 def test_check_data_upload(
-    mocker, sbytes, daddr, expected_result, expected_call_count
+    mocker, sbytes, daddr, ignored_ip, expected_result, expected_call_count
 ):
     """
     Tests the check_data_upload function with
     various scenarios for data upload.
     """
     conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.is_ignored_ip_data_upload = Mock(return_value=ignored_ip)
     mock_set_evidence = mocker.patch(
         "modules.flowalerts.set_evidence.SetEvidenceHelper.data_exfiltration"
     )
@@ -431,6 +432,7 @@ def test_check_data_upload(
         dmac="",
         state="",
         history="",
+        interface="eth0",
     )
     assert conn.check_data_upload(profileid, twid, flow) is expected_result
     assert mock_set_evidence.call_count == expected_call_count
