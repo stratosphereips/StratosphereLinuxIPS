@@ -29,19 +29,19 @@ class Nfdump(IInputType):
         starttime = utils.convert_ts_format(get_value_at(0), "unixtimestamp")
         endtime = utils.convert_ts_format(get_value_at(1), "unixtimestamp")
         self.flow: NfdumpConn = NfdumpConn(
-            starttime,
-            endtime,
-            get_value_at(2),
-            get_value_at(7),
-            get_value_at(3),
-            get_value_at(5),
-            get_value_at(22),
-            get_value_at(4),
-            get_value_at(6),
-            get_value_at(8),
-            get_value_at(11),
-            get_value_at(13),
-            get_value_at(12),
-            get_value_at(14),
+            starttime=starttime,
+            endtime=endtime,
+            dur=get_value_at(2),
+            proto=get_value_at(7),
+            saddr=get_value_at(3),
+            sport=get_value_at(5),
+            dir_=get_value_at(22),
+            daddr=get_value_at(4),
+            dport=get_value_at(6),
+            state=get_value_at(8),
+            spkts=get_value_at(11),
+            dpkts=get_value_at(13),
+            sbytes=get_value_at(12),
+            dbytes=get_value_at(14),
         )
         return self.flow
