@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch, Mock
 
 import netifaces
 import pytest
+
 from tests.module_factory import ModuleFactory
 import sys
 
@@ -102,6 +103,7 @@ def test_get_host_ips_single_interface(
 ):
     """Test _get_host_ips for single-interface cases."""
     host_ip_man = ModuleFactory().create_host_ip_manager_obj()
+    host_ip_man.main.args.growing = None
     host_ip_man.main.args.interface = args_interface
     host_ip_man.main.args.access_point = args_access_point
 
@@ -117,6 +119,7 @@ def test_get_host_ips_multiple_interfaces_from_access_point(mock_ifaddresses):
     """Test _get_host_ips when using multiple interfaces via --access-point."""
     host_ip_man = ModuleFactory().create_host_ip_manager_obj()
     host_ip_man.main.args.interface = None
+    host_ip_man.main.args.growing = None
     host_ip_man.main.args.access_point = "wlan0,eth0"
 
     def mock_ifaddresses_side_effect(iface):
@@ -130,6 +133,23 @@ def test_get_host_ips_multiple_interfaces_from_access_point(mock_ifaddresses):
 
     result = host_ip_man._get_host_ips()
     assert result == {"wlan0": "10.0.0.5", "eth0": "192.168.0.8"}
+
+
+def test_get_host_ips_growing_zeek_dir(mocker):
+    """Test _get_host_ips when using multiple interfaces via --access-point."""
+    host_ip_man = ModuleFactory().create_host_ip_manager_obj()
+    host_ip_man.main.args.interface = None
+    host_ip_man.main.args.growing = True
+    host_ip_man.main.args.access_point = None
+    host_ip_man._get_default_host_ip = Mock(return_value="10.0.0.5")
+
+    mocker.patch(
+        "slips_files.common.slips_utils.Utils.infer_used_interface",
+        return_value="eth0",
+    )
+
+    result = host_ip_man._get_host_ips()
+    assert result == {"eth0": "10.0.0.5"}
 
 
 @pytest.mark.parametrize(
