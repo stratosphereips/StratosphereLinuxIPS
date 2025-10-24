@@ -166,7 +166,7 @@ def get_zeek_flow(file, flow_type):
         sample_flow = f.readline().replace("\n", "")
 
     sample_flow = json.loads(sample_flow)
-    sample_flow = {"data": sample_flow, "type": flow_type}
+    sample_flow = {"data": sample_flow, "type": flow_type, "interface": "eth0"}
     return sample_flow
 
 
@@ -373,28 +373,26 @@ def test_convert_starttime_to_epoch_invalid_format(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "saddr, is_localnet_set, expected_result",
+    "saddr, localnet_cache, running_non_stop, expected_result",
     [
-        ("192.168.1.1", False, True),
-        ("192.168.1.1", True, False),
-        ("8.8.8.8", False, False),
+        ("192.168.1.1", {}, True, True),
+        ("192.168.1.1", {"eth0": "some_ip"}, True, False),
+        ("8.8.8.8", {"default": "ip"}, False, False),
     ],
 )
-def test_should_set_localnet(saddr, is_localnet_set, expected_result):
+def test_should_set_localnet(
+    saddr, localnet_cache, running_non_stop, expected_result
+):
     profiler = ModuleFactory().create_profiler_obj()
+    profiler.db.is_running_non_stop = Mock(return_value=running_non_stop)
+
     flow = Mock()
     flow.saddr = saddr
-    profiler.localnet_cache = is_localnet_set
+    flow.interface = "eth0"
+
+    profiler.localnet_cache = localnet_cache
 
     assert profiler.should_set_localnet(flow) == expected_result
-
-
-def test_should_set_localnet_already_set():
-    profiler = ModuleFactory().create_profiler_obj()
-    profiler.localnet_cache = True
-    flow = Mock(saddr="1.1.1.1")
-    result = profiler.should_set_localnet(flow)
-    assert result is False
 
 
 def test_check_for_stop_msg(monkeypatch):
@@ -587,6 +585,9 @@ def test_get_local_net(client_ips, saddr, expected_cidr):
     profiler = ModuleFactory().create_profiler_obj()
     profiler.args.interface = None
 
+    flow = Mock()
+    flow.saddr = saddr
+
     if not client_ips:
         with patch.object(
             profiler, "get_private_client_ips", return_value=client_ips
@@ -594,18 +595,14 @@ def test_get_local_net(client_ips, saddr, expected_cidr):
             "slips_files.common.slips_utils.Utils.get_cidr_of_private_ip",
             return_value="10.0.0.0/8",
         ):
-            flow = Mock()
-            flow.saddr = saddr
             local_net = profiler.get_local_net_of_flow(flow)
     else:
         with patch.object(
             profiler, "get_private_client_ips", return_value=client_ips
         ):
-            flow = Mock()
-            flow.saddr = saddr
             local_net = profiler.get_local_net_of_flow(flow)
 
-    assert local_net == expected_cidr
+    assert local_net == {"default": expected_cidr}
 
 
 def test_get_local_net_from_flow():
@@ -621,32 +618,32 @@ def test_get_local_net_from_flow():
         flow.saddr = "10.0.0.1"
         local_net = profiler.get_local_net_of_flow(flow)
 
-    assert local_net == "10.0.0.0/8"
+    assert local_net == {"default": "10.0.0.0/8"}
 
 
 def test_handle_setting_local_net_when_already_set():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.localnet_cache = True
+    local_net = "192.168.1.0/24"
+    profiler.should_set_localnet = Mock(return_value=False)
+    profiler.localnet_cache = {"default": local_net}
     flow = Mock()
     profiler.handle_setting_local_net(flow)
     profiler.db.set_local_network.assert_not_called()
 
 
-def test_handle_setting_local_net(monkeypatch):
+def test_handle_setting_local_net():
     profiler = ModuleFactory().create_profiler_obj()
+    local_net = "192.168.1.0/24"
+    profiler.should_set_localnet = Mock(return_value=True)
+    profiler.get_local_net_of_flow = Mock(return_value={"default": local_net})
+    profiler.get_local_net = Mock(return_value=local_net)
+    profiler.db.is_running_non_stop = Mock(return_value=False)
+
     flow = Mock()
     flow.saddr = "192.168.1.1"
 
-    monkeypatch.setattr(
-        profiler, "should_set_localnet", Mock(return_value=True)
-    )
-
-    monkeypatch.setattr(
-        profiler, "get_local_net", Mock(return_value="192.168.1.0/24")
-    )
-
     profiler.handle_setting_local_net(flow)
-    profiler.db.set_local_network.assert_called_once_with("192.168.1.0/24")
+    profiler.db.set_local_network.assert_called_once_with(local_net, "default")
 
 
 def test_notify_observers_no_observers():
@@ -707,12 +704,13 @@ def test_get_gateway_info_sets_mac_and_ip(
         dmac="00:11:22:33:44:55",
         state="Established",
         history="",
+        interface="eth0",
     )
 
     profiler.get_gateway_info(flow)
 
-    profiler.db.set_default_gateway.assert_any_call("MAC", flow.dmac)
-    profiler.db.set_default_gateway.assert_any_call("IP", "8.8.8.1")
+    profiler.db.set_default_gateway.assert_any_call("MAC", flow.dmac, "eth0")
+    profiler.db.set_default_gateway.assert_any_call("IP", "8.8.8.1", "eth0")
 
 
 @patch("slips_files.core.profiler.utils.is_private_ip")
@@ -769,25 +767,28 @@ def test_get_gateway_info_mac_detected_but_no_ip():
 @pytest.mark.parametrize(
     "info_type, attr_name, db_method, db_value",
     [
-        ("mac", "gw_mac", "get_gateway_mac", "00:1A:2B:3C:4D:5E"),
-        ("ip", "gw_ip", "get_gateway_ip", "192.168.1.1"),
+        ("mac", "gw_macs", "get_gateway_mac", "00:1A:2B:3C:4D:5E"),
+        ("ip", "gw_ips", "get_gateway_ip", "192.168.1.1"),
     ],
 )
 def test_is_gw_info_detected(info_type, attr_name, db_method, db_value):
     # create a profiler object using the ModuleFactory
     profiler = ModuleFactory().create_profiler_obj()
 
-    # mock the profiler's database methods and attributes
-    setattr(profiler, attr_name, None)
-    getattr(profiler.db, db_method).return_value = db_value
+    # ensure gw_macs / gw_ips exist as dicts
+    setattr(profiler, attr_name, {})
 
-    # test with info_type
-    result = profiler.is_gw_info_detected(info_type)
+    # mock the db method
+    mock_method = Mock(return_value=db_value)
+    setattr(profiler.db, db_method, mock_method)
 
-    # assertions
-    assert result
-    assert getattr(profiler, attr_name) == db_value
-    getattr(profiler.db, db_method).assert_called_once()
+    # call the function
+    result = profiler.is_gw_info_detected(info_type, "eth0")
+
+    # verify
+    assert result is True
+    assert getattr(profiler, attr_name)["eth0"] == db_value
+    mock_method.assert_called_once_with("eth0")
 
 
 def test_is_gw_info_detected_unsupported_info_type():
@@ -796,24 +797,9 @@ def test_is_gw_info_detected_unsupported_info_type():
 
     # test with an unsupported info_type
     with pytest.raises(ValueError) as exc_info:
-        profiler.is_gw_info_detected("unsupported_type")
+        profiler.is_gw_info_detected("unsupported_type", "eth0")
 
-    # assertion
     assert str(exc_info.value) == "Unsupported info_type: unsupported_type"
-
-
-def test_is_gw_info_detected_when_attribute_is_already_set():
-    profiler = ModuleFactory().create_profiler_obj()
-
-    # set gw_mac attribute to a value
-    profiler.gw_macs = "00:1A:2B:3C:4D:5E"
-
-    # test with info_type "mac"
-    result = profiler.is_gw_info_detected("mac")
-
-    # assertions
-    assert result
-    assert profiler.gw_macs == "00:1A:2B:3C:4D:5E"
 
 
 def test_process_flow_no_msg():

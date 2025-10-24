@@ -256,8 +256,7 @@ class Profiler(ICore, IObservable):
                 self.gw_ips[flow.interface] = gw_ip
                 self.db.set_default_gateway("IP", gw_ip, flow.interface)
                 self.print(
-                    f"IP address of the gateway detected: "
-                    f"{green(self.gw_ip)}"
+                    f"IP address of the gateway detected: " f"{green(gw_ip)}"
                 )
 
     def add_flow_to_profile(self, flow):
@@ -554,17 +553,18 @@ class Profiler(ICore, IObservable):
 
     def get_local_net_of_flow(self, flow) -> Dict[str, str]:
         """
-        gets the local network from client_ip param in the config file,
+        gets the local network from client_ip
+        param in the config file,
         or by using the localnetwork of the first private
         srcip seen in the traffic
         """
         local_net = {}
-        # For now the local network is only ipv4, but it
-        # could be ipv6 in the future. Todo.
-        # slips is running on a file. we either have a client ip or not
+        # Reaching this func means slips is running on a file. we either
+        # have a client ip or not
         private_client_ips: List[
             Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
         ]
+        # get_private_client_ips from the config file
         if private_client_ips := self.get_private_client_ips():
             # does the client ip from the config already have the localnet?
             for range_ in private_client_ips:
@@ -572,15 +572,15 @@ class Profiler(ICore, IObservable):
                     range_, IPv6Network
                 ):
                     local_net["default"] = str(range_)
+                    return local_net
 
-            # all client ips should belong to the same local network,
-            # it doesn't make sense to have ips belonging to different
-            # networks in the config file!
-            ip: str = str(private_client_ips[0])
-        else:
-            ip: str = flow.saddr
+        # For now the local network is only ipv4, but it
+        # could be ipv6 in the future. Todo.
+        ip: str = flow.saddr
+        if cidr := utils.get_cidr_of_private_ip(ip):
+            local_net["default"] = cidr
+            return local_net
 
-        local_net["default"] = utils.get_cidr_of_private_ip(ip)
         return local_net
 
     def handle_setting_local_net(self, flow):
