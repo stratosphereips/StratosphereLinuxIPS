@@ -101,8 +101,7 @@ class ZeekCommandBuilder:
             "-C",
             *bro_parameter,
             "-e",
-            f"redef tcp_inactivity_timeout={
-            self.tcp_inactivity_timeout}mins;",
+            f"redef tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins;",
             *rotation,
             zeek_scripts_dir,
             # putting -f last is best practice
