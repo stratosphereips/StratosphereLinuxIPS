@@ -567,7 +567,7 @@ def test_is_inbound_traffic(
     host_ip, daddr, analysis_direction, expected_result
 ):
     timeline = ModuleFactory().create_timeline_object()
-    timeline.host_ip = host_ip
+    timeline.host_ips = [host_ip]
     timeline.analysis_direction = analysis_direction
     flow = Mock()
     flow.daddr = daddr

@@ -31,7 +31,7 @@ class Timeline(IModule):
             "new_flow": self.c1,
         }
         self.classifier = FlowClassifier()
-        self.host_ips: str = self.db.get_all_host_ips()
+        self.host_ips: List[str] = self.db.get_all_host_ips()
 
     def read_configuration(self):
         conf = ConfigParser()
