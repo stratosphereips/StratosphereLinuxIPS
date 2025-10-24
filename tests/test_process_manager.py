@@ -317,7 +317,7 @@ def test_should_run_non_stop(
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.is_debugger_active = Mock(return_value=debugger_active)
     process_manager.main.input_type = input_type
-    process_manager.main.is_interface = is_interface
+    process_manager.main.should_run_non_stop = is_interface
 
     assert process_manager.should_run_non_stop() == expected
 

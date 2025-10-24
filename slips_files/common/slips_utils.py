@@ -506,6 +506,9 @@ class Utils(object):
             return [args.interface]
         if args.access_point:
             return args.access_point.split(",")
+        if args.growing:
+            return [self.infer_used_interface()]
+
         return ["default"]
 
     def get_mac_for_ip_using_cache(self, ip: str) -> str | None:

@@ -441,7 +441,11 @@ class Input(ICore):
             self.bro_timeout = float("inf")
 
         self.zeek_dir = self.given_path
-        self.start_observer(self.zeek_dir)
+        if self.args.growing:
+            interface = utils.infer_used_interface()
+        else:
+            interface = None
+        self.start_observer(self.zeek_dir, interface)
 
         # if 1 file is zeek tabs the rest should be the same
         if not hasattr(self, "is_zeek_tabs"):
@@ -463,7 +467,7 @@ class Input(ICore):
                 total_flows += self.get_flows_number(full_path)
 
             # Add log file to the database
-            self.db.add_zeek_file(full_path)
+            self.db.add_zeek_file(full_path, interface)
 
             # in testing mode, we only need to read one zeek file to know
             # that this function is working correctly

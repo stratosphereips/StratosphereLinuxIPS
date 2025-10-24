@@ -4,6 +4,7 @@ from typing import (
     Union,
     Optional,
     Dict,
+    List,
 )
 from uuid import uuid4, getnode
 import datetime
@@ -346,21 +347,7 @@ class IPInfo(AsyncModule):
             # only works if running on an interface
             return
 
-        interfaces = []
-        if self.is_running_in_ap_mode:
-            # ok why?? because when slips is running on normal hosts, we want
-            # the ip of the default gateway which is probably going to be the
-            # gw of the given interface and in the localnet of that interface.
-            # BUT when Slips is running as an AP, we dont want the ip of the
-            # default gateway, we want the ip of the AP. because in this case,
-            # the AP is the gateway of the computers connected to it. we don't
-            # want the ip of the actual gateway that is probably present in
-            # another localnet (the eth0).
-            # return the own IP. because slips is "the gw" for connected clients
-            interfaces = self.args.acess_point.split(",")
-        else:
-            interface: str = getattr(self.args, "interface", None)
-            interfaces.append(interface)
+        interfaces: List[str] = utils.get_all_interfaces(self.args)
 
         gw_ips = {}
         for interface in interfaces:

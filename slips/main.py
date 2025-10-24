@@ -652,8 +652,6 @@ class Main:
 
             # Don't try to stop slips if it's capturing from
             # an interface or a growing zeek dir
-            self.is_interface: bool = self.db.is_running_non_stop()
-
             while not self.proc_man.stop_slips():
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
