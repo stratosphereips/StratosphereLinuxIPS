@@ -17,7 +17,7 @@ class HostIPManager:
         self.main = main
         self.info_printed = False
 
-    def _get_default_host_ip(self) -> str | None:
+    def _get_default_host_ip(self, interface) -> str | None:
         """
         Return the host IP of the default interface (IPv4).
         usefull when slips is running using -g and the user didn't supply
@@ -25,11 +25,7 @@ class HostIPManager:
         """
         try:
             # Get the default gateway info (usually includes interface name)
-            interface = utils.infer_used_interface()
-            if not interface:
-                return None
             addrs = netifaces.ifaddresses(interface)
-
             # AF_INET is for IPv4 addresses
             inet_info = addrs.get(netifaces.AF_INET)
             if not inet_info:
@@ -49,8 +45,12 @@ class HostIPManager:
         if self.main.args.growing:
             # -g is used, user didn't supply the interface
             # try to get the default interface
-            if default_host_ip := self._get_default_host_ip():
-                return {"default": default_host_ip}
+            interface = utils.infer_used_interface()
+            if not interface:
+                return {}
+
+            if default_host_ip := self._get_default_host_ip(interface):
+                return {interface: default_host_ip}
             return {}
 
         # we use all interfaces when -g is used, otherwise we use the given

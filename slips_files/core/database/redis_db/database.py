@@ -1418,7 +1418,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         self.r.hset(f"{profileid}_{twid}", "Reconnections", str(data))
 
     def get_host_ip(self, interface) -> Optional[str]:
-        """returns the latest added host ip"""
+        """returns the latest added host ip
+        :param interface: can be an actual interface or "default"
+        """
         key = f"host_ip_{interface}"
         host_ip: List[str] = self.r.zrevrange(key, 0, 0, withscores=False)
         return host_ip[0] if host_ip else None
