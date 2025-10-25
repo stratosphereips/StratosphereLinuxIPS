@@ -7,6 +7,7 @@
   * [A Zeek Cluster with two workers monitoring each interface](#a-zeek-cluster-with-two-workers-monitoring-each-interface)
 * [Working Solution](#working-solution)
 * [Usage](#usage)
+* [Related Links](#related-links)
 
 
 # IDS-in-the-middle Traffic Routing
@@ -107,3 +108,8 @@ and will be able to detect the host IP, gateway IP and zeek logs of each interfa
 
 **Note:** Slips still supports monitoring of the wifi interface only when running as an access point, by passing only the
 wifi interface using `-i`. But using `-ap` is preferred in AP mode to get full network visibility and protection.
+
+
+# Related Links
+* [Github Issues](https://github.com/stratosphereips/StratosphereLinuxIPS/issues/1276)
+* [Implementation PR](https://github.com/stratosphereips/StratosphereLinuxIPS/pull/1665)
