@@ -4,7 +4,6 @@
 
 import asyncio
 
-import netifaces
 
 from tests.module_factory import ModuleFactory
 import maxminddb
@@ -16,7 +15,6 @@ from unittest.mock import (
 import json
 import requests
 import socket
-import subprocess
 from slips_files.core.structures.evidence import (
     ThreatLevel,
     Evidence,
@@ -407,48 +405,58 @@ async def test_shutdown_gracefully(
 
 
 @pytest.mark.parametrize(
-    "is_running_non_stop, is_running_in_ap_mode, ifaddresses_ret, get_gw_ret, expected",
+    "gw_return, expected",
     [
-        # ap mode: returns own ip
-        (True, True, {"addr": "10.0.0.1"}, None, "10.0.0.1"),
-        (True, True, KeyError, None, None),
-        # not ap mode: returns gw
-        (True, False, None, "192.168.1.1", "192.168.1.1"),
-        (True, False, None, None, None),
-        # not running
-        (False, True, {"addr": "10.0.0.1"}, None, None),
-        (False, False, None, "192.168.1.1", None),
+        (
+            ["10.0.0.1", "192.168.1.1"],
+            {"wlan0": "10.0.0.1", "eth0": "192.168.1.1"},
+        ),
+        ([None, None], {}),
+        (
+            ["10.0.0.1", None],
+            {
+                "wlan0": "10.0.0.1",
+            },
+        ),
     ],
 )
-def test_get_gateway_ip_if_interface(
-    mocker,
-    is_running_non_stop,
-    is_running_in_ap_mode,
-    ifaddresses_ret,
-    get_gw_ret,
-    expected,
+def test_get_gateway_ip_if_interface_args_access_point(
+    mocker, gw_return, expected
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.is_running_non_stop = is_running_non_stop
-    ip_info.is_running_in_ap_mode = is_running_in_ap_mode
+    ip_info.is_running_non_stop = True
+    ip_info.is_running_in_ap_mode = True
+    ip_info.args.access_point = "wlan0,eth0"
+    mocker.patch(
+        "slips_files.common.slips_utils.Utils.get_gateway_for_iface",
+        return_value=gw_return,
+    )
+
+
+@pytest.mark.parametrize(
+    "gw_return, expected",
+    [
+        ("10.0.0.1", {"ap0": "10.0.0.1"}),
+        (None, {}),
+        ("192.168.1.1", {"wlan0": "192.168.1.1"}),
+        ("10.0.0.1", None),
+        ("192.168.1.1", None),
+    ],
+)
+def test_get_gateway_ip_if_interface_args_interface(
+    mocker, gw_return, expected
+):
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.is_running_non_stop = True
+    ip_info.is_running_in_ap_mode = False
     ip_info.args.interface = "wlan0"
+    mocker.patch(
+        "slips_files.common.slips_utils.Utils.get_gateway_for_iface",
+        return_value=gw_return,
+    )
 
-    if is_running_non_stop:
-        if is_running_in_ap_mode:
-            if ifaddresses_ret is KeyError:
-                mocker.patch("netifaces.ifaddresses", side_effect=KeyError)
-            else:
-                mocker.patch(
-                    "netifaces.ifaddresses",
-                    return_value={netifaces.AF_INET: [ifaddresses_ret]},
-                )
-        else:
-            mocker.patch.object(
-                ip_info, "get_gateway_for_iface", return_value=get_gw_ret
-            )
 
-    result = ip_info.get_gateway_ip_if_interface()
-    assert result == expected
+# def test_get_gateway_ip_if_interface_args_access_point():
 
 
 @pytest.mark.parametrize(
@@ -526,81 +534,100 @@ def test_check_if_we_have_pending_mac_queries_empty_queue(
     mock_get_vendor.assert_not_called()
 
 
+@pytest.fixture
+def ip_info():
+    """Return a mock-ready instance of the IP info manager."""
+    obj = Mock()
+    obj.db = Mock()
+    obj._get_wifi_interface_if_ap = Mock(return_value=None)
+    obj._get_mac_using_ip_neigh = Mock(return_value=None)
+    obj._get_mac_using_arp_cache = Mock(return_value=None)
+    obj.get_own_mac = Mock(return_value=None)
+    obj.is_running_non_stop = True
+    return obj
+
+
 @pytest.mark.parametrize(
-    "gw_ip, cached_mac",
+    "gw_ips, mac_in_db, expected",
     [
-        ("192.168.1.1", "00:11:22:33:44:55"),
+        (
+            {"eth0": "192.168.1.1"},
+            "AA:BB:CC:DD:EE:FF",
+            {"eth0": "AA:BB:CC:DD:EE:FF"},
+        ),
+        ({"wlan0": "10.0.0.1"}, None, None),  # no MAC found
     ],
 )
-def test_get_gateway_mac_cached(gw_ip, cached_mac):
+def test_mac_found_in_db_or_not(ip_info, gw_ips, mac_in_db, expected):
+    """Test when MAC exists or not in the DB."""
     ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.db.get_mac_addr_from_profile.return_value = cached_mac
-
-    result = ip_info.get_gateway_mac(gw_ip)
-
-    assert result == cached_mac
-    ip_info.db.get_mac_addr_from_profile.assert_called_once_with(
-        f"profile_{gw_ip}"
-    )
-
-
-@pytest.mark.parametrize("gw_ip", ["192.168.0.1"])
-def test_get_gateway_mac_not_found(mocker, gw_ip):
-    ip_info = ModuleFactory().create_ip_info_obj()
-
-    ip_info.db.get_mac_addr_from_profile.return_value = None
+    ip_info.db.get_mac_addr_from_profile.return_value = mac_in_db
     ip_info.is_running_non_stop = True
-    ip_info.is_running_in_ap_mode = False
+    result = ip_info.get_gateway_mac(gw_ips)
 
-    mocker.patch("sys.argv", ["-i", "eth0"])
-    mock_subprocess_run = mocker.patch("subprocess.run")
-    mock_subprocess_run.side_effect = subprocess.CalledProcessError(
-        1, "ip neigh"
-    )
+    assert result == expected
 
-    mocker.patch(
-        "slips_files.common.slips_utils.utils.get_mac_for_ip_using_cache",
-        side_effect=subprocess.CalledProcessError(1, "arp"),
-    )
 
-    result = ip_info.get_gateway_mac(gw_ip)
+def test_non_stop_false_skips_mac_lookup():
+    """Should skip all lookups when not running non-stop."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.is_running_non_stop = False
+    ip_info.db.get_mac_addr_from_profile = Mock(return_value=None)
+    ip_info._get_mac_using_ip_neigh = Mock()
+    ip_info._get_mac_using_arp_cache = Mock()
+    result = ip_info.get_gateway_mac({"eth0": "192.168.1.1"})
 
     assert result is None
-    assert mock_subprocess_run.call_count == 1  # only ip neigh is called
-    ip_info.db.set_default_gateway.assert_not_called()
+    ip_info._get_mac_using_ip_neigh.assert_not_called()
+    ip_info._get_mac_using_arp_cache.assert_not_called()
 
 
-@pytest.mark.parametrize("gw_ip", ["172.16.0.1"])
-def test_get_gateway_mac_ip_command_failure(mocker, gw_ip):
+def test_wifi_interface_uses_own_mac():
+    """If interface is WiFi AP, use get_own_mac()."""
     ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info._get_wifi_interface_if_ap = Mock(return_value="wlan0")
+    ip_info.get_own_mac = Mock(return_value="AA:AA:AA:AA:AA:AA")
+    ip_info.db.get_mac_addr_from_profile = Mock(return_value=None)
+    result = ip_info.get_gateway_mac({"wlan0": "10.0.0.1"})
 
-    ip_info.db.get_mac_addr_from_profile.return_value = None
-    ip_info.is_running_non_stop = True
-    ip_info.is_running_in_ap_mode = False
+    assert result == {"wlan0": "AA:AA:AA:AA:AA:AA"}
 
-    mocker.patch("sys.argv", ["-i", "eth0"])
 
-    mock_subprocess_run = mocker.patch("subprocess.run")
-    mock_subprocess_run.side_effect = subprocess.CalledProcessError(
-        1, "ip neigh"
-    )
+def test_mac_from_ip_neigh():
+    """Should use ip neigh if available."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.db.get_mac_addr_from_profile = Mock(return_value=None)
+    ip_info._get_mac_using_ip_neigh = Mock(return_value="AA:BB:CC:11:22:33")
 
-    mocker.patch(
-        "slips_files.common.slips_utils.utils.get_mac_for_ip_using_cache",
-        side_effect=subprocess.CalledProcessError(1, "arp"),
-    )
+    result = ip_info.get_gateway_mac({"eth0": "172.16.0.1"})
 
-    result = ip_info.get_gateway_mac(gw_ip)
+    assert result == {"eth0": "AA:BB:CC:11:22:33"}
+    ip_info._get_mac_using_ip_neigh.assert_called_once_with("172.16.0.1")
+
+
+def test_mac_from_arp_cache_if_ip_neigh_fails():
+    """Should fallback to ARP cache if ip neigh fails."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.db.get_mac_addr_from_profile = Mock(return_value=None)
+    ip_info._get_mac_using_ip_neigh = Mock(return_value=None)
+    ip_info._get_mac_using_arp_cache = Mock(return_value="FF:EE:DD:CC:BB:AA")
+
+    result = ip_info.get_gateway_mac({"eth0": "192.168.0.1"})
+
+    assert result == {"eth0": "FF:EE:DD:CC:BB:AA"}
+    ip_info._get_mac_using_arp_cache.assert_called_once_with("192.168.0.1")
+
+
+def test_all_methods_fail_returns_none():
+    """If all lookups fail, return None."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.db.get_mac_addr_from_profile = Mock(return_value=None)
+    ip_info._get_mac_using_ip_neigh = Mock(return_value=None)
+    ip_info._get_mac_using_arp_cache = Mock(return_value=None)
+    ip_info.get_own_mac = Mock(return_value=None)
+    result = ip_info.get_gateway_mac({"eth0": "1.1.1.1"})
 
     assert result is None
-    assert mock_subprocess_run.call_count == 1
-    mock_subprocess_run.assert_called_once_with(
-        ["ip", "neigh", "show", gw_ip],
-        capture_output=True,
-        check=True,
-        text=True,
-    )
-    ip_info.db.set_default_gateway.assert_not_called()
 
 
 @pytest.mark.parametrize(

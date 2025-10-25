@@ -629,7 +629,7 @@ class ProcessManager:
         return (
             self.is_debugger_active()
             or self.main.input_type in ("stdin", "cyst")
-            or self.main.is_interface
+            or self.main.db.is_running_non_stop()
         )
 
     def shutdown_interactive(

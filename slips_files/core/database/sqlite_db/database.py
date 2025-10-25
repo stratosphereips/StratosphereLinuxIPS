@@ -71,7 +71,7 @@ class SQLiteDB(ISQLite):
         """
         return self._flows_db
 
-    def get_altflow_from_uid(self, profileid, twid, uid) -> dict:
+    def get_altflow_from_uid(self, uid) -> dict:
         """Given a uid, get the alternative flow associated with it"""
         condition = f'uid = "{uid}"'
         altflow = self.select("altflows", condition=condition)

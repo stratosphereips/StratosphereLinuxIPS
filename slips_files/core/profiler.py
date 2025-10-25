@@ -28,6 +28,7 @@ from typing import (
     List,
     Union,
     Optional,
+    Dict,
 )
 
 import netifaces
@@ -87,7 +88,7 @@ class Profiler(ICore, IObservable):
         self.timeformat = None
         self.input_type = False
         self.rec_lines = 0
-        self.is_localnet_set = False
+        self.localnet_cache = {}
         self.whitelist = Whitelist(self.logger, self.db)
         self.read_configuration()
         self.symbol = SymbolHandler(self.logger, self.db)
@@ -101,8 +102,10 @@ class Profiler(ICore, IObservable):
         # is set by this proc to tell input proc that we are done
         # processing and it can exit no issue
         self.is_profiler_done_event = is_profiler_done_event
-        self.gw_mac = None
-        self.gw_ip = None
+        # stores the MAC addresses of the gateway of each interface
+        # will have interfaces as keys, and MACs as values
+        self.gw_macs = {}
+        self.gw_ips = {}
         self.profiler_threads = []
         self.stop_profiler_threads = multiprocessing.Event()
         # each msg received from inputprocess will be put here, and each one
@@ -162,14 +165,14 @@ class Profiler(ICore, IObservable):
         rev_twid: str = self.db.get_timewindow(flow.starttime, rev_profileid)
         return rev_profileid, rev_twid
 
-    def get_gw_ip_using_gw_mac(self) -> Optional[str]:
+    def get_gw_ip_using_gw_mac(self, gw_mac) -> Optional[str]:
         """
         gets the ip of the given mac from the db
         prioritizes returning the ipv4. if not found, the function returns
         the ipv6. or none if both are not found.
         """
         # the db returns a serialized list of IPs belonging to this mac
-        gw_ips: str = self.db.get_ip_of_mac(self.gw_mac)
+        gw_ips: str = self.db.get_ip_of_mac(gw_mac)
 
         if not gw_ips:
             return
@@ -186,14 +189,14 @@ class Profiler(ICore, IObservable):
         # all of them are ipv6, return the first
         return gw_ips[0]
 
-    def is_gw_info_detected(self, info_type: str) -> bool:
+    def is_gw_info_detected(self, info_type: str, interface: str) -> bool:
         """
         checks own attributes and the db for the gw mac/ip
         :param info_type: can be 'mac' or 'ip'
         """
         info_mapping = {
-            "mac": ("gw_mac", self.db.get_gateway_mac),
-            "ip": ("gw_ip", self.db.get_gateway_ip),
+            "mac": ("gw_macs", self.db.get_gateway_mac),
+            "ip": ("gw_ips", self.db.get_gateway_ip),
         }
 
         if info_type not in info_mapping:
@@ -201,14 +204,15 @@ class Profiler(ICore, IObservable):
 
         attr, check_db_method = info_mapping[info_type]
 
-        if getattr(self, attr):
+        # did we get this interface's GW IP/MAC yet?
+        if interface in getattr(self, attr, {}):
             # the reason we don't just check the db is we don't want a db
             # call per each flow
             return True
 
         # did some other module manage to get it?
-        if info := check_db_method():
-            setattr(self, attr, info)
+        if info := check_db_method(interface):
+            getattr(self, attr, {}).update({interface: info})
             return True
 
         return False
@@ -226,15 +230,19 @@ class Profiler(ICore, IObservable):
             # some suricata flows dont have that, like SuricataFile objs
             return
 
-        gw_mac_found: bool = self.is_gw_info_detected("mac")
+        gw_mac_found: bool = self.is_gw_info_detected("mac", flow.interface)
+
         if not gw_mac_found:
+            # we didnt get the MAC of the GW of this flow's interface
+            # ok consider the GW MAC = any dst MAC of a flow
+            # going from a private srcip -> a public ip
             if (
                 utils.is_private_ip(flow.saddr)
                 and not utils.is_ignored_ip(flow.daddr)
                 and flow.dmac
             ):
-                self.gw_mac: str = flow.dmac
-                self.db.set_default_gateway("MAC", self.gw_mac)
+                self.gw_macs.update({flow.interface: flow.dmac})
+                self.db.set_default_gateway("MAC", flow.dmac, flow.interface)
                 # self.print(
                 #     f"MAC address of the gateway detected: "
                 #     f"{green(self.gw_mac)}"
@@ -242,13 +250,13 @@ class Profiler(ICore, IObservable):
                 gw_mac_found = True
 
         # we need the mac to be set to be able to find the ip using it
-        if not self.is_gw_info_detected("ip") and gw_mac_found:
-            self.gw_ip: Optional[str] = self.get_gw_ip_using_gw_mac()
-            if self.gw_ip:
-                self.db.set_default_gateway("IP", self.gw_ip)
+        if not self.is_gw_info_detected("ip", flow.interface) and gw_mac_found:
+            gw_ip: Optional[str] = self.get_gw_ip_using_gw_mac(flow.dmac)
+            if gw_ip:
+                self.gw_ips[flow.interface] = gw_ip
+                self.db.set_default_gateway("IP", gw_ip, flow.interface)
                 self.print(
-                    f"IP address of the gateway detected: "
-                    f"{green(self.gw_ip)}"
+                    f"IP address of the gateway detected: " f"{green(gw_ip)}"
                 )
 
     def add_flow_to_profile(self, flow):
@@ -430,8 +438,12 @@ class Profiler(ICore, IObservable):
         returns true only if the saddr of the current flow is ipv4, private
         and we don't have the local_net set already
         """
-        if self.is_localnet_set:
-            return False
+        if self.db.is_running_non_stop():
+            if flow.interface in self.localnet_cache:
+                return False
+        else:
+            if "default" in self.localnet_cache:
+                return False
 
         if flow.saddr == "0.0.0.0":
             return False
@@ -519,73 +531,77 @@ class Profiler(ICore, IObservable):
                 private_clients.append(ip)
         return private_clients
 
-    def get_localnet_of_given_interface(self) -> str | None:
+    def get_localnet_of_given_interface(self) -> Dict[str, str]:
         """
         returns the local network of the given interface only if slips is
         running with -i
         """
-        addrs = netifaces.ifaddresses(self.args.interface).get(
-            netifaces.AF_INET
-        )
-        if not addrs:
-            return
-        for addr in addrs:
-            ip = addr.get("addr")
-            netmask = addr.get("netmask")
-            if ip and netmask:
-                network = ipaddress.IPv4Network(
-                    f"{ip}/{netmask}", strict=False
-                )
-                return str(network)
-        return None
+        local_nets = {}
+        for interface in utils.get_all_interfaces(self.args):
+            addrs = netifaces.ifaddresses(interface).get(netifaces.AF_INET)
+            if not addrs:
+                return
+            for addr in addrs:
+                ip = addr.get("addr")
+                netmask = addr.get("netmask")
+                if ip and netmask:
+                    network = ipaddress.IPv4Network(
+                        f"{ip}/{netmask}", strict=False
+                    )
+                    local_nets[interface] = str(network)
+        return local_nets
 
-    def get_local_net(self, flow) -> Optional[str]:
+    def get_local_net_of_flow(self, flow) -> Dict[str, str]:
         """
-        gets the local network from client_ip param in the config file,
+        gets the local network from client_ip
+        param in the config file,
         or by using the localnetwork of the first private
         srcip seen in the traffic
         """
-        # For now the local network is only ipv4, but it
-        # could be ipv6 in the future. Todo.
-        if self.args.interface:
-            self.is_localnet_set = True
-            return self.get_localnet_of_given_interface()
-
-        # slips is running on a file, we either have a client ip or not
+        local_net = {}
+        # Reaching this func means slips is running on a file. we either
+        # have a client ip or not
         private_client_ips: List[
             Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
         ]
-        private_client_ips = self.get_private_client_ips()
-
-        if private_client_ips:
+        # get_private_client_ips from the config file
+        if private_client_ips := self.get_private_client_ips():
             # does the client ip from the config already have the localnet?
             for range_ in private_client_ips:
                 if isinstance(range_, IPv4Network) or isinstance(
                     range_, IPv6Network
                 ):
-                    self.is_localnet_set = True
-                    return str(range_)
+                    local_net["default"] = str(range_)
+                    return local_net
 
-            # all client ips should belong to the same local network,
-            # it doesn't make sense to have ips belonging to different
-            # networks in the config file!
-            ip: str = str(private_client_ips[0])
-        else:
-            ip: str = flow.saddr
+        # For now the local network is only ipv4, but it
+        # could be ipv6 in the future. Todo.
+        ip: str = flow.saddr
+        if cidr := utils.get_cidr_of_private_ip(ip):
+            local_net["default"] = cidr
+            return local_net
 
-        self.is_localnet_set = True
-        return utils.get_cidr_of_private_ip(ip)
+        return local_net
 
     def handle_setting_local_net(self, flow):
         """
         stores the local network if possible
+        sets the self.localnet_cache dict
         """
         if not self.should_set_localnet(flow):
             return
 
-        local_net: str = self.get_local_net(flow)
-        self.print(f"Used local network: {green(local_net)}")
-        self.db.set_local_network(local_net)
+        if self.db.is_running_non_stop():
+            self.localnet_cache = self.get_localnet_of_given_interface()
+        else:
+            self.localnet_cache = self.get_local_net_of_flow(flow)
+
+        for interface, local_net in self.localnet_cache.items():
+            self.db.set_local_network(local_net, interface)
+            to_print = f"Used local network: {green(local_net)}"
+            if interface != "default":
+                to_print += f" for interface {green(interface)}."
+            self.print(to_print)
 
     def get_msg_from_input_proc(
         self, q: multiprocessing.Queue, thread_safe=False
@@ -660,7 +676,6 @@ class Profiler(ICore, IObservable):
 
             line: dict = msg["line"]
             input_type: str = msg["input_type"]
-
             # TODO who is putting this True here?
             if line is True:
                 continue
@@ -676,7 +691,6 @@ class Profiler(ICore, IObservable):
                 flow = self.input_handler_obj.process_line(line)
                 if not flow:
                     continue
-
                 self.add_flow_to_profile(flow)
                 self.handle_setting_local_net(flow)
                 self.db.increment_processed_flows()

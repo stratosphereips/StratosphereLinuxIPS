@@ -101,7 +101,7 @@ class EvidenceHandler(ICore):
         utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
         # this list will have our local and public ips when using -i
         self.our_ips: List[str] = utils.get_own_ips(ret="List")
-        self.formatter = EvidenceFormatter(self.db)
+        self.formatter = EvidenceFormatter(self.db, self.args)
         # thats just a tmp value, this variable will be set and used when
         # the
         # module is stopping.
@@ -136,8 +136,8 @@ class EvidenceHandler(ICore):
             open(logfile_path, "w").close()
         return open(logfile_path, "a")
 
-    def handle_unable_to_log(self):
-        self.print("Error logging evidence/alert.")
+    def handle_unable_to_log(self, failed_log, error=None):
+        self.print(f"Error logging evidence/alert: {error}. {failed_log}.")
 
     def add_alert_to_json_log_file(self, alert: Alert):
         """
@@ -145,7 +145,7 @@ class EvidenceHandler(ICore):
         """
         idmef_alert: dict = self.idmefv2.convert_to_idmef_alert(alert)
         if not idmef_alert:
-            self.handle_unable_to_log()
+            self.handle_unable_to_log(alert, "Can't convert to IDMEF alert")
             return
 
         try:
@@ -153,8 +153,8 @@ class EvidenceHandler(ICore):
             self.jsonfile.write("\n")
         except KeyboardInterrupt:
             return True
-        except Exception:
-            self.handle_unable_to_log()
+        except Exception as e:
+            self.handle_unable_to_log(alert, e)
 
     def add_evidence_to_json_log_file(
         self,
@@ -166,7 +166,9 @@ class EvidenceHandler(ICore):
         """
         idmef_evidence: dict = self.idmefv2.convert_to_idmef_event(evidence)
         if not idmef_evidence:
-            self.handle_unable_to_log()
+            self.handle_unable_to_log(
+                evidence, "Can't convert to IDMEF evidence"
+            )
             return
 
         try:
@@ -188,8 +190,8 @@ class EvidenceHandler(ICore):
             self.jsonfile.write("\n")
         except KeyboardInterrupt:
             return True
-        except Exception:
-            self.handle_unable_to_log()
+        except Exception as e:
+            self.handle_unable_to_log(evidence, e)
 
     def add_to_log_file(self, data):
         """
@@ -378,7 +380,9 @@ class EvidenceHandler(ICore):
         ) and blocking_module_enabled
 
     def handle_new_alert(
-        self, alert: Alert, evidence_causing_the_alert: Dict[str, Evidence]
+        self,
+        alert: Alert,
+        evidence_causing_the_alert,
     ):
         """
         saves alert details in the db and informs exporting modules about it
@@ -386,8 +390,8 @@ class EvidenceHandler(ICore):
         if a profile already generated an alert in this tw, we send a
         blocking request (to extend its blocking period), and log the alert
         in the db only, without printing it to cli.
+        :param evidence_causing_the_alert: Dict[str, Evidence]
         """
-
         self.db.set_alert(alert, evidence_causing_the_alert)
         is_blocked: bool = self.decide_blocking(
             alert.profile.ip, alert.timewindow
@@ -419,7 +423,9 @@ class EvidenceHandler(ICore):
         self.log_alert(alert, blocked=is_blocked)
 
     def decide_blocking(
-        self, ip_to_block: str, timewindow: TimeWindow
+        self,
+        ip_to_block: str,
+        timewindow: TimeWindow,
     ) -> bool:
         """
         Decide whether to block or not and send to the blocking module
@@ -444,6 +450,10 @@ class EvidenceHandler(ICore):
             "ip": ip_to_block,
             "block": True,
             "tw": timewindow.number,
+            # in which localnet is this IP? to which interface does it belong?
+            "interface": utils.get_interface_of_ip(
+                ip_to_block, self.db, self.args
+            ),
         }
         blocking_data = json.dumps(blocking_data)
         self.db.publish("new_blocking", blocking_data)
@@ -517,6 +527,7 @@ class EvidenceHandler(ICore):
                 twid: str = str(evidence.timewindow)
                 evidence_type: EvidenceType = evidence.evidence_type
                 timestamp: str = evidence.timestamp
+
                 # the database naturally has evidence before they reach
                 # this module. and sometime when this module queries
                 # evidence for a specific timewindow, the db returns all
@@ -646,6 +657,11 @@ class EvidenceHandler(ICore):
                     "block": True,
                     "to": True,
                     "from": True,
+                    # in which localnet is this IP?
+                    # to which interface does it belong?
+                    "interface": utils.get_interface_of_ip(
+                        key, self.db, self.args
+                    ),
                 }
                 blocking_data = json.dumps(blocking_data)
                 self.db.publish("new_blocking", blocking_data)

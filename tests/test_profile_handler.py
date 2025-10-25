@@ -1515,7 +1515,7 @@ def test_add_mac_addr_to_profile_no_existing_mac():
 
     handler.r.hmget.return_value = [None]
     handler.update_mac_of_profile = MagicMock()
-    result = handler.add_mac_addr_to_profile(profileid, mac_addr)
+    result = handler.add_mac_addr_to_profile(profileid, mac_addr, "eth0")
 
     handler.r.hmget.assert_called_once_with("MAC", mac_addr)
     handler.r.hset.assert_called_once_with(
@@ -1537,7 +1537,7 @@ def test_add_mac_addr_to_profile_existing_mac():
     # this should make [incoming_ip in cached_ips] True
     handler.r.hmget.return_value = [json.dumps([profileid.split("_")[1]])]
     handler.update_mac_of_profile = MagicMock()
-    result = handler.add_mac_addr_to_profile(profileid, mac_addr)
+    result = handler.add_mac_addr_to_profile(profileid, mac_addr, "eth0")
     assert result is False
 
     handler.r.hmget.assert_called_once_with("MAC", mac_addr)

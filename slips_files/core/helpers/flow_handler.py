@@ -131,7 +131,9 @@ class FlowHandler:
         # store the original flow as benign in sqlite
         self.db.add_flow(self.flow, self.profileid, self.twid, "benign")
 
-        self.db.add_mac_addr_to_profile(self.profileid, self.flow.smac)
+        self.db.add_mac_addr_to_profile(
+            self.profileid, self.flow.smac, self.flow.interface
+        )
 
         if self.running_non_stop:
             # to avoid publishing duplicate MACs, when running on
@@ -170,15 +172,17 @@ class FlowHandler:
             # foirst check if the gw ip and mac are set by
             # profiler.get_gateway_info() or ip_info module
             gw_ip = False
-            if not self.db.get_gateway_ip():
+            if not self.db.get_gateway_ip(self.flow.interface):
                 # get the gw addr from the msg
                 gw_ip = self.flow.msg.split(": ")[-1].strip()
-                self.db.set_default_gateway("IP", gw_ip)
+                self.db.set_default_gateway("IP", gw_ip, self.flow.interface)
 
-            if not self.db.get_gateway_mac() and gw_ip:
+            if not self.db.get_gateway_mac(self.flow.interface) and gw_ip:
                 gw_mac = self.db.get_mac_addr_from_profile(f"profile_{gw_ip}")
                 if gw_mac:
-                    self.db.set_default_gateway("MAC", gw_mac)
+                    self.db.set_default_gateway(
+                        "MAC", gw_mac, self.flow.interface
+                    )
 
         self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
 
@@ -216,7 +220,9 @@ class FlowHandler:
             self.flow.saddr,
         )
 
-        self.db.add_mac_addr_to_profile(self.profileid, self.flow.smac)
+        self.db.add_mac_addr_to_profile(
+            self.profileid, self.flow.smac, self.flow.interface
+        )
 
         if self.flow.server_addr:
             self.db.store_dhcp_server(self.flow.server_addr)
@@ -264,7 +270,9 @@ class FlowHandler:
         # send to arp module
         to_send = json.dumps(to_send)
         self.db.publish("new_arp", to_send)
-        self.db.add_mac_addr_to_profile(self.profileid, self.flow.smac)
+        self.db.add_mac_addr_to_profile(
+            self.profileid, self.flow.smac, self.flow.interface
+        )
         self.publisher.new_MAC(self.flow.dmac, self.flow.daddr)
         self.publisher.new_MAC(self.flow.smac, self.flow.saddr)
         self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")

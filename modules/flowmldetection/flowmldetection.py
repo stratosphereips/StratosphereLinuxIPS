@@ -148,6 +148,7 @@ class FlowMLDetection(IModule):
                 "endtime",
                 "bytes",
                 "flow_source",
+                "interface",
             ]
             for field in to_drop:
                 try:

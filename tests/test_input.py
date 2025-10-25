@@ -15,29 +15,31 @@ import signal
 
 @pytest.mark.parametrize(
     "input_type,input_information",
-    # the pcaps here must have a conn.log when read by zeek
     [("pcap", "dataset/test7-malicious.pcap")],
 )
-def test_handle_pcap_and_interface(input_type, input_information):
-    # no need to test interfaces because in that case read_zeek_files runs
-    # in a loop and never returns
+def test_handle_pcap_and_interface(tmp_path, input_type, input_information):
     input = ModuleFactory().create_input_obj(input_information, input_type)
-    input.zeek_pid = "False"
-    input.is_zeek_tabs = False
-    input.start_observer = Mock()
+    input.zeek_dir = tmp_path
+    # Mock attributes and methods used inside the function
     input.read_zeek_files = Mock()
-    input.zeek_thread = Mock()
-    with (
-        patch.object(input, "get_flows_number", return_value=500),
-        patch("time.sleep"),
-    ):
-        assert input.handle_pcap_and_interface() is True
-    input.zeek_thread.start.assert_called_once()
-    input.read_zeek_files.assert_called_once()
-    input.start_observer.assert_called_once()
+    input.print_lines_read = Mock()
+    input.mark_self_as_done_processing = Mock()
+    input.stop_observer = Mock()
+    input.init_zeek = Mock()
 
-    # delete the zeek logs created
-    shutil.rmtree(input.zeek_dir)
+    with patch("os.makedirs"), patch("os.path.exists", return_value=True):
+        assert input.handle_pcap_and_interface() is True
+
+    # Assert that the expected methods were called
+    input.init_zeek.assert_called_once_with(input.zeek_dir, input.given_path)
+    input.read_zeek_files.assert_called_once()
+    input.print_lines_read.assert_called_once()
+    input.mark_self_as_done_processing.assert_called_once()
+    input.stop_observer.assert_called_once()
+
+    # Clean up any directories created (safe guard)
+    if os.path.exists(input.zeek_dir):
+        shutil.rmtree(input.zeek_dir, ignore_errors=True)
 
 
 @pytest.mark.parametrize(
@@ -108,7 +110,7 @@ def test_cache_nxt_line_in_file(path: str, is_tabs: str, line_cached: bool):
     input.file_time = {}
     input.is_zeek_tabs = is_tabs
 
-    assert input.cache_nxt_line_in_file(path) == line_cached
+    assert input.cache_nxt_line_in_file(path, "eth0") == line_cached
     if line_cached:
         assert input.cache_lines[path]["type"] == path
         assert input.cache_lines[path]["data"]
@@ -352,7 +354,8 @@ def test_get_file_handle_existing_file():
 
 def test_shutdown_gracefully_all_components_active():
     """
-    Test shutdown_gracefully when all components (open files, zeek, remover thread) are active.
+    Test shutdown_gracefully when all components
+     (open files, zeek, remover thread) are active.
     """
     input_process = ModuleFactory().create_input_obj("", "zeek_log_file")
     input_process.stop_observer = MagicMock(return_value=True)
@@ -362,11 +365,12 @@ def test_shutdown_gracefully_all_components_active():
     input_process.zeek_thread = MagicMock()
     input_process.zeek_thread.start()
     input_process.open_file_handlers = {"test_file.log": MagicMock()}
-    input_process.zeek_pid = 123
+    input_process.zeek_pids = [123, 321]
 
     with patch("os.kill") as mock_kill:
         assert input_process.shutdown_gracefully()
-        mock_kill.assert_called_with(input_process.zeek_pid, signal.SIGKILL)
+        for pid in input_process.zeek_pids:
+            mock_kill.assert_any_call(pid, signal.SIGKILL)
     assert input_process.open_file_handlers["test_file.log"].close.called
 
 
@@ -382,12 +386,12 @@ def test_shutdown_gracefully_no_open_files():
     input_process.zeek_thread = MagicMock()
     input_process.zeek_thread.start()
     input_process.open_file_handlers = {}
-    input_process.zeek_pid = os.getpid()
+    input_process.zeek_pids = [123]
 
     with patch("os.kill") as mock_kill:
         assert input_process.shutdown_gracefully() is True
         mock_kill.assert_called_once_with(
-            input_process.zeek_pid, signal.SIGKILL
+            input_process.zeek_pids[0], signal.SIGKILL
         )
 
 
@@ -401,33 +405,11 @@ def test_shutdown_gracefully_zeek_not_running():
     input_process.remover_thread = MagicMock()
     input_process.remover_thread.start()
     input_process.open_file_handlers = {"test_file.log": MagicMock()}
-    input_process.zeek_pid = os.getpid()
+    input_process.zeek_pids = []
 
     with patch("os.kill") as mock_kill:
         assert input_process.shutdown_gracefully() is True
-        mock_kill.assert_called_once_with(
-            input_process.zeek_pid, signal.SIGKILL
-        )
-    assert input_process.open_file_handlers["test_file.log"].close.called
-
-
-def test_shutdown_gracefully_remover_thread_not_running():
-    """
-    Test shutdown_gracefully when the remover thread is not running.
-    """
-    input_process = ModuleFactory().create_input_obj("", "zeek_log_file")
-    input_process.stop_observer = MagicMock(return_value=True)
-    input_process.stop_queues = MagicMock(return_value=True)
-    input_process.zeek_thread = MagicMock()
-    input_process.zeek_thread.start()
-    input_process.open_file_handlers = {"test_file.log": MagicMock()}
-    input_process.zeek_pid = os.getpid()
-
-    with patch("os.kill") as mock_kill:
-        assert input_process.shutdown_gracefully() is True
-        mock_kill.assert_called_once_with(
-            input_process.zeek_pid, signal.SIGKILL
-        )
+        mock_kill.assert_not_called()
     assert input_process.open_file_handlers["test_file.log"].close.called
 
 

@@ -343,9 +343,10 @@ Meaning it wil kick out the malicious device from the AP.
 
 
 1. Connect your RPI to your router using an ethernet cable
-2. Run your RPI as an access point using [create_ap](https://github.com/oblique/create_ap)
+2. Install [linux-wifi-hotspot](https://github.com/lakinduakash/linux-wifi-hotspot/blob/master/src/scripts/README.md)
+3. Start the access point (in NAT mode)
 
-`sudo create_ap wlan0 eth0 rpi_wifi mysecurepassword -c 40`
+  `sudo create_ap wlan0 eth0 rpi_wifi mysecurepassword -c 40`
 
 where `wlan0` is the wifi interface of your RPI, `eth0` is the ethernet interface and `-c 40` is the channel of the access point.
 
@@ -360,13 +361,13 @@ Check the [Debugging common AP errors](https://stratospherelinuxips.readthedocs.
 
 
 
-3. Run Slips in the RPI using the command below to listen to the traffic from the access point.
+4. Run Slips in the RPI using the command below to listen to the traffic from the access point.
 
 ```bash
 ./slips.py -i wlan0
 ```
 
-4. (Optional) If you want to block malicious devices, run Slips with the `-p` parameter. Using this parameter will
+5. (Optional) If you want to block malicious devices, run Slips with the `-p` parameter. Using this parameter will
 block all traffic to and from the malicious device when slips sets an alert.
 
 ```bash

@@ -151,6 +151,7 @@ class ZeekJSON(IInputType, Zeek):
 
     def process_line(self, new_line: dict):
         line = new_line["data"]
+        interface = new_line["interface"]
 
         if not isinstance(line, dict):
             return False
@@ -165,7 +166,7 @@ class ZeekJSON(IInputType, Zeek):
         else:
             starttime = ""
 
-        flow_values = {"starttime": starttime}
+        flow_values = {"starttime": starttime, "interface": interface}
 
         for zeek_field, slips_field in line_map.items():
             if not slips_field:

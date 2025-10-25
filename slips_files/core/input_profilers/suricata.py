@@ -47,7 +47,7 @@ class Suricata(IInputType):
 
         if not line:
             return
-        # these fields are common in all suricata lines regardless of the event type
+
         event_type = line["event_type"]
         flow_id = line["flow_id"]
         saddr = line["src_ip"]
@@ -82,46 +82,49 @@ class Suricata(IInputType):
             endtime = utils.convert_ts_format(
                 get_value_at("flow", "end"), "unixtimestamp"
             )
-            self.flow: SuricataFlow = SuricataFlow(
-                flow_id,
-                saddr,
-                sport,
-                daddr,
-                dport,
-                proto,
-                appproto,
-                starttime,
-                endtime,
-                int(get_value_at("flow", "pkts_toserver", 0)),
-                int(get_value_at("flow", "pkts_toclient", 0)),
-                int(get_value_at("flow", "bytes_toserver", 0)),
-                int(get_value_at("flow", "bytes_toclient", 0)),
-                get_value_at("flow", "state", ""),
+
+            self.flow = SuricataFlow(
+                uid=flow_id,
+                saddr=saddr,
+                sport=sport,
+                daddr=daddr,
+                dport=dport,
+                proto=proto,
+                appproto=appproto,
+                starttime=starttime,
+                endtime=endtime,
+                spkts=int(get_value_at("flow", "pkts_toserver", 0)),
+                dpkts=int(get_value_at("flow", "pkts_toclient", 0)),
+                sbytes=int(get_value_at("flow", "bytes_toserver", 0)),
+                dbytes=int(get_value_at("flow", "bytes_toclient", 0)),
+                state=get_value_at("flow", "state", ""),
             )
 
         elif event_type == "http":
-            self.flow: SuricataHTTP = SuricataHTTP(
-                timestamp,
-                flow_id,
-                saddr,
-                sport,
-                daddr,
-                dport,
-                proto,
-                appproto,
-                get_value_at("http", "http_method", ""),
-                get_value_at("http", "hostname", ""),
-                get_value_at("http", "url", ""),
-                get_value_at("http", "http_user_agent", ""),
-                get_value_at("http", "status", ""),
-                get_value_at("http", "protocol", ""),
-                int(get_value_at("http", "request_body_len", 0)),
-                int(get_value_at("http", "length", 0)),
+            self.flow = SuricataHTTP(
+                starttime=timestamp,
+                uid=flow_id,
+                saddr=saddr,
+                sport=sport,
+                daddr=daddr,
+                dport=dport,
+                proto=proto,
+                appproto=appproto,
+                method=get_value_at("http", "http_method", ""),
+                host=get_value_at("http", "hostname", ""),
+                uri=get_value_at("http", "url", ""),
+                user_agent=get_value_at("http", "http_user_agent", ""),
+                status_code=get_value_at("http", "status", ""),
+                version=get_value_at("http", "protocol", ""),
+                request_body_len=int(
+                    get_value_at("http", "request_body_len", 0)
+                ),
+                response_body_len=int(get_value_at("http", "length", 0)),
             )
 
         elif event_type == "dns":
-            answers: list = self.get_answers(line)
-            self.flow: SuricataDNS = SuricataDNS(
+            answers = self.get_answers(line)
+            self.flow = SuricataDNS(
                 starttime=timestamp,
                 uid=flow_id,
                 saddr=saddr,
@@ -132,55 +135,63 @@ class Suricata(IInputType):
                 appproto=appproto,
                 query=get_value_at("dns", "rrname", ""),
                 TTLs=get_value_at("dns", "ttl", ""),
-                qtype_name=get_value_at("qtype_name", "rrtype", ""),
+                qtype_name=get_value_at("dns", "rrtype", ""),
                 answers=answers,
             )
 
         elif event_type == "tls":
-            self.flow: SuricataTLS = SuricataTLS(
-                timestamp,
-                flow_id,
-                saddr,
-                sport,
-                daddr,
-                dport,
-                proto,
-                appproto,
-                get_value_at("tls", "version", ""),
-                get_value_at("tls", "subject", ""),
-                get_value_at("tls", "issuerdn", ""),
-                get_value_at("tls", "sni", ""),
-                get_value_at("tls", "notbefore", ""),
-                get_value_at("tls", "notafter", ""),
-                get_value_at("tls", "sni", ""),
+            self.flow = SuricataTLS(
+                starttime=timestamp,
+                uid=flow_id,
+                saddr=saddr,
+                sport=sport,
+                daddr=daddr,
+                dport=dport,
+                proto=proto,
+                appproto=appproto,
+                sslversion=get_value_at("tls", "version", ""),
+                subject=get_value_at("tls", "subject", ""),
+                issuer=get_value_at("tls", "issuerdn", ""),
+                server_name=get_value_at("tls", "sni", ""),
+                notbefore=get_value_at("tls", "notbefore", ""),
+                notafter=get_value_at("tls", "notafter", ""),
             )
 
         elif event_type == "fileinfo":
-            self.flow: SuricataFile = SuricataFile(
-                timestamp,
-                flow_id,
-                saddr,
-                sport,
-                daddr,
-                dport,
-                proto,
-                appproto,
-                get_value_at("fileinfo", "size", ""),
+            self.flow = SuricataFile(
+                starttime=timestamp,
+                uid=flow_id,
+                saddr=saddr,
+                sport=sport,
+                daddr=daddr,
+                dport=dport,
+                proto=proto,
+                appproto=appproto,
+                size=int(get_value_at("fileinfo", "size", 0)),
             )
+
         elif event_type == "ssh":
-            self.flow: SuricataSSH = SuricataSSH(
-                timestamp,
-                flow_id,
-                saddr,
-                sport,
-                daddr,
-                dport,
-                proto,
-                appproto,
-                get_value_at("ssh", "client", {}).get("software_version", ""),
-                get_value_at("ssh", "client", {}).get("proto_version", ""),
-                get_value_at("ssh", "server", {}).get("software_version", ""),
+            self.flow = SuricataSSH(
+                starttime=timestamp,
+                uid=flow_id,
+                saddr=saddr,
+                sport=sport,
+                daddr=daddr,
+                dport=dport,
+                proto=proto,
+                appproto=appproto,
+                client=get_value_at("ssh", "client", {}).get(
+                    "software_version", ""
+                ),
+                version=get_value_at("ssh", "client", {}).get(
+                    "proto_version", ""
+                ),
+                server=get_value_at("ssh", "server", {}).get(
+                    "software_version", ""
+                ),
             )
+
         else:
             return False
+
         return self.flow

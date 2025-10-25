@@ -31,7 +31,7 @@ class Timeline(IModule):
             "new_flow": self.c1,
         }
         self.classifier = FlowClassifier()
-        self.host_ip: str = self.db.get_host_ip()
+        self.host_ips: List[str] = self.db.get_all_host_ips()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -55,7 +55,7 @@ class Timeline(IModule):
             # slips only detects inbound traffic in the "all" direction
             return False
 
-        return flow.daddr == self.host_ip or utils.is_ip_in_client_ips(
+        return flow.daddr in self.host_ips or utils.is_ip_in_client_ips(
             flow.daddr, self.client_ips
         )
 
@@ -135,9 +135,7 @@ class Timeline(IModule):
         return {"info": ssh_activity}
 
     def process_altflow(self, profileid, twid, flow) -> dict:
-        alt_flow: dict = self.db.get_altflow_from_uid(
-            profileid, twid, flow.uid
-        )
+        alt_flow: dict = self.db.get_altflow_from_uid(flow.uid)
         altflow_info = {"info": ""}
 
         if not alt_flow:

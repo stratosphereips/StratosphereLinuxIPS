@@ -53,7 +53,7 @@ def test_can_poison_ip(
         if is_gw:
             poisoner.db.get_gateway_ip = MagicMock(return_value=ip)
         poisoner.is_broadcast = MagicMock(return_value=is_bcast)
-        assert poisoner.can_poison_ip(ip) == expected
+        assert poisoner.can_poison_ip(ip, "eth0") == expected
 
 
 def test__arp_scan(poisoner):
@@ -122,7 +122,7 @@ def test__cut_targets_internet(poisoner, ip, mac, gw_mac):
         ),
         patch.object(poisoner.db, "get_gateway_mac", return_value=gw_mac),
     ):
-        poisoner._cut_targets_internet(ip, mac, gw_mac)
+        poisoner._cut_targets_internet(ip, mac, gw_mac, "eth0")
         assert sendp.call_count == 2
 
 
@@ -143,7 +143,7 @@ def test__isolate_target_from_localnet(poisoner):
             }
         )
         poisoner._isolate_target_from_localnet(
-            "192.168.1.100", "aa:aa:aa:aa:aa:aa"
+            "192.168.1.100", "aa:aa:aa:aa:aa:aa", "eth0"
         )
         assert sendp.call_count == 2
 

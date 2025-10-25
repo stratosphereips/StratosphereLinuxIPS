@@ -166,7 +166,7 @@ class ARP(IModule):
         # node to announce or update its IP to MAC mapping
         # to the entire network. It shouldn't be marked as an arp scan
         # Don't detect arp scan from the GW router
-        if self.db.get_gateway_ip() == flow.saddr:
+        if self.db.get_gateway_ip(flow.interface) == flow.saddr:
             return False
 
         # What is this?
@@ -417,8 +417,8 @@ class ARP(IModule):
             attackers_ip = flow.saddr
             victims_ip = original_ip
 
-            gateway_ip = self.db.get_gateway_ip()
-            gateway_mac = self.db.get_gateway_mac()
+            gateway_ip = self.db.get_gateway_ip(flow.interface)
+            gateway_mac = self.db.get_gateway_mac(flow.interface)
             if flow.saddr == gateway_ip:
                 saddr = f"The gateway {flow.saddr}"
             else:
