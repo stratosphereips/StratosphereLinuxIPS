@@ -1,7 +1,15 @@
+# Table Of Contents
+* [IDS-in-the-middle Traffic Routing](#ids-in-the-middle-traffic-routing)
+* [Problem Statement](#problem-statement)
+* [Researched Solutions](#researched-solutions)
+  * [Using Bridge mode instead of NAT](#using-bridge-mode-instead-of-nat-for-the-rpi-access-point-)
+  * [Port Mirroring](#port-mirroring)
+  * [A Zeek Cluster with two workers monitoring each interface](#a-zeek-cluster-with-two-workers-monitoring-each-interface)
+* [Working Solution](#working-solution)
+* [Usage](#usage)
+
+
 # IDS-in-the-middle Traffic Routing
-
-
-
 
 # Problem Statement
 With the current design of Slips, Slips only supports monitoring one interface with Zeek.
@@ -90,3 +98,12 @@ The wifi interface should be listed first, followed by the ethernet interface.
 or
 
 ```./slips.py -ap wlan0,eth0```
+
+
+Slips will produce zeek logs in two separate directories inside your output directory:
+`zeek_files/eth0/` and `zeek_files/wlan0/`.
+and will be able to detect the host IP, gateway IP and zeek logs of each interface separately.
+
+
+**Note:** Slips still supports monitoring of the wifi interface only when running as an access point, by passing only the
+wifi interface using `-i`. But using `-ap` is preferred in AP mode to get full network visibility and protection.
