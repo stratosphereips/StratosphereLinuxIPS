@@ -430,7 +430,11 @@ class Input(ICore):
         return count
 
     def read_zeek_folder(self):
-        # This is the case that a folder full of zeek files is passed with -f
+        """
+        This is the case that a folder full of zeek files is passed with -f
+        DISCLAIMER: this func does not run when slips is running on an
+        interface with -i or -ap
+        """
         # wait max 10 seconds before stopping slips if no new flows are read
         self.bro_timeout = 10
         growing_zeek_dir: bool = self.db.is_growing_zeek_dir()
@@ -444,7 +448,7 @@ class Input(ICore):
         if self.args.growing:
             interface = utils.infer_used_interface()
         else:
-            interface = None
+            interface = "default"
         self.start_observer(self.zeek_dir, interface)
 
         # if 1 file is zeek tabs the rest should be the same
@@ -612,7 +616,7 @@ class Input(ICore):
             self.total_flows = total_flows
 
         # Add log file to database
-        self.db.add_zeek_file(self.given_path)
+        self.db.add_zeek_file(self.given_path, "default")
 
         # this timeout is the only thing that
         # makes the read_zeek_files() return

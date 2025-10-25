@@ -1328,6 +1328,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         return self.r.hgetall(self.constants.ZEEK_FILES)
 
     def _get_gw_info(self, interface: str) -> Dict[str, str] | None:
+        """
+        gets the gw of the given interface, when slips is runnuning on a
+        file, it uses "default" as the interface
+        """
+        if not interface:
+            interface = "default"
+
         gw_info: str = self.r.hget(self.constants.DEFAULT_GATEWAY, interface)
         if gw_info:
             gw_info: Dict[str, str] = json.loads(gw_info)
