@@ -30,7 +30,7 @@ whois==1.20240129.2
 flask
 tldextract==5.3.0
 termcolor==3.1.0
-yappi==1.6.10
+yappi==1.7.3
 pytest-sugar==1.1.1
 aid_hash
 black==24.10.0
