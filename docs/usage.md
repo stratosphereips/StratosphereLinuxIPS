@@ -87,6 +87,11 @@ tr:nth-child(even) {
 		<td>-f</td>
 		<td>./slips.py -f zeek </td>
 	</tr>
+    <tr>
+		<td>Access Point</td>
+		<td>-ap</td>
+		<td>./slips.py -ap wifi_interface,eth_interface </td>
+	</tr>
 
 </table>
 
@@ -746,6 +751,27 @@ All zeek lines taken from stdin should be in json form and are treated as conn.l
 This feature is specifically designed to allow slips to interact with network simulators and scripts.
 
 
+## Slips as an access point
+
+Slips supports monitoring two interface with Zeek when it's running as an access point.
+
+To use this feature, simply pass the `--access-point` or `-ap` argument followed by a comma-separated list of interfaces
+to monitor when running slips.
+
+The wifi interface should be listed first, followed by the ethernet interface.
+
+```./slips.py --access-point  wlan0,eth0```
+
+or
+
+```./slips.py -ap wlan0,eth0```
+
+
+Slips will produce zeek logs in two separate directories inside your output directory:
+`zeek_files/eth0/` and `zeek_files/wlan0/`.
+and will be able to detect the host IP, gateway IP and zeek logs of each interface separately.
+
+
 ## Plug in a zeek script
 
 Slips supports automatically running a custom zeek script by adding it to ```zeek-scripts``` dir and adding the file
@@ -789,6 +815,7 @@ this file can be used for training Slips RNN module.
 - ```-w``` or  ```--webinterface``` Start Slips web interface automatically
 - ```-V``` or  ```--version``` Used for checking your running Slips version flags.
 - ```-im``` or  ```--input-module``` Used for reading flows from a module other than input process.
+- ```-ap``` or  ```--access-point``` Used for reading packets from two interfaces when Slips is running as an access point.
 
 
 ## Limiting Slips resource consumption
