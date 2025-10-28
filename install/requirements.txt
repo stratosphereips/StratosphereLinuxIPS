@@ -18,7 +18,7 @@ slackclient==2.9.4
 psutil==7.1.2
 six==1.17.0
 pytest==8.4.2
-pytest-mock==3.15.0
+pytest-mock==3.15.1
 pytest-xdist==3.8.0
 scipy==1.15.1
 scikit-learn==1.7.2
