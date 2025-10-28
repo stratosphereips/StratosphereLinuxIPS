@@ -12,7 +12,7 @@ tensorflow==2.16.1
 Keras
 validators==0.35.0
 ipwhois==1.2.0
-matplotlib==3.10.1
+matplotlib==3.10.7
 scikit_learn
 slackclient==2.9.4
 psutil==7.1.2
