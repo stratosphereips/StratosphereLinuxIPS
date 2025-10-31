@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from flask import Blueprint
 from flask import render_template
-from flask import escape
+from markupsafe import escape
 import json
 from collections import defaultdict
 from typing import Dict, List
