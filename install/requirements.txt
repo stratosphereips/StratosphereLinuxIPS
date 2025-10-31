@@ -2,7 +2,7 @@ maxminddb==3.0.0
 setuptools<81
 numpy==1.26.4
 watchdog==5.0.0
-redis==5.2.1
+redis==7.0.1
 urllib3==2.5.0
 pandas==2.3.3
 tzlocal==5.3.1
