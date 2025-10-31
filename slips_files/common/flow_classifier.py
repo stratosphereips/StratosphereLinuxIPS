@@ -60,6 +60,7 @@ class FlowClassifier:
             "suricata_http": SuricataHTTP,
             "suricata_dns": SuricataDNS,
             "suricata_tls": SuricataTLS,
+            "suricata_ssl": SuricataTLS,
             "suricata_files": SuricataFile,
             "suricata_ssh": SuricataSSH,
         }

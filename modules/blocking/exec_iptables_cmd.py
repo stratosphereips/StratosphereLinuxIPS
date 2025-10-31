@@ -22,7 +22,7 @@ def exec_iptables_command(sudo: str, action, ip_to_block, flag, options):
     for key in options.keys():
         command += options[key]
     command += " -j DROP"
-    # Execute
+
     exit_status = os.system(command)
 
     # 0 is the success value

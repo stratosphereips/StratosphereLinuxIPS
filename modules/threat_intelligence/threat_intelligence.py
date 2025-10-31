@@ -1197,13 +1197,17 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         2. ip is public
         3. ip is not our host ip
         """
-        host_ip: str = self.db.get_host_ip()
-        return (
-            "src" in ip_state
-            and ipaddress.ip_address(ip).is_global
-            and ip != host_ip
-            and not utils.is_ip_in_client_ips(ip, self.client_ips)
-        )
+        # if slips was monitoring multiple interfaces, it'd have multiple
+        # host ips
+        for host_ip in self.db.get_all_host_ips():
+            if (
+                "src" in ip_state
+                and ipaddress.ip_address(ip).is_global
+                and ip != host_ip
+                and not utils.is_ip_in_client_ips(ip, self.client_ips)
+            ):
+                return True
+        return False
 
     def search_online_for_ip(self, ip: str, ip_state: str):
         if self.is_inbound_traffic(ip, ip_state):

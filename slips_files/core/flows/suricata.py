@@ -8,6 +8,8 @@ from typing import (
 )
 
 from slips_files.common.slips_utils import utils
+from slips_files.core.flows.base_flow import BaseFlow
+
 
 #     suricata available event_type values:
 #     -flow
@@ -34,8 +36,8 @@ def get_total_pkts(flow):
     return flow.dpkts + flow.spkts
 
 
-@dataclass
-class SuricataFlow:
+@dataclass(kw_only=True)
+class SuricataFlow(BaseFlow):
     # A suricata line of flow type usually has 2 components.
     # 1. flow information
     # 2. tcp information
@@ -86,8 +88,8 @@ class SuricataFlow:
         self.uid = str(self.uid)
 
 
-@dataclass
-class SuricataHTTP:
+@dataclass(kw_only=True)
+class SuricataHTTP(BaseFlow):
     starttime: str
     uid: str
 
@@ -124,8 +126,8 @@ class SuricataHTTP:
         self.uid = str(self.uid)
 
 
-@dataclass
-class SuricataDNS:
+@dataclass(kw_only=True)
+class SuricataDNS(BaseFlow):
     starttime: str
     uid: str
 
@@ -153,8 +155,8 @@ class SuricataDNS:
         self.uid = str(self.uid)
 
 
-@dataclass
-class SuricataTLS:
+@dataclass(kw_only=True)
+class SuricataTLS(BaseFlow):
     starttime: str
     uid: str
 
@@ -183,8 +185,8 @@ class SuricataTLS:
         self.uid = str(self.uid)
 
 
-@dataclass
-class SuricataFile:
+@dataclass(kw_only=True)
+class SuricataFile(BaseFlow):
     starttime: str
     uid: str
 
@@ -212,8 +214,8 @@ class SuricataFile:
         self.uid = str(self.uid)
 
 
-@dataclass
-class SuricataSSH:
+@dataclass(kw_only=True)
+class SuricataSSH(BaseFlow):
     starttime: str
     uid: str
 

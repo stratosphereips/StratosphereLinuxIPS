@@ -51,21 +51,24 @@ class IDMEFv2:
         self.printer = Printer(logger, self.name)
         self.db = db
         self.model: str = utils.get_slips_version()
-        self.analyzer = {
-            "IP": self.get_host_ip(),
+
+        # the used idmef version
+        self.version = "2.0.3"
+
+    def _get_analyzer(self, interface):
+        return {
+            "IP": self.get_host_ip(interface),
             "Name": "Slips",
             "Model": self.model,
             "Category": ["NIDS"],
             "Data": ["Flow", "Network"],
             "Method": ["Heuristic"],
         }
-        # the used idmef version
-        self.version = "2.0.3"
 
-    def get_host_ip(self) -> str:
+    def get_host_ip(self, interface: str) -> str:
         if not self.db.is_running_non_stop():
             return DEFAULT_ADDRESS
-        if host_ip := self.db.get_host_ip():
+        if host_ip := self.db.get_host_ip(interface):
             return host_ip
         return DEFAULT_ADDRESS
 
@@ -140,7 +143,9 @@ class IDMEFv2:
             msg.update(
                 {
                     "Version": self.version,
-                    "Analyzer": self.analyzer,
+                    # alerts aren't tied to a specific interface, and alert
+                    # is a combination of evidence from any interface
+                    "Analyzer": self._get_analyzer(None),
                     "Source": [{"IP": alert.profile.ip}],
                     "ID": alert.id,
                     "Status": "Incident",
@@ -198,7 +203,7 @@ class IDMEFv2:
             msg.update(
                 {
                     "Version": self.version,
-                    "Analyzer": self.analyzer,
+                    "Analyzer": self._get_analyzer(evidence.interface),
                     "Status": IDMEFv2Status.EVIDENCE.value,
                     # that is a uuid4()
                     "ID": evidence.id,

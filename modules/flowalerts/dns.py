@@ -675,7 +675,7 @@ class DNS(IFlowalertsAnalyzer):
             # outside of localnet
             return
 
-        own_local_network = self.db.get_local_network()
+        own_local_network = self.db.get_local_network(flow.interface)
         if not own_local_network:
             # the current local network wasn't set in the db yet
             # it's impossible to get here becaus ethe localnet is set before

@@ -7,7 +7,7 @@ import time
 from threading import Lock
 import json
 import ipaddress
-from typing import Set, Tuple
+from typing import Set, Tuple, Dict
 from scapy.all import ARP, Ether
 from scapy.sendrecv import sendp, srp
 import random
@@ -53,6 +53,12 @@ class ARPPoisoner(IModule):
         self._scan_delay = 30
         self._last_scan_time = 0
         self.last_arp_scan_output = set()
+        self.ap_info: None | Dict[str, str] = self.db.get_ap_info()
+        self.is_running_in_ap_mode = True if self.ap_info else False
+        # contains interfaces as keys and and their GW ip as values
+        self.gw_ip: Dict[str, str] = {}
+        # keeps track of which interface were blocked ips attacking on
+        self.ip_interface_map = {}
 
     def log(self, text):
         """Logs the given text to the blocking log file"""
@@ -165,8 +171,16 @@ class ARPPoisoner(IModule):
             # use the cached output if it's not time to rescan
             return self.last_arp_scan_output
 
-        # --retry=0 to avoid redundant retries.
-        cmd = ["arp-scan", f"--interface={interface}", "--localnet"]
+        # we are explicitly giving arp-scan the ip to avoid giving docker
+        # RAW_SOCKET permissions for arp-scan to be able to auto detect the ip
+        host_ip = self.db.get_host_ip(interface)
+        cmd = [
+            "arp-scan",
+            f"--interface={interface}",
+            "--localnet",
+            f"--arpspa={host_ip}",
+        ]
+
         try:
             output = subprocess.check_output(cmd, text=True)
         except subprocess.CalledProcessError as e:
@@ -205,7 +219,9 @@ class ARPPoisoner(IModule):
             return result[0][1].hwsrc
         return None
 
-    def _isolate_target_from_localnet(self, target_ip: str, fake_mac: str):
+    def _isolate_target_from_localnet(
+        self, target_ip: str, fake_mac: str, interface: str
+    ):
         """
         Tells all the available hosts in the localnet that the target_ip is
         at fake_mac using unsolicited arp replies.
@@ -224,11 +240,10 @@ class ARPPoisoner(IModule):
         # found, FW blocking module handles blocking it through the fw,
         # plus we need our cache unpoisoned to be able to get the mac of
         # attackers to poison/reposion them.
-        all_hosts: Set[Tuple[str, str]] = self._arp_scan(self.args.interface)
+        all_hosts: Set[Tuple[str, str]] = self._arp_scan(interface)
         for ip, mac in all_hosts:
             if ip == target_ip:
                 continue
-
             pkt = Ether(dst=mac) / ARP(
                 op=2,
                 pdst=ip,  # which dst ip are we sending this pkt to?
@@ -239,18 +254,34 @@ class ARPPoisoner(IModule):
             )
             sendp(pkt, verbose=0)
 
+    def _get_gateway_ip(self, interface: str) -> str | None:
+        """gets the GW ip using cache, using the DB, or using netifaces"""
+        if interface in self.gw_ip:
+            return self.gw_ip[interface]
+
+        gateway_ip: str = self.db.get_gateway_ip(
+            interface
+        ) or utils.get_gateway_for_iface(interface)
+        # cache it for later
+        self.gw_ip[interface] = gateway_ip
+        return gateway_ip
+
     def _cut_targets_internet(
-        self, target_ip: str, target_mac: str, fake_mac: str
+        self, target_ip: str, target_mac: str, fake_mac: str, interface: str
     ):
         """
         Cuts the target's internet by telling the target_ip that the gateway
         is at fake_mac using unsolicited arp reply AND telling the gw that
         the target is at a fake mac.
         """
-        # in ap mode, this gw ip is the same as our own ip
-        gateway_ip: str = self.db.get_gateway_ip()
+        gateway_ip: str = self._get_gateway_ip(interface)
 
-        # we use replies, not requests, because we wanna anser ARP requests
+        if not gateway_ip:
+            self.print(
+                f"Unable to cut the internet of attacker at"
+                f" {target_ip}. Gateway IP is not found."
+            )
+        # we use replies, not requests, because we wanna answer ARP requests
         # sent to the network instead of waiting for the attacker to answer
         # them.
 
@@ -264,12 +295,13 @@ class ARPPoisoner(IModule):
             pdst=target_ip,
             hwdst=target_mac,
         )
-        sendp(pkt, iface=self.args.interface, verbose=0)
+        sendp(pkt, iface=interface, verbose=0)
 
         # poison the gw, tell it the victim is at a fake mac so traffic
         # from it wont reach the victim
         # attacker -> gw: im at a fake mac.
-        gateway_mac = self.db.get_gateway_mac()
+        gateway_mac = self.db.get_gateway_mac(interface)
+
         pkt = Ether(dst=gateway_mac) / ARP(
             op=2,
             psrc=target_ip,
@@ -277,7 +309,16 @@ class ARPPoisoner(IModule):
             pdst=gateway_ip,
             hwdst=gateway_mac,
         )
-        sendp(pkt, iface=self.args.interface, verbose=0)
+        sendp(pkt, iface=interface, verbose=0)
+
+    def _get_interface_of_ip(self, ip) -> str | None:
+        if ip in self.ip_interface_map:
+            return self.ip_interface_map[ip]
+
+        interface = utils.get_interface_of_ip(ip, self.db, self.args)
+        if interface:
+            self.ip_interface_map[ip] = interface
+            return interface
 
     def _attack(self, target_ip: str, first_time=False):
         """
@@ -300,8 +341,16 @@ class ARPPoisoner(IModule):
             if not target_mac:
                 return
 
-        self._cut_targets_internet(target_ip, target_mac, fake_mac)
-        self._isolate_target_from_localnet(target_ip, fake_mac)
+        interface: str | None = self._get_interface_of_ip(target_ip)
+        if not interface:
+            self.print(
+                f"Can't get the interface of {target_ip}. "
+                f"Poisoning cancelled."
+            )
+            return
+
+        self._cut_targets_internet(target_ip, target_mac, fake_mac, interface)
+        self._isolate_target_from_localnet(target_ip, fake_mac, interface)
 
         # we repoison every 10s, we dont wanna log every 10s.
         if first_time:
@@ -315,21 +364,21 @@ class ARPPoisoner(IModule):
         except ValueError:
             return False
 
-    def can_poison_ip(self, ip) -> bool:
+    def can_poison_ip(self, ip, interface: str) -> bool:
         """
         Checks if the ip is in out localnet, isnt the router
         """
         if utils.is_public_ip(ip):
             return False
 
-        localnet = self.db.get_local_network()
+        localnet = self.db.get_local_network(interface)
         if ipaddress.ip_address(ip) not in ipaddress.ip_network(localnet):
             return False
 
         if self.is_broadcast(ip, localnet):
             return False
 
-        if ip == self.db.get_gateway_ip():
+        if ip == self._get_gateway_ip(interface):
             return False
 
         # no need to check if the ip is in our ips because all our ips are
@@ -343,10 +392,12 @@ class ARPPoisoner(IModule):
             data = json.loads(msg["data"])
             ip = data.get("ip")
             tw: int = data.get("tw")
+            interface: str = data.get("interface")
 
-            if not self.can_poison_ip(ip):
+            if not self.can_poison_ip(ip, interface):
                 return
 
+            self.ip_interface_map[ip] = interface
             self._attack(ip, first_time=True)
 
             # whether this ip is blocked now, or was already blocked, make an

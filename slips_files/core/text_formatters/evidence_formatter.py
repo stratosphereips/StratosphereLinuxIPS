@@ -21,8 +21,10 @@ from slips_files.core.structures.alerts import (
 
 
 class EvidenceFormatter:
-    def __init__(self, db):
+    def __init__(self, db, args):
         self.db = db
+        # args given to slips on startup
+        self.args = args
 
     def get_evidence_to_log(
         self, evidence: Evidence, flow_datetime: str
@@ -109,6 +111,9 @@ class EvidenceFormatter:
             evidence: Evidence = self.add_threat_level_to_evidence_description(
                 evidence
             )
+            evidence: Evidence = self.add_interface_to_evidence_description(
+                evidence
+            )
             evidence_string = self.line_wrap(
                 f"Detected {evidence.description.strip()}"
             )
@@ -129,6 +134,17 @@ class EvidenceFormatter:
         evidence.description += (
             f" threat level: " f"{evidence.threat_level.name.lower()}."
         )
+        return evidence
+
+    def add_interface_to_evidence_description(
+        self, evidence: Evidence
+    ) -> Evidence:
+
+        if not self.args.access_point:
+            # no eed to add the interface if slips is only monitoring one
+            return evidence
+
+        evidence.description += f" Interface: {evidence.interface}."
         return evidence
 
     def get_printable_attacker_and_victim_info(

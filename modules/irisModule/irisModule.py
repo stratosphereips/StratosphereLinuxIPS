@@ -49,6 +49,7 @@ class IrisModule(IModule):
             with open(config_path, "r") as file:
                 config = yaml.safe_load(file)
 
+            wifi_interface = self.db.get_wifi_interface()
             # Ensure the Redis section exists and update the port
             if "Redis" in config:
                 config["Redis"]["Port"] = redis_port
@@ -62,12 +63,12 @@ class IrisModule(IModule):
                 }
             if "Server" in config:
                 # config["Server"]["Port"] = 9010
-                config["Server"]["Host"] = self.db.get_host_ip()
+                config["Server"]["Host"] = self.db.get_host_ip(wifi_interface)
                 config["Server"]["DhtServerMode"] = "true"
             else:
                 config["Redis"] = {
                     "Port": 6644,
-                    "Host": self.db.get_host_ip(),
+                    "Host": self.db.get_host_ip(wifi_interface),
                     "DhtServerMode": "true",
                 }
 

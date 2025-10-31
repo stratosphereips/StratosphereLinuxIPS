@@ -690,6 +690,25 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     def get_slips_internal_time(self):
         return self.r.get(self.constants.SLIPS_INTERNAL_TIME) or 0
 
+    def set_ap_info(self, interfaces: Dict[str, str]):
+        """the main slips instance call this func for the modules to be
+        aware that slips is running as an access point"""
+        return self.r.set(
+            self.constants.IS_RUNNING_AS_AP, json.dumps(interfaces)
+        )
+
+    def get_ap_info(self) -> Dict[str, str] | None:
+        """returns both AP interfaces or None if slips is not
+        running in AP mode
+        returns a dict with {"wifi_interface": <wifi>,
+        "ethernet_interface": <eth0>}
+        or None if slips is not running as an AP
+        """
+        ap_info = self.r.get(self.constants.IS_RUNNING_AS_AP)
+        if not ap_info:
+            return None
+        return json.loads(ap_info)
+
     def get_redis_keys_len(self) -> int:
         """returns the length of all keys in the db"""
         return self.r.dbsize()
@@ -707,14 +726,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """
         return int(hrs * 3600 / self.width)
 
-    def set_local_network(self, cidr):
+    def set_local_network(self, cidr, interface):
         """
         set the local network used in the db
         """
-        self.r.set(self.constants.LOCAL_NETWORK, cidr)
+        self.r.hset(self.constants.LOCAL_NETWORK, interface, cidr)
 
-    def get_local_network(self):
-        return self.r.get(self.constants.LOCAL_NETWORK)
+    def get_local_network(self, interface):
+        return self.r.hget(self.constants.LOCAL_NETWORK, interface)
 
     def get_used_port(self) -> int:
         return int(self.r.config_get(self.constants.REDIS_USED_PORT)["port"])
@@ -1085,7 +1104,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """
         self.r.sadd(self.constants.SRCIPS_SEEN_IN_CONN_LOG, ip)
 
-    def _is_gw_mac(self, mac_addr: str) -> bool:
+    def _is_gw_mac(self, mac_addr: str, interface: str) -> bool:
         """
         Detects the MAC of the gateway if 1 mac is seen
         assigned to 1 public destination IP
@@ -1097,9 +1116,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
         if self._gateway_MAC_found:
             # gateway MAC already set using this function
-            return self.get_gateway_mac() == mac_addr
+            return self.get_gateway_mac(interface) == mac_addr
 
-    def _determine_gw_mac(self, ip, mac):
+    def _determine_gw_mac(self, ip, mac, interface: str):
         """
         sets the gw mac if the given ip is public and is assigned a mc
         """
@@ -1113,7 +1132,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             # belongs to it
             # we are sure this is the gw mac
             # set it if we don't already have it in the db
-            self.set_default_gateway(self.constants.MAC, mac)
+            self.set_default_gateway(self.constants.MAC, mac, interface)
 
             # mark the gw mac as found so we don't look for it again
             self._gateway_MAC_found = True
@@ -1300,38 +1319,62 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             self.constants.ORGANIZATIONS_PORTS, portproto.lower()
         )
 
-    def add_zeek_file(self, filename):
+    def add_zeek_file(self, filename, interface):
         """Add an entry to the list of zeek files"""
-        self.r.sadd(self.constants.ZEEK_FILES, filename)
+        self.r.hset(self.constants.ZEEK_FILES, filename, interface)
 
     def get_all_zeek_files(self) -> set:
         """Return all entries from the list of zeek files"""
-        return self.r.smembers(self.constants.ZEEK_FILES)
+        return self.r.hgetall(self.constants.ZEEK_FILES)
 
-    def get_gateway_ip(self):
-        return self.r.hget(self.constants.DEFAULT_GATEWAY, "IP")
+    def _get_gw_info(self, interface: str) -> Dict[str, str] | None:
+        """
+        gets the gw of the given interface, when slips is runnuning on a
+        file, it uses "default" as the interface
+        """
+        if not interface:
+            interface = "default"
 
-    def get_gateway_mac(self):
-        return self.r.hget(self.constants.DEFAULT_GATEWAY, self.constants.MAC)
+        gw_info: str = self.r.hget(self.constants.DEFAULT_GATEWAY, interface)
+        if gw_info:
+            gw_info: Dict[str, str] = json.loads(gw_info)
+            return gw_info
 
-    def get_gateway_mac_vendor(self):
-        return self.r.hget(self.constants.DEFAULT_GATEWAY, "Vendor")
+    def get_gateway_ip(self, interface: str) -> str | None:
+        if gw_info := self._get_gw_info(interface):
+            return gw_info.get("IP")
 
-    def set_default_gateway(self, address_type: str, address: str):
+    def get_gateway_mac(self, interface):
+        if gw_info := self._get_gw_info(interface):
+            return gw_info.get(self.constants.MAC)
+
+    def get_gateway_mac_vendor(self, interface):
+        if gw_info := self._get_gw_info(interface):
+            return gw_info.get("Vendor")
+
+    def set_default_gateway(
+        self, address_type: str, address: str, interface: str
+    ):
         """
         :param address_type: can either be 'IP' or 'MAC'
         :param address: can be ip or mac, but always is a str
+        :param interface: which interface is the given address the GW to?
         """
         # make sure the IP or mac aren't already set before re-setting
         if (
-            (address_type == "IP" and not self.get_gateway_ip())
+            (address_type == "IP" and not self.get_gateway_ip(interface))
             or (
                 address_type == self.constants.MAC
-                and not self.get_gateway_mac()
+                and not self.get_gateway_mac(interface)
             )
-            or (address_type == "Vendor" and not self.get_gateway_mac_vendor())
+            or (
+                address_type == "Vendor"
+                and not self.get_gateway_mac_vendor(interface)
+            )
         ):
-            self.r.hset(self.constants.DEFAULT_GATEWAY, address_type, address)
+            gw_info = json.dumps({address_type: address})
+
+            self.r.hset(self.constants.DEFAULT_GATEWAY, interface, gw_info)
 
     def get_domain_resolution(self, domain) -> List[str]:
         """
@@ -1381,20 +1424,47 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         data = json.dumps(data)
         self.r.hset(f"{profileid}_{twid}", "Reconnections", str(data))
 
-    def get_host_ip(self) -> Optional[str]:
-        """returns the latest added host ip"""
-        host_ip: List[str] = self.r.zrevrange(
-            "host_ip", 0, 0, withscores=False
-        )
+    def get_host_ip(self, interface) -> Optional[str]:
+        """returns the latest added host ip
+        :param interface: can be an actual interface or "default"
+        """
+        key = f"host_ip_{interface}"
+        host_ip: List[str] = self.r.zrevrange(key, 0, 0, withscores=False)
         return host_ip[0] if host_ip else None
 
-    def set_host_ip(self, ip):
+    def get_wifi_interface(self):
+        """
+        return sthe wifi interface if running as an AP, and the user
+        supplied interfcae if not.
+        """
+        if ap_info := self.get_ap_info():
+            return ap_info["wifi_interface"]
+
+        return self.get_interface()
+
+    def get_all_host_ips(self) -> List[str]:
+        """returns the latest added host ip of all interfaces"""
+        ip_keys = self.r.scan_iter(match="host_ip_*")
+
+        all_ips: List[str] = []
+        for key in ip_keys:
+            host_ip_list: List[bytes] = self.r.zrevrange(
+                key, 0, 0, withscores=False
+            )
+            if host_ip_list:
+                # Decode the bytes to a string before appending
+                latest_ip: str = host_ip_list[0]
+                all_ips.append(latest_ip)
+        return all_ips
+
+    def set_host_ip(self, ip, interface: str):
         """Store the IP address of the host in a db.
         There can be more than one"""
         # stored them in a sorted set to be able to retrieve the latest one
         # of them as the host ip
-        host_ips_added = self.r.zcard("host_ip")
-        self.r.zadd("host_ip", {ip: host_ips_added + 1})
+        key = f"host_ip_{interface}"
+        host_ips_added = self.r.zcard(key)
+        self.r.zadd(key, {ip: host_ips_added + 1})
 
     def set_asn_cache(self, org: str, asn_range: str, asn_number: str) -> None:
         """

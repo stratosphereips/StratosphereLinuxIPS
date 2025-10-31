@@ -763,7 +763,8 @@ class ModuleFactory:
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_evidence_formatter_obj(self, mock_db):
-        return EvidenceFormatter(mock_db)
+        args = Mock()
+        return EvidenceFormatter(mock_db, args)
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_symbol_handler_obj(self, mock_db):

@@ -24,8 +24,6 @@ SPECIAL_IPV6 = ("0.0.0.0", "255.255.255.255")
 
 class Conn(IFlowalertsAnalyzer):
     def init(self):
-        # get the default gateway
-        self.gateway = self.db.get_gateway_ip()
         self.p2p_daddrs = {}
         # If 1 flow uploaded this amount of MBs or more,
         # slips will alert data upload
@@ -289,14 +287,15 @@ class Conn(IFlowalertsAnalyzer):
 
         self.db.set_reconnections(profileid, twid, current_reconnections)
 
-    def is_ignored_ip_data_upload(self, ip):
+    def is_ignored_ip_data_upload(self, ip, interface: str):
         """
         Ignore the IPs that we shouldn't alert about
         """
 
         ip_obj = ipaddress.ip_address(ip)
+        interface = interface or self.db.get_wifi_interface()
         if (
-            ip == self.gateway
+            ip == self.db.get_gateway_ip(interface)
             or ip_obj.is_multicast
             or ip_obj.is_link_local
             or ip_obj.is_reserved
@@ -323,8 +322,9 @@ class Conn(IFlowalertsAnalyzer):
             daddr = flow["daddr"]
             sbytes: int = int(flow.get("sbytes", 0))
             ts: str = flow.get("starttime", "")
+            interface: str = flow.get("interface", "")
 
-            if self.is_ignored_ip_data_upload(daddr) or not sbytes:
+            if self.is_ignored_ip_data_upload(daddr, interface) or not sbytes:
                 continue
 
             if daddr in bytes_sent:
@@ -430,7 +430,7 @@ class Conn(IFlowalertsAnalyzer):
         """
         if (
             not flow.daddr
-            or self.is_ignored_ip_data_upload(flow.daddr)
+            or self.is_ignored_ip_data_upload(flow.daddr, flow.interface)
             or not flow.sbytes
         ):
             return False
@@ -562,6 +562,11 @@ class Conn(IFlowalertsAnalyzer):
         """
         if flow.proto.lower() in ("igmp", "icmp", "ipv6-icmp", "arp"):
             return
+
+        if ipaddress.ip_address(flow.daddr).is_multicast:
+            # igmp
+            return
+
         try:
             flow.sport = int(flow.sport)
             flow.dport = int(flow.dport)
@@ -747,7 +752,7 @@ class Conn(IFlowalertsAnalyzer):
         if not (validators.ipv4(ip_to_check) and utils.is_private_ip(ip_obj)):
             return
 
-        own_local_network = self.db.get_local_network()
+        own_local_network = self.db.get_local_network(flow.interface)
         if not own_local_network:
             # the current local network wasn't set in the db yet
             # it's impossible to get here becaus ethe localnet is set before
@@ -774,7 +779,7 @@ class Conn(IFlowalertsAnalyzer):
             return (
                 flow.dport == 53
                 and flow.proto.lower() == "udp"
-                and flow.daddr == self.db.get_gateway_ip()
+                and flow.daddr == self.db.get_gateway_ip(flow.interface)
             )
 
         def is_dhcp_conn(flow):
@@ -783,7 +788,7 @@ class Conn(IFlowalertsAnalyzer):
             return (
                 (flow.dport == 67 or flow.dport == 68)
                 and flow.proto.lower() == "udp"
-                and flow.daddr == self.db.get_gateway_ip()
+                and flow.daddr == self.db.get_gateway_ip(flow.interface)
             )
 
         with contextlib.suppress(ValueError):

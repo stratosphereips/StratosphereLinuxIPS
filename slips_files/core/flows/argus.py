@@ -1,12 +1,12 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from dataclasses import dataclass, field
-
 from slips_files.common.slips_utils import utils
+from slips_files.core.flows.base_flow import BaseFlow
 
 
-@dataclass
-class ArgusConn:
+@dataclass(kw_only=True)
+class ArgusConn(BaseFlow):
     starttime: str
     endtime: str
     dur: str

@@ -89,7 +89,13 @@ This is what slips stores for each IP/Profile it creates:
 
 When running Slips, the alerts you see in red in the CLI or at the very bottom in kalispo, are a bunch of evidence. Evidence in slips are detections caused by a specific IP in a specific timeframe. Slips doesn't alert on every evidence/detection. it accumulates evidence and only generates and alert when the amount of gathered evidence crosses a threshold. After this threshold Slips generates an alert, marks the timewindow as malicious(displays it in red in kalipso and the web interface) and blocks the IP causing the alert if iptables is enabled.
 
-Each alert has a threat level and confidence; the Threat level of each alert is Critical by default, and the confidence is the accumulated threat level of all the evidence of the alert normalized to a value ranging from 0 to 1. The more evidence the higher the confidence of the alert.
+Each alert has a threat level and confidence; the Threat level of each alert is Critical by default,
+and the confidence is the accumulated threat level of all the evidence of the alert normalized to a value
+ranging from 0 to 1. The more evidence the higher the confidence of the alert.
+
+NOTE: When slips is runnign with -ap, evidence are tied to one interface,
+meaning each evidence belongs to a flow that belongs to one interface.
+Meanwhile an alert contains evidence from different interfaces.
 
 ### Usage of Zeek.
 

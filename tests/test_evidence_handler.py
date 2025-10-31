@@ -32,7 +32,7 @@ from datetime import datetime
     ],
 )
 def test_decide_blocking(
-    profileid, our_ips, expected_result, expected_publish_call_count
+    mocker, profileid, our_ips, expected_result, expected_publish_call_count
 ):
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
     evidence_handler.blocking_modules_supported = True
@@ -41,7 +41,12 @@ def test_decide_blocking(
         tw = TimeWindow(
             2, "2025-05-09T13:27:45.123456", "2025-05-09T13:27:45.123456"
         )
+        mocker.patch(
+            "slips_files.common.slips_utils.Utils.get_interface_of_ip",
+            return_value="eth0",
+        )
         result = evidence_handler.decide_blocking(profileid, tw)
+
         assert result == expected_result
         assert mock_publish.call_count == expected_publish_call_count
 

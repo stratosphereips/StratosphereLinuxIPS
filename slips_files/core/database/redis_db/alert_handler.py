@@ -234,7 +234,6 @@ class AlertHandler:
                     break
 
             setattr(evidence, entity_type, entity)
-
         return evidence
 
     def set_evidence(self, evidence: Evidence):
