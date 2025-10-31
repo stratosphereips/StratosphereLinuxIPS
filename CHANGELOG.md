@@ -1,3 +1,10 @@
+1.1.15 (Oct 31st, 2025)
+- Fix FP connection to port 0 for IGMP flows.
+- Support monitoring two interfaces when Slips is running as an access point.
+- Improve running slips on a growing zeek directory: Slips can now detect the interface, host IP and gateway IP.
+- Handle IDMEFv2 API deprecation warning.
+
+
 1.1.14 (Oct 14th, 2025)
 - Security Patch for CVE-2025-49844: Force use of Redis version 8.2.2
 
