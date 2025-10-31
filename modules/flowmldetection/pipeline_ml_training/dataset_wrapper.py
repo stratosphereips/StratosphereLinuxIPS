@@ -134,6 +134,14 @@ class ZeekDataset:
                     valid_indices.append(idx)
                     labels.append(str(mapped))
                     idx += 1
+            # Shuffle valid_indices and labels together with fixed seed (if provided)
+            if self.seed is not None:
+                combined = list(zip(valid_indices, labels))
+                rng = random.Random(self.seed)
+                rng.shuffle(combined)
+                valid_indices, labels = zip(*combined)
+                valid_indices = list(valid_indices)
+                labels = list(labels)
 
         self.headers = headers
         self.types = types

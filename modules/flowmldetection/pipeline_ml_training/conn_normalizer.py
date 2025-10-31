@@ -99,7 +99,9 @@ class ConnToSlipsConverter:
 
     def _infer_state(self, row: Mapping[str, Any]) -> float:
         state = row.get("state", "")
-        pkts = self._safe_int(row.get("pkts", 0))
+        pkts = self._safe_int(row.get("spkts", 0)) + self._safe_int(
+            row.get("dpkts", 0)
+        )
         pre = str(state).split("_")[0]
 
         st = str(state).lower()
@@ -127,7 +129,6 @@ class ConnToSlipsConverter:
         """
         Normalize a single flow dict to canonical SLIPS fields.
         """
-
         out: Dict[str, Any] = {}
 
         # First, map known keys to canonical names

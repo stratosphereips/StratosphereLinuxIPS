@@ -79,7 +79,8 @@ class FlowMLDetection(IModule):
         self.training_flows = []
 
         # Set the random seed for reproducibility
-        numpy.random.seed(1111)
+        self.seed = 1111
+        self.rng = numpy.random.default_rng(self.seed)
 
     def init_log_file(self):
         """
@@ -337,6 +338,7 @@ class FlowMLDetection(IModule):
             self.print("No flows to train on. Skipping training.", 0, 1)
             return
         try:
+
             # Create y_gt_train with the label
             if hasattr(self.flows, "ground_truth_label"):
                 gt = self.flows.ground_truth_label
@@ -362,12 +364,22 @@ class FlowMLDetection(IModule):
             X_train = self.flows.copy()
             X_train = self.drop_labels(X_train)
 
+            # Sort X_train by the first column and apply the same order to y_gt_train
+            # Append y_gt_train as a temporary column for sorting
+            X_train_with_y = X_train.copy()
+            X_train_with_y["_tmp_label"] = y_gt_train
+            sort_indices = X_train_with_y.apply(tuple, axis=1).argsort(
+                kind="mergesort"
+            )
+            X_train = X_train.iloc[sort_indices].reset_index(drop=True)
+            y_gt_train = y_gt_train[sort_indices]
+
             X_val = X_train  # default - validate on all training data
             y_gt_val = y_gt_train
 
             # Take random 10% of data for validation if validating while training!
             if self.validate_on_train:
-                validation_indices = numpy.random.choice(
+                validation_indices = self.rng.choice(
                     X_train.shape[0],
                     size=int(self.percentage_validation * X_train.shape[0]),
                     replace=False,
@@ -409,16 +421,8 @@ class FlowMLDetection(IModule):
                     1,
                 )
 
-            # Train
-
             try:
                 unique_labels = numpy.unique(y_gt_train)
-                label_counts = {
-                    label: (y_gt_train == label).sum()
-                    for label in unique_labels
-                }
-                self.print(f"Training label counts: {label_counts}", 0, 1)
-
                 if not self.classifier_initialized:  # init the classifier
                     self.print(
                         "labels in the training set: " + str(unique_labels),
@@ -449,7 +453,7 @@ class FlowMLDetection(IModule):
                                     [X_train, self.dummy_benign_flow]
                                 )
                                 y_gt_train = numpy.append(y_gt_train, [BENIGN])
-                    # print("before training: ", X_train.shape)
+
                     self.clf.partial_fit(
                         X_train,
                         y_gt_train,
@@ -617,6 +621,7 @@ class FlowMLDetection(IModule):
             for field in fields_to_convert_to_float:
                 try:
                     field = field.astype("float64")
+                    dataset[field.name] = field
                 except (ValueError, AttributeError):
                     pass
 
@@ -756,9 +761,10 @@ class FlowMLDetection(IModule):
                     2,
                 )
             self.clf = SGDClassifier(
-                warm_start=True,  # warm start not needed, setting new model up?
+                warm_start=False,  # warm start not needed, setting new model up?
                 loss="hinge",
                 penalty="l2",
+                random_state=self.seed,
                 # experiments:
                 # penalty, L1,L2,elastic,
                 # class weights,
@@ -873,6 +879,7 @@ class FlowMLDetection(IModule):
         utils.drop_root_privs_permanently()
         # Load the model
         self.read_model()
+        print("\n")
 
     def main(self):
         """if (
@@ -899,8 +906,6 @@ class FlowMLDetection(IModule):
                 }
             )
 
-            # print("unchanged_flow: ", self.flow)
-
             if (not self.flow.get("ground_truth_label")) or (
                 self.flow.get("ground_truth_label") == ""
             ):
@@ -915,16 +920,15 @@ class FlowMLDetection(IModule):
 
             if self.mode == "train":
                 # We are training
-
                 # Is the amount in the DB of labels enough to retrain?
-                # Use labeled flows
+                # Use labeled flows only
                 if self.flow["ground_truth_label"] in [MALICIOUS, BENIGN]:
                     self.labeled_counter += 1
                     self.training_flows += [self.flow]
 
                 # The min labels to retrain is the min number of flows
                 # we should have seen so far in this capture to start training
-                # This is so we dont _start_ training with only 1 flow
+                # This is so we dont start training with only 1 flow etc.
 
                 # Once we are over the start minimum, the second condition is
                 # to force to retrain every a minimum_labels_to_retrain number
@@ -932,7 +936,6 @@ class FlowMLDetection(IModule):
 
                 if self.labeled_counter < self.minimum_labels_to_retrain:
                     return
-
                 # So for example we retrain every 50 labels and only when
                 # we have at least 50 labels
 
@@ -942,7 +945,6 @@ class FlowMLDetection(IModule):
                 self.process_training_flows(
                     self.last_number_of_flows_when_trained
                 )
-
                 # Train a model
                 self.train(
                     self.labeled_counter,

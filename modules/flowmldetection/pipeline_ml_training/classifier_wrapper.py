@@ -102,7 +102,7 @@ class ClassifierWrapper:
                     )
                 X = numpy.concatenate([X, self.dummy_flows[cls][0]], axis=0)
                 y = numpy.concatenate([y, numpy.array([cls])], axis=0)
-
+            self.is_trained = True
             self.classifier.partial_fit(X, y, classes=self.classes)
         else:
             self.classifier.partial_fit(X, y)
@@ -116,7 +116,7 @@ class ClassifierWrapper:
     def save_classifier(
         self,
         path: Union[str, Path] = "./models/",
-        name: str = "classifier.pkl",
+        name: str = "classifier.bin",
     ):
         path = Path(path)
         if not path.exists():
@@ -132,3 +132,48 @@ class SKLearnClassifierWrapper(ClassifierWrapper):
 
 
 # wrappers for other libraries? torch, xgboost, lightgbm
+class RiverClassifierWrapper(ClassifierWrapper):
+    def __init__(self, classifier):
+        super().__init__(classifier)
+
+    def partial_fit(self, X, y):
+        # Prefer batch update if the river estimator supports learn_many
+        if hasattr(self.classifier, "learn_many"):
+            try:
+                # River expects a mapping feature_name -> array/series for batch updates.
+                if isinstance(X, numpy.ndarray):
+                    X_batch = {i: X[:, i] for i in range(X.shape[1])}
+                else:
+                    X_batch = X
+                self.classifier.learn_many(X_batch, y)
+                return
+            except Exception:
+                # if conversion fails, fall back to per-sample learning
+                pass
+
+        # fallback: per-sample learning
+        for xi, yi in zip(X, y):
+            self.classifier.learn_one(
+                x=dict(enumerate(xi)), y=yi
+            )  # ,w= weights[yi])
+
+    def predict(self, X):
+        # Prefer batch prediction if the river estimator supports predict_many
+        if hasattr(self.classifier, "predict_many"):
+            try:
+                if isinstance(X, numpy.ndarray):
+                    X_batch = {i: X[:, i] for i in range(X.shape[1])}
+                else:
+                    X_batch = X
+                preds = self.classifier.predict_many(X_batch)
+                return numpy.array(list(preds))
+            except Exception:
+                # fall through to per-sample prediction on failure
+                pass
+
+        # Fallback: per-sample prediction using predict_one (always present in River)
+        preds = []
+        for xi in X:
+            preds.append(self.classifier.predict_one(dict(enumerate(xi))))
+
+        return numpy.array(preds)

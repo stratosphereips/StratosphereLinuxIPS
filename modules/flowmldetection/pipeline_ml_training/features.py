@@ -83,11 +83,11 @@ class FeatureExtraction:
         X: pd.DataFrame without label columns
         y: pd.Series with values from commons BENIGN / MALICIOUS
         """
+
         try:
-            # Normalize / ensure canonical SLIPS fields first
+
             if isinstance(data, pd.DataFrame):
                 df = data.copy()
-                # detect raw Zeek fields (simple heuristic).
                 raw_zeek_field_signatures = {
                     "id.orig_p",
                     "orig_bytes",
@@ -96,7 +96,6 @@ class FeatureExtraction:
                     "orig_pkts",
                 }
                 if any(col in df.columns for col in raw_zeek_field_signatures):
-                    # convert rows to canonical slips dicts
                     records = df.to_dict(orient="records")
                     norm = self.converter.normalize_batch(records)
                     df = pd.DataFrame(norm)
@@ -110,8 +109,7 @@ class FeatureExtraction:
                     [], dtype="object"
                 )
 
-            y = self._extract_labels(df)
-
+            # PROCESS features first (this may drop/filter rows)
             df = self._process_features(df)
 
             if df.empty:
@@ -119,7 +117,10 @@ class FeatureExtraction:
                     [], dtype="object"
                 )
 
-            # finally remove label columns from X (keep y separately)
+            # Now extract labels from the already-filtered df -> alignment is correct
+            y = self._extract_labels(df)
+
+            # remove label columns from X (keep y separately)
             df = self.drop_labels(df)
 
             # enforce user-specified column dtypes (best-effort)
@@ -135,12 +136,30 @@ class FeatureExtraction:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
 
-            # align y with df
-            y.index = df.index[: len(y)] if len(y) <= len(df) else y.index
+            # Reorder as in slips (only keep existing cols)
+            slips_column_order = [
+                "dur",
+                "proto",
+                "sport",
+                "dport",
+                "spkts",
+                "dpkts",
+                "sbytes",
+                "dbytes",
+                "state",
+                "bytes",
+                "pkts",
+            ]
+            existing_cols = [
+                col for col in slips_column_order if col in df.columns
+            ]
+            df = df[existing_cols]
 
-            return df.reset_index(drop=True), y.loc[df.index].reset_index(
-                drop=True
-            )
+            # final reset indexes for both df and y so returned objects have standard RangeIndex
+            df = df.reset_index(drop=True)
+            y = y.reset_index(drop=True)
+
+            return df, y
 
         except Exception:
             print("Error in FeatureExtraction.process_batch():")

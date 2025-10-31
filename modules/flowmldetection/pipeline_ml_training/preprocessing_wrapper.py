@@ -29,26 +29,30 @@ class PreprocessingWrapper:
     def partial_fit(self, X, y=None):
         """Update transformers if they support partial_fit, otherwise fit once."""
         for name, transformer in self.steps:
-            try:
-                if hasattr(transformer, "partial_fit"):
-                    transformer.partial_fit(X, y)
-                    self.is_fitted[name] = True
-                else:
-                    if not self.is_fitted[name]:
-                        # fallback: fit once if not fitted yet
-                        if hasattr(transformer, "fit") and hasattr(
-                            transformer, "transform"
-                        ):
-                            transformer.fit(X, y)
-                            self.is_fitted[name] = True
-                        else:
-                            raise AttributeError(
-                                f"Transformer {name} does not implement partial_fit or fit/transform."
-                            )
 
-            except Exception as e:
-                print(f"[ERROR] Partial fitting step '{name}' failed: {e}")
-                raise
+            if not self.is_fitted[name]:
+                if hasattr(transformer, "fit"):
+                    transformer.fit(X, y)
+                    self.is_fitted[name] = True
+            else:
+                try:
+                    if hasattr(transformer, "partial_fit"):
+                        transformer.partial_fit(X, y)
+                        self.is_fitted[name] = True
+                    else:
+                        if not self.is_fitted[name]:
+                            # fallback: fit once if not fitted yet and cannot partial fit
+                            if hasattr(transformer, "fit"):
+                                transformer.fit(X, y)
+                                self.is_fitted[name] = True
+                            else:
+                                raise AttributeError(
+                                    f"Transformer {name} does not implement partial_fit or fit/transform."
+                                )
+
+                except Exception as e:
+                    print(f"[ERROR] Partial fitting step '{name}' failed: {e}")
+                    raise
         self._has_been_fitted_once = True
 
     def transform(self, X):
