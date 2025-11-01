@@ -26,10 +26,11 @@ class HostIPManager:
         try:
             # Get the default gateway info (usually includes interface name)
             addrs = netifaces.ifaddresses(interface)
-            # AF_INET is for IPv4 addresses
             inet_info = addrs.get(netifaces.AF_INET)
             if not inet_info:
-                return None
+                inet_info = addrs.get(netifaces.AF_INET6)
+                if not inet_info:
+                    return None
 
             return inet_info[0]["addr"]
         except Exception as e:
@@ -63,13 +64,13 @@ class HostIPManager:
         found_ips = {}
         for iface in interfaces:
             addrs = netifaces.ifaddresses(iface)
-            # check for IPv4 address
-            if netifaces.AF_INET not in addrs:
-                continue
-            for addr in addrs[netifaces.AF_INET]:
-                ip = addr.get("addr")
-                if ip and not ip.startswith("127."):
-                    found_ips[iface] = ip
+            for family in (netifaces.AF_INET, netifaces.AF_INET6):
+                if family not in addrs:
+                    continue
+                for addr in addrs[family]:
+                    ip = addr.get("addr")
+                    if ip and not ip.startswith("127."):
+                        found_ips[iface] = ip
         return found_ips
 
     def store_host_ip(self) -> Dict[str, str] | None:

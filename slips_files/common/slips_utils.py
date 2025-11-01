@@ -209,21 +209,23 @@ class Utils(object):
 
     def infer_used_interface(self) -> str | None:
         """for when the user is using -g and didnt give slips an interface"""
-        # PS: make sure you neveer run this when slips is given a file or a
+        # PS: make sure you never run this when slips is given a file or a
         # pcap
+        if self.used_inetrface:
+            return self.used_inetrface
+
         try:
-            if self.used_inetrface:
-                return self.used_inetrface
             gateways = netifaces.gateways()
             default_gateway = gateways.get("default", {})
-            if netifaces.AF_INET not in default_gateway:
-                return None
-
-            interface = default_gateway[netifaces.AF_INET][1]
-            self.used_inetrface = interface
-            return interface
+            for family in (netifaces.AF_INET, netifaces.AF_INET6):
+                if family not in default_gateway:
+                    continue
+                interface = default_gateway[family][1]
+                self.used_inetrface = interface
+                return interface
         except KeyError:
-            return
+            pass
+        return "default"
 
     def get_gateway_for_iface(self, iface: str) -> Optional[str]:
         """returns the default gateway for the given interface"""
