@@ -341,6 +341,13 @@ def dict_to_evidence(evidence: dict) -> Evidence:
     :param evidence: Dictionary with evidence details.
     returns an instance of the Evidence class.
     """
+
+    try:
+        evidence["interface"]
+    except KeyError:
+        print("@@@@@@@@@@@@@@@@ erroorr ")
+        print(evidence)
+
     evidence_attributes = {
         "evidence_type": EvidenceType[evidence["evidence_type"]],
         "description": evidence["description"],

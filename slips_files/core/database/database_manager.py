@@ -10,7 +10,7 @@ from typing import (
     Dict,
 )
 
-from modules.p2ptrust.trust.trustdb import TrustDB
+
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.redis_db.database import RedisDB
@@ -52,6 +52,10 @@ class DBManager:
 
         self.trust_db = None
         if self.conf.use_local_p2p():
+            # import this on demand because slips light version doesn't
+            # include the P2P dir
+            from modules.p2ptrust.trust.trustdb import TrustDB
+
             self.trust_db_path: str = self.init_p2ptrust_db()
             self.trust_db = TrustDB(
                 self.logger,
@@ -559,11 +563,18 @@ class DBManager:
         """
         Returns the interface of the first flow of the given evidence
         """
+        # in these 2 cases slips is only monitoring 1 interface, must be it
+        if self.args.interface:
+            return self.args.interface
+        if self.args.growing:
+            return utils.infer_used_interface()
+
         try:
             # get any flow uid of this evidence, to get the interface of it
             uid = evidence.uid[0]
         except KeyError:
             # evidence doesnt have a uid?
+            print(f"@@@@@@@@@@@@@@@@  evidence doesnt have a uid {evidence}")
             return
 
         try:

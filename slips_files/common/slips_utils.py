@@ -81,6 +81,7 @@ class Utils(object):
         self.alerts_format = "%Y/%m/%d %H:%M:%S.%f%z"
         self.local_tz = self.get_local_timezone()
         self.aid = aid_hash.AID()
+        self.used_inetrface = None
 
     def generate_uid(self):
         """Generates a UID similar to what Zeek uses."""
@@ -211,12 +212,20 @@ class Utils(object):
         # PS: make sure you neveer run this when slips is given a file or a
         # pcap
         try:
+            if self.used_inetrface:
+                print(
+                    f"@@@@@@@@@@@@@@@@ returning the inferred one "
+                    f"{self.used_inetrface}"
+                )
+                return self.used_inetrface
+            print("@@@@@@@@@@@@@@@@ inferring it!")
             gateways = netifaces.gateways()
             default_gateway = gateways.get("default", {})
             if netifaces.AF_INET not in default_gateway:
                 return None
 
             interface = default_gateway[netifaces.AF_INET][1]
+            self.used_inetrface = interface
             return interface
         except KeyError:
             return
