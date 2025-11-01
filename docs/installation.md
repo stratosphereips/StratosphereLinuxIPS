@@ -206,7 +206,7 @@ You can read more about it [here](https://stratospherelinuxips.readthedocs.io/en
 Slips is dependent on three major elements:
 
 - Python 3.10.12
-- Zeek
+- Zeek 8.0.0
 - Redis database 7.0.4
 
 To install these elements we will use APT package manager. After that, we will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node.JS and several npm packages.
