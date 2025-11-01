@@ -522,7 +522,13 @@ class EvidenceHandler(ICore):
             if msg := self.get_msg("evidence_added"):
                 msg["data"]: str
                 evidence: dict = json.loads(msg["data"])
-                evidence: Evidence = dict_to_evidence(evidence)
+                try:
+                    evidence: Evidence = dict_to_evidence(evidence)
+                except Exception as e:
+                    self.print(
+                        f"Problem converting {evidence} to dict: " f"{e}", 0, 1
+                    )
+                    continue
                 profileid: str = str(evidence.profile)
                 twid: str = str(evidence.timewindow)
                 evidence_type: EvidenceType = evidence.evidence_type
