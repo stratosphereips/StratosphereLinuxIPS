@@ -273,6 +273,10 @@ class AlertHandler:
         ):
             self.r.hset(evidence_hash, evidence.id, evidence_to_send)
             self.r.incr(self.constants.NUMBER_OF_EVIDENCE, 1)
+            print(
+                f"@@@@@@@@@@@@@@@@ publishing {evidence.id} to evidence "
+                f"handler!"
+            )
             self.publish(self.channels.EVIDENCE_ADDED, evidence_to_send)
             return True
 
