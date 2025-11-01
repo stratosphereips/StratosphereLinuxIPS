@@ -48,7 +48,7 @@ class ConfigParser(object):
 
     def get_parser(self, help=False):
         return ArgumentParser(
-            usage="./slips.py -c <configfile> [options] [file]", add_help=help
+            usage="./slips.py -c <configfile> [options]", add_help=help
         )
 
     def get_args(self):
