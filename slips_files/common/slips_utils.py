@@ -213,12 +213,7 @@ class Utils(object):
         # pcap
         try:
             if self.used_inetrface:
-                print(
-                    f"@@@@@@@@@@@@@@@@ returning the inferred one "
-                    f"{self.used_inetrface}"
-                )
                 return self.used_inetrface
-            print("@@@@@@@@@@@@@@@@ inferring it!")
             gateways = netifaces.gateways()
             default_gateway = gateways.get("default", {})
             if netifaces.AF_INET not in default_gateway:
