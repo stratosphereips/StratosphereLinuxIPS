@@ -570,25 +570,12 @@ class DBManager:
         # when slips is only monitoring 1 interface, must be it
         if not self.all_interfaces:
             self.interface = "default"
-            print(
-                f"@@@@@@@@@@@@@@@@ cant get all interfaces! "
-                f"{self.conf.get_args()}"
-            )
-            print("@@@@@@@@@@@@@@@@ returning default")
             return "default"
 
         if len(self.all_interfaces) == 1:
-            print(
-                f"@@@@@@@@@@@@@@@@ yes, only 1 interface is flound! "
-                f"{evidence.id} "
-                f"{self.all_interfaces}"
-            )
             return self.all_interfaces[0]
 
         elif len(self.all_interfaces) == 2:
-            print(
-                f"@@@@@@@@@@@@@@@@ ok we have 2 interfaces! {self.all_interfaces}"
-            )
             # slips is running with -ap
             try:
                 # get any flow uid of this evidence, to get the interface
@@ -596,7 +583,6 @@ class DBManager:
                 uid = evidence.uid[0]
             except (KeyError, IndexError, AttributeError):
                 # evidence doesnt have a uid?
-                print("@@@@@@@@@@@@@@@@ ev doesnt have  auid?")
                 return "default"
 
             try:
@@ -605,7 +591,6 @@ class DBManager:
                     flow: dict = json.loads(flow)
             except KeyError:
                 flow: dict = self.get_altflow_from_uid(uid)
-            print(f"@@@@@@@@@@@@@@@@ returning flow or default {flow}")
             return "default" if not flow else flow["interface"]
 
     def set_evidence(self, evidence: Evidence):
