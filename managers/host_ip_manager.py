@@ -52,7 +52,7 @@ class HostIPManager:
                 self.main.db.set_host_ip(ip, iface)
                 if not self.info_printed:
                     self.main.print(
-                        f"Detected host IP: {green(ip)} for {green(iface)}"
+                        f"Detected host IP: {green(ip)} for {green(iface)}\n"
                     )
             self.info_printed = True
             return host_ips
