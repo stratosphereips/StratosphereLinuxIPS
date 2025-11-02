@@ -29,13 +29,23 @@ class HostIPManager:
         found_ips = {}
         for iface in interfaces:
             addrs = netifaces.ifaddresses(iface)
-            for family in (netifaces.AF_INET, netifaces.AF_INET6):
-                if family not in addrs:
-                    continue
-                for addr in addrs[family]:
+            # we just need 1 host ip, v4 or v6, preferably v4 though
+            if netifaces.AF_INET in addrs:
+                for addr in addrs[netifaces.AF_INET]:
                     ip = addr.get("addr")
                     if ip and not ip.startswith("127."):
                         found_ips[iface] = ip
+                        break
+            elif netifaces.AF_INET6 in addrs:
+                for addr in addrs[netifaces.AF_INET]:
+                    ip = addr.get("addr")
+                    if ip:
+                        try:
+                            ip = ip.split("%")[0]
+                        except KeyError:
+                            pass
+                        found_ips[iface] = ip
+                        break
         return found_ips
 
     def store_host_ip(self) -> Dict[str, str] | None:
