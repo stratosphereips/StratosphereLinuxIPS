@@ -37,7 +37,7 @@ class HostIPManager:
                         found_ips[iface] = ip
                         break
             elif netifaces.AF_INET6 in addrs:
-                for addr in addrs[netifaces.AF_INET]:
+                for addr in addrs[netifaces.AF_INET6]:
                     ip = addr.get("addr")
                     if ip:
                         try:
