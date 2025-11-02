@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import time
 import netifaces
 from typing import (
     Set,
@@ -56,12 +55,14 @@ class HostIPManager:
                         f"Detected host IP: {green(ip)} for {green(iface)}"
                     )
             self.info_printed = True
-
             return host_ips
 
-        self.main.print("Not Connected to the internet. Reconnecting in 10s.")
-        time.sleep(10)
-        self.store_host_ip()
+        # uncomment this if in the future we require host ips to start
+        # slips, then it will get stuck in a loop here until it's abl to
+        # get the host ip
+        # self.main.print("Not Connected to the internet. Reconnecting in 10s.")
+        # time.sleep(10)
+        # self.store_host_ip()
 
     def update_host_ip(
         self, host_ips: Dict[str, str], modified_profiles: Set[str]
