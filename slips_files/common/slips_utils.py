@@ -535,7 +535,7 @@ class Utils(object):
         :kwarg ret: "Dict" or "List"
         and returns a list of all the ips combined if ret=List is given
         """
-        if "-i" not in sys.argv and "-g" not in sys.argv:
+        if "-i" not in sys.argv:
             # this method is only valid when running on an interface
             return []
 
