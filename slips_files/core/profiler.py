@@ -120,6 +120,7 @@ class Profiler(ICore, IObservable):
         self.pending_flows_queue_lock = threading.Lock()
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
+        self.handle_setting_local_net_lock = threading.Lock()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -442,6 +443,7 @@ class Profiler(ICore, IObservable):
             if flow.interface in self.localnet_cache:
                 return False
         else:
+            # running on a file, impossible to get the interface
             if "default" in self.localnet_cache:
                 return False
 
@@ -588,20 +590,24 @@ class Profiler(ICore, IObservable):
         stores the local network if possible
         sets the self.localnet_cache dict
         """
-        if not self.should_set_localnet(flow):
-            return
+        # to avoid running this func from the 3 profiler threads at the
+        # same time.
+        with self.handle_setting_local_net_lock:
+            if not self.should_set_localnet(flow):
+                return
 
-        if self.db.is_running_non_stop():
-            self.localnet_cache = self.get_localnet_of_given_interface()
-        else:
-            self.localnet_cache = self.get_local_net_of_flow(flow)
+            if self.db.is_running_non_stop():
+                self.localnet_cache = self.get_localnet_of_given_interface()
+            else:
+                self.localnet_cache = self.get_local_net_of_flow(flow)
 
-        for interface, local_net in self.localnet_cache.items():
-            self.db.set_local_network(local_net, interface)
-            to_print = f"Used local network: {green(local_net)}"
-            if interface != "default":
-                to_print += f" for interface {green(interface)}."
-            self.print(to_print)
+            for interface, local_net in self.localnet_cache.items():
+                self.db.set_local_network(local_net, interface)
+
+                to_print = f"Used local network: {green(local_net)}"
+                if interface != "default":
+                    to_print += f" for interface {green(interface)}."
+                self.print(to_print)
 
     def get_msg_from_input_proc(
         self, q: multiprocessing.Queue, thread_safe=False
@@ -665,7 +671,6 @@ class Profiler(ICore, IObservable):
         This function runs in 3 parallel threads for faster processing of
         the flows
         """
-
         while not self.stop_profiler_thread():
             msg = self.get_msg_from_input_proc(
                 self.flows_to_process_q, thread_safe=True

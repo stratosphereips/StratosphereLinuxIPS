@@ -126,12 +126,39 @@ def test_check_given_flags_root_user(monkeypatch):
 def test_check_input_type_interface():
     checker = ModuleFactory().create_checker_obj()
     checker.main.args.interface = "eth0"
+    checker.main.args.growing = None
     checker.main.args.filepath = None
     checker.main.args.db = None
     checker.main.args.input_module = None
 
     result = checker.get_input_type()
     assert result == ("interface", "eth0", False)
+
+
+def test_get_input_type_with_interface_and_growing():
+    """
+    Test get_input_type when both --interface and --growing are set.
+    Should trigger the first if condition and return (input_type, input_information, line_type).
+    """
+    checker = ModuleFactory().create_checker_obj()
+
+    # Arrange: set both interface and growing to trigger the first if
+    checker.main.args.interface = "eth0"
+    checker.main.args.growing = "/path/to/dir"
+    checker.main.args.filepath = None
+    checker.main.args.db = None
+    checker.main.args.input_module = None
+    checker.main.args.access_point = None
+
+    # Mock get_input_file_type to return a predictable result
+    with patch.object(
+        checker.main, "get_input_file_type", return_value="zeek_folder"
+    ) as mock_get_type:
+        result = checker.get_input_type()
+
+    # Assert
+    mock_get_type.assert_called_once_with("/path/to/dir")
+    assert result == ("zeek_folder", "/path/to/dir", False)
 
 
 def test_check_input_type_db():

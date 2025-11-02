@@ -175,10 +175,12 @@ def test_messaging(
                 "./slips.py",
                 "-t",
                 "-g",
+                str(zeek_dir_path),
+                # dummy interface required by -g
+                "-i",
+                "eth0",
                 "-e",
                 "1",
-                "-f",
-                str(zeek_dir_path),
                 "-o",
                 str(output_dir),
                 "-c",
@@ -225,7 +227,7 @@ def test_messaging(
                     "PeerDiscovery": {
                         "ListOfMultiAddresses": [original_conn_string]
                     },
-                    "Identity": {"KeyFile": "second.priv"}
+                    "Identity": {"KeyFile": "second.priv"},
                 },
             )
             # generate a second command for the second peer
@@ -233,10 +235,12 @@ def test_messaging(
                 "./slips.py",
                 "-t",
                 "-g",
+                str(zeek_dir_path),
+                # dummy interface required by -g
+                "-i",
+                "eth0",
                 "-e",
                 "1",
-                "-f",
-                str(zeek_dir_path),
                 "-o",
                 str(output_dir_peer),
                 "-c",
@@ -304,6 +308,6 @@ def test_messaging(
             "Redis": {"Port": 6644},
             "Server": {"Port": 9010},
             "PeerDiscovery": {},
-            "Identity": {"KeyFile": "private.key"}
+            "Identity": {"KeyFile": "private.key"},
         },
     )

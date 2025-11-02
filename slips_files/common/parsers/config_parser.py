@@ -644,7 +644,7 @@ class ConfigParser(object):
             to_ignore.append("p2ptrust")
 
         use_global_p2p = self.use_global_p2p()
-        if not (use_global_p2p and ("-i" in sys.argv or "-g" in sys.argv)):
+        if not (use_global_p2p and ("-i" in sys.argv)):
             to_ignore.append("fidesModule")
             to_ignore.append("irisModule")
 

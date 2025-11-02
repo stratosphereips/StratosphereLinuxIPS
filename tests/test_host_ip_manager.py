@@ -67,89 +67,51 @@ def test_update_host_ip_should_update(
     assert host_ip_man.store_host_ip.call_count == expected_calls
 
 
-@pytest.mark.parametrize(
-    "args_interface,args_access_point,iface_addrs,expected",
-    [
-        # Single interface with valid IPv4
-        (
-            "eth0",
-            None,
-            {netifaces.AF_INET: [{"addr": "192.168.1.10"}]},
-            {"eth0": "192.168.1.10"},
-        ),
-        # Only loopback IP -> should be skipped
-        (
-            "lo",
-            None,
-            {netifaces.AF_INET: [{"addr": "127.0.0.1"}]},
-            {},
-        ),
-        # Interface without AF_INET -> skipped
-        (
-            "eth1",
-            None,
-            {},
-            {},
-        ),
-    ],
-)
 @patch("netifaces.ifaddresses")
-def test_get_host_ips_single_interface(
-    mock_ifaddresses,
-    args_interface,
-    args_access_point,
-    iface_addrs,
-    expected,
-):
-    """Test _get_host_ips for single-interface cases."""
+def test_get_host_ips_single_interface(mock_ifaddresses):
+    """Test _get_host_ips when using a single interface via -i."""
     host_ip_man = ModuleFactory().create_host_ip_manager_obj()
-    host_ip_man.main.args.growing = None
-    host_ip_man.main.args.interface = args_interface
-    host_ip_man.main.args.access_point = args_access_point
-
-    mock_ifaddresses.return_value = iface_addrs
-    result = host_ip_man._get_host_ips()
-
-    assert result == expected
-    mock_ifaddresses.assert_called_once_with(args_interface)
-
-
-@patch("netifaces.ifaddresses")
-def test_get_host_ips_multiple_interfaces_from_access_point(mock_ifaddresses):
-    """Test _get_host_ips when using multiple interfaces via --access-point."""
-    host_ip_man = ModuleFactory().create_host_ip_manager_obj()
-    host_ip_man.main.args.interface = None
-    host_ip_man.main.args.growing = None
-    host_ip_man.main.args.access_point = "wlan0,eth0"
-
-    def mock_ifaddresses_side_effect(iface):
-        if iface == "wlan0":
-            return {netifaces.AF_INET: [{"addr": "10.0.0.5"}]}
-        elif iface == "eth0":
-            return {netifaces.AF_INET: [{"addr": "192.168.0.8"}]}
-        return {}
-
-    mock_ifaddresses.side_effect = mock_ifaddresses_side_effect
-
-    result = host_ip_man._get_host_ips()
-    assert result == {"wlan0": "10.0.0.5", "eth0": "192.168.0.8"}
-
-
-def test_get_host_ips_growing_zeek_dir(mocker):
-    """Test _get_host_ips when using multiple interfaces via --access-point."""
-    host_ip_man = ModuleFactory().create_host_ip_manager_obj()
-    host_ip_man.main.args.interface = None
-    host_ip_man.main.args.growing = True
+    host_ip_man.main.args.interface = "eth0"
     host_ip_man.main.args.access_point = None
-    host_ip_man._get_default_host_ip = Mock(return_value="10.0.0.5")
 
-    mocker.patch(
-        "slips_files.common.slips_utils.Utils.infer_used_interface",
-        return_value="eth0",
-    )
+    mock_ifaddresses.return_value = {
+        netifaces.AF_INET: [{"addr": "192.168.1.10"}]
+    }
 
     result = host_ip_man._get_host_ips()
-    assert result == {"eth0": "10.0.0.5"}
+
+    assert result == {"eth0": "192.168.1.10"}
+    mock_ifaddresses.assert_called_once_with("eth0")
+
+
+@patch("netifaces.ifaddresses")
+def test_get_host_ips_ipv6_fallback(mock_ifaddresses):
+    """Test _get_host_ips uses IPv6 when no IPv4 is found."""
+    host_ip_man = ModuleFactory().create_host_ip_manager_obj()
+    host_ip_man.main.args.interface = "wlan0"
+    host_ip_man.main.args.access_point = None
+
+    mock_ifaddresses.return_value = {
+        netifaces.AF_INET6: [{"addr": "fe80::1234:abcd%wlan0"}]
+    }
+
+    result = host_ip_man._get_host_ips()
+    assert result == {"wlan0": "fe80::1234:abcd"}
+
+
+@patch("netifaces.ifaddresses")
+def test_get_host_ips_skips_loopback(mock_ifaddresses):
+    """Test _get_host_ips ignores loopback addresses."""
+    host_ip_man = ModuleFactory().create_host_ip_manager_obj()
+    host_ip_man.main.args.interface = "lo"
+    host_ip_man.main.args.access_point = None
+
+    mock_ifaddresses.return_value = {
+        netifaces.AF_INET: [{"addr": "127.0.0.1"}]
+    }
+
+    result = host_ip_man._get_host_ips()
+    assert result == {}
 
 
 @pytest.mark.parametrize(

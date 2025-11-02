@@ -555,20 +555,10 @@ class Main:
             self.profilers_manager.memory_profiler_init()
 
             if self.args.growing:
-                if self.input_type != "zeek_folder":
-                    self.print(
-                        f"Parameter -g should be used with "
-                        f"-f <dirname> not a {self.input_type} file. "
-                        f"Ignoring -g. Analyzing {self.input_information} "
-                        f"instead.",
-                        verbose=1,
-                        debug=3,
-                    )
-                else:
-                    self.print(
-                        f"Running on a growing zeek dir: {self.input_information}"
-                    )
-                    self.db.set_growing_zeek_dir()
+                self.print(
+                    f"Running on a growing zeek dir: " f"{self.args.growing}"
+                )
+                self.db.set_growing_zeek_dir()
 
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started

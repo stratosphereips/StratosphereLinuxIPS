@@ -207,26 +207,6 @@ class Utils(object):
                 if ip_obj in ipaddress.IPv4Network(local_net):
                     return interface
 
-    def infer_used_interface(self) -> str | None:
-        """for when the user is using -g and didnt give slips an interface"""
-        # PS: make sure you never run this when slips is given a file or a
-        # pcap
-        if self.used_inetrface:
-            return self.used_inetrface
-
-        try:
-            gateways = netifaces.gateways()
-            default_gateway = gateways.get("default", {})
-            for family in (netifaces.AF_INET, netifaces.AF_INET6):
-                if family not in default_gateway:
-                    continue
-                interface = default_gateway[family][1]
-                self.used_inetrface = interface
-                return interface
-        except KeyError:
-            pass
-        return "default"
-
     def get_gateway_for_iface(self, iface: str) -> Optional[str]:
         """returns the default gateway for the given interface"""
         gws = netifaces.gateways()
@@ -512,8 +492,6 @@ class Utils(object):
             return [args.interface]
         if args.access_point:
             return args.access_point.split(",")
-        if args.growing:
-            return [self.infer_used_interface()]
 
         return ["default"]
 
@@ -557,7 +535,7 @@ class Utils(object):
         :kwarg ret: "Dict" or "List"
         and returns a list of all the ips combined if ret=List is given
         """
-        if "-i" not in sys.argv and "-g" not in sys.argv:
+        if "-i" not in sys.argv:
             # this method is only valid when running on an interface
             return []
 
