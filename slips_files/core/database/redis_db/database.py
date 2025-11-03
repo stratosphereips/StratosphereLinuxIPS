@@ -13,7 +13,6 @@ from slips_files.core.database.redis_db.profile_handler import ProfileHandler
 from slips_files.core.database.redis_db.p2p_handler import P2PHandler
 
 import os
-import signal
 import redis
 import time
 import json
@@ -241,6 +240,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         return cls.r.get(cls.constants.SLIPS_START_TIME)
 
     @classmethod
+    def should_flush_db(cls) -> bool:
+        """
+        these are the cases that we DO NOT flush the db when we
+            connect to it, because we need to use it
+            -d means Read an analysed file (rdb) from disk.
+            -S stop daemon
+            -cb clears the blocking chain
+        """
+        will_need_the_db_later = (
+            "-S" in sys.argv or "-cb" in sys.argv or "-d" in sys.argv
+        )
+        return cls.deletePrevdb and cls.flush_db and not will_need_the_db_later
+
+    @classmethod
     def init_redis_server(cls) -> Tuple[bool, str]:
         """
         starts the redis server, connects to the it, and andjusts redis
@@ -257,18 +270,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             if not connected:
                 return False, err
 
-            # these are the cases that we DO NOT flush the db when we
-            # connect to it, because we need to use it
-            # -d means Read an analysed file (rdb) from disk.
-            # -S stop daemon
-            # -cb clears the blocking chain
-            if (
-                cls.deletePrevdb
-                and not (
-                    "-S" in sys.argv or "-cb" in sys.argv or "-d" in sys.argv
-                )
-                and cls.flush_db
-            ):
+            if cls.should_flush_db():
                 # when stopping the daemon, don't flush bc we need to get
                 # the PIDS to close slips files
                 cls.r.flushdb()
@@ -367,11 +369,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             return False, f"database.connect_to_redis_server: {e}"
 
     @classmethod
-    def close_redis_server(cls, redis_port):
-        if server_pid := cls.get_redis_server_pid(redis_port):
-            os.kill(int(server_pid), signal.SIGKILL)
-
-    @classmethod
     def change_redis_limits(cls, client: redis.StrictRedis):
         """
         changes redis soft and hard limits to fix redis closing/resetting
@@ -404,7 +401,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         self.r.hincrby(self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel, 1)
         self.r.publish(channel, msg)
 
-    def get_msgs_published_in_channel(self, channel: str) -> int:
+    def get_msgs_published_in_channel(self, channel: str) -> int | None:
         """returns the number of msgs published in a channel"""
         return self.r.hget(self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel)
 
@@ -1031,20 +1028,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         stored as {Domain: [IP, IP, IP]} in the db
         """
         self.r.hset(self.constants.DOMAINS_RESOLVED, domain, json.dumps(ips))
-
-    @staticmethod
-    def get_redis_server_pid(redis_port):
-        """
-        get the PID of the redis server started on the given redis_port
-        retrns the pid
-        """
-        cmd = "ps aux | grep redis-server"
-        cmd_output = os.popen(cmd).read()
-        for line in cmd_output.splitlines():
-            if str(redis_port) in line:
-                pid = line.split()[1]
-                return pid
-        return False
 
     def set_slips_mode(self, slips_mode):
         """

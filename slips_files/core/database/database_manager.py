@@ -331,9 +331,6 @@ class DBManager:
     def set_domain_resolution(self, *args, **kwargs):
         return self.rdb.set_domain_resolution(*args, **kwargs)
 
-    def get_redis_server_pid(self, *args, **kwargs):
-        return self.rdb.get_redis_server_pid(*args, **kwargs)
-
     def set_slips_mode(self, *args, **kwargs):
         return self.rdb.set_slips_mode(*args, **kwargs)
 
