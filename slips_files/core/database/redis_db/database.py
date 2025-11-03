@@ -1,5 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import socket
+
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -252,6 +254,9 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
                 # starts the redis server using cli.
                 # we don't need that when using -k
                 cls._start_a_redis_server()
+                all_good, err = cls._confirm_redis_is_listening()
+                if not all_good:
+                    return False, err
 
             connected, err = cls.connect_to_redis_server()
             if not connected:
@@ -315,10 +320,34 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         )
 
     @classmethod
+    def _confirm_redis_is_listening(cls, timeout: float = 5.0) -> (bool, str):
+        """
+        Polls the redis port to confirm Redis is really listening
+        :param timeout: how long to keep polling before raising runtime error
+        """
+        start = time.time()
+        while time.time() - start < timeout:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(0.2)
+                try:
+                    sock.connect(("127.0.0.1", cls.redis_port))
+                    return True, ""  # Redis is up
+                except (ConnectionRefusedError, OSError):
+                    time.sleep(0.2)
+
+        # If we reach here, port never opened
+        return False, (
+            f"_confirm_redis_is_listening: Redis failed to start on "
+            f"{cls.redis_port}"
+        )
+
+    @classmethod
     def _start_a_redis_server(cls) -> bool:
         cmd = (
-            f"redis-server {cls._conf_file} --port {cls.redis_port} "
-            f" --daemonize yes"
+            f"redis-server {cls._conf_file} "
+            f"--port {cls.redis_port} "
+            f"--bind 127.0.0.1 "
+            f"--daemonize yes"
         )
         process = subprocess.Popen(
             cmd,
