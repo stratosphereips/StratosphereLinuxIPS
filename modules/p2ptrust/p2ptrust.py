@@ -158,6 +158,8 @@ class Trust(IModule):
 
     def get_available_port(self) -> int:
         for port in range(32768, 65535):
+            if port == self.redis_port:
+                continue
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
                 sock.bind(("0.0.0.0", port))
