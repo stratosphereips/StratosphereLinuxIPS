@@ -166,3 +166,5 @@ Each incident in the final dataset contains:
 - **Behavior Analysis**: Structured network flow descriptions
 
 Token efficiency enables deployment on Raspberry Pi 5 while maintaining security analysis quality suitable for real-time intrusion detection.
+
+The current version of the dataset used for finentuning LLM models is available [here](https://github.com/stratosphereips/Slips-tools/raw/refs/heads/main/alert_summary/datasets/summarization_dataset.json.gz)
