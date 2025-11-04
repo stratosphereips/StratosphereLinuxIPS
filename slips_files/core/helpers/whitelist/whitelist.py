@@ -7,6 +7,7 @@ from typing import (
     Union,
     Set,
 )
+from pybloom_live import BloomFilter
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.printer import Printer
@@ -42,6 +43,10 @@ class Whitelist:
         self.mac_analyzer = MACAnalyzer(self.db, whitelist_manager=self)
         self.org_analyzer = OrgAnalyzer(self.db, whitelist_manager=self)
         self.read_configuration()
+        self.domains_bloom = BloomFilter(capacity=10000, error_rate=0.001)
+        self.ips_bloom = BloomFilter(capacity=10000, error_rate=0.001)
+        self.mac_addrs_bloom = BloomFilter(capacity=10000, error_rate=0.001)
+        self.orgs_bloom = BloomFilter(capacity=100, error_rate=0.001)
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -50,13 +55,25 @@ class Whitelist:
     def update(self):
         """
         parses the local whitelist specified in the slips.yaml
-        and stores the parsed results in the db
+        and stores the parsed results in the db and in bloom filters
         """
         self.parser.parse()
+
         self.db.set_whitelist("IPs", self.parser.whitelisted_ips)
+        for ip in self.parser.whitelisted_ips:
+            self.ips_bloom.add(ip)
+
         self.db.set_whitelist("domains", self.parser.whitelisted_domains)
+        for domain in self.parser.whitelisted_domains:
+            self.domains_bloom.add(domain)
+
         self.db.set_whitelist("organizations", self.parser.whitelisted_orgs)
+        for org in self.parser.whitelisted_orgs:
+            self.orgs_bloom.add(org)
+
         self.db.set_whitelist("macs", self.parser.whitelisted_mac)
+        for mac in self.parser.whitelisted_mac:
+            self.mac_addrs_bloom.add(mac)
 
     def _check_if_whitelisted_domains_of_flow(self, flow) -> bool:
         dst_domains_to_check: List[str] = (
