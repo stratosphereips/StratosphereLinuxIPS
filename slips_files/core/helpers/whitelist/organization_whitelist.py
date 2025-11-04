@@ -8,6 +8,8 @@ from typing import (
     Union,
 )
 
+from pybloom_live import BloomFilter
+
 from slips_files.common.abstracts.iwhitelist_analyzer import IWhitelistAnalyzer
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -44,6 +46,41 @@ class OrgAnalyzer(IWhitelistAnalyzer):
     def read_configuration(self):
         conf = ConfigParser()
         self.enable_local_whitelist: bool = conf.enable_local_whitelist()
+
+    def init_bloom_filters(self):
+        """
+        Updates the bloom filters with the whitelisted organization
+        domains, asns, and ips
+        is called from update_manager whether slips did update its local
+        org files or not.
+        this goal of calling this is to make sure slips has the bloom
+        filters in mem at all times.
+        """
+        self.bloom_filters = {}
+        for org in utils.supported_orgs:
+            domains_bloom = BloomFilter(capacity=10000, error_rate=0.001)
+            asns_bloom = BloomFilter(capacity=10000, error_rate=0.001)
+            cidrs_bloom = BloomFilter(capacity=100, error_rate=0.001)
+
+            domains: List[str] = json.loads(
+                self.db.get_org_info(org, "domains")
+            )
+            for domain in domains:
+                domains_bloom.add(domain)
+
+            asns: List[str] = json.loads(self.db.get_org_info(org, "asn"))
+            for asn in asns:
+                asns_bloom.add(asn)
+
+            org_subnets: dict = self.db.get_org_ips(org)
+            for first_octet in org_subnets:
+                cidrs_bloom.add(first_octet)
+
+            self.bloom_filters[org] = {
+                "domains": domains_bloom,
+                "asns": asns_bloom,
+                "cidrs": cidrs_bloom,
+            }
 
     def is_domain_in_org(self, domain: str, org: str):
         """

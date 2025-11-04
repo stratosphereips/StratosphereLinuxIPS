@@ -127,7 +127,7 @@ class WhitelistParser:
         self.whitelisted_mac[mac] = info
 
     def update_whitelisted_ips(self, ip: str, info: Dict[str, str]):
-        if not (validators.ipv6(ip) or validators.ipv4):
+        if not (validators.ipv6(ip) or validators.ipv4(ip)):
             return
         self.whitelisted_ips[ip] = info
 

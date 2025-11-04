@@ -1484,10 +1484,16 @@ class UpdateManager(IModule):
             self.whitelist.update()
 
     def update_org_files(self):
+        """
+        This func handles organizations whitelist files.
+        It updates the local IoCs of every supported organization in the db
+        and initializes the bloom filters
+        """
         for org in utils.supported_orgs:
             org_ips = os.path.join(self.org_info_path, org)
             org_asn = os.path.join(self.org_info_path, f"{org}_asn")
             org_domains = os.path.join(self.org_info_path, f"{org}_domains")
+
             if self.check_if_update_org(org_ips):
                 self.whitelist.parser.load_org_ips(org)
 
@@ -1502,6 +1508,7 @@ class UpdateManager(IModule):
                     "hash": utils.get_sha256_hash_of_file_contents(file),
                 }
                 self.mark_feed_as_updated(file, info)
+        self.whitelist.org_analyzer.init_bloom_filters()
 
     def update_ports_info(self):
         for file in os.listdir("slips_files/ports_info"):
