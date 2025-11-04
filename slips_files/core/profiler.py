@@ -611,8 +611,7 @@ class Profiler(ICore, IObservable):
         """starts 3 profiler threads for faster processing of the flows"""
         num_of_profiler_threads = 3
         for _ in range(num_of_profiler_threads):
-            t = threading.Thread(target=self.process_flow)
-            t.daemon = True
+            t = threading.Thread(target=self.process_flow, daemon=True)
             t.start()
             self.profiler_threads.append(t)
 
