@@ -30,6 +30,7 @@ from typing import (
 )
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
+LOCALHOST = "127.0.0.1"
 
 
 class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
@@ -332,7 +333,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.settimeout(0.2)
                 try:
-                    sock.connect(("127.0.0.1", cls.redis_port))
+                    sock.connect((LOCALHOST, cls.redis_port))
                     return True, ""  # Redis is up
                 except (ConnectionRefusedError, OSError):
                     time.sleep(0.2)
@@ -348,7 +349,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         cmd = (
             f"redis-server {cls._conf_file} "
             f"--port {cls.redis_port} "
-            f"--bind 127.0.0.1 "
+            f"--bind {LOCALHOST} "
             f"--daemonize yes"
         )
         process = subprocess.Popen(
@@ -942,7 +943,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # don't store this as a valid dns resolution
         if query != "localhost":
             for answer in answers:
-                if answer in ("127.0.0.1", "0.0.0.0"):
+                if answer in (LOCALHOST, "0.0.0.0"):
                     return False
 
         return True
@@ -1262,7 +1263,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
     def get_multiaddr(self):
         """
-        this is can only be called when p2p is enabled, this value is set by p2p pigeon
+        this can only be called when p2p is enabled,
+        this value is set by p2p pigeon in the db
         """
         return self.r.get(self.constants.MULTICAST_ADDRESS)
 
