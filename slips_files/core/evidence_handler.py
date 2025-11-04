@@ -109,7 +109,6 @@ class EvidenceHandler(ICore):
         self.last_msg_received_time = time.time()
 
         # A thread that handing I/O to disk (writing evidence to log files)
-        # todo use this on sg()
         self.logger_stop_signal = threading.Event()
         self.evidence_logger_q = multiprocessing.Queue()
         self.evidence_logger = EvidenceLogger(
@@ -250,6 +249,11 @@ class EvidenceHandler(ICore):
         self.add_alert_to_json_log_file(alert)
 
     def shutdown_gracefully(self):
+        self.logger_stop_signal.set()
+        try:
+            self.logger_thread.join(timeout=5)
+        except Exception:
+            pass
         self.logfile.close()
         self.jsonfile.close()
 
