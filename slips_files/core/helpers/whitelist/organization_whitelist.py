@@ -79,7 +79,7 @@ class OrgAnalyzer(IWhitelistAnalyzer):
             self.bloom_filters[org] = {
                 "domains": domains_bloom,
                 "asns": asns_bloom,
-                "cidrs": cidrs_bloom,
+                "first_octets": cidrs_bloom,
             }
 
     def is_domain_in_org(self, domain: str, org: str):
@@ -88,6 +88,9 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         the hardcoded org domains in organizations_info/org_domains
         """
         try:
+            if domain not in self.bloom_filters[org]["domains"]:
+                return False
+
             org_domains = json.loads(self.db.get_org_info(org, "domains"))
             flow_tld = self.domain_analyzer.get_tld(domain)
 
@@ -120,9 +123,12 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         Check if the given ip belongs to the given org
         """
         try:
+            first_octet: str = utils.get_first_octet(ip)
+            if first_octet not in self.bloom_filters[org]["first_octets"]:
+                return False
+
             org_subnets: dict = self.db.get_org_ips(org)
 
-            first_octet: str = utils.get_first_octet(ip)
             if not first_octet:
                 return
             ip_obj = ipaddress.ip_address(ip)
@@ -163,6 +169,9 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         asn: str = asn.upper()
         if org.upper() in asn:
             return True
+
+        if asn not in self.bloom_filters[org]["asns"]:
+            return False
 
         org_asn: List[str] = json.loads(self.db.get_org_info(org, "asn"))
         return asn in org_asn
