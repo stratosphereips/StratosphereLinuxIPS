@@ -16,7 +16,7 @@ ipwhois==1.2.0
 matplotlib==3.10.7
 scikit_learn
 slackclient==2.9.4
-psutil==7.1.2
+psutil==7.1.3
 six==1.17.0
 pytest==8.4.2
 pytest-mock==3.15.1
