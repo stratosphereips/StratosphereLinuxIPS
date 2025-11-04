@@ -642,9 +642,9 @@ class Trust(IModule):
         try:
             if not self.mutliaddress_printed:
                 # give the pigeon time to put the multiaddr in the db
-                time.sleep(10)
+                time.sleep(2)
                 multiaddr = self.db.get_multiaddr()
-                self.print(f"You Multiaddress is: {multiaddr}")
+                self.print(f"You Multiaddress is: {multiaddr}\n")
                 self.mutliaddress_printed = True
 
         except Exception:
