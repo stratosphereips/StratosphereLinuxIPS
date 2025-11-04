@@ -27,6 +27,8 @@ from slips_files.core.structures.evidence import (
     Direction,
 )
 
+LOCALHOST = "127.0.0.1"
+
 
 def validate_slips_data(message_data: str) -> (str, int):
     """
@@ -197,30 +199,23 @@ class Trust(IModule):
                     f"Did you include it in PATH?. Exiting process."
                 )
                 return
-            executable = [self.pigeon_binary]
-            port_param = ["-port", str(self.port)]
-            # if '-ip' in sys.argv:
-            #     ip_to_listen_on = sys.argv[sys.argv.index('-ip')+1]
-            #     host_param = ["-host", ip_to_listen_on ]
-            #     print(f"P2P modules is listening on ip {ip_to_listen_on} port: {self.port}, using '-ip' parameter")
-            # else:
-            host_param = ["-host", self.host]
-            self.print(
-                f"P2p is listening on {self.host} port {self.port} determined "
-                f"by p2p module"
-            )
 
-            keyfile_param = ["-key-file", self.pigeon_key_file]
-            # rename_with_port_param = ["-rename-with-port",
-            # str(self.rename_with_port).lower()]
-            pygo_channel_param = ["-redis-channel-pygo", self.pygo_channel_raw]
-            gopy_channel_param = ["-redis-channel-gopy", self.gopy_channel_raw]
-            executable.extend(port_param)
-            executable.extend(host_param)
-            executable.extend(keyfile_param)
-            # executable.extend(rename_with_port_param)
-            executable.extend(pygo_channel_param)
-            executable.extend(gopy_channel_param)
+            params = {
+                "-port": str(self.port),
+                "-host": self.host,
+                "-key-file": self.pigeon_key_file,
+                "--redis-db": f"localhost:{self.redis_port}",
+                "-redis-channel-pygo": self.pygo_channel_raw,
+                "-redis-channel-gopy": self.gopy_channel_raw,
+            }
+            self.print(
+                f"P2P is listening on {self.host} port {self.port} "
+                f"(determined by p2p module)"
+            )
+            executable = [self.pigeon_binary] + [
+                item for pair in params.items() for item in pair
+            ]
+
             if self.create_p2p_logfile:
                 outfile = open(self.pigeon_logfile, "+w")
             else:
@@ -647,7 +642,7 @@ class Trust(IModule):
         try:
             if not self.mutliaddress_printed:
                 # give the pigeon time to put the multiaddr in the db
-                time.sleep(2)
+                time.sleep(10)
                 multiaddr = self.db.get_multiaddr()
                 self.print(f"You Multiaddress is: {multiaddr}")
                 self.mutliaddress_printed = True
