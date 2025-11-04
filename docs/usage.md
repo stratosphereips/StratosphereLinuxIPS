@@ -468,28 +468,6 @@ The values for each column are the following:
             - Ignore alerts: slips reads all the flows, but it just ignores alerting if there is a match.
             - Ignore flows: the flow will be completely discarded.
 
-### Removing values from the Whitelist
-
-Whitelisted IoCs can be updated:
-1. When you re-start Slips
-2. On the fly while running Slips
-
-If you're updating the whitelist while Slips is running, be careful to use ; to comment out the lines you want to remove from the db
-for example, if you have the following line in `whitelist.conf`:
-
-```
-organization,google,both,alerts
-```
-
-To be able to remove this whitelist entry while Slips is running, simply change it to
-
-```
-# organization,google,both,alerts
-```
-
-Comments starting with `;` are not removed from the database and are treated as user comments.
-Comments starting with `#` will cause Slips to attempt to remove that entry from the database.
-
 ## Popup notifications
 
 Slips Support displaying popup notifications whenever there's an alert.
@@ -622,7 +600,7 @@ Check [rotation section](https://stratospherelinuxips.readthedocs.io/en/develop/
 
 But you can also enable storing a copy of zeek log files in the output
 directory after the analysis is done by setting ```store_a_copy_of_zeek_files``` to yes,
-or while zeek is stil generating log files by setting ```store_zeek_files_in_the_output_dir``` to yes.
+or while zeek is still generating log files by setting ```store_zeek_files_in_the_output_dir``` to yes.
 this option stores a copy of the zeek files present in ```zeek_files/``` the moment slips stops.
 so this doesn't include deleted zeek logs.
 

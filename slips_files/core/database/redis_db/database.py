@@ -62,7 +62,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         "new_notice",
         "new_url",
         "new_downloaded_file",
-        "reload_whitelist",
         "new_service",
         "new_arp",
         "new_MAC",

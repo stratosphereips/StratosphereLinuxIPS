@@ -95,10 +95,7 @@ class Profiler(ICore, IObservable):
         # there has to be a timeout or it will wait forever and never
         # receive a new line
         self.timeout = 0.0000001
-        self.c1 = self.db.subscribe("reload_whitelist")
-        self.channels = {
-            "reload_whitelist": self.c1,
-        }
+        self.channels = {}
         # is set by this proc to tell input proc that we are done
         # processing and it can exit no issue
         self.is_profiler_done_event = is_profiler_done_event
@@ -745,16 +742,6 @@ class Profiler(ICore, IObservable):
         # we're using self.should_stop() here instead of while True to be
         # able to unit test this function:D
         while not self.should_stop():
-            # listen on this channel in case whitelist.conf is changed,
-            # we need to process the new changes
-            if self.get_msg("reload_whitelist"):
-                # if whitelist.conf is edited using pycharm
-                # a msg will be sent to this channel on every keypress,
-                # because pycharm saves file automatically
-                # otherwise this channel will get a msg only when
-                # whitelist.conf is modified and saved to disk
-                self.whitelist.update()
-
             msg = self.get_msg_from_input_proc(self.profiler_queue)
             if not msg:
                 # wait for msgs
