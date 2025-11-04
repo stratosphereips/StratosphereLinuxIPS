@@ -52,6 +52,11 @@ class IPAnalyzer(IWhitelistAnalyzer):
         if not self.is_valid_ip(ip):
             return False
 
+        if ip not in self.manager.ips_bloom:
+            # defnitely not whitelisted
+            return False
+
+        # reaching here means ip is in the bloom filter
         whitelisted_ips: Dict[str, dict] = self.db.get_whitelist("IPs")
 
         if ip not in whitelisted_ips:

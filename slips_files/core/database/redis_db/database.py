@@ -1573,13 +1573,24 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         :param info_type: supported types are 'asn', 'domains'
         returns a json serialized dict with info
         PS: All ASNs returned by this function are uppercase
+        retuns:
+        when info_type is 'asn': List[str]
+        when info_type is 'domains': List[str]
+        when info_type is 'IPs': Dict[str, str] keys are subnet first
+        octets and values are the full subnet str
+        e.g {"34": "34.64.0.0/10"}
         """
         return (
             self.rcache.hget(self.constants.ORG_INFO, f"{org}_{info_type}")
             or "[]"
         )
 
-    def get_org_ips(self, org):
+    def get_org_ips(self, org) -> Dict[str, str]:
+        """
+        returns Dict[str, str]
+        keys are subnet first octets and values are the full subnet str
+        e.g {"34": "34.64.0.0/10"}
+        """
         org_info = self.rcache.hget(self.constants.ORG_INFO, f"{org}_IPs")
 
         if not org_info:

@@ -65,6 +65,10 @@ class MACAnalyzer(IWhitelistAnalyzer):
         if not self.is_valid_mac(mac):
             return False
 
+        if mac not in self.manager.macs_bloom:
+            # defnitely not whitelisted
+            return False
+
         whitelisted_macs: Dict[str, dict] = self.db.get_whitelist("macs")
         if mac not in whitelisted_macs:
             return False

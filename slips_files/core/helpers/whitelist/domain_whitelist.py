@@ -104,6 +104,11 @@ class DomainAnalyzer(IWhitelistAnalyzer):
                 # domain is in the local whitelist, but the local whitelist
                 # not enabled
                 return False
+
+            if parent_domain not in self.manager.domains_bloom:
+                # definitely not whitelisted
+                return False
+
             whitelisted_domains: Dict[str, Dict[str, str]]
             whitelisted_domains = self.db.get_whitelist("domains")
             if parent_domain in whitelisted_domains:
