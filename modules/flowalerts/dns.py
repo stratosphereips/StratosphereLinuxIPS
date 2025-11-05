@@ -651,6 +651,7 @@ class DNS(IFlowalertsAnalyzer):
                 # if the ip is the dns server that slips detected,
                 # it's ok to connect to it
                 ip == self.detected_dns_ip
+                or not validators.ipv4(ip)
                 or ip in SPECIAL_IPV4
                 or not ip_obj.is_private
                 or ip_obj.is_loopback

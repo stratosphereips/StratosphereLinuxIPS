@@ -719,7 +719,9 @@ class Conn(IFlowalertsAnalyzer):
         for ip in (flow.saddr, flow.daddr):
             ip_obj = ipaddress.ip_address(ip)
             return (
-                ip in SPECIAL_IPV4
+                # because slips only knows about the ipv4 local networks
+                not validators.ipv4(ip)
+                or ip in SPECIAL_IPV4
                 or not ip_obj.is_private
                 or ip_obj.is_loopback
                 or ip_obj.is_multicast
