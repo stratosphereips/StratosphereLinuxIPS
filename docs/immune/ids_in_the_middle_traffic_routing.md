@@ -1,11 +1,11 @@
 # Table Of Contents
 * [IDS-in-the-middle Traffic Routing](#ids-in-the-middle-traffic-routing)
 * [Problem Statement](#problem-statement)
-* [Researched Solutions](#researched-solutions)
-  * [Using Bridge mode instead of NAT](#using-bridge-mode-instead-of-nat-for-the-rpi-access-point-)
+* [Solutions That Didn't Work](#solutions-that-didn-t-work)
+  * [Using Bridge mode instead of NAT for the RPI Access Point:](#using-bridge-mode-instead-of-nat-for-the-rpi-access-point-)
   * [Port Mirroring](#port-mirroring)
   * [A Zeek Cluster with two workers monitoring each interface](#a-zeek-cluster-with-two-workers-monitoring-each-interface)
-* [Working Solution](#working-solution)
+* [Working Solution Currently Implemented in Slips](#working-solution-currently-implemented-in-slips)
 * [Usage](#usage)
 * [Related Links](#related-links)
 
@@ -36,7 +36,7 @@ attack (eth0 in this case) and it doesn't have access to the attacker's IP.
 This makes out goal is to find a way to access and monitor both interfaces (wlan0 and eth0) when Slips is running as
 an access point in the RPI.
 
-# Researched Solutions
+# Solutions That Didn't Work
 
 Here we list the researched solutions to monitor both interfaces in Slips, they all manage to give slips access to the network
 traffic from both interfaces, but they all have their limitations that made us discard them.
@@ -68,10 +68,13 @@ causing frequent reconnection of AP clients, client failing to get an IP address
 minutes, which is too long to be practical for Slips users.
 
 
-# Working Solution
+# Working Solution Currently Implemented in Slips
 
-Support monitoring 2 interfaces and start 2 instances of Zeek (without a cluster),
-one monitoring each interface (wlan0 and eth0).
+The following solutions is the one that works and integrates seamlessly into Slips.
+
+**Goal:**
+Monitor 2 interfaces and start 2 instances of Zeek (without a cluster),
+with one zeek instance monitoring each interface (wlan0 and eth0).
 
 **Pros:**
 - Integrates well with the current Slips architecture.
@@ -83,9 +86,12 @@ Zeek instances resulting in duplicate zeek logs.
 
 **Workaround:**
 
-- For solving the duplicate traffic issue, thanks to the flexibility of zeek, we added a filter to show incoming traffic only
-in the logs produced by the zeek instance monitoring the ethernet interface.
+- For solving the duplicate traffic issue, thanks to the flexibility of zeek, we added a Zeek filter to show the
+traffic incoming from the router's network to the RPI in the logs produced by the Zeek instance monitoring the
+ethernet interface (the interface responsible for receiving traffic from the router).
 
+- The used Zeek filter is simply `dst net <localnetwork>` added to the CLI args of the zeek instance monitoring
+the ethernet interface (eth0 in the graph above) to only log incoming traffic to the local network.
 
 # Usage
 
