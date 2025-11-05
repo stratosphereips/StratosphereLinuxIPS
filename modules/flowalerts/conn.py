@@ -19,7 +19,7 @@ from slips_files.common.flow_classifier import FlowClassifier
 
 NOT_ESTAB = "Not Established"
 ESTAB = "Established"
-SPECIAL_IPV6 = ("0.0.0.0", "255.255.255.255")
+SPECIAL_IPV4 = ("0.0.0.0", "255.255.255.255")
 
 
 class Conn(IFlowalertsAnalyzer):
@@ -41,8 +41,6 @@ class Conn(IFlowalertsAnalyzer):
         self.our_ips: List[str] = utils.get_own_ips(ret="List")
         self.input_type: str = self.db.get_input_type()
         self.multiple_reconnection_attempts_threshold = 5
-        # we use this to try to detect if there's dns server that has a
-        # private ip outside of localnet
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -367,7 +365,7 @@ class Conn(IFlowalertsAnalyzer):
         """Devices send flow as/to these ips all the time, the're not
         suspicious not need to detect them."""
         # its ok to change ips from a link local ip to another private ip
-        return ip in SPECIAL_IPV6 or ipaddress.ip_address(ip).is_link_local
+        return ip in SPECIAL_IPV4 or ipaddress.ip_address(ip).is_link_local
 
     def check_device_changing_ips(self, twid, flow):
         """
@@ -713,12 +711,21 @@ class Conn(IFlowalertsAnalyzer):
                     return True
             return False
 
-    def _is_ok_to_connect_to_ip(self, ip: str) -> bool:
+    def _is_ok_to_connect_to_ip_outside_localnet(self, flow) -> bool:
         """
         returns true if it's ok to connect to the given IP even if it's
         "outside the given local network"
         """
-        return ip in SPECIAL_IPV6 or utils.is_localhost(ip)
+        for ip in (flow.saddr, flow.daddr):
+            ip_obj = ipaddress.ip_address(ip)
+            return (
+                # because slips only knows about the ipv4 local networks
+                not validators.ipv4(ip)
+                or ip in SPECIAL_IPV4
+                or not ip_obj.is_private
+                or ip_obj.is_loopback
+                or ip_obj.is_multicast
+            )
 
     def _is_dns(self, flow) -> bool:
         return str(flow.dport) == "53" and flow.proto.lower() == "udp"
@@ -736,26 +743,23 @@ class Conn(IFlowalertsAnalyzer):
         If we are on 192.168.1.0/24 then detect anything
         coming from/to 10.0.0.0/8
         :param what_to_check: can be 'srcip' or 'dstip'
+        PS: most changes here should be in
+        dns.py::check_different_localnet_usage() so remember to update both:D
         """
         if self._is_dns(flow):
             # dns flows are checked fot this same detection in dns.py
             return
 
-        if self._is_ok_to_connect_to_ip(
-            flow.saddr
-        ) or self._is_ok_to_connect_to_ip(flow.daddr):
+        if self._is_ok_to_connect_to_ip_outside_localnet(flow):
             return
 
         ip_to_check = flow.saddr if what_to_check == "srcip" else flow.daddr
 
         ip_obj = ipaddress.ip_address(ip_to_check)
-        if not (validators.ipv4(ip_to_check) and utils.is_private_ip(ip_obj)):
-            return
-
         own_local_network = self.db.get_local_network(flow.interface)
         if not own_local_network:
             # the current local network wasn't set in the db yet
-            # it's impossible to get here becaus ethe localnet is set before
+            # it's impossible to get here because the localnet is set before
             # any msg is published in the new_flow channel
             return
 
