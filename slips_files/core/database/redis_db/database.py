@@ -1168,14 +1168,14 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """Return the field separator"""
         return self.separator
 
-    def store_tranco_whitelisted_domain(self, domain):
+    def store_tranco_whitelisted_domains(self, domains: List[str]):
         """
-        store whitelisted domain from tranco whitelist in the db
+        store whitelisted domains from tranco whitelist in the db
         """
         # the reason we store tranco whitelisted domains in the cache db
         # instead of the main db is, we don't want them cleared on every new
         # instance of slips
-        self.rcache.sadd(self.constants.TRANCO_WHITELISTED_DOMAINS, domain)
+        self.rcache.sadd(self.constants.TRANCO_WHITELISTED_DOMAINS, *domains)
 
     def is_whitelisted_tranco_domain(self, domain):
         return self.rcache.sismember(
@@ -1603,35 +1603,27 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             # it's a dict
             return org_info
 
-    def set_whitelist(self, type_, whitelist_dict):
+    def set_whitelist(self, type_, whitelist_dict: Dict[str, Dict[str, str]]):
         """
         Store the whitelist_dict in the given key
         :param type_: supported types are IPs, domains, macs and organizations
         :param whitelist_dict: the dict of IPs,macs,  domains or orgs to store
         """
-        self.r.hset(
-            self.constants.WHITELIST, type_, json.dumps(whitelist_dict)
-        )
-
-    def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
-        """
-        Returns a dict with the following keys from the whitelist
-        'mac', 'organizations', 'IPs', 'domains'
-        """
-        whitelist: Optional[Dict[str, str]] = self.r.hgetall(
-            self.constants.WHITELIST
-        )
-        if whitelist:
-            whitelist = {k: json.loads(v) for k, v in whitelist.items()}
-        return whitelist
+        key = f"{self.constants.WHITELIST}_{type_}"
+        # Pre-serialize all values
+        data = {ioc: json.dumps(info) for ioc, info in whitelist_dict.items()}
+        # Send all at once
+        if data:
+            self.r.hset(key, mapping=data)
 
     def get_whitelist(self, key: str) -> dict:
         """
         Whitelist supports different keys like : "IPs", "domains",
         "organizations" or "macs"
         """
-        if whitelist := self.r.hget(self.constants.WHITELIST, key):
-            return json.loads(whitelist)
+        key = f"{self.constants.WHITELIST}_{key}"
+        if whitelist := self.r.hgetall(key):
+            return whitelist
         else:
             return {}
 
