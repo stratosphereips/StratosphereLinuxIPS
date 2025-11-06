@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import ipaddress
+import json
 from typing import (
     Dict,
     List,
@@ -229,23 +230,24 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         :param direction: direction of the given ioc, src or dst?
         :param what_to_ignore: can be "flows" or "alerts" or "both"
         """
-
         if ioc_type == IoCType.IP:
             if utils.is_private_ip(ioc):
                 return False
 
-        whitelisted_orgs: Dict[str, dict] = self.db.get_whitelist(
+        whitelisted_orgs: Dict[str, str] = self.db.get_whitelist(
             "organizations"
         )
         if not whitelisted_orgs:
             return False
 
         for org in whitelisted_orgs:
-            dir_from_whitelist = whitelisted_orgs[org]["from"]
+            org_info = json.loads(whitelisted_orgs[org])
+
+            dir_from_whitelist = org_info["from"]
             if not self.match.direction(direction, dir_from_whitelist):
                 continue
 
-            whitelist_what_to_ignore = whitelisted_orgs[org]["what_to_ignore"]
+            whitelist_what_to_ignore = org_info["what_to_ignore"]
             if not self.match.what_to_ignore(
                 what_to_ignore, whitelist_what_to_ignore
             ):

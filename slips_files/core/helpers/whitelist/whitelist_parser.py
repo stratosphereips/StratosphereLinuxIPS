@@ -17,27 +17,11 @@ class WhitelistParser:
         # to have access to the print function
         self.manager = manager
         self.read_configuration()
-        self.init_whitelists()
-        self.org_info_path = "slips_files/organizations_info/"
-
-    def init_whitelists(self):
-        """
-        initializes the dicts we'll be using for storing the parsed
-        whitelists.
-        uses existing dicts from the db if found.
-        """
         self.whitelisted_ips = {}
         self.whitelisted_domains = {}
         self.whitelisted_orgs = {}
         self.whitelisted_mac = {}
-        if self.db.has_cached_whitelist():
-            # since this parser can run when the user modifies whitelist.conf
-            # and not just when the user starts slips
-            # we need to check if the dicts are already there in the cache db
-            self.whitelisted_ips = self.db.get_whitelist("IPs")
-            self.whitelisted_domains = self.db.get_whitelist("domains")
-            self.whitelisted_orgs = self.db.get_whitelist("organizations")
-            self.whitelisted_mac = self.db.get_whitelist("mac")
+        self.org_info_path = "slips_files/organizations_info/"
 
     def get_dict_for_storing_data(self, data_type: str):
         """
@@ -91,9 +75,6 @@ class WhitelistParser:
         ):
             cache.pop(entry_to_remove["data"])
         return True
-
-    def set_number_of_columns(self, line: str) -> None:
-        self.NUMBER_OF_WHITELIST_COLUMNS: int = len(line.split(","))
 
     def update_whitelisted_domains(self, domain: str, info: Dict[str, str]):
         if not utils.is_valid_domain(domain):
@@ -149,7 +130,7 @@ class WhitelistParser:
     def call_handler(self, parsed_line: Dict[str, str]):
         """
         calls the appropriate handler based on the type of data in the
-        parsed line
+        given line
         :param parsed_line: output dict of self.parse_line
         should have the following keys {
             type": ..
@@ -282,7 +263,6 @@ class WhitelistParser:
         while line := whitelist.readline():
             line_number += 1
             if line.startswith('"IoCType"'):
-                self.set_number_of_columns(line)
                 continue
 
             if line.startswith(";"):
@@ -304,10 +284,11 @@ class WhitelistParser:
             except Exception:
                 self.manager.print(
                     f"Line {line_number} in whitelist.conf is invalid."
-                    f" Skipping. "
+                    f" Skipping."
                 )
                 continue
 
             self.call_handler(parsed_line)
+
         whitelist.close()
         return True
