@@ -1627,10 +1627,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
     def get_whitelist(self, key: str) -> dict:
         """
-        Whitelist supports different keys like : IPs domains
-        and organizations
-        this function is used to check if we have any of the
-        above keys whitelisted
+        Whitelist supports different keys like : "IPs", "domains",
+        "organizations" or "macs"
         """
         if whitelist := self.r.hget(self.constants.WHITELIST, key):
             return json.loads(whitelist)

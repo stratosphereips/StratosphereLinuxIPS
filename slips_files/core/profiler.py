@@ -89,7 +89,7 @@ class Profiler(ICore, IObservable):
         self.input_type = False
         self.rec_lines = 0
         self.localnet_cache = {}
-        self.whitelist = Whitelist(self.logger, self.db)
+        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.read_configuration()
         self.symbol = SymbolHandler(self.logger, self.db)
         # there has to be a timeout or it will wait forever and never

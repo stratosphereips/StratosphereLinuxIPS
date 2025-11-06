@@ -105,7 +105,7 @@ class DomainAnalyzer(IWhitelistAnalyzer):
                 # not enabled
                 return False
 
-            if parent_domain not in self.manager.domains_bloom:
+            if parent_domain not in self.manager.bloom_filters.domains:
                 # definitely not whitelisted
                 return False
 

@@ -56,7 +56,7 @@ class UpdateManager(IModule):
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
         self.interval = 7
-        self.whitelist = Whitelist(self.logger, self.db)
+        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.slips_logfile = self.db.get_stdfile("stdout")
         self.org_info_path = "slips_files/organizations_info/"
         self.path_to_mac_db = "databases/macaddress-db.json"
@@ -1508,7 +1508,6 @@ class UpdateManager(IModule):
                     "hash": utils.get_sha256_hash_of_file_contents(file),
                 }
                 self.mark_feed_as_updated(file, info)
-        self.whitelist.org_analyzer.init_bloom_filters()
 
     def update_ports_info(self):
         for file in os.listdir("slips_files/ports_info"):

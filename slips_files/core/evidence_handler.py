@@ -66,7 +66,7 @@ class EvidenceHandler(ICore):
     name = "EvidenceHandler"
 
     def init(self):
-        self.whitelist = Whitelist(self.logger, self.db)
+        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.idmefv2 = IDMEFv2(self.logger, self.db)
         self.separator = self.db.get_separator()
         self.read_configuration()
