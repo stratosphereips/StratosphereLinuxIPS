@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import json
-from typing import List
+from typing import List, Dict
 
 from pybloom_live import BloomFilter
 
@@ -56,29 +55,29 @@ class BFManager:
         """
         Updates the bloom filters with the whitelisted organization
         domains, asns, and ips
+        fills the self.org_filters dict
         is called from update_manager whether slips did update its local
         org files or not.
         this goal of calling this is to make sure slips has the bloom
         filters in mem at all times.
         """
+        err_rate = 0.01
         for org in utils.supported_orgs:
-            domains_bloom = BloomFilter(capacity=10000, error_rate=0.001)
-            asns_bloom = BloomFilter(capacity=10000, error_rate=0.001)
-            cidrs_bloom = BloomFilter(capacity=100, error_rate=0.001)
+            domains_bloom = BloomFilter(capacity=10000, error_rate=err_rate)
+            asns_bloom = BloomFilter(capacity=10000, error_rate=err_rate)
+            cidrs_bloom = BloomFilter(capacity=100, error_rate=err_rate)
 
-            domains: List[str] = json.loads(
-                self.db.get_org_info(org, "domains")
-            )
-            for domain in domains:
-                domains_bloom.add(domain)
+            domains: List[str] = self.db.get_org_info(org, "domains")
+            _ = [domains_bloom.add(domain) for domain in domains]
 
-            asns: List[str] = json.loads(self.db.get_org_info(org, "asn"))
-            for asn in asns:
-                asns_bloom.add(asn)
+            asns: List[str] = self.db.get_org_info(org, "asn")
+            _ = [asns_bloom.add(asn) for asn in asns]
 
-            org_subnets: dict = self.db.get_org_ips(org)
-            for first_octet in org_subnets:
+            org_subnets: Dict[str, str] = self.db.get_org_ips(org)
+            _ = [
                 cidrs_bloom.add(first_octet)
+                for first_octet in org_subnets.keys()
+            ]
 
             self.org_filters[org] = {
                 "domains": domains_bloom,

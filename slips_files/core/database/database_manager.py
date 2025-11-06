@@ -367,8 +367,8 @@ class DBManager:
     def get_field_separator(self, *args, **kwargs):
         return self.rdb.get_field_separator(*args, **kwargs)
 
-    def store_tranco_whitelisted_domain(self, *args, **kwargs):
-        return self.rdb.store_tranco_whitelisted_domain(*args, **kwargs)
+    def store_tranco_whitelisted_domains(self, *args, **kwargs):
+        return self.rdb.store_tranco_whitelisted_domains(*args, **kwargs)
 
     def is_whitelisted_tranco_domain(self, *args, **kwargs):
         return self.rdb.is_whitelisted_tranco_domain(*args, **kwargs)
@@ -478,6 +478,9 @@ class DBManager:
     def set_org_info(self, *args, **kwargs):
         return self.rdb.set_org_info(*args, **kwargs)
 
+    def set_org_cidrs(self, *args, **kwargs):
+        return self.rdb.set_org_cidrs(*args, **kwargs)
+
     def get_org_info(self, *args, **kwargs):
         return self.rdb.get_org_info(*args, **kwargs)
 
@@ -489,6 +492,15 @@ class DBManager:
 
     def get_whitelist(self, *args, **kwargs):
         return self.rdb.get_whitelist(*args, **kwargs)
+
+    def is_domain_in_org_domains(self, *args, **kwargs):
+        return self.rdb.is_domain_in_org_domains(*args, **kwargs)
+
+    def is_asn_in_org_asn(self, *args, **kwargs):
+        return self.rdb.is_asn_in_org_asn(*args, **kwargs)
+
+    def is_ip_in_org_ips(self, *args, **kwargs):
+        return self.rdb.is_ip_in_org_cidrs(*args, **kwargs)
 
     def has_cached_whitelist(self, *args, **kwargs):
         return self.rdb.has_cached_whitelist(*args, **kwargs)

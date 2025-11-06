@@ -1151,11 +1151,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             return True
         return False
 
-    def get_ip_of_mac(self, MAC):
+    def get_ip_of_mac(self, mac_addr: str):
         """
         Returns the IP associated with the given MAC in our database
         """
-        return self.r.hget(self.constants.MAC, MAC)
+        return self.r.hget(self.constants.MAC, mac_addr)
 
     def get_modified_tw(self):
         """Return all the list of modified tw"""
@@ -1551,57 +1551,101 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             if int(given_pid) == int(pid):
                 return name
 
-    def set_org_info(self, org, org_info, info_type):
+    def set_org_cidrs(self, org, org_ips: Dict[str, List[str]]):
         """
-        store ASN, IP and domains of an org in the db
+        stores CIDRs of an org in the db
         :param org: supported orgs are ('google', 'microsoft',
         'apple', 'facebook', 'twitter')
-        : param org_info: a json serialized list of asns or ips or domains
-        :param info_type: supported types are 'asn', 'domains', 'IPs'
+        :param org_ips: A dict with the first octet of a cidr,
+        and the full cidr as keys.
+        something like  {
+                '2401': ['2401:fa00::/42', '2401:fa00:4::/48']
+                '70': ['70.32.128.0/19','70.32.136.0/24']
+            }
         """
-        # info will be stored in OrgInfo key {'facebook_asn': ..,
-        # 'twitter_domains': ...}
-        self.rcache.hset(
-            self.constants.ORG_INFO, f"{org}_{info_type}", org_info
-        )
+        key = f"{org}_IPs"
+        if isinstance(org_ips, dict):
+            serializable = {str(k): json.dumps(v) for k, v in org_ips.items()}
+            self.rcache.hset(key, mapping=serializable)
 
-    def get_org_info(self, org, info_type) -> str:
+    def set_org_info(self, org, org_info: List[str], info_type: str):
         """
-        get the ASN, IP and domains of an org from the db
+        store ASN or domains of an org in the db
+        :param org: supported orgs are ('google', 'microsoft',
+        'apple', 'facebook', 'twitter')
+        : param org_info: a list of asns or ips or domains
+        :param info_type: supported types are 'asn' or 'domains'
+        NOTE: this function doesnt store org IPs, pls use set_org_ips()
+        instead
+        """
+        # info will be stored in redis SETs like 'facebook_asn',
+        # 'twitter_ips', etc.
+        key = f"{org}_{info_type}"
+        if isinstance(org_info, list):
+            self.rcache.sadd(key, *org_info)
+
+    def get_org_info(self, org, info_type: str) -> List[str]:
+        """
+        Returns the ASN or domains of an org from the db
+
         :param org: supported orgs are ('google', 'microsoft', 'apple',
          'facebook', 'twitter')
-        :param info_type: supported types are 'asn', 'domains'
-        returns a json serialized dict with info
-        PS: All ASNs returned by this function are uppercase
-        retuns:
-        when info_type is 'asn': List[str]
-        when info_type is 'domains': List[str]
-        when info_type is 'IPs': Dict[str, str] keys are subnet first
-        octets and values are the full subnet str
-        e.g {"34": "34.64.0.0/10"}
-        """
-        return (
-            self.rcache.hget(self.constants.ORG_INFO, f"{org}_{info_type}")
-            or "[]"
-        )
+        :param info_type: supported types are 'asn' or 'domains'
 
-    def get_org_ips(self, org) -> Dict[str, str]:
+        returns a List[str] of the required info
+        PS: All ASNs returned by this function are uppercase
+        """
+        key = f"{org}_{info_type}"
+        return self.rcache.smembers(key)
+
+    def is_domain_in_org_domains(self, org: str, domain: str) -> bool:
+        """
+        checks if the given domain is in the org's domains set
+        :param org: supported orgs are ('google', 'microsoft', 'apple',
+         'facebook', 'twitter')
+        :param domain: domain to check
+        :return: True if the domain is in the org's domains set, False otherwise
+        """
+        key = f"{org}_domains"
+        return True if self.rcache.sismember(key, domain) else False
+
+    def is_asn_in_org_asn(self, org: str, asn: str) -> bool:
+        """
+        checks if the given asn is in the org's asns set
+        :param org: supported orgs are ('google', 'microsoft', 'apple',
+         'facebook', 'twitter')
+        :param asn: asn to check
+        :return: True if the asn is in the org's asns set, False otherwise
+        """
+        key = f"{org}_asn"
+        return True if self.rcache.sismember(key, asn) else False
+
+    def is_ip_in_org_cidrs(
+        self, org: str, first_octet: str
+    ) -> List[str] | None:
+        """
+        checks if the given first octet in the org's octets
+        :param org: supported orgs are ('google', 'microsoft', 'apple',
+         'facebook', 'twitter')
+        :param ip: ip to check
+        :return: a list of cidrs the given ip may belong to, None otherwise
+        """
+        key = f"{org}_IPs"
+        return self.r.hget(key, first_octet)
+
+    def get_org_ips(self, org: str) -> Dict[str, str]:
         """
         returns Dict[str, str]
-        keys are subnet first octets and values are the full subnet str
-        e.g {"34": "34.64.0.0/10"}
+            keys are subnet first octets
+            values are serialized list of cidrs
+            e.g {
+                '2401': ['2401:fa00::/42', '2401:fa00:4::/48']
+                '70': ['70.32.128.0/19','70.32.136.0/24']
+            }
         """
-        org_info = self.rcache.hget(self.constants.ORG_INFO, f"{org}_IPs")
-
-        if not org_info:
-            org_info = {}
-            return org_info
-
-        try:
-            return json.loads(org_info)
-        except TypeError:
-            # it's a dict
-            return org_info
+        key = f"{org}_IPs"
+        org_info = self.rcache.hgetall(key)
+        return org_info if org_info else {}
 
     def set_whitelist(self, type_, whitelist_dict: Dict[str, Dict[str, str]]):
         """
@@ -1618,6 +1662,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
     def get_whitelist(self, key: str) -> dict:
         """
+        Return ALL the whitelisted IoCs of key type
         Whitelist supports different keys like : "IPs", "domains",
         "organizations" or "macs"
         """

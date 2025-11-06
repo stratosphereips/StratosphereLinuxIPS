@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import ipaddress
-import json
 import os
 from typing import TextIO, List, Dict, Optional
 import validators
@@ -196,7 +195,7 @@ class WhitelistParser:
             line = line.replace("\n", "").strip()
             org_asn.append(line.upper())
         org_asn_file.close()
-        self.db.set_org_info(org, json.dumps(org_asn), "asn")
+        self.db.set_org_info(org, org_asn, "asn")
         return org_asn
 
     def load_org_domains(self, org):
@@ -220,7 +219,7 @@ class WhitelistParser:
             domains.append(line.lower())
         domain_info.close()
 
-        self.db.set_org_info(org, json.dumps(domains), "domains")
+        self.db.set_org_info(org, domains, "domains")
         return domains
 
     def is_valid_network(self, network: str) -> bool:
@@ -268,7 +267,8 @@ class WhitelistParser:
                 org_subnets[first_octet] = [line]
 
         org_info.close()
-        self.db.set_org_info(org, json.dumps(org_subnets), "IPs")
+
+        self.db.set_org_cidrs(org, org_subnets)
         return org_subnets
 
     def parse(self) -> bool:

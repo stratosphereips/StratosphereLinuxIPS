@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import ipaddress
-import json
 from typing import (
     Dict,
     List,
@@ -62,7 +61,12 @@ class OrgAnalyzer(IWhitelistAnalyzer):
                 self.bf_hits += 1
                 return False
 
-            org_domains = json.loads(self.db.get_org_info(org, "domains"))
+            if self.db.is_domain_in_org_domains(org, domain):
+                self.bf_hits += 1
+                return True
+
+            # match subdomains of all org domains slips knows of
+            org_domains: List[str] = self.db.get_org_info(org, "domains")
             flow_tld = self.domain_analyzer.get_tld(domain)
 
             for org_domain in org_domains:
@@ -71,7 +75,6 @@ class OrgAnalyzer(IWhitelistAnalyzer):
                 if flow_tld != org_domain_tld:
                     continue
 
-                # match subdomains too
                 # if org has org.com, and the flow_domain is xyz.org.com
                 # whitelist it
                 if org_domain in domain:
@@ -104,16 +107,19 @@ class OrgAnalyzer(IWhitelistAnalyzer):
                 return
 
             if first_octet not in self.bloom_filters[org]["first_octets"]:
+                self.bf_hits += 1
                 return False
 
-            org_subnets: dict = self.db.get_org_ips(org)
+            # organization IPs are sorted in the db by first octet for faster
+            # search
+            cidrs: List[str]
+            if cidrs := self.db.is_ip_in_org_ips(org, first_octet):
+                ip_obj = ipaddress.ip_address(ip)
+                for cidr in cidrs:
+                    if ip_obj in ipaddress.ip_network(cidr):
+                        self.bf_hits += 1
+                        return True
 
-            ip_obj = ipaddress.ip_address(ip)
-            # organization IPs are sorted by first octet for faster search
-            for range_ in org_subnets.get(first_octet, []):
-                if ip_obj in ipaddress.ip_network(range_):
-                    self.bf_hits += 1
-                    return True
         except (KeyError, TypeError):
             # comes here if the whitelisted org doesn't have
             # info in slips/organizations_info (not a famous org)
@@ -145,19 +151,21 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         """
         if not (asn and asn != "Unknown"):
             return False
+
         # because all ASN stored in slips organization_info/ are uppercase
         asn: str = asn.upper()
         if org.upper() in asn:
             return True
 
         if asn not in self.bloom_filters[org]["asns"]:
+            self.bf_hits += 1
             return False
 
-        org_asn: List[str] = json.loads(self.db.get_org_info(org, "asn"))
-        if asn in org_asn:
+        if self.db.is_asn_in_org_asn(org, asn):
             self.bf_hits += 1
             return True
         else:
+            # bloom filter FP
             self.bf_misses += 1
             return False
 

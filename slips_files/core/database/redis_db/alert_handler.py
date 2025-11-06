@@ -53,7 +53,7 @@ class AlertHandler:
 
     def get_malicious_profiles(self):
         """returns profiles that generated an alert"""
-        self.r.smembers(self.constants.MALICIOUS_PROFILES)
+        return self.r.smembers(self.constants.MALICIOUS_PROFILES)
 
     def set_evidence_causing_alert(self, alert: Alert):
         """
