@@ -44,18 +44,22 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         self.bloom_filters: Dict[str, Dict[str, BloomFilter]]
         self.bloom_filters = self.manager.bloom_filters.org_filters
         self.read_configuration()
+        # for debugging
+        self.bf_hits = 0
+        self.bf_misses = 0
 
     def read_configuration(self):
         conf = ConfigParser()
         self.enable_local_whitelist: bool = conf.enable_local_whitelist()
 
-    def is_domain_in_org(self, domain: str, org: str):
+    def is_domain_in_org(self, domain: str, org: str) -> bool:
         """
         Checks if the given domains belongs to the given org using
         the hardcoded org domains in organizations_info/org_domains
         """
         try:
             if domain not in self.bloom_filters[org]["domains"]:
+                self.bf_hits += 1
                 return False
 
             org_domains = json.loads(self.db.get_org_info(org, "domains"))
@@ -71,19 +75,24 @@ class OrgAnalyzer(IWhitelistAnalyzer):
                 # if org has org.com, and the flow_domain is xyz.org.com
                 # whitelist it
                 if org_domain in domain:
+                    self.bf_hits += 1
                     return True
 
                 # if org has xyz.org.com, and the flow_domain is org.com
                 # whitelist it
                 if domain in org_domain:
+                    self.bf_hits += 1
                     return True
+
+            self.bf_misses += 1
 
         except (KeyError, TypeError):
             # comes here if the whitelisted org doesn't have domains in
             # slips/organizations_info (not a famous org)
             # and ip doesn't have asn info.
             # so we don't know how to link this ip to the whitelisted org!
-            return False
+            pass
+        return False
 
     def is_ip_in_org(self, ip: str, org):
         """
@@ -91,23 +100,27 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         """
         try:
             first_octet: str = utils.get_first_octet(ip)
+            if not first_octet:
+                return
+
             if first_octet not in self.bloom_filters[org]["first_octets"]:
                 return False
 
             org_subnets: dict = self.db.get_org_ips(org)
 
-            if not first_octet:
-                return
             ip_obj = ipaddress.ip_address(ip)
             # organization IPs are sorted by first octet for faster search
             for range_ in org_subnets.get(first_octet, []):
                 if ip_obj in ipaddress.ip_network(range_):
+                    self.bf_hits += 1
                     return True
         except (KeyError, TypeError):
             # comes here if the whitelisted org doesn't have
             # info in slips/organizations_info (not a famous org)
             # and ip doesn't have asn info.
             pass
+
+        self.bf_misses += 1
         return False
 
     def is_ip_asn_in_org_asn(self, ip: str, org):
@@ -141,7 +154,12 @@ class OrgAnalyzer(IWhitelistAnalyzer):
             return False
 
         org_asn: List[str] = json.loads(self.db.get_org_info(org, "asn"))
-        return asn in org_asn
+        if asn in org_asn:
+            self.bf_hits += 1
+            return True
+        else:
+            self.bf_misses += 1
+            return False
 
     def is_whitelisted(self, flow) -> bool:
         """checks if the given -flow- is whitelisted. not evidence/alerts."""

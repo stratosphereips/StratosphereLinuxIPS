@@ -245,3 +245,25 @@ class Whitelist:
             return True
 
         return False
+
+    def get_bloom_filters_stats(self) -> Dict[str, float]:
+        """
+        returns the bloom filters stats
+        """
+        total_hits = 0
+        total_misses = 0
+
+        for helper in (
+            self.ip_analyzer,
+            self.domain_analyzer,
+            self.mac_analyzer,
+            self.org_analyzer,
+        ):
+            total_hits += helper.bf_hits
+            total_misses += helper.bf_misses
+
+        # Bloom filters cannot produce false negatives:D
+        return (
+            f"Number of times bloom filter was acuurate (TN + TP):"
+            f" {total_hits}, FPs: {total_misses}"
+        )

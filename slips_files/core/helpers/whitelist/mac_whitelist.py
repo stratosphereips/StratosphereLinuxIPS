@@ -20,6 +20,9 @@ class MACAnalyzer(IWhitelistAnalyzer):
     def init(self):
         self.ip_analyzer = IPAnalyzer(self.db)
         self.read_configuration()
+        # for debugging
+        self.bf_hits = 0
+        self.bf_misses = 0
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -67,11 +70,14 @@ class MACAnalyzer(IWhitelistAnalyzer):
 
         if mac not in self.manager.bloom_filters.macs:
             # defnitely not whitelisted
+            self.bf_hits += 1
             return False
 
         whitelisted_macs: Dict[str, dict] = self.db.get_whitelist("macs")
         if mac not in whitelisted_macs:
+            self.bf_misses += 1
             return False
+        self.bf_hits += 1
 
         whitelist_direction: str = whitelisted_macs[mac]["from"]
         if not self.match.direction(direction, whitelist_direction):

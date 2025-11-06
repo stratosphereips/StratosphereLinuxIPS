@@ -17,6 +17,9 @@ class IPAnalyzer(IWhitelistAnalyzer):
 
     def init(self):
         self.read_configuration()
+        # for debugging
+        self.bf_hits = 0
+        self.bf_misses = 0
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -54,13 +57,17 @@ class IPAnalyzer(IWhitelistAnalyzer):
 
         if ip not in self.manager.bloom_filters.ips:
             # defnitely not whitelisted
+            self.bf_hits += 1
             return False
 
         # reaching here means ip is in the bloom filter
         whitelisted_ips: Dict[str, dict] = self.db.get_whitelist("IPs")
 
         if ip not in whitelisted_ips:
+            self.bf_misses += 1
             return False
+
+        self.bf_hits += 1
 
         # Check if we should ignore src or dst alerts from this ip
         # from_ can be: src, dst, both

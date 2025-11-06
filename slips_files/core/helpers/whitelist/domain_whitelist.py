@@ -20,6 +20,9 @@ class DomainAnalyzer(IWhitelistAnalyzer):
     def init(self):
         self.ip_analyzer = IPAnalyzer(self.db)
         self.read_configuration()
+        # for debugging
+        self.bf_hits = 0
+        self.bf_misses = 0
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -107,6 +110,7 @@ class DomainAnalyzer(IWhitelistAnalyzer):
 
             if parent_domain not in self.manager.bloom_filters.domains:
                 # definitely not whitelisted
+                self.bf_hits += 1
                 return False
 
             whitelisted_domains: Dict[str, Dict[str, str]]
@@ -122,7 +126,10 @@ class DomainAnalyzer(IWhitelistAnalyzer):
                 dir_from_whitelist: str = whitelisted_domains[parent_domain][
                     "from"
                 ]
+                self.bf_hits += 1
             else:
+                # bloom filter FP
+                self.bf_misses += 1
                 return False
 
         # match the direction and whitelist_Type of the given domain to the

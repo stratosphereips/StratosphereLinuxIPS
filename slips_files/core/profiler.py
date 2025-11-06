@@ -285,6 +285,7 @@ class Profiler(ICore, IObservable):
 
         # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(flow):
+            self.print(f"{self.whitelist.get_bloom_filters_stats()}", 2, 0)
             return True
 
         # 5th. Store the data according to the paremeters

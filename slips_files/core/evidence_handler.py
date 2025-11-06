@@ -566,6 +566,9 @@ class EvidenceHandler(ICore):
                     # reaching this point, now remove evidence from db so
                     # it could be completely ignored
                     self.db.delete_evidence(profileid, twid, evidence.id)
+                    self.print(
+                        f"{self.whitelist.get_bloom_filters_stats()}", 2, 0
+                    )
                     continue
 
                 # convert time to local timezone
