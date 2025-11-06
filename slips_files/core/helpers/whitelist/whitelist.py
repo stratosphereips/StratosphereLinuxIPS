@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from typing import (
-    Optional,
     Dict,
     List,
     Union,
@@ -141,33 +140,6 @@ class Whitelist:
             return False
 
         return self.org_analyzer.is_whitelisted(flow)
-
-    def get_all_whitelist(self) -> Optional[Dict[str, dict]]:
-        """
-        returns the whitelisted ips, domains, org from the db
-        returns a dict with the following keys
-        'mac', 'organizations', 'IPs', 'domains'
-        this function tries to get the whitelist from the db 10 times
-        """
-        whitelist: Dict[str, dict] = self.db.get_all_whitelist()
-        max_tries = 10
-        # if this module is loaded before profilerProcess or before we're
-        # done processing the whitelist in general
-        # the database won't return the whitelist
-        # so we need to try several times until the db returns the
-        # populated whitelist
-        # empty dicts evaluate to False
-        while not bool(whitelist) and max_tries != 0:
-            # try max 10 times to get the whitelist, if it's still empty
-            # hen it's not empty by mistake
-            max_tries -= 1
-            whitelist = self.db.get_all_whitelist()
-
-        if max_tries == 0:
-            # we tried 10 times to get the whitelist, it's probably empty.
-            return
-
-        return whitelist
 
     def is_whitelisted_evidence(self, evidence: Evidence) -> bool:
         """

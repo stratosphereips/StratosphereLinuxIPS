@@ -609,6 +609,10 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         return threat_level in utils.threat_levels
 
     def parse_known_fp_hashes(self, fullpath: str):
+        """
+        That file contains known FalsePositives of hashes to reduce the
+        amount of FP from TI files
+        """
         fp_hashes = {}
         with open(fullpath) as fps:
             # skip comments

@@ -487,9 +487,6 @@ class DBManager:
     def set_whitelist(self, *args, **kwargs):
         return self.rdb.set_whitelist(*args, **kwargs)
 
-    def get_all_whitelist(self, *args, **kwargs):
-        return self.rdb.get_all_whitelist(*args, **kwargs)
-
     def get_whitelist(self, *args, **kwargs):
         return self.rdb.get_whitelist(*args, **kwargs)
 

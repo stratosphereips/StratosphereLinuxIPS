@@ -66,7 +66,7 @@ class Constants:
     BLOCKED_PROFILES_AND_TWS = "BlockedProfTW"
     PROFILES = "profiles"
     NUMBER_OF_ALERTS = "number_of_alerts"
-    KNOWN_FPS = "known_fps"
+    KNOWN_FP_MD5_HASHES = "known_fps"
     WILL_SLIPS_HAVE_MORE_FLOWS = "will_slips_have_more_flows"
     SUBS_WHO_PROCESSED_MSG = "number_of_subscribers_who_processed_this_msg"
     FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN = "flows_analyzed_per_minute"
