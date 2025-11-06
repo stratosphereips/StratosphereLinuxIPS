@@ -44,6 +44,9 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         self.bloom_filters: Dict[str, Dict[str, BloomFilter]]
         self.bloom_filters = self.manager.bloom_filters.org_filters
         self.read_configuration()
+        self.whitelisted_orgs: Dict[str, str] = self.db.get_whitelist(
+            "organizations"
+        )
         # for debugging
         self.bf_hits = 0
         self.bf_misses = 0
@@ -234,14 +237,11 @@ class OrgAnalyzer(IWhitelistAnalyzer):
             if utils.is_private_ip(ioc):
                 return False
 
-        whitelisted_orgs: Dict[str, str] = self.db.get_whitelist(
-            "organizations"
-        )
-        if not whitelisted_orgs:
+        if not self.whitelisted_orgs:
             return False
 
-        for org in whitelisted_orgs:
-            org_info = json.loads(whitelisted_orgs[org])
+        for org in self.whitelisted_orgs:
+            org_info = json.loads(self.whitelisted_orgs[org])
 
             dir_from_whitelist = org_info["from"]
             if not self.match.direction(direction, dir_from_whitelist):
