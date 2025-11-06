@@ -493,6 +493,9 @@ class DBManager:
     def get_whitelist(self, *args, **kwargs):
         return self.rdb.get_whitelist(*args, **kwargs)
 
+    def is_whitelisted(self, *args, **kwargs):
+        return self.rdb.is_whitelisted(*args, **kwargs)
+
     def is_domain_in_org_domains(self, *args, **kwargs):
         return self.rdb.is_domain_in_org_domains(*args, **kwargs)
 

@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import json
 from typing import Dict
 
 import validators
@@ -68,22 +69,24 @@ class MACAnalyzer(IWhitelistAnalyzer):
         if not self.is_valid_mac(mac):
             return False
 
-        if mac not in self.manager.bloom_filters.macs:
+        if mac not in self.manager.bloom_filters.mac_addrs:
             # defnitely not whitelisted
             self.bf_hits += 1
             return False
 
-        whitelisted_macs: Dict[str, dict] = self.db.get_whitelist("macs")
-        if mac not in whitelisted_macs:
+        mac_info: str | None = self.db.is_whitelisted(mac, "macs")
+        if not mac_info:
             self.bf_misses += 1
             return False
+
         self.bf_hits += 1
 
-        whitelist_direction: str = whitelisted_macs[mac]["from"]
+        mac_info: Dict[str, dict] = json.loads(mac_info)
+        whitelist_direction: str = mac_info["from"]
         if not self.match.direction(direction, whitelist_direction):
             return False
 
-        whitelist_what_to_ignore: str = whitelisted_macs[mac]["what_to_ignore"]
+        whitelist_what_to_ignore: str = mac_info["what_to_ignore"]
         if not self.match.what_to_ignore(
             what_to_ignore, whitelist_what_to_ignore
         ):

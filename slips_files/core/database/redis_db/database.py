@@ -1672,6 +1672,26 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         else:
             return {}
 
+    def is_whitelisted(self, ioc: str, type_: str) -> str | None:
+        """
+        Check if a given ioc (IP, domain, or MAC) is whitelisted.
+
+        :param ioc: The ioc to check; IP address, domain, or MAC
+        :param type_: The type of ioc to check. Supported types: 'IPs',
+        'domains', 'macs'.
+        :return: a serialized dict with the whitelist info of the given ioc
+        :raises ValueError: If the provided type_ is not supported.
+        """
+        valid_types = {"IPs", "domains", "macs"}
+        if type_ not in valid_types:
+            raise ValueError(
+                f"Unsupported whitelist type: {type_}. "
+                f"Must be one of {valid_types}."
+            )
+
+        key = f"{self.constants.WHITELIST}_{type_}"
+        return self.r.hget(key, ioc)
+
     def has_cached_whitelist(self) -> bool:
         return bool(self.r.exists(self.constants.WHITELIST))
 
