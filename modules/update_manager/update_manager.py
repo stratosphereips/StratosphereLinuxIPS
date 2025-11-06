@@ -1582,10 +1582,12 @@ class UpdateManager(IModule):
         # delete the old ones
         self.db.delete_tranco_whitelist()
         response = self.responses["tranco_whitelist"]
+        domains = []
         for line in response.text.splitlines():
             domain = line.split(",")[1]
             domain.strip()
-            self.db.store_tranco_whitelisted_domain(domain)
+            domains.add(domain)
+        self.db.store_tranco_whitelisted_domains(domains)
 
         self.mark_feed_as_updated("tranco_whitelist")
 
