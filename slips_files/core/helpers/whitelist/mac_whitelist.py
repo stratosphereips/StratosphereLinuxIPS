@@ -65,7 +65,7 @@ class MACAnalyzer(IWhitelistAnalyzer):
         if not self.is_valid_mac(mac):
             return False
 
-        if mac not in self.manager.macs_bloom:
+        if mac not in self.manager.bloom_filters.macs:
             # defnitely not whitelisted
             return False
 

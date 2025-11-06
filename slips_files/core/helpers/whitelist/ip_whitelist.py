@@ -52,7 +52,7 @@ class IPAnalyzer(IWhitelistAnalyzer):
         if not self.is_valid_ip(ip):
             return False
 
-        if ip not in self.manager.ips_bloom:
+        if ip not in self.manager.bloom_filters.ips:
             # defnitely not whitelisted
             return False
 
