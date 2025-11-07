@@ -77,7 +77,7 @@ class HTTPLifeCycleLogger(IModule):
                 new_ops = [
                     op
                     for op in row.keys()
-                    if op not in self.headers and op != "done"
+                    if op not in self.headers  # and op != "done"
                 ]
                 if new_ops:
                     self.headers.extend(new_ops)
