@@ -36,7 +36,10 @@ def plot_growth(csv_path: str):
         alpha=0.8,
     )
 
-    ax.set_title("Top Bottleneck Stages Across Flows (log scale)", fontsize=16)
+    ax.set_title(
+        "The 4 major operations in evidence handler that can lead to slowing it down (log scale)",
+        fontsize=16,
+    )
     ax.set_xlabel("Row Index (Flow)", fontsize=12)
     ax.set_ylabel("Time (log scale)", fontsize=12)
     plt.legend(title="Stages", bbox_to_anchor=(1.05, 1), loc="upper left")
