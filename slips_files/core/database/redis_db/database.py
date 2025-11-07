@@ -87,6 +87,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         "fides2slips",
         "slips2fides",
         "iris_internal",
+        "http_lifecycle_logger",
     }
     # channels that recv actual flows, not msgs that we need to pass between
     # modules.
@@ -1167,6 +1168,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     def get_field_separator(self):
         """Return the field separator"""
         return self.separator
+
+    def set_http_last_operation_ts(self, uid, ts):
+        self.r.hset("http_last_op_ts", uid, ts)
+
+    def get_http_last_operation_ts(self, uid):
+        return float(self.r.hget("http_last_op_ts", uid))
 
     def store_tranco_whitelisted_domains(self, domains: List[str]):
         """

@@ -630,14 +630,37 @@ class HTTPAnalyzer(AsyncModule):
     def pre_main(self):
         utils.drop_root_privs_permanently()
 
+    def log_time(self, uid, op):
+        now = time.time()
+        dur = now - self.db.get_http_last_operation_ts(uid)
+        self.db.publish(
+            "http_lifecycle_logger",
+            json.dumps(
+                {
+                    "uid": uid,
+                    "operation": op,
+                    "time_it_took": dur,
+                }
+            ),
+        )
+        self.db.set_http_last_operation_ts(uid, now)
+
     async def main(self):
         if msg := self.get_msg("new_http"):
             msg = json.loads(msg["data"])
             profileid = msg["profileid"]
             twid = msg["twid"]
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
+            ###########################################################
+            uid = flow.uid
+            self.log_time(uid, "time_from_profiler_to_http_analyzer")
+
             self.check_suspicious_user_agents(profileid, twid, flow)
+            self.log_time(uid, "check_suspicious_user_agents")
+
             self.check_multiple_empty_connections(twid, flow)
+            self.log_time(uid, "check_multiple_empty_connections")
+
             # find the UA of this profileid if we don't have it
             # get the last used ua of this profile
             cached_ua = self.db.get_user_agent_from_profile(profileid)
@@ -647,6 +670,7 @@ class HTTPAnalyzer(AsyncModule):
                     twid,
                     cached_ua,
                 )
+            self.log_time(uid, "check_multiple_user_agents_in_a_row")
 
             if not cached_ua or (
                 isinstance(cached_ua, dict)
@@ -656,12 +680,22 @@ class HTTPAnalyzer(AsyncModule):
                 # only UAs of type dict are browser UAs,
                 # skips str UAs as they are SSH clients
                 self.get_user_agent_info(flow.user_agent, profileid)
+            self.log_time(uid, "get_user_agent_info")
 
             self.extract_info_from_ua(flow.user_agent, profileid)
+            self.log_time(uid, "extract_info_from_ua")
+
             self.detect_executable_mime_types(twid, flow)
+            self.log_time(uid, "detect_executable_mime_types")
+
             self.check_incompatible_user_agent(profileid, twid, flow)
+            self.log_time(uid, "check_incompatible_user_agent")
+
             self.check_pastebin_downloads(twid, flow)
+            self.log_time(uid, "check_pastebin_downloads")
+
             self.set_evidence.http_traffic(twid, flow)
+            self.log_time(uid, "set_evidence_http_traffic")
 
         if msg := self.get_msg("new_weird"):
             msg = json.loads(msg["data"])

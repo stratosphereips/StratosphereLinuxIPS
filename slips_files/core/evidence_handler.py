@@ -396,6 +396,22 @@ class EvidenceHandler(ICore):
             self.is_running_non_stop or custom_flows
         ) and blocking_module_enabled
 
+    def log_time(self, uids, op):
+        now = time.time()
+        for uid in uids:
+            dur = now - self.db.get_http_last_operation_ts(uid)
+            self.db.publish(
+                "http_lifecycle_logger",
+                json.dumps(
+                    {
+                        "uid": uid,
+                        "operation": op,
+                        "time_it_took": dur,
+                    }
+                ),
+            )
+            self.db.set_http_last_operation_ts(uid, now)
+
     def handle_new_alert(
         self,
         alert: Alert,
@@ -560,16 +576,33 @@ class EvidenceHandler(ICore):
                 # unprocessed evidence.
                 self.db.mark_evidence_as_processed(evidence.id)
 
+                self.log_time(evidence.uid, "reach_evidence_handler")
+
                 if self.whitelist.is_whitelisted_evidence(evidence):
                     self.db.cache_whitelisted_evidence_id(evidence.id)
                     # Modules add evidence to the db before
                     # reaching this point, now remove evidence from db so
                     # it could be completely ignored
                     self.db.delete_evidence(profileid, twid, evidence.id)
+
+                    self.log_time(evidence.uid, "check_whitelisted_evidence")
+                    for uid in evidence.uid:
+                        self.db.publish(
+                            "http_lifecycle_logger",
+                            json.dumps(
+                                {
+                                    "uid": uid,
+                                    "operation": "done",
+                                }
+                            ),
+                        )
+
                     self.print(
                         f"{self.whitelist.get_bloom_filters_stats()}", 2, 0
                     )
                     continue
+
+                self.log_time(evidence.uid, "check_whitelisted_evidence")
 
                 # convert time to local timezone
                 if self.is_running_non_stop:
@@ -609,6 +642,9 @@ class EvidenceHandler(ICore):
                     accumulated_threat_level: float = (
                         self.db.get_accumulated_threat_level(profileid, twid)
                     )
+                self.log_time(
+                    evidence.uid, "filtering_and_acc_threat_lvl_of_ev"
+                )
 
                 # add to alerts.json
                 self.add_evidence_to_json_log_file(
@@ -618,6 +654,7 @@ class EvidenceHandler(ICore):
 
                 evidence_dict: dict = utils.to_dict(evidence)
                 self.db.publish("report_to_peers", json.dumps(evidence_dict))
+                self.log_time(evidence.uid, "adding_to_alerts_json")
 
                 # This is the part to detect if the accumulated
                 # evidence was enough for generating a detection
@@ -632,6 +669,7 @@ class EvidenceHandler(ICore):
                 ):
                     tw_evidence: Dict[str, Evidence]
                     tw_evidence = self.get_evidence_for_tw(profileid, twid)
+
                     if tw_evidence:
                         tw_start, tw_end = self.db.get_tw_limits(
                             profileid, twid
@@ -647,6 +685,19 @@ class EvidenceHandler(ICore):
                             correl_id=list(tw_evidence.keys()),
                         )
                         self.handle_new_alert(alert, tw_evidence)
+                self.log_time(evidence.uid, "checking_alert")
+
+                # to flush the row to the csv log file
+                for uid in evidence.uid:
+                    self.db.publish(
+                        "http_lifecycle_logger",
+                        json.dumps(
+                            {
+                                "uid": uid,
+                                "operation": "done",
+                            }
+                        ),
+                    )
 
             if msg := self.get_msg("new_blame"):
                 data = msg["data"]
