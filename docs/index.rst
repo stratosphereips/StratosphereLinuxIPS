@@ -35,6 +35,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Datasets**. The folder `dataset` contains some testing datasets for you to try. See :doc:`Datasets <datasets>`.
 
+- **Visualization of Alerts**. For visualizing alerts Slips sends the alerts to a TAXII server. How to setup a TAXII server and visualize the alerts can be read in :doc:`Visualization <visualization>`.
 
 
 
@@ -63,3 +64,4 @@ This documentation gives an overview how Slips works, how to use it and how to h
    contributing
    code_documentation
    related_repos
+   visualisation
