@@ -341,9 +341,6 @@ class ConfigParser(object):
             "exporting_alerts", "discovery_path", False
         )
 
-    def inbox_path(self):
-        return self.read_configuration("exporting_alerts", "inbox_path", False)
-
     def push_delay(self):
         # 3600 = 1h
         delay = self.read_configuration("exporting_alerts", "push_delay", 3600)
@@ -366,11 +363,6 @@ class ConfigParser(object):
     def taxii_password(self):
         return self.read_configuration(
             "exporting_alerts", "taxii_password", False
-        )
-
-    def jwt_auth_path(self):
-        return self.read_configuration(
-            "exporting_alerts", "jwt_auth_path", False
         )
 
     def long_connection_threshold(self):
