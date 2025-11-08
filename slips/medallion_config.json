@@ -5,19 +5,9 @@
   ,
   "taxii": { "max_page_size": 100},
   "backend": {
-    "module": "medallion.backends.memory_backend",
-    "module_class": "MemoryBackend",
-    "config": {
-      "data": [
-        {
-          "id": "collection--a1111111-b222-4ccc-8ddd-eeeeeeeeeeee",
-          "title": "Collection A",
-          "description": "Imported STIX data from SLIPS",
-          "can_read": true,
-          "can_write": true,
-          "stix_objects": []
-        }
-      ]
-    }
-  }
+  "module": "medallion.backends.memory_backend",
+  "module_class": "MemoryBackend",
+  "filename": "config/medallion_default_data.json"
+}
+
 }
