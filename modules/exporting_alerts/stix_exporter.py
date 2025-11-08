@@ -1,10 +1,14 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-from stix2 import Indicator, Bundle
-from cabby import create_client
-import time
-import threading
+import json
 import os
+import threading
+import time
+from typing import List, Optional
+from urllib.parse import urljoin
+
+from stix2 import Bundle, Indicator, parse
+from taxii2client.v21 import Server
 
 from slips_files.common.abstracts.iexporter import IExporter
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -19,14 +23,12 @@ class StixExporter(IExporter):
         self.configs_read: bool = self.read_configuration()
         if self.should_export():
             self.print(
-                f"Exporting to Stix & TAXII very "
+                f"Exporting alerts to STIX 2 / TAXII every "
                 f"{self.push_delay} seconds."
             )
-            # This bundle should be created once and we should
-            # append all indicators to it
-            self.is_bundle_created = False
-            # To avoid duplicates in STIX_data.json
             self.added_ips = set()
+            self.bundle_objects: List[Indicator] = []
+            self._load_existing_bundle()
             self.export_to_taxii_thread = threading.Thread(
                 target=self.schedule_sending_to_taxii_server,
                 daemon=True,
@@ -43,84 +45,169 @@ class StixExporter(IExporter):
     def name(self):
         return "StixExporter"
 
-    def create_client(self):
-        client = create_client(
-            self.TAXII_server,
-            use_https=self.use_https,
-            port=self.port,
-            discovery_path=self.discovery_path,
-        )
+    def _base_url(self) -> str:
+        scheme = "https" if self.use_https else "http"
+        default_port = 443 if self.use_https else 80
+        if self.port:
+            try:
+                port = int(self.port)
+            except (TypeError, ValueError):
+                port = None
+            if port and port != default_port:
+                return f"{scheme}://{self.TAXII_server}:{port}"
+        return f"{scheme}://{self.TAXII_server}"
 
-        if self.jwt_auth_path != "":
-            client.set_auth(
-                username=self.taxii_username,
-                password=self.taxii_password,
-                # URL used to obtain JWT token
-                jwt_auth_url=self.jwt_auth_path,
-            )
-        else:
-            # User didn't provide jwt_auth_path in slips.yaml
-            client.set_auth(
-                username=self.taxii_username,
-                password=self.taxii_password,
-            )
-        return client
+    def _build_url(self, path: str) -> str:
+        if not path:
+            return self._base_url()
+        if path.startswith("http://") or path.startswith("https://"):
+            return path
+        # urljoin discards url path if relative path does not start with /
+        adjusted = path if path.startswith("/") else f"/{path}"
+        return urljoin(self._base_url(), adjusted)
 
-    def inbox_service_exists_in_taxii_server(self, services):
+    def _load_existing_bundle(self) -> None:
         """
-        Checks if inbox service is available in the taxii server
+        Loads indicators from an existing STIX_data.json file so we can resume
+        without creating duplicates if Slips was restarted.
         """
-        for service in services:
-            if "inbox" in service.type.lower():
-                return True
+        if not os.path.exists(self.stix_filename):
+            return
+        try:
+            with open(self.stix_filename, "r") as stix_file:
+                data = stix_file.read().strip()
+        except OSError as err:
+            self.print(f"Unable to read {self.stix_filename}: {err}", 0, 3)
+            return
+
+        if not data:
+            return
+
+        try:
+            bundle = parse(data)
+        except Exception as err:  # stix2 raises generic Exception
+            self.print(f"Invalid STIX bundle, starting fresh: {err}", 0, 3)
+            return
+
+        if not isinstance(bundle, Bundle):
+            self.print("STIX_data.json does not contain a bundle.", 0, 3)
+            return
+
+        self.bundle_objects = list(bundle.objects)
+        for indicator in self.bundle_objects:
+            attacker = self._extract_attacker_from_indicator(indicator)
+            if attacker:
+                self.added_ips.add(attacker)
+
+    def _extract_attacker_from_indicator(self, indicator: Indicator) -> Optional[str]:
+        pattern = getattr(indicator, "pattern", None)
+        if not pattern:
+            return None
+        start = pattern.find("'")
+        end = pattern.rfind("'")
+        if start == -1 or end == -1 or end <= start:
+            return None
+        return pattern[start + 1 : end]
+
+    def _serialize_bundle(self) -> str:
+        bundle = Bundle(*self.bundle_objects)
+        return bundle.serialize(pretty=True)
+
+    def _write_bundle(self) -> None:
+        with open(self.stix_filename, "w") as stix_file:
+            stix_file.write(self._serialize_bundle())
+
+    def create_collection(self):
+        if not self.collection_name:
+            self.print(
+                "collection_name is missing in slips.yaml; cannot export STIX.",
+                0,
+                3,
+            )
+            return None
+
+        discovery_url = self._build_url(self.discovery_path)
+        try:
+            server = Server(
+                discovery_url,
+                user=self.taxii_username or None,
+                password=self.taxii_password or None,
+            )
+        except Exception as err:
+            self.print(f"Failed to connect to TAXII discovery: {err}", 0, 3)
+            return None
+
+        if not server.api_roots:
+            self.print("TAXII server returned no API roots.", 0, 3)
+            return None
+
+        for api_root in server.api_roots:
+            try:
+                for collection in api_root.collections:
+                    if collection.id == self.collection_name:
+                        return collection
+                    if (
+                        hasattr(collection, "title")
+                        and collection.title == self.collection_name
+                    ):
+                        return collection
+            except Exception as err:
+                self.print(
+                    f"Could not list collections for API root {api_root.url}: {err}",
+                    0,
+                    3,
+                )
 
         self.print(
-            "Server doesn't have inbox available. "
-            "Exporting STIX_data.json is cancelled.",
+            f"Collection '{self.collection_name}' was not found on the TAXII "
+            f"server.",
             0,
-            2,
+            3,
         )
-        return False
+        return None
 
     def read_stix_file(self) -> str:
-        with open(self.stix_filename) as stix_file:
-            stix_data = stix_file.read()
-        return stix_data
+        if not os.path.exists(self.stix_filename):
+            return ""
+
+        with open(self.stix_filename, "r") as stix_file:
+            return stix_file.read()
 
     def export(self) -> bool:
         """
-        Exports evidence/alerts to the TAXII server
-        Uses Inbox Service (TAXII Service to Support Producer-initiated
-         pushes of cyber threat information) to publish
-        our STIX_data.json file
+        Exports evidence/alerts to a TAXII 2.x collection by pushing the
+        STIX_data.json bundle as a TAXII envelope.
         """
-        if not self.should_export:
-            return False
-
-        client = self.create_client()
-
-        # Check the available services to make sure inbox service is there
-        services = client.discover_services()
-        if not self.inbox_service_exists_in_taxii_server(services):
+        if not self.should_export():
             return False
 
         stix_data: str = self.read_stix_file()
-
-        # Make sure we don't push empty files
-        if len(stix_data) == 0:
+        if len(stix_data.strip()) == 0:
             return False
 
-        binding = "urn:stix.mitre.org:json:2.1"
-        # URI is the path to the inbox service we want to
-        # use in the taxii server
-        client.push(
-            stix_data,
-            binding,
-            collection_names=[self.collection_name],
-            uri=self.inbox_path,
-        )
+        try:
+            bundle_dict = json.loads(stix_data)
+        except json.JSONDecodeError as err:
+            self.print(f"STIX_data.json is not valid JSON: {err}", 0, 3)
+            return False
+
+        objects = bundle_dict.get("objects") or []
+        if not objects:
+            return False
+
+        collection = self.create_collection()
+        if not collection:
+            return False
+
+        try:
+            collection.add_objects(bundle_dict)
+        except Exception as err:
+            self.print(f"Failed to push bundle to TAXII collection: {err}", 0, 3)
+            return False
+
         self.print(
-            f"Successfully exported to TAXII server: " f"{self.TAXII_server}.",
+            f"Successfully exported {len(objects)} indicators to TAXII "
+            f"collection '{self.collection_name}'.",
             1,
             0,
         )
@@ -149,13 +236,11 @@ class StixExporter(IExporter):
         self.port = conf.taxii_port()
         self.use_https = conf.use_https()
         self.discovery_path = conf.discovery_path()
-        self.inbox_path = conf.inbox_path()
         # push_delay is only used when slips is running using -i
         self.push_delay = conf.push_delay()
         self.collection_name = conf.collection_name()
         self.taxii_username = conf.taxii_username()
         self.taxii_password = conf.taxii_password()
-        self.jwt_auth_path = conf.jwt_auth_path()
         # push delay exists -> create a thread that waits
         # push delay doesn't exist -> running using file not interface
         # -> only push to taxii server once before
@@ -172,10 +257,11 @@ class StixExporter(IExporter):
             "domain": f"[domain-name:value = '{attacker}']",
             "url": f"[url:value = '{attacker}']",
         }
-        if ioc_type not in ioc_type:
+        pattern = patterns_map.get(ioc_type)
+        if not pattern:
             self.print(f"Can't set pattern for STIX. {attacker}", 0, 3)
-            return False
-        return patterns_map[ioc_type]
+            return ""
+        return pattern
 
     def add_to_stix_file(self, to_add: tuple) -> bool:
         """
@@ -195,6 +281,15 @@ class StixExporter(IExporter):
         name = evidence_type
         ioc_type = utils.detect_ioc_type(attacker)
         pattern: str = self.get_ioc_pattern(ioc_type, attacker)
+        if not pattern:
+            return False
+        if self.ip_exists_in_stix_file(attacker):
+            self.print(
+                f"{attacker} already exists in STIX bundle, skipping duplicate.",
+                2,
+                0,
+            )
+            return False
         # Required Indicator Properties: type, spec_version, id, created,
         # modified , all are set automatically
         # Valid_from, created and modified attribute will
@@ -204,32 +299,9 @@ class StixExporter(IExporter):
         indicator = Indicator(
             name=name, pattern=pattern, pattern_type="stix"
         )  # the pattern language that the indicator pattern is expressed in.
-        # Create and Populate Bundle.
-        # All our indicators will be inside bundle['objects'].
-        bundle = Bundle()
-        if not self.is_bundle_created:
-            bundle = Bundle(indicator)
-            # Clear everything in the existing STIX_data.json
-            # if it's not empty
-            open(self.stix_filename, "w").close()
-            # Write the bundle.
-            with open(self.stix_filename, "w") as stix_file:
-                stix_file.write(str(bundle))
-            self.is_bundle_created = True
-        elif not self.ip_exists_in_stix_file(attacker):
-            # Bundle is already created just append to it
-            # r+ to delete last 4 chars
-            with open(self.stix_filename, "r+") as stix_file:
-                # delete the last 4 characters in the file ']\n}\n' so we
-                # can append to the objects array and add them back later
-                stix_file.seek(0, os.SEEK_END)
-                stix_file.seek(stix_file.tell() - 4, 0)
-                stix_file.truncate()
 
-            # Append mode to add the new indicator to the objects array
-            with open(self.stix_filename, "a") as stix_file:
-                # Append the indicator in the objects array
-                stix_file.write(f",{str(indicator)}" + "]\n}\n")
+        self.bundle_objects.append(indicator)
+        self._write_bundle()
 
         # Set of unique ips added to stix_data.json to avoid duplicates
         self.added_ips.add(attacker)
@@ -249,10 +321,12 @@ class StixExporter(IExporter):
             # server again but there's no
             # new alerts in stix_data.json yet
             if os.path.exists(self.stix_filename):
-                self.export()
-                # Delete stix_data.json file so we don't send duplicates
-                os.remove(self.stix_filename)
-                self.is_bundle_created = False
+                exported = self.export()
+                if exported:
+                    # Delete stix_data.json file so we don't send duplicates
+                    os.remove(self.stix_filename)
+                    self.bundle_objects = []
+                    self.added_ips.clear()
             else:
                 self.print(
                     f"{self.push_delay} seconds passed, "
