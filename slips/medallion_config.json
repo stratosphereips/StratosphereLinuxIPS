@@ -1,6 +1,6 @@
 {
   "users": {
-      "admin": "secret"
+      "admin": "changeme_before_installing_a_medallion_server"
   }
   ,
   "taxii": { "max_page_size": 100},
