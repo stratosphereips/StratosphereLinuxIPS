@@ -1,0 +1,60 @@
+{
+    "/discovery": {
+        "title": "Some TAXII Server",
+        "description": "This TAXII Server contains a listing of",
+        "contact": "string containing contact information",
+        "default": "http://localhost:5000/trustgroup1/",
+        "api_roots": [
+            "http://localhost:5000/api1/",
+            "http://localhost:5000/api2/",
+            "http://localhost:1234/alerts/"
+        ]
+    },
+    "api1": {
+        "information": {
+            "title": "General STIX 2.1 Collections",
+            "description": "A repo for general STIX data.",
+            "versions": [
+                "application/taxii+json;version=2.1"
+            ],
+            "max_content_length": 9765625
+        },
+        "status": [],
+        "collections": []
+    },
+    "api2": {
+        "information": {
+            "title": "STIX 2.1 Indicator Collections",
+            "description": "A repo for general STIX data.",
+            "versions": [
+                "application/taxii+json;version=2.1"
+            ],
+            "max_content_length": 9765625
+        },
+        "status": [],
+        "collections": []
+    },
+    "alerts": {
+        "information": {
+            "title": "Attack Alerts",
+            "description": "Alerts from attacks detected by Slips",
+            "versions": [
+                "application/taxii+json;version=2.1"
+            ],
+            "max_content_length": 9765625
+        },
+        "status": [],
+        "collections": [
+            {
+            "id": "collection--slips-alerts",
+            "title": "Alerts",
+            "description": "Alerts from attacks detected by Slips",
+            "alias": ["alerts"],
+            "can_read": true,
+            "can_write": true,
+            "media_types": ["application/stix+json;version=2.1"],
+            "objects": []
+            }
+        ]
+    }
+}
