@@ -359,8 +359,24 @@ class EvidenceHandler(ICore):
         """
         for evidence in tw_evidence.values():
             evidence: Evidence
-            evidence: dict = utils.to_dict(evidence)
-            self.db.publish("export_evidence", json.dumps(evidence))
+            evidence_dict: dict = utils.to_dict(evidence)
+            self.print(
+                f"[EvidenceHandler] Exporting evidence {evidence_dict.get('id')} "
+                f"type={evidence_dict.get('evidence_type')} via export_evidence.",
+                1,
+                0,
+            )
+            self.db.publish("export_evidence", json.dumps(evidence_dict))
+
+    def publish_single_evidence(self, evidence: Evidence):
+        evidence_dict: dict = utils.to_dict(evidence)
+        self.print(
+            f"[EvidenceHandler] Export streaming {evidence_dict.get('id')} "
+            f"type={evidence_dict.get('evidence_type')} via export_evidence.",
+            1,
+            0,
+        )
+        self.db.publish("export_evidence", json.dumps(evidence_dict))
 
     def is_blocking_modules_supported(self) -> bool:
         """
@@ -576,6 +592,9 @@ class EvidenceHandler(ICore):
                     evidence,
                     accumulated_threat_level,
                 )
+
+                # stream every evidence toward exporting modules immediately
+                self.publish_single_evidence(evidence)
 
                 evidence_dict: dict = utils.to_dict(evidence)
                 self.db.publish("report_to_peers", json.dumps(evidence_dict))
