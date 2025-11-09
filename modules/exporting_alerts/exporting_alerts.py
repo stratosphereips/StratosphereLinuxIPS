@@ -24,6 +24,7 @@ class ExportingAlerts(IModule):
         self.stix = StixExporter(self.logger, self.db)
         self.c1 = self.db.subscribe("export_evidence")
         self.channels = {"export_evidence": self.c1}
+        self.print("Subscribed to export_evidence channel.", 1, 0)
 
     def shutdown_gracefully(self):
         self.slack.shutdown_gracefully()
@@ -68,6 +69,12 @@ class ExportingAlerts(IModule):
         # a msg is sent here for each evidence that was part of an alert
         if msg := self.get_msg("export_evidence"):
             evidence = json.loads(msg["data"])
+            self.print(
+                f"[ExportingAlerts] Evidence {evidence.get('id')} "
+                f"type={evidence.get('evidence_type')} received.",
+                1,
+                0,
+            )
             description = self.remove_sensitive_info(evidence)
             if self.slack.should_export():
                 srcip = evidence["profile"]["ip"]
