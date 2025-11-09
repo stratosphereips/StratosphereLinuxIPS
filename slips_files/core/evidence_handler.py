@@ -363,7 +363,7 @@ class EvidenceHandler(ICore):
             self.print(
                 f"[EvidenceHandler] Exporting evidence {evidence_dict.get('id')} "
                 f"type={evidence_dict.get('evidence_type')} via export_evidence.",
-                1,
+                2,
                 0,
             )
             self.db.publish("export_evidence", json.dumps(evidence_dict))
@@ -373,7 +373,7 @@ class EvidenceHandler(ICore):
         self.print(
             f"[EvidenceHandler] Export streaming {evidence_dict.get('id')} "
             f"type={evidence_dict.get('evidence_type')} via export_evidence.",
-            1,
+            2,
             0,
         )
         self.db.publish("export_evidence", json.dumps(evidence_dict))
