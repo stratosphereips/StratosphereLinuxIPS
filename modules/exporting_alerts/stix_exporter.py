@@ -298,7 +298,9 @@ class StixExporter(IExporter):
             dt_obj = utils.convert_ts_to_tz_aware(dt_obj)
         return dt_obj.astimezone(timezone.utc)
 
-    def _build_custom_properties(self, evidence: dict) -> Dict[str, object]:
+    def _build_custom_properties(
+        self, evidence: dict, date_added: Optional[str]
+    ) -> Dict[str, object]:
         victim = evidence.get("victim") or {}
         attacker = evidence.get("attacker") or {}
         timewindow = evidence.get("timewindow") or {}
@@ -311,6 +313,7 @@ class StixExporter(IExporter):
             "x_slips_timewindow": timewindow.get("number"),
             "x_slips_attacker_direction": attacker.get("direction"),
             "x_slips_attacker_ti": attacker.get("TI"),
+            "date_added": date_added,
         }
 
         victim_value = victim.get("value")
@@ -360,7 +363,12 @@ class StixExporter(IExporter):
 
         indicator_labels = self._build_indicator_labels(evidence)
         valid_from = self._build_valid_from(evidence)
-        custom_properties = self._build_custom_properties(evidence)
+        date_added = (
+            valid_from.isoformat()
+            if isinstance(valid_from, datetime)
+            else datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
+        )
+        custom_properties = self._build_custom_properties(evidence, date_added)
 
         indicator = Indicator(
             name=evidence.get("evidence_type", "Slips Alert"),
