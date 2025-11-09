@@ -56,19 +56,20 @@ Configure the TAXII client by editing the following variables:
 
 ```port```: TCP port (optional, defaults to 80/443).
 
-```use_https```: set to true to connect over HTTPS.
+```use_https```: set to true to connect over HTTPS (be careful that the default TAXII server in SlipsWeb, Medallion, do not support HTTPS yet)
 
 ```discovery_path```: TAXII discovery endpoint path or full URL
  (for example ```/taxii2/```).
 
-```collection_name```: ID or title of the TAXII collection that should receive
- your indicators.
+```collection_name```: ID or title of the TAXII collection that should receive your indicators. Be default `Alerts`.
 
 ```push_delay```: time between automatic pushes (in seconds) when Slips is
 running continuously.
 
-```taxii_username``` / ```taxii_password```: credentials used for HTTP Basic
-authentication.
+```taxii_username``` / ```taxii_password```: credentials used for HTTP Basic authentication.
+
+**Change the default config password of the TAXII servers you are going to export to in ```config/medallion_config.yaml```**
+
 
 Slips stores the generated bundle for each run in the output directory of that
 execution (for example `output/<run_id>/STIX_data.json`), so you can inspect the
