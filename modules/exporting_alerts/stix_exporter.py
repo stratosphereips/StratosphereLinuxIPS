@@ -5,6 +5,7 @@ import os
 import threading
 import time
 from datetime import datetime, timezone
+from uuid import uuid4
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
@@ -24,6 +25,7 @@ class StixExporter(IExporter):
         self.stix_filename = os.path.join(self.output_dir, "STIX_data.json")
         self.configs_read: bool = self.read_configuration()
         self.export_to_taxii_thread = None
+        self.last_exported_count = 0
         if self.should_export():
             self.print(
                 f"Exporting alerts to STIX 2 / TAXII every "
@@ -31,7 +33,9 @@ class StixExporter(IExporter):
             )
             self.exported_evidence_ids = set()
             self.bundle_objects: List[Indicator] = []
+            self.last_exported_count = 0
             self._load_existing_bundle()
+            self._ensure_bundle_file()
             if self.is_running_non_stop:
                 self.export_to_taxii_thread = threading.Thread(
                     target=self.schedule_sending_to_taxii_server,
@@ -77,11 +81,14 @@ class StixExporter(IExporter):
         Falls back to the current working directory if the DB does not
         have an output directory set yet.
         """
-        output_dir = self.db.get_output_dir()
+        output_dir = getattr(self.db, "output_dir", None)
+        if not output_dir:
+            output_dir = self.db.get_output_dir()
         if isinstance(output_dir, bytes):
             output_dir = output_dir.decode("utf-8")
         if not output_dir:
             output_dir = os.getcwd()
+        output_dir = os.path.abspath(output_dir)
         os.makedirs(output_dir, exist_ok=True)
         return output_dir
 
@@ -113,10 +120,26 @@ class StixExporter(IExporter):
             return
 
         self.bundle_objects = list(bundle.objects)
+        self.last_exported_count = len(self.bundle_objects)
         for indicator in self.bundle_objects:
             evidence_id = self._extract_evidence_id(indicator)
             if evidence_id:
                 self.exported_evidence_ids.add(evidence_id)
+
+    def _ensure_bundle_file(self) -> None:
+        """
+        Guarantee that STIX_data.json exists even before the first indicator
+        arrives so the user can inspect the file immediately.
+        """
+        if os.path.exists(self.stix_filename):
+            return
+        bundle_stub = {
+            "type": "bundle",
+            "id": f"bundle--{uuid4()}",
+            "objects": [],
+        }
+        with open(self.stix_filename, "w") as stix_file:
+            json.dump(bundle_stub, stix_file, indent=2)
 
     def _extract_evidence_id(self, indicator: Indicator) -> Optional[str]:
         try:
@@ -129,6 +152,10 @@ class StixExporter(IExporter):
         return bundle.serialize(pretty=True)
 
     def _write_bundle(self) -> None:
+        if not self.bundle_objects:
+            self._ensure_bundle_file()
+            return
+
         with open(self.stix_filename, "w") as stix_file:
             stix_file.write(self._serialize_bundle())
 
@@ -210,11 +237,15 @@ class StixExporter(IExporter):
         if not objects:
             return False
 
+        new_objects = objects[self.last_exported_count :]
+        if not new_objects:
+            return False
+
         collection = self.create_collection()
         if not collection:
             return False
 
-        envelope = {"objects": objects}
+        envelope = {"objects": new_objects}
 
         try:
             collection.add_objects(envelope)
@@ -222,8 +253,10 @@ class StixExporter(IExporter):
             self.print(f"Failed to push bundle to TAXII collection: {err}", 0, 3)
             return False
 
+        self.last_exported_count = len(objects)
+
         self.print(
-            f"Successfully exported {len(objects)} indicators to TAXII "
+            f"Successfully exported {len(new_objects)} indicators to TAXII "
             f"collection '{self.collection_name}'.",
             1,
             0,
@@ -348,17 +381,35 @@ class StixExporter(IExporter):
         """
         attacker = (evidence.get("attacker") or {}).get("value")
         if not attacker:
+            attacker = (evidence.get("profile") or {}).get("ip")
+        if not attacker:
+            attacker = (evidence.get("victim") or {}).get("value")
+        if not attacker:
             self.print("Evidence missing attacker value; skipping.", 0, 3)
             return False
 
         evidence_id = evidence.get("id")
         if evidence_id and evidence_id in self.exported_evidence_ids:
-            # Already exported this evidence
+            self.print(
+                f"Evidence {evidence_id} already exported; skipping.",
+                1,
+                0,
+            )
             return False
+
+        self.print(
+            f"Processing evidence {evidence_id or attacker} "
+            f"(profile={evidence.get('profile')}, attacker={evidence.get('attacker')})",
+            1,
+            0,
+        )
 
         ioc_type = utils.detect_ioc_type(attacker)
         pattern: str = self.get_ioc_pattern(ioc_type, attacker)
         if not pattern:
+            self.print(
+                f"Unable to build STIX pattern for attacker {attacker}.", 0, 3
+            )
             return False
 
         indicator_labels = self._build_indicator_labels(evidence)
@@ -388,7 +439,7 @@ class StixExporter(IExporter):
             self.exported_evidence_ids.add(evidence_id)
 
         self.print(
-            f"Indicator added to STIX bundle at {self.stix_filename}", 2, 0
+            f"Indicator added to STIX bundle at {self.stix_filename}", 1, 0
         )
         return True
 
@@ -405,12 +456,7 @@ class StixExporter(IExporter):
             # server again but there's no
             # new alerts in stix_data.json yet
             if os.path.exists(self.stix_filename):
-                exported = self.export()
-                if exported:
-                    # Delete stix_data.json file so we don't send duplicates
-                    os.remove(self.stix_filename)
-                    self.bundle_objects = []
-                    self.exported_evidence_ids.clear()
+                self.export()
             else:
                 self.print(
                     f"{self.push_delay} seconds passed, "
