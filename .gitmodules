@@ -16,4 +16,4 @@
     branch = main
 [submodule "StratosphereWeb"]
 	path = StratosphereWeb
-	url = https://github.com/stratosphereips/StratosphereWeb.git
+	url = https://github.com/stratosphereips/SlipsWeb.git
