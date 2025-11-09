@@ -203,14 +203,15 @@ You can read more about it [here](https://stratospherelinuxips.readthedocs.io/en
 
 ## Installing Slips natively
 
-Slips is dependent on three major elements:
+The best way to install Slips manually is to use the [install.sh](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/master/install/install.sh) script. Please review it.
 
-Python 3.10.12
-Zeek
-Redis database 7.0.4
+Slips depends on three major elements:
 
-To install these elements we will use APT package manager. After that, we will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node.JS and several npm packages.
+- Python 3.10.12
+- Zeek
+- Redis database 7.0.4
 
+To install these elements, the script will use the APT package manager. After that, it will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node JS and several npm packages.
 
 
 
@@ -218,11 +219,10 @@ To install these elements we will use APT package manager. After that, we will i
 <br>
 
 ### Install Slips using shell script
-You can install it using install.sh
+You can install it using [install.sh](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/master/install/install.sh)
 
 	sudo chmod +x install.sh
 	sudo ./install.sh
-
 
 ### Installing Slips manually
 #### Installing Python, Redis, NodeJs, and required python and npm libraries.
@@ -305,6 +305,7 @@ You can kill this redis database by running:
 ```
 then choosing 1.
 
+After these steps, if you need the submodules, you will need to clone them as done in the `install.sh` script.
 
 
 ## Installing Slips on a Raspberry PI
