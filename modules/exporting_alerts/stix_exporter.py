@@ -4,7 +4,8 @@ import json
 import os
 import threading
 import time
-from typing import List, Optional
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
 from stix2 import Bundle, Indicator, parse
@@ -19,27 +20,31 @@ class StixExporter(IExporter):
     def init(self):
         self.port = None
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
-        self.stix_filename = "STIX_data.json"
+        self.output_dir = self._resolve_output_dir()
+        self.stix_filename = os.path.join(self.output_dir, "STIX_data.json")
         self.configs_read: bool = self.read_configuration()
+        self.export_to_taxii_thread = None
         if self.should_export():
             self.print(
                 f"Exporting alerts to STIX 2 / TAXII every "
                 f"{self.push_delay} seconds."
             )
-            self.added_ips = set()
+            self.exported_evidence_ids = set()
             self.bundle_objects: List[Indicator] = []
             self._load_existing_bundle()
-            self.export_to_taxii_thread = threading.Thread(
-                target=self.schedule_sending_to_taxii_server,
-                daemon=True,
-                name="stix_exporter_to_taxii_thread",
-            )
+            if self.is_running_non_stop:
+                self.export_to_taxii_thread = threading.Thread(
+                    target=self.schedule_sending_to_taxii_server,
+                    daemon=True,
+                    name="stix_exporter_to_taxii_thread",
+                )
 
     def start_exporting_thread(self):
         # This thread is responsible for waiting n seconds before
         # each push to the stix server
         # it starts the timer when the first alert happens
-        utils.start_thread(self.export_to_taxii_thread, self.db)
+        if self.export_to_taxii_thread:
+            utils.start_thread(self.export_to_taxii_thread, self.db)
 
     @property
     def name(self):
@@ -66,6 +71,20 @@ class StixExporter(IExporter):
         adjusted = path if path.startswith("/") else f"/{path}"
         return urljoin(self._base_url(), adjusted)
 
+    def _resolve_output_dir(self) -> str:
+        """
+        Determines the directory where STIX_data.json should be stored.
+        Falls back to the current working directory if the DB does not
+        have an output directory set yet.
+        """
+        output_dir = self.db.get_output_dir()
+        if isinstance(output_dir, bytes):
+            output_dir = output_dir.decode("utf-8")
+        if not output_dir:
+            output_dir = os.getcwd()
+        os.makedirs(output_dir, exist_ok=True)
+        return output_dir
+
     def _load_existing_bundle(self) -> None:
         """
         Loads indicators from an existing STIX_data.json file so we can resume
@@ -84,7 +103,7 @@ class StixExporter(IExporter):
             return
 
         try:
-            bundle = parse(data)
+            bundle = parse(data, allow_custom=True)
         except Exception as err:  # stix2 raises generic Exception
             self.print(f"Invalid STIX bundle, starting fresh: {err}", 0, 3)
             return
@@ -95,22 +114,18 @@ class StixExporter(IExporter):
 
         self.bundle_objects = list(bundle.objects)
         for indicator in self.bundle_objects:
-            attacker = self._extract_attacker_from_indicator(indicator)
-            if attacker:
-                self.added_ips.add(attacker)
+            evidence_id = self._extract_evidence_id(indicator)
+            if evidence_id:
+                self.exported_evidence_ids.add(evidence_id)
 
-    def _extract_attacker_from_indicator(self, indicator: Indicator) -> Optional[str]:
-        pattern = getattr(indicator, "pattern", None)
-        if not pattern:
+    def _extract_evidence_id(self, indicator: Indicator) -> Optional[str]:
+        try:
+            return indicator.get("x_slips_evidence_id")  # type: ignore[index]
+        except AttributeError:
             return None
-        start = pattern.find("'")
-        end = pattern.rfind("'")
-        if start == -1 or end == -1 or end <= start:
-            return None
-        return pattern[start + 1 : end]
 
     def _serialize_bundle(self) -> str:
-        bundle = Bundle(*self.bundle_objects)
+        bundle = Bundle(*self.bundle_objects, allow_custom=True)
         return bundle.serialize(pretty=True)
 
     def _write_bundle(self) -> None:
@@ -199,8 +214,10 @@ class StixExporter(IExporter):
         if not collection:
             return False
 
+        envelope = {"objects": objects}
+
         try:
-            collection.add_objects(bundle_dict)
+            collection.add_objects(envelope)
         except Exception as err:
             self.print(f"Failed to push bundle to TAXII collection: {err}", 0, 3)
             return False
@@ -221,7 +238,7 @@ class StixExporter(IExporter):
 
     def should_export(self) -> bool:
         """Determines whether to export or not"""
-        return self.is_running_non_stop and "stix" in self.export_to
+        return "stix" in self.export_to
 
     def read_configuration(self) -> bool:
         """Reads configuration"""
@@ -247,10 +264,6 @@ class StixExporter(IExporter):
         # stopping
         return True
 
-    def ip_exists_in_stix_file(self, ip):
-        """Searches for ip in STIX_data.json to avoid exporting duplicates"""
-        return ip in self.added_ips
-
     def get_ioc_pattern(self, ioc_type: str, attacker) -> str:
         patterns_map = {
             "ip": f"[ip-addr:value = '{attacker}']",
@@ -263,49 +276,112 @@ class StixExporter(IExporter):
             return ""
         return pattern
 
-    def add_to_stix_file(self, to_add: tuple) -> bool:
+    def _build_indicator_labels(self, evidence: dict) -> List[str]:
+        labels = []
+        evidence_type = evidence.get("evidence_type")
+        if evidence_type:
+            labels.append(str(evidence_type).lower())
+        threat_level = evidence.get("threat_level")
+        if threat_level:
+            labels.append(str(threat_level).lower())
+        return labels
+
+    def _build_valid_from(self, evidence: dict) -> Optional[datetime]:
+        timestamp = evidence.get("timestamp")
+        if not timestamp:
+            return None
+        try:
+            dt_obj = utils.convert_to_datetime(timestamp)
+        except Exception:
+            return None
+        if not utils.is_aware(dt_obj):
+            dt_obj = utils.convert_ts_to_tz_aware(dt_obj)
+        return dt_obj.astimezone(timezone.utc)
+
+    def _build_custom_properties(self, evidence: dict) -> Dict[str, object]:
+        victim = evidence.get("victim") or {}
+        attacker = evidence.get("attacker") or {}
+        timewindow = evidence.get("timewindow") or {}
+        profile = evidence.get("profile") or {}
+
+        custom_properties: Dict[str, object] = {
+            "x_slips_evidence_id": evidence.get("id"),
+            "x_slips_threat_level": evidence.get("threat_level"),
+            "x_slips_profile_ip": profile.get("ip"),
+            "x_slips_timewindow": timewindow.get("number"),
+            "x_slips_attacker_direction": attacker.get("direction"),
+            "x_slips_attacker_ti": attacker.get("TI"),
+        }
+
+        victim_value = victim.get("value")
+        if victim_value:
+            custom_properties["x_slips_victim"] = victim_value
+
+        uids = evidence.get("uid")
+        if uids:
+            custom_properties["x_slips_flow_uids"] = uids
+
+        dst_port = evidence.get("dst_port")
+        if dst_port:
+            custom_properties["x_slips_dst_port"] = dst_port
+
+        src_port = evidence.get("src_port")
+        if src_port:
+            custom_properties["x_slips_src_port"] = src_port
+
+        return {
+            key: value
+            for key, value in custom_properties.items()
+            if value not in (None, "", [], {})
+        }
+
+    def add_to_stix_file(self, evidence: dict) -> bool:
         """
         Function to export evidence to a STIX_data.json file in the cwd.
         It keeps appending the given indicator to STIX_data.json until they're
          sent to the
         taxii server
-        msg_to_send is a tuple: (evidence_type,attacker)
-            evidence_type: e.g PortScan, ThreatIntelligence etc
-            attacker: ip of the attcker
+        evidence is a dictionary that contains the alert data
         """
-        evidence_type, attacker = (
-            to_add[0],
-            to_add[1],
-        )
-        # Get the right description to use in stix
-        name = evidence_type
+        attacker = (evidence.get("attacker") or {}).get("value")
+        if not attacker:
+            self.print("Evidence missing attacker value; skipping.", 0, 3)
+            return False
+
+        evidence_id = evidence.get("id")
+        if evidence_id and evidence_id in self.exported_evidence_ids:
+            # Already exported this evidence
+            return False
+
         ioc_type = utils.detect_ioc_type(attacker)
         pattern: str = self.get_ioc_pattern(ioc_type, attacker)
         if not pattern:
             return False
-        if self.ip_exists_in_stix_file(attacker):
-            self.print(
-                f"{attacker} already exists in STIX bundle, skipping duplicate.",
-                2,
-                0,
-            )
-            return False
-        # Required Indicator Properties: type, spec_version, id, created,
-        # modified , all are set automatically
-        # Valid_from, created and modified attribute will
-        # be set to the current time
-        # ID will be generated randomly
-        # ref https://docs.oasis-open.org/cti/stix/v2.1/os/stix-v2.1-os.html#_6khi84u7y58g
+
+        indicator_labels = self._build_indicator_labels(evidence)
+        valid_from = self._build_valid_from(evidence)
+        custom_properties = self._build_custom_properties(evidence)
+
         indicator = Indicator(
-            name=name, pattern=pattern, pattern_type="stix"
+            name=evidence.get("evidence_type", "Slips Alert"),
+            description=evidence.get("description"),
+            pattern=pattern,
+            pattern_type="stix",
+            valid_from=valid_from,
+            labels=indicator_labels or None,
+            allow_custom=True,
+            custom_properties=custom_properties or None,
         )  # the pattern language that the indicator pattern is expressed in.
 
         self.bundle_objects.append(indicator)
         self._write_bundle()
 
-        # Set of unique ips added to stix_data.json to avoid duplicates
-        self.added_ips.add(attacker)
-        self.print("Indicator added to STIX_data.json", 2, 0)
+        if evidence_id:
+            self.exported_evidence_ids.add(evidence_id)
+
+        self.print(
+            f"Indicator added to STIX bundle at {self.stix_filename}", 2, 0
+        )
         return True
 
     def schedule_sending_to_taxii_server(self):
@@ -326,7 +402,7 @@ class StixExporter(IExporter):
                     # Delete stix_data.json file so we don't send duplicates
                     os.remove(self.stix_filename)
                     self.bundle_objects = []
-                    self.added_ips.clear()
+                    self.exported_evidence_ids.clear()
             else:
                 self.print(
                     f"{self.push_delay} seconds passed, "
