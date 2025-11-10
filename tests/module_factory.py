@@ -196,6 +196,7 @@ class ModuleFactory:
             Mock(),  # args
             Mock(),  # conf
             Mock(),  # ppid
+            Mock(),  # Bloom filter manager
         )
 
         # override the self.print function to avoid broken pipes
@@ -212,6 +213,7 @@ class ModuleFactory:
             Mock(),  # args
             Mock(),  # conf
             Mock(),  # ppid
+            Mock(),  # Bloom filter manager
         )
 
         # override the self.print function
@@ -228,6 +230,7 @@ class ModuleFactory:
             Mock(),  # args
             Mock(),  # conf
             Mock(),  # ppid
+            Mock(),  # Bloom filter manager
         )
         virustotal.print = Mock()
         virustotal.__read_configuration = Mock()
@@ -246,6 +249,7 @@ class ModuleFactory:
                 Mock(),  # args
                 Mock(),  # conf
                 Mock(),  # ppid
+                Mock(),  # Bloom filter manager
             )
         arp.print = Mock()
         arp.evidence_filter.is_slips_peer = Mock(return_value=False)
@@ -266,6 +270,7 @@ class ModuleFactory:
             Mock(),  # args
             Mock(),  # conf
             Mock(),  # ppid
+            Mock(),  # Bloom filter manager
         )
         # override the print function to avoid broken pipes
         blocking.print = Mock()
@@ -389,6 +394,7 @@ class ModuleFactory:
             Mock(),  # args
             Mock(),  # conf
             Mock(),  # ppid
+            Mock(),  # Bloom filter manager
         )
         # override the self.print function to avoid broken pipes
         ip_info.print = Mock()
@@ -413,6 +419,7 @@ class ModuleFactory:
             Mock(),  # args
             Mock(),  # conf
             Mock(),  # ppid
+            Mock(),  # Bloom filter manager
         )
         leak_detector.print = Mock()
         # this is the path containing 1 yara rule for testing,
@@ -476,6 +483,7 @@ class ModuleFactory:
             Mock(),  # args
             Mock(),  # conf
             Mock(),  # ppid
+            Mock(),  # Bloom filter manager
         )
 
         # override the self.print function to avoid broken pipes
@@ -496,6 +504,7 @@ class ModuleFactory:
             Mock(),  # args
             Mock(),  # conf
             Mock(),  # ppid
+            Mock(),  # Bloom filter manager
         )
         # override the self.print function to avoid broken pipes
         update_manager.print = Mock()
@@ -619,6 +628,7 @@ class ModuleFactory:
             Mock(),  # args
             Mock(),  # conf
             Mock(),  # ppid
+            Mock(),  # Bloom filter manager
         )
         return network_discovery
 
@@ -632,6 +642,7 @@ class ModuleFactory:
             Mock(),  # args
             Mock(),  # conf
             Mock(),  # ppid
+            Mock(),  # Bloom filter manager
         )
         return poisoner
 
@@ -742,6 +753,7 @@ class ModuleFactory:
             Mock(),  # args
             Mock(),  # conf
             Mock(),  # ppid
+            Mock(),  # Bloom filter manager
         )
         cesnet.db = mock_db
         cesnet.wclient = MagicMock()
@@ -787,6 +799,7 @@ class ModuleFactory:
             Mock(),  # args
             Mock(),  # conf
             Mock(),  # ppid
+            Mock(),  # Bloom filter manager
         )
         riskiq.db = mock_db
         return riskiq
@@ -804,6 +817,7 @@ class ModuleFactory:
             Mock(),  # args
             Mock(),  # conf
             Mock(),  # ppid
+            Mock(),  # Bloom filter manager
         )
         tl.db = mock_db
         return tl
