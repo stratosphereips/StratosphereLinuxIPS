@@ -258,7 +258,7 @@ class StixExporter(IExporter):
         self.print(
             f"Successfully exported {len(new_objects)} indicators to TAXII "
             f"collection '{self.collection_name}'.",
-            1,
+            2,
             0,
         )
         return True
@@ -392,7 +392,7 @@ class StixExporter(IExporter):
         if evidence_id and evidence_id in self.exported_evidence_ids:
             self.print(
                 f"Evidence {evidence_id} already exported; skipping.",
-                1,
+                3,
                 0,
             )
             return False
@@ -400,7 +400,7 @@ class StixExporter(IExporter):
         self.print(
             f"Processing evidence {evidence_id or attacker} "
             f"(profile={evidence.get('profile')}, attacker={evidence.get('attacker')})",
-            1,
+            2,
             0,
         )
 
@@ -439,7 +439,7 @@ class StixExporter(IExporter):
             self.exported_evidence_ids.add(evidence_id)
 
         self.print(
-            f"Indicator added to STIX bundle at {self.stix_filename}", 1, 0
+            f"Indicator added to STIX bundle at {self.stix_filename}", 2, 0
         )
         return True
 
