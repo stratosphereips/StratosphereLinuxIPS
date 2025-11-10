@@ -37,17 +37,29 @@ class CCDetection(IAsyncModule):
     description = "Detect C&C channels based on behavioral letters"
     authors = ["Sebastian Garcia", "Kamila Babayeva", "Ondrej Lukas"]
 
-    def init(self):
-        self.subscribe_to_channels()
+    async def init(self):
+        # Set up channel handlers - this should be the first thing in init()
+        self.channels = {
+            "new_letters": self.new_letters_msg_handler,
+            "tw_closed": self.tw_closed_msg_handler,
+        }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
+
         self.exporter = StratoLettersExporter(self.db)
 
-    def subscribe_to_channels(self):
-        self.c1 = self.db.subscribe("new_letters")
-        self.c2 = self.db.subscribe("tw_closed")
-        self.channels = {
-            "new_letters": self.c1,
-            "tw_closed": self.c2,
-        }
+    async def new_letters_msg_handler(self, msg):
+        """Handler for new_letters channel messages"""
+        try:
+            await self.handle_new_letters(msg)
+        except Exception as e:
+            self.print(f"Error processing new_letters message: {e}")
+
+    async def tw_closed_msg_handler(self, msg):
+        """Handler for tw_closed channel messages"""
+        try:
+            await self.handle_tw_closed(msg)
+        except Exception as e:
+            self.print(f"Error processing tw_closed message: {e}")
 
     def set_evidence_cc_channel(
         self,
@@ -251,7 +263,7 @@ class CCDetection(IAsyncModule):
         twid = profileid_tw[-1]
         self.exporter.export(profileid, twid)
 
-    def pre_main(self):
+    async def pre_main(self):
         utils.drop_root_privs_permanently()
         # TODO: set the decision threshold in the function call
         try:
@@ -261,11 +273,10 @@ class CCDetection(IAsyncModule):
             self.print(e)
             return 1
 
-        self.exporter.init()
+        await self.exporter.init()
 
-    def main(self):
-        if msg := self.get_msg("new_letters"):
-            self.handle_new_letters(msg)
-
-        if msg := self.get_msg("tw_closed"):
-            self.handle_tw_closed(msg)
+    async def main(self):
+        """Main loop function"""
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
+        pass

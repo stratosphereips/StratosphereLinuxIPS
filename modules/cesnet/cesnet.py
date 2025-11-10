@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import os
 import json
-import time
-import threading
 import queue
+import threading
+import time
 import ipaddress
 import validators
 
@@ -27,13 +27,25 @@ class CESNET(IAsyncModule):
     description = "Send and receive alerts from warden servers."
     authors = ["Alya Gomaa"]
 
-    def init(self):
-        self.read_configuration()
-        self.c1 = self.db.subscribe("export_evidence")
+    async def init(self):
+        # Set up channel handlers - this should be the first thing in init()
         self.channels = {
-            "export_evidence": self.c1,
+            "export_evidence": self.export_evidence_msg_handler,
         }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
+
+        self.read_configuration()
         self.stop_module = False
+
+    async def export_evidence_msg_handler(self, msg):
+        """Handler for export_evidence channel messages"""
+        try:
+            if self.send_to_warden:
+                self.msg_received = True
+                evidence = json.loads(msg["data"])
+                await self.export_evidence(evidence)
+        except Exception as e:
+            self.print(f"Error processing export_evidence message: {e}")
 
     def read_configuration(self):
         """Read importing/exporting preferences from slips.yaml"""
@@ -246,7 +258,7 @@ class CESNET(IAsyncModule):
 
         self.db.add_ips_to_ioc(src_ips)
 
-    def pre_main(self):
+    async def pre_main(self):
         utils.drop_root_privs_permanently()
         # Stop module if the configuration file is invalid or not found
         if self.stop_module:
@@ -270,19 +282,17 @@ class CESNET(IAsyncModule):
             {"Name": self.wclient.name, "Type": ["IPS"], "SW": ["Slips"]}
         ]
 
-    def main(self):
+    async def main(self):
+        """Main loop function"""
         if self.receive_from_warden:
-            last_update = self.db.get_last_warden_poll_time()
+            last_update = await self.db.get_last_warden_poll_time()
             now = time.time()
             # did we wait the poll_delay period since last poll?
             if last_update + self.poll_delay < now:
-                self.import_alerts()
+                await self.import_alerts()
                 # set last poll time to now
-                self.db.set_last_warden_poll_time(now)
+                await self.db.set_last_warden_poll_time(now)
 
-        # in case of an interface or a file, push every time we get an alert
-        msg = self.get_msg("export_evidence")
-        if msg and self.send_to_warden:
-            self.msg_received = True
-            evidence = json.loads(msg["data"])
-            self.export_evidence(evidence)
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
+        pass

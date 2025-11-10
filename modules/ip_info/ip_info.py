@@ -18,7 +18,6 @@ import subprocess
 import netifaces
 import time
 import asyncio
-import multiprocessing
 from functools import lru_cache
 
 
@@ -47,26 +46,84 @@ class IPInfo(IAsyncModule):
     description = "Get different info about an IP/MAC address"
     authors = ["Alya Gomaa", "Sebastian Garcia"]
 
-    def init(self):
+    async def init(self):
         """This will be called when initializing this module"""
-        self.pending_mac_queries = multiprocessing.Queue()
+        # Set up channel handlers - this should be the first thing in init()
+        self.channels = {
+            "new_ip": self.new_ip_msg_handler,
+            "new_MAC": self.new_mac_msg_handler,
+            "new_dns": self.new_dns_msg_handler,
+            "check_jarm_hash": self.check_jarm_hash_msg_handler,
+        }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
+
+        self.pending_mac_queries = asyncio.Queue()
         self.asn = ASN(self.db)
         self.JARM = JARM()
         self.classifier = FlowClassifier()
-        self.c1 = self.db.subscribe("new_ip")
-        self.c2 = self.db.subscribe("new_MAC")
-        self.c3 = self.db.subscribe("new_dns")
-        self.c4 = self.db.subscribe("check_jarm_hash")
-        self.channels = {
-            "new_ip": self.c1,
-            "new_MAC": self.c2,
-            "new_dns": self.c3,
-            "check_jarm_hash": self.c4,
-        }
         self.whitelist = Whitelist(self.logger, self.db)
-        self.is_running_non_stop: bool = self.db.is_running_non_stop()
+        self.is_running_non_stop: bool = await self.db.is_running_non_stop()
         self.valid_tlds = whois.validTlds()
         self.is_running_in_ap_mode = False
+
+    async def new_ip_msg_handler(self, msg):
+        """Handler for new_ip channel messages"""
+        try:
+            ip = msg["data"]
+            await self.handle_new_ip(ip)
+        except Exception as e:
+            self.print(f"Error processing new_ip message: {e}")
+
+    async def new_mac_msg_handler(self, msg):
+        """Handler for new_MAC channel messages"""
+        try:
+            data = json.loads(msg["data"])
+            mac_addr: str = data["MAC"]
+            profileid: str = data["profileid"]
+
+            await self.get_vendor(mac_addr, profileid)
+            await self.check_if_we_have_pending_offline_mac_queries()
+        except Exception as e:
+            self.print(f"Error processing new_MAC message: {e}")
+
+    async def new_dns_msg_handler(self, msg):
+        """Handler for new_dns channel messages"""
+        try:
+            data = json.loads(msg["data"])
+            flow = self.classifier.convert_to_flow_obj(data["flow"])
+            if domain := flow.query:
+                await self.get_domain_info(domain)
+        except Exception as e:
+            self.print(f"Error processing new_dns message: {e}")
+
+    async def check_jarm_hash_msg_handler(self, msg):
+        """Handler for check_jarm_hash channel messages"""
+        try:
+            # example of a msg
+            # {'attacker_type': 'ip',
+            # 'profileid': 'profile_192.168.1.9', 'twid': 'timewindow1',
+            # 'flow': {'starttime': 1700828217.923668,
+            # 'uid': 'CuTCcR1Bbp9Je7LVqa', 'saddr': '192.168.1.9',
+            # 'daddr': '45.33.32.156', 'dur': 0.20363497734069824,
+            # 'proto': 'tcp', 'appproto': '', 'sport': 50824, 'dport': 443,
+            # 'spkts': 1, 'dpkts': 1, 'sbytes': 0, 'dbytes': 0,
+            # 'smac': 'c4:23:60:3d:fd:d3', 'dmac': '50:78:b3:b0:08:ec',
+            # 'state': 'REJ', 'history': 'Sr', 'type_': 'conn', 'dir_': '->'},
+            # 'uid': 'CuTCcR1Bbp9Je7LVqa'}
+
+            data: dict = json.loads(msg["data"])
+            flow: dict = data["flow"]
+            if data["attacker_type"] == "ip":
+                jarm_hash: str = self.JARM.JARM_hash(
+                    flow["daddr"], flow["dport"]
+                )
+
+                if await self.db.is_blacklisted_jarm(jarm_hash):
+                    await self.set_evidence_malicious_jarm_hash(
+                        flow, data["twid"]
+                    )
+        except Exception as e:
+            self.print(f"Error processing check_jarm_hash message: {e}")
 
     async def open_dbs(self):
         """Function to open the different offline databases used in this
@@ -550,9 +607,9 @@ class IPInfo(IAsyncModule):
 
         self.db.set_evidence(evidence)
 
-    def pre_main(self):
+    async def pre_main(self):
         utils.drop_root_privs_permanently()
-        self.wait_for_dbs()
+        await self.wait_for_dbs()
 
         self.is_running_in_ap_mode: bool = self.is_ap_mode_iwconfig()
         # the following method only works when running on an interface
@@ -593,43 +650,7 @@ class IPInfo(IAsyncModule):
         self.get_rdns(ip)
 
     async def main(self):
-        if msg := self.get_msg("new_MAC"):
-            data = json.loads(msg["data"])
-            mac_addr: str = data["MAC"]
-            profileid: str = data["profileid"]
-
-            self.get_vendor(mac_addr, profileid)
-            self.check_if_we_have_pending_offline_mac_queries()
-
-        if msg := self.get_msg("new_dns"):
-            msg = json.loads(msg["data"])
-            flow = self.classifier.convert_to_flow_obj(msg["flow"])
-            if domain := flow.query:
-                self.get_domain_info(domain)
-
-        if msg := self.get_msg("new_ip"):
-            ip = msg["data"]
-            self.handle_new_ip(ip)
-
-        if msg := self.get_msg("check_jarm_hash"):
-            # example of a msg
-            # {'attacker_type': 'ip',
-            # 'profileid': 'profile_192.168.1.9', 'twid': 'timewindow1',
-            # 'flow': {'starttime': 1700828217.923668,
-            # 'uid': 'CuTCcR1Bbp9Je7LVqa', 'saddr': '192.168.1.9',
-            # 'daddr': '45.33.32.156', 'dur': 0.20363497734069824,
-            # 'proto': 'tcp', 'appproto': '', 'sport': 50824, 'dport': 443,
-            # 'spkts': 1, 'dpkts': 1, 'sbytes': 0, 'dbytes': 0,
-            # 'smac': 'c4:23:60:3d:fd:d3', 'dmac': '50:78:b3:b0:08:ec',
-            # 'state': 'REJ', 'history': 'Sr', 'type_': 'conn', 'dir_': '->'},
-            # 'uid': 'CuTCcR1Bbp9Je7LVqa'}
-
-            msg: dict = json.loads(msg["data"])
-            flow: dict = msg["flow"]
-            if msg["attacker_type"] == "ip":
-                jarm_hash: str = self.JARM.JARM_hash(
-                    flow["daddr"], flow["dport"]
-                )
-
-                if self.db.is_blacklisted_jarm(jarm_hash):
-                    self.set_evidence_malicious_jarm_hash(flow, msg["twid"])
+        """Main loop function"""
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
+        pass

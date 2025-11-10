@@ -16,11 +16,13 @@ class RiskIQ(IAsyncModule):
     description = "Module to get passive DNS info about IPs from RiskIQ"
     authors = ["Alya Gomaa"]
 
-    def init(self):
-        self.c1 = self.db.subscribe("new_ip")
+    async def init(self):
+        # Set up channel handlers - this should be the first thing in init()
         self.channels = {
-            "new_ip": self.c1,
+            "new_ip": self.new_ip_msg_handler,
         }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
+
         self.read_configuration()
 
     def read_configuration(self):
@@ -84,22 +86,31 @@ class RiskIQ(IAsyncModule):
         sorted_pt_results = sorted(pt_data.items(), reverse=True)[:10]
         return sorted_pt_results
 
-    def pre_main(self):
-        utils.drop_root_privs_permanently()
-        if not self.riskiq_email or not self.riskiq_key:
-            return 1
-
-    def main(self):
-        if msg := self.get_msg("new_ip"):
+    async def new_ip_msg_handler(self, msg):
+        """Handler for new_ip channel messages"""
+        try:
             ip = msg["data"]
             if utils.is_ignored_ip(ip):
                 # return here means keep looping
                 return
 
             # Only get passive total dns data if we don't have it in the db
-            if self.db.get_passive_dns(ip):
+            if await self.db.get_passive_dns(ip):
                 return
             # we don't have it in the db , get it from passive total
-            if passive_dns := self.get_passive_dns(ip):
+            if passive_dns := await self.get_passive_dns(ip):
                 # we found data from passive total, store it in the db
-                self.db.set_passive_dns(ip, passive_dns)
+                await self.db.set_passive_dns(ip, passive_dns)
+        except Exception as e:
+            self.print(f"Error processing new_ip message: {e}")
+
+    async def pre_main(self):
+        utils.drop_root_privs_permanently()
+        if not self.riskiq_email or not self.riskiq_key:
+            return 1
+
+    async def main(self):
+        """Main loop function"""
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
+        pass

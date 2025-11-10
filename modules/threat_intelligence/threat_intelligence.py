@@ -1,11 +1,9 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import asyncio
 import ipaddress
-import multiprocessing
 import os
 import json
-import threading
-import time
 from uuid import uuid4
 import validators
 from typing import (
@@ -44,7 +42,7 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
     )
     authors = ["Frantisek Strasak, Sebastian Garcia, Alya Gomaa"]
 
-    def init(self):
+    async def init(self):
         """Initializes the ThreatIntel module. This includes setting up database
         subscriptions for threat intelligence and new downloaded file notifications,
         reading configuration settings, caching malicious IP ranges, creating a session
@@ -59,25 +57,104 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
             urlhaus (URLhaus): An instance of the URLhaus module for
             querying URLhaus data.
         """
-        self.c1 = self.db.subscribe("give_threat_intelligence")
-        self.c2 = self.db.subscribe("new_downloaded_file")
+        # Set up channel handlers - this should be the first thing in init()
         self.channels = {
-            "give_threat_intelligence": self.c1,
-            "new_downloaded_file": self.c2,
+            "give_threat_intelligence": self.give_threat_intelligence_msg_handler,
+            "new_downloaded_file": self.new_downloaded_file_msg_handler,
         }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
+
         self.__read_configuration()
-        self.get_all_blacklisted_ip_ranges()
+        await self.get_all_blacklisted_ip_ranges()
         self.urlhaus = URLhaus(self.db)
         self.spamhaus = Spamhaus(self.db)
-        self.pending_queries = multiprocessing.Queue()
-        self.pending_circllu_calls_thread = threading.Thread(
-            target=self.handle_pending_queries,
-            daemon=True,
-            name="ti_pending_circllu_calls_thread",
-        )
+        self.pending_queries = asyncio.Queue()
         self.circllu = Circllu(self.db, self.pending_queries)
 
-    def get_all_blacklisted_ip_ranges(self):
+    async def give_threat_intelligence_msg_handler(self, msg):
+        """Handler for give_threat_intelligence channel messages"""
+        try:
+            data = json.loads(msg["data"])
+            profileid = data.get("profileid")
+            twid = data.get("twid")
+            timestamp = data.get("stime")
+            uid = data.get("uid")
+            protocol = data.get("proto")
+            daddr = data.get("daddr")
+            # these 2 are only available when looking up dns answers
+            # the query is needed when a malicious answer is found,
+            # for more detailed description of the evidence
+            is_dns_response = data.get("is_dns_response")
+            dns_query = data.get("dns_query")
+            # this is the IP/domain that we want the TI for.
+            to_lookup = data.get("to_lookup", "")
+            # detect the type given because sometimes,
+            # http.log host field has ips OR domains
+            type_ = utils.detect_ioc_type(to_lookup)
+
+            # ip_state can be "srcip" or "dstip"
+            ip_state = data.get("ip_state")
+            if type_ == "ip":
+                ip = to_lookup
+                if self.should_lookup(ip, protocol, ip_state):
+                    await self.is_malicious_ip(
+                        ip,
+                        uid,
+                        daddr,
+                        timestamp,
+                        profileid,
+                        twid,
+                        ip_state,
+                        dns_query=dns_query,
+                        is_dns_response=is_dns_response,
+                    )
+                    await self.ip_belongs_to_blacklisted_range(
+                        ip, uid, daddr, timestamp, profileid, twid, ip_state
+                    )
+                    await self.ip_has_blacklisted_asn(
+                        ip,
+                        uid,
+                        timestamp,
+                        profileid,
+                        twid,
+                        is_dns_response=is_dns_response,
+                    )
+            elif type_ == "domain":
+                if is_dns_response:
+                    await self.is_malicious_cname(
+                        dns_query, to_lookup, uid, timestamp, profileid, twid
+                    )
+                else:
+                    await self.is_malicious_domain(
+                        to_lookup, uid, timestamp, profileid, twid
+                    )
+            elif type_ == "url":
+                await self.is_malicious_url(
+                    to_lookup, uid, timestamp, daddr, profileid, twid
+                )
+        except Exception as e:
+            self.print(
+                f"Error processing give_threat_intelligence message: {e}"
+            )
+
+    async def new_downloaded_file_msg_handler(self, msg):
+        """Handler for new_downloaded_file channel messages"""
+        try:
+            file_info: dict = json.loads(msg["data"])
+            # the format of file_info is as follows
+            #  {
+            #     'flow': asdict(self.flow),
+            #     'type': 'suricata' or 'zeek',
+            #     'profileid': str,
+            #     'twid': str,
+            # }
+
+            if file_info["type"] == "zeek":
+                await self.is_malicious_hash(file_info)
+        except Exception as e:
+            self.print(f"Error processing new_downloaded_file message: {e}")
+
+    async def get_all_blacklisted_ip_ranges(self):
         """Retrieves and caches the malicious IP ranges from the database,
         separating them into IPv4 and IPv6 ranges. These ranges are stored in
         dictionaries indexed by the first octet (or hextet for IPv6) of
@@ -88,7 +165,7 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
             dictionaries with malicious IP ranges categorized by their
             first octet or hextet.
         """
-        ip_ranges = self.db.get_all_blacklisted_ip_ranges()
+        ip_ranges = await self.db.get_all_blacklisted_ip_ranges()
         self.cached_ipv6_ranges = {}
         self.cached_ipv4_ranges = {}
         for range in ip_ranges.keys():
@@ -1363,7 +1440,7 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
     def search_online_for_url(self, url):
         return self.urlhaus.lookup(url, "url")
 
-    def is_malicious_ip(
+    async def is_malicious_ip(
         self,
         ip: str,
         uid: str,
@@ -1405,14 +1482,14 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
             using either `set_evidence_malicious_ip_in_dns_response`
             or `set_evidence_malicious_ip` methods depending on the context.
         """
-        ip_info = self.search_offline_for_ip(ip)
+        ip_info = await self.search_offline_for_ip(ip)
         if not ip_info:
-            ip_info = self.search_online_for_ip(ip, ip_state)
+            ip_info = await self.search_online_for_ip(ip, ip_state)
             if not ip_info:
                 # not malicious
                 return False
 
-        self.db.add_ips_to_ioc({ip: json.dumps(ip_info)})
+        await self.db.add_ips_to_ioc({ip: json.dumps(ip_info)})
         if is_dns_response:
             self.set_evidence_malicious_ip_in_dns_response(
                 ip,
@@ -1436,7 +1513,7 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
             )
         return True
 
-    def is_malicious_hash(self, flow_info: dict):
+    async def is_malicious_hash(self, flow_info: dict):
         """Checks if a file hash is considered malicious based on online threat
         intelligence sources.
 
@@ -1462,7 +1539,7 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
             # .. }
             return
 
-        if self.db.is_known_fp_md5_hash(flow_info["flow"]["md5"]):
+        if await self.db.is_known_fp_md5_hash(flow_info["flow"]["md5"]):
             # this is a known FP https://github.com/Neo23x0/ti-falsepositives/tree/master
             # its benign so dont look it up
             return
@@ -1478,7 +1555,9 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
             else:
                 self.set_evidence_malicious_hash(blacklist_details)
 
-    def is_malicious_url(self, url, uid, timestamp, daddr, profileid, twid):
+    async def is_malicious_url(
+        self, url, uid, timestamp, daddr, profileid, twid
+    ):
         """Determines if a URL is considered malicious by querying online threat
         intelligence sources.
 
@@ -1661,7 +1740,7 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
         domain_info = {"threatintelligence": domain_info}
         self.db.set_info_for_domains(cname, domain_info)
 
-    def is_malicious_domain(
+    async def is_malicious_domain(
         self,
         domain,
         uid,
@@ -1708,7 +1787,7 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
 
         # mark this domain as malicious in our database
         domain_info = {"threatintelligence": domain_info}
-        self.db.set_info_for_domains(domain, domain_info)
+        await self.db.set_info_for_domains(domain, domain_info)
 
     def update_local_file(self, filename):
         """Checks for updates to a specified local threat intelligence
@@ -1757,9 +1836,9 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
             self.db.set_ti_feed_info(filename, malicious_file_info)
             return True
 
-    def handle_pending_queries(self):
+    async def handle_pending_queries(self):
         """Processes the pending Circl.lu queries stored in the queue.
-        This method runs as a daemon thread, executing a batch of up to 10
+        This method runs as an async task, executing a batch of up to 10
         queries every 2 minutes. After processing a batch, it waits for
         another 2 minutes before attempting the next batch of queries.
         This method continuously checks the queue for new items and
@@ -1773,10 +1852,12 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
         """
         max_queries = 10
         while not self.should_stop():
-            time.sleep(120)
+            await asyncio.sleep(120)
             try:
-                flow_info = self.pending_queries.get(timeout=0.5)
-            except Exception:
+                flow_info = await asyncio.wait_for(
+                    self.pending_queries.get(), timeout=0.5
+                )
+            except asyncio.TimeoutError:
                 # queue is empty wait extra 2 mins
                 continue
 
@@ -1785,7 +1866,7 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
                 not self.pending_queries.empty()
                 and queries_done <= max_queries
             ):
-                self.is_malicious_hash(flow_info)
+                await self.is_malicious_hash(flow_info)
                 queries_done += 1
 
     def should_lookup(self, ip: str, protocol: str, ip_state: str) -> bool:
@@ -1810,79 +1891,11 @@ class ThreatIntel(IAsyncModule, URLhaus, Spamhaus):
         for local_file in local_files:
             self.update_local_file(local_file)
 
-        await utils.start_thread(self.pending_circllu_calls_thread, self.db)
+        # Start the pending queries handler as an async task
+        self.create_task(self.handle_pending_queries)
 
-    def main(self):
-        # The channel can receive an IP address or a domain name
-        if msg := self.get_msg("give_threat_intelligence"):
-            data = json.loads(msg["data"])
-            profileid = data.get("profileid")
-            twid = data.get("twid")
-            timestamp = data.get("stime")
-            uid = data.get("uid")
-            protocol = data.get("proto")
-            daddr = data.get("daddr")
-            # these 2 are only available when looking up dns answers
-            # the query is needed when a malicious answer is found,
-            # for more detailed description of the evidence
-            is_dns_response = data.get("is_dns_response")
-            dns_query = data.get("dns_query")
-            # this is the IP/domain that we want the TI for.
-            to_lookup = data.get("to_lookup", "")
-            # detect the type given because sometimes,
-            # http.log host field has ips OR domains
-            type_ = utils.detect_ioc_type(to_lookup)
-
-            # ip_state can be "srcip" or "dstip"
-            ip_state = data.get("ip_state")
-            if type_ == "ip":
-                ip = to_lookup
-                if self.should_lookup(ip, protocol, ip_state):
-                    self.is_malicious_ip(
-                        ip,
-                        uid,
-                        daddr,
-                        timestamp,
-                        profileid,
-                        twid,
-                        ip_state,
-                        dns_query=dns_query,
-                        is_dns_response=is_dns_response,
-                    )
-                    self.ip_belongs_to_blacklisted_range(
-                        ip, uid, daddr, timestamp, profileid, twid, ip_state
-                    )
-                    self.ip_has_blacklisted_asn(
-                        ip,
-                        uid,
-                        timestamp,
-                        profileid,
-                        twid,
-                        is_dns_response=is_dns_response,
-                    )
-            elif type_ == "domain":
-                if is_dns_response:
-                    self.is_malicious_cname(
-                        dns_query, to_lookup, uid, timestamp, profileid, twid
-                    )
-                else:
-                    self.is_malicious_domain(
-                        to_lookup, uid, timestamp, profileid, twid
-                    )
-            elif type_ == "url":
-                self.is_malicious_url(
-                    to_lookup, uid, timestamp, daddr, profileid, twid
-                )
-
-        if msg := self.get_msg("new_downloaded_file"):
-            file_info: dict = json.loads(msg["data"])
-            # the format of file_info is as follows
-            #  {
-            #     'flow': asdict(self.flow),
-            #     'type': 'suricata' or 'zeek',
-            #     'profileid': str,
-            #     'twid': str,
-            # }
-
-            if file_info["type"] == "zeek":
-                self.is_malicious_hash(file_info)
+    async def main(self):
+        """Main loop function"""
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
+        pass

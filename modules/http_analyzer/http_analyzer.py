@@ -622,53 +622,64 @@ class HTTPAnalyzer(IAsyncModule):
         utils.drop_root_privs_permanently()
 
     async def new_http_msg_handler(self, msg: dict):
-        msg = json.loads(msg["data"])
-        profileid = msg["profileid"]
-        twid = msg["twid"]
-        flow = self.classifier.convert_to_flow_obj(msg["flow"])
-        self.create_task(
-            self.check_suspicious_user_agents, profileid, twid, flow
-        )
-        self.create_task(self.check_multiple_empty_connections, twid, flow)
-        # find the UA of this profileid if we don't have it
-        # get the last used ua of this profile
-        cached_ua = await self.db.get_user_agent_from_profile(profileid)
-        if cached_ua:
+        try:
+            msg = json.loads(msg["data"])
+            profileid = msg["profileid"]
+            twid = msg["twid"]
+            flow = self.classifier.convert_to_flow_obj(msg["flow"])
             self.create_task(
-                self.check_multiple_user_agents_in_a_row,
-                flow,
-                twid,
-                cached_ua,
+                self.check_suspicious_user_agents, profileid, twid, flow
             )
+            self.create_task(self.check_multiple_empty_connections, twid, flow)
+            # find the UA of this profileid if we don't have it
+            # get the last used ua of this profile
+            cached_ua = await self.db.get_user_agent_from_profile(profileid)
+            if cached_ua:
+                self.create_task(
+                    self.check_multiple_user_agents_in_a_row,
+                    flow,
+                    twid,
+                    cached_ua,
+                )
 
-        if not cached_ua or (
-            isinstance(cached_ua, dict)
-            and cached_ua.get("user_agent", "") != flow.user_agent
-            and "server-bag" not in flow.user_agent
-        ):
-            # only UAs of type dict are browser UAs,
-            # skips str UAs as they are SSH clients
+            if not cached_ua or (
+                isinstance(cached_ua, dict)
+                and cached_ua.get("user_agent", "") != flow.user_agent
+                and "server-bag" not in flow.user_agent
+            ):
+                # only UAs of type dict are browser UAs,
+                # skips str UAs as they are SSH clients
+                self.create_task(
+                    self.get_user_agent_info, flow.user_agent, profileid
+                )
+
             self.create_task(
-                self.get_user_agent_info, flow.user_agent, profileid
+                self.extract_info_from_ua, flow.user_agent, profileid
             )
-
-        self.create_task(self.extract_info_from_ua, flow.user_agent, profileid)
-        self.create_task(self.detect_executable_mime_types, twid, flow)
-        self.create_task(
-            self.check_incompatible_user_agent, profileid, twid, flow
-        )
-        self.create_task(self.check_pastebin_downloads, twid, flow)
-        self.create_task(self.set_evidence.http_traffic, twid, flow)
+            self.create_task(self.detect_executable_mime_types, twid, flow)
+            self.create_task(
+                self.check_incompatible_user_agent, profileid, twid, flow
+            )
+            self.create_task(self.check_pastebin_downloads, twid, flow)
+            self.create_task(self.set_evidence.http_traffic, twid, flow)
+        except Exception as e:
+            self.print(f"Error processing new_http message: {e}", 0, 1)
 
     async def new_weird_msg_handler(self, msg: dict):
-        msg = json.loads(msg["data"])
-        self.create_task(self.check_weird_http_method, msg)
+        try:
+            msg = json.loads(msg["data"])
+            self.create_task(self.check_weird_http_method, msg)
+        except Exception as e:
+            self.print(f"Error processing new_weird message: {e}", 0, 1)
 
     async def new_flow_msg_handler(self, msg: dict):
-        msg = json.loads(msg["data"])
-        twid = msg["twid"]
-        flow = self.classifier.convert_to_flow_obj(msg["flow"])
-        self.create_task(self.check_non_http_port_80_conns, twid, flow)
+        try:
+            msg = json.loads(msg["data"])
+            twid = msg["twid"]
+            flow = self.classifier.convert_to_flow_obj(msg["flow"])
+            self.create_task(self.check_non_http_port_80_conns, twid, flow)
+        except Exception as e:
+            self.print(f"Error processing new_flow message: {e}", 0, 1)
 
     async def main(self):
         await self.remove_old_entries_from_http_recognized_flows()

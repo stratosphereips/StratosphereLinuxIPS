@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import asyncio
 import sys
 import traceback
 import json
@@ -7,7 +8,6 @@ import urllib3
 import certifi
 import time
 import ipaddress
-import threading
 import validators
 
 from slips_files.common.flow_classifier import FlowClassifier
@@ -26,37 +26,112 @@ class VT(IAsyncModule):
         "Sebastian Garcia",
     ]
 
-    def init(self):
-        self.c1 = self.db.subscribe("new_flow")
-        self.c2 = self.db.subscribe("new_dns")
-        self.c3 = self.db.subscribe("new_url")
+    async def init(self):
+        # Set up channel handlers - this should be the first thing in init()
         self.channels = {
-            "new_flow": self.c1,
-            "new_dns": self.c2,
-            "new_url": self.c3,
+            "new_flow": self.new_flow_msg_handler,
+            "new_dns": self.new_dns_msg_handler,
+            "new_url": self.new_url_msg_handler,
         }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
+
         # Read the conf file
         self.__read_configuration()
         # query counter for debugging purposes
         self.counter = 0
         # Queue of API calls
-        self.api_call_queue = []
+        self.api_call_queue = asyncio.Queue()
         # Pool manager to make HTTP requests with urllib3
         # The certificate provides a bundle of trusted CAs,
         # the certificates are located in certifi.where()
         self.http = urllib3.PoolManager(
             cert_reqs="CERT_REQUIRED", ca_certs=certifi.where()
         )
-        # create the queue thread
-        self.api_calls_thread = threading.Thread(
-            target=self.api_calls_queue_handler,
-            daemon=True,
-            name="vt_api_calls_thread",
-        )
         # this will be true when there's a problem with the
         # API key, then the module will exit
         self.incorrect_API_key = False
         self.classifier = FlowClassifier()
+
+    async def new_flow_msg_handler(self, msg):
+        """Handler for new_flow channel messages"""
+        try:
+            data = json.loads(msg["data"])
+            flow = self.classifier.convert_to_flow_obj(data["flow"])
+            ip = flow.daddr
+            cached_data = await self.db.get_ip_info(ip)
+            if not cached_data:
+                cached_data = {}
+
+            # return an IPv4Address or IPv6Address object depending on the
+            # IP address passed as argument.
+            ip_addr = ipaddress.ip_address(ip)
+            # if VT data of this IP (not multicast) is not in the IPInfo,
+            # ask VT.  if the IP is not a multicast and 'VirusTotal' key is
+            # not in
+            # the IPInfo, proceed.
+            if (
+                "VirusTotal" not in cached_data
+                and not ip_addr.is_multicast
+                and not utils.is_private_ip(ip_addr)
+            ):
+                await self.set_vt_data_in_IPInfo(ip, cached_data)
+
+            # if VT data of this IP is in the IPInfo, check the timestamp.
+            elif "VirusTotal" in cached_data:
+                # If VT is in data, check timestamp. Take time difference,
+                # if not valid, update vt scores.
+                if (
+                    time.time() - cached_data["VirusTotal"]["timestamp"]
+                ) > self.update_period:
+                    await self.set_vt_data_in_IPInfo(ip, cached_data)
+        except Exception as e:
+            self.print(f"Error processing new_flow message: {e}")
+
+    async def new_dns_msg_handler(self, msg):
+        """Handler for new_dns channel messages"""
+        try:
+            data = json.loads(msg["data"])
+            flow = self.classifier.convert_to_flow_obj(data["flow"])
+            cached_data = await self.db.get_domain_data(flow.query)
+            # If VT data of this domain is not in the DomainInfo, ask VT
+            # If 'Virustotal' key is not in the DomainInfo
+            if flow.query and (
+                not cached_data or "VirusTotal" not in cached_data
+            ):
+                await self.update_domain_info_cache(flow.query, cached_data)
+            elif flow.query and cached_data and "VirusTotal" in cached_data:
+                # If VT is in data, check timestamp. Take time difference,
+                # if not valid, update vt scores.
+                if (
+                    time.time() - cached_data["VirusTotal"]["timestamp"]
+                ) > self.update_period:
+                    await self.update_domain_info_cache(
+                        flow.query, cached_data
+                    )
+        except Exception as e:
+            self.print(f"Error processing new_dns message: {e}")
+
+    async def new_url_msg_handler(self, msg):
+        """Handler for new_url channel messages"""
+        try:
+            data = json.loads(msg["data"])
+            flow = self.classifier.convert_to_flow_obj(data["flow"])
+            url = f"http://{flow.host}{flow.uri}"
+            cached_data = await self.db.is_cached_url_by_vt(url)
+            # If VT data of this domain is not in the DomainInfo, ask VT
+            # If 'Virustotal' key is not in the DomainInfo
+            if not cached_data or "VirusTotal" not in cached_data:
+                # cached data is either False or {}
+                await self.set_url_data_in_URLInfo(url, cached_data)
+            elif cached_data and "VirusTotal" in cached_data:
+                # If VT is in data, check timestamp. Take time difference,
+                # if not valid, update vt scores.
+                if (
+                    time.time() - cached_data["VirusTotal"]["timestamp"]
+                ) > self.update_period:
+                    await self.set_url_data_in_URLInfo(url, cached_data)
+        except Exception as e:
+            self.print(f"Error processing new_url message: {e}")
 
     def read_api_key(self):
         self.key = None
@@ -191,53 +266,65 @@ class VT(IAsyncModule):
             data["asn"] = {"number": f"AS{as_owner}"}
         self.db.set_info_for_domains(domain, data)
 
-    def api_calls_queue_handler(self):
+    async def api_calls_queue_handler(self):
         """
-        This thread starts if there's an API calls queue,
+        This async task starts if there's an API calls queue,
         it operates every minute, and executes 4 api calls
         from the queue then sleeps again.
         """
-        while True:
+        while not self.should_stop():
             # do not attempt to make more api calls if we already
             # know that the api key is incorrect
             if self.incorrect_API_key:
                 return False
             # wait until the queue is populated
-            if not self.api_call_queue:
-                time.sleep(30)
+            if self.api_call_queue.empty():
+                await asyncio.sleep(30)
+                continue
             # wait the api limit
-            time.sleep(60)
-            while self.api_call_queue:
-                # get the first element in the queue
-                ioc = self.api_call_queue.pop(0)
-                ioc_type = self.get_ioc_type(ioc)
-                if ioc_type == "ip":
-                    cached_data = self.db.get_ip_info(ioc)
-                    # return an IPv4Address or IPv6Address object
-                    # depending on the IP address passed as argument.
-                    ip_addr = ipaddress.ip_address(ioc)
-                    # if VT data of this IP (not multicast) is not
-                    # in the IPInfo, ask VT.
-                    # if the IP is not a multicast and 'VirusTotal'
-                    # key is not in the IPInfo, proceed.
-                    if (
-                        not cached_data or "VirusTotal" not in cached_data
-                    ) and not ip_addr.is_multicast:
-                        self.set_vt_data_in_IPInfo(ioc, cached_data)
+            await asyncio.sleep(60)
+            while not self.api_call_queue.empty():
+                try:
+                    # get the first element in the queue
+                    ioc = await asyncio.wait_for(
+                        self.api_call_queue.get(), timeout=0.1
+                    )
+                    ioc_type = self.get_ioc_type(ioc)
+                    if ioc_type == "ip":
+                        cached_data = await self.db.get_ip_info(ioc)
+                        # return an IPv4Address or IPv6Address object
+                        # depending on the IP address passed as argument.
+                        ip_addr = ipaddress.ip_address(ioc)
+                        # if VT data of this IP (not multicast) is not
+                        # in the IPInfo, ask VT.
+                        # if the IP is not a multicast and 'VirusTotal'
+                        # key is not in the IPInfo, proceed.
+                        if (
+                            not cached_data or "VirusTotal" not in cached_data
+                        ) and not ip_addr.is_multicast:
+                            await self.set_vt_data_in_IPInfo(ioc, cached_data)
 
-                elif ioc_type == "domain":
-                    cached_data = self.db.get_domain_data(ioc)
-                    if not cached_data or "VirusTotal" not in cached_data:
-                        self.update_domain_info_cache(ioc, cached_data)
+                    elif ioc_type == "domain":
+                        cached_data = await self.db.get_domain_data(ioc)
+                        if not cached_data or "VirusTotal" not in cached_data:
+                            await self.update_domain_info_cache(
+                                ioc, cached_data
+                            )
 
-                elif ioc_type == "url":
-                    cached_data = self.db.is_cached_url_by_vt(ioc)
-                    # If VT data of this domain is not in the
-                    # DomainInfo, ask VT
-                    # If 'Virustotal' key is not in the DomainInfo
-                    if not cached_data or "VirusTotal" not in cached_data:
-                        # cached data is either False or {}
-                        self.set_url_data_in_URLInfo(ioc, cached_data)
+                    elif ioc_type == "url":
+                        cached_data = await self.db.is_cached_url_by_vt(ioc)
+                        # If VT data of this domain is not in the
+                        # DomainInfo, ask VT
+                        # If 'Virustotal' key is not in the DomainInfo
+                        if not cached_data or "VirusTotal" not in cached_data:
+                            # cached data is either False or {}
+                            await self.set_url_data_in_URLInfo(
+                                ioc, cached_data
+                            )
+                except asyncio.TimeoutError:
+                    # queue is empty
+                    break
+        return None
 
     def get_as_owner(self, response):
         """
@@ -548,76 +635,14 @@ class VT(IAsyncModule):
         if not self.read_api_key() or self.key in ("", None):
             # We don't have a virustotal key
             return 1
-        await utils.start_thread(self.api_calls_thread, self.db)
+        # Start the API calls queue handler as an async task
+        self.create_task(self.api_calls_queue_handler)
 
-    def main(self):
+    async def main(self):
+        """Main loop function"""
         if self.incorrect_API_key:
-            self.shutdown_gracefully()
+            await self.shutdown_gracefully()
             return 1
-
-        if msg := self.get_msg("new_flow"):
-            data = json.loads(msg["data"])
-            flow = self.classifier.convert_to_flow_obj(data["flow"])
-            ip = flow.daddr
-            cached_data = self.db.get_ip_info(ip)
-            if not cached_data:
-                cached_data = {}
-
-            # return an IPv4Address or IPv6Address object depending on the
-            # IP address passed as argument.
-            ip_addr = ipaddress.ip_address(ip)
-            # if VT data of this IP (not multicast) is not in the IPInfo,
-            # ask VT.  if the IP is not a multicast and 'VirusTotal' key is
-            # not in
-            # the IPInfo, proceed.
-            if (
-                "VirusTotal" not in cached_data
-                and not ip_addr.is_multicast
-                and not utils.is_private_ip(ip_addr)
-            ):
-                self.set_vt_data_in_IPInfo(ip, cached_data)
-
-            # if VT data of this IP is in the IPInfo, check the timestamp.
-            elif "VirusTotal" in cached_data:
-                # If VT is in data, check timestamp. Take time difference,
-                # if not valid, update vt scores.
-                if (
-                    time.time() - cached_data["VirusTotal"]["timestamp"]
-                ) > self.update_period:
-                    self.set_vt_data_in_IPInfo(ip, cached_data)
-
-        if msg := self.get_msg("new_dns"):
-            data = json.loads(msg["data"])
-            flow = self.classifier.convert_to_flow_obj(data["flow"])
-            cached_data = self.db.get_domain_data(flow.query)
-            # If VT data of this domain is not in the DomainInfo, ask VT
-            # If 'Virustotal' key is not in the DomainInfo
-            if flow.query and (
-                not cached_data or "VirusTotal" not in cached_data
-            ):
-                self.update_domain_info_cache(flow.query, cached_data)
-            elif flow.query and cached_data and "VirusTotal" in cached_data:
-                # If VT is in data, check timestamp. Take time difference,
-                # if not valid, update vt scores.
-                if (
-                    time.time() - cached_data["VirusTotal"]["timestamp"]
-                ) > self.update_period:
-                    self.update_domain_info_cache(flow.query, cached_data)
-
-        if msg := self.get_msg("new_url"):
-            data = json.loads(msg["data"])
-            flow = self.classifier.convert_to_flow_obj(data["flow"])
-            url = f"http://{flow.host}{flow.uri}"
-            cached_data = self.db.is_cached_url_by_vt(url)
-            # If VT data of this domain is not in the DomainInfo, ask VT
-            # If 'Virustotal' key is not in the DomainInfo
-            if not cached_data or "VirusTotal" not in cached_data:
-                # cached data is either False or {}
-                self.set_url_data_in_URLInfo(url, cached_data)
-            elif cached_data and "VirusTotal" in cached_data:
-                # If VT is in data, check timestamp. Take time difference,
-                # if not valid, update vt scores.
-                if (
-                    time.time() - cached_data["VirusTotal"]["timestamp"]
-                ) > self.update_period:
-                    self.set_url_data_in_URLInfo(url, cached_data)
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
+        pass

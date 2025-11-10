@@ -246,7 +246,7 @@ class ModuleFactory:
                 Mock(),  # ppid
             )
         arp.print = Mock()
-        arp.evidence_filter.is_slips_peer = Mock(return_value=False)
+        arp.evidence_filter._is_slips_peer = Mock(return_value=False)
         return arp
 
     @patch(MODULE_DB_MANAGER, name="mock_db")

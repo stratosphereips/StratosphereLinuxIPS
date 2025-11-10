@@ -713,7 +713,7 @@ class Input(IAsyncModule):
         # Stop the observer
         try:
             self.event_queue_termination_event.set()
-            self.event_observer.stop()
+            self.event_observer.should_stop()
             self.event_observer.join(10)
         except AttributeError:
             # In the case of nfdump, there is no observer

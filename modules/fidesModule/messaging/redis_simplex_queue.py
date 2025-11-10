@@ -5,8 +5,6 @@ from typing import Callable, Optional
 from slips_files.core.database.database_manager import DBManager
 from ..messaging.queue import Queue
 from ..utils.logger import Logger
-from dataclasses import dataclass
-from typing import List, Optional
 
 logger = Logger(__name__)
 

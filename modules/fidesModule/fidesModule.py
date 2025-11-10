@@ -41,7 +41,7 @@ class FidesModule(IAsyncModule):
     description = "Trust computation module for P2P interactions."
     authors = ["David Otta", "Lukáš Forst"]
 
-    def init(self):
+    async def init(self):
         self.__output = self.logger
 
         # IModule has its own logger, no set-up
@@ -57,20 +57,17 @@ class FidesModule(IAsyncModule):
         self.__bridge: NetworkBridge
         self.__intelligence: ThreatIntelligenceProtocol
         self.__alerts: AlertProtocol
-        self.f2n = self.db.subscribe("fides2network")
-        self.n2f = self.db.subscribe("network2fides")
-        self.s2f = self.db.subscribe("slips2fides")
-        self.ch_alert = self.db.subscribe("new_alert")
-        self.f2s = self.db.subscribe("fides2slips")
-        self.ch_ip = self.db.subscribe("new_ip")
+
+        # Set up channel handlers - this should be the first thing in init()
         self.channels = {
-            "network2fides": self.n2f,
-            "fides2network": self.f2n,
-            "slips2fides": self.s2f,
-            "fides2slips": self.f2s,
-            "new_alert": self.ch_alert,
-            "new_ip": self.ch_ip,
+            "network2fides": self.network2fides_msg_handler,
+            "fides2network": self.fides2network_msg_handler,
+            "slips2fides": self.slips2fides_msg_handler,
+            "fides2slips": self.fides2slips_msg_handler,
+            "new_alert": self.new_alert_msg_handler,
+            "new_ip": self.new_ip_msg_handler,
         }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
 
         # this sqlite is shared between all runs, like a cache,
         # so it shouldnt be stored in the current output dir, it should be
@@ -178,40 +175,58 @@ class FidesModule(IAsyncModule):
         self.sqlite.close()
         self.network_fides_queue.stop_all_queue_threads()
 
-    def pre_main(self):
-        """
-        Initializations that run only once before the main() function
-         runs in a loop
-        """
-        self.__setup_trust_model()
-        utils.drop_root_privs_permanently()
+    async def network2fides_msg_handler(self, msg):
+        """Handler for network2fides channel messages"""
+        try:
+            # Handle network to fides messages
+            pass
+        except Exception as e:
+            self.print(f"Error processing network2fides message: {e}")
 
-    def main(self):
-        if msg := self.get_msg("new_alert"):
+    async def fides2network_msg_handler(self, msg):
+        """Handler for fides2network channel messages"""
+        try:
+            # TODO: the code below exists for testing purposes for
+            #  tests/integration_tests/test_fides.py
+            pass
+        except Exception as e:
+            self.print(f"Error processing fides2network message: {e}")
+
+    async def slips2fides_msg_handler(self, msg):
+        """Handler for slips2fides channel messages"""
+        try:
+            # Handle slips to fides messages
+            pass
+        except Exception as e:
+            self.print(f"Error processing slips2fides message: {e}")
+
+    async def fides2slips_msg_handler(self, msg):
+        """Handler for fides2slips channel messages"""
+        try:
+            # Handle fides to slips messages
+            pass
+        except Exception as e:
+            self.print(f"Error processing fides2slips message: {e}")
+
+    async def new_alert_msg_handler(self, msg):
+        """Handler for new_alert channel messages"""
+        try:
             # if there's no string data message we can continue waiting
             if not msg["data"]:
                 return
             alert: dict = json.loads(msg["data"])
             alert: Alert = dict_to_alert(alert)
-            self.__alerts.dispatch_alert(
+            await self.__alerts.dispatch_alert(
                 target=alert.profile.ip,
                 confidence=0.5,
                 score=0.8,
             )
-            # envelope = NetworkMessage(
-            #     type="tl2nl_alert",
-            #     version=self.__bridge.version,
-            #     data={
-            #         "payload": FidesAlert(
-            #             target=alert.profile.ip,
-            #             score=0.8,
-            #             confidence=0.5,
-            #         )
-            #     },
-            # )
-            # self.db.publish("fides2network", json.dumps(asdict(envelope)))
+        except Exception as e:
+            self.print(f"Error processing new_alert message: {e}")
 
-        if msg := self.get_msg("new_ip"):
+    async def new_ip_msg_handler(self, msg):
+        """Handler for new_ip channel messages"""
+        try:
             # if there's no string data message we can continue waiting
             if not msg["data"]:
                 return
@@ -223,9 +238,20 @@ class FidesModule(IAsyncModule):
 
             if utils.is_ignored_ip(ip):
                 return
-            self.__intelligence.request_data(ip)
+            await self.__intelligence.request_data(ip)
+        except Exception as e:
+            self.print(f"Error processing new_ip message: {e}")
 
-        # TODO: the code below exists for testing purposes for
-        #  tests/integration_tests/test_fides.py
-        if msg := self.get_msg("fides2network"):
-            pass
+    async def pre_main(self):
+        """
+        Initializations that run only once before the main() function
+         runs in a loop
+        """
+        await self.__setup_trust_model()
+        utils.drop_root_privs_permanently()
+
+    async def main(self):
+        """Main loop function"""
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
+        pass

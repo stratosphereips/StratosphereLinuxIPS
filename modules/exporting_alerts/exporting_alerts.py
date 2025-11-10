@@ -19,30 +19,34 @@ class ExportingAlerts(IAsyncModule):
     description = "Export alerts to slack or STIX format"
     authors = ["Alya Gomaa"]
 
-    def init(self):
+    async def init(self):
+        # Set up channel handlers - this should be the first thing in init()
+        self.channels = {
+            "export_evidence": self.export_evidence_msg_handler,
+        }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
+
         self.slack = SlackExporter(self.logger, self.db)
         self.stix = StixExporter(self.logger, self.db)
-        self.c1 = self.db.subscribe("export_evidence")
-        self.channels = {"export_evidence": self.c1}
 
     def shutdown_gracefully(self):
         self.slack.shutdown_gracefully()
         self.stix.shutdown_gracefully()
 
-    def pre_main(self):
+    async def pre_main(self):
         utils.drop_root_privs_permanently()
 
         export_to_slack = self.slack.should_export()
         export_to_stix = self.stix.should_export()
 
         if export_to_slack:
-            self.slack.send_init_msg()
+            await self.slack.send_init_msg()
 
         if export_to_stix:
-            # This thread is responsible for waiting n seconds before
+            # This async task is responsible for waiting n seconds before
             # each push to the stix server
             # it starts the timer when the first alert happens
-            self.stix.start_exporting_thread()
+            await self.stix.start_exporting_thread()
 
         if not export_to_slack or export_to_stix:
             return 1
@@ -59,24 +63,34 @@ class ExportingAlerts(IAsyncModule):
         description = evidence["description"]
         return description[: description.index("Leaked location")]
 
-    def main(self):
-        # a msg is sent here for each evidence that was part of an alert
-        if msg := self.get_msg("export_evidence"):
+    async def export_evidence_msg_handler(self, msg):
+        """Handler for export_evidence channel messages"""
+        try:
             evidence = json.loads(msg["data"])
             description = self.remove_sensitive_info(evidence)
             if self.slack.should_export():
                 srcip = evidence["profile"]["ip"]
                 msg_to_send = f"Src IP {srcip} Detected {description}"
-                self.slack.export(msg_to_send)
+                await self.slack.export(msg_to_send)
 
             if self.stix.should_export():
                 msg_to_send = (
                     evidence["evidence_type"],
                     evidence["attacker"]["value"],
                 )
-                added_to_stix: bool = self.stix.add_to_stix_file(msg_to_send)
+                added_to_stix: bool = await self.stix.add_to_stix_file(
+                    msg_to_send
+                )
                 if added_to_stix:
                     # now export to taxii
-                    self.stix.export()
+                    await self.stix.export()
                 else:
                     self.print("Problem in add_to_stix_file()", 0, 3)
+        except Exception as e:
+            self.print(f"Error processing export_evidence message: {e}")
+
+    async def main(self):
+        """Main loop function"""
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
+        pass

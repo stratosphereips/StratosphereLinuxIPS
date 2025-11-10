@@ -35,7 +35,7 @@ class LeakDetector(IAsyncModule):
     description = "Detect leaks of data in the traffic"
     authors = ["Alya Gomaa"]
 
-    def init(self):
+    async def init(self):
         # this module is only loaded when a pcap is given get the pcap path
         try:
             self.pcap = utils.sanitize(sys.argv[sys.argv.index("-f") + 1])
@@ -363,7 +363,7 @@ class LeakDetector(IAsyncModule):
                     }
                 )
 
-    def pre_main(self):
+    async def pre_main(self):
         utils.drop_root_privs_permanently()
 
         if not self.bin_found:
@@ -371,11 +371,11 @@ class LeakDetector(IAsyncModule):
             return 1
 
         # if we we don't have compiled rules, compile them
-        if self.compile_and_save_rules():
+        if await self.compile_and_save_rules():
             # run the yara rules on the given pcap
-            self.find_matches()
+            await self.find_matches()
 
-    def main(self):
+    async def main(self):
         # nothing runs in a loop in this module
         # exit module
         return 1

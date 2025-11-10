@@ -21,10 +21,14 @@ class Module(IAsyncModule):
     description = "Communicates with CYST simulation framework"
     authors = ["Alya Gomaa"]
 
-    def init(self):
+    async def init(self):
+        # Set up channel handlers - this should be the first thing in init()
+        self.channels = {
+            "new_alert": self.new_alert_msg_handler,
+        }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
+
         self.port = None
-        self.c1 = self.db.subscribe("new_alert")
-        self.channels = {"new_alert": self.c1}
         self.cyst_UDS = "/run/slips.sock"
         self.conn_closed = False
 
@@ -158,19 +162,32 @@ class Module(IAsyncModule):
         self.db.publish_stop()
         return
 
-    def pre_main(self):
+    async def new_alert_msg_handler(self, msg):
+        """Handler for new_alert channel messages"""
+        try:
+            alert: dict = json.loads(msg["data"])
+            alert: Alert = dict_to_alert(alert)
+            self.print(
+                "Cyst module received a new blocking request . "
+                "sending to CYST ... "
+            )
+            await self.send_alert(alert.id, alert.profile.ip)
+        except Exception as e:
+            self.print(f"Error processing new_alert message: {e}")
+
+    async def pre_main(self):
         # are the flows being read from the default inputprocess or from a custom module? like this one
-        if not self.db.is_cyst_enabled():
+        if not await self.db.is_cyst_enabled():
             return 1
-        self.db.set_cyst_enabled()
+        await self.db.set_cyst_enabled()
         # connect to cyst
         self.print("Initializing socket", 0, 1)
-        self.sock, self.cyst_conn = self.initialize_unix_socket()
+        self.sock, self.cyst_conn = await self.initialize_unix_socket()
         if not self.sock:
             return 1
         self.print("Done initializing socket", 0, 1)
 
-    def main(self):
+    async def main(self):
         """
         returning non-zero will cause shutdown_gracefully to be called
         """
@@ -180,7 +197,7 @@ class Module(IAsyncModule):
             return 1
 
         # RECEIVE FLOWS FROM CYST
-        if flow := self.get_flow():
+        if flow := await self.get_flow():
             # send the flow to inputprocess so slips can process it normally
             to_send = {
                 "flow": flow,
@@ -190,18 +207,13 @@ class Module(IAsyncModule):
             self.print("Received flow from cyst")
             self.print(pp(to_send))
 
-            self.db.publish("new_module_flow", json.dumps(to_send))
+            await self.db.publish("new_module_flow", json.dumps(to_send))
 
         # check for connection before receiving
         if self.conn_closed:
             self.print("Connection closed by CYST.", 0, 1)
             return 1
 
-        if msg := self.get_msg("new_alert"):
-            alert: dict = json.loads(msg["data"])
-            alert: Alert = dict_to_alert(alert)
-            self.print(
-                "Cyst module received a new blocking request . "
-                "sending to CYST ... "
-            )
-            self.send_alert(alert.id, alert.profile.ip)
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
+        pass

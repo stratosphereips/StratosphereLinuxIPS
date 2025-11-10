@@ -26,7 +26,7 @@ def test_is_slips_peer(p2p_enabled, is_private, peer_trust, expected):
         return_value=peer_trust,
     ):
         arp.p2p_enabled = p2p_enabled
-        assert arp.is_slips_peer("192.168.1.100") == expected
+        assert arp._is_slips_peer("192.168.1.100") == expected
 
 
 @pytest.mark.parametrize(
@@ -47,7 +47,7 @@ def test_is_self_defense(ip, our_ips, blocking, has_poisoner, expected):
     arp = ARPEvidenceFilter(conf=Mock(), slips_args=args, db=db)
     arp.our_ips = our_ips
 
-    assert arp.is_self_defense(ip) == expected
+    assert arp._is_self_defense(ip) == expected
 
 
 @pytest.mark.parametrize(

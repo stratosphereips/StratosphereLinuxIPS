@@ -19,20 +19,20 @@ class IrisModule(IAsyncModule):
     process = None
     stopFlag = False
 
-    def init(self):
+    async def init(self):
         # To which channels do you want to subscribe? When a message
         # arrives on the channel the module will receive a msg
 
         # You can find the full list of channels at
         # slips_files/core/database/redis_db/database.py
-        self.f2n = self.db.subscribe("fides2network")
-        self.n2f = self.db.subscribe("network2fides")
-        self.fi = self.db.subscribe("iris_internal")
+
+        # Set up channel handlers - this should be the first thing in init()
         self.channels = {
-            "network2fides": self.n2f,
-            "fides2network": self.f2n,
-            "iris_internal": self.fi,
+            "network2fides": self.network2fides_msg_handler,
+            "fides2network": self.fides2network_msg_handler,
+            "iris_internal": self.iris_internal_msg_handler,
         }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
 
     def make_relative_path(self, executable_path, config_file_path):
         # Get the directory of the executable
@@ -91,7 +91,7 @@ class IrisModule(IAsyncModule):
             return None
         return config["Server"]["Port"]
 
-    def pre_main(self):
+    async def pre_main(self):
         """
         Initializations that run only once before the main() function runs in a loop
         """
@@ -182,14 +182,38 @@ class IrisModule(IAsyncModule):
                 self.print(f"Iris says: {line}", verbose=0, debug=1)
         return False
 
-    def main(self):
+    async def network2fides_msg_handler(self, msg):
+        """Handler for network2fides channel messages"""
+        try:
+            # Handle network to fides messages
+            pass
+        except Exception as e:
+            self.print(f"Error processing network2fides message: {e}")
+
+    async def fides2network_msg_handler(self, msg):
+        """Handler for fides2network channel messages"""
+        try:
+            # Handle fides to network messages
+            pass
+        except Exception as e:
+            self.print(f"Error processing fides2network message: {e}")
+
+    async def iris_internal_msg_handler(self, msg):
+        """Handler for iris_internal channel messages"""
+        try:
+            # Handle iris internal messages
+            pass
+        except Exception as e:
+            self.print(f"Error processing iris_internal message: {e}")
+
+    async def main(self):
         """Main loop function"""
         if self.stopFlag:
             return True
         try:
-            self._simplex_duplex_translator()
+            await self._simplex_duplex_translator()
             if (
-                not self._check_iris_status()
+                not await self._check_iris_status()
             ):  # Iris needs attention, canceled, crashing, ...
                 self.print(
                     f"Iris in a critical state, stopping! \n\t "
@@ -204,6 +228,10 @@ class IrisModule(IAsyncModule):
             # so we're returning true so that Imodule wouold to call
             # shutdown_gracefully()
             return True
+
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
+        pass
 
     def shutdown_gracefully(self):
         self.print("Iris Module terminating gracefully")

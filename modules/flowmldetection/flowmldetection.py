@@ -42,11 +42,14 @@ class FlowMLDetection(IAsyncModule):
     )
     authors = ["Sebastian Garcia"]
 
-    def init(self):
-        # Subscribe to the channel
-        self.c1 = self.db.subscribe("new_flow")
-        self.channels = {"new_flow": self.c1}
-        self.fieldseparator = self.db.get_field_separator()
+    async def init(self):
+        # Set up channel handlers - this should be the first thing in init()
+        self.channels = {
+            "new_flow": self.new_flow_msg_handler,
+        }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
+
+        self.fieldseparator = await self.db.get_field_separator()
         # Set the output queue of our database instance
         # Read the configuration
         self.read_configuration()
@@ -405,21 +408,17 @@ class FlowMLDetection(IAsyncModule):
 
         self.db.set_evidence(evidence)
 
-    def shutdown_gracefully(self):
+    async def shutdown_gracefully(self):
         # Confirm that the module is done processing
         if self.mode == "train":
-            self.store_model()
+            await self.store_model()
 
-    def pre_main(self):
-        utils.drop_root_privs_permanently()
-        # Load the model
-        self.read_model()
-
-    def main(self):
-        if msg := self.get_msg("new_flow"):
-            msg = json.loads(msg["data"])
-            twid = msg["twid"]
-            self.flow = msg["flow"]
+    async def new_flow_msg_handler(self, msg):
+        """Handler for new_flow channel messages"""
+        try:
+            data = json.loads(msg["data"])
+            twid = data["twid"]
+            self.flow = data["flow"]
             # these fields are expected in testing. update the original
             # flow dict to have them
             self.flow.update(
@@ -427,10 +426,10 @@ class FlowMLDetection(IAsyncModule):
                     "allbytes": (self.flow["sbytes"] + self.flow["dbytes"]),
                     # the flow["state"] is the origstate, we dont need that here
                     # we need the interpreted state
-                    "state": msg["interpreted_state"],
+                    "state": data["interpreted_state"],
                     "pkts": self.flow["spkts"] + self.flow["dpkts"],
-                    "label": msg["label"],
-                    "module_labels": msg["module_labels"],
+                    "label": data["label"],
+                    "module_labels": data["module_labels"],
                 }
             )
 
@@ -439,7 +438,7 @@ class FlowMLDetection(IAsyncModule):
 
                 # Is the amount in the DB of labels enough to retrain?
                 # Use labeled flows
-                labels = self.db.get_labels()
+                labels = await self.db.get_labels()
                 sum_labeled_flows = sum(i[1] for i in labels)
                 if (
                     sum_labeled_flows >= self.minimum_lables_to_retrain
@@ -455,18 +454,18 @@ class FlowMLDetection(IAsyncModule):
                     )
                     # Process all flows in the DB and make them ready
                     # for pandas
-                    self.process_flows()
+                    await self.process_flows()
                     # Train an algorithm
-                    self.train()
+                    await self.train()
             elif self.mode == "test":
                 # We are testing, which means using the model to detect
-                processed_flow = self.process_flow(self.flow)
+                processed_flow = await self.process_flow(self.flow)
 
                 # After processing the flow, it may happen that we
                 # delete icmp/arp/etc so the dataframe can be empty
                 if processed_flow is not None and not processed_flow.empty:
                     # Predict
-                    pred: numpy.ndarray = self.detect(processed_flow)
+                    pred: numpy.ndarray = await self.detect(processed_flow)
                     if not pred:
                         # an error occurred
                         return
@@ -488,7 +487,7 @@ class FlowMLDetection(IAsyncModule):
                         )
                     if pred[0] == "Malware":
                         # Generate an alert
-                        self.set_evidence_malicious_flow(self.flow, twid)
+                        await self.set_evidence_malicious_flow(self.flow, twid)
                         self.print(
                             f"Prediction {pred[0]} for label {label}"
                             f' flow {self.flow["saddr"]}:'
@@ -499,3 +498,16 @@ class FlowMLDetection(IAsyncModule):
                             0,
                             2,
                         )
+        except Exception as e:
+            self.print(f"Error processing new_flow message: {e}")
+
+    async def pre_main(self):
+        utils.drop_root_privs_permanently()
+        # Load the model
+        await self.read_model()
+
+    async def main(self):
+        """Main loop function"""
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
+        pass

@@ -32,17 +32,17 @@ class NetworkDiscovery(IAsyncModule):
     description = "Detect Horizonal, Vertical, ICMP and DHCP Scans."
     authors = ["Sebastian Garcia", "Alya Gomaa"]
 
-    def init(self):
+    async def init(self):
+        # Set up channel handlers - this should be the first thing in init()
+        self.channels = {
+            "tw_modified": self.tw_modified_msg_handler,
+            "new_notice": self.new_notice_msg_handler,
+            "new_dhcp": self.new_dhcp_msg_handler,
+        }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
+
         self.horizontal_ps = HorizontalPortscan(self.db)
         self.vertical_ps = VerticalPortscan(self.db)
-        self.c1 = self.db.subscribe("tw_modified")
-        self.c2 = self.db.subscribe("new_notice")
-        self.c3 = self.db.subscribe("new_dhcp")
-        self.channels = {
-            "tw_modified": self.c1,
-            "new_notice": self.c2,
-            "new_dhcp": self.c3,
-        }
         # We need to know that after a detection, if we receive another flow
         # that does not modify the count for the detection, we are not
         # re-detecting again only because the threshold was overcomed last time.
@@ -59,7 +59,67 @@ class NetworkDiscovery(IAsyncModule):
         self.minimum_requested_addrs = 4
         self.classifier = FlowClassifier()
 
-    def check_icmp_sweep(self, twid, flow):
+    async def tw_modified_msg_handler(self, msg):
+        """Handler for tw_modified channel messages"""
+        try:
+            # Get the profileid and twid
+            profileid = msg["data"].split(":")[0]
+            twid = msg["data"].split(":")[1]
+            # Start of the port scan detection
+            self.print(
+                f"Running the detection of portscans in profile "
+                f"{profileid} TW {twid}",
+                3,
+                0,
+            )
+
+            # For port scan detection, we will measure different things:
+
+            # 1. Vertical port scan:
+            # (single IP being scanned for multiple ports)
+            # - 1 srcip sends not established flows to > 3 dst ports in the
+            # same dst ip. Any number of packets
+            # 2. Horizontal port scan:
+            #  (scan against a group of IPs for a single port)
+            # - 1 srcip sends not established flows to the same dst ports in
+            # > 3 dst ip.
+            # 3. Too many connections???:
+            # - 1 srcip sends not established flows to the same dst ports,
+            # > 3 pkts, to the same dst ip
+            # 4. Slow port scan. Same as the others but distributed in
+            # multiple time windows
+
+            # Remember that in slips all these port scans can happen
+            # for traffic going IN to an IP or going OUT from the IP.
+
+            await self.horizontal_ps.check(profileid, twid)
+            await self.vertical_ps.check(profileid, twid)
+            await self.check_icmp_scan(profileid, twid)
+        except Exception as e:
+            self.print(f"Error processing tw_modified message: {e}")
+
+    async def new_notice_msg_handler(self, msg):
+        """Handler for new_notice channel messages"""
+        try:
+            data = json.loads(msg["data"])
+            twid = data["twid"]
+            flow = self.classifier.convert_to_flow_obj(data["flow"])
+            await self.check_icmp_sweep(twid, flow)
+        except Exception as e:
+            self.print(f"Error processing new_notice message: {e}")
+
+    async def new_dhcp_msg_handler(self, msg):
+        """Handler for new_dhcp channel messages"""
+        try:
+            data = json.loads(msg["data"])
+            profileid = data["profileid"]
+            twid = data["twid"]
+            flow = self.classifier.convert_to_flow_obj(data["flow"])
+            await self.check_dhcp_scan(profileid, twid, flow)
+        except Exception as e:
+            self.print(f"Error processing new_dhcp message: {e}")
+
+    async def check_icmp_sweep(self, twid, flow):
         """
         Use our own Zeek scripts to detect ICMP scans.
         Threshold is on the scripts and it is 25 ICMP flows
@@ -371,54 +431,11 @@ class NetworkDiscovery(IAsyncModule):
                 profileid, twid, flow, number_of_requested_addrs
             )
 
-    def pre_main(self):
+    async def pre_main(self):
         utils.drop_root_privs_permanently()
 
-    def main(self):
-        if msg := self.get_msg("tw_modified"):
-            # Get the profileid and twid
-            profileid = msg["data"].split(":")[0]
-            twid = msg["data"].split(":")[1]
-            # Start of the port scan detection
-            self.print(
-                f"Running the detection of portscans in profile "
-                f"{profileid} TW {twid}",
-                3,
-                0,
-            )
-
-            # For port scan detection, we will measure different things:
-
-            # 1. Vertical port scan:
-            # (single IP being scanned for multiple ports)
-            # - 1 srcip sends not established flows to > 3 dst ports in the
-            # same dst ip. Any number of packets
-            # 2. Horizontal port scan:
-            #  (scan against a group of IPs for a single port)
-            # - 1 srcip sends not established flows to the same dst ports in
-            # > 3 dst ip.
-            # 3. Too many connections???:
-            # - 1 srcip sends not established flows to the same dst ports,
-            # > 3 pkts, to the same dst ip
-            # 4. Slow port scan. Same as the others but distributed in
-            # multiple time windows
-
-            # Remember that in slips all these port scans can happen
-            # for traffic going IN to an IP or going OUT from the IP.
-
-            self.horizontal_ps.check(profileid, twid)
-            self.vertical_ps.check(profileid, twid)
-            self.check_icmp_scan(profileid, twid)
-
-        if msg := self.get_msg("new_notice"):
-            data = json.loads(msg["data"])
-            twid = data["twid"]
-            flow = self.classifier.convert_to_flow_obj(data["flow"])
-            self.check_icmp_sweep(twid, flow)
-
-        if msg := self.get_msg("new_dhcp"):
-            msg = json.loads(msg["data"])
-            profileid = msg["profileid"]
-            twid = msg["twid"]
-            flow = self.classifier.convert_to_flow_obj(msg["flow"])
-            self.check_dhcp_scan(profileid, twid, flow)
+    async def main(self):
+        """Main loop function"""
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
+        pass

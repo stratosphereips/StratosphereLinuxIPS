@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import asyncio
 import os
 import shutil
 import signal
@@ -82,7 +83,7 @@ class Trust(IAsyncModule):
     rename_redis_ip_info = False
     override_p2p = False
 
-    def init(self, *args, **kwargs):
+    async def init(self, *args, **kwargs):
         self.read_configuration()
         # pigeon generate keys and stores them in the following dir, if this
         # is placed in the <output> dir,
@@ -90,8 +91,8 @@ class Trust(IAsyncModule):
         # output dir! so it wont find them and will
         # generate new keys, and therefore new peerid!
         # store the keys in slips main dir so they don't change every run
-        self.p2ptrust_runtime_dir = self.db.get_p2ptrust_dir()
-        self.sql_db_name = self.db.get_p2ptrust_db_path()
+        self.p2ptrust_runtime_dir = await self.db.get_p2ptrust_dir()
+        self.sql_db_name = await self.db.get_p2ptrust_db_path()
 
         self.port = self.get_available_port()
         self.host = self.get_local_IP()
@@ -102,17 +103,14 @@ class Trust(IAsyncModule):
         self.storage_name = "IPsInfo"
         if self.rename_redis_ip_info:
             self.storage_name += str(self.port)
-        self.c1 = self.db.subscribe("report_to_peers")
-        # channel to send msgs to whenever slips needs
-        # info from other peers about an ip
-        self.c2 = self.db.subscribe(self.p2p_data_request_channel)
-        # this channel receives peers requests/updates
-        self.c3 = self.db.subscribe(self.gopy_channel)
+
+        # Set up channel handlers - this should be the first thing in init()
         self.channels = {
-            "report_to_peers": self.c1,
-            self.p2p_data_request_channel: self.c2,
-            self.gopy_channel: self.c3,
+            "report_to_peers": self.report_to_peers_msg_handler,
+            self.p2p_data_request_channel: self.p2p_data_request_msg_handler,
+            self.gopy_channel: self.gopy_channel_msg_handler,
         }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
 
         # todo don't duplicate this dict, move it to slips_utils
         # all evidence slips detects has threat levels of strings
@@ -600,11 +598,32 @@ class Trust(IAsyncModule):
         if hasattr(self, "trust_db"):
             self.trust_db.__del__()
 
-    def pre_main(self):
+    async def report_to_peers_msg_handler(self, msg):
+        """Handler for report_to_peers channel messages"""
+        try:
+            await self.new_evidence_callback(msg)
+        except Exception as e:
+            self.print(f"Error processing report_to_peers message: {e}")
+
+    async def p2p_data_request_msg_handler(self, msg):
+        """Handler for p2p_data_request channel messages"""
+        try:
+            await self.data_request_callback(msg)
+        except Exception as e:
+            self.print(f"Error processing p2p_data_request message: {e}")
+
+    async def gopy_channel_msg_handler(self, msg):
+        """Handler for gopy_channel channel messages"""
+        try:
+            await self.gopy_callback(msg)
+        except Exception as e:
+            self.print(f"Error processing gopy_channel message: {e}")
+
+    async def pre_main(self):
         utils.drop_root_privs_permanently()
-        self._init_log_files()
+        await self._init_log_files()
         # configure process
-        self._configure()
+        await self._configure()
         # check if it was possible to start up pigeon
         if self.start_pigeon and self.pigeon is None:
             self.print(
@@ -616,22 +635,14 @@ class Trust(IAsyncModule):
         # should call self.update_callback
         # self.c4 = self.db.subscribe(self.slips_update_channel)
 
-    def main(self):
+    async def main(self):
+        """Main loop function"""
         if self.create_p2p_logfile:
             # rotates p2p.log file every 1 day
             now = time.time()
             if now - self.last_log_rotation_time >= self.rotation_period:
                 open(self.pigeon_logfile, "w").close()
                 self.last_log_rotation_time = now
-
-        if msg := self.get_msg("report_to_peers"):
-            self.new_evidence_callback(msg)
-
-        if msg := self.get_msg(self.p2p_data_request_channel):
-            self.data_request_callback(msg)
-
-        if msg := self.get_msg(self.gopy_channel):
-            self.gopy_callback(msg)
 
         ret_code = self.pigeon.poll()
         if ret_code not in (None, 0):
@@ -645,10 +656,14 @@ class Trust(IAsyncModule):
         try:
             if not self.mutliaddress_printed:
                 # give the pigeon time to put the multiaddr in the db
-                time.sleep(2)
-                multiaddr = self.db.get_multiaddr()
+                await asyncio.sleep(2)
+                multiaddr = await self.db.get_multiaddr()
                 self.print(f"You Multiaddress is: {multiaddr}")
                 self.mutliaddress_printed = True
 
         except Exception:
             pass
+
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
+        pass

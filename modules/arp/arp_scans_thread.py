@@ -45,16 +45,20 @@ class ARPScansProcessor(IThread):
             # now keep getting evidence from the queue and combine all
             # similar ones, and put back in the queue all the ones that
             # wont be combined.
+            n = 0
             while True:
                 try:
                     new_evidence = self.pending_arp_scan_evidence.get(
                         timeout=0.5
                     )
+                    n += 1
+                    print(f"@@@@@@@@@@@@@@@@ accumulating {n}")
                 except Exception:
                     # queue is empty
                     break
 
                 (ts2, profileid2, twid2, uids2) = new_evidence
+
                 if profileid == profileid2 and twid == twid2:
                     # this should be combined with the past alert
                     ts = ts2

@@ -999,9 +999,6 @@ class DBManager:
         return await self.rdb.get_timeline_last_lines(*args, **kwargs)
 
     async def get_profiled_tw_timeline(self, *args, **kwargs):
-        print(
-            "@@@@@@@@@@@@@@@@ DBMANAGER: get_profiled_tw_timeline " "iscalled"
-        )
         return await self.rdb.get_profiled_tw_timeline(*args, **kwargs)
 
     async def mark_profile_as_gateway(self, *args, **kwargs):

@@ -24,27 +24,46 @@ class Template(IAsyncModule):
     description = "Template module"
     authors = ["Template Author"]
 
-    def init(self):
+    async def init(self):
         # To which channels do you want to subscribe? When a message
         # arrives on the channel the module will receive a msg
 
         # You can find the full list of channels at
         # slips_files/core/database/redis_db/database.py
-        self.c1 = self.db.subscribe("new_ip")
-        self.channels = {
-            "new_ip": self.c1,
-        }
 
-    def pre_main(self):
+        # Set up channel handlers - this should be the first thing in init()
+        self.channels = {
+            "new_ip": self.new_ip_msg_handler,
+        }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
+
+    async def new_ip_msg_handler(self, msg):
+        """
+        Handler for new_ip channel messages
+        """
+        try:
+            data = json.loads(msg["data"])
+            # Process the new IP data here
+            # Example: print the number of profiles in the database
+            await self.process_new_ip(data)
+        except Exception as e:
+            self.print(f"Error processing new_ip message: {e}")
+
+    async def process_new_ip(self, data):
+        """
+        Process new IP data
+        """
+        # Example processing - replace with actual logic
+        pass
+
+    async def pre_main(self):
         """
         Initializations that run only once before the main() function runs in a loop
         """
         utils.drop_root_privs_permanently()
 
-    def main(self):
+    async def main(self):
         """Main loop function"""
-        if msg := self.get_msg("new_ip"):
-            # Example of printing the number of profiles in the
-            # Database every second
-            msg = json.loads(msg["data"])
-            ...
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
+        pass

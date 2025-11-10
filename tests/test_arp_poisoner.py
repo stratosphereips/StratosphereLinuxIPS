@@ -53,7 +53,7 @@ def test_can_poison_ip(
         if is_gw:
             poisoner.db.get_gateway_ip = MagicMock(return_value=ip)
         poisoner.is_broadcast = MagicMock(return_value=is_bcast)
-        assert poisoner.can_poison_ip(ip) == expected
+        assert poisoner._can_poison_ip(ip) == expected
 
 
 def test__arp_scan(poisoner):

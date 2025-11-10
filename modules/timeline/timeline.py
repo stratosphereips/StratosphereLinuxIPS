@@ -24,14 +24,16 @@ class Timeline(IAsyncModule):
     )
     authors = ["Sebastian Garcia", "Alya Gomaa"]
 
-    def init(self):
-        self.read_configuration()
-        self.c1 = self.db.subscribe("new_flow")
+    async def init(self):
+        # Set up channel handlers - this should be the first thing in init()
         self.channels = {
-            "new_flow": self.c1,
+            "new_flow": self.new_flow_msg_handler,
         }
+        await self.db.subscribe(self.pubsub, self.channels.keys())
+
+        self.read_configuration()
         self.classifier = FlowClassifier()
-        self.host_ip: str = self.db.get_host_ip()
+        self.host_ip: str = await self.db.get_host_ip()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -332,14 +334,22 @@ class Timeline(IAsyncModule):
             self.print(traceback.format_exc(), 0, 1)
             return True
 
-    def pre_main(self):
+    async def new_flow_msg_handler(self, msg):
+        """Handler for new_flow channel messages"""
+        try:
+            data = json.loads(msg["data"])
+            profileid = data["profileid"]
+            twid = data["twid"]
+            flow = self.classifier.convert_to_flow_obj(data["flow"])
+            await self.process_flow(profileid, twid, flow)
+        except Exception as e:
+            self.print(f"Error processing new_flow message: {e}")
+
+    async def pre_main(self):
         utils.drop_root_privs_permanently()
 
-    def main(self):
-        # Main loop function
-        if msg := self.get_msg("new_flow"):
-            msg = json.loads(msg["data"])
-            profileid = msg["profileid"]
-            twid = msg["twid"]
-            flow = self.classifier.convert_to_flow_obj(msg["flow"])
-            self.process_flow(profileid, twid, flow)
+    async def main(self):
+        """Main loop function"""
+        # The main loop is now handled by the base class through message dispatching
+        # Individual message handlers are called automatically when messages arrive
+        pass
