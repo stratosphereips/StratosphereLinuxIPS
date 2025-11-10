@@ -3,7 +3,7 @@
 from tests.module_factory import ModuleFactory
 import pytest
 import json
-from unittest.mock import MagicMock, patch, Mock
+from unittest.mock import MagicMock, patch, Mock, mock_open
 from slips_files.core.structures.evidence import (
     Direction,
     IoCType,
@@ -115,48 +115,130 @@ def test_get_dst_domains_of_flow(flow_type, expected_result):
 
 
 @pytest.mark.parametrize(
-    "ip, org, org_ips, expected_result",
+    "ip, org, cidrs, mock_bf_octets, expected_result",
     [
-        ("216.58.192.1", "google", {"216": ["216.58.192.0/19"]}, True),
-        ("8.8.8.8", "cloudflare", {"216": ["216.58.192.0/19"]}, False),
-        ("8.8.8.8", "google", {}, False),  # no org ip info
+        # Case 1: Bloom filter hit, DB hit
+        ("216.58.192.1", "google", ["216.58.192.0/19"], ["216"], True),
+        # Case 2: Bloom filter hit, DB miss
+        ("8.8.8.8", "cloudflare", [], ["8"], False),
+        # Case 3: Bloom filter MISS
+        # The 'ip' starts with "192", but we'll only put "10" in the filter
+        ("192.168.1.1", "my_org", [], ["10"], False),
     ],
 )
-def test_is_ip_in_org(
+def test_is_ip_in_org_complete(
     ip,
     org,
-    org_ips,
+    cidrs,
+    mock_bf_octets,
     expected_result,
 ):
     whitelist = ModuleFactory().create_whitelist_obj()
-    whitelist.db.get_org_ips.return_value = org_ips
-    result = whitelist.org_analyzer.is_ip_in_org(ip, org)
+    analyzer = whitelist.org_analyzer
+    analyzer.bloom_filters = {org: {"first_octets": mock_bf_octets}}
+
+    whitelist.db.is_ip_in_org_ips.return_value = cidrs
+
+    result = analyzer.is_ip_in_org(ip, org)
     assert result == expected_result
 
 
 @pytest.mark.parametrize(
-    "domain, org, org_domains, expected_result",
+    "domain, org, mock_bf_domains, mock_db_exact, mock_db_org_list, "
+    "mock_tld_side_effect, expected_result",
     [
-        ("www.google.com", "google", json.dumps(["google.com"]), True),
-        ("www.example.com", "google", json.dumps(["google.com"]), None),
+        # --- Case 1: Bloom Filter MISS ---
+        # The domain isn't even in the bloom filter.
+        ("google.com", "google", ["other.com"], None, None, None, False),
+        # --- Case 2: Bloom Filter HIT, DB Exact Match HIT ---
+        # BF hits, and db.is_domain_in_org_domains finds it.
+        ("google.com", "google", ["google.com"], True, None, None, True),
+        # --- Case 3: Subdomain Match (org_domain IN domain) ---
+        # 'google.com' (from db) is IN 'ads.google.com' (flow domain)
         (
-            "www.google.com",
+            "ads.google.com",
             "google",
-            json.dumps([]),
-            None,
-        ),  # no org domain info
+            ["ads.google.com"],  # 1. BF Hit
+            False,  # 2. DB Exact Miss
+            ["google.com"],  # 3. DB Org List
+            ["google.com", "google.com"],  # 4. TLDs match (ads.google.com
+            # -> google.com, google.com -> google.com)
+            True,  # 5. Expected: True
+        ),
+        # --- Case 4: Reverse Subdomain Match (domain IN org_domain) ---
+        # 'google.com' (flow domain) is IN 'ads.google.com' (from db)
+        (
+            "google.com",
+            "google",
+            ["google.com"],  # 1. BF Hit
+            False,  # 2. DB Exact Miss
+            ["ads.google.com"],  # 3. DB Org List
+            ["google.com", "google.com"],  # 4. TLDs match
+            True,  # 5. Expected: True
+        ),
+        # --- Case 5: TLD Mismatch ---
+        # TLDs (google.net vs google.com) don't match, so 'continue' is hit.
+        (
+            "google.net",
+            "google",
+            ["google.net"],  # 1. BF Hit
+            False,  # 2. DB Exact Miss
+            ["google.com"],  # 3. org_domains
+            ["google.net", "google.com"],  # 4. TLDs mismatch
+            False,  # 5. Expected: False
+        ),
+        # --- Case 6: No Match (Falls through) ---
+        # TLDs match, but neither is a substring of the other.
+        (
+            "evil-oogle.com",
+            "google",
+            ["evil-google.com"],  # 1. BF should Hit
+            False,  # 2. DB Exact Miss
+            ["google.com"],  # 3. org_domains
+            ["google.com", "google.com"],  # 4. TLDs match
+            False,  # 5. Expected: False
+        ),
     ],
 )
 def test_is_domain_in_org(
     domain,
     org,
-    org_domains,
+    mock_bf_domains,
+    mock_db_exact,
+    mock_db_org_list,
+    mock_tld_side_effect,
     expected_result,
 ):
     whitelist = ModuleFactory().create_whitelist_obj()
-    whitelist.db.get_org_info.return_value = org_domains
-    result = whitelist.org_analyzer.is_domain_in_org(domain, org)
+    analyzer = whitelist.org_analyzer
+
+    analyzer.bloom_filters = {org: {"domains": mock_bf_domains}}
+
+    whitelist.db.is_domain_in_org_domains.return_value = mock_db_exact
+
+    whitelist.db.get_org_info.return_value = mock_db_org_list
+    # The first call is for 'domain', the second for 'org_domain'
+    if mock_tld_side_effect:
+        analyzer.domain_analyzer.get_tld = MagicMock(
+            side_effect=mock_tld_side_effect
+        )
+    result = analyzer.is_domain_in_org(domain, org)
     assert result == expected_result
+
+
+def test_is_domain_in_org_key_error():
+    """
+    Tests the 'try...except KeyError' block.
+    This happens if the 'org' isn't in the bloom_filters dict.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    analyzer = whitelist.org_analyzer
+    analyzer.bloom_filters = {}
+    # Accessing analyzer.bloom_filters["google"] will raise a KeyError,
+    # which should be caught and return False.
+    result = analyzer.is_domain_in_org("google.com", "google")
+
+    assert not result
 
 
 @pytest.mark.parametrize(
@@ -188,14 +270,14 @@ def test_is_whitelisted_evidence(
             "b1:b1:b1:c1:c2:c3",
             Direction.SRC,
             False,
-            {"b1:b1:b1:c1:c2:c3": {"from": "src", "what_to_ignore": "alerts"}},
+            {"from": "src", "what_to_ignore": "alerts"},
         ),
         (
             "5.6.7.8",
             "a1:a2:a3:a4:a5:a6",
             Direction.DST,
             True,
-            {"a1:a2:a3:a4:a5:a6": {"from": "dst", "what_to_ignore": "both"}},
+            {"from": "dst", "what_to_ignore": "both"},
         ),
         ("9.8.7.6", "c1:c2:c3:c4:c5:c6", Direction.SRC, False, {}),
     ],
@@ -208,8 +290,15 @@ def test_profile_has_whitelisted_mac(
     whitelisted_macs,
 ):
     whitelist = ModuleFactory().create_whitelist_obj()
+    # act as it is present in the bloom filter
+    whitelist.bloom_filters.mac_addrs = mac_address
+
     whitelist.db.get_mac_addr_from_profile.return_value = mac_address
-    whitelist.db.get_whitelist.return_value = whitelisted_macs
+    if whitelisted_macs:
+        whitelist.db.is_whitelisted.return_value = json.dumps(whitelisted_macs)
+    else:
+        whitelist.db.is_whitelisted.return_value = None
+
     assert (
         whitelist.mac_analyzer.profile_has_whitelisted_mac(
             profile_ip, direction, "both"
@@ -237,14 +326,16 @@ def test_matching_direction(direction, whitelist_direction, expected_result):
 @pytest.mark.parametrize(
     "ioc_data, expected_result",
     [
+        # Private IP should short-circuit -> False
         (
             {
                 "ioc_type": IoCType.IP,
-                "value": "1.2.3.4",
+                "value": "192.168.1.1",
                 "direction": Direction.SRC,
             },
             False,
         ),
+        #         Domain belonging to whitelisted org -> True
         (
             {
                 "ioc_type": IoCType.DOMAIN,
@@ -253,6 +344,7 @@ def test_matching_direction(direction, whitelist_direction, expected_result):
             },
             True,
         ),
+        #         Public IP not in whitelisted org -> False
         (
             {
                 "ioc_type": IoCType.IP,
@@ -263,51 +355,62 @@ def test_matching_direction(direction, whitelist_direction, expected_result):
         ),
     ],
 )
-def test_is_part_of_a_whitelisted_org(
-    ioc_data,
-    expected_result,
-):
+def test_is_part_of_a_whitelisted_org(ioc_data, expected_result):
     whitelist = ModuleFactory().create_whitelist_obj()
-    whitelist.db.get_whitelist.return_value = {
-        "google": {"from": "both", "what_to_ignore": "both"}
+    whitelist.org_analyzer.whitelisted_orgs = {
+        "google": json.dumps({"from": "both", "what_to_ignore": "both"})
     }
-    whitelist.db.get_org_info.return_value = json.dumps(["1.2.3.4/32"])
-    whitelist.db.get_ip_info.return_value = {"asn": {"asnorg": "Google"}}
-    whitelist.db.get_org_info.return_value = json.dumps(["example.com"])
-    # we're mocking either an attacker or a  victim obj
-    mock_ioc = MagicMock()
-    mock_ioc.value = ioc_data["value"]
-    mock_ioc.direction = ioc_data["direction"]
-    mock_ioc.ioc_type = ioc_data["ioc_type"]
 
-    assert (
-        whitelist.org_analyzer._is_part_of_a_whitelisted_org(
-            mock_ioc.value, mock_ioc.ioc_type, mock_ioc.direction, "both"
-        )
-        == expected_result
+    # mock dependent methods
+    whitelist.org_analyzer.is_domain_in_org = MagicMock(return_value=True)
+    whitelist.org_analyzer.is_ip_part_of_a_whitelisted_org = MagicMock(
+        return_value=False
     )
+
+    whitelist.match = MagicMock()
+    whitelist.match.direction.return_value = True
+    whitelist.match.what_to_ignore.return_value = True
+
+    with patch(
+        "slips_files.core.helpers.whitelist.organization_whitelist."
+        "utils.is_private_ip",
+        return_value=False,
+    ):
+        result = whitelist.org_analyzer._is_part_of_a_whitelisted_org(
+            ioc=ioc_data["value"],
+            ioc_type=ioc_data["ioc_type"],
+            direction=ioc_data["direction"],
+            what_to_ignore="both",
+        )
+
+    assert result == expected_result
 
 
 @pytest.mark.parametrize(
-    "dst_domains, src_domains, whitelisted_domains, expected_result",
+    "dst_domains, src_domains, whitelisted_domains, "
+    "is_whitelisted_return_vals,  expected_result",
     [
         (
             ["dst_domain.net"],
             ["apple.com"],
             {"apple.com": {"from": "src", "what_to_ignore": "both"}},
+            [False, True],
             True,
         ),
         (
-            ["apple.com"],
+            ["apple.com"],  # dst domains, shouldnt be whitelisted
             ["src.com"],
             {"apple.com": {"from": "src", "what_to_ignore": "both"}},
+            [False, False],
             False,
         ),
-        (["apple.com"], ["src.com"], {}, False),  # no whitelist found
+        (["apple.com"], ["src.com"], {}, [False, False], False),
+        # no whitelist found
         (  # no flow domains found
             [],
             [],
             {"apple.com": {"from": "src", "what_to_ignore": "both"}},
+            [False, False],
             False,
         ),
     ],
@@ -316,22 +419,19 @@ def test_check_if_whitelisted_domains_of_flow(
     dst_domains,
     src_domains,
     whitelisted_domains,
+    is_whitelisted_return_vals,
     expected_result,
 ):
     whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.bloom_filters.domains = list(whitelisted_domains.keys())
     whitelist.db.get_whitelist.return_value = whitelisted_domains
 
-    whitelist.domain_analyzer.is_domain_in_tranco_list = Mock()
-    whitelist.domain_analyzer.is_domain_in_tranco_list.return_value = False
-
-    whitelist.domain_analyzer.get_dst_domains_of_flow = Mock()
-    whitelist.domain_analyzer.get_dst_domains_of_flow.return_value = (
-        dst_domains
+    whitelist.domain_analyzer.get_src_domains_of_flow = Mock(
+        return_value=src_domains
     )
 
-    whitelist.domain_analyzer.get_src_domains_of_flow = Mock()
-    whitelist.domain_analyzer.get_src_domains_of_flow.return_value = (
-        src_domains
+    whitelist.domain_analyzer.is_whitelisted = Mock(
+        side_effect=is_whitelisted_return_vals
     )
 
     flow = Mock()
@@ -344,6 +444,7 @@ def test_is_whitelisted_domain_not_found():
     Test when the domain is not found in the whitelisted domains.
     """
     whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.bloom_filters.domains = []
     whitelist.db.get_whitelist.return_value = {}
     whitelist.db.is_whitelisted_tranco_domain.return_value = False
     domain = "nonwhitelisteddomain.com"
@@ -379,9 +480,17 @@ def test_read_configuration(
 )
 def test_ip_analyzer_is_whitelisted(ip, what_to_ignore, expected_result):
     whitelist = ModuleFactory().create_whitelist_obj()
-    whitelist.db.get_whitelist.return_value = {
-        "1.2.3.4": {"from": "both", "what_to_ignore": "both"}
-    }
+    whitelist.bloom_filters.ips = [ip]  # Simulate presence in bloom
+    # filter, because we wanna test the rest of the logic
+
+    # only this ip is whitelisted
+    if ip == "1.2.3.4":
+        whitelist.db.is_whitelisted.return_value = json.dumps(
+            {"from": "both", "what_to_ignore": "both"}
+        )
+    else:
+        whitelist.db.is_whitelisted.return_value = None
+
     assert (
         whitelist.ip_analyzer.is_whitelisted(ip, Direction.SRC, what_to_ignore)
         == expected_result
@@ -485,47 +594,67 @@ def test_is_whitelisted_entity_victim(
 
 
 @pytest.mark.parametrize(
-    "org, expected_result",
+    "org, file_content, expected_result",
     [
-        ("google", ["google.com", "google.co.uk"]),
-        ("microsoft", ["microsoft.com", "microsoft.net"]),
+        (
+            "google",
+            "google.com\ngoogle.co.uk\n",
+            ["google.com", "google.co.uk"],
+        ),
+        (
+            "microsoft",
+            "microsoft.com\nmicrosoft.net\n",
+            ["microsoft.com", "microsoft.net"],
+        ),
     ],
 )
-def test_load_org_domains(
-    org,
-    expected_result,
-):
+def test_load_org_domains(org, file_content, expected_result):
     whitelist = ModuleFactory().create_whitelist_obj()
     whitelist.db.set_org_info = MagicMock()
 
-    actual_result = whitelist.parser.load_org_domains(org)
-    for domain in expected_result:
-        assert domain in actual_result
+    # Mock the file open for reading org domains
+    with patch("builtins.open", mock_open(read_data=file_content)):
+        actual_result = whitelist.parser.load_org_domains(org)
 
-    assert len(actual_result) >= len(expected_result)
-    whitelist.db.set_org_info.assert_called_with(
-        org, json.dumps(actual_result), "domains"
+    # Check contents
+    assert actual_result == expected_result
+    whitelist.db.set_org_info.assert_called_once_with(
+        org, expected_result, "domains"
     )
 
 
 @pytest.mark.parametrize(
-    "domain, direction, expected_result",
+    "domain, direction, is_whitelisted_return, expected_result",
     [
-        ("example.com", Direction.SRC, True),
-        ("test.example.com", Direction.DST, True),
-        ("malicious.com", Direction.SRC, False),
+        (
+            "example.com",
+            Direction.SRC,
+            {"from": "both", "what_to_ignore": "both"},
+            True,
+        ),
+        (
+            "test.example.com",
+            Direction.DST,
+            {"from": "both", "what_to_ignore": "both"},
+            True,
+        ),
+        ("malicious.com", Direction.SRC, {}, False),
     ],
 )
 def test_is_domain_whitelisted(
     domain,
     direction,
+    is_whitelisted_return,
     expected_result,
 ):
     whitelist = ModuleFactory().create_whitelist_obj()
-    whitelist.db.get_whitelist.return_value = {
-        "example.com": {"from": "both", "what_to_ignore": "both"}
-    }
+    whitelist.db.is_whitelisted.return_value = json.dumps(
+        is_whitelisted_return
+    )
+
     whitelist.db.is_whitelisted_tranco_domain.return_value = False
+    whitelist.bloom_filters.domains = ["example.com"]
+
     for type_ in ("alerts", "flows"):
         result = whitelist.domain_analyzer.is_whitelisted(
             domain, direction, type_
@@ -539,36 +668,36 @@ def test_is_domain_whitelisted(
         (
             "8.8.8.8",
             "google",
-            json.dumps(["AS6432"]),
+            ["AS6432"],
             {"asn": {"number": "AS6432"}},
             True,
         ),
         (
             "1.1.1.1",
             "cloudflare",
-            json.dumps(["AS6432"]),
+            ["AS6432"],
             {"asn": {"number": "AS6432"}},
             True,
         ),
         (
             "8.8.8.8",
             "Google",
-            json.dumps(["AS15169"]),
+            ["AS15169"],
             {"asn": {"number": "AS15169", "asnorg": "Google"}},
             True,
         ),
         (
             "1.1.1.1",
             "Cloudflare",
-            json.dumps(["AS13335"]),
+            ["AS13335"],
             {"asn": {"number": "AS15169", "asnorg": "Google"}},
             False,
         ),
-        ("9.9.9.9", "IBM", json.dumps(["AS36459"]), {}, None),
+        ("9.9.9.9", "IBM", ["AS36459"], {}, False),
         (
             "9.9.9.9",
             "IBM",
-            json.dumps(["AS36459"]),
+            ["AS36459"],
             {"asn": {"number": "Unknown"}},
             False,
         ),
@@ -578,8 +707,15 @@ def test_is_ip_asn_in_org_asn(
     ip, org, org_asn_info, ip_asn_info, expected_result
 ):
     whitelist = ModuleFactory().create_whitelist_obj()
-    whitelist.db.get_org_info.return_value = org_asn_info
+
+    whitelist.db = MagicMock()
     whitelist.db.get_ip_info.return_value = ip_asn_info
-    assert (
-        whitelist.org_analyzer.is_ip_asn_in_org_asn(ip, org) == expected_result
+    whitelist.db.get_org_info.return_value = org_asn_info
+
+    ip_asn = ip_asn_info.get("asn", {}).get("number", None)
+    whitelist.org_analyzer._is_asn_in_org = MagicMock(
+        return_value=ip_asn in org_asn_info
     )
+
+    result = whitelist.org_analyzer.is_ip_asn_in_org_asn(ip, org)
+    assert result == expected_result

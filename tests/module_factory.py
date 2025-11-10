@@ -503,7 +503,12 @@ class ModuleFactory:
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_whitelist_obj(self, mock_db):
-        whitelist = Whitelist(self.logger, mock_db)
+        bloom_filter_manager_mock = Mock()
+        whitelist = Whitelist(
+            self.logger,
+            mock_db,
+            bloom_filter_manager=bloom_filter_manager_mock,
+        )
         # override the self.print function to avoid broken pipes
         whitelist.print = Mock()
         whitelist.whitelist_path = "tests/test_whitelist.conf"
