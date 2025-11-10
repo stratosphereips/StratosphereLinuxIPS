@@ -382,6 +382,8 @@ This whitelist can be enabled or disabled by changing the ```enable_local_whitel
 
 The attacker and victim of every evidence are checked against the whitelist. In addition to all the related IPs, DNS resolutions, SNI, and CNAMEs of the attacker and teh victim. If any of them are whitelisted, the flow/evidence is discarded.
 
+Whitelists now use bloom filters to speed up the process of checking if an IoC is whitelisted or not.
+
 ### Flows Whitelist
 If you whitelist an IP address, Slips will check all flows and see if you are whitelisting to them or from them.
 
