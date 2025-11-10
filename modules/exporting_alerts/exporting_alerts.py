@@ -72,7 +72,7 @@ class ExportingAlerts(IModule):
             self.print(
                 f"[ExportingAlerts] Evidence {evidence.get('id')} "
                 f"type={evidence.get('evidence_type')} received.",
-                1,
+                2,
                 0,
             )
             description = self.remove_sensitive_info(evidence)
