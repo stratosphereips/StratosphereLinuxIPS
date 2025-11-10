@@ -21,6 +21,9 @@
 
 Develop a dataset for network security event summarization to be integrated with the Slips Immune system, optimized for deployment on low-resource hardware such as the Raspberry Pi 5. This dataset will be used to fine-tune compact language models capable of generating concise and actionable summaries of security incidents from raw Slips alert data, enabling real-time threat analysis in resource-constrained environments.
 
+The current version of the dataset used for finentuning LLM models is available [here](https://github.com/stratosphereips/Slips-tools/raw/refs/heads/main/alert_summary/datasets/summarization_dataset_extended.json.gz)
+
+
 ## 2. Limitations
 
 ### Hardware Constraints
@@ -38,6 +41,7 @@ Develop a dataset for network security event summarization to be integrated with
 The dataset generation process consists of four stages, each implemented as Python scripts with shell wrappers that simplify execution, handle argument validation, and automate file naming. This modular design enables flexible experimentation with different models and configurations while maintaining reproducibility.
 
 **Detailed documentation**: See [summary_dataset_workflow.md](summary_dataset_workflow.md) for complete pipeline specifications and advanced usage.
+The complete set of scripts for creating and updating the dataset is availabble in the [SLIPS tools repository](https://github.com/stratosphereips/Slips-tools/tree/main/alert_summary).
 
 ### Stage 1: Incident Sampling
 Extract security incidents from Slips `alerts.json` logs with category labels (Malware/Normal):
@@ -167,4 +171,4 @@ Each incident in the final dataset contains:
 
 Token efficiency enables deployment on Raspberry Pi 5 while maintaining security analysis quality suitable for real-time intrusion detection.
 
-The current version of the dataset used for finentuning LLM models is available [here](https://github.com/stratosphereips/Slips-tools/raw/refs/heads/main/alert_summary/datasets/summarization_dataset.json.gz)
+
