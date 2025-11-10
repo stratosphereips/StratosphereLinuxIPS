@@ -29,7 +29,7 @@ class FlowAlerts(AsyncModule):
 
     def init(self):
         self.subscribe_to_channels()
-        self.whitelist = Whitelist(self.logger, self.db)
+        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.dns = DNS(self.db, flowalerts=self)
         self.software = Software(self.db, flowalerts=self)
         self.notice = Notice(self.db, flowalerts=self)

@@ -21,6 +21,8 @@
 # stratosphere@aic.fel.cvut.cz
 
 import json
+import multiprocessing
+import threading
 from typing import (
     List,
     Dict,
@@ -31,7 +33,6 @@ from os import path
 import sys
 import os
 import time
-import traceback
 
 from slips_files.common.idmefv2 import IDMEFv2
 from slips_files.common.style import (
@@ -39,6 +40,7 @@ from slips_files.common.style import (
 )
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.core.evidence_logger import EvidenceLogger
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from slips_files.core.helpers.notify import Notify
 from slips_files.common.abstracts.icore import ICore
@@ -64,7 +66,7 @@ class EvidenceHandler(ICore):
     name = "EvidenceHandler"
 
     def init(self):
-        self.whitelist = Whitelist(self.logger, self.db)
+        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.idmefv2 = IDMEFv2(self.logger, self.db)
         self.separator = self.db.get_separator()
         self.read_configuration()
@@ -103,9 +105,24 @@ class EvidenceHandler(ICore):
         self.our_ips: List[str] = utils.get_own_ips(ret="List")
         self.formatter = EvidenceFormatter(self.db, self.args)
         # thats just a tmp value, this variable will be set and used when
-        # the
-        # module is stopping.
+        # the module is stopping.
         self.last_msg_received_time = time.time()
+
+        # A thread that handing I/O to disk (writing evidence to log files)
+        self.logger_stop_signal = threading.Event()
+        self.evidence_logger_q = multiprocessing.Queue()
+        self.evidence_logger = EvidenceLogger(
+            stop_signal=self.logger_stop_signal,
+            evidence_logger_q=self.evidence_logger_q,
+            logfile=self.logfile,
+            jsonfile=self.jsonfile,
+        )
+        self.logger_thread = threading.Thread(
+            target=self.evidence_logger.run_logger_thread,
+            daemon=True,
+            name="thread_that_handles_evidence_logging_to_disk",
+        )
+        utils.start_thread(self.logger_thread, self.db)
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -148,13 +165,11 @@ class EvidenceHandler(ICore):
             self.handle_unable_to_log(alert, "Can't convert to IDMEF alert")
             return
 
-        try:
-            json.dump(idmef_alert, self.jsonfile)
-            self.jsonfile.write("\n")
-        except KeyboardInterrupt:
-            return True
-        except Exception as e:
-            self.handle_unable_to_log(alert, e)
+        to_log = {
+            "to_log": idmef_alert,
+            "where": "alerts.json",
+        }
+        self.evidence_logger_q.put(to_log)
 
     def add_evidence_to_json_log_file(
         self,
@@ -186,29 +201,26 @@ class EvidenceHandler(ICore):
                     )
                 }
             )
-            json.dump(idmef_evidence, self.jsonfile)
-            self.jsonfile.write("\n")
+
+            to_log = {
+                "to_log": idmef_evidence,
+                "where": "alerts.json",
+            }
+
+            self.evidence_logger_q.put(to_log)
+
         except KeyboardInterrupt:
             return True
         except Exception as e:
             self.handle_unable_to_log(evidence, e)
 
-    def add_to_log_file(self, data):
+    def add_to_log_file(self, data: str):
         """
         Add a new evidence line to the alerts.log and other log files if
         logging is enabled.
         """
-        try:
-            # write to alerts.log
-            self.logfile.write(data)
-            if not data.endswith("\n"):
-                self.logfile.write("\n")
-            self.logfile.flush()
-        except KeyboardInterrupt:
-            return True
-        except Exception:
-            self.print("Error in add_to_log_file()")
-            self.print(traceback.format_exc(), 0, 1)
+        to_log = {"to_log": data, "where": "alerts.log"}
+        self.evidence_logger_q.put(to_log)
 
     def log_alert(self, alert: Alert, blocked=False):
         """
@@ -239,6 +251,11 @@ class EvidenceHandler(ICore):
         self.add_alert_to_json_log_file(alert)
 
     def shutdown_gracefully(self):
+        self.logger_stop_signal.set()
+        try:
+            self.logger_thread.join(timeout=5)
+        except Exception:
+            pass
         self.logfile.close()
         self.jsonfile.close()
 
@@ -549,6 +566,9 @@ class EvidenceHandler(ICore):
                     # reaching this point, now remove evidence from db so
                     # it could be completely ignored
                     self.db.delete_evidence(profileid, twid, evidence.id)
+                    self.print(
+                        f"{self.whitelist.get_bloom_filters_stats()}", 2, 0
+                    )
                     continue
 
                 # convert time to local timezone

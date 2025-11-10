@@ -189,45 +189,44 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_http_analyzer_obj(self, mock_db):
         http_analyzer = HTTPAnalyzer(
-            self.logger,
-            "dummy_output_dir",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
-            Mock(),  # ppid
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
         )
-
-        # override the self.print function to avoid broken pipes
         http_analyzer.print = Mock()
         return http_analyzer
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_fidesModule_obj(self, mock_db):
         fm = FidesModule(
-            self.logger,
-            "dummy_output_dir",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
-            Mock(),  # ppid
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
         )
-
-        # override the self.print function
         fm.print = Mock()
         return fm
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_virustotal_obj(self, mock_db):
         virustotal = VT(
-            self.logger,
-            "dummy_output_dir",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
-            Mock(),  # ppid
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
         )
         virustotal.print = Mock()
         virustotal.__read_configuration = Mock()
@@ -239,17 +238,110 @@ class ModuleFactory:
             "modules.arp.arp.ARP.wait_for_arp_scans", return_value=Mock()
         ):
             arp = ARP(
-                self.logger,
-                "dummy_output_dir",
-                6379,
-                Mock(),  # termination event
-                Mock(),  # args
-                Mock(),  # conf
-                Mock(),  # ppid
+                logger=self.logger,
+                output_dir="dummy_output_dir",
+                redis_port=6379,
+                termination_event=Mock(),
+                slips_args=Mock(),
+                conf=Mock(),
+                ppid=Mock(),
+                bloom_filters_manager=Mock(),
             )
         arp.print = Mock()
         arp.evidence_filter.is_slips_peer = Mock(return_value=False)
         return arp
+
+    def create_checker_obj(self):
+        mock_main = Mock()
+        mock_main.args = MagicMock()
+        mock_main.args.output = "test_output"
+        mock_main.args.verbose = "0"
+        mock_main.args.debug = "0"
+        mock_main.redis_man = Mock()
+        mock_main.terminate_slips = Mock()
+        mock_main.print_version = Mock()
+        mock_main.get_input_file_type = Mock()
+        mock_main.handle_flows_from_stdin = Mock()
+        mock_main.pid = 12345
+
+        checker = Checker(mock_main)
+        return checker
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_go_director_obj(self, mock_db):
+        with patch("modules.p2ptrust.utils.utils.send_evaluation_to_go"):
+            go_director = GoDirector(
+                logger=self.logger,
+                trustdb=Mock(spec=TrustDB),
+                db=mock_db,
+                storage_name="test_storage",
+                override_p2p=False,
+                gopy_channel="test_gopy",
+                pygo_channel="test_pygo",
+                p2p_reports_logfile="test_reports.log",
+            )
+            go_director.print = Mock()
+        return go_director
+
+    @patch(DB_MANAGER, name="mock_db")
+    def create_daemon_object(self, mock_db):
+        with (
+            patch("slips.daemon.Daemon.read_pidfile", return_type=None),
+            patch("slips.daemon.Daemon.read_configuration"),
+            patch("builtins.open", mock_open(read_data=None)),
+        ):
+            daemon = Daemon(MagicMock())
+        daemon.stderr = "errors.log"
+        daemon.stdout = "slips.log"
+        daemon.stdin = "/dev/null"
+        daemon.logsfile = "slips.log"
+        daemon.pidfile_dir = "/tmp"
+        daemon.pidfile = os.path.join(daemon.pidfile_dir, "slips_daemon.lock")
+        daemon.daemon_start_lock = "slips_daemon_start"
+        daemon.daemon_stop_lock = "slips_daemon_stop"
+        return daemon
+
+    @contextmanager
+    def dummy_acquire_flock(self):
+        yield
+
+    @patch("sqlite3.connect")
+    def create_trust_db_obj(self, sqlite_mock):
+        with (
+            patch("slips_files.common.abstracts.isqlite.ISQLite._init_flock"),
+            patch(
+                "slips_files.common.abstracts.isqlite.ISQLite._acquire_flock"
+            ),
+        ):
+            trust_db = TrustDB(
+                logger=self.logger,
+                db_file=Mock(),
+                main_pid=Mock(),
+                drop_tables_on_startup=False,
+            )
+        trust_db.conn = Mock()
+        trust_db.print = Mock()
+        trust_db._init_flock = Mock()
+        trust_db._acquire_flock = MagicMock()
+        return trust_db
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_base_model_obj(self, mock_db):
+        logger = Mock(spec=Output)
+        trustdb = Mock()
+        return BaseModel(logger, trustdb, mock_db)
+
+    def create_notify_obj(self):
+        notify = Notify()
+        return notify
+
+    def create_ioc_handler_obj(self):
+        handler = IoCHandler()
+        handler.r = Mock()
+        handler.rcache = Mock()
+        handler.constants = Constants()
+        handler.channels = Channels()
+        return handler
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_arp_filter_obj(self, mock_db):
@@ -259,13 +351,14 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_blocking_obj(self, mock_db):
         blocking = Blocking(
-            self.logger,
-            "dummy_output_dir",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
-            Mock(),  # ppid
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
         )
         # override the print function to avoid broken pipes
         blocking.print = Mock()
@@ -295,9 +388,8 @@ class ModuleFactory:
             slips_args=Mock(),
             conf=Mock(),
             ppid=Mock(),
+            bloom_filters_manager=Mock(),
         )
-
-        # override the self.print function to avoid broken pipes
         flowalerts.print = Mock()
         return flowalerts
 
@@ -347,6 +439,21 @@ class ModuleFactory:
         return Software(flowalerts.db, flowalerts=flowalerts)
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_ip_info_obj(self, mock_db):
+        ip_info = IPInfo(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
+        )
+        ip_info.print = Mock()
+        return ip_info
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_input_obj(
         self, input_information, input_type, mock_db, line_type=False
     ):
@@ -359,6 +466,7 @@ class ModuleFactory:
             slips_args=Mock(),
             conf=Mock(),
             ppid=Mock(),
+            bloom_filters_manager=Mock(),
             is_input_done=Mock(),
             profiler_queue=self.profiler_queue,
             input_type=input_type,
@@ -379,40 +487,24 @@ class ModuleFactory:
 
         return input
 
-    @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_ip_info_obj(self, mock_db):
-        ip_info = IPInfo(
-            self.logger,
-            "dummy_output_dir",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
-            Mock(),  # ppid
-        )
-        # override the self.print function to avoid broken pipes
-        ip_info.print = Mock()
-        return ip_info
-
     @patch(DB_MANAGER, name="mock_db")
     def create_asn_obj(self, mock_db):
         return ASN(mock_db)
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_leak_detector_obj(self, mock_db):
-        # this file will be used for storing the module output
-        # and deleted when the tests are done
         test_pcap = "dataset/test7-malicious.pcap"
         yara_rules_path = "tests/yara_rules_for_testing/rules/"
         compiled_yara_rules_path = "tests/yara_rules_for_testing/compiled/"
         leak_detector = LeakDetector(
-            self.logger,
-            "dummy_output_dir",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
-            Mock(),  # ppid
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
         )
         leak_detector.print = Mock()
         # this is the path containing 1 yara rule for testing,
@@ -432,11 +524,11 @@ class ModuleFactory:
             slips_args=Mock(),
             conf=Mock(),
             ppid=Mock(),
+            bloom_filters_manager=Mock(),
             is_profiler_done=Mock(),
             profiler_queue=self.input_queue,
             is_profiler_done_event=Mock(),
         )
-        # override the self.print function to avoid broken pipes
         profiler.print = Mock()
         profiler.local_whitelist_path = "tests/test_whitelist.conf"
         profiler.db = mock_db
@@ -469,16 +561,15 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_threatintel_obj(self, mock_db):
         threatintel = ThreatIntel(
-            self.logger,
-            "dummy_output_dir",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
-            Mock(),  # ppid
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
         )
-
-        # override the self.print function to avoid broken pipes
         threatintel.print = Mock()
         return threatintel
 
@@ -489,21 +580,26 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_update_manager_obj(self, mock_db):
         update_manager = UpdateManager(
-            self.logger,
-            "dummy_output_dir",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
-            Mock(),  # ppid
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
         )
-        # override the self.print function to avoid broken pipes
         update_manager.print = Mock()
         return update_manager
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_whitelist_obj(self, mock_db):
-        whitelist = Whitelist(self.logger, mock_db)
+        bloom_filter_manager_mock = Mock()
+        whitelist = Whitelist(
+            self.logger,
+            mock_db,
+            bloom_filter_manager=bloom_filter_manager_mock,
+        )
         # override the self.print function to avoid broken pipes
         whitelist.print = Mock()
         whitelist.whitelist_path = "tests/test_whitelist.conf"
@@ -607,122 +703,47 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_network_discovery_obj(self, mock_db):
         network_discovery = NetworkDiscovery(
-            self.logger,
-            "dummy_output_dir",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
-            Mock(),  # ppid
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
         )
         return network_discovery
-
-    @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_arp_poisoner_obj(self, mock_db):
-        poisoner = ARPPoisoner(
-            self.logger,
-            "dummy_output_dir",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
-            Mock(),  # ppid
-        )
-        return poisoner
 
     def create_markov_chain_obj(self):
         return Matrix()
 
-    def create_checker_obj(self):
-        mock_main = Mock()
-        mock_main.args = MagicMock()
-        mock_main.args.output = "test_output"
-        mock_main.args.verbose = "0"
-        mock_main.args.debug = "0"
-        mock_main.redis_man = Mock()
-        mock_main.terminate_slips = Mock()
-        mock_main.print_version = Mock()
-        mock_main.get_input_file_type = Mock()
-        mock_main.handle_flows_from_stdin = Mock()
-        mock_main.pid = 12345
-
-        checker = Checker(mock_main)
-        return checker
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_arp_poisoner_obj(self, mock_db):
+        poisoner = ARPPoisoner(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
+        )
+        return poisoner
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_go_director_obj(self, mock_db):
-        with patch("modules.p2ptrust.utils.utils.send_evaluation_to_go"):
-            go_director = GoDirector(
-                logger=self.logger,
-                trustdb=Mock(spec=TrustDB),
-                db=mock_db,
-                storage_name="test_storage",
-                override_p2p=False,
-                gopy_channel="test_gopy",
-                pygo_channel="test_pygo",
-                p2p_reports_logfile="test_reports.log",
-            )
-            go_director.print = Mock()
-        return go_director
-
-    @patch(DB_MANAGER, name="mock_db")
-    def create_daemon_object(self, mock_db):
-        with (
-            patch("slips.daemon.Daemon.read_pidfile", return_type=None),
-            patch("slips.daemon.Daemon.read_configuration"),
-            patch("builtins.open", mock_open(read_data=None)),
-        ):
-            daemon = Daemon(MagicMock())
-        daemon.stderr = "errors.log"
-        daemon.stdout = "slips.log"
-        daemon.stdin = "/dev/null"
-        daemon.logsfile = "slips.log"
-        daemon.pidfile_dir = "/tmp"
-        daemon.pidfile = os.path.join(daemon.pidfile_dir, "slips_daemon.lock")
-        daemon.daemon_start_lock = "slips_daemon_start"
-        daemon.daemon_stop_lock = "slips_daemon_stop"
-        return daemon
-
-    @contextmanager
-    def dummy_acquire_flock(self):
-        yield
-
-    @patch("sqlite3.connect")
-    def create_trust_db_obj(self, sqlite_mock):
-        with (
-            patch("slips_files.common.abstracts.isqlite.ISQLite._init_flock"),
-            patch(
-                "slips_files.common.abstracts.isqlite.ISQLite._acquire_flock"
-            ),
-        ):
-            trust_db = TrustDB(
-                logger=self.logger,
-                db_file=Mock(),
-                main_pid=Mock(),
-                drop_tables_on_startup=False,
-            )
-        trust_db.conn = Mock()
-        trust_db.print = Mock()
-        trust_db._init_flock = Mock()
-        trust_db._acquire_flock = MagicMock()
-        return trust_db
-
-    @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_base_model_obj(self, mock_db):
-        logger = Mock(spec=Output)
-        trustdb = Mock()
-        return BaseModel(logger, trustdb, mock_db)
-
-    def create_notify_obj(self):
-        notify = Notify()
-        return notify
-
-    def create_ioc_handler_obj(self):
-        handler = IoCHandler()
-        handler.r = Mock()
-        handler.rcache = Mock()
-        handler.constants = Constants()
-        handler.channels = Channels()
+    def create_evidence_handler_obj(self, mock_db):
+        handler = EvidenceHandler(
+            logger=Mock(),
+            output_dir="/tmp",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
+        )
+        handler.db = mock_db
         return handler
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
@@ -737,6 +758,7 @@ class ModuleFactory:
             Mock(),  # args
             Mock(),  # conf
             Mock(),  # ppid
+            Mock(),  # Bloom filter manager
         )
         cesnet.db = mock_db
         cesnet.wclient = MagicMock()
@@ -746,20 +768,6 @@ class ModuleFactory:
 
         cesnet.print = MagicMock()
         return cesnet
-
-    @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_evidence_handler_obj(self, mock_db):
-        handler = EvidenceHandler(
-            logger=Mock(),
-            output_dir="/tmp",
-            redis_port=6379,
-            termination_event=Mock(),
-            slips_args=Mock(),
-            conf=Mock(),
-            ppid=Mock(),
-        )
-        handler.db = mock_db
-        return handler
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_evidence_formatter_obj(self, mock_db):
@@ -775,13 +783,14 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_riskiq_obj(self, mock_db):
         riskiq = RiskIQ(
-            self.logger,
-            "dummy_output_dir",
-            6379,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
-            Mock(),  # ppid
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
         )
         riskiq.db = mock_db
         return riskiq
@@ -792,13 +801,14 @@ class ModuleFactory:
         output_dir = "/tmp"
         redis_port = 6379
         tl = Timeline(
-            logger,
-            output_dir,
-            redis_port,
-            Mock(),  # termination event
-            Mock(),  # args
-            Mock(),  # conf
-            Mock(),  # ppid
+            logger=logger,
+            output_dir=output_dir,
+            redis_port=redis_port,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
         )
         tl.db = mock_db
         return tl

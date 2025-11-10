@@ -64,7 +64,7 @@ class IPInfo(AsyncModule):
             "new_dns": self.c3,
             "check_jarm_hash": self.c4,
         }
-        self.whitelist = Whitelist(self.logger, self.db)
+        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.valid_tlds = whois.validTlds()
         self.is_running_in_ap_mode: bool = (

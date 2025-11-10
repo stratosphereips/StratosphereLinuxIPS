@@ -39,6 +39,7 @@ from slips_files.common.abstracts.imodule import (
 
 from slips_files.common.style import green
 from slips_files.core.evidence_handler import EvidenceHandler
+from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.input import Input
 from slips_files.core.output import Output
 from slips_files.core.profiler import Profiler
@@ -111,6 +112,7 @@ class ProcessManager:
             self.main.args,
             self.main.conf,
             self.main.pid,
+            self.main.bloom_filters_man,
             is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
@@ -134,6 +136,7 @@ class ProcessManager:
             self.main.args,
             self.main.conf,
             self.main.pid,
+            self.main.bloom_filters_man,
         )
         evidence_process.start()
         self.main.print(
@@ -154,6 +157,7 @@ class ProcessManager:
             self.main.args,
             self.main.conf,
             self.main.pid,
+            self.main.bloom_filters_man,
             is_input_done=self.is_input_done,
             profiler_queue=self.profiler_queue,
             input_type=self.main.input_type,
@@ -399,6 +403,7 @@ class ProcessManager:
                 self.main.args,
                 self.main.conf,
                 self.main.pid,
+                self.main.bloom_filters_man,
             )
             module.start()
             self.main.db.store_pid(module_name, int(module.pid))
@@ -430,17 +435,30 @@ class ProcessManager:
             f"\t{green(module)} \tStopped. " f"" f"{green(modules_left)} left."
         )
 
+    def init_bloom_filters_manager(self):
+        """this instance is shared accross all slips IModule instances,
+        because we dont wanna re-create the filters once for each process,
+        this way is more memory efficient"""
+        return BFManager(
+            self.main.logger,
+            self.main.args.output,
+            self.main.redis_port,
+            self.main.conf,
+            self.main.pid,
+        )
+
     def start_update_manager(self, local_files=False, ti_feeds=False):
         """
         starts the update manager process
         PS; this function is blocking, slips.py will not start the rest of the
-         module unless this functionis done
+         module unless this function's done
         :kwarg local_files: if true, updates the local ports and
                 org files from disk
         :kwarg ti_feeds: if true, updates the remote TI feeds.
             PS: this takes time.
         """
         try:
+            bloom_filters_man = getattr(self.main, "bloom_filters_man", None)
             # only one instance of slips should be able to update ports
             # and orgs at a time
             # so this function will only be allowed to run from 1 slips
@@ -456,6 +474,7 @@ class ProcessManager:
                     self.main.args,
                     self.main.conf,
                     self.main.pid,
+                    bloom_filters_man,
                 )
 
                 if local_files:

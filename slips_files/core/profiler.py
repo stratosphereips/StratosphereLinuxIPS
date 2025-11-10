@@ -89,16 +89,13 @@ class Profiler(ICore, IObservable):
         self.input_type = False
         self.rec_lines = 0
         self.localnet_cache = {}
-        self.whitelist = Whitelist(self.logger, self.db)
+        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.read_configuration()
         self.symbol = SymbolHandler(self.logger, self.db)
         # there has to be a timeout or it will wait forever and never
         # receive a new line
         self.timeout = 0.0000001
-        self.c1 = self.db.subscribe("reload_whitelist")
-        self.channels = {
-            "reload_whitelist": self.c1,
-        }
+        self.channels = {}
         # is set by this proc to tell input proc that we are done
         # processing and it can exit no issue
         self.is_profiler_done_event = is_profiler_done_event
@@ -288,6 +285,7 @@ class Profiler(ICore, IObservable):
 
         # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(flow):
+            self.print(f"{self.whitelist.get_bloom_filters_stats()}", 2, 0)
             return True
 
         # 5th. Store the data according to the paremeters
@@ -633,8 +631,7 @@ class Profiler(ICore, IObservable):
         """starts 3 profiler threads for faster processing of the flows"""
         num_of_profiler_threads = 3
         for _ in range(num_of_profiler_threads):
-            t = threading.Thread(target=self.process_flow)
-            t.daemon = True
+            t = threading.Thread(target=self.process_flow, daemon=True)
             t.start()
             self.profiler_threads.append(t)
 
@@ -746,16 +743,6 @@ class Profiler(ICore, IObservable):
         # we're using self.should_stop() here instead of while True to be
         # able to unit test this function:D
         while not self.should_stop():
-            # listen on this channel in case whitelist.conf is changed,
-            # we need to process the new changes
-            if self.get_msg("reload_whitelist"):
-                # if whitelist.conf is edited using pycharm
-                # a msg will be sent to this channel on every keypress,
-                # because pycharm saves file automatically
-                # otherwise this channel will get a msg only when
-                # whitelist.conf is modified and saved to disk
-                self.whitelist.update()
-
             msg = self.get_msg_from_input_proc(self.profiler_queue)
             if not msg:
                 # wait for msgs
