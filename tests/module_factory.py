@@ -524,6 +524,7 @@ class ModuleFactory:
             slips_args=Mock(),
             conf=Mock(),
             ppid=Mock(),
+            bloom_filters_manager=Mock(),
             is_profiler_done=Mock(),
             profiler_queue=self.input_queue,
             is_profiler_done_event=Mock(),
