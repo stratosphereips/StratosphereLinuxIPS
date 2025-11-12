@@ -3,16 +3,6 @@ name: Install Slips Dependencies
 on:
   workflow_call:
     inputs:
-      zeek-repo-url:
-        description: 'Zeek repository URL'
-        required: false
-        default: 'http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/'
-        type: string
-      zeek-key-url:
-        description: 'Zeek key URL'
-        required: false
-        default: 'https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key'
-        type: string
       python-version:
         description: 'Python version to set up'
         required: false
@@ -57,9 +47,11 @@ jobs:
 
     - name: Install Zeek
       run: |
-        echo "deb ${{ inputs.zeek-repo-url }} /" | sudo tee /etc/apt/sources.list.d/security:zeek.list
-        curl -fsSL ${{ inputs.zeek-key-url }} | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/security_zeek.gpg
-        sudo apt update && sudo apt install -y --no-install-recommends --fix-missing zeek-8.0
+        sudo sed -i 's|http://download.opensuse.org|https://download.opensuse.org|' /etc/apt/sources.list.d/security:zeek.list
+        sudo apt update || true
+        sudo apt install -y --no-install-recommends --fix-missing zeek-8.0 || \
+          (wget https://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/all/zeek-8.0-btest-data_8.0.3-0_all.deb
+        && sudo dpkg -i zeek-8.0-btest-data_8.0.3-0_all.deb && sudo apt -f install)
         sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
     - name: Mark dependencies as installed
