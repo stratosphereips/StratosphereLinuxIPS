@@ -14,9 +14,7 @@
 	path = feel_project
 	url = https://github.com/stratosphereips/feel_project
     branch = main
-[submodule "StratosphereWeb"]
-	path = SlipsWeb
-	url = https://github.com/stratosphereips/SlipsWeb.git
+
 [submodule "SlipsWeb"]
 	path = SlipsWeb
 	url = https://github.com/stratosphereips/SlipsWeb.git
