@@ -24,6 +24,7 @@ class ExportingAlerts(IModule):
         self.stix = StixExporter(self.logger, self.db)
         self.c1 = self.db.subscribe("export_evidence")
         self.channels = {"export_evidence": self.c1}
+        self.print("Subscribed to export_evidence channel.", 1, 0)
 
     def shutdown_gracefully(self):
         self.slack.shutdown_gracefully()
@@ -35,17 +36,22 @@ class ExportingAlerts(IModule):
         export_to_slack = self.slack.should_export()
         export_to_stix = self.stix.should_export()
 
+        if not export_to_slack and not export_to_stix:
+            self.print(
+                "Exporting Alerts module disabled (no export targets configured).",
+                0,
+                2,
+            )
+            return 1
+
         if export_to_slack:
             self.slack.send_init_msg()
 
-        if export_to_stix:
+        if export_to_stix and self.stix.is_running_non_stop:
             # This thread is responsible for waiting n seconds before
             # each push to the stix server
             # it starts the timer when the first alert happens
             self.stix.start_exporting_thread()
-
-        if not export_to_slack or export_to_stix:
-            return 1
 
     def remove_sensitive_info(self, evidence: dict) -> str:
         """
@@ -63,6 +69,12 @@ class ExportingAlerts(IModule):
         # a msg is sent here for each evidence that was part of an alert
         if msg := self.get_msg("export_evidence"):
             evidence = json.loads(msg["data"])
+            self.print(
+                f"[ExportingAlerts] Evidence {evidence.get('id')} "
+                f"type={evidence.get('evidence_type')} received.",
+                2,
+                0,
+            )
             description = self.remove_sensitive_info(evidence)
             if self.slack.should_export():
                 srcip = evidence["profile"]["ip"]
@@ -70,11 +82,7 @@ class ExportingAlerts(IModule):
                 self.slack.export(msg_to_send)
 
             if self.stix.should_export():
-                msg_to_send = (
-                    evidence["evidence_type"],
-                    evidence["attacker"]["value"],
-                )
-                added_to_stix: bool = self.stix.add_to_stix_file(msg_to_send)
+                added_to_stix: bool = self.stix.add_to_stix_file(evidence)
                 if added_to_stix:
                     # now export to taxii
                     self.stix.export()

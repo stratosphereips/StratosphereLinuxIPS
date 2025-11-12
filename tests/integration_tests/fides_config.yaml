@@ -305,11 +305,11 @@ exporting_alerts:
    # you can set the port to 443 or 80.
    port : 1234
    use_https : False
-   discovery_path : /services/discovery-a
-   inbox_path : /services/inbox-a
+   # TAXII 2 discovery endpoint (relative path or full URL)
+   discovery_path : /taxii2/
 
-   # Collection on the server you want to push stix data to
-   collection_name : collection-a
+   # Collection (ID or title) on the server you want to push STIX data to
+   collection_name : Alerts
 
    # This value is only used when slips is running non-stop (e.g with -i )
    # push_delay is the time to wait before pushing STIX data to server (in seconds)
@@ -321,11 +321,6 @@ exporting_alerts:
    # TAXII server credentials
    taxii_username : admin
    taxii_password : admin
-
-   # URL used to obtain JWT token. set this to '' if you don't want to use it
-   # is required for JWT based authentication. (JWT based authentication is Optional)
-   # It's usually /management/auth
-   jwt_auth_path : /management/auth
 
 #############################
 CESNET:
@@ -429,4 +424,3 @@ local_p2p:
    # create p2p.log with additional info about peer communications?
    create_p2p_logfile : False
    use_p2p : False
-
