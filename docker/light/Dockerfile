@@ -27,7 +27,7 @@ RUN set -eux; \
         | tee /etc/apt/sources.list.d/security:zeek.list \
     && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key \
         | gpg --dearmor | tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
-    && apt-get update && apt-get install -y --no-install-recommends --fix-missing zeek \
+    && apt-get update && apt-get install -y --no-install-recommends --fix-missing zeek-8.0 \
     && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*

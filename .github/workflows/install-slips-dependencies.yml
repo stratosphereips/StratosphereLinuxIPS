@@ -59,7 +59,7 @@ jobs:
       run: |
         echo "deb ${{ inputs.zeek-repo-url }} /" | sudo tee /etc/apt/sources.list.d/security:zeek.list
         curl -fsSL ${{ inputs.zeek-key-url }} | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/security_zeek.gpg
-        sudo apt update && sudo apt install -y --no-install-recommends zeek
+        sudo apt update && sudo apt install -y --no-install-recommends zeek-8.0
         sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
     - name: Mark dependencies as installed

@@ -94,7 +94,7 @@ ZEEK_REPO_URL="download.opensuse.org/repositories/security:/zeek/xUbuntu_${UBUNT
 # Add the repository to the sources list
 echo "deb http://${ZEEK_REPO_URL}/ /" |  tee /etc/apt/sources.list.d/security:zeek.list \
 && curl -fsSL "https://${ZEEK_REPO_URL}/Release.key" | gpg --dearmor |  tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
-&& sudo apt update && sudo apt install -y --no-install-recommends zeek
+&& sudo apt update && sudo apt install -y --no-install-recommends zeek-8.0
 
 # create a symlink to zeek so that slips can find it
 ln -s /opt/zeek/bin/zeek /usr/local/bin/bro

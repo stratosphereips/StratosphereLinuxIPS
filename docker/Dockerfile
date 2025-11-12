@@ -64,7 +64,7 @@ RUN apt update && apt install -y --no-install-recommends \
     && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key | gpg --dearmor |  tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
     && apt update \
     && apt install -y --no-install-recommends --fix-missing \
-    zeek \
+    zeek-8.0 \
     npm \
     && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro \
     && apt clean \
