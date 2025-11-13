@@ -5,7 +5,6 @@
 #   - Casts columns according to Zeek #types header.
 #   - Skips flows with BACKGROUND label.
 #   - Defaults unlabeled flows to BENIGN.
-#   - Supports batching with shuffle/reset at epoch boundaries.
 #   - Stores index in cache/ directory for large files (>50k valid flows) and reloads automatically.
 
 from commons import BENIGN, MALICIOUS, BACKGROUND
