@@ -68,7 +68,6 @@ create_directories() {
   echoc "${GREEN}This script will mount ${OUTPUT_DIR} into the Docker container as Slips output directory in /StratosphereLinuxIPS/output.\n ${RESET}"
 }
 
-
 setup_iptables_persistence() {
     echoc "${BLUE}Setting up iptables persistence...${RESET}"
 
@@ -85,18 +84,31 @@ setup_iptables_persistence() {
     UNIT_DIR="/etc/systemd/system"
     SRC_DIR="$(pwd)/iptables_autosave"
 
-    for unit in iptables-autosave.path iptables-autosave.service; do
-        cp -f "$SRC_DIR/$unit" "$UNIT_DIR/$unit"
-        chmod 644 "$UNIT_DIR/$unit"
+    for unit in iptables-watcher.service iptables-watcher.timer; do
+        if [[ -f "$SRC_DIR/$unit" ]]; then
+            cp -f "$SRC_DIR/$unit" "$UNIT_DIR/$unit"
+            chmod 644 "$UNIT_DIR/$unit"
+            echoc "${GREEN}Copied $unit to $UNIT_DIR${RESET}"
+        else
+            echoc "${RED}File $SRC_DIR/$unit not found, skipping.${RESET}"
+        fi
     done
 
-    # Reload systemd, enable and start the path unit
-    systemctl daemon-reload
-    systemctl enable iptables-autosave.path
-    systemctl start iptables-autosave.path
 
-    echoc "${GREEN}Done setting up iptables persistence and auto-save units.${RESET}"
+    # Deploy the check-iptables-hash.sh script
+    cp -f "$SRC_DIR/check-iptables-hash.sh" "/usr/local/bin/check-iptables-hash.sh"
+    chmod +x /usr/local/bin/check-iptables-hash.sh
+
+
+    # Reload systemd, enable and start units
+    systemctl daemon-reload
+    systemctl enable iptables-watcher.service
+    systemctl enable iptables-watcher.timer
+    systemctl start iptables-watcher.timer
+
+    echoc "${GREEN}Done setting up iptables persistence using iptables-watcher units.${RESET}"
 }
+
 
 create_slips_runner_script() {
   RUNNER_PATH="/usr/local/bin/slips-runner.sh"
