@@ -41,10 +41,11 @@ main() {
     # -v "$CONFIG_DIR":/StratosphereLinuxIPS/config/
     --name "$CONTAINER_NAME"
     --net=host
-    --cpu-shares 700
+    --cpu-shares 800
     --memory 8g
     --memory-swap 8g
     --shm-size 512m
+    --cap-add NET_ADMIN
     "$DOCKER_IMAGE"
     bash -c "tmux new -s slips './slips.py -ap $WIFI_IF,$ETH_IF'"
   )
@@ -64,7 +65,7 @@ main() {
 
   exit_code=$(docker inspect --format='{{.State.ExitCode}}' "$container_id" 2>/dev/null || echo 0)
   log "Exited with code $exit_code"
-
+  # TODO handle this
   # kill_ap_process
 
   netfilter-persistent save || true
