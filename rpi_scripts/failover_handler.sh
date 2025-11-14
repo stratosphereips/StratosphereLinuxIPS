@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+RESET="\033[0m"; BOLD="\033[1m"; RED="\033[0;31m"; GREEN="\033[0;32m"; YELLOW="\033[0;33m"; BLUE="\033[0;34m"
+echoc() { printf "%b\n" "$*"; }
+
+usage() {
+  cat <<EOF
+Usage: $0 [-h] <wifi_interface>,<ethernet_interface>
+
+-h        Show help
+<wifi_interface>,<ethernet_interface>  e.g. wlan0,eth0
+
+Example:
+  $0 wlan0,eth0
+
+This script will:
+ - Require root (re-exec with sudo if needed)
+ - Check for a running create_ap instance, and exit if not found
+ - Create ./output and ./config if missing
+ - Install iptables persistence & save iptables rules on any change.
+ - Run Slips inside Docker + tmux
+ - Log Slips & Docker status to slips_container.log
+ - Create a systemd unit for Slips for persistence
+EOF
+}
+
+ensure_root() {
+  if [ "$(id -u)" -ne 0 ]; then
+    echoc "${YELLOW}Root required, re-running with sudo...${RESET}"
+    # Flush output to terminal
+    sleep 0.1
+    exec sudo bash "$0" "$@"
+  fi
+}
+
+parse_interfaces() {
+  if [ "${1:-}" = "-h" ]; then usage; exit 0; fi
+  if [ $# -ne 1 ]; then usage; exit 1; fi
+  IFS=',' read -r WIFI_IF ETH_IF <<< "$1" || { echoc "${RED}Invalid format.${RESET}"; exit 1; }
+  [ -z "$WIFI_IF" ] || [ -z "$ETH_IF" ] && { echoc "${RED}Missing interface(s).${RESET}"; exit 1; }
+  echoc "${GREEN}Using WiFi interface: ${WIFI_IF}, Ethernet interface: ${ETH_IF}${RESET}"
+}
+
+ensure_create_ap_is_running() {
+  echoc "${BLUE}Checking for running create_ap...${RESET}"
+  if ! pgrep -a create_ap | grep -E "\\b${WIFI_IF}\\b.*\\b${ETH_IF}\\b" >/dev/null 2>&1; then
+    echoc "${RED}create_ap is not running for ${WIFI_IF},${ETH_IF}.${RESET}"
+    echoc "${YELLOW}Run first:${RESET}"
+    echoc "${BOLD}sudo create_ap ${WIFI_IF} ${ETH_IF} rpi_wifi mysecurepassword -c 40${RESET}"
+    exit 1
+  fi
+}
+
+create_directories() {
+  CWD="$(pwd -P)"
+  OUTPUT_DIR="$CWD/output"
+  CONFIG_DIR="$CWD/config"
+  mkdir -p "$OUTPUT_DIR" "$CONFIG_DIR"
+  echoc "${GREEN}Ensured output/config directories exist.${RESET}"
+}
+
+setup_iptables_persistence() {
+  echoc "${BLUE}Setting up iptables persistence...${RESET}"
+  apt-get update -y
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends iptables-persistent netfilter-persistent gettext-base
+  systemctl enable netfilter-persistent || true
+  systemctl restart netfilter-persistent || true
+  netfilter-persistent save || iptables-save > /etc/iptables/rules.v4 || true
+}
+
+create_slips_runner_script() {
+  RUNNER_PATH="/usr/local/bin/slips-runner.sh"
+  TEMPLATE="./slips-runner-template.sh"
+  LOG_FILE="${CWD}/slips_container.log"
+
+  echoc "${BLUE}Creating runner script from template...${RESET}"
+  [ -f "$TEMPLATE" ] || { echoc "${RED}Template not found: $TEMPLATE${RESET}"; exit 1; }
+
+  export WIFI_IF ETH_IF CWD LOG_FILE
+  envsubst '$WIFI_IF $ETH_IF $CWD $LOG_FILE' < "$TEMPLATE" > "$RUNNER_PATH"
+  chmod +x "$RUNNER_PATH"
+  echoc "${GREEN}Runner created at $RUNNER_PATH.${RESET}"
+}
+
+create_systemd_unit() {
+  SERVICE_PATH="/etc/systemd/system/slips.service"
+  TEMPLATE="./slips.service.template"
+
+  echoc "${BLUE}Creating systemd service from template...${RESET}"
+  [ -f "$TEMPLATE" ] || { echoc "${RED}Template not found: $TEMPLATE${RESET}"; exit 1; }
+
+  # Ensure all needed vars are exported for envsubst
+  export WIFI_IF ETH_IF CWD LOG_FILE
+  export OUTPUT_DIR="$CWD/output"
+  export CONFIG_DIR="$CWD/config"
+  export CONTAINER_NAME="slips"
+  export DOCKER_IMAGE="stratosphereips/slips:latest"
+  export RUNNER_PATH="/usr/local/bin/slips-runner.sh"
+
+  envsubst < "$TEMPLATE" > "$SERVICE_PATH"
+
+  systemctl daemon-reload
+  systemctl enable slips.service
+  systemctl restart slips.service
+  echoc "${GREEN}Systemd service installed and started.${RESET}"
+}
+
+
+main() {
+  parse_interfaces "$@"
+  ensure_root "$@"
+  ensure_create_ap_is_running
+
+
+  create_directories
+  setup_iptables_persistence
+  create_slips_runner_script
+  create_systemd_unit
+
+  echoc "${YELLOW}Slips is running inside tmux in Docker.${RESET}"
+  echoc "You can attach using: ${BOLD}docker exec -it slips tmux attach -t slips${RESET}"
+  echoc "For container logs check: ${BOLD}${CWD}/slips_container.log${RESET}"
+}
+main "$@"
