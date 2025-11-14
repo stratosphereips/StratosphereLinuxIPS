@@ -1,9 +1,0 @@
-[Unit]
-Description=Watch for iptables changes
-
-[Path]
-PathChanged=/proc/net/ip_tables_names
-Unit=iptables-autosave.service
-
-[Install]
-WantedBy=multi-user.target

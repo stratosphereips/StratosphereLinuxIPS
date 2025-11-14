@@ -1,6 +1,0 @@
-[Unit]
-Description=Automatically save iptables rules
-
-[Service]
-Type=oneshot
-ExecStart=/usr/sbin/netfilter-persistent save
