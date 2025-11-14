@@ -1,0 +1,20 @@
+[Unit]
+Description=Slips Docker Runner with tmux
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+ExecStart=${RUNNER_PATH}
+ExecStop=/bin/bash -c 'docker rm -f slips >/dev/null 2>&1 || true'
+Restart=always
+RestartSec=5
+KillMode=process
+TimeoutStartSec=120
+TimeoutStopSec=60
+User=root
+StandardOutput=append:${CWD}/slips_container.log
+StandardError=append:${CWD}/slips_container.log
+
+[Install]
+WantedBy=multi-user.target
