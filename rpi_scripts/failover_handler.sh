@@ -70,13 +70,32 @@ create_directories() {
 
 
 setup_iptables_persistence() {
-  echoc "${BLUE}Setting up iptables persistence...${RESET}"
-  apt-get update -y
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends iptables-persistent netfilter-persistent gettext-base
-  systemctl enable netfilter-persistent || true
-  systemctl restart netfilter-persistent || true
-  netfilter-persistent save || iptables-save > /etc/iptables/rules.v4 || true
-  echoc "Done setting up persistence"
+    echoc "${BLUE}Setting up iptables persistence...${RESET}"
+
+    # Install required packages
+    apt-get update -y
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends iptables-persistent netfilter-persistent
+
+    # Enable and start netfilter-persistent as fallback
+    systemctl enable netfilter-persistent || true
+    systemctl restart netfilter-persistent || true
+    netfilter-persistent save || iptables-save > /etc/iptables/rules.v4 || true
+
+    # Deploy custom systemd units
+    UNIT_DIR="/etc/systemd/system"
+    SRC_DIR="$(pwd)/iptables_autosave"
+
+    for unit in iptables-autosave.path iptables-autosave.service; do
+        cp -f "$SRC_DIR/$unit" "$UNIT_DIR/$unit"
+        chmod 644 "$UNIT_DIR/$unit"
+    done
+
+    # Reload systemd, enable and start the path unit
+    systemctl daemon-reload
+    systemctl enable iptables-autosave.path
+    systemctl start iptables-autosave.path
+
+    echoc "${GREEN}Done setting up iptables persistence and auto-save units.${RESET}"
 }
 
 create_slips_runner_script() {
