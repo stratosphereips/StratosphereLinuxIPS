@@ -53,13 +53,21 @@ ensure_create_ap_is_running() {
   fi
 }
 
+
 create_directories() {
   CWD="$(pwd -P)"
   OUTPUT_DIR="$CWD/output"
-  CONFIG_DIR="$CWD/config"
-  mkdir -p "$OUTPUT_DIR" "$CONFIG_DIR"
-  echoc "${GREEN}Ensured output/config directories exist.${RESET}"
+  echoc "${BLUE}\nChecking if ${OUTPUT_DIR} exists...${RESET} "
+
+  if [ -d "$OUTPUT_DIR" ]; then
+    echoc "${GREEN}${OUTPUT_DIR} exists${RESET}"
+  else
+    mkdir -p "$OUTPUT_DIR"
+    echoc "${GREEN}Created ${OUTPUT_DIR} successfully.${RESET}"
+  fi
+  echoc "${GREEN}This script will mount ${OUTPUT_DIR} into the Docker container as Slips output directory in /StratosphereLinuxIPS/output.\n ${RESET}"
 }
+
 
 setup_iptables_persistence() {
   echoc "${BLUE}Setting up iptables persistence...${RESET}"
@@ -68,6 +76,7 @@ setup_iptables_persistence() {
   systemctl enable netfilter-persistent || true
   systemctl restart netfilter-persistent || true
   netfilter-persistent save || iptables-save > /etc/iptables/rules.v4 || true
+  echoc "Done setting up persistence"
 }
 
 create_slips_runner_script() {
@@ -113,14 +122,13 @@ main() {
   ensure_root "$@"
   ensure_create_ap_is_running
 
-
   create_directories
   setup_iptables_persistence
   create_slips_runner_script
   create_systemd_unit
 
   echoc "${YELLOW}Slips is running inside tmux in Docker.${RESET}"
-  echoc "You can attach using: ${BOLD}docker exec -it slips tmux attach -t slips${RESET}"
+  echoc "You can attach using: ${BOLD}docker exec -it slips${RESET}"
   echoc "For container logs check: ${BOLD}${CWD}/slips_container.log${RESET}"
 }
 main "$@"
