@@ -69,6 +69,7 @@ create_directories() {
 }
 
 setup_iptables_persistence() {
+    # Persistence here is a systemd unit that watches for iptables changes and saves them whenever a change is detected
     echoc "${BLUE}Setting up iptables persistence...${RESET}"
 
     # Install required packages
@@ -84,6 +85,7 @@ setup_iptables_persistence() {
     UNIT_DIR="/etc/systemd/system"
     SRC_DIR="$(pwd)/iptables_autosave"
 
+    # copy each unit file in iptables_autosave to the systemd directory
     for unit in iptables-watcher.service iptables-watcher.timer; do
         if [[ -f "$SRC_DIR/$unit" ]]; then
             cp -f "$SRC_DIR/$unit" "$UNIT_DIR/$unit"
@@ -107,10 +109,12 @@ setup_iptables_persistence() {
     systemctl start iptables-watcher.timer
 
     echoc "${GREEN}Done setting up iptables persistence using iptables-watcher units.${RESET}"
+    echoc "${BOLD}You can check the status with: ${RESET} sudo systemctl status iptables-watcher.timer"
 }
 
 
 create_slips_runner_script() {
+  # Creates the slips-runner.sh script from template slips-runner-template.sh
   RUNNER_PATH="/usr/local/bin/slips-runner.sh"
   TEMPLATE="./slips-runner-template.sh"
   LOG_FILE="${CWD}/slips_container.log"
@@ -162,4 +166,5 @@ main() {
   echoc "You can attach using: ${BOLD}docker exec -it slips${RESET}"
   echoc "For container logs check: ${BOLD}${CWD}/slips_container.log${RESET}"
 }
+
 main "$@"
