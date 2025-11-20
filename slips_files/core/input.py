@@ -40,6 +40,7 @@ import multiprocessing
 
 from slips_files.common.style import yellow
 from slips_files.core.helpers.filemonitor import FileEventHandler
+from slips_files.core.input_readers.binetflow_reader import BinetflowReader
 from slips_files.core.input_readers.nfdump_reader import NfdumpReader
 from slips_files.core.input_readers.stdin_reader import StdinReader
 from slips_files.core.input_readers.suricata_reader import SuricataReader
@@ -477,31 +478,17 @@ class Input(ICore):
         return self.stdin_reader.read(self.line_type)
 
     def handle_binetflow(self):
-        # the number of flows returned by get_flows_number contains the header
-        # , so subtract that
-        self.total_flows = self.get_flows_number(self.given_path) - 1
-        self.db.set_input_metadata({"total_flows": self.total_flows})
-
-        self.lines = 0
-        with open(self.given_path) as file_stream:
-            # read first line to determine the type of line, tab or comma separated
-            t_line = file_stream.readline()
-            type_ = "argus-tabs" if "\t" in t_line else "argus"
-            line = {"type": type_, "data": t_line}
-            self.give_profiler(line)
-            self.lines += 1
-
-            # go through the rest of the file
-            for t_line in file_stream:
-                line = {"type": type_, "data": t_line}
-                # argus files are either tab separated orr comma separated
-                if len(t_line.strip()) != 0:
-                    self.give_profiler(line)
-
-                self.lines += 1
-                if self.testing:
-                    break
-
+        binetflow_reader = BinetflowReader(
+            self.logger,
+            self.output_dir,
+            self.redis_port,
+            self.conf,
+            self.ppid,
+            self.profiler_queue,
+            self.input_type,
+        )
+        self.lines = binetflow_reader.read(self.given_path)
+        self.print_lines_read()
         self.mark_self_as_done_processing()
         return True
 
