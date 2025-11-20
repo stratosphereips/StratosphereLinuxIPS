@@ -62,7 +62,7 @@ def test_read_zeek_folder(zeek_dir: str, is_tabs: bool):
     input.mark_process_as_done_processing.return_value = True
     input.start = Mock()
     input.start.return_value = True
-    assert input.read_zeek_folder() is True
+    assert input.handle_zeek_folder() is True
 
 
 @pytest.mark.parametrize(
@@ -364,14 +364,14 @@ def test_shutdown_gracefully_all_components_active():
     input_process.remover_thread.start()
     input_process.zeek_thread = MagicMock()
     input_process.zeek_thread.start()
-    input_process.open_file_handlers = {"test_file.log": MagicMock()}
+    input_process.open_file_handles = {"test_file.log": MagicMock()}
     input_process.zeek_pids = [123, 321]
 
     with patch("os.kill") as mock_kill:
         assert input_process.shutdown_gracefully()
         for pid in input_process.zeek_pids:
             mock_kill.assert_any_call(pid, signal.SIGKILL)
-    assert input_process.open_file_handlers["test_file.log"].close.called
+    assert input_process.open_file_handles["test_file.log"].close.called
 
 
 def test_shutdown_gracefully_no_open_files():
@@ -385,7 +385,7 @@ def test_shutdown_gracefully_no_open_files():
     input_process.remover_thread.start()
     input_process.zeek_thread = MagicMock()
     input_process.zeek_thread.start()
-    input_process.open_file_handlers = {}
+    input_process.open_file_handles = {}
     input_process.zeek_pids = [123]
 
     with patch("os.kill") as mock_kill:
@@ -404,13 +404,13 @@ def test_shutdown_gracefully_zeek_not_running():
     input_process.stop_queues = MagicMock(return_value=True)
     input_process.remover_thread = MagicMock()
     input_process.remover_thread.start()
-    input_process.open_file_handlers = {"test_file.log": MagicMock()}
+    input_process.open_file_handles = {"test_file.log": MagicMock()}
     input_process.zeek_pids = []
 
     with patch("os.kill") as mock_kill:
         assert input_process.shutdown_gracefully() is True
         mock_kill.assert_not_called()
-    assert input_process.open_file_handlers["test_file.log"].close.called
+    assert input_process.open_file_handles["test_file.log"].close.called
 
 
 def test_close_all_handles():
@@ -418,7 +418,7 @@ def test_close_all_handles():
     input_process = ModuleFactory().create_input_obj("", "zeek_log_file")
     mock_handle1 = MagicMock()
     mock_handle2 = MagicMock()
-    input_process.open_file_handlers = {
+    input_process.open_file_handles = {
         "file1": mock_handle1,
         "file2": mock_handle2,
     }
@@ -440,12 +440,12 @@ def test_shutdown_gracefully_no_zeek_pid():
     input_process.remover_thread.start()
     input_process.zeek_thread = MagicMock()
     input_process.zeek_thread.start()
-    input_process.open_file_handlers = {"test_file.log": MagicMock()}
+    input_process.open_file_handles = {"test_file.log": MagicMock()}
 
     with patch("os.kill") as mock_kill:
         assert input_process.shutdown_gracefully() is True
         mock_kill.assert_not_called()
-    assert input_process.open_file_handlers["test_file.log"].close.called
+    assert input_process.open_file_handles["test_file.log"].close.called
 
 
 def test_get_file_handle_non_existing_file():

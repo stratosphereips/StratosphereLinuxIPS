@@ -15,6 +15,7 @@ from typing import List
 from watchdog.observers import Observer
 
 
+from slips_files.common.style import yellow
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 
@@ -623,3 +624,77 @@ class ZeekReader(IInputReader):
         self.db.set_input_metadata({"total_flows": total_flows})
         self.lines = self.read_zeek_files()
         return True
+
+    def handle_pcap(self, given_path):
+        if not os.path.exists(self.zeek_dir):
+            os.makedirs(self.zeek_dir)
+        self.print(f"Storing zeek log files in {self.zeek_dir}")
+        # This is for stopping the inputprocess
+        # if bro does not receive any new line while reading a pcap
+        self.bro_timeout = 30
+        self.init_zeek(self.zeek_dir, given_path)
+
+        self.lines = self.read_zeek_files()
+        return self.lines
+
+    def handle_interface(self):
+        if not os.path.exists(self.zeek_dir):
+            os.makedirs(self.zeek_dir)
+        self.print(f"Storing zeek log files in {self.zeek_dir}")
+        # slips is running with -i or -ap
+        # We don't want to stop bro if we read from an interface
+        self.bro_timeout = float("inf")
+        # format is {interface: zeek_dir_path}
+        interfaces_to_monitor = {}
+        if self.args.interface:
+            interfaces_to_monitor.update(
+                {
+                    self.args.interface: {
+                        "dir": self.zeek_dir,
+                        "type": "main_interface",
+                    }
+                }
+            )
+
+        elif self.args.access_point:
+            # slips is running in AP mode, we need to monitor the 2
+            # interfaces, wifi and eth.
+            for _type, interface in self.db.get_ap_info().items():
+                # _type can be 'wifi_interface' or "ethernet_interface"
+                dir_to_store_interface_logs = os.path.join(
+                    self.zeek_dir, interface
+                )
+                interfaces_to_monitor.update(
+                    {
+                        interface: {
+                            "dir": dir_to_store_interface_logs,
+                            "type": _type,
+                        }
+                    }
+                )
+        for interface, interface_info in interfaces_to_monitor.items():
+            interface_dir = interface_info["dir"]
+            if not os.path.exists(interface_dir):
+                os.makedirs(interface_dir)
+
+            if interface_info["type"] == "ethernet_interface":
+                cidr = utils.get_cidr_of_interface(interface)
+                tcpdump_filter = f"dst net {cidr}"
+                logline = yellow(
+                    f"Zeek is logging incoming traffic only "
+                    f"for interface: {interface}."
+                )
+                self.print(logline)
+            else:
+                tcpdump_filter = None
+                logline = yellow(
+                    f"Zeek is logging all traffic on interface:"
+                    f" {interface}."
+                )
+                self.print(logline)
+
+            self.init_zeek(
+                interface_dir, interface, tcpdump_filter=tcpdump_filter
+            )
+        self.lines = self.read_zeek_files()
+        return self.lines

@@ -13,7 +13,6 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
-import os
 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -24,16 +23,14 @@ import os
 from slips_files.common.abstracts.icore import ICore
 
 # common imports for all modules
-from slips_files.common.slips_utils import utils
 import multiprocessing
 
-from slips_files.common.style import yellow
 from slips_files.core.input_readers.binetflow_reader import BinetflowReader
 from slips_files.core.input_readers.cyst_reader import CYSTReader
 from slips_files.core.input_readers.nfdump_reader import NfdumpReader
 from slips_files.core.input_readers.stdin_reader import StdinReader
 from slips_files.core.input_readers.suricata_reader import SuricataReader
-from slips_files.core.input_readers.zeek_reader import ZeekReader, ZeekRotator
+from slips_files.core.input_readers.zeek_reader import ZeekReader
 
 
 class Input(ICore):
@@ -121,21 +118,7 @@ class Input(ICore):
         # do nothing.
         self.profiler_queue.cancel_join_thread()
 
-    def read_zeek_folder(self):
-        self.zeek_reader = ZeekReader(
-            self.logger,
-            self.output_dir,
-            self.redis_port,
-            self.conf,
-            self.ppid,
-            self.profiler_queue,
-            self.input_type,
-            args=self.args,
-            input_proc=self,
-            zeek_dir=self.zeek_dir,
-            zeek_or_bro=self.zeek_or_bro,
-            cli_packet_filter=self.cli_packet_filter,
-        )
+    def handle_zeek_folder(self):
         self.lines = self.zeek_reader.read("zeek_folder", self.given_path)
         self.print_lines_read()
         self.mark_self_as_done_processing()
@@ -190,102 +173,20 @@ class Input(ICore):
         return True
 
     def handle_zeek_log_file(self):
-        self.zeek_reader = ZeekReader(
-            self.logger,
-            self.output_dir,
-            self.redis_port,
-            self.conf,
-            self.ppid,
-            self.profiler_queue,
-            self.input_type,
-            args=self.args,
-            input_proc=self,
-            zeek_dir=self.zeek_dir,
-            zeek_or_bro=self.zeek_or_bro,
-            cli_packet_filter=self.cli_packet_filter,
-        )
         self.lines = self.zeek_reader.read("zeek_log_file", self.given_path)
         self.print_lines_read()
         self.mark_self_as_done_processing()
         return True
 
-    def handle_pcap_and_interface(self) -> bool:
-        """
-        runs when slips is given a pcap with -f, an interface with -i,
-        or 2 interfaces with -ap
-        """
-        if not os.path.exists(self.zeek_dir):
-            os.makedirs(self.zeek_dir)
-        self.print(f"Storing zeek log files in {self.zeek_dir}")
-
-        if self.input_type == "interface":
-            # slips is running with -i or -ap
-            # We don't want to stop bro if we read from an interface
-            self.bro_timeout = float("inf")
-            # format is {interface: zeek_dir_path}
-            interfaces_to_monitor = {}
-            if self.args.interface:
-                interfaces_to_monitor.update(
-                    {
-                        self.args.interface: {
-                            "dir": self.zeek_dir,
-                            "type": "main_interface",
-                        }
-                    }
-                )
-
-            elif self.args.access_point:
-                # slips is running in AP mode, we need to monitor the 2
-                # interfaces, wifi and eth.
-                for _type, interface in self.db.get_ap_info().items():
-                    # _type can be 'wifi_interface' or "ethernet_interface"
-                    dir_to_store_interface_logs = os.path.join(
-                        self.zeek_dir, interface
-                    )
-                    interfaces_to_monitor.update(
-                        {
-                            interface: {
-                                "dir": dir_to_store_interface_logs,
-                                "type": _type,
-                            }
-                        }
-                    )
-            for interface, interface_info in interfaces_to_monitor.items():
-                interface_dir = interface_info["dir"]
-                if not os.path.exists(interface_dir):
-                    os.makedirs(interface_dir)
-
-                if interface_info["type"] == "ethernet_interface":
-                    cidr = utils.get_cidr_of_interface(interface)
-                    tcpdump_filter = f"dst net {cidr}"
-                    logline = yellow(
-                        f"Zeek is logging incoming traffic only "
-                        f"for interface: {interface}."
-                    )
-                    self.print(logline)
-                else:
-                    tcpdump_filter = None
-                    logline = yellow(
-                        f"Zeek is logging all traffic on interface:"
-                        f" {interface}."
-                    )
-                    self.print(logline)
-
-                self.init_zeek(
-                    interface_dir, interface, tcpdump_filter=tcpdump_filter
-                )
-
-        elif self.input_type == "pcap":
-            # This is for stopping the inputprocess
-            # if bro does not receive any new line while reading a pcap
-            self.bro_timeout = 30
-            self.init_zeek(self.zeek_dir, self.given_path)
-
-        self.lines = self.read_zeek_files()
+    def handle_pcap(self) -> bool:
+        self.lines = self.zeek_reader.read("pcap", self.given_path)
         self.print_lines_read()
         self.mark_self_as_done_processing()
-        self.stop_observer()
-        return True
+
+    def handle_interface(self):
+        self.lines = self.zeek_reader.read("interface", self.given_path)
+        self.print_lines_read()
+        self.mark_self_as_done_processing()
 
     def shutdown_gracefully(self):
         self.print(f"Stopping. Total lines read: {self.lines}")
@@ -295,8 +196,10 @@ class Input(ICore):
             self.zeek_rotator.stop()
 
         if hasattr(self, "zeek_reader"):
-            self.zeek_reader.shutdown_gracefully()
 
+            self.zeek_reader.shutdown_gracefully()
+            if hasattr(self.zeek_reader, "observer"):
+                self.zeek_reader.observer.stop()
         return True
 
     def handle_cyst(self):
@@ -329,26 +232,45 @@ class Input(ICore):
         self.print_lines_read()
         self.mark_self_as_done_processing()
 
+    def init_zeek_reader_if_needed(self):
+        input_that_require_zeek = {
+            "zeek_folder",
+            "zeek_log_file",
+            "pcap",
+            "interface",
+        }
+
+        if self.input_type in input_that_require_zeek:
+            self.zeek_reader = ZeekReader(
+                self.logger,
+                self.output_dir,
+                self.redis_port,
+                self.conf,
+                self.ppid,
+                self.profiler_queue,
+                self.input_type,
+                args=self.args,
+                input_proc=self,
+                zeek_dir=self.zeek_dir,
+                zeek_or_bro=self.zeek_or_bro,
+                cli_packet_filter=self.cli_packet_filter,
+            )
+
     def main(self):
-        if self.is_running_non_stop:
-            # this thread should be started from run() to get the PID of
-            # inputprocess and have shared variables
-            # if it started from __init__() it will have the PID of slips.py
-            # therefore, any changes made to the shared variables in
-            # inputprocess will not appear in the thread
-            # delete old zeek-date.log files
-            self.zeek_rotator = ZeekRotator()
-            self.zeek_rotator.start()
+        """
+        PS: this main doesnt run in a loop like modst slips modules
+        """
+        self.init_zeek_reader_if_needed()
 
         input_handlers = {
             "stdin": self.read_from_stdin,
-            "zeek_folder": self.read_zeek_folder,
+            "zeek_folder": self.handle_zeek_folder,
             "zeek_log_file": self.handle_zeek_log_file,
             "nfdump": self.handle_nfdump,
             "binetflow": self.handle_binetflow,
             "binetflow-tabs": self.handle_binetflow,
-            "pcap": self.handle_pcap_and_interface,
-            "interface": self.handle_pcap_and_interface,
+            "pcap": self.handle_pcap,
+            "interface": self.handle_interface,
             "suricata": self.handle_suricata,
             "CYST": self.handle_cyst,
         }
