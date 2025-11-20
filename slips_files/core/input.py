@@ -85,15 +85,6 @@ class Input(ICore):
             self.profiler_queue,
             self.input_type,
         )
-        self.stdin_reader = StdinReader(
-            self.logger,
-            self.output_dir,
-            self.redis_port,
-            self.conf,
-            self.ppid,
-            self.profiler_queue,
-            self.input_type,
-        )
 
         self.read_lines_delay = 0
         # when input is done processing, it reeleases this semaphore, that's how the process_manager knows it's done
@@ -476,6 +467,15 @@ class Input(ICore):
         return sys.stdin
 
     def read_from_stdin(self) -> bool:
+        self.stdin_reader = StdinReader(
+            self.logger,
+            self.output_dir,
+            self.redis_port,
+            self.conf,
+            self.ppid,
+            self.profiler_queue,
+            self.input_type,
+        )
         return self.stdin_reader.read(self.line_type)
 
     def handle_binetflow(self):
