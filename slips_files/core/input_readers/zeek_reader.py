@@ -18,8 +18,6 @@ from watchdog.observers import Observer
 from slips_files.common.style import yellow
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-
-
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
 from slips_files.common.abstracts.iinput_reader import IInputReader
@@ -28,12 +26,28 @@ from slips_files.core.zeek_cmd_builder import ZeekCommandBuilder
 
 
 class ZeekRotator:
-    def __init__(self):
+    def __init__(
+        self,
+        input_proc,
+        open_file_handlers_lock=threading.Lock(),
+    ):
+        self.input_proc = input_proc
+        self.open_file_handles_lock = open_file_handlers_lock
+
+        self.time_rotated = 0
+        self.to_be_deleted: List[str] = []
+
+        self.read_configuration()
+
         self.remover_thread = threading.Thread(
             target=self.remove_old_zeek_files,
             daemon=True,
             name="input_remover_thread",
         )
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.keep_rotated_files_for = conf.keep_rotated_files_for()
 
     def start(self):
         self.remover_thread.start()
@@ -65,8 +79,7 @@ class ZeekRotator:
 
                 # don't allow inputprocess to access the
                 # open_file_handlers dict until this thread sleeps again
-                lock = threading.Lock()
-                lock.acquire()
+                self.open_file_handles_lock.acquire()
                 try:
                     # close slips' open handles
                     self.open_file_handlers[new_log_file].close()
@@ -84,7 +97,30 @@ class ZeekRotator:
                         datetime.datetime.now(), "unixtimestamp"
                     )
                 )
-                lock.release()
+                self.open_file_handles_lock.release()
+
+    def check_if_time_to_del_rotated_files(self):
+        """
+        After a specific period (keep_rotated_files_for), slips deletes all rotated files
+        Check if it's time to do so
+        """
+        if not hasattr(self, "time_rotated"):
+            return False
+
+        now = float(
+            utils.convert_ts_format(datetime.datetime.now(), "unixtimestamp")
+        )
+        time_to_delete = now >= self.time_rotated + self.keep_rotated_files_for
+        if time_to_delete:
+            # getting here means that the rotated
+            # files are kept enough ( keep_rotated_files_for seconds)
+            # and it's time to delete them
+            for file in self.to_be_deleted:
+                try:
+                    os.remove(file)
+                except FileNotFoundError:
+                    pass
+            self.to_be_deleted = []
 
     def stop(self):
         try:
@@ -94,9 +130,10 @@ class ZeekRotator:
 
 
 class ZeekObserver:
-    def __init__(self, db: DBManager):
+    def __init__(self, db: DBManager, zeek_dir, pcap_or_interface):
         self.db = db
         self.event_observer = None
+        self.start(zeek_dir, pcap_or_interface)
 
     def start(self, zeek_dir: str, pcap_or_interface: str):
         """
@@ -108,7 +145,6 @@ class ZeekObserver:
         # Get the file eventhandler
         # We have to set event_handler and event_observer before running zeek.
         event_handler = FileEventHandler(zeek_dir, self.db, pcap_or_interface)
-
         self.event_observer = Observer()
         # Schedule the observer with the callback on the file handler
         self.event_observer.schedule(event_handler, zeek_dir, recursive=True)
@@ -141,10 +177,10 @@ class ZeekReader(IInputReader):
     ):
         self.args = args
         self.bro_timeout = None
-        self.open_file_handlers = {}
+        self.open_file_handles = {}
         self.zeek_threads = []
         self.input_proc = input_proc
-        self.zeek_dir = (zeek_dir,)
+        self.zeek_dir = zeek_dir
         self.zeek_or_bro = zeek_or_bro
 
         self.packet_filter = False
@@ -153,12 +189,12 @@ class ZeekReader(IInputReader):
 
         self.read_configuration()
         self.zeek_pids = []
-
-        # zeek rotated files to be deleted after a period of time
-        self.to_be_deleted = []
         self.zeek_threads = []
         self.observer = None
         self.lines = 0
+        self.is_running_non_stop: bool = self.db.is_running_non_stop()
+        self.open_file_handles_lock = threading.Lock()
+        self.start_rotator()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -168,13 +204,30 @@ class ZeekReader(IInputReader):
         self.tcp_inactivity_timeout = conf.tcp_inactivity_timeout()
         self.enable_rotation = conf.rotation()
         self.rotation_period = conf.rotation_period()
-        self.keep_rotated_files_for = conf.keep_rotated_files_for()
 
     def read(self, _type: str, given_path: str):
         if _type == "zeek_folder":
-            self.read_zeek_folder(given_path)
+            self.handle_zeek_folder(given_path)
         elif _type == "zeek_log_file":
             self.handle_zeek_log_file(given_path)
+        elif _type == "interface":
+            self.handle_interface()
+        elif _type == "pcap":
+            self.handle_pcap(given_path)
+
+    def start_rotator(self):
+        if not self.is_running_non_stop:
+            return
+        # this thread should be started from run() to get the PID of
+        # inputprocess and have shared variables
+        # if it started from __init__() it will have the PID of slips.py
+        # therefore, any changes made to the shared variables in
+        # inputprocess will not appear in the thread
+        # delete old zeek-date.log files
+        self.zeek_rotator = ZeekRotator(
+            self.input_proc, self.open_file_handles_lock
+        )
+        self.zeek_rotator.start()
 
     def shutdown_gracefully(self):
         self.observer.stop()
@@ -184,7 +237,7 @@ class ZeekReader(IInputReader):
         except Exception:
             pass
 
-        if hasattr(self, "open_file_handlers"):
+        if hasattr(self, "open_file_handles"):
             self.close_all_handles()
 
         # kill zeek manually if it started bc it's detached from this
@@ -208,8 +261,7 @@ class ZeekReader(IInputReader):
         PS: this function contains a call to self.read_zeek_files that
         keeps running until slips stops
         """
-        self.observer = ZeekObserver(self.db)
-        self.observer.start(zeek_dir, pcap_or_interface)
+        self.observer = ZeekObserver(self.db, zeek_dir, pcap_or_interface)
 
         zeek_files = os.listdir(zeek_dir)
         if len(zeek_files) > 0:
@@ -284,15 +336,13 @@ class ZeekReader(IInputReader):
         # Update which files we know about
         try:
             # We already opened this file
-            file_handler = self.open_file_handlers[filename]
+            file_handle = self.open_file_handles[filename]
         except KeyError:
             # First time opening this file.
             try:
-                file_handler = open(filename, "r")
-                lock = threading.Lock()
-                lock.acquire()
-                self.open_file_handlers[filename] = file_handler
-                lock.release()
+                file_handle = open(filename, "r")
+                with self.open_file_handles_lock:
+                    self.open_file_handles[filename] = file_handle
                 # now that we replaced the old handle with the newly created file handle
                 # delete the old .log file, that has a timestamp in its name.
             except FileNotFoundError:
@@ -306,7 +356,7 @@ class ZeekReader(IInputReader):
                 # created yet simply continue until the new log file is
                 # created and added to the zeek_files list
                 return False
-        return file_handler
+        return file_handle
 
     def reached_timeout(self) -> bool:
         # If we don't have any cached lines to send,
@@ -405,9 +455,10 @@ class ZeekReader(IInputReader):
         # We reach here after the break produced
         # if no zeek files are being updated.
         # No more files to read. Close the files
-        for file, handle in self.open_file_handlers.items():
-            self.print(f"Closing file {file}", 2, 0)
-            handle.close()
+        with self.open_file_handles_lock:
+            for file, handle in self.open_file_handles.items():
+                self.print(f"Closing file {file}", 2, 0)
+                handle.close()
 
     def run_zeek(self, zeek_logs_dir, pcap_or_interface, tcpdump_filter=None):
         """
@@ -457,34 +508,11 @@ class ZeekReader(IInputReader):
         cmd = builder.build(pcap_or_interface, tcpdump_filter=tcpdump_filter)
         return cmd
 
-    def check_if_time_to_del_rotated_files(self):
-        """
-        After a specific period (keep_rotated_files_for), slips deletes all rotated files
-        Check if it's time to do so
-        """
-        if not hasattr(self, "time_rotated"):
-            return False
-
-        now = float(
-            utils.convert_ts_format(datetime.datetime.now(), "unixtimestamp")
-        )
-        time_to_delete = now >= self.time_rotated + self.keep_rotated_files_for
-        if time_to_delete:
-            # getting here means that the rotated
-            # files are kept enough ( keep_rotated_files_for seconds)
-            # and it's time to delete them
-            for file in self.to_be_deleted:
-                try:
-                    os.remove(file)
-                except FileNotFoundError:
-                    pass
-            self.to_be_deleted = []
-
     def read_zeek_files(self) -> int:
         lines = 0
         try:
             self.zeek_files: Dict[str, str] = self.db.get_all_zeek_files()
-            self.open_file_handlers = {}
+
             # stores zeek_log_file_name: timestamp of the last flow read from
             # that file
             self.file_time = {}
@@ -493,7 +521,8 @@ class ZeekReader(IInputReader):
             self.last_updated_file_time = datetime.datetime.now()
 
             while not self.input_proc.should_stop():
-                self.check_if_time_to_del_rotated_files()
+                if hasattr(self, "zeek_rotator"):
+                    self.zeek_rotator.check_if_time_to_del_rotated_files()
                 # Go to all the files generated by Zeek and read 1
                 # line from each of them
                 for filename, interface in self.zeek_files.items():
@@ -524,8 +553,8 @@ class ZeekReader(IInputReader):
                 del self.cache_lines[file_with_earliest_flow]
                 del self.file_time[file_with_earliest_flow]
 
-                # Get the new list of files. Since new files may have been created by
-                # Zeek while we were processing them.
+                # Get the new list of files. Since new files may have been
+                # created by Zeek while we were processing them.
                 self.zeek_files: Dict[str, str] = self.db.get_all_zeek_files()
 
             self.close_all_handles()
@@ -564,7 +593,7 @@ class ZeekReader(IInputReader):
         self.bro_timeout = 30
         self.lines = self.read_zeek_files()
 
-    def read_zeek_folder(self, given_path):
+    def handle_zeek_folder(self, given_path):
         """
         This function runs when
         - a finite zeek dir is given to slips with -f
@@ -588,8 +617,7 @@ class ZeekReader(IInputReader):
         if self.args.growing:
             interface = self.args.interface
 
-        self.observer = ZeekObserver(self.db)
-        self.observer.start(self.zeek_dir, interface)
+        self.observer = ZeekObserver(self.db, self.zeek_dir, interface)
 
         # if 1 file is zeek tabs the rest should be the same
         if not hasattr(self, "is_zeek_tabs"):
