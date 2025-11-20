@@ -564,7 +564,7 @@ class EvidenceHandler(ICore):
 
                 try:
                     to_log = {
-                        "to_log": evidence,
+                        "to_log": f"time now: {time.time()} .. {evidence}",
                         "where": "alerts.json",
                     }
                     self.evidence_logger_q.put(to_log)

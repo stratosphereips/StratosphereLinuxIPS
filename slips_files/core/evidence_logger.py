@@ -1,4 +1,3 @@
-import json
 import queue
 import threading
 import traceback
@@ -37,8 +36,7 @@ class EvidenceLogger:
 
     def print_to_alerts_json(self, idmef_evidence: dict):
         try:
-            json.dump(idmef_evidence, self.jsonfile)
-            self.jsonfile.write("\n")
+            self.jsonfile.write(f"{idmef_evidence}\n")
         except KeyboardInterrupt:
             return
         except Exception:

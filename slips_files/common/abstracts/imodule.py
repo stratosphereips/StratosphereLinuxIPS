@@ -16,7 +16,7 @@ from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
-from time import time
+import time
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
@@ -171,8 +171,9 @@ class IModule(ABC, Process):
                     self.channel_tracker[channel][
                         "last_log_time"
                     ] = time.time()
-                    self.log_latency(message)
-
+                    self.log_latency(
+                        f"time now: {time.time()} .. msg:" f" {message}"
+                    )
                 return message
 
             self.channel_tracker[channel]["msg_received"] = False
