@@ -41,6 +41,7 @@ import multiprocessing
 from slips_files.common.style import yellow
 from slips_files.core.helpers.filemonitor import FileEventHandler
 from slips_files.core.input_readers.binetflow_reader import BinetflowReader
+from slips_files.core.input_readers.cyst_reader import CYSTReader
 from slips_files.core.input_readers.nfdump_reader import NfdumpReader
 from slips_files.core.input_readers.stdin_reader import StdinReader
 from slips_files.core.input_readers.suricata_reader import SuricataReader
@@ -826,43 +827,18 @@ class Input(ICore):
             )
 
     def handle_cyst(self):
-        """
-        Read flows sent by any external module (for example the cYST module)
-        Supported flows are of type zeek conn log
-        """
-        # slips supports reading zeek json conn.log only using CYST
-        # this type is passed here by slips.py, so in the future
-        # to support more types, modify slips.py
-        if self.line_type != "zeek":
-            return
-
-        channel = self.db.subscribe("new_module_flow")
-        self.channels.update({"new_module_flow": channel})
-        while not self.should_stop():
-            # the CYST module will send msgs to this channel when it read s a new flow from the CYST UDS
-            # todo when to break? cyst should send something like stop?
-
-            msg = self.get_msg("new_module_flow")
-            if msg and msg["data"] == "stop_process":
-                self.shutdown_gracefully()
-                return True
-
-            if msg := self.get_msg("new_module_flow"):
-                msg: str = msg["data"]
-                msg = json.loads(msg)
-                flow = msg["flow"]
-                src_module = msg["module"]
-                line_info = {
-                    "type": "external_module",
-                    "module": src_module,
-                    "line_type": self.line_type,
-                    "data": flow,
-                }
-                self.print(f"   > Sent Line: {line_info}", 0, 3)
-                self.give_profiler(line_info)
-                self.lines += 1
-                self.print("Done reading 1 CYST flow.\n ", 0, 3)
-
+        cyst_reader = CYSTReader(
+            self.logger,
+            self.output_dir,
+            self.redis_port,
+            self.conf,
+            self.ppid,
+            self.profiler_queue,
+            self.input_type,
+            input_proc=self,
+        )
+        self.lines = cyst_reader.read(self.line_type)
+        self.print_lines_read()
         self.mark_self_as_done_processing()
 
     def give_profiler(self, line):
@@ -879,7 +855,6 @@ class Input(ICore):
         self.lines = self.nfdump_reader.read(self.given_path)
         self.print_lines_read()
         self.mark_self_as_done_processing()
-        return True
 
     def main(self):
         if self.is_running_non_stop:
