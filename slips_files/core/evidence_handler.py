@@ -28,7 +28,6 @@ from typing import (
     Dict,
     Optional,
 )
-from datetime import datetime
 from os import path
 import sys
 import os
@@ -562,151 +561,163 @@ class EvidenceHandler(ICore):
                         f"Problem converting {evidence} to dict: " f"{e}", 0, 1
                     )
                     continue
-                profileid: str = str(evidence.profile)
-                twid: str = str(evidence.timewindow)
-                evidence_type: EvidenceType = evidence.evidence_type
-                timestamp: str = evidence.timestamp
 
-                # the database naturally has evidence before they reach
-                # this module. and sometime when this module queries
-                # evidence for a specific timewindow, the db returns all
-                # evidence including the ones the werent processed here yet.
-                # this marking of ev. as processed is to avoid that.
-                # so that get_evidence_for_tw() call below won't return
-                # unprocessed evidence.
-                self.db.mark_evidence_as_processed(evidence.id)
-
-                if self.whitelist.is_whitelisted_evidence(evidence):
-                    self.db.cache_whitelisted_evidence_id(evidence.id)
-                    # Modules add evidence to the db before
-                    # reaching this point, now remove evidence from db so
-                    # it could be completely ignored
-                    self.db.delete_evidence(profileid, twid, evidence.id)
-                    self.print(
-                        f"{self.whitelist.get_bloom_filters_stats()}", 2, 0
-                    )
-                    continue
-
-                # convert time to local timezone
-                if self.is_running_non_stop:
-                    timestamp: datetime = utils.convert_to_local_timezone(
-                        timestamp
-                    )
-                flow_datetime = utils.convert_ts_format(timestamp, "iso")
-
-                evidence: Evidence = (
-                    self.formatter.add_threat_level_to_evidence_description(
-                        evidence
-                    )
-                )
-
-                evidence_to_log: str = self.formatter.get_evidence_to_log(
-                    evidence,
-                    flow_datetime,
-                )
-                # Add the evidence to alerts.log
-                self.add_to_log_file(evidence_to_log)
-
-                self.increment_attack_counter(
-                    evidence.profile.ip, evidence.victim, evidence_type
-                )
-
-                past_evidence_ids: List[str] = (
-                    self.get_evidence_that_were_part_of_a_past_alert(
-                        profileid, twid
-                    )
-                )
-                # filtered evidence dont add to the acc threat level
-                if not self.is_filtered_evidence(evidence, past_evidence_ids):
-                    accumulated_threat_level: float = (
-                        self.update_accumulated_threat_level(evidence)
-                    )
-                else:
-                    accumulated_threat_level: float = (
-                        self.db.get_accumulated_threat_level(profileid, twid)
-                    )
-
-                # add to alerts.json
-                self.add_evidence_to_json_log_file(
-                    evidence,
-                    accumulated_threat_level,
-                )
-
-                # stream every evidence toward exporting modules immediately
-                self.publish_single_evidence(evidence)
-
-                evidence_dict: dict = utils.to_dict(evidence)
-                self.db.publish("report_to_peers", json.dumps(evidence_dict))
-
-                # This is the part to detect if the accumulated
-                # evidence was enough for generating a detection
-                # The detection should be done in attacks per minute.
-                # The parameter in the configuration
-                # is attacks per minute
-                # So find out how many attacks corresponds
-                # to the width we are using
-                if (
-                    accumulated_threat_level
-                    >= self.detection_threshold_in_this_width
-                ):
-                    tw_evidence: Dict[str, Evidence]
-                    tw_evidence = self.get_evidence_for_tw(profileid, twid)
-                    if tw_evidence:
-                        tw_start, tw_end = self.db.get_tw_limits(
-                            profileid, twid
-                        )
-                        evidence.timewindow.start_time = tw_start
-                        evidence.timewindow.end_time = tw_end
-
-                        alert: Alert = Alert(
-                            profile=evidence.profile,
-                            timewindow=evidence.timewindow,
-                            last_evidence=evidence,
-                            accumulated_threat_level=accumulated_threat_level,
-                            correl_id=list(tw_evidence.keys()),
-                        )
-                        self.handle_new_alert(alert, tw_evidence)
-
-            if msg := self.get_msg("new_blame"):
-                data = msg["data"]
                 try:
-                    data = json.loads(data)
-                except json.decoder.JSONDecodeError:
-                    self.print(
-                        "Error in the report received from p2ptrust module"
-                    )
-                    return
-                # The available values for the following variables are
-                # defined in go_director
+                    to_log = {
+                        "to_log": evidence,
+                        "where": "alerts.json",
+                    }
+                    self.evidence_logger_q.put(to_log)
+                except KeyboardInterrupt:
+                    return True
+                except Exception as e:
+                    self.handle_unable_to_log(evidence, e)
 
-                # available key types: "ip"
-                # key_type = data['key_type']
-
-                # if the key type is ip, the ip is validated
-                key = data["key"]
-
-                # available evaluation types: 'score_confidence'
-                # evaluation_type = data['evaluation_type']
-
-                # this is the score_confidence received from the peer
-                evaluation = data["evaluation"]
-                # {"key_type": "ip", "key": "1.2.3.40",
-                # "evaluation_type": "score_confidence",
-                # "evaluation": { "score": 0.9, "confidence": 0.6 }}
-                ip_info = {"p2p4slips": evaluation}
-                ip_info["p2p4slips"].update({"ts": time.time()})
-                self.db.store_blame_report(key, evaluation)
-
-                blocking_data = {
-                    "ip": key,
-                    "block": True,
-                    "to": True,
-                    "from": True,
-                    # in which localnet is this IP?
-                    # to which interface does it belong?
-                    "interface": utils.get_interface_of_ip(
-                        key, self.db, self.args
-                    ),
-                }
-                blocking_data = json.dumps(blocking_data)
-                self.db.publish("new_blocking", blocking_data)
+            #     profileid: str = str(evidence.profile)
+            #     twid: str = str(evidence.timewindow)
+            #     evidence_type: EvidenceType = evidence.evidence_type
+            #     timestamp: str = evidence.timestamp
+            #
+            #     # the database naturally has evidence before they reach
+            #     # this module. and sometime when this module queries
+            #     # evidence for a specific timewindow, the db returns all
+            #     # evidence including the ones the werent processed here yet.
+            #     # this marking of ev. as processed is to avoid that.
+            #     # so that get_evidence_for_tw() call below won't return
+            #     # unprocessed evidence.
+            #     self.db.mark_evidence_as_processed(evidence.id)
+            #
+            #     if self.whitelist.is_whitelisted_evidence(evidence):
+            #         self.db.cache_whitelisted_evidence_id(evidence.id)
+            #         # Modules add evidence to the db before
+            #         # reaching this point, now remove evidence from db so
+            #         # it could be completely ignored
+            #         self.db.delete_evidence(profileid, twid, evidence.id)
+            #         self.print(
+            #             f"{self.whitelist.get_bloom_filters_stats()}", 2, 0
+            #         )
+            #         continue
+            #
+            #     # convert time to local timezone
+            #     if self.is_running_non_stop:
+            #         timestamp: datetime = utils.convert_to_local_timezone(
+            #             timestamp
+            #         )
+            #     flow_datetime = utils.convert_ts_format(timestamp, "iso")
+            #
+            #     evidence: Evidence = (
+            #         self.formatter.add_threat_level_to_evidence_description(
+            #             evidence
+            #         )
+            #     )
+            #
+            #     evidence_to_log: str = self.formatter.get_evidence_to_log(
+            #         evidence,
+            #         flow_datetime,
+            #     )
+            #     # Add the evidence to alerts.log
+            #     self.add_to_log_file(evidence_to_log)
+            #
+            #     self.increment_attack_counter(
+            #         evidence.profile.ip, evidence.victim, evidence_type
+            #     )
+            #
+            #     past_evidence_ids: List[str] = (
+            #         self.get_evidence_that_were_part_of_a_past_alert(
+            #             profileid, twid
+            #         )
+            #     )
+            #     # filtered evidence dont add to the acc threat level
+            #     if not self.is_filtered_evidence(evidence, past_evidence_ids):
+            #         accumulated_threat_level: float = (
+            #             self.update_accumulated_threat_level(evidence)
+            #         )
+            #     else:
+            #         accumulated_threat_level: float = (
+            #             self.db.get_accumulated_threat_level(profileid, twid)
+            #         )
+            #
+            #     # add to alerts.json
+            #     self.add_evidence_to_json_log_file(
+            #         evidence,
+            #         accumulated_threat_level,
+            #     )
+            #
+            #     # stream every evidence toward exporting modules immediately
+            #     self.publish_single_evidence(evidence)
+            #
+            #     evidence_dict: dict = utils.to_dict(evidence)
+            #     self.db.publish("report_to_peers", json.dumps(evidence_dict))
+            #
+            #     # This is the part to detect if the accumulated
+            #     # evidence was enough for generating a detection
+            #     # The detection should be done in attacks per minute.
+            #     # The parameter in the configuration
+            #     # is attacks per minute
+            #     # So find out how many attacks corresponds
+            #     # to the width we are using
+            #     if (
+            #         accumulated_threat_level
+            #         >= self.detection_threshold_in_this_width
+            #     ):
+            #         tw_evidence: Dict[str, Evidence]
+            #         tw_evidence = self.get_evidence_for_tw(profileid, twid)
+            #         if tw_evidence:
+            #             tw_start, tw_end = self.db.get_tw_limits(
+            #                 profileid, twid
+            #             )
+            #             evidence.timewindow.start_time = tw_start
+            #             evidence.timewindow.end_time = tw_end
+            #
+            #             alert: Alert = Alert(
+            #                 profile=evidence.profile,
+            #                 timewindow=evidence.timewindow,
+            #                 last_evidence=evidence,
+            #                 accumulated_threat_level=accumulated_threat_level,
+            #                 correl_id=list(tw_evidence.keys()),
+            #             )
+            #             self.handle_new_alert(alert, tw_evidence)
+            #
+            # if msg := self.get_msg("new_blame"):
+            #     data = msg["data"]
+            #     try:
+            #         data = json.loads(data)
+            #     except json.decoder.JSONDecodeError:
+            #         self.print(
+            #             "Error in the report received from p2ptrust module"
+            #         )
+            #         return
+            #     # The available values for the following variables are
+            #     # defined in go_director
+            #
+            #     # available key types: "ip"
+            #     # key_type = data['key_type']
+            #
+            #     # if the key type is ip, the ip is validated
+            #     key = data["key"]
+            #
+            #     # available evaluation types: 'score_confidence'
+            #     # evaluation_type = data['evaluation_type']
+            #
+            #     # this is the score_confidence received from the peer
+            #     evaluation = data["evaluation"]
+            #     # {"key_type": "ip", "key": "1.2.3.40",
+            #     # "evaluation_type": "score_confidence",
+            #     # "evaluation": { "score": 0.9, "confidence": 0.6 }}
+            #     ip_info = {"p2p4slips": evaluation}
+            #     ip_info["p2p4slips"].update({"ts": time.time()})
+            #     self.db.store_blame_report(key, evaluation)
+            #
+            #     blocking_data = {
+            #         "ip": key,
+            #         "block": True,
+            #         "to": True,
+            #         "from": True,
+            #         # in which localnet is this IP?
+            #         # to which interface does it belong?
+            #         "interface": utils.get_interface_of_ip(
+            #             key, self.db, self.args
+            #         ),
+            #     }
+            #     blocking_data = json.dumps(blocking_data)
+            #     self.db.publish("new_blocking", blocking_data)
