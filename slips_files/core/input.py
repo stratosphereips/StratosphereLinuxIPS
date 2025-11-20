@@ -41,6 +41,7 @@ import multiprocessing
 from slips_files.common.style import yellow
 from slips_files.core.helpers.filemonitor import FileEventHandler
 from slips_files.core.input_readers.nfdump_reader import NfdumpReader
+from slips_files.core.input_readers.stdin_reader import StdinReader
 from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
 from slips_files.core.zeek_cmd_builder import ZeekCommandBuilder
 
@@ -73,6 +74,15 @@ class Input(ICore):
         self.zeek_or_bro: str = zeek_or_bro
 
         self.nfdump_reader = NfdumpReader(
+            self.logger,
+            self.output_dir,
+            self.redis_port,
+            self.conf,
+            self.ppid,
+            self.profiler_queue,
+            self.input_type,
+        )
+        self.stdin_reader = StdinReader(
             self.logger,
             self.output_dir,
             self.redis_port,
@@ -496,31 +506,7 @@ class Input(ICore):
         return sys.stdin
 
     def read_from_stdin(self) -> bool:
-        self.print("Receiving flows from stdin.")
-        for line in self.stdin():
-            if line == "\n":
-                continue
-            if line == "done":
-                break
-            # slips supports reading zeek json conn.log only using stdin,
-            # tabs aren't supported
-            if self.line_type == "zeek":
-                try:
-                    line = json.loads(line)
-                except json.decoder.JSONDecodeError:
-                    self.print("Invalid json line")
-                    continue
-
-            line_info = {
-                "type": "stdin",
-                "line_type": self.line_type,
-                "data": line,
-            }
-            self.print(f"	> Sent Line: {line_info}", 0, 3)
-            self.give_profiler(line_info)
-            self.lines += 1
-            self.print("Done reading 1 flow.\n ", 0, 3)
-        return True
+        return self.stdin_reader.read(self.line_type)
 
     def handle_binetflow(self):
         # the number of flows returned by get_flows_number contains the header

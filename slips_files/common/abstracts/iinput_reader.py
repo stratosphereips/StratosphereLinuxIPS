@@ -22,6 +22,7 @@ class IInputReader(ABC):
         profiler_queue,
         input_type,
         testing=False,
+        **kwargs
     ):
         """
         Common initializations for all readers
