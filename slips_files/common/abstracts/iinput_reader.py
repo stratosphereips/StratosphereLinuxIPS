@@ -60,6 +60,39 @@ class IInputReader(ABC):
         # if necessary until a free slot is available
         self.profiler_queue.put(to_send)
 
+    def _make_gen(self, reader):
+        """yeilds (64 kilobytes) at a time from the file"""
+        while True:
+            b = reader(2**16)
+            if not b:
+                break
+            yield b
+
+    def get_flows_number(self, file: str) -> int:
+        """
+        returns the number of flows/lines in a given file
+        """
+        # using wc -l doesn't count last line of the file if it does not have end of line character
+        # using  grep -c "" returns incorrect line numbers sometimes
+        # this method is the most efficient and accurate i found online
+        # https://stackoverflow.com/a/68385697/11604069
+
+        with open(file, "rb") as f:
+            # counts the occurances of \n in a file
+            count = sum(buf.count(b"\n") for buf in self._make_gen(f.raw.read))
+
+        if hasattr(self, "is_zeek_tabs") and self.is_zeek_tabs:
+            # subtract comment lines in zeek tab files,
+            # they shouldn't be considered flows
+
+            # NOTE: the counting of \n returns the actual lines-1 bc the
+            # very last line of a zeek tab log file doesn't contain a \n
+            # so instead of subtracting the 9 comment lines, we'll subtract
+            # 8 bc the very last comment line isn't even included in count
+            count -= 9
+
+        return count
+
     @abstractmethod
     def read(self, *args):
         """

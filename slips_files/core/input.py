@@ -42,6 +42,7 @@ from slips_files.common.style import yellow
 from slips_files.core.helpers.filemonitor import FileEventHandler
 from slips_files.core.input_readers.nfdump_reader import NfdumpReader
 from slips_files.core.input_readers.stdin_reader import StdinReader
+from slips_files.core.input_readers.suricata_reader import SuricataReader
 from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
 from slips_files.core.zeek_cmd_builder import ZeekCommandBuilder
 
@@ -396,39 +397,6 @@ class Input(ICore):
 
         return self.lines
 
-    def _make_gen(self, reader):
-        """yeilds (64 kilobytes) at a time from the file"""
-        while True:
-            b = reader(2**16)
-            if not b:
-                break
-            yield b
-
-    def get_flows_number(self, file: str) -> int:
-        """
-        returns the number of flows/lines in a given file
-        """
-        # using wc -l doesn't count last line of the file if it does not have end of line character
-        # using  grep -c "" returns incorrect line numbers sometimes
-        # this method is the most efficient and accurate i found online
-        # https://stackoverflow.com/a/68385697/11604069
-
-        with open(file, "rb") as f:
-            # counts the occurances of \n in a file
-            count = sum(buf.count(b"\n") for buf in self._make_gen(f.raw.read))
-
-        if hasattr(self, "is_zeek_tabs") and self.is_zeek_tabs:
-            # subtract comment lines in zeek tab files,
-            # they shouldn't be considered flows
-
-            # NOTE: the counting of \n returns the actual lines-1 bc the
-            # very last line of a zeek tab log file doesn't contain a \n
-            # so instead of subtracting the 9 comment lines, we'll subtract
-            # 8 bc the very last comment line isn't even included in count
-            count -= 9
-
-        return count
-
     def read_zeek_folder(self):
         """
         This function runs when
@@ -538,20 +506,17 @@ class Input(ICore):
         return True
 
     def handle_suricata(self):
-        self.total_flows = self.get_flows_number(self.given_path)
-        self.db.set_input_metadata({"total_flows": self.total_flows})
-        with open(self.given_path) as file_stream:
-            for t_line in file_stream:
-                line = {
-                    "type": "suricata",
-                    "data": t_line,
-                }
-                self.print(f"	> Sent Line: {line}", 0, 3)
-                if len(t_line.strip()) != 0:
-                    self.give_profiler(line)
-                self.lines += 1
-                if self.testing:
-                    break
+        suricata_reader = SuricataReader(
+            self.logger,
+            self.output_dir,
+            self.redis_port,
+            self.conf,
+            self.ppid,
+            self.profiler_queue,
+            self.input_type,
+        )
+        self.lines = suricata_reader.read(self.given_path)
+        self.print_lines_read()
         self.mark_self_as_done_processing()
         return True
 
