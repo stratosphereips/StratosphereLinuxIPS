@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import os
 import sys
 import traceback
 import warnings
@@ -15,6 +16,7 @@ from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
+from time import time
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
@@ -68,9 +70,16 @@ class IModule(ABC, Process):
         # received in that channel
         self.channel_tracker: Dict[str, Dict[str, bool]]
         self.channel_tracker = self.init_channel_tracker()
+        self.debugging_file = os.path.join(
+            self.output_dir, f"debugging_{self.name}.log"
+        )
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
+
+    def log_latency(self, txt):
+        with open(self.debugging_file, "a") as f:
+            f.write(f"{txt}\n")
 
     def init_channel_tracker(self) -> Dict[str, Dict[str, bool]]:
         """
@@ -153,9 +162,21 @@ class IModule(ABC, Process):
             if utils.is_msg_intended_for(message, channel):
                 self.channel_tracker[channel]["msg_received"] = True
                 self.db.incr_msgs_received_in_channel(self.name, channel)
+
+                # log the current msg every 10 mins
+                if (
+                    time.time()
+                    > self.channel_tracker[channel]["last_log_time"] + 10 * 60
+                ):
+                    self.channel_tracker[channel][
+                        "last_log_time"
+                    ] = time.time()
+                    self.log_latency(message)
+
                 return message
 
             self.channel_tracker[channel]["msg_received"] = False
+
         except KeyboardInterrupt:
             return None
 
