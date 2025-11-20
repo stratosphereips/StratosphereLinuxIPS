@@ -190,34 +190,22 @@ class Input(ICore):
         return True
 
     def handle_zeek_log_file(self):
-        """
-        Handles conn.log files given to slips directly,
-         and conn.log flows given to slips through CYST unix socket.
-        """
-        if (
-            utils.is_ignored_zeek_log_file(self.given_path)
-            and "cyst" not in self.given_path.lower()
-        ):
-            # unsupported file
-            return False
-
-        if os.path.exists(self.given_path):
-            # in case of CYST flows, the given path is 'cyst' and there's no
-            # way to get the total flows
-            self.is_zeek_tabs = self.is_zeek_tabs_file(self.given_path)
-            total_flows = self.get_flows_number(self.given_path)
-            self.db.set_input_metadata({"total_flows": total_flows})
-            self.total_flows = total_flows
-
-        # Add log file to database
-        self.db.add_zeek_file(self.given_path, "default")
-
-        # this timeout is the only thing that
-        # makes the read_zeek_files() return
-        # without it, it will keep listening forever for new zeek log files
-        # as we're running on an interface
-        self.bro_timeout = 30
-        self.lines = self.read_zeek_files()
+        self.zeek_reader = ZeekReader(
+            self.logger,
+            self.output_dir,
+            self.redis_port,
+            self.conf,
+            self.ppid,
+            self.profiler_queue,
+            self.input_type,
+            args=self.args,
+            input_proc=self,
+            zeek_dir=self.zeek_dir,
+            zeek_or_bro=self.zeek_or_bro,
+            cli_packet_filter=self.cli_packet_filter,
+        )
+        self.lines = self.zeek_reader.read("zeek_log_file", self.given_path)
+        self.print_lines_read()
         self.mark_self_as_done_processing()
         return True
 

@@ -139,7 +139,6 @@ class ZeekReader(IInputReader):
         cli_packet_filter=None,
     ):
         self.args = args
-        print(f"@@@@@@@@@@@@@@@@ self.args {self.args}")
         self.bro_timeout = None
         self.open_file_handlers = {}
         self.zeek_threads = []
@@ -173,6 +172,8 @@ class ZeekReader(IInputReader):
     def read(self, _type: str, given_path: str):
         if _type == "zeek_folder":
             self.read_zeek_folder(given_path)
+        elif _type == "zeek_log_file":
+            self.handle_zeek_log_file(given_path)
 
     def shutdown_gracefully(self):
         self.observer.stop()
@@ -479,7 +480,6 @@ class ZeekReader(IInputReader):
             self.to_be_deleted = []
 
     def read_zeek_files(self) -> int:
-        print("@@@@@@@@@@@@@@@@ inside read_zeek_files!!!!")
         lines = 0
         try:
             self.zeek_files: Dict[str, str] = self.db.get_all_zeek_files()
@@ -532,6 +532,36 @@ class ZeekReader(IInputReader):
             pass
 
         return lines
+
+    def handle_zeek_log_file(self, given_path):
+        """
+        Handles conn.log files given to slips directly,
+         and conn.log flows given to slips through CYST unix socket.
+        """
+        if (
+            utils.is_ignored_zeek_log_file(given_path)
+            and "cyst" not in given_path.lower()
+        ):
+            # unsupported file
+            return False
+
+        if os.path.exists(given_path):
+            # in case of CYST flows, the given path is 'cyst' and there's no
+            # way to get the total flows
+            self.is_zeek_tabs = self.is_zeek_tabs_file(given_path)
+            total_flows = self.get_flows_number(given_path)
+            self.db.set_input_metadata({"total_flows": total_flows})
+            self.total_flows = total_flows
+
+        # Add log file to database
+        self.db.add_zeek_file(given_path, "default")
+
+        # this timeout is the only thing that
+        # makes the read_zeek_files() return
+        # without it, it will keep listening forever for new zeek log files
+        # as we're running on an interface
+        self.bro_timeout = 30
+        self.lines = self.read_zeek_files()
 
     def read_zeek_folder(self, given_path):
         """
