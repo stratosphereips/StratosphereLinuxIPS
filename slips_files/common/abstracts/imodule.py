@@ -96,7 +96,7 @@ class IModule(ABC, Process):
         """
         tracker = {}
         for channel_name in self.channels:
-            tracker[channel_name] = {"msg_received": False}
+            tracker[channel_name] = {"msg_received": False, "last_log_time": 0}
         return tracker
 
     @abstractmethod
