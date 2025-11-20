@@ -39,7 +39,7 @@ class IInputReader(ABC):
         self.db = DBManager(
             self.logger, self.output_dir, self.redis_port, self.conf, self.ppid
         )
-        self.init()
+        self.init(**kwargs)
 
     @abstractmethod
     def init(self):

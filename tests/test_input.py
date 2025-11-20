@@ -24,7 +24,7 @@ def test_handle_pcap_and_interface(tmp_path, input_type, input_information):
     input.read_zeek_files = Mock()
     input.print_lines_read = Mock()
     input.mark_self_as_done_processing = Mock()
-    input.stop_observer = Mock()
+    input.stop = Mock()
     input.init_zeek = Mock()
 
     with patch("os.makedirs"), patch("os.path.exists", return_value=True):
@@ -35,7 +35,7 @@ def test_handle_pcap_and_interface(tmp_path, input_type, input_information):
     input.read_zeek_files.assert_called_once()
     input.print_lines_read.assert_called_once()
     input.mark_self_as_done_processing.assert_called_once()
-    input.stop_observer.assert_called_once()
+    input.stop.assert_called_once()
 
     # Clean up any directories created (safe guard)
     if os.path.exists(input.zeek_dir):
@@ -60,8 +60,8 @@ def test_read_zeek_folder(zeek_dir: str, is_tabs: bool):
     input.db.is_growing_zeek_dir.return_value = False
     input.mark_process_as_done_processing = Mock()
     input.mark_process_as_done_processing.return_value = True
-    input.start_observer = Mock()
-    input.start_observer.return_value = True
+    input.start = Mock()
+    input.start.return_value = True
     assert input.read_zeek_folder() is True
 
 
@@ -358,7 +358,7 @@ def test_shutdown_gracefully_all_components_active():
      (open files, zeek, remover thread) are active.
     """
     input_process = ModuleFactory().create_input_obj("", "zeek_log_file")
-    input_process.stop_observer = MagicMock(return_value=True)
+    input_process.stop = MagicMock(return_value=True)
     input_process.stop_queues = MagicMock(return_value=True)
     input_process.remover_thread = MagicMock()
     input_process.remover_thread.start()
@@ -379,7 +379,7 @@ def test_shutdown_gracefully_no_open_files():
     Test shutdown_gracefully when there are no open files.
     """
     input_process = ModuleFactory().create_input_obj("", "zeek_log_file")
-    input_process.stop_observer = MagicMock(return_value=True)
+    input_process.stop = MagicMock(return_value=True)
     input_process.stop_queues = MagicMock(return_value=True)
     input_process.remover_thread = MagicMock()
     input_process.remover_thread.start()
@@ -400,7 +400,7 @@ def test_shutdown_gracefully_zeek_not_running():
     Test shutdown_gracefully when Zeek is not running.
     """
     input_process = ModuleFactory().create_input_obj("", "zeek_log_file")
-    input_process.stop_observer = MagicMock(return_value=True)
+    input_process.stop = MagicMock(return_value=True)
     input_process.stop_queues = MagicMock(return_value=True)
     input_process.remover_thread = MagicMock()
     input_process.remover_thread.start()
@@ -434,7 +434,7 @@ def test_shutdown_gracefully_no_zeek_pid():
     Test shutdown_gracefully when the Zeek PID is not set.
     """
     input_process = ModuleFactory().create_input_obj("", "zeek_log_file")
-    input_process.stop_observer = MagicMock(return_value=True)
+    input_process.stop = MagicMock(return_value=True)
     input_process.stop_queues = MagicMock(return_value=True)
     input_process.remover_thread = MagicMock()
     input_process.remover_thread.start()
