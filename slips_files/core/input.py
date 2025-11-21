@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
+import csv
 
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -103,6 +104,9 @@ class Input(ICore):
         # is set by the profiler to tell this proc that we it is done processing
         # the input process and shut down and close the profiler queue no issue
         self.is_profiler_done_event = is_profiler_done_event
+        self.init_latency_csv()
+        self.last_log_time = 0
+        self.starttime = time.time()
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
 
     def mark_self_as_done_processing(self):
@@ -344,6 +348,35 @@ class Input(ICore):
         earliest_line = self.cache_lines[file_with_earliest_flow]
         return earliest_line, file_with_earliest_flow
 
+    def loggg(self, now, line):
+        debugging_log = os.path.join(self.output_dir, "debugging_input.log")
+        with open(debugging_log, "a") as f:
+            line.update({"now": now})
+            f.write(line + "\n")
+
+    def init_latency_csv(self):
+        """
+        Initialize a CSV file with the header:
+        time_passed_Since_starting_slips, latency, uid
+        """
+        filename = os.path.join(self.output_dir, "input_latency.csv")
+        # Ensure the file doesn't already exist to avoid overwriting
+        if not os.path.exists(filename):
+            with open(filename, mode="w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(
+                    ["time_passed_Since_starting_slips", "latency", "uid"]
+                )
+
+    def append_latency_csv(self, time_passed: float, latency: float, uid: str):
+        """
+        Append a row to the CSV file.
+        """
+        filename = os.path.join(self.output_dir, "input_latency.csv")
+        with open(filename, mode="a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([f"{time_passed:.3f}", f"{latency:.3f}", uid])
+
     def read_zeek_files(self) -> int:
         try:
             self.zeek_files: Dict[str, str] = self.db.get_all_zeek_files()
@@ -375,7 +408,18 @@ class Input(ICore):
                 if not file_with_earliest_flow:
                     continue
 
-                # self.print('	> Sent Line: {}'.format(earliest_line), 0, 3)
+                try:
+                    now = time.time()
+                    flow_ts = earliest_line["data"]["ts"]
+                    uid = earliest_line["data"]["uid"]
+
+                    if now >= self.last_log_time + 10 * 60:
+                        self.last_log_time = now
+                        latency = now - flow_ts
+                        time_passed = now - self.starttime
+                        self.append_latency_csv(time_passed, latency, uid)
+                except Exception:
+                    pass
 
                 self.give_profiler(earliest_line)
                 self.lines += 1

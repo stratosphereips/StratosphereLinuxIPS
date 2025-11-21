@@ -6,8 +6,11 @@
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
+import csv
 import json
+import os
 import threading
+import time
 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -118,6 +121,9 @@ class Profiler(ICore, IObservable):
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
         self.handle_setting_local_net_lock = threading.Lock()
+        self.init_latency_csv()
+        self.last_log_time = 0
+        self.starttime = time.time()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -663,6 +669,29 @@ class Profiler(ICore, IObservable):
             and not self.flows_to_process_q.qsize()
         )
 
+    def init_latency_csv(self):
+        """
+        Initialize a CSV file with the header:
+        time_passed_Since_starting_slips, latency, uid
+        """
+        filename = os.path.join(self.output_dir, "profiler_latency.csv")
+        # Ensure the file doesn't already exist to avoid overwriting
+        if not os.path.exists(filename):
+            with open(filename, mode="w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(
+                    ["time_passed_Since_starting_slips", "latency", "uid"]
+                )
+
+    def append_latency_csv(self, time_passed: float, latency: float, uid: str):
+        """
+        Append a row to the CSV file.
+        """
+        filename = os.path.join(self.output_dir, "profiler_latency.csv")
+        with open(filename, mode="a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([f"{time_passed:.3f}", f"{latency:.3f}", uid])
+
     def process_flow(self):
         """
         This function runs in 3 parallel threads for faster processing of
@@ -694,6 +723,20 @@ class Profiler(ICore, IObservable):
                 if not flow:
                     continue
                 self.add_flow_to_profile(flow)
+
+                try:
+                    now = time.time()
+                    flow_ts = flow.starttime
+                    uid = flow.uid
+
+                    if now >= self.last_log_time + 10 * 60:
+                        self.last_log_time = now
+                        latency = now - flow_ts
+                        time_passed = now - self.starttime
+                        self.append_latency_csv(time_passed, latency, uid)
+                except Exception:
+                    pass
+
                 self.handle_setting_local_net(flow)
                 self.db.increment_processed_flows()
             except Exception as e:
