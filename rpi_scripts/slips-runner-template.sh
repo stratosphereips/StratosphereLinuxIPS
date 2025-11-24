@@ -19,12 +19,8 @@ log() { printf "%b\n" "$(date -Iseconds) - $*" | tee -a "$LOG_FILE"; }
 remove_existing_container() {
   # Removes existing slips container if found, because we'll be starting a new one with the same name
   if docker ps -a --format '{{.Names}}' | grep -xq "$CONTAINER_NAME"; then
-    log "Container '$CONTAINER_NAME' already exists."
-    read -rp "Delete it? (y/n): " answer
-    case "$answer" in
-      [Yy]*) docker rm -f "$CONTAINER_NAME" || true ;;
-      *) log "Aborted."; exit 1 ;;
-    esac
+    log "Container '$CONTAINER_NAME' already exists. Removing it."
+    docker rm -f "$CONTAINER_NAME" || true
   fi
 }
 
@@ -78,19 +74,25 @@ main() {
 
   log "Container started: $container_id"
 
-  while docker ps --format '{{.Names}}' | grep -q "$CONTAINER_NAME"; do
+
+  # This loop blocks forever until the docker container dies.
+  # qx matches exactly "slips" container
+  while docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null | grep -qx "true" ; do
     sleep 10
     status=$(docker inspect -f '{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "unknown")
     log "Container status: $status"
   done
 
+
+  ### Docker exited. Termination Logic #### :D
   exit_code=$(docker inspect --format='{{.State.ExitCode}}' "$container_id" 2>/dev/null || echo 0)
   log "Exited with code $exit_code"
 
+
+  # we want the user to notice that slips is no longer protecting their traffic, so we kill the AP process to cut internet access
   kill_ap_process
 
   netfilter-persistent save || true
-  docker rm -f "$container_id" >/dev/null 2>&1 || true
   log "Runner finished."
 }
 
