@@ -109,7 +109,7 @@ setup_iptables_persistence() {
     systemctl start iptables-watcher.timer
 
     echoc "${GREEN}Done setting up iptables persistence using iptables-watcher units.${RESET}"
-    echoc "${BOLD}You can check the status with: ${RESET} sudo systemctl status iptables-watcher.timer"
+    echoc "${BOLD}You can check the status with: ${RESET} sudo systemctl status iptables-watcher.timer\n"
 }
 
 
@@ -119,20 +119,21 @@ create_slips_runner_script() {
   TEMPLATE="./slips-runner-template.sh"
   LOG_FILE="${CWD}/slips_container.log"
 
-  echoc "${BLUE}Creating runner script from template...${RESET}"
+  echoc "${BLUE}Creating runner script from template for slips systemd unit to use...${RESET}"
   [ -f "$TEMPLATE" ] || { echoc "${RED}Template not found: $TEMPLATE${RESET}"; exit 1; }
-
+  echoc "PS: This Slips runner script doesn't start slips with the blocking modules enabled, modify the Slips command in ${TEMPLATE}
+  if you want to enable them and rerun this script for the changes to take effect."
   export WIFI_IF ETH_IF CWD LOG_FILE
   envsubst '$WIFI_IF $ETH_IF $CWD $LOG_FILE' < "$TEMPLATE" > "$RUNNER_PATH"
   chmod +x "$RUNNER_PATH"
   echoc "${GREEN}Runner created at $RUNNER_PATH.${RESET}"
 }
 
-create_systemd_unit() {
+create_slips_systemd_unit() {
   SERVICE_PATH="/etc/systemd/system/slips.service"
   TEMPLATE="./slips.service.template"
 
-  echoc "${BLUE}Creating systemd service from template...${RESET}"
+  echoc "${BLUE}Creating slips systemd service from template ./slips.service.template ...${RESET}"
   [ -f "$TEMPLATE" ] || { echoc "${RED}Template not found: $TEMPLATE${RESET}"; exit 1; }
 
   # Ensure all needed vars are exported for envsubst
@@ -148,7 +149,8 @@ create_systemd_unit() {
   systemctl daemon-reload
   systemctl enable slips.service
   systemctl restart slips.service
-  echoc "${GREEN}Systemd service installed and started.${RESET}"
+  echoc "${GREEN}Slips systemd service installed and started.${RESET}"
+  echoc "${BOLD}You can check the status with: ${RESET} sudo systemctl status slips\n"
 }
 
 
@@ -160,7 +162,7 @@ main() {
   create_directories
   setup_iptables_persistence
   create_slips_runner_script
-  create_systemd_unit
+  create_slips_systemd_unit
 
   echoc "${YELLOW}Slips is running inside tmux in Docker.${RESET}"
   echoc "You can attach using: ${BOLD}docker exec -it slips${RESET}"
