@@ -64,7 +64,7 @@ main() {
     --shm-size 512m
     --cap-add NET_ADMIN
     "$DOCKER_IMAGE"
-    bash -c "tmux new -s slips './slips.py -ap $WIFI_IF,$ETH_IF'"
+    bash -c "tmux new -s slips './slips.py -ap $WIFI_IF,$ETH_IF'; tmux wait-for -S slips_done"
   )
 
   log "Starting Slips container using command: ${docker_cmd[*]}"
