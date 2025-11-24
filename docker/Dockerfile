@@ -34,9 +34,9 @@ WORKDIR ${SLIPS_DIR}
 
 COPY . $SLIPS_DIR
 
-RUN apt update  \
-    &&  apt-get -y --no-install-recommends install $(cat install/apt_dependencies.txt) \
-    && apt install -y --no-install-recommends \
+RUN apt-get update -o Acquire::Retries=5 -o Acquire::https::No-Cache=True \
+    && apt-get install -y --no-install-recommends --fix-broken --fix-missing \
+    $(cat install/apt_dependencies.txt) \
     lsb-release \
     software-properties-common \
     vim \
@@ -48,7 +48,7 @@ RUN apt update  \
     && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /' |  tee /etc/apt/sources.list.d/security:zeek.list \
     && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key | gpg --dearmor |  tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
     && apt update \
-    && apt install -y --no-install-recommends --fix-missing \
+    && apt-get install -y --no-install-recommends --fix-missing \
     zeek-8.0 \
     npm \
     && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro \
@@ -57,7 +57,8 @@ RUN apt update  \
     && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash - \
     && export NVM_DIR="$HOME/.nvm" \
     && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  \
-    && nvm install 22
+    && nvm install 22 \
+    && apt purge -y  redis-server redis # we'll be compiling it manually
 
 
 
@@ -95,5 +96,6 @@ ENV PATH="$PATH:/StratosphereLinuxIPS/p2p4slips/"
 
 
 WORKDIR ${SLIPS_DIR}
+
 
 CMD /bin/bash
