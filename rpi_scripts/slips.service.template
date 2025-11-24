@@ -6,12 +6,24 @@ Wants=docker.service
 [Service]
 Type=simple
 ExecStart=${RUNNER_PATH}
-ExecStop=/bin/bash -c 'docker rm -f slips >/dev/null 2>&1 || true'
+# this will be handled by the runner script, no need to handle it here too # TODO
+# ExecStop=/bin/bash -c 'docker rm -f slips >/dev/null 2>&1 || true'
+
+# always restart the service if it exits, no matter why (clean exit, crash, non-zero exit, etc.).
 Restart=always
+
+# wait 5 seconds before restarting the service after it stops.
 RestartSec=5
-KillMode=process
-TimeoutStartSec=120
-TimeoutStopSec=60
+
+#KillMode=process
+# kills child processes of the ExecStart command on shutdown.
+KillMode=control-group
+
+# wait up to 10mins for slips service to complete its ExecStart command (to start). why? because it may pull docker image, do apt update, etc. so this takes time.
+TimeoutStartSec=600
+
+# wait 5 mins for the script to shutdown
+TimeoutStopSec=300
 User=root
 StandardOutput=append:${CWD}/slips_container.log
 StandardError=append:${CWD}/slips_container.log
