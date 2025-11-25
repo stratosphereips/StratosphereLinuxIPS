@@ -51,9 +51,8 @@ main() {
   log "=== Slips Runner Started ==="
 
   remove_existing_container
-
   docker_cmd=(
-    docker run -d -it --rm
+    docker run -d -it
     -v "$OUTPUT_DIR":/StratosphereLinuxIPS/output/
     # -v "$CONFIG_DIR":/StratosphereLinuxIPS/config/
     --name "$CONTAINER_NAME"
