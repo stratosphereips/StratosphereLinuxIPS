@@ -85,17 +85,27 @@ def accumulate_test_metrics_cumulative_snapshots(entries):
             for cls in class_names
         }
         multi_now = compute_multi_metrics(snapshot_counts)
-        # benign-malicious accuracy
-        total_tp_fn = sum(
-            snapshot_counts[c].get("TP", 0) + snapshot_counts[c].get("FN", 0)
-            for c in snapshot_counts
+        # malware specific
+        mal_key = next(
+            (
+                k
+                for k in snapshot_counts
+                if k.lower() in ("malware", "malicious")
+            ),
+            None,
         )
-        total_tp = sum(
-            snapshot_counts[c].get("TP", 0) for c in snapshot_counts
-        )
-        multi_now["benign_malicious_accuracy"] = (
-            (total_tp / total_tp_fn) if total_tp_fn > 0 else 0.0
-        )
+        if mal_key:
+            mcounts = snapshot_counts[mal_key]
+            # Reuse binary metrics!
+            mal_binary = compute_binary_metrics(mcounts)
+            multi_now["malware_fpr"] = mal_binary["FPR"]
+            multi_now["malware_fnr"] = mal_binary["FNR"]
+            multi_now["malware_f1"] = mal_binary["f1"]
+        else:
+            multi_now["malware_fpr"] = 0.0
+            multi_now["malware_fnr"] = 0.0
+            multi_now["malware_f1"] = 0.0
+
         # malware specific
         mal_key = next(
             (
@@ -168,18 +178,37 @@ def accumulate_test_metrics_cumulative_snapshots(entries):
     )
 
 
-def _choose_sparse_xticks(n, labels):
-    if n <= 20:
-        return list(range(n)), labels
+def _choose_sparse_xticks(batch_count, labels):
+    """
+    Always return numeric positions for xticks (0..batch_count-1) as the first
+    element. The second element is a list of labels where only a limited set
+    of positions contain text (sparse labels); other positions are "".
+
+    This prevents accidental use of string labels as x coordinates.
+    """
+    # full numeric positions for plotting (monotonic)
+    positions = list(range(batch_count))
+
+    if batch_count <= 20:
+        # keep all labels for small series
+        return positions, labels
+
     max_labels = 15
-    step = max(1, n // max_labels)
-    indices = list(range(0, n, step))
-    if indices[-1] != n - 1:
-        indices.append(n - 1)
-    sparse_labels = [""] * n
+    step = max(1, batch_count // max_labels)
+    indices = list(range(0, batch_count, step))
+    if indices[-1] != batch_count - 1:
+        indices.append(batch_count - 1)
+
+    sparse_labels = [""] * batch_count
     for i in indices:
-        sparse_labels[i] = labels[i]
-    return indices, sparse_labels
+        # guard: labels might be shorter than batch_count
+        if i < len(labels):
+            sparse_labels[i] = labels[i]
+        else:
+            sparse_labels[i] = str(i)
+
+    # NOTE: first element is the full numeric positions (not the sparse indices)
+    return positions, sparse_labels
 
 
 def plot_counts_series(
@@ -325,18 +354,14 @@ def main():
 
     # malware metrics
     print(
-        "[INFO] Plotting malware metrics (FPR, FNR, F1, Benign-Malicious Acc) over snapshots..."
+        "[INFO] Plotting malware metrics (FPR, FNR, F1, Accuracy) over snapshots..."
     )
-    malware_metrics_data = []
-    for m in cumul_multi_series:
-        malware_metrics_data.append(
-            {
-                "Malware FPR": m.get("malware_fpr", 0),
-                "Malware FNR": m.get("malware_fnr", 0),
-                "Malware F1": m.get("malware_f1", 0),
-                "Benign-Malicious Acc": m.get("benign_malicious_accuracy", 0),
-            }
-        )
+    from base_utils import MALWARE_PLOT_METRICS, extract_metrics_for_plot
+
+    malware_metrics_data = [
+        extract_metrics_for_plot(m, MALWARE_PLOT_METRICS)
+        for m in cumul_multi_series
+    ]
     out_malware = os.path.join(
         testing_dir, "malware_metrics_aggregated_testing.png"
     )
@@ -409,9 +434,7 @@ def main():
     # print("[INFO] Writing summary...")
     lines = []
     lines.append("\n=== Main final metrics (Aggregated so-far) ===")
-    lines.append(
-        f"Benign-Malicious Acc: {last_multi.get('benign_malicious_accuracy', 0):.4f}"
-    )
+    lines.append(f"Accuracy:             {last_multi.get('accuracy', 0):.4f}")
     lines.append(
         f"Malware F1:           {last_multi.get('malware_f1', 0):.4f}"
     )

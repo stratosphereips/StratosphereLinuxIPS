@@ -8,6 +8,72 @@ from typing import Dict, List, Optional
 import numpy as np
 import matplotlib.pyplot as plt
 
+# ============================================================================
+# METRIC DISPLAY CONFIGURATIONS
+# Single source of truth for all plotting - change once, applies everywhere
+# ============================================================================
+
+# Metrics to show in malware-focused plots (with FPR, FNR, F1, error rate)
+MALWARE_PLOT_METRICS = {
+    "Malware FPR": "malware_fpr",
+    "Malware FNR": "malware_fnr",
+    "Malware F1": "malware_f1",
+    "Accuracy": "accuracy",  # This IS benign-malicious accuracy
+    "Total Error Rate": "error_rate",
+}
+
+# Metrics for accuracy-only plots
+ACCURACY_PLOT_METRICS = {
+    "Accuracy": "accuracy",
+}
+
+# Metrics for train/val comparison plots
+COMPARISON_PLOT_METRICS = [
+    ("accuracy", "Accuracy", "train_val_accuracy.png"),
+    ("malware_f1", "Malware F1", "train_val_malware_f1.png"),
+    ("MCC", "MCC", "train_val_mcc.png"),
+]
+
+# Metrics for FN/FP rate comparison plots
+FN_RATE_METRIC = ("malware_fnr", "FN Rate")
+FP_RATE_METRIC = ("malware_fp_over_predicted", "FP Rate")
+
+
+# ============================================================================
+# METRIC EXTRACTION FUNCTIONS
+# ============================================================================
+
+
+def extract_metrics_for_plot(
+    metrics_dict: Dict[str, float], display_mapping: Dict[str, str]
+) -> Dict[str, float]:
+    """
+    Generic extractor: maps display names to metric keys.
+
+    Args:
+        metrics_dict: Dict with computed metrics (e.g., from accumulate_metrics)
+        display_mapping: Dict mapping display_name -> metric_key
+
+    Returns:
+        Dict with display names as keys
+    """
+    return {
+        display_name: metrics_dict.get(metric_key, 0.0)
+        for display_name, metric_key in display_mapping.items()
+    }
+
+
+def extract_comparison_for_plot(
+    val_metric: float,
+    train_metric: float,
+    val_label: str = "Validation",
+    train_label: str = "Training",
+) -> Dict[str, float]:
+    """
+    Build comparison dict for train vs val plots.
+    """
+    return {val_label: val_metric, train_label: train_metric}
+
 
 def ensure_dir(path: str) -> str:
     """
@@ -223,11 +289,19 @@ def compute_binary_metrics(counts: Dict[str, int]) -> Dict[str, float]:
         else 0.0
     )
 
+    numerator = (tp * tn) - (fp * fn)
+    denominator = ((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn)) ** 0.5
+    mcc = numerator / denominator if denominator > 0 else 0.0
+
     return {
         "accuracy": accuracy,
         "precision": precision,
         "recall": recall,
         "f1": f1,
+        "mcc": mcc,
+        "error_rate": (fp + fn) / total if total > 0 else 0.0,
+        "FPR": fp / (fp + tn) if (fp + tn) > 0 else 0.0,
+        "FNR": fn / (fn + tp) if (fn + tp) > 0 else 0.0,
     }
 
 
@@ -241,7 +315,7 @@ def compute_multi_metrics(
       {
         "accuracy",
         "macro_precision", "macro_recall", "macro_f1",
-        "micro_precision", "micro_recall", "micro_f1"
+        "micro_precision", "micro_recall", "micro_f1", "MCC"
       }
     """
     # accumulate counts
@@ -373,16 +447,6 @@ def plot_major_metrics_together(
                 lower = max(0, min_val - margin)
                 upper = min(1, max_val + margin)
                 plt.ylim(lower, upper)
-                # Add annotation to show this is zoomed
-                plt.text(
-                    0.02,
-                    0.98,
-                    "Zoomed view",
-                    transform=plt.gca().transAxes,
-                    fontsize=8,
-                    verticalalignment="top",
-                    bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.3),
-                )
             else:
                 # Normal range - show full 0 to 1
                 plt.ylim(0, 1.05)

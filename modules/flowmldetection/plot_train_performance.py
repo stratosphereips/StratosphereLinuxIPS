@@ -49,33 +49,10 @@ def read_all_batches(logfile):
     return entries
 
 
-def compute_multi_metrics_custom(per_class):
-    # Reuse base metrics
-    metrics = compute_multi_metrics(per_class)
-
-    # Calculate benign_malicious_accuracy (excluding Background if any)
-    total_tp_fn = 0
-    total_tp = 0
-
-    for cls_name, counts in per_class.items():
-        if cls_name.lower() not in ("background", "bg"):
-            tp = counts.get("TP", 0)
-            fn = counts.get("FN", 0)
-            total_tp_fn += tp + fn
-            total_tp += tp
-
-    # FIXED: Explicit handling of edge cases
-    if total_tp_fn > 0:
-        metrics["benign_malicious_accuracy"] = total_tp / total_tp_fn
-    else:
-        # No actual samples - this shouldn't happen but handle gracefully
-        metrics["benign_malicious_accuracy"] = 0.0
-
-    return metrics
-
-
 def compute_malware_metrics(per_class):
-    malware_metrics = {}
+    """
+    Compute malware-specific metrics by reusing binary metrics.
+    """
     malware_key = None
     for cls_name in per_class.keys():
         if cls_name.lower() in ("malware", "malicious"):
@@ -84,37 +61,33 @@ def compute_malware_metrics(per_class):
 
     if malware_key and malware_key in per_class:
         counts = per_class[malware_key]
+        binary_metrics = compute_binary_metrics(counts)
+        malware_metrics = {
+            "malware_fpr": binary_metrics["FPR"],
+            "malware_fnr": binary_metrics["FNR"],
+            "malware_precision": binary_metrics["precision"],
+            "malware_recall": binary_metrics["recall"],
+            "malware_f1": binary_metrics["f1"],
+            "MCC": binary_metrics["mcc"],
+            "error_rate": binary_metrics["error_rate"],
+        }
+
         tp = counts.get("TP", 0)
         fp = counts.get("FP", 0)
-        tn = counts.get("TN", 0)
-        fn = counts.get("FN", 0)
-
-        malware_metrics["malware_fpr"] = (
-            (fp / (fp + tn)) if (fp + tn) > 0 else 0.0
-        )
-        malware_metrics["malware_fnr"] = (
-            (fn / (fn + tp)) if (fn + tp) > 0 else 0.0
-        )
         malware_metrics["malware_fp_over_predicted"] = (
             (fp / (tp + fp)) if (tp + fp) > 0 else 0.0
         )
-
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        malware_metrics["malware_precision"] = precision
-        malware_metrics["malware_recall"] = recall
-        malware_metrics["malware_f1"] = (
-            (2 * precision * recall / (precision + recall))
-            if (precision + recall) > 0
-            else 0.0
-        )
     else:
-        malware_metrics["malware_fpr"] = 0.0
-        malware_metrics["malware_fnr"] = 0.0
-        malware_metrics["malware_fp_over_predicted"] = 0.0
-        malware_metrics["malware_precision"] = 0.0
-        malware_metrics["malware_recall"] = 0.0
-        malware_metrics["malware_f1"] = 0.0
+        malware_metrics = {
+            "malware_fpr": 0.0,
+            "malware_fnr": 0.0,
+            "malware_fp_over_predicted": 0.0,
+            "malware_precision": 0.0,
+            "malware_recall": 0.0,
+            "malware_f1": 0.0,
+            "MCC": 0.0,
+            "error_rate": 0.0,
+        }
 
     return malware_metrics
 
@@ -126,7 +99,7 @@ def process_batch_metrics(per_class, class_names):
         bin_metrics_per_class.update(per_class[cls])
         batch_metrics_per_class[cls] = bin_metrics_per_class
 
-    batch_multi = compute_multi_metrics_custom(per_class)
+    batch_multi = compute_multi_metrics(per_class)
     batch_multi.update(compute_malware_metrics(per_class))
 
     return batch_metrics_per_class, batch_multi
@@ -141,7 +114,7 @@ def process_cumulative_metrics(cumul_class_counters, class_names):
         bin_metrics_per_class.update(cumul_class_counters[cls])
         cumul_metrics_per_class[cls] = bin_metrics_per_class
 
-    cumul_multi = compute_multi_metrics_custom(cumul_class_counters)
+    cumul_multi = compute_multi_metrics(cumul_class_counters)
     cumul_multi.update(compute_malware_metrics(cumul_class_counters))
 
     return cumul_metrics_per_class, cumul_multi
@@ -338,17 +311,36 @@ def calculate_class_counts(entries, data_key, class_names):
 
 
 def _choose_sparse_xticks(batch_count, labels):
+    """
+    Always return numeric positions for xticks (0..batch_count-1) as the first
+    element. The second element is a list of labels where only a limited set
+    of positions contain text (sparse labels); other positions are "".
+
+    This prevents accidental use of string labels as x coordinates.
+    """
+    # full numeric positions for plotting (monotonic)
+    positions = list(range(batch_count))
+
     if batch_count <= 20:
-        return list(range(batch_count)), labels
+        # keep all labels for small series
+        return positions, labels
+
     max_labels = 15
     step = max(1, batch_count // max_labels)
     indices = list(range(0, batch_count, step))
     if indices[-1] != batch_count - 1:
         indices.append(batch_count - 1)
+
     sparse_labels = [""] * batch_count
     for i in indices:
-        sparse_labels[i] = labels[i]
-    return indices, sparse_labels
+        # guard: labels might be shorter than batch_count
+        if i < len(labels):
+            sparse_labels[i] = labels[i]
+        else:
+            sparse_labels[i] = str(i)
+
+    # NOTE: first element is the full numeric positions (not the sparse indices)
+    return positions, sparse_labels
 
 
 def plot_counts_series(
@@ -447,7 +439,7 @@ def sliding_window_aggregated(
             bin_metrics.update(agg[cls])
             per_class_metrics[cls] = bin_metrics
 
-        multi = compute_multi_metrics_custom(agg)
+        multi = compute_multi_metrics(agg)
         multi.update(compute_malware_metrics(agg))
 
         series_per_class.append(per_class_metrics)
@@ -467,27 +459,15 @@ def sliding_window_aggregated(
 
 
 def plot_malware_metrics(metrics_data, output_path, title, xvals, xlabel):
-    malware_metrics_data = []
-    for entry in metrics_data:
-        malware_metrics_data.append(
-            {
-                "Malware FPR": entry.get("malware_fpr", 0),
-                "Malware FNR": entry.get("malware_fnr", 0),
-                "Malware F1": entry.get("malware_f1", 0),
-                "Benign-Malicious Acc": entry.get(
-                    "benign_malicious_accuracy", 0
-                ),
-            }
-        )
-    # print(f"[INFO] Plotting metrics -> {output_path}")
+    from base_utils import MALWARE_PLOT_METRICS, extract_metrics_for_plot
+
+    plot_data = [
+        extract_metrics_for_plot(entry, MALWARE_PLOT_METRICS)
+        for entry in metrics_data
+    ]
     plot_major_metrics_together(
-        malware_metrics_data,
-        output_path,
-        title=title,
-        xvals=xvals,
-        xlabel=xlabel,
+        plot_data, output_path, title=title, xvals=xvals, xlabel=xlabel
     )
-    # print(f"[SAVED] {output_path}")
 
 
 def plot_accuracy_metrics(metrics_data, output_path, title, xvals, xlabel):
@@ -496,11 +476,9 @@ def plot_accuracy_metrics(metrics_data, output_path, title, xvals, xlabel):
         accuracy_data.append(
             {"Benign-Malicious Acc": entry.get("benign_malicious_accuracy", 0)}
         )
-    # print(f"[INFO] Plotting accuracy -> {output_path}")
     plot_major_metrics_together(
         accuracy_data, output_path, title=title, xvals=xvals, xlabel=xlabel
     )
-    # print(f"[SAVED] {output_path}")
 
 
 def plot_comparison_metrics(
@@ -513,52 +491,62 @@ def plot_comparison_metrics(
     cumulative_total_sizes,
     batch_count,
 ):
+    from base_utils import COMPARISON_PLOT_METRICS, extract_comparison_for_plot
+
     agg_dir = ensure_dir(os.path.join(base_dir, "aggregated"))
     batch_dir = ensure_dir(os.path.join(base_dir, "per_batch"))
-    metrics = [
-        (
-            "benign_malicious_accuracy",
-            "Benign-Malicious Acc",
-            "train_val_accuracy.png",
-        ),
-        ("malware_f1", "Malware F1", "train_val_malware_f1.png"),
-    ]
-    for metric, short_title, filename in metrics:
-        combined = []
-        for i in range(batch_count):
-            combined.append(
-                {
-                    "Validation": cumul_metrics_multi[i].get(metric, 0),
-                    "Training": cumul_metrics_multi_training[i].get(metric, 0),
-                }
+
+    # Aggregated plots
+    for metric_key, short_title, filename in COMPARISON_PLOT_METRICS:
+        combined = [
+            extract_comparison_for_plot(
+                cumul_metrics_multi[i].get(metric_key, 0),
+                cumul_metrics_multi_training[i].get(metric_key, 0),
             )
+            for i in range(batch_count)
+        ]
         out = os.path.join(agg_dir, filename)
+
+        # Safe x-labels
+        labels = [str(v) for v in cumulative_total_sizes]
+        if len(labels) < batch_count:
+            labels.extend([str(i) for i in range(len(labels), batch_count)])
+
+        positions, sparse_labels = _choose_sparse_xticks(batch_count, labels)
+
         plot_major_metrics_together(
             combined,
             out,
             title=f"{short_title}\n(Validation vs Training — Aggregated)",
-            xvals=cumulative_total_sizes,
+            xvals=positions,
             xlabel="Aggregated samples",
         )
-        # print(f"[SAVED] {out}")
-    for metric, short_title, filename in metrics:
-        combined = []
-        for i in range(batch_count):
-            combined.append(
-                {
-                    "Validation": batch_metrics_multi[i].get(metric, 0),
-                    "Training": batch_metrics_multi_training[i].get(metric, 0),
-                }
+
+    # Per-batch plots
+    for metric_key, short_title, filename in COMPARISON_PLOT_METRICS:
+        combined = [
+            extract_comparison_for_plot(
+                batch_metrics_multi[i].get(metric_key, 0),
+                batch_metrics_multi_training[i].get(metric_key, 0),
             )
+            for i in range(batch_count)
+        ]
         out = os.path.join(batch_dir, filename.replace(".png", "_batch.png"))
+
+        # Safe x-labels
+        labels = [str(v) for v in stepping_total_sizes]
+        if len(labels) < batch_count:
+            labels.extend([str(i) for i in range(len(labels), batch_count)])
+
+        positions, sparse_labels = _choose_sparse_xticks(batch_count, labels)
+
         plot_major_metrics_together(
             combined,
             out,
             title=f"{short_title}\n(Validation vs Training — Per-batch)",
-            xvals=stepping_total_sizes,
+            xvals=positions,
             xlabel="Batch",
         )
-        # print(f"[SAVED] {out}")
 
 
 def plot_comparison_metrics_for_series(
@@ -570,78 +558,97 @@ def plot_comparison_metrics_for_series(
     batch_count,
     name_prefix,
 ):
+    from base_utils import (
+        COMPARISON_PLOT_METRICS,
+        FN_RATE_METRIC,
+        FP_RATE_METRIC,
+        extract_comparison_for_plot,
+    )
+
     if start_index is None:
         print(f"Skipping comparison {name_prefix}: not enough batches")
         return
+
     ensure_dir(base_dir)
-    metrics = [
-        (
-            "benign_malicious_accuracy",
-            "Benign-Malicious Acc",
-            f"train_val_accuracy_{name_prefix}.png",
-        ),
-        (
-            "malware_f1",
-            "Malware F1",
-            f"train_val_malware_f1_{name_prefix}.png",
-        ),
-    ]
     length = len(series_val)
-    for metric, short_title, filename in metrics:
-        combined = []
-        for i in range(length):
-            combined.append(
-                {
-                    "Validation": series_val[i].get(metric, 0),
-                    "Training": series_train[i].get(metric, 0),
-                }
+
+    # Main comparison metrics
+    for metric_key, short_title, base_filename in COMPARISON_PLOT_METRICS:
+        filename = base_filename.replace(".png", f"_{name_prefix}.png")
+        combined = [
+            extract_comparison_for_plot(
+                series_val[i].get(metric_key, 0),
+                series_train[i].get(metric_key, 0),
             )
+            for i in range(length)
+        ]
         out = os.path.join(base_dir, filename)
+
+        # Safe x-labels
+        labels = [str(v) for v in xvals]
+        if len(labels) < length:
+            labels.extend([str(i) for i in range(len(labels), length)])
+        positions, sparse_labels = _choose_sparse_xticks(length, labels)
+
         plot_major_metrics_together(
             combined,
             out,
             title=f"{short_title}\n(Validation vs Training — {name_prefix})",
-            xvals=xvals,
+            xvals=positions,
             xlabel="Batch",
         )
-        # print(f"[SAVED] {out}")
-    fn_data = []
-    fp_data = []
-    for i in range(length):
-        fn_data.append(
-            {
-                "Validation FN Rate": series_val[i].get("malware_fnr", 0),
-                "Training FN Rate": series_train[i].get("malware_fnr", 0),
-            }
+
+    # FN Rate
+    fn_metric_key, fn_title = FN_RATE_METRIC
+    fn_data = [
+        extract_comparison_for_plot(
+            series_val[i].get(fn_metric_key, 0),
+            series_train[i].get(fn_metric_key, 0),
+            f"Validation {fn_title}",
+            f"Training {fn_title}",
         )
-        fp_data.append(
-            {
-                "Validation FP Rate": series_val[i].get(
-                    "malware_fp_over_predicted", 0
-                ),
-                "Training FP Rate": series_train[i].get(
-                    "malware_fp_over_predicted", 0
-                ),
-            }
-        )
+        for i in range(length)
+    ]
     out1 = os.path.join(base_dir, f"train_val_fn_rate_{name_prefix}.png")
+
+    labels = [str(v) for v in xvals]
+    if len(labels) < length:
+        labels.extend([str(i) for i in range(len(labels), length)])
+    positions, sparse_labels = _choose_sparse_xticks(length, labels)
+
     plot_major_metrics_together(
         fn_data,
         out1,
-        title=f"FN Rate\n(Validation vs Training — {name_prefix})",
-        xvals=xvals,
+        title=f"{fn_title}\n(Validation vs Training — {name_prefix})",
+        xvals=positions,
         xlabel="Batch",
     )
-    # print(f"[SAVED] {out1}")
+
+    # FP Rate
+    fp_metric_key, fp_title = FP_RATE_METRIC
+    fp_data = [
+        extract_comparison_for_plot(
+            series_val[i].get(fp_metric_key, 0),
+            series_train[i].get(fp_metric_key, 0),
+            f"Validation {fp_title}",
+            f"Training {fp_title}",
+        )
+        for i in range(length)
+    ]
     out2 = os.path.join(base_dir, f"train_val_fp_rate_{name_prefix}.png")
+
+    labels = [str(v) for v in xvals]
+    if len(labels) < length:
+        labels.extend([str(i) for i in range(len(labels), length)])
+    positions, sparse_labels = _choose_sparse_xticks(length, labels)
+
     plot_major_metrics_together(
         fp_data,
         out2,
-        title=f"FP Rate\n(Validation vs Training — {name_prefix})",
-        xvals=xvals,
+        title=f"{fp_title}\n(Validation vs Training — {name_prefix})",
+        xvals=positions,
         xlabel="Batch",
     )
-    # print(f"[SAVED] {out2}")
 
 
 def plot_malware_fn_rate_comparison(
@@ -651,28 +658,28 @@ def plot_malware_fn_rate_comparison(
     cumulative_total_sizes,
     batch_count,
 ):
+    from base_utils import FN_RATE_METRIC, extract_comparison_for_plot
+
     agg_dir = ensure_dir(os.path.join(base_dir, "aggregated"))
-    fn_rate_data = []
-    for i in range(batch_count):
-        fn_rate_data.append(
-            {
-                "Validation FN Rate": cumul_metrics_multi[i].get(
-                    "malware_fnr", 0
-                ),
-                "Training FN Rate": cumul_metrics_multi_training[i].get(
-                    "malware_fnr", 0
-                ),
-            }
+    fn_metric_key, fn_title = FN_RATE_METRIC
+
+    fn_rate_data = [
+        extract_comparison_for_plot(
+            cumul_metrics_multi[i].get(fn_metric_key, 0),
+            cumul_metrics_multi_training[i].get(fn_metric_key, 0),
+            f"Validation {fn_title}",
+            f"Training {fn_title}",
         )
+        for i in range(batch_count)
+    ]
     out = os.path.join(agg_dir, "train_val_fn_rate.png")
     plot_major_metrics_together(
         fn_rate_data,
         out,
-        title="FN Rate\n(Validation vs Training — Aggregated)",
+        title=f"{fn_title}\n(Validation vs Training — Aggregated)",
         xvals=cumulative_total_sizes,
         xlabel="Aggregated samples",
     )
-    # print(f"[SAVED] {out}")
 
 
 def plot_malware_fp_over_predicted_comparison(
@@ -682,34 +689,34 @@ def plot_malware_fp_over_predicted_comparison(
     cumulative_total_sizes,
     batch_count,
 ):
+    from base_utils import FP_RATE_METRIC, extract_comparison_for_plot
+
     agg_dir = ensure_dir(os.path.join(base_dir, "aggregated"))
-    fp_over_pred = []
-    for i in range(batch_count):
-        fp_over_pred.append(
-            {
-                "Validation FP Rate": cumul_metrics_multi[i].get(
-                    "malware_fp_over_predicted", 0
-                ),
-                "Training FP Rate": cumul_metrics_multi_training[i].get(
-                    "malware_fp_over_predicted", 0
-                ),
-            }
+    fp_metric_key, fp_title = FP_RATE_METRIC
+
+    fp_rate_data = [
+        extract_comparison_for_plot(
+            cumul_metrics_multi[i].get(fp_metric_key, 0),
+            cumul_metrics_multi_training[i].get(fp_metric_key, 0),
+            f"Validation {fp_title}",
+            f"Training {fp_title}",
         )
+        for i in range(batch_count)
+    ]
     out = os.path.join(agg_dir, "train_val_fp_rate.png")
     plot_major_metrics_together(
-        fp_over_pred,
+        fp_rate_data,
         out,
-        title="FP Rate\n(Validation vs Training — Aggregated)",
+        title=f"{fp_title}\n(Validation vs Training — Aggregated)",
         xvals=cumulative_total_sizes,
         xlabel="Aggregated samples",
     )
-    # print(f"[SAVED] {out}")
 
 
 def print_summary_section(lines, title, metrics_data):
     lines.append(f"\n=== {title} ===")
     lines.append(
-        f"Benign-Malicious Acc: {metrics_data.get('benign_malicious_accuracy', 0):.4f}"
+        f"Accuracy:             {metrics_data.get('accuracy', 0):.4f}"
     )
     lines.append(
         f"Malware F1:           {metrics_data.get('malware_f1', 0):.4f}"
@@ -724,11 +731,12 @@ def print_summary_section(lines, title, metrics_data):
         f"Macro F1:             {metrics_data.get('macro_f1', 0):.4f}"
     )
     lines.append(
-        f"Precision:             {metrics_data.get('malware_precision', 0):.4f}"
+        f"Precision:            {metrics_data.get('malware_precision', 0):.4f}"
     )
     lines.append(
-        f"Recall:                {metrics_data.get('malware_recall', 0):.4f}"
+        f"Recall:               {metrics_data.get('malware_recall', 0):.4f}"
     )
+    lines.append(f"MCC:                  {metrics_data.get('MCC', 0):.4f}")
 
 
 def print_per_class_table(lines, title, cum_metrics_per_class):
