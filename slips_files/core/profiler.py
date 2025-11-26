@@ -286,6 +286,9 @@ class Profiler(ICore, IObservable):
         # we're using self.should_stop() here instead of while True to be
         # able to unit test this function:D
         while not self.should_stop():
+            # implemented in icore.py
+            self.store_flows_read_per_second()
+
             msg = self.get_msg_from_queue(self.profiler_queue)
             if not msg:
                 # wait for msgs
