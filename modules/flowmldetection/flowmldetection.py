@@ -546,6 +546,7 @@ class FlowMLDetection(IModule):
                 "dir_",
                 "endtime",
                 "flow_source",
+                "interface",
             ]
             for field in to_drop:
                 try:

@@ -34,6 +34,7 @@ def test_start_input_process(
     process_manager.main.zeek_bro = zeek_or_bro
     process_manager.main.zeek_dir = zeek_dir
     process_manager.main.line_type = line_type
+    process_manager.main.bloom_filters_man = Mock()
 
     with patch("managers.process_manager.Input") as mock_input:
         mock_input_process = Mock()
@@ -51,6 +52,7 @@ def test_start_input_process(
             process_manager.main.args,
             process_manager.main.conf,
             process_manager.main.pid,
+            process_manager.main.bloom_filters_man,
             is_input_done=process_manager.is_input_done,
             profiler_queue=process_manager.profiler_queue,
             input_type=input_type,
@@ -317,7 +319,9 @@ def test_should_run_non_stop(
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.is_debugger_active = Mock(return_value=debugger_active)
     process_manager.main.input_type = input_type
-    process_manager.main.is_interface = is_interface
+    process_manager.main.db.is_running_non_stop = Mock(
+        return_value=is_interface
+    )
 
     assert process_manager.should_run_non_stop() == expected
 
@@ -392,6 +396,7 @@ def test_print_stopped_module():
 
 def test_start_profiler_process():
     process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.bloom_filters_man = Mock()
     with patch("managers.process_manager.Profiler") as mock_profiler:
         mock_profiler_process = Mock()
         mock_profiler.return_value = mock_profiler_process
@@ -408,6 +413,7 @@ def test_start_profiler_process():
             process_manager.main.args,
             process_manager.main.conf,
             process_manager.main.pid,
+            process_manager.main.bloom_filters_man,
             is_profiler_done=process_manager.is_profiler_done,
             profiler_queue=process_manager.profiler_queue,
             is_profiler_done_event=process_manager.is_profiler_done_event,
@@ -430,6 +436,7 @@ def test_start_profiler_process():
 )
 def test_start_evidence_process(output_dir, redis_port):
     process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.bloom_filters_man = Mock()
     process_manager.main.args.output = output_dir
     process_manager.main.redis_port = redis_port
 
@@ -449,6 +456,7 @@ def test_start_evidence_process(output_dir, redis_port):
             process_manager.main.args,
             process_manager.main.conf,
             process_manager.main.pid,
+            process_manager.main.bloom_filters_man,
         )
         mock_evidence_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()

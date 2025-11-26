@@ -70,15 +70,22 @@ class SSL(IFlowalertsAnalyzer):
 
     def check_self_signed_certs(self, twid, flow):
         """
-        checks the validation status of every a zeek ssl flow for self
+        checks the validation status of every zeek ssl flow for self
         signed certs
         """
-        if "self signed" not in flow.validation_status:
+        if not hasattr(flow, "validation_status"):
+            # must be a suricata TLS flow
             return
 
+        if "self signed" not in flow.validation_status:
+            return
         self.set_evidence.self_signed_certificates(twid, flow)
 
     def detect_malicious_ja3(self, twid, flow):
+        if not (hasattr(flow, "ja3") and hasattr(flow, "ja3s")):
+            # its a suricata flow
+            return
+
         if not (flow.ja3 or flow.ja3s):
             # we don't have info about this flow's ja3 or ja3s fingerprint
             return
@@ -295,8 +302,11 @@ class SSL(IFlowalertsAnalyzer):
             pass  # timeout reached
 
     def detect_doh(self, twid, flow):
+        if not hasattr(flow, "is_DoH"):
+            return False
         if not flow.is_DoH:
             return False
+
         self.set_evidence.doh(twid, flow)
         self.db.set_ip_info(flow.daddr, {"is_doh_server": True})
 

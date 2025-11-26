@@ -265,6 +265,9 @@ class Method(Enum):
 
 @dataclass
 class Evidence:
+    # IMPORTANT: remember to update dict_to_evidence() function based on the
+    # field you add to the evidence class, or any class used by the evidence
+    # class.
     evidence_type: EvidenceType
     description: str
     attacker: Attacker
@@ -277,6 +280,7 @@ class Evidence:
     timestamp: str = field(
         metadata={"validate": lambda x: validate_timestamp(x)}
     )
+    interface: str = field(default="default")
     victim: Optional[Victim] = field(default=False)
     proto: Optional[Proto] = field(default=False)
     dst_port: int = field(default=None)
@@ -340,6 +344,7 @@ def dict_to_evidence(evidence: dict) -> Evidence:
     evidence_attributes = {
         "evidence_type": EvidenceType[evidence["evidence_type"]],
         "description": evidence["description"],
+        "interface": evidence["interface"],
         "attacker": Attacker(**evidence["attacker"]),
         "threat_level": ThreatLevel[evidence["threat_level"].upper()],
         "victim": (

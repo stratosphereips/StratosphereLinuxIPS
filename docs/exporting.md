@@ -40,46 +40,44 @@ You can do this by going to the channel, then clicking on the channel's name. Th
 
 ## STIX
 
-If you want to export alerts to your TAXII server using STIX format, change ```export_to``` variable to export to STIX, and Slips will automatically generate a
-```STIX_data.json``` containing all alerts it detects.
+If you want to export alerts to your TAXII 2 server using STIX 2.1 format,
+set ```export_to``` to ```stix``` and Slips will automatically generate a
+```STIX_data.json``` bundle containing the indicators it detects and push it to
+your collection.
 
 
     [ExportingAlerts]
     export_to = [stix]
 
 
-You can add your TAXII server details in the following variables:
+Configure the TAXII client by editing the following variables:
 
-```TAXII_server```: link to your TAXII server
+```TAXII_server```: host name or IP address of the TAXII server.
 
-```port```: port to be used
+```port```: TCP port (optional, defaults to 80/443).
 
-```use_https```: use https or not.
+```use_https```: set to true to connect over HTTPS (be careful that the default TAXII server in SlipsWeb, Medallion, do not support HTTPS yet)
 
-```discovery_path``` and ```inbox_path``` should contain URIs not full urls. For example:
+```discovery_path```: TAXII discovery endpoint path or full URL
+ (for example ```/taxii2/```).
 
-```python
-discovery_path = /services/discovery-a
-inbox_path = /services/inbox-a
-```
+```collection_name```: ID or title of the TAXII collection that should receive your indicators. Be default `Alerts`.
 
-```collection_name```: the collection on the server you want to push your STIX data to.
+```push_delay```: time between automatic pushes (in seconds) when Slips is
+running continuously.
 
-```push_delay```: the time to wait before pushing STIX data to server (in seconds).
-It is used when slips is running non-stop (e.g with -i )
+```taxii_username``` / ```taxii_password```: credentials used for HTTP Basic authentication.
 
-```taxii_username```: TAXII server user credentials
-
-```taxii_password```: TAXII server user password
-
-```jwt_auth_path```: auth path if JWT based authentication is used. It's usually /management/auth. this is what we
-use to get a token.
+**Change the default config password of the TAXII servers you are going to export to in ```config/medallion_config.yaml```**
 
 
-if your TAXII server is a remote server, you can set the ```port``` to 443 or 80.
+Slips stores the generated bundle for each run in the output directory of that
+execution (for example `output/<run_id>/STIX_data.json`), so you can inspect the
+exact STIX objects that were pushed.
 
-If running on a file, Slips will export to server after analysis is done.
-If running on an interface, Slips will export to server every push_delay seconds. by default it's 1h.
+If running on a file, Slips will export once before shutdown.
+If running on an interface, Slips will export to the server every
+```push_delay``` seconds (default 1 hour).
 
 ## JSON format
 

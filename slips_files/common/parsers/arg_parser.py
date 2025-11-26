@@ -165,6 +165,15 @@ class ArgumentParser(argparse.ArgumentParser):
             help="Read packets from an interface.",
         )
         self.add_argument(
+            "-ap",
+            "--access-point",
+            action="store",
+            required=False,
+            help="Read packets from two interfaces when Slips is running as "
+            "an access point. the wifi interface should come first ("
+            "e.g -ap wlan0, eth0).",
+        )
+        self.add_argument(
             "-F",
             "--pcapfilter",
             action="store",
@@ -266,9 +275,11 @@ class ArgumentParser(argparse.ArgumentParser):
         self.add_argument(
             "-g",
             "--growing",
-            action="store_true",
+            action="store",
+            metavar="<zeek_dir>",
             required=False,
-            help="Treat the given zeek directory as growing. eg. zeek dirs generated when running on an interface",
+            help="Treat the given zeek directory as growing. eg. "
+            "Zeek dirs generated when running on an interface",
         )
         self.add_argument(
             "-w",

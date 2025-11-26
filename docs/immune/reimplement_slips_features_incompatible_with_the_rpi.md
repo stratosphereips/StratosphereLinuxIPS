@@ -24,8 +24,8 @@ Docker can run amd64 images on arm devices using emulation, but this method come
 
 So we decided to go for an ARM docker image specifically for ARM devices and the RPI. This is doable without maintaining 2 different Dockerfiles one for each architechture thanks to docker buildx multiplatform support.
 
-**Commands for building the ARM image**
-
+**Commands for building one multi-architecture image (supporting AMD and ARM)**
+```
 docker buildx create --name slips\_builder
 
 docker buildx use slips\_builder
@@ -33,6 +33,7 @@ docker buildx use slips\_builder
 export BUILDKIT\_CONTAINERD=1
 
 docker buildx build --platform linux/amd64,linux/arm64 -t stratosphereips/slips:latest -f docker/Dockerfile --push .
+```
 
 Our goal is to maintain one Dockerfile that is able to run on both ARM and AMD architectures.
 

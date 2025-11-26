@@ -45,7 +45,7 @@ def normalize(value: float):
 @dataclass
 class Alert:
     profile: ProfileID
-    # this should have the fields start_Time and end_time set #TODO force it
+    # this should have the fields start_Time and end_time set
     timewindow: TimeWindow
     # the last evidence that triggered this alert
     last_evidence: Evidence

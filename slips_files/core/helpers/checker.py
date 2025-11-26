@@ -10,19 +10,28 @@ class Checker:
     def __init__(self, main):
         self.main = main
 
-    def check_input_type(self) -> tuple:
+    def get_input_type(self) -> tuple:
         """
         returns line_type, input_type, input_information
-        supported input types are:
+        supported input_type values are:
             interface, argus, suricata, zeek, nfdump, db
-        supported self.input_information:
-            given filepath, interface or type of line given in stdin
+        supported input_information:
+            given filepath, interface or type of line given in stdin,
+            comma separated access point interfaces like wlan0,eth0
         """
         # only defined in stdin lines
         line_type = False
-        # -I
-        if self.main.args.interface:
-            input_information = self.main.args.interface
+
+        if self.main.args.interface and self.main.args.growing:
+            input_information = self.main.args.growing
+            input_type = self.main.get_input_file_type(input_information)
+            return input_type, input_information, line_type
+
+        # -i or -ap
+        if self.main.args.interface or self.main.args.access_point:
+            input_information = (
+                self.main.args.interface or self.main.args.access_point
+            )
             input_type = "interface"
             # return input_type, self.main.input_information
             return input_type, input_information, line_type
@@ -56,37 +65,129 @@ class Checker:
 
         return input_type, input_information, line_type
 
-    def check_given_flags(self):
-        """
-        check the flags that don't require starting slips
-        for example: clear db, clearing the blocking chain, killing all
-        servers, etc.
-        """
+    def _print_help_and_exit(self):
+        """prints the help msg and shutd down slips"""
+        self.main.print_version()
+        arg_parser = self.main.conf.get_parser(help=True)
+        arg_parser.parse_arguments()
+        arg_parser.print_help()
+        self.main.terminate_slips()
 
-        if self.main.args.help:
-            self.main.print_version()
-            arg_parser = self.main.conf.get_parser(help=True)
-            arg_parser.parse_arguments()
-            arg_parser.print_help()
-            self.main.terminate_slips()
-        if self.main.args.interface and self.main.args.filepath:
-            print("Only -i or -f is allowed. Stopping slips.")
-            self.main.terminate_slips()
-            return
+    def _check_mutually_exclusive_flags(self):
+        """checks if the user provided args that shouldnt be used together"""
+        mutually_exclusive_flags = [
+            self.main.args.interface,  # -i
+            self.main.args.access_point,  # -ap
+            self.main.args.save,  # -s
+            self.main.args.db,  # -d
+            self.main.args.filepath,  # -f
+            self.main.args.input_module,  # -im
+        ]
+        # Count how many of the flags are set (True)
+        mutually_exclusive_flag_count = sum(
+            bool(flag) for flag in mutually_exclusive_flags
+        )
 
-        if (
-            self.main.args.interface or self.main.args.filepath
-        ) and self.main.args.input_module:
+        if mutually_exclusive_flag_count > 1:
             print(
-                "You can't use --input-module with -f or -i. Stopping slips."
+                "Only one of the flags -i, -ap, -s, -d, or -f is allowed. "
+                "Stopping Slips."
             )
             self.main.terminate_slips()
             return
 
+    def _check_if_growing_zeek_dir_is_used_correctly(self):
+        """it should be used with -i. something like -g <dir> -i
+        <interface>"""
+        if not self.main.args.growing:
+            return
+
+        usage = "Usage: -g <dir> -i <interface>."
+        if not self.main.args.interface:
+            print(
+                f"{usage}\n"
+                "You need to define an interface with -i. Stopping Slips"
+            )
+            self.main.terminate_slips()
+
+        if self.main.args.filepath:
+            print(f"{usage}\n" "-f shouldn't be used with -g. Stopping Slips")
+            self.main.terminate_slips()
+
+    def _check_if_root_is_required(self):
         if (self.main.args.save or self.main.args.db) and os.getuid() != 0:
             print("Saving and loading the database requires root privileges.")
             self.main.terminate_slips()
             return
+        if (
+            self.main.args.interface
+            and self.main.args.blocking
+            and os.geteuid() != 0
+        ):
+            # If the user wants to blocks, we need permission to modify
+            # iptables
+            print("Run Slips with sudo to use the blocking modules.")
+            self.main.terminate_slips()
+            return
+
+        if self.main.args.clearblocking:
+            if os.geteuid() != 0:
+                print(
+                    "Slips needs to be run as root to clear the slipsBlocking "
+                    "chain. Stopping."
+                )
+            else:
+                self.delete_blocking_chain()
+            self.main.terminate_slips()
+            return
+
+    def _check_interface_validity(self):
+        """checks if the given interface/s are valid"""
+        interfaces = psutil.net_if_addrs().keys()
+        if self.main.args.interface:
+            if self.main.args.interface not in interfaces:
+                print(
+                    f"{self.main.args.interface} is not a valid interface. "
+                    f"Stopping Slips"
+                )
+                self.main.terminate_slips()
+                return
+
+        if self.main.args.access_point:
+            for interface in self.main.args.access_point.split(","):
+                if interface not in interfaces:
+                    print(
+                        f"{interface} is not a valid interface."
+                        f" Stopping Slips"
+                    )
+                    self.main.terminate_slips()
+                    return
+
+    def _is_slips_running_non_stop(self) -> bool:
+        """determines if slips is monitoring real time traffic based oin
+        the giving params"""
+        return (
+            self.main.args.interface
+            or self.main.args.access_point
+            or self.main.args.input_module
+        )
+
+    def verify_given_flags(self):
+        """
+        Checks the validity of the given flags.
+        """
+        if self.main.args.help:
+            self._print_help_and_exit()
+
+        if self.main.args.version:
+            self.main.print_version()
+            self.main.terminate_slips()
+            return
+
+        self._check_mutually_exclusive_flags()
+        self._check_if_root_is_required()
+        self._check_interface_validity()
+        self._check_if_growing_zeek_dir_is_used_correctly()
 
         if (self.main.args.verbose and int(self.main.args.verbose) > 3) or (
             self.main.args.debug and int(self.main.args.debug) > 3
@@ -115,24 +216,12 @@ class Checker:
             )
             return
 
-        if self.main.conf.use_global_p2p() and not (
-            self.main.args.interface or self.main.args.growing
-        ):
+        if self.main.conf.use_global_p2p() and not self.main.args.interface:
             print(
                 "Warning: Global P2P (Fides Module + Iris Module) is only supported using "
                 "an interface. Global P2P (Fides Module + Iris Module) Disabled."
             )
             return
-
-        if self.main.args.interface:
-            interfaces = psutil.net_if_addrs().keys()
-            if self.main.args.interface not in interfaces:
-                print(
-                    f"{self.main.args.interface} is not a valid interface. "
-                    f"Stopping Slips"
-                )
-                self.main.terminate_slips()
-                return
 
         # if we're reading flows from some module other than the input
         # process, make sure it exists
@@ -148,9 +237,10 @@ class Checker:
             return
 
         # Clear cache if the parameter was included
-        if self.main.args.blocking and not self.main.args.interface:
+        if self.main.args.blocking and not self._is_slips_running_non_stop():
             print(
-                "Blocking is only allowed when running slips using an interface."
+                "Blocking is only allowed when running slips on real time "
+                "traffic. (running with -i, -ap, -im, or -g)"
             )
             self.main.terminate_slips()
             return
@@ -158,39 +248,6 @@ class Checker:
         # kill all open unused redis servers if the parameter was included
         if self.main.args.killall:
             self.main.redis_man.close_open_redis_servers()
-            self.main.terminate_slips()
-            return
-
-        if self.main.args.version:
-            self.main.print_version()
-            self.main.terminate_slips()
-            return
-
-        if (
-            self.main.args.interface
-            and self.main.args.blocking
-            and os.geteuid() != 0
-        ):
-            # If the user wants to blocks, we need permission to modify
-            # iptables
-            print("Run Slips with sudo to use the blocking modules.")
-            self.main.terminate_slips()
-            return
-
-        if self.main.args.clearblocking:
-            if os.geteuid() != 0:
-                print(
-                    "Slips needs to be run as root to clear the slipsBlocking "
-                    "chain. Stopping."
-                )
-            else:
-                self.delete_blocking_chain()
-            self.main.terminate_slips()
-            return
-
-        # Check if user want to save and load a db at the same time
-        if self.main.args.save and self.main.args.db:
-            print("Can't use -s and -d together")
             self.main.terminate_slips()
             return
 

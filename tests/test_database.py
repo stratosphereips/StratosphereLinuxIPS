@@ -31,23 +31,24 @@ profileid = "profile_192.168.1.1"
 twid = "timewindow1"
 test_ip = "192.168.1.1"
 flow = Conn(
-    "1601998398.945854",
-    "1234",
-    test_ip,
-    "8.8.8.8",
-    5,
-    "TCP",
-    "dhcp",
-    80,
-    88,
-    20,
-    20,
-    20,
-    20,
-    "",
-    "",
-    "Established",
-    "",
+    starttime="1601998398.945854",
+    uid="1234",
+    saddr=test_ip,
+    daddr="8.8.8.8",
+    dur=5,
+    proto="TCP",
+    appproto="dhcp",
+    sport=80,
+    dport=88,
+    spkts=20,
+    dpkts=20,
+    sbytes=20,
+    dbytes=20,
+    state="",
+    history="",
+    smac="Established",
+    dmac="",
+    interface="eth0",
 )
 
 
@@ -112,6 +113,7 @@ def test_set_evidence():
     victim: Victim = Victim(
         direction=Direction.DST, ioc_type=IoCType.IP, value="8.8.8.8"
     )
+    db._get_evidence_interface = Mock(return_value="eth0")
     evidence: Evidence = Evidence(
         evidence_type=EvidenceType.SSH_SUCCESSFUL,
         attacker=attacker,
@@ -171,12 +173,13 @@ def test_add_mac_addr_with_new_ipv4():
     mac_addr = "00:00:5e:00:53:af"
 
     db.rdb.is_gw_mac = Mock(return_value=False)
+    db.rdb._should_associate_this_mac_with_this_ip = Mock(return_value=True)
     db.r.hget = Mock()
     db.r.hset = Mock()
-    db.r.hmget = Mock(return_value=[None])  # No entry initially
+    db.r.hmget = Mock(return_value=[None])
 
     # simulate adding a new MAC and IPv4 address
-    assert db.add_mac_addr_to_profile(profileid_ipv4, mac_addr) is True
+    assert db.add_mac_addr_to_profile(profileid_ipv4, mac_addr, "eth0") is True
 
     # Ensure the IP is associated in the 'MAC' hash
     db.r.hmget.assert_called_with("MAC", mac_addr)
@@ -191,6 +194,7 @@ def test_add_mac_addr_with_existing_ipv4():
     ipv4 = "192.168.1.5"
     mac_addr = "00:00:5e:00:53:af"
     db.rdb.is_gw_mac = Mock(return_value=False)
+    db.rdb._should_associate_this_mac_with_this_ip = Mock(return_value=True)
     db.r.hget = Mock()
     db.r.hset = Mock()
     db.r.hmget = Mock(return_value=[json.dumps([ipv4])])
@@ -198,7 +202,7 @@ def test_add_mac_addr_with_existing_ipv4():
     new_profile = "profile_192.168.1.6"
 
     # try to add a new profile with the same MAC but another IPv4 address
-    assert db.add_mac_addr_to_profile(new_profile, mac_addr) is False
+    assert db.add_mac_addr_to_profile(new_profile, mac_addr, "eth0") is False
 
 
 def test_add_mac_addr_with_ipv6_association():
@@ -212,6 +216,7 @@ def test_add_mac_addr_with_ipv6_association():
 
     # mock existing entry with ipv6
     db.rdb.is_gw_mac = Mock(return_value=False)
+    db.rdb._should_associate_this_mac_with_this_ip = Mock(return_value=True)
     db.rdb.update_mac_of_profile = Mock()
     db.r.hmget = Mock(return_value=[json.dumps([ipv4])])
     db.r.hset = Mock()
@@ -220,11 +225,11 @@ def test_add_mac_addr_with_ipv6_association():
     ipv6 = "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
     profile_ipv6 = f"profile_{ipv6}"
     # try to associate an ipv6 with the same MAC address
-    assert db.add_mac_addr_to_profile(profile_ipv6, mac_addr)
+    assert db.add_mac_addr_to_profile(profile_ipv6, mac_addr, "eth0")
 
     expected_calls = [
-        call(profile_ipv4, mac_addr),  # call with ipv4 profile id
-        call(profile_ipv6, mac_addr),  # call with ipv6 profile id
+        call(profile_ipv4, mac_addr),  # call with the ipv4 profileid
+        call(profile_ipv6, mac_addr),  # call with the ipv6 profileid
     ]
     db.rdb.update_mac_of_profile.assert_has_calls(
         expected_calls, any_order=True

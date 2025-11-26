@@ -1,4 +1,5 @@
 redef LogAscii::use_json=T;
+redef tcp_attempt_delay=1min;
 
 function get_mmdb_path(): string {
     local curdir = @DIR;

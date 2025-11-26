@@ -363,7 +363,7 @@ exporting_alerts:
 
   # Configuer all the methods Slips will export data with
   # Available options are slack or stix
-  # export_to : [stix]
+  # export_to : [stix] (And a TAXII server)
   # export_to : [slack]
   export_to: []
 
@@ -389,12 +389,11 @@ exporting_alerts:
   # For Stix, if Slips should use TLS
   use_https: false
 
-  # TAXII
-  discovery_path: /services/discovery-a
-  inbox_path: /services/inbox-a
+  # TAXII 2 discovery endpoint (relative path or full URL)
+  discovery_path: /taxii2/
 
-  # Collection on the server you want to push stix data to
-  collection_name: collection-a
+  # Collection (ID or title) on the server you want to push STIX data to
+  collection_name: Alerts
 
   # This value is only used when Slips is running non-stop (e.g with -i )
   # push_delay is the time to wait before pushing STIX data to server
@@ -406,13 +405,7 @@ exporting_alerts:
 
   # TAXII server credentials
   taxii_username: admin
-  taxii_password: admin
-
-  # URL used to obtain JWT token. set this to '' if you don't want to use it
-  # is required for JWT based authentication.
-  # (JWT based authentication is Optional)
-  # It's usually /management/auth
-  jwt_auth_path: /management/auth
+  taxii_password: changeme_before_installing_a_medallion_server
 
 #############################
 CESNET:

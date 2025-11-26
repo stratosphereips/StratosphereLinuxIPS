@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import json
 import os
 import shutil
 import sqlite3
@@ -9,7 +10,7 @@ from typing import (
     Dict,
 )
 
-from modules.p2ptrust.trust.trustdb import TrustDB
+
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.redis_db.database import RedisDB
@@ -51,6 +52,10 @@ class DBManager:
 
         self.trust_db = None
         if self.conf.use_local_p2p():
+            # import this on demand because slips light version doesn't
+            # include the P2P dir
+            from modules.p2ptrust.trust.trustdb import TrustDB
+
             self.trust_db_path: str = self.init_p2ptrust_db()
             self.trust_db = TrustDB(
                 self.logger,
@@ -65,6 +70,7 @@ class DBManager:
         self.sqlite = None
         if start_sqlite:
             self.sqlite = SQLiteDB(self.logger, output_dir, main_pid)
+        self.all_interfaces = utils.get_all_interfaces(self.conf.get_args())
 
     def is_db_malformed(self, db_path: str) -> bool:
         try:
@@ -218,6 +224,12 @@ class DBManager:
     def ask_for_ip_info(self, *args, **kwargs):
         return self.rdb.ask_for_ip_info(*args, **kwargs)
 
+    def set_ap_info(self, *args, **kwargs):
+        return self.rdb.set_ap_info(*args, **kwargs)
+
+    def get_ap_info(self, *args, **kwargs):
+        return self.rdb.get_ap_info(*args, **kwargs)
+
     @classmethod
     def discard_obj(cls):
         """
@@ -319,9 +331,6 @@ class DBManager:
     def set_domain_resolution(self, *args, **kwargs):
         return self.rdb.set_domain_resolution(*args, **kwargs)
 
-    def get_redis_server_pid(self, *args, **kwargs):
-        return self.rdb.get_redis_server_pid(*args, **kwargs)
-
     def set_slips_mode(self, *args, **kwargs):
         return self.rdb.set_slips_mode(*args, **kwargs)
 
@@ -358,8 +367,8 @@ class DBManager:
     def get_field_separator(self, *args, **kwargs):
         return self.rdb.get_field_separator(*args, **kwargs)
 
-    def store_tranco_whitelisted_domain(self, *args, **kwargs):
-        return self.rdb.store_tranco_whitelisted_domain(*args, **kwargs)
+    def store_tranco_whitelisted_domains(self, *args, **kwargs):
+        return self.rdb.store_tranco_whitelisted_domains(*args, **kwargs)
 
     def is_whitelisted_tranco_domain(self, *args, **kwargs):
         return self.rdb.is_whitelisted_tranco_domain(*args, **kwargs)
@@ -439,6 +448,12 @@ class DBManager:
     def get_host_ip(self, *args, **kwargs):
         return self.rdb.get_host_ip(*args, **kwargs)
 
+    def get_wifi_interface(self, *args, **kwargs):
+        return self.rdb.get_wifi_interface(*args, **kwargs)
+
+    def get_all_host_ips(self, *args, **kwargs):
+        return self.rdb.get_all_host_ips(*args, **kwargs)
+
     def set_new_incoming_flows(self, *args, **kwargs):
         return self.rdb.set_new_incoming_flows(*args, **kwargs)
 
@@ -463,6 +478,9 @@ class DBManager:
     def set_org_info(self, *args, **kwargs):
         return self.rdb.set_org_info(*args, **kwargs)
 
+    def set_org_cidrs(self, *args, **kwargs):
+        return self.rdb.set_org_cidrs(*args, **kwargs)
+
     def get_org_info(self, *args, **kwargs):
         return self.rdb.get_org_info(*args, **kwargs)
 
@@ -472,11 +490,20 @@ class DBManager:
     def set_whitelist(self, *args, **kwargs):
         return self.rdb.set_whitelist(*args, **kwargs)
 
-    def get_all_whitelist(self, *args, **kwargs):
-        return self.rdb.get_all_whitelist(*args, **kwargs)
-
     def get_whitelist(self, *args, **kwargs):
         return self.rdb.get_whitelist(*args, **kwargs)
+
+    def is_whitelisted(self, *args, **kwargs):
+        return self.rdb.is_whitelisted(*args, **kwargs)
+
+    def is_domain_in_org_domains(self, *args, **kwargs):
+        return self.rdb.is_domain_in_org_domains(*args, **kwargs)
+
+    def is_asn_in_org_asn(self, *args, **kwargs):
+        return self.rdb.is_asn_in_org_asn(*args, **kwargs)
+
+    def is_ip_in_org_ips(self, *args, **kwargs):
+        return self.rdb.is_ip_in_org_cidrs(*args, **kwargs)
 
     def has_cached_whitelist(self, *args, **kwargs):
         return self.rdb.has_cached_whitelist(*args, **kwargs)
@@ -542,7 +569,42 @@ class DBManager:
         """returns the list of uids of the flows causing evidence"""
         return self.rdb.get_flows_causing_evidence(*args, **kwargs)
 
+    def _get_evidence_interface(self, evidence: Evidence) -> str:
+        """
+        Returns the interface of the first flow of the given evidence
+        PS: this function HAS TO return something, or else we wouldn't be
+        able to set an evidence without an interface. if slips is
+        completely unable to return the used interface, it returns "default"
+        """
+        # when slips is only monitoring 1 interface, must be it
+        if not self.all_interfaces:
+            self.interface = "default"
+            return "default"
+
+        if len(self.all_interfaces) == 1:
+            return self.all_interfaces[0]
+
+        elif len(self.all_interfaces) == 2:
+            # slips is running with -ap
+            try:
+                # get any flow uid of this evidence, to get the interface
+                # of it
+                uid = evidence.uid[0]
+            except (KeyError, IndexError, AttributeError):
+                # evidence doesnt have a uid?
+                return "default"
+
+            try:
+                flow: str = self.get_flow(uid)[uid]
+                if isinstance(flow, str):
+                    flow: dict = json.loads(flow)
+            except KeyError:
+                flow: dict = self.get_altflow_from_uid(uid)
+            return "default" if not flow else flow["interface"]
+
     def set_evidence(self, evidence: Evidence):
+        interface: str | None = self._get_evidence_interface(evidence)
+        setattr(evidence, "interface", interface)
         evidence_set = self.rdb.set_evidence(evidence)
         if evidence_set:
             # an evidence is generated for this profile

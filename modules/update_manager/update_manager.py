@@ -56,7 +56,7 @@ class UpdateManager(IModule):
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
         self.interval = 7
-        self.whitelist = Whitelist(self.logger, self.db)
+        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.slips_logfile = self.db.get_stdfile("stdout")
         self.org_info_path = "slips_files/organizations_info/"
         self.path_to_mac_db = "databases/macaddress-db.json"
@@ -1484,10 +1484,16 @@ class UpdateManager(IModule):
             self.whitelist.update()
 
     def update_org_files(self):
+        """
+        This func handles organizations whitelist files.
+        It updates the local IoCs of every supported organization in the db
+        and initializes the bloom filters
+        """
         for org in utils.supported_orgs:
             org_ips = os.path.join(self.org_info_path, org)
             org_asn = os.path.join(self.org_info_path, f"{org}_asn")
             org_domains = os.path.join(self.org_info_path, f"{org}_domains")
+
             if self.check_if_update_org(org_ips):
                 self.whitelist.parser.load_org_ips(org)
 
@@ -1576,10 +1582,11 @@ class UpdateManager(IModule):
         # delete the old ones
         self.db.delete_tranco_whitelist()
         response = self.responses["tranco_whitelist"]
+        domains = []
         for line in response.text.splitlines():
-            domain = line.split(",")[1]
-            domain.strip()
-            self.db.store_tranco_whitelisted_domain(domain)
+            domain = line.split(",")[1].strip()
+            domains.append(domain)
+        self.db.store_tranco_whitelisted_domains(domains)
 
         self.mark_feed_as_updated("tranco_whitelist")
 

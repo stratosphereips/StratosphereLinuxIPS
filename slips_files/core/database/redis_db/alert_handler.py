@@ -53,7 +53,7 @@ class AlertHandler:
 
     def get_malicious_profiles(self):
         """returns profiles that generated an alert"""
-        self.r.smembers(self.constants.MALICIOUS_PROFILES)
+        return self.r.smembers(self.constants.MALICIOUS_PROFILES)
 
     def set_evidence_causing_alert(self, alert: Alert):
         """
@@ -234,7 +234,6 @@ class AlertHandler:
                     break
 
             setattr(evidence, entity_type, entity)
-
         return evidence
 
     def set_evidence(self, evidence: Evidence):
@@ -273,7 +272,7 @@ class AlertHandler:
             not self.is_whitelisted_evidence(evidence.id)
         ):
             self.r.hset(evidence_hash, evidence.id, evidence_to_send)
-            self.r.incr(self.constants.NUMBER_OF_EVIDENCE, 1)
+            self.r.incr(self.constants.NUMBER_OF_EVIDENCE)
             self.publish(self.channels.EVIDENCE_ADDED, evidence_to_send)
             return True
 
@@ -311,7 +310,7 @@ class AlertHandler:
         # which means that any evidence passed to this function
         # can never be a part of a past alert
         self.r.hdel(f"{profileid}_{twid}_evidence", evidence_id)
-        self.r.incr(self.constants.NUMBER_OF_EVIDENCE, -1)
+        self.r.decr(self.constants.NUMBER_OF_EVIDENCE)
 
     def cache_whitelisted_evidence_id(self, evidence_id: str):
         """

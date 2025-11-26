@@ -203,25 +203,24 @@ You can read more about it [here](https://stratospherelinuxips.readthedocs.io/en
 
 ## Installing Slips natively
 
-Slips is dependent on three major elements:
+Slips depends on three major elements:
 
 - Python 3.10.12
-- Zeek
+- Zeek 8.0.0
 - Redis database 7.0.4
 
-To install these elements we will use APT package manager. After that, we will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node.JS and several npm packages.
 
+To install these elements, the script will use the APT package manager. After that, it will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node JS and several npm packages.
 
 
 **Instructions to download everything for Slips are below.**
 <br>
 
 ### Install Slips using shell script
-You can install it using install.sh
+You can install it using [install.sh](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/master/install/install.sh)
 
 	sudo chmod +x install.sh
 	sudo ./install.sh
-
 
 ### Installing Slips manually
 #### Installing Python, Redis, NodeJs, and required python and npm libraries.
@@ -314,6 +313,7 @@ You can kill this redis database by running:
 ```
 then choosing 1.
 
+After these steps, if you need the submodules, you will need to clone them as done in the `install.sh` script.
 
 
 ## Installing Slips on a Raspberry PI
@@ -343,9 +343,10 @@ Meaning it wil kick out the malicious device from the AP.
 
 
 1. Connect your RPI to your router using an ethernet cable
-2. Run your RPI as an access point using [create_ap](https://github.com/oblique/create_ap)
+2. Install [linux-wifi-hotspot](https://github.com/lakinduakash/linux-wifi-hotspot/blob/master/src/scripts/README.md)
+3. Start the access point (in NAT mode)
 
-`sudo create_ap wlan0 eth0 rpi_wifi mysecurepassword -c 40`
+  `sudo create_ap wlan0 eth0 rpi_wifi mysecurepassword -c 40`
 
 where `wlan0` is the wifi interface of your RPI, `eth0` is the ethernet interface and `-c 40` is the channel of the access point.
 
@@ -360,13 +361,13 @@ Check the [Debugging common AP errors](https://stratospherelinuxips.readthedocs.
 
 
 
-3. Run Slips in the RPI using the command below to listen to the traffic from the access point.
+4. Run Slips in the RPI using the command below to listen to the traffic from the access point.
 
 ```bash
 ./slips.py -i wlan0
 ```
 
-4. (Optional) If you want to block malicious devices, run Slips with the `-p` parameter. Using this parameter will
+5. (Optional) If you want to block malicious devices, run Slips with the `-p` parameter. Using this parameter will
 block all traffic to and from the malicious device when slips sets an alert.
 
 ```bash

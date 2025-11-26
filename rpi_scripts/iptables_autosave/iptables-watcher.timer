@@ -1,0 +1,12 @@
+[Unit]
+Description=Run iptables-watcher.service every 10 seconds
+
+[Timer]
+# run the service 5 seconds after boot
+OnBootSec=5s
+# then run the iptables-watcher every 10 seconds periodically
+OnUnitActiveSec=10s
+Unit=iptables-watcher.service
+
+[Install]
+WantedBy=timers.target

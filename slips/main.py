@@ -16,6 +16,7 @@ from typing import Set
 import logging
 
 from managers.host_ip_manager import HostIPManager
+from managers.ap_manager import APManager
 from managers.metadata_manager import MetadataManager
 from managers.process_manager import ProcessManager
 from managers.profilers_manager import ProfilersManager
@@ -24,8 +25,9 @@ from managers.ui_manager import UIManager
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
-from slips_files.common.style import green
+from slips_files.common.style import green, yellow
 from slips_files.core.database.database_manager import DBManager
+from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.helpers.checker import Checker
 
 
@@ -59,7 +61,7 @@ class Main:
             self.args = self.conf.get_args()
             self.profilers_manager = ProfilersManager(self)
             self.pid = os.getpid()
-            self.checker.check_given_flags()
+            self.checker.verify_given_flags()
             self.prepare_locks_dir()
             if not self.args.stopdaemon:
                 # Check the type of input
@@ -67,7 +69,7 @@ class Main:
                     self.input_type,
                     self.input_information,
                     self.line_type,
-                ) = self.checker.check_input_type()
+                ) = self.checker.get_input_type()
                 # If we need zeek (bro), test if we can run it.
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
@@ -76,6 +78,7 @@ class Main:
                 self.twid_width = self.conf.get_tw_width()
                 # should be initialised after self.input_type is set
                 self.host_ip_man = HostIPManager(self)
+                self.ap_manager = APManager(self)
 
     def check_zeek_or_bro(self):
         """
@@ -196,6 +199,7 @@ class Main:
 
         # self.args.output is the same as self.alerts_default_path
         self.input_information = os.path.normpath(self.input_information)
+        self.input_information = self.input_information.replace(",", "_")
         # now that slips can run several instances,
         # each created dir will be named after the instance
         # that created it
@@ -451,11 +455,13 @@ class Main:
     def print_gw_info(self):
         if self.gw_info_printed:
             return
-        if ip := self.db.get_gateway_ip():
-            self.print(f"Detected gateway IP: {green(ip)}")
-        if mac := self.db.get_gateway_mac():
-            self.print(f"Detected gateway MAC: {green(mac)}")
-        self.gw_info_printed = True
+
+        for interface in utils.get_all_interfaces(self.args):
+            if ip := self.db.get_gateway_ip(interface):
+                self.print(f"Detected gateway IP: {green(ip)}")
+            if mac := self.db.get_gateway_mac(interface):
+                self.print(f"Detected gateway MAC: {green(mac)}")
+            self.gw_info_printed = True
 
     def prepare_locks_dir(self):
         """
@@ -507,6 +513,19 @@ class Main:
                 self.print(str(e), 1, 1)
                 self.terminate_slips()
 
+            if self.args.access_point:
+                # is -ap given but no AP running?
+                if not self.ap_manager.is_ap_running():
+                    self.print(
+                        "Slips was started with -ap but can't detect a "
+                        "running access point. Please start an access point "
+                        "and restart Slips. Stopping."
+                    )
+                    self.terminate_slips()
+                else:
+                    self.print(yellow("Slips is running in AP mode."))
+                    self.ap_manager.store_ap_interfaces(self.input_information)
+
             self.db.set_input_metadata(
                 {
                     "output_dir": self.args.output,
@@ -521,7 +540,7 @@ class Main:
             # to be able to use the host IP as analyzer IP in alerts.json
             # should be after setting the input metadata with "input_type"
             # TLDR; dont change the order of this line
-            host_ip = self.host_ip_man.store_host_ip()
+            host_ips = self.host_ip_man.store_host_ip()
 
             self.print(
                 f"Using redis server on port: {green(self.redis_port)}",
@@ -539,20 +558,10 @@ class Main:
             self.profilers_manager.memory_profiler_init()
 
             if self.args.growing:
-                if self.input_type != "zeek_folder":
-                    self.print(
-                        f"Parameter -g should be used with "
-                        f"-f <dirname> not a {self.input_type} file. "
-                        f"Ignoring -g. Analyzing {self.input_information} "
-                        f"instead.",
-                        verbose=1,
-                        debug=3,
-                    )
-                else:
-                    self.print(
-                        f"Running on a growing zeek dir: {self.input_information}"
-                    )
-                    self.db.set_growing_zeek_dir()
+                self.print(
+                    f"Running on a growing zeek dir: " f"{self.args.growing}"
+                )
+                self.db.set_growing_zeek_dir()
 
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
@@ -580,6 +589,9 @@ class Main:
             # if slips is given a .rdb file, don't load the
             # modules as we don't need them
             if not self.args.db:
+                self.bloom_filters_man: BFManager = (
+                    self.proc_man.init_bloom_filters_manager()
+                )
                 # update local files before starting modules
                 # if wait_for_TI_to_finish is set to true in the config file,
                 # slips will wait untill all TI files are updated before
@@ -589,6 +601,10 @@ class Main:
                     ti_feeds=self.conf.wait_for_TI_to_finish(),
                 )
                 self.print("Starting modules", 1, 0)
+                # initialize_filter must be called after the update manager
+                # is started, and before the modules start. why? because
+                # update manager updates the iocs that the bloom filters need
+                self.bloom_filters_man.initialize_filter()
                 self.proc_man.load_modules()
                 # give outputprocess time to print all the started modules
                 time.sleep(0.5)
@@ -636,8 +652,6 @@ class Main:
 
             # Don't try to stop slips if it's capturing from
             # an interface or a growing zeek dir
-            self.is_interface: bool = self.db.is_running_non_stop()
-
             while not self.proc_man.stop_slips():
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
@@ -656,7 +670,7 @@ class Main:
                     self.metadata_man.update_slips_stats_in_the_db()[1]
                 )
 
-                self.host_ip_man.update_host_ip(host_ip, modified_profiles)
+                self.host_ip_man.update_host_ip(host_ips, modified_profiles)
 
         except KeyboardInterrupt:
             # the EINTR error code happens if a signal occurred while

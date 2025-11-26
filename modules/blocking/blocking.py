@@ -16,6 +16,9 @@ from .exec_iptables_cmd import exec_iptables_command
 from modules.blocking.unblocker import Unblocker
 
 
+OUTPUT_TO_DEV_NULL = ">/dev/null 2>&1"
+
+
 class Blocking(IModule):
     """Data should be passed to this module as a json encoded python dict,
     by default this module flushes all slipsBlocking chains before it starts"""
@@ -46,6 +49,10 @@ class Blocking(IModule):
             open(self.blocking_log_path, "w").close()
         except FileNotFoundError:
             pass
+        self.last_closed_tw = None
+
+        self.ap_info: None | Dict[str, str] = self.db.get_ap_info()
+        self.is_running_in_ap_mode = True if self.ap_info else False
 
     def log(self, text: str):
         """Logs the given text to the blocking log file"""
@@ -89,7 +96,9 @@ class Blocking(IModule):
         # self.delete_iptables_chain()
         self.print('Executing "sudo iptables -N slipsBlocking"', 6, 0)
         # Add a new chain to iptables
-        os.system(f"{self.sudo} iptables -N slipsBlocking >/dev/null 2>&1")
+        os.system(
+            f"{self.sudo} iptables -N slipsBlocking {OUTPUT_TO_DEV_NULL}"
+        )
 
         # Check if we're already redirecting to slipsBlocking chain
         input_chain_rules = self._get_cmd_output(
@@ -107,18 +116,18 @@ class Blocking(IModule):
         # FORWARD chains
         if "slipsBlocking" not in input_chain_rules:
             os.system(
-                self.sudo
-                + " iptables -I INPUT -j slipsBlocking >/dev/null 2>&1"
+                f"{self.sudo} iptables -I INPUT -j slipsBlocking "
+                f"{OUTPUT_TO_DEV_NULL}"
             )
         if "slipsBlocking" not in output_chain_rules:
             os.system(
-                self.sudo
-                + " iptables -I OUTPUT -j slipsBlocking >/dev/null 2>&1"
+                f"{self.sudo} iptables -I OUTPUT -j slipsBlocking "
+                f"{OUTPUT_TO_DEV_NULL}"
             )
         if "slipsBlocking" not in forward_chain_rules:
             os.system(
-                self.sudo
-                + " iptables -I FORWARD -j slipsBlocking >/dev/null 2>&1"
+                f"{self.sudo} iptables -I FORWARD -j slipsBlocking"
+                f" {OUTPUT_TO_DEV_NULL}"
             )
 
     def _is_ip_already_blocked(self, ip) -> bool:
@@ -134,7 +143,9 @@ class Blocking(IModule):
         This function determines the user's platform and firewall and calls
         the appropriate function to add the rules to the used firewall.
         By default this function blocks all traffic from and to the given ip.
-        return strue if the ip is successfully blocked
+        and it Blocks private IPs on the given interface, and block public
+        IPs on all interfaces
+        returns true if the ip is successfully blocked
         """
 
         if self.firewall != "iptables":
@@ -152,15 +163,25 @@ class Blocking(IModule):
         dport = flags.get("dport")
         sport = flags.get("sport")
         protocol = flags.get("protocol")
+        interface = flags.get("interface")
         # Set the default behaviour to block all traffic from and to an ip
         if from_ is None and to is None:
             from_, to = True, True
         # This dictionary will be used to construct the rule
         options = {
             "protocol": f" -p {protocol}" if protocol is not None else "",
-            "dport": f" --dport {str(dport)}" if dport is not None else "",
-            "sport": f" --sport {str(sport)}" if sport is not None else "",
+            "dport": f" --dport {dport}" if dport is not None else "",
+            "sport": f" --sport {sport}" if sport is not None else "",
         }
+
+        if utils.is_private_ip(ip_to_block) and interface:
+            # block all ingoing AND outgoing packet on the given interface
+            options.update(
+                {
+                    "interface": f" -i {interface} -o {interface}",
+                }
+            )
+
         blocked = False
         if from_:
             # Add rule to block traffic from source ip_to_block (-s)
@@ -234,6 +255,7 @@ class Blocking(IModule):
                 "dport": data.get("dport"),
                 "sport": data.get("sport"),
                 "protocol": data.get("protocol"),
+                "interface": data.get("interface"),
             }
             if block:
                 self._block_ip(ip, flags)

@@ -16,7 +16,6 @@ scikit_learn
 slackclient
 matplotlib
 stix2
-cabby
 pandas
 setuptools
 numpy

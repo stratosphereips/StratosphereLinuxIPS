@@ -81,6 +81,7 @@ class Utils(object):
         self.alerts_format = "%Y/%m/%d %H:%M:%S.%f%z"
         self.local_tz = self.get_local_timezone()
         self.aid = aid_hash.AID()
+        self.used_inetrface = None
 
     def generate_uid(self):
         """Generates a UID similar to what Zeek uses."""
@@ -188,6 +189,33 @@ class Utils(object):
             return {k: self.to_dict(v) for k, v in obj.items()}
 
         return obj
+
+    def get_interface_of_ip(self, ip, db, args) -> str:
+        """
+        Gets the interface this IP is attacking on
+        return s None if slips isnt running on an interface
+        """
+        if args.interface:
+            return args.interface
+
+        if args.access_point:
+            # we have 2 interfaces, in which interface is the ip_to_block?
+            for _type, interface in db.get_ap_info().items():
+                # _type can be 'wifi_interface' or "ethernet_interface"
+                local_net: str = db.get_local_network(interface)
+                ip_obj = ipaddress.ip_address(ip)
+                if ip_obj in ipaddress.IPv4Network(local_net):
+                    return interface
+
+    def get_gateway_for_iface(self, iface: str) -> Optional[str]:
+        """returns the default gateway for the given interface"""
+        gws = netifaces.gateways()
+        for family in (netifaces.AF_INET, netifaces.AF_INET6):
+            if "default" in gws and gws["default"][family]:
+                gw, gw_iface = gws["default"][family]
+                if gw_iface == iface:
+                    return gw
+        return None
 
     def is_valid_uuid4(self, uuid_string: str) -> bool:
         """Validate that the given str in UUID4"""
@@ -437,6 +465,36 @@ class Utils(object):
             datetime.now(), format or self.alerts_format
         )
 
+    def get_cidr_of_interface(self, interface: str) -> str | None:
+        try:
+            addrs = netifaces.ifaddresses(interface)
+            ipv4_addrs = addrs.get(socket.AF_INET)
+
+            if ipv4_addrs:
+                for addr_info in ipv4_addrs:
+                    ip = addr_info.get("addr")
+                    netmask = addr_info.get("netmask")
+
+                    if ip and netmask:
+                        # Create an interface object from the IP and netmask
+                        iface = ipaddress.ip_interface(f"{ip}/{netmask}")
+                        network_cidr = str(iface.network)
+                        return network_cidr
+        except Exception:
+            return
+
+    def get_all_interfaces(self, args) -> List[str]:
+        """
+        returns a list of all interfaces slips is now monitoring
+        :param args: slips args
+        """
+        if args.interface:
+            return [args.interface]
+        if args.access_point:
+            return args.access_point.split(",")
+
+        return ["default"]
+
     def get_mac_for_ip_using_cache(self, ip: str) -> str | None:
         """gets the mac of the given local ip using the local arp cache"""
         try:
@@ -477,7 +535,7 @@ class Utils(object):
         :kwarg ret: "Dict" or "List"
         and returns a list of all the ips combined if ret=List is given
         """
-        if "-i" not in sys.argv and "-g" not in sys.argv:
+        if "-i" not in sys.argv:
             # this method is only valid when running on an interface
             return []
 

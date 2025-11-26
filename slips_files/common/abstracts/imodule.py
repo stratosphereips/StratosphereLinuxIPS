@@ -11,6 +11,7 @@ from typing import (
     Optional,
 )
 from slips_files.common.printer import Printer
+from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
@@ -38,6 +39,7 @@ class IModule(ABC, Process):
         slips_args,
         conf,
         ppid: int,
+        bloom_filters_manager: BFManager,
         **kwargs,
     ):
         Process.__init__(self)
@@ -53,6 +55,7 @@ class IModule(ABC, Process):
         # used to tell all slips.py children to stop
         self.termination_event: Event = termination_event
         self.logger = logger
+        self.bloom_filters: BFManager = bloom_filters_manager
         self.printer = Printer(self.logger, self.name)
         self.db = DBManager(
             self.logger, self.output_dir, self.redis_port, self.conf, self.ppid
