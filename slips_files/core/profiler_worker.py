@@ -22,53 +22,60 @@ from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
+from slips_files.core.input_profilers.argus import Argus
+from slips_files.core.input_profilers.nfdump import Nfdump
+from slips_files.core.input_profilers.suricata import Suricata
+from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 
 
 class ProfilerWorker(Process):
-    name = "ProfilerWorker"
-
     def __init__(
         self,
+        name,
         logger,
         output_dir,
         redis_port,
         conf,
         ppid: int,
+        localnet_cache: multiprocessing.manager.Dict,
         profiler_queue: multiprocessing.Queue,
-        input_type: str,
         stop_profiler_workers: multiprocessing.Event,
         handle_setting_local_net_lock: multiprocessing.Lock,
         flows_to_process_q: multiprocessing.Queue,
+        input_handler: (
+            ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
+        ),
     ):
         super().__init__()
+        self.name = name
         self.logger = logger
         self.output_dir = output_dir
         self.redis_port = redis_port
         self.conf = conf
         self.ppid = ppid
         self.profiler_queue = profiler_queue
-        self.input_type = input_type
-        self.stop_profiler_workers = stop_profiler_workers
         self.flows_to_process_q = flows_to_process_q
+        self.stop_profiler_workers = stop_profiler_workers
+        # this is an instance of that cls
+        self.input_handler = input_handler
+        self.handle_setting_local_net_lock = handle_setting_local_net_lock
 
-        self.read_configuration()
         self.printer = Printer(self.logger, self.name)
         self.db = DBManager(
             self.logger, self.output_dir, self.redis_port, self.conf, self.ppid
         )
 
-        self.rec_lines = 0
-        self.localnet_cache = {}
+        self.read_configuration()
+        self.received_lines = 0
+        self.localnet_cache = localnet_cache
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.symbol = SymbolHandler(self.logger, self.db)
         # stores the MAC addresses of the gateway of each interface
         # will have interfaces as keys, and MACs as values
         self.gw_macs = {}
         self.gw_ips = {}
-        # @@@@@@@@@@@@@ handle this
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
-        self.handle_setting_local_net_lock = handle_setting_local_net_lock
 
     def read_configuration(self):
         self.local_whitelist_path = self.conf.local_whitelist_path()
@@ -126,8 +133,13 @@ class ProfilerWorker(Process):
     def store_first_seen_ts(self, ts):
         # set the pcap/file start time in the analysis key
         if self.first_flow:
-            self.db.set_input_metadata({"file_start": ts})
             self.first_flow = False
+
+            if self.db.get_first_flow_time():
+                # already set by another worker
+                return
+
+            self.db.set_input_metadata({"file_start": ts})
 
     def store_features_going_in(self, profileid: str, twid: str, flow):
         """
@@ -394,7 +406,6 @@ class ProfilerWorker(Process):
             # we didnt get the MAC of the GW of this flow's interface
             # ok consider the GW MAC = any dst MAC of a flow
             # going from a private srcip -> a public ip
-            print(f"@@@@@@@@@@@@@@@@ flow.saddr {flow.saddr}")
             if (
                 utils.is_private_ip(flow.saddr)
                 and not utils.is_ignored_ip(flow.daddr)
@@ -445,10 +456,9 @@ class ProfilerWorker(Process):
         if self.db.is_running_non_stop():
             if flow.interface in self.localnet_cache:
                 return False
-        else:
+        elif "default" in self.localnet_cache:
             # running on a file, impossible to get the interface
-            if "default" in self.localnet_cache:
-                return False
+            return False
 
         if flow.saddr == "0.0.0.0":
             return False
@@ -464,7 +474,7 @@ class ProfilerWorker(Process):
         if self.is_ignored_ip(flow.saddr):
             return False
 
-        saddr_obj: ipaddress = ipaddress.ip_address(flow.saddr)
+        saddr_obj = ipaddress.ip_address(flow.saddr)
         if not utils.is_private_ip(saddr_obj):
             return False
 
@@ -534,23 +544,17 @@ class ProfilerWorker(Process):
                 # wait for msgs
                 continue
 
-            # print(f"@@@@@@@@@@@@@@@@ {msg}")
             line: dict = msg["line"]
-            # can be ("zeek_folder", "zeek_log_file", "pcap", "interface")
-            input_type: str = msg["input_type"]
             # TODO who is putting this True here?
             if line is True:
                 continue
 
             # Received new input data
             self.print(f"< Received Line: {line}", 2, 0)
-            self.rec_lines += 1
+            self.received_lines += 1
 
-            # get the correct input type class and process the line based on it
             try:
-                self.init_input_handlers(line, input_type)
-
-                flow = self.input_handler_cls.process_line(line)
+                flow = self.input_handler.process_line(line)
                 if not flow:
                     continue
                 self.add_flow_to_profile(flow)
