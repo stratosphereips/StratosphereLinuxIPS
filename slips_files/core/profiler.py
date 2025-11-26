@@ -18,6 +18,7 @@
 # stratosphere@aic.fel.cvut.cz
 import queue
 import multiprocessing
+from multiprocessing import Process
 from typing import (
     List,
     Union,
@@ -92,7 +93,11 @@ class Profiler(ICore, IObservable):
         # is set by this proc to tell input proc that we are done
         # processing and it can exit no issue
         self.is_profiler_done_event = is_profiler_done_event
-        self.profiler_workers_pids = []
+        # to close them on shutdown
+        self.profiler_child_processes: List[Process] = []
+        # to access their internal attributes if needed
+        self.workers: List[ProfilerWorker] = []
+
         self.stop_profiler_workers = multiprocessing.Event()
         # each msg received from inputprocess will be put here, and each one
         # profiler worker will retrieve msgs from this queue.
@@ -102,6 +107,9 @@ class Profiler(ICore, IObservable):
         # waiting for new msgs
         self.flows_to_process_q = multiprocessing.Queue()
         self.handle_setting_local_net_lock = multiprocessing.Lock()
+        self.is_first_msg = True
+        self.manager = multiprocessing.Manager()
+        self.localnet_cache = self.manager.dict()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -138,7 +146,7 @@ class Profiler(ICore, IObservable):
             return input_type
 
     def join_profiler_workers(self):
-        for process in self.profiler_workers_pids:
+        for process in self.profiler_child_processes:
             process.join()
 
     def mark_process_as_done_processing(self):
@@ -183,60 +191,67 @@ class Profiler(ICore, IObservable):
         except Exception:
             return None
 
-    def worker(self):
+    def worker(
+        self,
+        name,
+        input_handler_obj: (
+            ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
+        ),
+    ):
         ProfilerWorker(
+            name=name,
             logger=self.logger,
             output_dir=self.output_dir,
             redis_port=self.redis_port,
             conf=self.conf,
             ppid=self.ppid,
+            localnet_cache=self.localnet_cache,
             profiler_queue=self.profiler_queue,
-            input_type=self.input_type,  # @@@@@@@@@@@@@ TODO get the input
-            # type here
             stop_profiler_workers=self.stop_profiler_workers,
             handle_setting_local_net_lock=self.handle_setting_local_net_lock,
             flows_to_process_q=self.flows_to_process_q,
+            input_handler=input_handler_obj,
         ).start()
 
-    def start_profiler_workers(self):
+    def start_profiler_workers(self, input_handler_cls):
         """starts 3 profiler workers for faster processing of the flows"""
         num_of_profiler_workers = 3
-        for _ in range(num_of_profiler_workers):
-            proc = multiprocessing.Process(target=self.worker)
-            utils.start_process(proc, self.db)
-            self.profiler_workers_pids.append(proc)
-
-    def init_input_handlers(self, line, input_type_from_input_proc: str):
-        """
-        This function determines the exact input type, if input process
-        says it's an interface, this func says whether the flows are zeek or
-        zeek-tabs.
-
-        sets self.input_handler_obj to the correct input handler class
-
-        :param input_type_from_input_proc: input type as received from
-        input process. can be ("zeek_folder", "zeek_log_file", "pcap",
-        "interface")
-
-        """
-        # self.input_type is set only once by get_input_type
-        # once we know the type, no need to check each line for it
-        if not self.input_type:
-            # Find the type of input received
-            self.input_type = self.get_input_type(
-                line, input_type_from_input_proc
+        for number in range(num_of_profiler_workers):
+            proc = multiprocessing.Process(
+                target=self.worker,
+                args=(
+                    f"ProfilerWorker_{number}",
+                    input_handler_cls,
+                ),
             )
+            utils.start_process(proc, self.db)
+            self.profiler_child_processes.append(proc)
 
-        # What type of input do we have?
-        if not self.input_type:
+    def get_handler_class(
+        self, first_msg: dict
+    ) -> ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump:
+        """
+        This function determines the class that handles the given flows.
+        based on the exact input type.
+
+        :param first_msg: the first msg received from the input process
+
+        returns the input handler class from SUPPORTED_INPUT_TYPES
+        """
+        line: dict = first_msg["line"]
+        # can be ("zeek_folder", "zeek_log_file", "pcap", "interface")
+        input_type_from_input_proc: str = first_msg["input_type"]
+
+        # if input process says it's an interface, this func says whether
+        # the flows are zeek or zeek-tabs and gets the class based on it.
+        input_type = self.get_input_type(line, input_type_from_input_proc)
+        if not input_type:
             # the above define_type can't define the type of input
             self.print("Can't determine input type.")
-            return False
+            return None
 
-        # only create the input_handler_obj once,
-        # the rest of the flows will use the same input handler
-        if not hasattr(self, "input_handler_obj"):
-            self.input_handler_cls = SUPPORTED_INPUT_TYPES[self.input_type]()
+        input_handler_cls = SUPPORTED_INPUT_TYPES[input_type]()
+        return input_handler_cls
 
     def should_stop(self):
         """
@@ -250,6 +265,9 @@ class Profiler(ICore, IObservable):
         return False
 
     def shutdown_gracefully(self):
+        for worker in self.workers:
+            self.rec_lines += worker.received_lines
+
         self.stop_profiler_workers.set()
         # wait for all flows to be processed by the profiler processes.
         self.join_profiler_workers()
@@ -270,7 +288,6 @@ class Profiler(ICore, IObservable):
         client_ips = [str(ip) for ip in self.client_ips]
         if client_ips:
             self.print(f"Used client IPs: {green(', '.join(client_ips))}")
-        self.start_profiler_workers()
 
     def main(self):
         # the only thing that stops this loop is the 'stop' msg
@@ -289,6 +306,17 @@ class Profiler(ICore, IObservable):
                 # shutdown gracefully will be called by ICore() once this
                 # function returns
                 return 1
+
+            if self.is_first_msg:
+                self.is_first_msg = False
+
+                input_handler_cls = self.get_handler_class(msg)
+                if not input_handler_cls:
+                    self.print("Unsupported input type, exiting.")
+                    return 1
+
+                self.start_profiler_workers(input_handler_cls)
+                continue
 
             self.pending_flows_queue_lock.acquire()
             self.flows_to_process_q.put(msg)
