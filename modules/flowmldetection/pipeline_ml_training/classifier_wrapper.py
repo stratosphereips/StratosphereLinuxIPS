@@ -10,13 +10,14 @@ import numpy
 # functions: save/load, fit/predict, init new classifier
 #
 class ClassifierWrapper:
-    def __init__(self, classifier):
+    def __init__(self, classifier, preprocessing_handler):
 
         self.classifier = classifier
         self.is_trained = False
         self.classes = [BENIGN, MALICIOUS]
         self.dummy_flows = {}
         self.fill_dummy()
+        self.preprocessing_handler = preprocessing_handler
 
     def fill_dummy(self):
         # these dummy flows are taken from slips itself
@@ -77,35 +78,39 @@ class ClassifierWrapper:
             self.classifier = pickle.load(f)
         self.is_trained = True
 
-    def partial_fit(self, X, y):
-        if not hasattr(self.classifier, "partial_fit"):
-            raise NotImplementedError(
-                "The underlying classifier does not support partial_fit."
+    def process_flows(self, X, y):
+        # first fit, check for class coverage (at least one??)
+        missing_classes = [cls for cls in self.classes if cls not in set(y)]
+        if missing_classes:
+            print(
+                f"Warning: The initial training data does not contain samples for all classes. Missing classes: {missing_classes}"
             )
-
-        if not self.is_trained:
-            # first fit, check for class coverage (at least one??)
-            missing_classes = [
-                cls for cls in self.classes if cls not in set(y)
-            ]
-            if missing_classes:
-                print(
-                    f"Warning: The initial training data does not contain samples for all classes. Missing classes: {missing_classes}"
+        for cls in missing_classes:
+            if not hasattr(self, "dummy_flows") or cls not in self.dummy_flows:
+                raise ValueError(
+                    f"No dummy sample provided for missing class {cls} in self.dummy_flows."
                 )
-            for cls in missing_classes:
-                if (
-                    not hasattr(self, "dummy_flows")
-                    or cls not in self.dummy_flows
-                ):
-                    raise ValueError(
-                        f"No dummy sample provided for missing class {cls} in self.dummy_flows."
-                    )
-                X = numpy.concatenate([X, self.dummy_flows[cls][0]], axis=0)
-                y = numpy.concatenate([y, numpy.array([cls])], axis=0)
-            self.is_trained = True
-            self.classifier.partial_fit(X, y, classes=self.classes)
-        else:
-            self.classifier.partial_fit(X, y)
+            processed_dummy = self.preprocessing_handler.transform(
+                self.dummy_flows[cls][0]
+            )
+            X = numpy.concatenate([X, processed_dummy], axis=0)
+            y = numpy.concatenate([y, numpy.array([cls])], axis=0)
+        self.is_trained = True
+        return X, y
+
+    def native_fitting_function(self, X, y, *args, **kwargs):
+        pass
+
+    def partial_fit(self, X, y):
+        try:
+            if not self.is_trained:
+                X, y = self.process_flows(X, y)
+                self.native_fitting_function(X, y, classes=self.classes)
+            else:
+                self.native_fitting_function(X, y)
+        except Exception as e:
+            print(f"[ERROR] Classifier partial_fit failed: {e}")
+            raise
 
     def predict(self, X):
         return self.classifier.predict(X)
@@ -127,16 +132,23 @@ class ClassifierWrapper:
 
 
 class SKLearnClassifierWrapper(ClassifierWrapper):
-    def __init__(self, classifier):
-        super().__init__(classifier)
+    def __init__(self, classifier, preprocessing_handler=None):
+        super().__init__(
+            classifier, preprocessing_handler=preprocessing_handler
+        )
+
+    def native_fitting_function(self, X, y, *args, **kwargs):
+        self.classifier.partial_fit(X, y, *args, **kwargs)
 
 
 # wrappers for other libraries? torch, xgboost, lightgbm
 class RiverClassifierWrapper(ClassifierWrapper):
-    def __init__(self, classifier):
-        super().__init__(classifier)
+    def __init__(self, classifier, preprocessing_handler=None):
+        super().__init__(
+            classifier, preprocessing_handler=preprocessing_handler
+        )
 
-    def partial_fit(self, X, y):
+    def native_fitting_function(self, X, y, *args, **kwargs):
         # Prefer batch update if the river estimator supports learn_many
         if hasattr(self.classifier, "learn_many"):
             try:
