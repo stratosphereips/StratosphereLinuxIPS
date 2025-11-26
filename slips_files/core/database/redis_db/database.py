@@ -1545,6 +1545,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         pid = self.r.hget(self.constants.PIDS, module_name)
         return int(pid) if pid else None
 
+    def store_module_flows_per_second(self, module, fps):
+        self.r.hset(self.constants.MODULES_FLOWS_PER_SECOND, module, fps)
+
+    def get_module_flows_per_second(self, module):
+        return self.r.hget(self.constants.MODULES_FLOWS_PER_SECOND, module)
+
     def get_name_of_module_at(self, given_pid):
         """returns the name of the module that has the given pid"""
         for name, pid in self.get_pids().items():
