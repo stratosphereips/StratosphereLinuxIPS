@@ -18,6 +18,7 @@
 # stratosphere@aic.fel.cvut.cz
 import queue
 import multiprocessing
+import time
 from multiprocessing import Process
 from typing import (
     List,
@@ -108,6 +109,8 @@ class Profiler(ICore, IObservable):
         self.is_first_msg = True
         self.manager = multiprocessing.Manager()
         self.localnet_cache = self.manager.dict()
+        # max parallel profiler workers to start when high throughput is detected
+        self.max_workers = 10
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -205,19 +208,17 @@ class Profiler(ICore, IObservable):
             bloom_filters=self.bloom_filters,
         ).start()
 
-    def start_profiler_workers(self, input_handler_cls):
-        """starts 3 profiler workers for faster processing of the flows"""
-        num_of_profiler_workers = 3
-        for number in range(num_of_profiler_workers):
-            proc = multiprocessing.Process(
-                target=self.worker,
-                args=(
-                    f"ProfilerWorker_{number}",
-                    input_handler_cls,
-                ),
-            )
-            utils.start_process(proc, self.db)
-            self.profiler_child_processes.append(proc)
+    def start_profiler_worker(self, worker_id: int = None):
+        """starts A profiler worker for faster processing of the flows"""
+        proc = multiprocessing.Process(
+            target=self.worker,
+            args=(
+                f"ProfilerWorker_{worker_id}",
+                self.input_handler_cls,
+            ),
+        )
+        utils.start_process(proc, self.db)
+        self.profiler_child_processes.append(proc)
 
     def get_handler_class(
         self, first_msg: dict
@@ -276,6 +277,64 @@ class Profiler(ICore, IObservable):
         )
         self.mark_process_as_done_processing()
 
+    def did_5min_pass_since_last_throughput_check(self) -> bool:
+        """
+        returns true if 5 mins passed since the last time we checked
+        the flows read per second
+        """
+        now = time.time()
+        self.last_throughput_check_time = getattr(
+            self, "last_throughput_check_time", now
+        )
+        time_diff = now - self.last_throughput_check_time
+        if time_diff < 300:  # check every 5 minutes
+            return False
+
+        self.last_throughput_check_time = now
+        return True
+
+    def max_workers_started(self) -> bool:
+        """
+        returns true if the maximum number of profiler workers
+        is already started
+        """
+        # bc workers start from 0
+        if self.last_worker_id + 1 >= self.max_workers:
+            return True
+        return False
+
+    def check_if_high_throughput_and_add_workers(self):
+        """
+        Checks for input and profile flows/sec imbalance and adds more
+        profiler workers if needed.
+        """
+        if self.max_workers_started():
+            return
+
+        if not self.did_5min_pass_since_last_throughput_check():
+            return
+
+        profiler_fps = self.db.get_module_flows_per_second(self.name)
+        input_fps = self.db.get_module_flows_per_second("Input")
+
+        if (
+            input_fps > profiler_fps * 1.1
+        ):  # 10% more input fps than profiler fps
+            worker_id = self.last_worker_id + 1
+            self.start_profiler_worker(worker_id)
+            self.last_worker_id = worker_id
+            self.print(
+                f"Warning: High throughput detected. Started "
+                f"additional worker: "
+                f"ProfilerWorker_{worker_id} to handle the flows."
+            )
+
+            if self.last_worker_id == self.max_workers - 1:
+                self.print(
+                    f"Maximum number of profiler workers "
+                    f"({self.max_workers - 1}) started."
+                )
+
     def pre_main(self):
         client_ips = [str(ip) for ip in self.client_ips]
         if client_ips:
@@ -285,6 +344,7 @@ class Profiler(ICore, IObservable):
         # the only thing that stops this loop is the 'stop' msg
         # we're using self.should_stop() here instead of while True to be
         # able to unit test this function:D
+
         while not self.should_stop():
             # implemented in icore.py
             self.store_flows_read_per_second()
@@ -305,17 +365,24 @@ class Profiler(ICore, IObservable):
             if self.is_first_msg:
                 self.is_first_msg = False
 
-                input_handler_cls = self.get_handler_class(msg)
-                if not input_handler_cls:
+                self.input_handler_cls = self.get_handler_class(msg)
+                if not self.input_handler_cls:
                     self.print("Unsupported input type, exiting.")
                     return 1
 
                 line: dict = msg["line"]
                 # updates internal zeek to slips mapping if needed
-                input_handler_cls.process_line(line)
+                self.input_handler_cls.process_line(line)
 
-                self.start_profiler_workers(input_handler_cls)
+                # slips starts with 3 workers by default until it detects
+                # high throughput that 3 workers arent enough to handle
+                num_of_profiler_workers = 3
+                for worker_id in range(num_of_profiler_workers):
+                    self.last_worker_id = worker_id
+                    self.start_profiler_worker(worker_id)
                 continue
 
             self.flows_to_process_q.put(msg)
+
+            self.check_if_high_throughput_and_add_workers()
         return None
