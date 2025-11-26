@@ -555,7 +555,7 @@ def test_shutdown_gracefully(monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
     profiler.print = Mock()
     profiler.mark_process_as_done_processing = Mock()
-    profiler.rec_lines = 100
+    profiler.received_lines = 100
 
     # monkeypatch.setattr(profiler, "print", Mock())
     profiler.shutdown_gracefully()
@@ -807,9 +807,9 @@ def test_process_flow_no_msg():
     profiler.should_stop_profiler_workers = Mock()
     profiler.get_msg_from_queue = Mock()
     profiler.add_flow_to_profile = Mock()
-    profiler.input_handler_cls = Mock()
+    profiler.input_handler = Mock()
     profiler.print = Mock()
-    profiler.init_input_handlers = Mock()
+    profiler.get_handler_class = Mock()
     profiler.print_traceback = Mock()
 
     profiler.should_stop_profiler_workers.side_effect = [
@@ -822,8 +822,8 @@ def test_process_flow_no_msg():
 
     profiler.process_flow()
 
-    profiler.init_input_handlers.assert_not_called()
-    profiler.input_handler_cls.process_line.assert_not_called()
+    profiler.get_handler_class.assert_not_called()
+    profiler.input_handler.process_line.assert_not_called()
     profiler.add_flow_to_profile.assert_not_called()
     profiler.print.assert_not_called()
 
@@ -832,12 +832,12 @@ def test_process_flow():
     profiler = ModuleFactory().create_profiler_obj()
     profiler.should_stop_profiler_workers = Mock()
     profiler.get_msg_from_queue = Mock()
-    profiler.input_handler_cls = Mock()
+    profiler.input_handler = Mock()
     profiler.add_flow_to_profile = Mock()
     profiler.handle_setting_local_net = Mock()
     profiler.print = Mock()
     profiler.print_traceback = Mock()
-    profiler.init_input_handlers = Mock()
+    profiler.get_handler_class = Mock()
     profiler.should_stop_profiler_workers.side_effect = [
         False,
         True,
@@ -847,12 +847,12 @@ def test_process_flow():
         "input_type": "zeek",
     }
 
-    profiler.input_handler_cls.process_line = Mock(return_value=Mock())
+    profiler.input_handler.process_line = Mock(return_value=Mock())
 
     profiler.process_flow()
 
-    profiler.init_input_handlers.assert_called_once()
-    profiler.input_handler_cls.process_line.assert_called_once()
+    profiler.get_handler_class.assert_called_once()
+    profiler.input_handler.process_line.assert_called_once()
     profiler.add_flow_to_profile.assert_called_once()
     profiler.handle_setting_local_net.assert_called_once()
     profiler.db.increment_processed_flows.assert_called_once()
@@ -862,7 +862,7 @@ def test_process_flow_handle_exception():
     profiler = ModuleFactory().create_profiler_obj()
     profiler.should_stop_profiler_workers = Mock()
     profiler.get_msg_from_queue = Mock()
-    profiler.input_handler_cls = Mock()
+    profiler.input_handler = Mock()
     profiler.print = Mock()
     profiler.print_traceback = Mock()
 
@@ -875,7 +875,7 @@ def test_process_flow_handle_exception():
         "line": {"key": "value"},
         "input_type": "invalid_type",
     }
-    profiler.input_handler_cls.process_line.side_effect = Exception(
+    profiler.input_handler.process_line.side_effect = Exception(
         "Test exception"
     )
 
