@@ -6,9 +6,6 @@
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
-import json
-import threading
-
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -19,6 +16,7 @@ import threading
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz,
 # stratosphere@aic.fel.cvut.cz
+import json
 from dataclasses import asdict
 import queue
 import ipaddress
@@ -34,6 +32,8 @@ from typing import (
 import netifaces
 import validators
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
+
+
 from slips_files.common.abstracts.iobserver import IObservable
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -103,21 +103,19 @@ class Profiler(ICore, IObservable):
         # will have interfaces as keys, and MACs as values
         self.gw_macs = {}
         self.gw_ips = {}
-        self.profiler_threads = []
-        self.stop_profiler_threads = multiprocessing.Event()
+        self.profiler_workers_pids = []
+        self.stop_profiler_workers = multiprocessing.Event()
         # each msg received from inputprocess will be put here, and each one
-        # profiler_threads will retrieve from this queue.
+        # profiler worker will retrieve msgs from this queue.
         # the goal of this is to have main() handle the stop msg.
-        # so without this, only 1 of the 3 threads received the stop msg
-        # and exits, and the rest of the 2 threads AND the main() keep
+        # so without this, only 1 of the 3 workers receives the stop msg
+        # and exits, and the rest of the 2 workers AND the main() keep
         # waiting for new msgs
         self.flows_to_process_q = multiprocessing.Queue()
-        # that queue will be used in 4 different threads. the 3 profilers
-        # and main().
-        self.pending_flows_queue_lock = threading.Lock()
+        self.pending_flows_queue_lock = multiprocessing.Lock()
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
-        self.handle_setting_local_net_lock = threading.Lock()
+        self.handle_setting_local_net_lock = multiprocessing.Lock()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -234,6 +232,7 @@ class Profiler(ICore, IObservable):
             # we didnt get the MAC of the GW of this flow's interface
             # ok consider the GW MAC = any dst MAC of a flow
             # going from a private srcip -> a public ip
+            print(f"@@@@@@@@@@@@@@@@ flow.saddr {flow.saddr}")
             if (
                 utils.is_private_ip(flow.saddr)
                 and not utils.is_ignored_ip(flow.daddr)
@@ -465,14 +464,17 @@ class Profiler(ICore, IObservable):
 
         return True
 
-    def get_input_type(self, line: dict, input_type: str):
+    def get_input_type(self, line: dict, input_type: str) -> str:
         """
         for example if the input_type is zeek_folder
         this function determines if it's tab or json
         etc
         :param line: dict with the line as read from the input file/dir
-        given to slips using -f and the name of the logfile this line was read from
-        :the input_type: as determined by slips.py
+        given to slips using -f and the name of the logfile this line was read
+         from
+        :param input_type: as determined by slips.py
+
+        returns zeek, zeek-tabs, binetflow, binetflow tabs, nfdump, suricata
         """
         if input_type in ("zeek_folder", "zeek_log_file", "pcap", "interface"):
             # is it tab separated or comma separated?
@@ -485,14 +487,13 @@ class Profiler(ICore, IObservable):
             return line["line_type"]
         else:
             # if it's none of the above cases
-            # it's probably one of a kind
-            # pcap, binetflow, binetflow tabs, nfdump, etc
+            # it's probably one of the following:
+            # binetflow, binetflow tabs, nfdump, suricata
             return input_type
 
-    def join_profiler_threads(self):
-        # wait for the profiler threads to complete
-        for thread in self.profiler_threads:
-            thread.join()
+    def join_profiler_workers(self):
+        for process in self.profiler_workers_pids:
+            process.join()
 
     def mark_process_as_done_processing(self):
         """
@@ -588,7 +589,7 @@ class Profiler(ICore, IObservable):
         stores the local network if possible
         sets the self.localnet_cache dict
         """
-        # to avoid running this func from the 3 profiler threads at the
+        # this lock is to avoid running this func from the workers at the
         # same time.
         with self.handle_setting_local_net_lock:
             if not self.should_set_localnet(flow):
@@ -607,13 +608,11 @@ class Profiler(ICore, IObservable):
                     to_print += f" for interface {green(interface)}."
                 self.print(to_print)
 
-    def get_msg_from_input_proc(
-        self, q: multiprocessing.Queue, thread_safe=False
-    ):
+    def get_msg_from_queue(self, q: multiprocessing.Queue, thread_safe=False):
         """
         retrieves a msg from the given queue
         :kwarg thread_safe: set it to true if the queue passed is used by
-        the profiler threads (e.g pending_flows_queue).
+        the profiler workers (e.g pending_flows_queue).
          when set to true, this function uses the pending flows queue lock.
         """
         try:
@@ -627,20 +626,34 @@ class Profiler(ICore, IObservable):
         except Exception:
             return None
 
-    def start_profiler_threads(self):
-        """starts 3 profiler threads for faster processing of the flows"""
-        num_of_profiler_threads = 3
-        for _ in range(num_of_profiler_threads):
-            t = threading.Thread(target=self.process_flow, daemon=True)
-            t.start()
-            self.profiler_threads.append(t)
+    def start_profiler_workers(self):
+        """starts 3 profiler workers for faster processing of the flows"""
+        num_of_profiler_workers = 3
+        for _ in range(num_of_profiler_workers):
+            proc = multiprocessing.Process(target=self.process_flow)
+            utils.start_process(proc, self.db)
+            self.profiler_workers_pids.append(proc)
 
-    def init_input_handlers(self, line, input_type):
-        # self.input_type is set only once by define_separator
+    def init_input_handlers(self, line, input_type_from_input_proc: str):
+        """
+        This function determines the exact input type, if input process
+        says it's an interface, this func says whether the flows are zeek or
+        zeek-tabs.
+
+        sets self.input_handler_obj to the correct input handler class
+
+        :param input_type_from_input_proc: input type as received from
+        input process. can be ("zeek_folder", "zeek_log_file", "pcap",
+        "interface")
+
+        """
+        # self.input_type is set only once by get_input_type
         # once we know the type, no need to check each line for it
         if not self.input_type:
             # Find the type of input received
-            self.input_type = self.get_input_type(line, input_type)
+            self.input_type = self.get_input_type(
+                line, input_type_from_input_proc
+            )
 
         # What type of input do we have?
         if not self.input_type:
@@ -651,59 +664,7 @@ class Profiler(ICore, IObservable):
         # only create the input_handler_obj once,
         # the rest of the flows will use the same input handler
         if not hasattr(self, "input_handler_obj"):
-            self.input_handler_obj = SUPPORTED_INPUT_TYPES[self.input_type]()
-
-    def stop_profiler_thread(self) -> bool:
-        # cant use while self.flows_to_process_q.qsize() != 0 only here
-        # because when the thread starts, this qsize is 0, so we need
-        # another indicator that we are at the end of the flows. aka the
-        # stop_profiler_threads event
-        return (
-            self.stop_profiler_threads.is_set()
-            and not self.flows_to_process_q.qsize()
-        )
-
-    def process_flow(self):
-        """
-        This function runs in 3 parallel threads for faster processing of
-        the flows
-        """
-        while not self.stop_profiler_thread():
-            msg = self.get_msg_from_input_proc(
-                self.flows_to_process_q, thread_safe=True
-            )
-            if not msg:
-                # wait for msgs
-                continue
-
-            line: dict = msg["line"]
-            input_type: str = msg["input_type"]
-            # TODO who is putting this True here?
-            if line is True:
-                continue
-
-            # Received new input data
-            self.print(f"< Received Line: {line}", 2, 0)
-            self.rec_lines += 1
-
-            # get the correct input type class and process the line based on it
-            try:
-                self.init_input_handlers(line, input_type)
-
-                flow = self.input_handler_obj.process_line(line)
-                if not flow:
-                    continue
-                self.add_flow_to_profile(flow)
-                self.handle_setting_local_net(flow)
-                self.db.increment_processed_flows()
-            except Exception as e:
-                self.print_traceback()
-                self.print(
-                    f"Problem processing line {line}. "
-                    f"Line discarded. Error: {e}",
-                    0,
-                    1,
-                )
+            self.input_handler_cls = SUPPORTED_INPUT_TYPES[self.input_type]()
 
     def should_stop(self):
         """
@@ -717,11 +678,12 @@ class Profiler(ICore, IObservable):
         return False
 
     def shutdown_gracefully(self):
-        self.stop_profiler_threads.set()
-        # wait for all flows to be processed by the profiler threads.
-        self.join_profiler_threads()
+        self.stop_profiler_workers.set()
+        # wait for all flows to be processed by the profiler processes.
+        self.join_profiler_workers()
+
         # close the queues to avoid deadlocks.
-        # this step SHOULD NEVER be done before closing the threads
+        # this step SHOULD NEVER be done before closing the workers
         self.flows_to_process_q.close()
         self.profiler_queue.close()
 
@@ -736,14 +698,14 @@ class Profiler(ICore, IObservable):
         client_ips = [str(ip) for ip in self.client_ips]
         if client_ips:
             self.print(f"Used client IPs: {green(', '.join(client_ips))}")
-        self.start_profiler_threads()
+        self.start_profiler_workers()
 
     def main(self):
         # the only thing that stops this loop is the 'stop' msg
         # we're using self.should_stop() here instead of while True to be
         # able to unit test this function:D
         while not self.should_stop():
-            msg = self.get_msg_from_input_proc(self.profiler_queue)
+            msg = self.get_msg_from_queue(self.profiler_queue)
             if not msg:
                 # wait for msgs
                 continue

@@ -91,7 +91,7 @@ class Zeek:
 
     def get_file_type(self, new_line: dict) -> str:
         """
-        returnx x.log. always. no atter whats the name given to slips
+        returns x.log. always. no matter whats the name given to slips
         """
         file_type = new_line["type"]
         # all zeek lines received from stdin should be of type conn
