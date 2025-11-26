@@ -20,7 +20,7 @@ import queue
     "file,input_type,expected_value",
     [("dataset/test6-malicious.suricata.json", "suricata", "suricata")],
 )
-def test_define_separator_suricata(
+def test_get_input_type_suricata(
     file,
     input_type,
     expected_value,
@@ -46,7 +46,7 @@ def test_define_separator_suricata(
     "file,input_type,expected_value",
     [("dataset/test10-mixed-zeek-dir/conn.log", "zeek_log_file", "zeek-tabs")],
 )
-def test_define_separator_zeek_tab(
+def test_get_input_type_zeek_tab(
     file,
     input_type,
     expected_value,
@@ -72,7 +72,7 @@ def test_define_separator_zeek_tab(
     "file, input_type,expected_value",
     [("dataset/test9-mixed-zeek-dir/conn.log", "zeek_log_file", "zeek")],
 )
-def test_define_separator_zeek_dict(
+def test_get_input_type_zeek_dict(
     file,
     input_type,
     expected_value,
@@ -96,7 +96,7 @@ def test_define_separator_zeek_dict(
 
 
 @pytest.mark.parametrize("nfdump_file", ["dataset/test1-normal.nfdump"])
-def test_define_separator_nfdump(
+def test_get_input_type_nfdump(
     nfdump_file,
 ):
     # nfdump files aren't text files so we need to process them first
@@ -310,7 +310,7 @@ def test_get_rev_profile_no_timewindow():
     assert tw_id is None
 
 
-def test_define_separator_direct_support():
+def test_get_input_type_direct_support():
     profiler = ModuleFactory().create_profiler_obj()
     sample_flow = {"data": "some_data"}
     input_type = "nfdump"
@@ -438,7 +438,7 @@ def test_main():
 
     profiler.get_msg = Mock(side_effect=[None])
     msg = {"somemsg": 1}
-    profiler.get_msg_from_input_proc = Mock(side_effect=[msg])
+    profiler.get_msg_from_queue = Mock(side_effect=[msg])
 
     profiler.pending_flows_queue_lock = Mock()  # Mock the lock
     profiler.flows_to_process_q = Mock()  # Mock the queue
@@ -804,49 +804,55 @@ def test_is_gw_info_detected_unsupported_info_type():
 
 def test_process_flow_no_msg():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.stop_profiler_thread = Mock()
-    profiler.get_msg_from_input_proc = Mock()
+    profiler.should_stop_profiler_workers = Mock()
+    profiler.get_msg_from_queue = Mock()
     profiler.add_flow_to_profile = Mock()
-    profiler.input_handler_obj = Mock()
+    profiler.input_handler_cls = Mock()
     profiler.print = Mock()
     profiler.init_input_handlers = Mock()
     profiler.print_traceback = Mock()
 
-    profiler.stop_profiler_thread.side_effect = [False, True]  # Run loop once
-    profiler.get_msg_from_input_proc.return_value = (
+    profiler.should_stop_profiler_workers.side_effect = [
+        False,
+        True,
+    ]  # Run loop once
+    profiler.get_msg_from_queue.return_value = (
         None  # Empty message (no message in queue)
     )
 
     profiler.process_flow()
 
     profiler.init_input_handlers.assert_not_called()
-    profiler.input_handler_obj.process_line.assert_not_called()
+    profiler.input_handler_cls.process_line.assert_not_called()
     profiler.add_flow_to_profile.assert_not_called()
     profiler.print.assert_not_called()
 
 
 def test_process_flow():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.stop_profiler_thread = Mock()
-    profiler.get_msg_from_input_proc = Mock()
-    profiler.input_handler_obj = Mock()
+    profiler.should_stop_profiler_workers = Mock()
+    profiler.get_msg_from_queue = Mock()
+    profiler.input_handler_cls = Mock()
     profiler.add_flow_to_profile = Mock()
     profiler.handle_setting_local_net = Mock()
     profiler.print = Mock()
     profiler.print_traceback = Mock()
     profiler.init_input_handlers = Mock()
-    profiler.stop_profiler_thread.side_effect = [False, True]  # Run once
-    profiler.get_msg_from_input_proc.return_value = {
+    profiler.should_stop_profiler_workers.side_effect = [
+        False,
+        True,
+    ]  # Run once
+    profiler.get_msg_from_queue.return_value = {
         "line": {"key": "value"},
         "input_type": "zeek",
     }
 
-    profiler.input_handler_obj.process_line = Mock(return_value=Mock())
+    profiler.input_handler_cls.process_line = Mock(return_value=Mock())
 
     profiler.process_flow()
 
     profiler.init_input_handlers.assert_called_once()
-    profiler.input_handler_obj.process_line.assert_called_once()
+    profiler.input_handler_cls.process_line.assert_called_once()
     profiler.add_flow_to_profile.assert_called_once()
     profiler.handle_setting_local_net.assert_called_once()
     profiler.db.increment_processed_flows.assert_called_once()
@@ -854,19 +860,22 @@ def test_process_flow():
 
 def test_process_flow_handle_exception():
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.stop_profiler_thread = Mock()
-    profiler.get_msg_from_input_proc = Mock()
-    profiler.input_handler_obj = Mock()
+    profiler.should_stop_profiler_workers = Mock()
+    profiler.get_msg_from_queue = Mock()
+    profiler.input_handler_cls = Mock()
     profiler.print = Mock()
     profiler.print_traceback = Mock()
 
-    profiler.stop_profiler_thread.side_effect = [False, True]  # Run loop
+    profiler.should_stop_profiler_workers.side_effect = [
+        False,
+        True,
+    ]  # Run loop
     # once
-    profiler.get_msg_from_input_proc.return_value = {
+    profiler.get_msg_from_queue.return_value = {
         "line": {"key": "value"},
         "input_type": "invalid_type",
     }
-    profiler.input_handler_obj.process_line.side_effect = Exception(
+    profiler.input_handler_cls.process_line.side_effect = Exception(
         "Test exception"
     )
 
