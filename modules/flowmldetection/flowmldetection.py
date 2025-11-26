@@ -67,6 +67,9 @@ class FlowMLDetection(IModule):
         self.last_number_of_flows_when_trained = 0
         # The scaler trained during training and to use during testing
 
+        self.model_load_path = "./modules/flowmldetection/models/linear_models_1/classifiers/model_010.bin"
+        self.scaler_load_path = "./modules/flowmldetection/models/linear_models_1/scalers/scaler_010.bin"
+
         self.model_path = "./modules/flowmldetection/model.bin"
         self.scaler_path = "./modules/flowmldetection/scaler.bin"
         self.all_classes = [MALICIOUS, BENIGN]
@@ -363,16 +366,6 @@ class FlowMLDetection(IModule):
             # Create X_train with the current flows minus the label
             X_train = self.flows.copy()
             X_train = self.drop_labels(X_train)
-
-            # Sort X_train by the first column and apply the same order to y_gt_train
-            # Append y_gt_train as a temporary column for sorting
-            X_train_with_y = X_train.copy()
-            X_train_with_y["_tmp_label"] = y_gt_train
-            sort_indices = X_train_with_y.apply(tuple, axis=1).argsort(
-                kind="mergesort"
-            )
-            X_train = X_train.iloc[sort_indices].reset_index(drop=True)
-            y_gt_train = y_gt_train[sort_indices]
 
             X_val = X_train  # default - validate on all training data
             y_gt_val = y_gt_train
@@ -743,7 +736,7 @@ class FlowMLDetection(IModule):
         """
         try:
             self.print("Reading the trained model from disk.", 0, 2)
-            with open(self.model_path, "rb") as f:
+            with open(self.model_load_path, "rb") as f:
                 self.clf = pickle.load(f)
             self.classifier_initialized = True
         except Exception as e:
@@ -777,7 +770,7 @@ class FlowMLDetection(IModule):
         # Read the scaler or create it anew
         try:
             self.print("Reading the trained scaler from disk.", 0, 2)
-            with open(self.scaler_path, "rb") as g:
+            with open(self.scaler_load_path, "rb") as g:
                 self.scaler = pickle.load(g)
         except Exception as e:
             if isinstance(e, FileNotFoundError):
