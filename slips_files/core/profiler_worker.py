@@ -22,6 +22,7 @@ from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
+from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.input_profilers.argus import Argus
 from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
@@ -37,7 +38,7 @@ class ProfilerWorker(Process):
         redis_port,
         conf,
         ppid: int,
-        localnet_cache: multiprocessing.manager.Dict,
+        localnet_cache: Dict[str, str],
         profiler_queue: multiprocessing.Queue,
         stop_profiler_workers: multiprocessing.Event,
         handle_setting_local_net_lock: multiprocessing.Lock,
@@ -45,6 +46,7 @@ class ProfilerWorker(Process):
         input_handler: (
             ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         ),
+        bloom_filters: BFManager,
     ):
         super().__init__()
         self.name = name
@@ -56,6 +58,8 @@ class ProfilerWorker(Process):
         self.profiler_queue = profiler_queue
         self.flows_to_process_q = flows_to_process_q
         self.stop_profiler_workers = stop_profiler_workers
+        self.bloom_filters = bloom_filters
+
         # this is an instance of that cls
         self.input_handler = input_handler
         self.handle_setting_local_net_lock = handle_setting_local_net_lock
@@ -78,11 +82,18 @@ class ProfilerWorker(Process):
         self.first_flow = True
 
     def read_configuration(self):
+        self.client_ips: List[
+            Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
+        ]
+        self.client_ips = self.conf.client_ips()
         self.local_whitelist_path = self.conf.local_whitelist_path()
         self.timeformat = self.conf.ts_format()
         self.analysis_direction = self.conf.analysis_direction()
         self.label = self.conf.label()
         self.width = self.conf.get_tw_width_as_float()
+
+    def print(self, *args, **kwargs):
+        return self.printer.print(*args, **kwargs)
 
     def get_msg_from_queue(self, q: multiprocessing.Queue):
         """

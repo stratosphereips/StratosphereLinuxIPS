@@ -440,17 +440,12 @@ def test_main():
     msg = {"somemsg": 1}
     profiler.get_msg_from_queue = Mock(side_effect=[msg])
 
-    profiler.pending_flows_queue_lock = Mock()  # Mock the lock
     profiler.flows_to_process_q = Mock()  # Mock the queue
 
     # Mock the context manager behavior for the lock
-    profiler.pending_flows_queue_lock.__enter__ = Mock()
-    profiler.pending_flows_queue_lock.__exit__ = Mock()
 
     profiler.main()
     profiler.flows_to_process_q.put.assert_called_once_with(msg)
-    profiler.pending_flows_queue_lock.acquire.assert_called_once()
-    profiler.pending_flows_queue_lock.release.assert_called_once()
 
 
 @patch("slips_files.core.profiler.ConfigParser")

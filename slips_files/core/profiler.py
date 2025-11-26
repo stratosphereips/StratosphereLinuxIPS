@@ -33,7 +33,6 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.icore import ICore
 from slips_files.common.style import green
 from slips_files.core.helpers.symbols_handler import SymbolHandler
-from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from slips_files.core.input_profilers.argus import Argus
 from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
@@ -83,7 +82,6 @@ class Profiler(ICore, IObservable):
         self.input_type = ""
         self.rec_lines = 0
         self.localnet_cache = {}
-        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.read_configuration()
         self.symbol = SymbolHandler(self.logger, self.db)
         # there has to be a timeout or it will wait forever and never
@@ -173,19 +171,12 @@ class Profiler(ICore, IObservable):
         """
         return msg == "stop"
 
-    def get_msg_from_queue(self, q: multiprocessing.Queue, thread_safe=False):
+    def get_msg_from_queue(self, q: multiprocessing.Queue):
         """
         retrieves a msg from the given queue
-        :kwarg thread_safe: set it to true if the queue passed is used by
-        the profiler workers (e.g pending_flows_queue).
-         when set to true, this function uses the pending flows queue lock.
         """
         try:
-            if thread_safe:
-                with self.pending_flows_queue_lock:
-                    return q.get(timeout=1, block=False)
-            else:
-                return q.get(timeout=1, block=False)
+            return q.get(timeout=1, block=False)
         except queue.Empty:
             return None
         except Exception:
@@ -211,6 +202,7 @@ class Profiler(ICore, IObservable):
             handle_setting_local_net_lock=self.handle_setting_local_net_lock,
             flows_to_process_q=self.flows_to_process_q,
             input_handler=input_handler_obj,
+            bloom_filters=self.bloom_filters,
         ).start()
 
     def start_profiler_workers(self, input_handler_cls):
@@ -315,10 +307,12 @@ class Profiler(ICore, IObservable):
                     self.print("Unsupported input type, exiting.")
                     return 1
 
+                line: dict = msg["line"]
+                # updates internal zeek to slips mapping if needed
+                input_handler_cls.process_line(line)
+
                 self.start_profiler_workers(input_handler_cls)
                 continue
 
-            self.pending_flows_queue_lock.acquire()
             self.flows_to_process_q.put(msg)
-            self.pending_flows_queue_lock.release()
         return None
