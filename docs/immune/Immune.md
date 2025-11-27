@@ -11,6 +11,13 @@ This is the main guide to the documentation related to the changes done to Slips
 - [LLM RPI Performance](https://stratospherelinuxips.readthedocs.io/en/develop/immune/research_rpi_llm_performance.html)
 - [LLM RPI Finetuning Frameworks](https://stratospherelinuxips.readthedocs.io/en/develop/immune/finetuning_frameworks_rpi_5.html)
 
+### Security & Network Configuration
+
+- [ARP Poisoning](https://stratospherelinuxips.readthedocs.io/en/develop/immune/arp_poisoning.html)
+- [ARP Poisoning Risks](https://stratospherelinuxips.readthedocs.io/en/develop/immune/arp_poisoning_risks.html)
+- [Blocking with Slips as an Access Point](https://stratospherelinuxips.readthedocs.io/en/develop/immune/blocking_in_slips.html)
+- [IDS-in-the-middle Traffic routing](https://stratospherelinuxips.readthedocs.io/en/develop/immune/ids_in_the_middle_traffic_routing.html)
+
 ### Datasets & LLM Training
 
 **Overview Documents:**
@@ -30,10 +37,3 @@ This is the main guide to the documentation related to the changes done to Slips
 
 **Legacy Documentation (reference only):**
 - [LLM Summarization Dataset (OLD)](https://stratospherelinuxips.readthedocs.io/en/develop/immune/summary_dataset.html) - Previous version with external dataset links
-
-### Security & Network Configuration
-
-- [ARP Poisoning](https://stratospherelinuxips.readthedocs.io/en/develop/immune/arp_poisoning.html)
-- [ARP Poisoning Risks](https://stratospherelinuxips.readthedocs.io/en/develop/immune/arp_poisoning_risks.html)
-- [Blocking with Slips as an Access Point](https://stratospherelinuxips.readthedocs.io/en/develop/immune/blocking_in_slips.html)
-- [IDS-in-the-middle Traffic routing](https://stratospherelinuxips.readthedocs.io/en/develop/immune/ids_in_the_middle_traffic_routing.html)
