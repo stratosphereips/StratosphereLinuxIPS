@@ -318,8 +318,8 @@ class Profiler(ICore, IObservable):
         profiler_fps = self.db.get_module_flows_per_second(self.name)
         input_fps = self.db.get_module_flows_per_second("Input")
 
-        if (
-            input_fps > profiler_fps * 1.1
+        if float(input_fps) > (
+            float(profiler_fps) * 1.1
         ):  # 10% more input fps than profiler fps
             worker_id = self.last_worker_id + 1
             self.start_profiler_worker(worker_id)
