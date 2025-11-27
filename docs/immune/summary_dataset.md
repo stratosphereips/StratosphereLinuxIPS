@@ -21,7 +21,7 @@
 
 Develop a dataset for network security event summarization to be integrated with the Slips Immune system, optimized for deployment on low-resource hardware such as the Raspberry Pi 5. This dataset will be used to fine-tune compact language models capable of generating concise and actionable summaries of security incidents from raw Slips alert data, enabling real-time threat analysis in resource-constrained environments.
 
-The current version of the dataset used for finentuning LLM models is available [here](https://github.com/stratosphereips/Slips-tools/raw/refs/heads/main/alert_summary/datasets/summarization_dataset_extended.json.gz)
+The current version of the dataset used for finentuning LLM models is available [here](https://github.com/stratosphereips/Slips-tools/raw/refs/heads/main/alert_summary/datasets/summarization_dataset_v3.json.gz)
 
 
 ## 2. Limitations
