@@ -199,6 +199,7 @@ class Profiler(ICore, IObservable):
             redis_port=self.redis_port,
             conf=self.conf,
             ppid=self.ppid,
+            args=self.args,
             localnet_cache=self.localnet_cache,
             profiler_queue=self.profiler_queue,
             stop_profiler_workers=self.stop_profiler_workers,
@@ -346,6 +347,9 @@ class Profiler(ICore, IObservable):
         # able to unit test this function:D
 
         while not self.should_stop():
+            self.lines = sum(
+                [worker.received_lines for worker in self.workers]
+            )
             # implemented in icore.py
             self.store_flows_read_per_second()
 
@@ -383,6 +387,5 @@ class Profiler(ICore, IObservable):
                 continue
 
             self.flows_to_process_q.put(msg)
-
             self.check_if_high_throughput_and_add_workers()
         return None
