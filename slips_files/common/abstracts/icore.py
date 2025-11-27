@@ -25,6 +25,7 @@ class ICore(IModule, Process):
         interface
         """
         IModule.__init__(self, *args, **kwargs)
+        self.last_flows_count = 0
 
     def pre_main(self): ...
 
