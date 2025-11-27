@@ -1,4 +1,7 @@
+import csv
 import json
+import os
+import time
 from dataclasses import asdict
 from multiprocessing import Process
 import ipaddress
@@ -61,7 +64,7 @@ class ProfilerWorker(Process):
         self.flows_to_process_q = flows_to_process_q
         self.stop_profiler_workers = stop_profiler_workers
         self.bloom_filters = bloom_filters
-
+        self.last_log_time = time.time()
         # this is an instance of that cls
         self.input_handler = input_handler
         self.handle_setting_local_net_lock = handle_setting_local_net_lock
@@ -70,7 +73,7 @@ class ProfilerWorker(Process):
         self.db = DBManager(
             self.logger, self.output_dir, self.redis_port, self.conf, self.ppid
         )
-
+        self.init_latency_csv()
         self.read_configuration()
         self.received_lines = 0
         self.localnet_cache = localnet_cache
@@ -541,6 +544,29 @@ class ProfilerWorker(Process):
             self.print(pprint.pp(asdict(flow)))
         return True
 
+    def init_latency_csv(self):
+        """
+        Initialize a CSV file with the header:
+        time_passed_Since_starting_slips, latency, uid
+        """
+        filename = os.path.join(self.output_dir, "profiler_latency.csv")
+        # Ensure the file doesn't already exist to avoid overwriting
+        if not os.path.exists(filename):
+            with open(filename, mode="w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(
+                    ["time_passed_Since_starting_slips", "latency", "uid"]
+                )
+
+    def append_latency_csv(self, time_passed: float, latency: float, uid: str):
+        """
+        Append a row to the CSV file.
+        """
+        filename = os.path.join(self.output_dir, "profiler_latency.csv")
+        with open(filename, mode="a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([f"{time_passed:.3f}", f"{latency:.3f}", uid])
+
     def run(self):
         """
         This function runs in 3 different processes for faster processing of
@@ -568,6 +594,21 @@ class ProfilerWorker(Process):
                 self.add_flow_to_profile(flow)
                 self.handle_setting_local_net(flow)
                 self.db.increment_processed_flows()
+
+                if self.name == "ProfilerWorker_0":
+                    try:
+                        now = time.time()
+                        flow_ts = flow.starttime
+                        uid = flow.uid
+
+                        if now >= self.last_log_time + 10 * 60:
+                            self.last_log_time = now
+                            latency = now - flow_ts
+                            time_passed = now - self.starttime
+                            self.append_latency_csv(time_passed, latency, uid)
+                    except Exception:
+                        pass
+
             except Exception as e:
                 self.print_traceback()
                 self.print(
