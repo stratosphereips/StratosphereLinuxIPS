@@ -55,6 +55,7 @@ class Main:
         self.input_type = False
         self.proc_man = ProcessManager(self)
         self.gw_info_printed = False
+        self.localnet_info_printed = False
         # in testing mode we manually set the following params
         # TODO use mocks instead of this testing param
         if not testing:
@@ -461,6 +462,21 @@ class Main:
                 self.print(f"Detected gateway MAC: {green(mac)}")
             self.gw_info_printed = True
 
+    def print_localnet_info(self):
+        if self.localnet_info_printed:
+            return
+
+        for interface in utils.get_all_interfaces(self.args):
+            local_net = self.db.get_local_network(interface)
+            if not local_net:
+                continue
+
+            to_print = f"Used local network: {green(local_net)}"
+            if interface != "default":
+                to_print += f" for interface {green(interface)}."
+            self.print(to_print)
+            self.localnet_info_printed = True
+
     def prepare_locks_dir(self):
         """
         sets the correct permissions for the /tmp/slips directory to be
@@ -655,6 +671,7 @@ class Main:
                 # more traffic to come
                 time.sleep(5)
                 self.print_gw_info()
+                self.print_localnet_info()
 
                 # if you remove the below logic anywhere before the
                 # above sleep() statement, it will try to get the return

@@ -38,6 +38,7 @@ class ProfilerWorker(Process):
         redis_port,
         conf,
         ppid: int,
+        args,
         localnet_cache: Dict[str, str],
         profiler_queue: multiprocessing.Queue,
         stop_profiler_workers: multiprocessing.Event,
@@ -55,6 +56,7 @@ class ProfilerWorker(Process):
         self.redis_port = redis_port
         self.conf = conf
         self.ppid = ppid
+        self.args = args
         self.profiler_queue = profiler_queue
         self.flows_to_process_q = flows_to_process_q
         self.stop_profiler_workers = stop_profiler_workers
@@ -328,11 +330,6 @@ class ProfilerWorker(Process):
 
             for interface, local_net in self.localnet_cache.items():
                 self.db.set_local_network(local_net, interface)
-
-                to_print = f"Used local network: {green(local_net)}"
-                if interface != "default":
-                    to_print += f" for interface {green(interface)}."
-                self.print(to_print)
 
     def is_gw_info_detected(self, info_type: str, interface: str) -> bool:
         """
