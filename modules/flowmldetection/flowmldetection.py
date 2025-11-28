@@ -762,7 +762,7 @@ class FlowMLDetection(IModule):
                 # experiments:
                 # penalty, L1,L2,elastic,
                 # class weights,
-                # losses? kvadratic? huber?
+                # losses? quadratic? huber?
             )
             self.classifier_initialized = (
                 False  # needs training from this point on
