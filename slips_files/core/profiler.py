@@ -335,7 +335,7 @@ class Profiler(ICore, IObservable):
             if self.last_worker_id == self.max_workers - 1:
                 self.print(
                     f"Maximum number of profiler workers "
-                    f"({self.max_workers - 1}) started."
+                    f"({self.max_workers}) started."
                 )
 
     def pre_main(self):
