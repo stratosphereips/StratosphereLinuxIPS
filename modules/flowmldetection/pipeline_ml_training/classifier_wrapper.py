@@ -90,6 +90,7 @@ class ClassifierWrapper:
                 raise ValueError(
                     f"No dummy sample provided for missing class {cls} in self.dummy_flows."
                 )
+            # print("class ", cls, " is missing, adding dummy flow for initial training")
             processed_dummy = self.preprocessing_handler.transform(
                 self.dummy_flows[cls][0]
             )
