@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 # Now import the module-under-test (assumes you saved your class code to classifier_wrapper.py)
-import classifier_wrapper as cw
+from pipeline_ml_training import classifier_wrapper as cw
 
 # Provide a tiny 'commons' module for the imported code to use.
 # This avoids requiring a real commons file during tests.

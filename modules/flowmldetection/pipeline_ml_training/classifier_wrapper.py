@@ -1,6 +1,6 @@
 import pickle
 from pathlib import Path
-from commons import BENIGN, MALICIOUS
+from .commons import BENIGN, MALICIOUS
 from typing import Union
 import numpy
 
