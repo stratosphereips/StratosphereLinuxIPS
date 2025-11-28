@@ -7,7 +7,7 @@
 #   - Defaults unlabeled flows to BENIGN.
 #   - Stores index in cache/ directory for large files (>50k valid flows) and reloads automatically.
 
-from commons import BENIGN, MALICIOUS, BACKGROUND
+from .commons import BENIGN, MALICIOUS, BACKGROUND
 import random
 from pathlib import Path
 from typing import Dict, List, Optional, Union

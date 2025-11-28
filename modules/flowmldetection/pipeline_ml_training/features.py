@@ -12,7 +12,7 @@ import traceback
 from typing import Iterable, List, Optional, Tuple, Union
 
 from conn_normalizer import ConnToSlipsConverter  # <-- your converter
-from commons import BENIGN, MALICIOUS
+from .commons import BENIGN, MALICIOUS
 
 
 class FeatureExtraction:

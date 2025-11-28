@@ -1,4 +1,4 @@
-from commons import BENIGN, MALICIOUS, BACKGROUND
+from .commons import BENIGN, MALICIOUS, BACKGROUND
 import numpy
 import os
 
