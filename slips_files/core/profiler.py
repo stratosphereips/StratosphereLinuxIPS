@@ -211,12 +211,14 @@ class Profiler(ICore, IObservable):
 
     def start_profiler_worker(self, worker_id: int = None):
         """starts A profiler worker for faster processing of the flows"""
+        worker_name = f"ProfilerWorker_{worker_id}"
         proc = multiprocessing.Process(
             target=self.worker,
             args=(
-                f"ProfilerWorker_{worker_id}",
+                worker_name,
                 self.input_handler_cls,
             ),
+            name=worker_name,
         )
         utils.start_process(proc, self.db)
         self.profiler_child_processes.append(proc)
