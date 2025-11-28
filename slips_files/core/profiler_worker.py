@@ -85,6 +85,7 @@ class ProfilerWorker(Process):
         self.gw_ips = {}
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
+        self.starttime = float(self.db.get_slips_start_time())
 
     def read_configuration(self):
         self.client_ips: List[
@@ -591,10 +592,10 @@ class ProfilerWorker(Process):
                 flow = self.input_handler.process_line(line)
                 if not flow:
                     continue
+
                 self.add_flow_to_profile(flow)
                 self.handle_setting_local_net(flow)
                 self.db.increment_processed_flows()
-
                 if self.name == "ProfilerWorker_0":
                     try:
                         now = time.time()
@@ -606,7 +607,11 @@ class ProfilerWorker(Process):
                             latency = now - flow_ts
                             time_passed = now - self.starttime
                             self.append_latency_csv(time_passed, latency, uid)
-                    except Exception:
+
+                    except Exception as e:
+                        self.print(
+                            f"@@@@@@@@@@@@@@@@@@@@@@ ERRRRROORORR " f" {e}"
+                        )
                         pass
 
             except Exception as e:
