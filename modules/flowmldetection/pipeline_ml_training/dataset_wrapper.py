@@ -314,7 +314,11 @@ def find_and_load_datasets(
         data_path = entry / data_subdir
         if not data_path.is_dir():
             continue
-        ds = ZeekDataset(data_path, batch_size=batch_size, seed=seed)
+        try:
+            ds = ZeekDataset(data_path, batch_size=batch_size, seed=seed)
+        except FileNotFoundError:
+            # Skip datasets without conn.log/conn.log.labeled instead of failing the whole run
+            continue
         loaders[entry.name] = ds
 
     return loaders
