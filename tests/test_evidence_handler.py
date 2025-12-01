@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import pytest
 import os
-from unittest.mock import Mock, MagicMock, patch, call
+from unittest.mock import Mock, MagicMock, patch
 
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.evidence import (
@@ -185,20 +185,21 @@ def test_clean_file(output_dir, file_to_clean, file_exists):
 @pytest.mark.parametrize(
     "data",
     [
-        # testcase1: Basic log entry
         "Test log entry",
-        # testcase2: Another log entry
         "Another log entry",
     ],
 )
 def test_add_to_log_file(data):
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
-    mock_file = Mock()
-    evidence_handler.logfile = mock_file
+    evidence_handler.evidence_logger_q.put = Mock()
+
+    # Act
     evidence_handler.add_to_log_file(data)
-    assert mock_file.write.call_count == 2
-    mock_file.write.assert_has_calls([call(data), call("\n")])
-    mock_file.flush.assert_called_once()
+
+    # Assert
+    evidence_handler.evidence_logger_q.put.assert_called_once_with(
+        {"to_log": data, "where": "alerts.log"}
+    )
 
 
 @pytest.mark.parametrize(
@@ -247,11 +248,18 @@ def test_add_alert_to_json_log_file(
     )
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
     evidence_handler.jsonfile = mock_file
-    evidence_handler.idmefv2.convert_to_idmef_alert = Mock(return_value=True)
-    with patch("json.dump") as mock_json_dump:
-        evidence_handler.add_alert_to_json_log_file(alert)
-        mock_json_dump.assert_called_once()
-    mock_file.write.assert_any_call("\n")
+    evidence_handler.idmefv2.convert_to_idmef_alert = Mock(
+        return_value="alert_in_idmef_format"
+    )
+    evidence_handler.evidence_logger_q.put = Mock()
+
+    evidence_handler.add_alert_to_json_log_file(alert)
+    evidence_handler.evidence_logger_q.put.assert_called_once_with(
+        {
+            "to_log": "alert_in_idmef_format",
+            "where": "alerts.json",
+        }
+    )
 
 
 def test_show_popup():

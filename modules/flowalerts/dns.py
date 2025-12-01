@@ -16,6 +16,7 @@ import validators
 from multiprocessing import Queue
 from threading import Thread, Event
 
+
 from slips_files.common.abstracts.iflowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
@@ -23,6 +24,9 @@ from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import Direction
+
+
+SPECIAL_IPV4 = ("0.0.0.0", "255.255.255.255")
 
 
 class DNS(IFlowalertsAnalyzer):
@@ -636,6 +640,24 @@ class DNS(IFlowalertsAnalyzer):
             self.priv_ips_doing_dns_outside_of_localnet[flow.daddr] = 1
             return True
 
+    def _is_ok_to_connect_to_ip_outside_localnet(self, flow) -> bool:
+        """
+        returns true if it's ok to connect to the given IP even if it's
+        "outside the given local network"
+        """
+        for ip in (flow.saddr, flow.daddr):
+            ip_obj = ipaddress.ip_address(ip)
+            return (
+                # if the ip is the dns server that slips detected,
+                # it's ok to connect to it
+                ip == self.detected_dns_ip
+                or not validators.ipv4(ip)
+                or ip in SPECIAL_IPV4
+                or not ip_obj.is_private
+                or ip_obj.is_loopback
+                or ip_obj.is_multicast
+            )
+
     def check_different_localnet_usage(
         self,
         twid,
@@ -652,22 +674,17 @@ class DNS(IFlowalertsAnalyzer):
 
         only checks connections to dst port 53/UDP. the rest are checked in conn.log
         """
-        # if the ip is the dns server that slips detected, it's ok to
-        # connect to it
-        if (
-            flow.saddr == self.detected_dns_ip
-            or flow.daddr == self.detected_dns_ip
-        ):
-            return
-
         if not self._is_dns(flow):
             # the non dns flows are checked in conn.py
+            return
+
+        if self._is_ok_to_connect_to_ip_outside_localnet(flow):
             return
 
         ip_to_check = flow.saddr if what_to_check == "srcip" else flow.daddr
 
         ip_obj = ipaddress.ip_address(ip_to_check)
-        if not (validators.ipv4(ip_to_check) and utils.is_private_ip(ip_obj)):
+        if not (utils.is_private_ip(ip_obj)):
             return
 
         if self.is_possible_dns_misconfiguration(ip_to_check, flow):

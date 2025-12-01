@@ -27,6 +27,7 @@ from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green, yellow
 from slips_files.core.database.database_manager import DBManager
+from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.helpers.checker import Checker
 
 
@@ -555,20 +556,10 @@ class Main:
             self.profilers_manager.memory_profiler_init()
 
             if self.args.growing:
-                if self.input_type != "zeek_folder":
-                    self.print(
-                        f"Parameter -g should be used with "
-                        f"-f <dirname> not a {self.input_type} file. "
-                        f"Ignoring -g. Analyzing {self.input_information} "
-                        f"instead.",
-                        verbose=1,
-                        debug=3,
-                    )
-                else:
-                    self.print(
-                        f"Running on a growing zeek dir: {self.input_information}"
-                    )
-                    self.db.set_growing_zeek_dir()
+                self.print(
+                    f"Running on a growing zeek dir: " f"{self.args.growing}"
+                )
+                self.db.set_growing_zeek_dir()
 
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
@@ -596,6 +587,9 @@ class Main:
             # if slips is given a .rdb file, don't load the
             # modules as we don't need them
             if not self.args.db:
+                self.bloom_filters_man: BFManager = (
+                    self.proc_man.init_bloom_filters_manager()
+                )
                 # update local files before starting modules
                 # if wait_for_TI_to_finish is set to true in the config file,
                 # slips will wait untill all TI files are updated before
@@ -605,6 +599,10 @@ class Main:
                     ti_feeds=self.conf.wait_for_TI_to_finish(),
                 )
                 self.print("Starting modules", 1, 0)
+                # initialize_filter must be called after the update manager
+                # is started, and before the modules start. why? because
+                # update manager updates the iocs that the bloom filters need
+                self.bloom_filters_man.initialize_filter()
                 self.proc_man.load_modules()
                 # give outputprocess time to print all the started modules
                 time.sleep(0.5)

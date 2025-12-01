@@ -62,3 +62,5 @@ This documentation gives an overview how Slips works, how to use it and how to h
    FAQ
    contributing
    code_documentation
+   related_repos
+   visualisation

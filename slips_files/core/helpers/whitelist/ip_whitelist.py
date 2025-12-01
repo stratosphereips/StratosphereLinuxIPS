@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import ipaddress
+import json
 from typing import List, Dict
 
 from slips_files.common.abstracts.iwhitelist_analyzer import IWhitelistAnalyzer
@@ -17,6 +18,9 @@ class IPAnalyzer(IWhitelistAnalyzer):
 
     def init(self):
         self.read_configuration()
+        # for debugging
+        self.bf_hits = 0
+        self.bf_misses = 0
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -52,19 +56,29 @@ class IPAnalyzer(IWhitelistAnalyzer):
         if not self.is_valid_ip(ip):
             return False
 
-        whitelisted_ips: Dict[str, dict] = self.db.get_whitelist("IPs")
-
-        if ip not in whitelisted_ips:
+        if ip not in self.manager.bloom_filters.ips:
+            # defnitely not whitelisted
+            self.bf_hits += 1
             return False
 
+        ip_info: str | None = self.db.is_whitelisted(ip, "IPs")
+        # reaching here means ip is in the bloom filter
+        if not ip_info:
+            # bloom filter FP
+            self.bf_misses += 1
+            return False
+
+        self.bf_hits += 1
+        ip_info: Dict[str, str] = json.loads(ip_info)
         # Check if we should ignore src or dst alerts from this ip
         # from_ can be: src, dst, both
         # what_to_ignore can be: alerts or flows or both
-        whitelist_direction: str = whitelisted_ips[ip]["from"]
+        whitelist_direction: str = ip_info["from"]
         if not self.match.direction(direction, whitelist_direction):
             return False
 
-        ignore: str = whitelisted_ips[ip]["what_to_ignore"]
+        ignore: str = ip_info["what_to_ignore"]
         if not self.match.what_to_ignore(what_to_ignore, ignore):
             return False
+
         return True

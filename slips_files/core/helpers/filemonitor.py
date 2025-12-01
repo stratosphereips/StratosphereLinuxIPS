@@ -74,5 +74,3 @@ class FileEventHandler(RegexMatchingEventHandler):
                             # tell slips to terminate
                             self.db.publish_stop()
                             break
-        elif "whitelist" in filename:
-            self.db.publish("reload_whitelist", "reload")

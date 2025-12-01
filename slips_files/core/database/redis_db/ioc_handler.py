@@ -168,12 +168,12 @@ class IoCHandler:
         self.rcache.hset(self.constants.TI_FILES_INFO, file, data)
 
     def store_known_fp_md5_hashes(self, fps: Dict[str, List[str]]):
-        self.rcache.hmset(self.constants.KNOWN_FPS, fps)
+        self.rcache.hmset(self.constants.KNOWN_FP_MD5_HASHES, fps)
 
     def is_known_fp_md5_hash(self, hash: str) -> Optional[str]:
         """returns the description of the given hash if it is a FP. and
-        returns Fals eif the hash is not a FP"""
-        return self.rcache.hmget(self.constants.KNOWN_FPS, hash)
+        returns False if the hash is not a FP"""
+        return self.rcache.hmget(self.constants.KNOWN_FP_MD5_HASHES, hash)
 
     def delete_ips_from_ioc_ips(self, ips: List[str]):
         """

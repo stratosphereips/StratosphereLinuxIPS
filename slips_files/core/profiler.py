@@ -89,16 +89,13 @@ class Profiler(ICore, IObservable):
         self.input_type = False
         self.rec_lines = 0
         self.localnet_cache = {}
-        self.whitelist = Whitelist(self.logger, self.db)
+        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.read_configuration()
         self.symbol = SymbolHandler(self.logger, self.db)
         # there has to be a timeout or it will wait forever and never
         # receive a new line
         self.timeout = 0.0000001
-        self.c1 = self.db.subscribe("reload_whitelist")
-        self.channels = {
-            "reload_whitelist": self.c1,
-        }
+        self.channels = {}
         # is set by this proc to tell input proc that we are done
         # processing and it can exit no issue
         self.is_profiler_done_event = is_profiler_done_event
@@ -120,6 +117,7 @@ class Profiler(ICore, IObservable):
         self.pending_flows_queue_lock = threading.Lock()
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
+        self.handle_setting_local_net_lock = threading.Lock()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -287,6 +285,7 @@ class Profiler(ICore, IObservable):
 
         # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(flow):
+            self.print(f"{self.whitelist.get_bloom_filters_stats()}", 2, 0)
             return True
 
         # 5th. Store the data according to the paremeters
@@ -442,6 +441,7 @@ class Profiler(ICore, IObservable):
             if flow.interface in self.localnet_cache:
                 return False
         else:
+            # running on a file, impossible to get the interface
             if "default" in self.localnet_cache:
                 return False
 
@@ -588,20 +588,24 @@ class Profiler(ICore, IObservable):
         stores the local network if possible
         sets the self.localnet_cache dict
         """
-        if not self.should_set_localnet(flow):
-            return
+        # to avoid running this func from the 3 profiler threads at the
+        # same time.
+        with self.handle_setting_local_net_lock:
+            if not self.should_set_localnet(flow):
+                return
 
-        if self.db.is_running_non_stop():
-            self.localnet_cache = self.get_localnet_of_given_interface()
-        else:
-            self.localnet_cache = self.get_local_net_of_flow(flow)
+            if self.db.is_running_non_stop():
+                self.localnet_cache = self.get_localnet_of_given_interface()
+            else:
+                self.localnet_cache = self.get_local_net_of_flow(flow)
 
-        for interface, local_net in self.localnet_cache.items():
-            self.db.set_local_network(local_net, interface)
-            to_print = f"Used local network: {green(local_net)}"
-            if interface != "default":
-                to_print += f" for interface {green(interface)}."
-            self.print(to_print)
+            for interface, local_net in self.localnet_cache.items():
+                self.db.set_local_network(local_net, interface)
+
+                to_print = f"Used local network: {green(local_net)}"
+                if interface != "default":
+                    to_print += f" for interface {green(interface)}."
+                self.print(to_print)
 
     def get_msg_from_input_proc(
         self, q: multiprocessing.Queue, thread_safe=False
@@ -627,8 +631,7 @@ class Profiler(ICore, IObservable):
         """starts 3 profiler threads for faster processing of the flows"""
         num_of_profiler_threads = 3
         for _ in range(num_of_profiler_threads):
-            t = threading.Thread(target=self.process_flow)
-            t.daemon = True
+            t = threading.Thread(target=self.process_flow, daemon=True)
             t.start()
             self.profiler_threads.append(t)
 
@@ -665,7 +668,6 @@ class Profiler(ICore, IObservable):
         This function runs in 3 parallel threads for faster processing of
         the flows
         """
-
         while not self.stop_profiler_thread():
             msg = self.get_msg_from_input_proc(
                 self.flows_to_process_q, thread_safe=True
@@ -741,16 +743,6 @@ class Profiler(ICore, IObservable):
         # we're using self.should_stop() here instead of while True to be
         # able to unit test this function:D
         while not self.should_stop():
-            # listen on this channel in case whitelist.conf is changed,
-            # we need to process the new changes
-            if self.get_msg("reload_whitelist"):
-                # if whitelist.conf is edited using pycharm
-                # a msg will be sent to this channel on every keypress,
-                # because pycharm saves file automatically
-                # otherwise this channel will get a msg only when
-                # whitelist.conf is modified and saved to disk
-                self.whitelist.update()
-
             msg = self.get_msg_from_input_proc(self.profiler_queue)
             if not msg:
                 # wait for msgs

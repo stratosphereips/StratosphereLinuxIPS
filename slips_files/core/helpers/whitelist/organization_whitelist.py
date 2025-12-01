@@ -8,6 +8,8 @@ from typing import (
     Union,
 )
 
+from pybloom_live import BloomFilter
+
 from slips_files.common.abstracts.iwhitelist_analyzer import IWhitelistAnalyzer
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -39,19 +41,36 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         self.ip_analyzer = IPAnalyzer(self.db)
         self.domain_analyzer = DomainAnalyzer(self.db)
         self.org_info_path = "slips_files/organizations_info/"
+        self.bloom_filters: Dict[str, Dict[str, BloomFilter]]
+        self.bloom_filters = self.manager.bloom_filters.org_filters
         self.read_configuration()
+        self.whitelisted_orgs: Dict[str, str] = self.db.get_whitelist(
+            "organizations"
+        )
+        # for debugging
+        self.bf_hits = 0
+        self.bf_misses = 0
 
     def read_configuration(self):
         conf = ConfigParser()
         self.enable_local_whitelist: bool = conf.enable_local_whitelist()
 
-    def is_domain_in_org(self, domain: str, org: str):
+    def is_domain_in_org(self, domain: str, org: str) -> bool:
         """
         Checks if the given domains belongs to the given org using
         the hardcoded org domains in organizations_info/org_domains
         """
         try:
-            org_domains = json.loads(self.db.get_org_info(org, "domains"))
+            if domain not in self.bloom_filters[org]["domains"]:
+                self.bf_hits += 1
+                return False
+
+            if self.db.is_domain_in_org_domains(org, domain):
+                self.bf_hits += 1
+                return True
+
+            # match subdomains of all org domains slips knows of
+            org_domains: List[str] = self.db.get_org_info(org, "domains")
             flow_tld = self.domain_analyzer.get_tld(domain)
 
             for org_domain in org_domains:
@@ -60,44 +79,58 @@ class OrgAnalyzer(IWhitelistAnalyzer):
                 if flow_tld != org_domain_tld:
                     continue
 
-                # match subdomains too
                 # if org has org.com, and the flow_domain is xyz.org.com
                 # whitelist it
                 if org_domain in domain:
+                    self.bf_hits += 1
                     return True
 
                 # if org has xyz.org.com, and the flow_domain is org.com
                 # whitelist it
                 if domain in org_domain:
+                    self.bf_hits += 1
                     return True
+
+            self.bf_misses += 1
 
         except (KeyError, TypeError):
             # comes here if the whitelisted org doesn't have domains in
             # slips/organizations_info (not a famous org)
             # and ip doesn't have asn info.
             # so we don't know how to link this ip to the whitelisted org!
-            return False
+            pass
+        return False
 
     def is_ip_in_org(self, ip: str, org):
         """
         Check if the given ip belongs to the given org
         """
         try:
-            org_subnets: dict = self.db.get_org_ips(org)
-
             first_octet: str = utils.get_first_octet(ip)
             if not first_octet:
                 return
-            ip_obj = ipaddress.ip_address(ip)
-            # organization IPs are sorted by first octet for faster search
-            for range_ in org_subnets.get(first_octet, []):
-                if ip_obj in ipaddress.ip_network(range_):
-                    return True
+
+            if first_octet not in self.bloom_filters[org]["first_octets"]:
+                self.bf_hits += 1
+                return False
+
+            # organization IPs are sorted in the db by first octet for faster
+            # search
+            cidrs: List[str]
+            if cidrs := self.db.is_ip_in_org_ips(org, first_octet):
+                ip_obj = ipaddress.ip_address(ip)
+                for cidr in cidrs:
+                    if ip_obj in ipaddress.ip_network(cidr):
+                        self.bf_hits += 1
+                        return True
+
         except (KeyError, TypeError):
             # comes here if the whitelisted org doesn't have
             # info in slips/organizations_info (not a famous org)
             # and ip doesn't have asn info.
             pass
+
+        self.bf_misses += 1
         return False
 
     def is_ip_asn_in_org_asn(self, ip: str, org):
@@ -122,13 +155,23 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         """
         if not (asn and asn != "Unknown"):
             return False
+
         # because all ASN stored in slips organization_info/ are uppercase
         asn: str = asn.upper()
         if org.upper() in asn:
             return True
 
-        org_asn: List[str] = json.loads(self.db.get_org_info(org, "asn"))
-        return asn in org_asn
+        if asn not in self.bloom_filters[org]["asns"]:
+            self.bf_hits += 1
+            return False
+
+        if self.db.is_asn_in_org_asn(org, asn):
+            self.bf_hits += 1
+            return True
+        else:
+            # bloom filter FP
+            self.bf_misses += 1
+            return False
 
     def is_whitelisted(self, flow) -> bool:
         """checks if the given -flow- is whitelisted. not evidence/alerts."""
@@ -190,23 +233,21 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         :param direction: direction of the given ioc, src or dst?
         :param what_to_ignore: can be "flows" or "alerts" or "both"
         """
-
         if ioc_type == IoCType.IP:
             if utils.is_private_ip(ioc):
                 return False
 
-        whitelisted_orgs: Dict[str, dict] = self.db.get_whitelist(
-            "organizations"
-        )
-        if not whitelisted_orgs:
+        if not self.whitelisted_orgs:
             return False
 
-        for org in whitelisted_orgs:
-            dir_from_whitelist = whitelisted_orgs[org]["from"]
+        for org in self.whitelisted_orgs:
+            org_info = json.loads(self.whitelisted_orgs[org])
+
+            dir_from_whitelist = org_info["from"]
             if not self.match.direction(direction, dir_from_whitelist):
                 continue
 
-            whitelist_what_to_ignore = whitelisted_orgs[org]["what_to_ignore"]
+            whitelist_what_to_ignore = org_info["what_to_ignore"]
             if not self.match.what_to_ignore(
                 what_to_ignore, whitelist_what_to_ignore
             ):

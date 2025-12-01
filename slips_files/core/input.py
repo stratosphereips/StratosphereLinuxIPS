@@ -431,9 +431,11 @@ class Input(ICore):
 
     def read_zeek_folder(self):
         """
-        This is the case that a folder full of zeek files is passed with -f
-        DISCLAIMER: this func does not run when slips is running on an
-        interface with -i or -ap
+        This function runs when
+        - a finite zeek dir is given to slips with -f
+        - a growing zeek dir is given to slips with -g
+        This func does not run when slips is running on an interface with
+        -i or -ap
         """
         # wait max 10 seconds before stopping slips if no new flows are read
         self.bro_timeout = 10
@@ -445,10 +447,11 @@ class Input(ICore):
             self.bro_timeout = float("inf")
 
         self.zeek_dir = self.given_path
+        # if slips is just reading a finite zeek dir, there's no way to
+        # know the interface
+        interface = "default"
         if self.args.growing:
-            interface = utils.infer_used_interface()
-        else:
-            interface = "default"
+            interface = self.args.interface
         self.start_observer(self.zeek_dir, interface)
 
         # if 1 file is zeek tabs the rest should be the same

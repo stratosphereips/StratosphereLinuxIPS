@@ -48,7 +48,7 @@ class ConfigParser(object):
 
     def get_parser(self, help=False):
         return ArgumentParser(
-            usage="./slips.py -c <configfile> [options] [file]", add_help=help
+            usage="./slips.py -c <configfile> [options]", add_help=help
         )
 
     def get_args(self):
@@ -341,9 +341,6 @@ class ConfigParser(object):
             "exporting_alerts", "discovery_path", False
         )
 
-    def inbox_path(self):
-        return self.read_configuration("exporting_alerts", "inbox_path", False)
-
     def push_delay(self):
         # 3600 = 1h
         delay = self.read_configuration("exporting_alerts", "push_delay", 3600)
@@ -366,11 +363,6 @@ class ConfigParser(object):
     def taxii_password(self):
         return self.read_configuration(
             "exporting_alerts", "taxii_password", False
-        )
-
-    def jwt_auth_path(self):
-        return self.read_configuration(
-            "exporting_alerts", "jwt_auth_path", False
         )
 
     def long_connection_threshold(self):
@@ -644,7 +636,7 @@ class ConfigParser(object):
             to_ignore.append("p2ptrust")
 
         use_global_p2p = self.use_global_p2p()
-        if not (use_global_p2p and ("-i" in sys.argv or "-g" in sys.argv)):
+        if not (use_global_p2p and ("-i" in sys.argv)):
             to_ignore.append("fidesModule")
             to_ignore.append("irisModule")
 

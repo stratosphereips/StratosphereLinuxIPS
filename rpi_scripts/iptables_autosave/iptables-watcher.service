@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for iptables rule changes
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/check-iptables-hash.sh
+
+
+[Install]
+WantedBy=multi-user.target

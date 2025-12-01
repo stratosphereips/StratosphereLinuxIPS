@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import json
 from typing import List, Dict
 import tldextract
 
@@ -20,6 +21,9 @@ class DomainAnalyzer(IWhitelistAnalyzer):
     def init(self):
         self.ip_analyzer = IPAnalyzer(self.db)
         self.read_configuration()
+        # for debugging
+        self.bf_hits = 0
+        self.bf_misses = 0
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -76,7 +80,6 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         # the reason why this function doesnt support the Attacker or
         # Victim as a parameter directly is that we may call it on other
         # values. not just attacker and victim domains.
-
         if not isinstance(domain, str):
             return False
 
@@ -104,21 +107,28 @@ class DomainAnalyzer(IWhitelistAnalyzer):
                 # domain is in the local whitelist, but the local whitelist
                 # not enabled
                 return False
-            whitelisted_domains: Dict[str, Dict[str, str]]
-            whitelisted_domains = self.db.get_whitelist("domains")
-            if parent_domain in whitelisted_domains:
-                # did the user say slips should ignore flows or alerts in the
-                # config file?
-                whitelist_should_ignore = whitelisted_domains[parent_domain][
-                    "what_to_ignore"
-                ]
-                # did the user say slips should ignore flows/alerts  TO or from
-                # that domain in the config file?
-                dir_from_whitelist: str = whitelisted_domains[parent_domain][
-                    "from"
-                ]
-            else:
+
+            if parent_domain not in self.manager.bloom_filters.domains:
+                # definitely not whitelisted
+                self.bf_hits += 1
                 return False
+
+            domain_info: str | None = self.db.is_whitelisted(
+                parent_domain, "domains"
+            )
+            if not domain_info:
+                # bloom filter FP
+                self.bf_misses += 1
+                return False
+
+            self.bf_hits += 1
+            domain_info: Dict[str, str] = json.loads(domain_info)
+            # did the user say slips should ignore flows or alerts in the
+            # config file?
+            whitelist_should_ignore = domain_info["what_to_ignore"]
+            # did the user say slips should ignore flows/alerts  TO or from
+            # that domain in the config file?
+            dir_from_whitelist: str = domain_info["from"]
 
         # match the direction and whitelist_Type of the given domain to the
         # ones we have from the whitelist.

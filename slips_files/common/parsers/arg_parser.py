@@ -275,9 +275,11 @@ class ArgumentParser(argparse.ArgumentParser):
         self.add_argument(
             "-g",
             "--growing",
-            action="store_true",
+            action="store",
+            metavar="<zeek_dir>",
             required=False,
-            help="Treat the given zeek directory as growing. eg. zeek dirs generated when running on an interface",
+            help="Treat the given zeek directory as growing. eg. "
+            "Zeek dirs generated when running on an interface",
         )
         self.add_argument(
             "-w",

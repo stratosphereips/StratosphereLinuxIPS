@@ -1,3 +1,14 @@
+1.1.16 (Dec 1st, 2025)
+- Fix problem reporting evidence when Slips is monitoring one interface
+- Change the usage of -g option, now Slips requires the interface name to monitor when using -g.
+- Fix P2P unable to connect to the redis database when using -m.
+- Fix false positive setting evidence on connection to IP outside local network when the IP is multicast.
+- Evidence handler and whitelist speedup by using bloom filters.
+- Drop support for the dynamic reloading of whitelists
+- Add an alerts visualiser web interface for TAXII servers.
+- Handle Slips and iptables failovers when running Slips as an access point in the Raspberry Pi.
+
+
 1.1.15 (Oct 31st, 2025)
 - Fix FP connection to port 0 for IGMP flows.
 - Support monitoring two interfaces when Slips is running as an access point.

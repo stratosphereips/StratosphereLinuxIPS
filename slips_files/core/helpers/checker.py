@@ -21,6 +21,12 @@ class Checker:
         """
         # only defined in stdin lines
         line_type = False
+
+        if self.main.args.interface and self.main.args.growing:
+            input_information = self.main.args.growing
+            input_type = self.main.get_input_file_type(input_information)
+            return input_type, input_information, line_type
+
         # -i or -ap
         if self.main.args.interface or self.main.args.access_point:
             input_information = (
@@ -77,7 +83,6 @@ class Checker:
             self.main.args.filepath,  # -f
             self.main.args.input_module,  # -im
         ]
-
         # Count how many of the flags are set (True)
         mutually_exclusive_flag_count = sum(
             bool(flag) for flag in mutually_exclusive_flags
@@ -86,10 +91,28 @@ class Checker:
         if mutually_exclusive_flag_count > 1:
             print(
                 "Only one of the flags -i, -ap, -s, -d, or -f is allowed. "
-                "Stopping slips."
+                "Stopping Slips."
             )
             self.main.terminate_slips()
             return
+
+    def _check_if_growing_zeek_dir_is_used_correctly(self):
+        """it should be used with -i. something like -g <dir> -i
+        <interface>"""
+        if not self.main.args.growing:
+            return
+
+        usage = "Usage: -g <dir> -i <interface>."
+        if not self.main.args.interface:
+            print(
+                f"{usage}\n"
+                "You need to define an interface with -i. Stopping Slips"
+            )
+            self.main.terminate_slips()
+
+        if self.main.args.filepath:
+            print(f"{usage}\n" "-f shouldn't be used with -g. Stopping Slips")
+            self.main.terminate_slips()
 
     def _check_if_root_is_required(self):
         if (self.main.args.save or self.main.args.db) and os.getuid() != 0:
@@ -146,7 +169,6 @@ class Checker:
         return (
             self.main.args.interface
             or self.main.args.access_point
-            or self.main.args.growing
             or self.main.args.input_module
         )
 
@@ -165,6 +187,7 @@ class Checker:
         self._check_mutually_exclusive_flags()
         self._check_if_root_is_required()
         self._check_interface_validity()
+        self._check_if_growing_zeek_dir_is_used_correctly()
 
         if (self.main.args.verbose and int(self.main.args.verbose) > 3) or (
             self.main.args.debug and int(self.main.args.debug) > 3
@@ -193,9 +216,7 @@ class Checker:
             )
             return
 
-        if self.main.conf.use_global_p2p() and not (
-            self.main.args.interface or self.main.args.growing
-        ):
+        if self.main.conf.use_global_p2p() and not self.main.args.interface:
             print(
                 "Warning: Global P2P (Fides Module + Iris Module) is only supported using "
                 "an interface. Global P2P (Fides Module + Iris Module) Disabled."
