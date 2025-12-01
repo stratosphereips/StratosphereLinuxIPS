@@ -203,13 +203,16 @@ class Daemon:
         try:
             with Lock(name=self.daemon_start_lock):
                 if self.pid is not None:
-                    self.print(
-                        "pidfile already exists. Daemon already " "running?"
+                    to_print = (
+                        f"pidfile {self.pidfile} already exists. "
+                        f"Daemon already running?"
                     )
+                    # to cli and to log file
+                    self.print(to_print)
+                    print(to_print)
                     return
 
                 self.print("Daemon starting...")
-
                 # Starts the daemon
                 self.daemonize()
 
@@ -310,7 +313,7 @@ class Daemon:
                 self.db = DBManager(
                     self.logger,
                     output_dir,
-                    port,
+                    int(port),
                     self.slips.conf,
                     self.slips.pid,
                     start_sqlite=False,
