@@ -543,7 +543,6 @@ class ProcessManager:
             pids_to_kill_last.append(
                 self.main.db.get_pid_of("Exporting Alerts")
             )
-
         # remove all None PIDs. this happens when a module in that list
         # isnt started in the current run.
         pids_to_kill_last: List[int] = [
@@ -735,6 +734,9 @@ class ProcessManager:
         # and we only have access to the PIDs
         children = self.main.db.get_pids().items()
         for module_name, pid in children:
+            if "thread" in module_name.lower():
+                # skip threads, they'll be  handled by their parent process
+                continue
             self.kill_process_tree(int(pid))
             self.print_stopped_module(module_name)
 

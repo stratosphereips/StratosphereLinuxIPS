@@ -222,7 +222,7 @@ def test_killdaemon(pid, os_kill_side_effect):
     daemon.pid = str(pid)
 
     with patch("os.kill", side_effect=os_kill_side_effect) as mock_kill:
-        daemon.killdaemon()
+        daemon._kill_self()
 
     mock_kill.assert_called_once_with(pid, signal.SIGTERM)
 

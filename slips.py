@@ -50,7 +50,7 @@ if __name__ == "__main__":
         daemon_status: dict = Daemon(slips).stop()
         # it takes about 5 seconds for the stop_slips msg
         # to arrive in the channel, so give slips time to stop
-        time.sleep(3)
+        time.sleep(5)
         if daemon_status["stopped"]:
             print("Daemon stopped.")
         else:
