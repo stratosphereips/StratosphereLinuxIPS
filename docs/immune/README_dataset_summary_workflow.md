@@ -2,11 +2,10 @@
 
 > **Note**: This guide covers the **Summarization workflow** (summary + behavior analysis).
 > For **Cause & Risk analysis** workflow, see [README_dataset_risk_workflow.md](README_dataset_risk_workflow.md).
-> For a comparison of both workflows, see [WORKFLOWS_OVERVIEW.md](WORKFLOWS_OVERVIEW.md).
 
 ## 1. Overview
 
-This pipeline transforms raw Slips security logs into structured multi-model analysis datasets. The workflow consists of four stages: (1) sampling incidents from raw logs into JSONL format, (2) generating DAG-based structural analysis, (3) producing LLM-enhanced summaries with behavior analysis from multiple models, and (4) correlating all analyses into a unified JSON dataset. The output provides comprehensive incident analysis from different analytical perspectives, enabling comparative evaluation of model performance on security analysis tasks.
+This pipeline transforms raw Slips security alerts into structured multi-model analysis datasets. The workflow consists of four stages: (1) sampling incidents from raw logs into JSONL format, (2) generating DAG-based structural analysis, (3) producing LLM-enhanced summaries with behavior analysis from multiple models, and (4) correlating all analyses into a unified JSON dataset. The output provides comprehensive incident analysis from different analytical perspectives, enabling comparative evaluation of model performance on security analysis tasks.
 
 ## 2. Pipeline Components
 
@@ -44,7 +43,7 @@ Wrapper for `alert_dag_parser_llm.py` supporting multiple model configurations. 
 
 **Input Requirements:**
 - Raw Slips logs: `alerts.json` files from Slips network security analysis
-- Directory structure: `sample_logs/alya_datasets/{Normal,Malware}/...`
+- Directory structure: `sample_logs/datasets/{Normal,Malware}/...`
 
 **Model Configuration:**
 - **GPT-4o-mini**: OpenAI API key in environment variable `OPENAI_API_KEY`
