@@ -188,21 +188,6 @@ The final dataset contains merged analyses with the following structure:
 
 ---
 
-## Evaluation Workflow
-
-After generating the dataset, evaluate LLM performance using LLM-as-judge:
-
-```bash
-# Evaluate risk assessments
-python3 evaluate_risk.py datasets/final_dataset_risk.json \
-  --judge-model gpt-4o \
-  -o risk_evaluation_results.json
-```
-
-For detailed evaluation instructions, see [LLM_EVALUATION_GUIDE.md](LLM_EVALUATION_GUIDE.md#risk-analysis-evaluation).
-
----
-
 ## Performance Considerations
 
 **Token Optimization:**
@@ -210,26 +195,3 @@ For detailed evaluation instructions, see [LLM_EVALUATION_GUIDE.md](LLM_EVALUATI
 - Without grouping: 4604 events → ~200K tokens
 - With grouping: 4604 events → ~5K tokens
 
-**Model Selection:**
-- **GPT-4o-mini**: Best balance of cost/quality for production
-- **GPT-4o**: Highest quality, ~10x cost of mini
-- **Qwen 2.5**: Free local alternative via Ollama
-
-**Parallel Processing:**
-Run multiple models concurrently to reduce total pipeline time:
-```bash
-# Run in parallel (requires multiple terminals or background jobs)
-./generate_cause_risk_analysis.sh datasets/my_dataset.jsonl --model gpt-4o-mini --group-events &
-./generate_cause_risk_analysis.sh datasets/my_dataset.jsonl --model qwen2.5:3b --base-url http://localhost:11434/v1 --group-events &
-wait
-```
-
----
-
-## Next Steps
-
-- **Evaluation**: [LLM_EVALUATION_GUIDE.md](LLM_EVALUATION_GUIDE.md) - Evaluate analysis quality
-- **Summarization Workflow**: [README_dataset_summary_workflow.md](README_dataset_summary_workflow.md) - Alternative workflow
-- **Comparison**: [WORKFLOWS_OVERVIEW.md](WORKFLOWS_OVERVIEW.md) - Choose the right workflow
-
-For questions or issues, see the main [README.md](../README.md).
