@@ -254,10 +254,12 @@ class Daemon:
                 f" Slips won't be completely killed."
             )
 
-    def killdaemon(self):
-        """Kill the damon process only (aka slips.py)"""
+    def _kill_self(self):
+        """Kill the daemon process only (aka slips.py)"""
+
         # sending SIGINT to self.pid will only kill slips.py
-        # and the rest of it's children will be zombies
+        # and the rest of its children will be zombies
+
         # sending SIGKILL to self.pid will only kill slips.py and the rest of
         # it's children will stay open in memory (not even zombies)
         try:
@@ -282,6 +284,10 @@ class Daemon:
 
     def stop(self):
         """Stops the daemon"""
+        # WARNING: this function shouldn't call shutdown_gracefully().
+        # it should send a signal to the opened daemon via
+        # killdaemon(), and the
+        # opened daemon should call shutdown gracefully
         try:
             with Lock(name=self.daemon_stop_lock):
 
@@ -291,7 +297,7 @@ class Daemon:
                         "error": "Daemon is not running.",
                     }
 
-                self.killdaemon()
+                self._kill_self()
 
                 info: Tuple[str] = self.get_last_opened_daemon_info()
                 if not info:
@@ -307,9 +313,12 @@ class Daemon:
                 self.stdout = "slips.log"
                 self.logsfile = "slips.log"
                 self.prepare_std_streams(output_dir)
+
                 self.logger = self.slips.proc_man.start_output_process(
                     self.stderr, self.logsfile, stdout=self.stdout
                 )
+                self.slips.printer = Printer(self.logger, self.name)
+
                 self.db = DBManager(
                     self.logger,
                     output_dir,
@@ -319,19 +328,14 @@ class Daemon:
                     start_sqlite=False,
                     flush_db=False,
                 )
-                self.slips.printer = Printer(self.logger, self.name)
                 self.db.set_slips_mode("daemonized")
                 self.slips.set_mode("daemonized", daemon=self)
-                # used in shutdown gracefully to print the name of the
-                # stopped file in slips.log
+
                 self.slips.input_information = self.db.get_input_file()
                 self.slips.args = self.slips.conf.get_args()
                 self.slips.db = self.db
                 self.slips.proc_man.slips_logfile = self.logsfile
 
-                # WARNING: this function shouldn't call shutdown gracefully.
-                # it should send sigint to the opened daemon, and the
-                # opened daemon should call shutdown gracefully
                 return {
                     "stopped": True,
                     "error": None,
