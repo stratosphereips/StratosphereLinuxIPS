@@ -307,8 +307,3 @@ Using both flags together (`--group-events --behavior-analysis`) achieves optima
 - 4,604 events: 1,897 tokens (summary) + 1,527 tokens (behavior) = 3,424 total tokens
 - Processing time: ~10-15 seconds per incident on low-spec devices (Ollama on Raspberry Pi)
 
----
-
-**Pipeline Maintained By:** Security Analysis Team
-**Last Updated:** 2025-10-13
-**Version:** 2.0 (JSON-based workflow with event grouping and behavior analysis)
