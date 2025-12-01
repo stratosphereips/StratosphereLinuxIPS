@@ -28,7 +28,7 @@ This is the main guide to the documentation related to the changes done to Slips
 - [Summarization Dataset Report](https://stratospherelinuxips.readthedocs.io/en/develop/immune/DATASET_REPORT.html) - Event summarization and behavior analysis
 - [Risk Analysis Dataset Report](https://stratospherelinuxips.readthedocs.io/en/develop/immune/DATASET_RISK_REPORT.html) - Root cause and risk assessment
 
-** Workflow Guides:**
+**Workflow Guides:**
 - [Dataset Generation Workflows Overview](https://stratospherelinuxips.readthedocs.io/en/develop/immune/WORKFLOWS_OVERVIEW.html) - Quick comparison of summarization vs. risk workflows
 - [Summarization Workflow Implementation](https://stratospherelinuxips.readthedocs.io/en/develop/immune/README_dataset_summary_workflow.html) - Step-by-step guide for generating summarization datasets
 - [Risk Analysis Workflow Implementation](https://stratospherelinuxips.readthedocs.io/en/develop/immune/README_dataset_risk_workflow.html) - Step-by-step guide for generating risk datasets
