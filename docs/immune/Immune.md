@@ -6,7 +6,7 @@ This is the main guide to the documentation related to the changes done to Slips
 
 - [Main Architecture of Slips Immune](https://stratospherelinuxips.readthedocs.io/en/develop/immune/immune_architecture.html)
 
-### 
+###  RPI performance 
 - [Research RPI Limitations](https://stratospherelinuxips.readthedocs.io/en/develop/immune/research_rpi_limitations_and_define_acceptable_performance_benchmarks.html)
 - [Slips Compatibility In The RPI](https://stratospherelinuxips.readthedocs.io/en/develop/immune/reimplement_slips_features_incompatible_with_the_rpi.html)
 - [Installing Slips On the RPI](https://stratospherelinuxips.readthedocs.io/en/develop/immune/installing_slips_in_the_rpi.html)
