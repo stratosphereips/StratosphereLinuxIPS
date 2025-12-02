@@ -114,8 +114,6 @@ class RedisDB(
     # to keep track of connection retries. once it reaches max_retries,
     # slips will terminate
     connection_retry = 0
-    # used to cleanup flow trackers
-    last_cleanup_time = time.time()
 
     def __new__(
         cls, logger, redis_port, start_redis_server=True, flush_db=True

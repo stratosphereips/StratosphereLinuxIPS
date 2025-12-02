@@ -50,51 +50,16 @@ class FlowTracker:
             return False
         return True
 
-    def _cleanup_old_keys_from_flow_tracker(self):
-        """
-        Deletes flows older than 1 hour from the
-        self.constants.SUBS_WHO_PROCESSED_MSG hash.
-        Does this cleanup every 1h
-        """
-        one_hr = 3600
-        now = time.time()
-
-        if now - self.last_cleanup_time < one_hr:
-            # Cleanup was done less than an hour ago
-            return
-
-        one_hour_ago = int(now) - one_hr
-        keys_to_delete = []
-
-        cursor = 0
-        while True:
-            cursor, key_values = self.r.hscan(
-                self.constants.SUBS_WHO_PROCESSED_MSG, cursor
-            )
-            for msg_id in key_values.keys():
-                try:
-                    # Extract timestamp from msg_id
-                    ts = int(msg_id.rsplit("_", 1)[-1])
-
-                    if ts < one_hour_ago:
-                        keys_to_delete.append(msg_id)
-                except ValueError:
-                    continue  # Skip keys that don't match expected format
-
-            if cursor == 0:
-                break  # Exit when full scan is done
-
-        if keys_to_delete:
-            self.r.hdel(self.constants.SUBS_WHO_PROCESSED_MSG, *keys_to_delete)
-        self.last_cleanup_time = now
-
     def _get_current_minute(self) -> str:
         return time.strftime("%Y%m%d%H%M", time.gmtime(time.time()))
 
     def _incr_flows_analyzed_by_all_modules_per_min(self, pipe):
         """
+        Keeps track of the number of flows analyzed by all modules per minute.
+        by increasing FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN by 1.
+
         Adds the logic of tracking flows per min to the given pipe for
-        excution
+        execution
         """
         current_minute = self._get_current_minute()
         key = (
@@ -102,8 +67,8 @@ class FlowTracker:
             f"{current_minute}"
         )
         pipe.incr(key)
-        # set expiration for 1 hour to avoid long-term storage
-        pipe.expire(key, 3600)
+        # set expiration for 30 mins to avoid long-term storage
+        pipe.expire(key, 1800)
 
     def get_flows_analyzed_per_minute(self):
         current_minute = self._get_current_minute()
@@ -135,8 +100,6 @@ class FlowTracker:
         if not self._should_track_msg(msg):
             return
 
-        self._cleanup_old_keys_from_flow_tracker()
-
         # we only say that a flow is done being analyzed if it was accessed
         # X times where x is the number of the channel subscribers
         # this way we make sure that all intended receivers did receive the
@@ -154,19 +117,22 @@ class FlowTracker:
         # channel name is used here because some flow may be present in
         # conn.log and ssl.log with the same uid, so uid only is not enough
         # as an identifier.
-        # we're storing the ts here to be able to delete the 1h old msgs
-        # from redis.
-        timestamp = int(time.time())
-        msg_id = f"{channel_name}_{flow_identifier}_{timestamp}"
+        key = f"{self.constants.SUBS_WHO_PROCESSED_MSG}_{channel_name}_{flow_identifier}"
+
+        with self.r.pipeline() as pipe:
+            pipe.incr(key)
+            pipe.ttl(key)
+            result = pipe.execute()
+
+        subscribers_who_processed_this_msg, ttl = result
+        # -1 means the key is new so set expiration 30mins
+        if ttl == -1:
+            self.r.expire(key, 1800)
 
         expected_subscribers: int = self.r.pubsub_numsub(channel_name)[0][1]
 
-        subscribers_who_processed_this_msg = self.r.hincrby(
-            self.constants.SUBS_WHO_PROCESSED_MSG, msg_id, 1
-        )
-
         if subscribers_who_processed_this_msg == expected_subscribers:
-            pipe = self.r.pipeline()
-            pipe.hdel(self.constants.SUBS_WHO_PROCESSED_MSG, msg_id)
-            self._incr_flows_analyzed_by_all_modules_per_min(pipe)
-            pipe.execute()
+            with self.r.pipeline() as pipe:
+                pipe.delete(key)
+                self._incr_flows_analyzed_by_all_modules_per_min(pipe)
+                pipe.execute()
