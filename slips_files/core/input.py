@@ -615,7 +615,11 @@ class Input(ICore):
             utils.is_ignored_zeek_log_file(self.given_path)
             and "cyst" not in self.given_path.lower()
         ):
-            # unsupported file
+            self.print(
+                f"Warning: Unsupported Zeek log file '{self.given_path}'. "
+                f"Only these log types are supported: {SUPPORTED_LOGFILES} "
+                f"(with a .log extension)."
+            )
             return False
 
         if os.path.exists(self.given_path):

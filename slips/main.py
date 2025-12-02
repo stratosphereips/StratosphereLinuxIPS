@@ -413,7 +413,7 @@ class Main:
     def get_analyzed_flows_percentage(self) -> str:
         """
         returns a str with the percentage of analyzed flows so far to be
-        logged in the stats
+        logged in the stats. runs every 5s
         """
         if self.is_total_flows_unknown():
             return ""
@@ -421,10 +421,12 @@ class Main:
         if not hasattr(self, "total_flows"):
             self.total_flows = self.db.get_total_flows()
 
-        flows_percentage = int(
-            (self.db.get_processed_flows_so_far() / self.total_flows) * 100
-        )
-        return f"Analyzed Flows: {green(flows_percentage)}{green('%')}. "
+        processed = self.db.get_processed_flows_so_far()
+        if not processed:
+            return ""
+
+        percentage = int((processed / self.total_flows) * 100)
+        return f"Analyzed Flows: {green(percentage)}{green('%')}. "
 
     def is_total_flows_unknown(self) -> bool:
         """
