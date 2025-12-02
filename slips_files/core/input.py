@@ -966,9 +966,9 @@ class Input(ICore):
         sends the total amount of flows to process with the first flow only
         """
         to_send = {"line": line, "input_type": self.input_type}
-        # when the queue is full, the default behaviour is to block
-        # if necessary until a free slot is available
-        self.profiler_queue.put(to_send)
+        # when the queue is full, it blocks forever until a free slot is
+        # available
+        self.profiler_queue.put(to_send, block=True, timeout=None)
 
     def main(self):
         if self.is_running_non_stop:

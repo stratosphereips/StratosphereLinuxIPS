@@ -388,6 +388,6 @@ class Profiler(ICore, IObservable):
                     self.start_profiler_worker(worker_id)
                 continue
 
-            self.flows_to_process_q.put(msg)
+            self.flows_to_process_q.put(msg, block=True, timeout=None)
             self.check_if_high_throughput_and_add_workers()
         return None
