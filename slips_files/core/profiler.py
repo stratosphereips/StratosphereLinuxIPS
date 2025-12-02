@@ -104,7 +104,7 @@ class Profiler(ICore, IObservable):
         # so without this, only 1 of the 3 workers receives the stop msg
         # and exits, and the rest of the 2 workers AND the main() keep
         # waiting for new msgs
-        self.flows_to_process_q = multiprocessing.Queue()
+        self.flows_to_process_q = multiprocessing.Queue(maxsize=10000)
         self.handle_setting_local_net_lock = multiprocessing.Lock()
         self.is_first_msg = True
         self.manager = multiprocessing.Manager()

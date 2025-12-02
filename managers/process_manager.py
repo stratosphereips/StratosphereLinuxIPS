@@ -51,7 +51,7 @@ class ProcessManager:
 
         # this is the queue that will be used by the input proces
         # to pass flows to the profiler
-        self.profiler_queue = Queue()
+        self.profiler_queue = Queue(maxsize=10000)
         self.termination_event: Event = Event()
         # to make sure we only warn the user once about
         # the pending modules
