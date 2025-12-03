@@ -183,3 +183,4 @@ modules/flowmldetection/pipeline_ml_training/results/
 modules/flowmldetection/pipeline_ml_training/models/
 modules/flowmldetection/pipeline_ml_training/cache/
 modules/flowmldetection/pipeline_ml_training/logs/
+modules/flowmldetection/pipeline_ml_training/testing/test_logs/*
