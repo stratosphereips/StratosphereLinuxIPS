@@ -11,7 +11,7 @@ import pandas as pd
 import traceback
 from typing import Iterable, List, Optional, Tuple, Union
 
-from conn_normalizer import ConnToSlipsConverter  # <-- your converter
+from .conn_normalizer import ConnToSlipsConverter
 from .commons import BENIGN, MALICIOUS
 
 
@@ -181,6 +181,7 @@ class FeatureExtraction:
         Extract label column from df, mapping into BENIGN/MALICIOUS.
         Prefer ground_truth_label, detailed_ground_truth_label, label, module_labels.
         Default to converter.default_label if missing.
+        If gt is missing, but the detailed label is malware, we assume the whole is malware.
         """
         label_cols = [
             "ground_truth_label",
@@ -196,9 +197,6 @@ class FeatureExtraction:
                 dtype="object",
             )
 
-        col = found[0]
-        raw = df[col].fillna(str(self.converter.default_label)).astype(str)
-
         def map_label(val: str) -> str:
             v = val.strip().upper()
             if v == "" or v == str(BENIGN).upper():
@@ -207,7 +205,18 @@ class FeatureExtraction:
                 return MALICIOUS
             return BENIGN
 
-        return raw.map(map_label)
+        def row_map_label(row) -> str:
+            for v in row:
+                if map_label(str(v)) == MALICIOUS:
+                    return MALICIOUS
+            return BENIGN
+
+        df_labels = df[found]  # extract all columns with possible labels
+        final_label = pd.DataFrame(
+            (row_map_label(row) for _, row in df_labels.iterrows())
+        )
+
+        return final_label.iloc[:, 0]
 
     def drop_labels(self, df: pd.DataFrame) -> pd.DataFrame:
         return df.drop(
