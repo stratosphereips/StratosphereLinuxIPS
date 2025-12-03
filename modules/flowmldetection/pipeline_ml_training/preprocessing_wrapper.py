@@ -27,32 +27,37 @@ class PreprocessingWrapper:
         self.is_fitted[name] = False
 
     def partial_fit(self, X, y=None):
-        """Update transformers if they support partial_fit, otherwise fit once."""
+        """
+        Fit transformers on first call, then use partial_fit if available on subsequent calls.
+        Handles transformers with only fit or only partial_fit.
+        """
         for name, transformer in self.steps:
+            if transformer is None:
+                raise AttributeError(
+                    f"Transformer '{name}' is None, cannot fit."
+                )
 
-            if not self.is_fitted[name]:
-                if hasattr(transformer, "fit"):
-                    transformer.fit(X, y)
-                    self.is_fitted[name] = True
+            # Decide which method to call
+            if not self._has_been_fitted_once:
+                # First time: use fit if available, else partial_fit
+                method = getattr(transformer, "fit", None) or getattr(
+                    transformer, "partial_fit", None
+                )
             else:
-                try:
-                    if hasattr(transformer, "partial_fit"):
-                        transformer.partial_fit(X, y)
-                        self.is_fitted[name] = True
-                    else:
-                        if not self.is_fitted[name]:
-                            # fallback: fit once if not fitted yet and cannot partial fit
-                            if hasattr(transformer, "fit"):
-                                transformer.fit(X, y)
-                                self.is_fitted[name] = True
-                            else:
-                                raise AttributeError(
-                                    f"Transformer {name} does not implement partial_fit or fit/transform."
-                                )
+                # Subsequent calls: use partial_fit if available, else fit
+                method = getattr(transformer, "partial_fit", None) or getattr(
+                    transformer, "fit", None
+                )
 
-                except Exception as e:
-                    print(f"[ERROR] Partial fitting step '{name}' failed: {e}")
-                    raise
+            if method is None or not callable(method):
+                raise AttributeError(
+                    f"Transformer '{name}' has neither fit nor partial_fit."
+                )
+
+            # Call the method
+            method(X, y)
+            self.is_fitted[name] = True
+
         self._has_been_fitted_once = True
 
     def transform(self, X):
@@ -85,7 +90,7 @@ class PreprocessingWrapper:
                 f"Preprocessing directory {base_path} does not exist."
             )
         for name, transformer in self.steps:
-            model_path = base_path / f"{name}.pkl"
+            model_path = base_path / f"{name}.bin"
             if not model_path.exists():
                 raise FileNotFoundError(
                     f"Preprocessing step {name} not found at {model_path}"

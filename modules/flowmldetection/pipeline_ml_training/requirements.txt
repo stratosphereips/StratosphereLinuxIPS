@@ -6,3 +6,4 @@ notebook
 ipykernel
 ipython
 river
+mock
