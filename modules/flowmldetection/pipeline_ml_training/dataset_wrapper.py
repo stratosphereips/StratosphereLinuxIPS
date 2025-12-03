@@ -23,23 +23,14 @@ class ZeekDataset:
         self.root = Path(root)
         self.seed = seed
         self.rng = random.Random(seed)
+        self.persist_cache_threshold = (
+            30000  # min valid flows to persist cache
+        )
 
         if not self.root.exists():
             raise FileNotFoundError(f"Root path {self.root} does not exist")
 
-        labeled = self.root / "conn.log.labeled"
-        alt_labeled = self.root / "labeled-conn.log"
-        plain = self.root / "conn.log"
-        if labeled.exists():
-            self.current_file = labeled
-        elif plain.exists():
-            self.current_file = plain
-        elif alt_labeled.exists():
-            self.current_file = alt_labeled
-        else:
-            raise FileNotFoundError(
-                f"No conn.log.labeled or conn.log in {self.root}"
-            )
+        self.find_labeled_logfile()
 
         self._index_file()
 
@@ -48,6 +39,21 @@ class ZeekDataset:
         self._batch_pos: int = 0
         self.epoch: int = 0
         self.reset_epoch(batch_size=batch_size)
+
+    def find_labeled_logfile(self) -> Path:
+        labeled = self.root / "conn.log.labeled"
+        alt_labeled = self.root / "labeled-conn.log"
+        plain = self.root / "conn.log"
+        if labeled.exists():
+            self.current_file = labeled
+        elif alt_labeled.exists():
+            self.current_file = alt_labeled
+        elif plain.exists():
+            self.current_file = plain
+        else:
+            raise FileNotFoundError(
+                f"No conn.log.labeled, labeled-conn.log or conn.log in {self.root}"
+            )
 
     def __len__(self):
         return self.total_lines
@@ -149,7 +155,7 @@ class ZeekDataset:
         self.total_lines = len(valid_indices)
 
         # persist if large enough
-        if len(valid_indices) > 50000:
+        if len(valid_indices) > self.persist_cache_threshold:
             with open(cache_file, "w") as f:
                 json.dump(
                     {
@@ -192,6 +198,10 @@ class ZeekDataset:
                 yield record
                 idx += 1
 
+                if idx == 1:
+                    print(record)
+                    print(types)
+
     def _cast(self, value: str, typ: Optional[str]):
         if value in ("-", ""):
             return None
@@ -201,6 +211,17 @@ class ZeekDataset:
             return float(value)
         if typ == "bool":
             return value.lower() == "t"
+        if typ == "time":
+            return float(value)
+        if typ == "interval":
+            return float(value)
+        if typ == "string" or typ == "str":
+            try:
+                return float(value)
+            except ValueError:
+                return value
+        if typ == "":
+            return float(value)
         return value
 
     def get_line(self, idx: int):
