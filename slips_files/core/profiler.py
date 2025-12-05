@@ -10,6 +10,7 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
+import os
 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -107,6 +108,7 @@ class Profiler(ICore, IObservable):
         self.flows_to_process_q = multiprocessing.Queue(maxsize=5162220)
         self.handle_setting_local_net_lock = multiprocessing.Lock()
         self.is_first_msg = True
+        # runs a separate server process behind the scenes.
         self.manager = multiprocessing.Manager()
         self.localnet_cache = self.manager.dict()
         # max parallel profiler workers to start when high throughput is detected
@@ -147,14 +149,22 @@ class Profiler(ICore, IObservable):
             return input_type
 
     def stop_profiler_workers(self):
-        self.stop_profiler_workers_event.set()
+        self.stop_profiler_workers_event.set()  # Signal workers to exit
+        time.sleep(2)
+        # Try to join gracefully first
+        for process in self.profiler_child_processes:
+            try:
+                process.join(timeout=3)
+            except (OSError, ChildProcessError):
+                pass
+
+        # Terminate any processes that are still alive after the join timeout
         for process in self.profiler_child_processes:
             try:
                 if process.is_alive():
                     process.terminate()
-                process.join(timeout=3)
+                    process.join(timeout=0.1)
             except (OSError, ChildProcessError):
-                # continue loop; don't abort shutdown
                 pass
 
     def mark_process_as_done_processing(self):
@@ -199,7 +209,12 @@ class Profiler(ICore, IObservable):
             ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         ),
     ):
-        ProfilerWorker(
+        worker_number = name.split("_")[-1]
+        self.print(
+            f"Started Profiler Worker {green(worker_number)} [PID"
+            f" {green(os.getpid())}]"
+        )
+        worker = ProfilerWorker(
             name=name,
             logger=self.logger,
             output_dir=self.output_dir,
@@ -214,11 +229,12 @@ class Profiler(ICore, IObservable):
             flows_to_process_q=self.flows_to_process_q,
             input_handler=input_handler_obj,
             bloom_filters=self.bloom_filters,
-        ).start()
+        )
+        worker.main()
 
     def start_profiler_worker(self, worker_id: int = None):
         """starts A profiler worker for faster processing of the flows"""
-        worker_name = f"ProfilerWorker_{worker_id}"
+        worker_name = f"ProfilerWorker_Process_{worker_id}"
         proc = multiprocessing.Process(
             target=self.worker,
             args=(
@@ -226,6 +242,7 @@ class Profiler(ICore, IObservable):
                 self.input_handler_cls,
             ),
             name=worker_name,
+            daemon=True,
         )
         utils.start_process(proc, self.db)
         self.profiler_child_processes.append(proc)
@@ -273,12 +290,17 @@ class Profiler(ICore, IObservable):
 
         # wait for all flows to be processed by the profiler processes.
         self.stop_profiler_workers()
-
         # close the queues to avoid deadlocks.
         # this step SHOULD NEVER be done before closing the workers
         self.flows_to_process_q.close()
+        # By default if a process is not the creator of the queue then on
+        # exit it will attempt to join the queue’s background thread. The
+        # process can call cancel_join_thread() to make join_thread()
+        # do nothing.
+        self.flows_to_process_q.cancel_join_thread()
         self.profiler_queue.close()
 
+        self.manager.shutdown()
         self.db.set_new_incoming_flows(False)
         self.print(
             f"Stopping. Total lines read: {self.rec_lines}",
@@ -317,6 +339,7 @@ class Profiler(ICore, IObservable):
         Checks for input and profile flows/sec imbalance and adds more
         profiler workers if needed.
         """
+
         if self.max_workers_started():
             return
 
@@ -354,7 +377,6 @@ class Profiler(ICore, IObservable):
         # we're using self.should_stop() here instead of while True to be
         # able to unit test this function:D
         while not self.should_stop():
-
             self.lines = sum(
                 [worker.received_lines for worker in self.workers]
             )
@@ -376,7 +398,6 @@ class Profiler(ICore, IObservable):
 
             if self.is_first_msg:
                 self.is_first_msg = False
-
                 self.input_handler_cls = self.get_handler_class(msg)
                 if not self.input_handler_cls:
                     self.print("Unsupported input type, exiting.")
@@ -396,3 +417,4 @@ class Profiler(ICore, IObservable):
 
             self.flows_to_process_q.put(msg, block=True, timeout=None)
             self.check_if_high_throughput_and_add_workers()
+        return
