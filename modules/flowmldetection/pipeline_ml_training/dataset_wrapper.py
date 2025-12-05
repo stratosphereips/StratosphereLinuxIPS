@@ -18,14 +18,40 @@ import json
 
 class ZeekDataset:
     def __init__(
-        self, root: Union[str, Path], batch_size, seed: Optional[int] = None
+        self,
+        root,
+        batch_size,
+        seed=None,
+        persist_cache_threshold=30000,
+        cache_dir=None,
+        labeled_filenames=None,
+        file_encoding="utf-8",
+        file_errors="ignore",
+        shuffle_per_epoch=False,
     ):
         self.root = Path(root)
         self.seed = seed
         self.rng = random.Random(seed)
-        self.persist_cache_threshold = (
-            30000  # min valid flows to persist cache
-        )
+        self.persist_cache_threshold = persist_cache_threshold
+        self.file_encoding = file_encoding
+        self.file_errors = file_errors
+        self.shuffle_per_epoch = shuffle_per_epoch
+
+        # cache dir
+        if cache_dir is None:
+            self.cache_dir = Path(__file__).parent / "cache"
+        else:
+            self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(exist_ok=True)
+
+        if labeled_filenames is None:
+            self.labeled_filenames = [
+                "conn.log.labeled",
+                "labeled-conn.log",
+                "conn.log",
+            ]
+        else:
+            self.labeled_filenames = list(labeled_filenames)
 
         if not self.root.exists():
             raise FileNotFoundError(f"Root path {self.root} does not exist")
@@ -41,19 +67,14 @@ class ZeekDataset:
         self.reset_epoch(batch_size=batch_size)
 
     def find_labeled_logfile(self) -> Path:
-        labeled = self.root / "conn.log.labeled"
-        alt_labeled = self.root / "labeled-conn.log"
-        plain = self.root / "conn.log"
-        if labeled.exists():
-            self.current_file = labeled
-        elif alt_labeled.exists():
-            self.current_file = alt_labeled
-        elif plain.exists():
-            self.current_file = plain
-        else:
-            raise FileNotFoundError(
-                f"No conn.log.labeled, labeled-conn.log or conn.log in {self.root}"
-            )
+        for fname in self.labeled_filenames:
+            candidate = self.root / fname
+            if candidate.exists():
+                self.current_file = candidate
+                return candidate
+        raise FileNotFoundError(
+            f"No conn.log.labeled, labeled-conn.log or conn.log in {self.root}"
+        )
 
     def __len__(self):
         return self.total_lines
@@ -62,7 +83,7 @@ class ZeekDataset:
         return (self.total_lines + self.batch_size - 1) // self.batch_size
 
     def _cache_path(self):
-        base = Path(__file__).parent / "cache"
+        base = self.cache_dir
         base.mkdir(exist_ok=True)
         file_hash = hashlib.sha1(str(self.current_file).encode()).hexdigest()[
             :16
@@ -81,7 +102,12 @@ class ZeekDataset:
 
         # try loading from cache
         if cache_file.exists():
-            with open(cache_file, "r") as f:
+            with open(
+                cache_file,
+                "r",
+                encoding=self.file_encoding,
+                errors=self.file_errors,
+            ) as f:
                 data = json.load(f)
             if (
                 data["__file_size"] == file_stat.st_size
@@ -99,7 +125,10 @@ class ZeekDataset:
         valid_indices, labels = [], []
 
         with open(
-            self.current_file, "r", encoding="utf-8", errors="ignore"
+            self.current_file,
+            "r",
+            encoding=self.file_encoding,
+            errors=self.file_errors,
         ) as fh:
             idx = 0
             for line in fh:
@@ -156,7 +185,12 @@ class ZeekDataset:
 
         # persist if large enough
         if len(valid_indices) > self.persist_cache_threshold:
-            with open(cache_file, "w") as f:
+            with open(
+                cache_file,
+                "w",
+                encoding=self.file_encoding,
+                errors=self.file_errors,
+            ) as f:
                 json.dump(
                     {
                         "__file_size": file_stat.st_size,
@@ -178,7 +212,10 @@ class ZeekDataset:
         }
 
         with open(
-            self.current_file, "r", encoding="utf-8", errors="ignore"
+            self.current_file,
+            "r",
+            encoding=self.file_encoding,
+            errors=self.file_errors,
         ) as fh:
             idx = 0
             for line in fh:
@@ -239,6 +276,8 @@ class ZeekDataset:
 
     def reset_epoch(self, batch_size: int):
         self.indices = list(range(self.total_lines))
+        if self.shuffle_per_epoch:
+            self.rng.shuffle(self.indices)
         self.batch_size = batch_size
         self._batch_pos = 0
         self.epoch = 0
@@ -274,7 +313,10 @@ class ZeekDataset:
         records = []
         found = 0
         with open(
-            self.current_file, "r", encoding="utf-8", errors="ignore"
+            self.current_file,
+            "r",
+            encoding=self.file_encoding,
+            errors=self.file_errors,
         ) as fh:
             file_idx = 0  # counts data lines (non-# lines)
             for line in fh:
@@ -339,7 +381,10 @@ class ZeekDataset:
         records = []
         found = 0
         with open(
-            self.current_file, "r", encoding="utf-8", errors="ignore"
+            self.current_file,
+            "r",
+            encoding=self.file_encoding,
+            errors=self.file_errors,
         ) as fh:
             file_idx = 0  # counts data lines (non-# lines)
             for line in fh:

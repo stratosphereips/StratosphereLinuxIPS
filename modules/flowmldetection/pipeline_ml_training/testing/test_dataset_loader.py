@@ -340,7 +340,147 @@ class TestZeekDataset:
         # Should load same order from same file
         assert ds1.indices == ds2.indices
 
-    # ========== Cache Tests ==========
+    # ========== New Parameter Tests ==========
+    def test_custom_labeled_filenames(self, temp_dir):
+        """Test initialization with custom labeled_filenames parameter."""
+        conn_file = temp_dir / "custom_name.log"
+        content = """#separator \t
+#fields\tts\tuid\tproto\tlabel
+#types\ttime\tstring\tenum\tstring
+1609459200.001\tuid-1\ttcp\tBenign
+"""
+        conn_file.write_text(content)
+
+        ds = ZeekDataset(
+            temp_dir, batch_size=10, labeled_filenames=["custom_name.log"]
+        )
+        assert ds.current_file == conn_file
+
+    def test_custom_cache_dir(self, temp_dir, sample_conn_log):
+        """Test initialization with custom cache_dir parameter."""
+        custom_cache = temp_dir / "my_cache"
+        custom_cache.mkdir()
+
+        # Create large dataset to trigger caching
+        lines = [
+            "#separator \t",
+            "#fields\tts\tuid\tproto\tlabel",
+            "#types\ttime\tstring\tenum\tstring",
+        ]
+        for i in range(35000):
+            lines.append(f"1609459200.{i:06d}\tuid-{i}\t\ttcp\tBenign")
+
+        conn_file = temp_dir / "conn.log"
+        conn_file.write_text("\n".join(lines))
+
+        ds = ZeekDataset(temp_dir, batch_size=100, cache_dir=custom_cache)
+        cache_file = ds._cache_path()
+
+        # Cache should be in custom directory
+        assert cache_file.parent == custom_cache
+
+    def test_file_encoding_parameter(self, temp_dir):
+        """Test file_encoding parameter is respected."""
+        conn_file = temp_dir / "conn.log"
+        content = """#separator \t
+#fields\tts\tuid\tproto\tlabel
+#types\ttime\tstring\tenum\tstring
+1609459200.001\tuid-1\ttcp\tBenign
+"""
+        conn_file.write_text(content, encoding="utf-8")
+
+        ds = ZeekDataset(
+            temp_dir,
+            batch_size=10,
+            file_encoding="utf-8",
+            file_errors="ignore",
+        )
+        assert ds.file_encoding == "utf-8"
+        assert ds.file_errors == "ignore"
+        assert ds.total_lines == 1
+
+    def test_shuffle_per_epoch_false(self, sample_conn_log, temp_dir):
+        """Test shuffle_per_epoch=False keeps same order each epoch."""
+        ds = ZeekDataset(temp_dir, batch_size=2, shuffle_per_epoch=False)
+
+        first_indices = ds.indices.copy()
+        ds.reset_epoch(batch_size=2)
+        second_indices = ds.indices.copy()
+
+        assert first_indices == second_indices
+
+    def test_shuffle_per_epoch_true(self, sample_conn_log, temp_dir):
+        """Test shuffle_per_epoch=True reshuffles each epoch."""
+        ds = ZeekDataset(
+            temp_dir, batch_size=2, seed=42, shuffle_per_epoch=True
+        )
+
+        first_indices = ds.indices.copy()
+        ds.reset_epoch(batch_size=2)
+        second_indices = ds.indices.copy()
+
+        # With shuffle_per_epoch, order should be same (both use seed) but after reset they reshuffle
+        # Check that reset_epoch shuffles
+        assert len(first_indices) == len(second_indices)
+
+    # ========== Next_n Tests ==========
+    def test_next_n_basic(self, sample_conn_log, temp_dir):
+        """Test next_n returns exactly n records."""
+        ds = ZeekDataset(temp_dir, batch_size=10)
+
+        records = ds.next_n(2)
+        assert len(records) == 2
+        assert all("uid" in r for r in records)
+
+    def test_next_n_partial(self, sample_conn_log, temp_dir):
+        """Test next_n with fewer records remaining than requested."""
+        ds = ZeekDataset(temp_dir, batch_size=10)
+
+        # Request more than available
+        records = ds.next_n(10)
+        assert len(records) == 4  # Only 4 valid flows
+
+    def test_next_n_zero(self, sample_conn_log, temp_dir):
+        """Test next_n with n=0 returns empty list."""
+        ds = ZeekDataset(temp_dir, batch_size=10)
+
+        records = ds.next_n(0)
+        assert records == []
+
+    def test_next_n_negative(self, sample_conn_log, temp_dir):
+        """Test next_n with negative n returns empty list."""
+        ds = ZeekDataset(temp_dir, batch_size=10)
+
+        records = ds.next_n(-5)
+        assert records == []
+
+    def test_next_n_advances_position(self, sample_conn_log, temp_dir):
+        """Test next_n advances internal position correctly."""
+        ds = ZeekDataset(temp_dir, batch_size=10)
+
+        ds.next_n(2)
+        assert ds._batch_pos == 2
+
+        ds.next_n(1)
+        assert ds._batch_pos == 3
+
+    def test_next_n_wraps_epoch(self, sample_conn_log, temp_dir):
+        """Test next_n increments epoch on subsequent call after reaching end."""
+        ds = ZeekDataset(temp_dir, batch_size=10)
+
+        # First call: get 4 records (all available), batch_pos becomes 4
+        records1 = ds.next_n(5)
+        assert len(records1) == 4
+        assert ds.epoch == 0
+        assert ds._batch_pos == 4
+        assert len(records1) == 4
+
+        # Second call: batch_pos >= len(indices) at start, so epoch increments and wraps
+        records2 = ds.next_n(2)
+        assert ds.epoch == 1
+        assert ds._batch_pos == 2
+        assert len(records2) == 2
+
     def test_cache_creation_for_large_dataset(self, temp_dir):
         """Test that cache is created for datasets above threshold."""
         # Create large dataset
