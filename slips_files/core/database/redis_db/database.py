@@ -1699,11 +1699,13 @@ class RedisDB(
 
     def increment_processed_flows(self):
         """processed by the profiler only"""
-        return self.r.incr(self.constants.PROCESSED_FLOWS, 1)
+        return self.r.incr(self.constants.PROCESSED_FLOWS_BY_PROFILER, 1)
 
-    def get_processed_flows_so_far(self) -> int:
+    def get_flow_analyzed_by_the_profiler_so_far(self) -> int:
         """processed by the profiler only"""
-        processed_flows = self.r.get(self.constants.PROCESSED_FLOWS)
+        processed_flows = self.r.get(
+            self.constants.PROCESSED_FLOWS_BY_PROFILER
+        )
         if not processed_flows:
             return 0
         return int(processed_flows)

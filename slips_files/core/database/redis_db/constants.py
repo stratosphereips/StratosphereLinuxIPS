@@ -19,7 +19,7 @@ class Constants:
     # used for Kalipso
     DOMAINS_INFO = "DomainsInfo"
     IPS_INFO = "IPsInfo"
-    PROCESSED_FLOWS = "processed_flows_so_far"
+    PROCESSED_FLOWS_BY_PROFILER = "processed_flows_by_profiler_so_far"
     MALICIOUS_PROFILES = "malicious_profiles"
     FLOWS_CAUSING_EVIDENCE = "flows_causing_evidence"
     PROCESSED_EVIDENCE = "processed_evidence"

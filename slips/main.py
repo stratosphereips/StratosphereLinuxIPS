@@ -412,8 +412,10 @@ class Main:
 
     def get_analyzed_flows_percentage(self) -> str:
         """
-        returns a str with the percentage of analyzed flows so far to be
-        logged in the stats. runs every 5s
+        returns a str with the percentage of analyzed flows so far (by
+        the profiler only) to be logged in the stats.
+
+        runs every 5s.
         """
         if self.is_total_flows_unknown():
             return ""
@@ -421,11 +423,20 @@ class Main:
         if not hasattr(self, "total_flows"):
             self.total_flows = self.db.get_total_flows()
 
-        processed = self.db.get_processed_flows_so_far()
+        processed = self.db.get_flow_analyzed_by_the_profiler_so_far()
         if not processed:
             return ""
 
-        percentage = int((processed / self.total_flows) * 100)
+        percentage = (processed / self.total_flows) * 100
+        # in very large pcaps, thousands of flows are nothing compared to
+        # the tot flows, so if the percentage is int, slips would print 0%
+        # for a while, so we take the first number after the floating point
+        # to avoid this
+        if percentage < 1:
+            percentage = f"{percentage:.1f}"
+        else:
+            percentage = int(percentage)
+
         return f"Analyzed Flows: {green(percentage)}{green('%')}. "
 
     def is_total_flows_unknown(self) -> bool:

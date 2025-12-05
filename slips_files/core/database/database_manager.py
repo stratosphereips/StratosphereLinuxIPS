@@ -884,8 +884,10 @@ class DBManager:
     def increment_processed_flows(self, *args, **kwargs):
         return self.rdb.increment_processed_flows(*args, **kwargs)
 
-    def get_processed_flows_so_far(self, *args, **kwargs):
-        return self.rdb.get_processed_flows_so_far(*args, **kwargs)
+    def get_flow_analyzed_by_the_profiler_so_far(self, *args, **kwargs):
+        return self.rdb.get_flow_analyzed_by_the_profiler_so_far(
+            *args, **kwargs
+        )
 
     def add_out_ssh(self, *args, **kwargs):
         return self.rdb.add_out_ssh(*args, **kwargs)
