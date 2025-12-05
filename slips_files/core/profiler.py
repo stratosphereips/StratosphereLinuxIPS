@@ -97,7 +97,7 @@ class Profiler(ICore, IObservable):
         # to access their internal attributes if needed
         self.workers: List[ProfilerWorker] = []
 
-        self.stop_profiler_workers = multiprocessing.Event()
+        self.stop_profiler_workers_event = multiprocessing.Event()
         # each msg received from inputprocess will be put here, and each one
         # profiler worker will retrieve msgs from this queue.
         # the goal of this is to have main() handle the stop msg.
@@ -110,7 +110,7 @@ class Profiler(ICore, IObservable):
         self.manager = multiprocessing.Manager()
         self.localnet_cache = self.manager.dict()
         # max parallel profiler workers to start when high throughput is detected
-        self.max_workers = 10
+        self.max_workers = 1
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -146,9 +146,16 @@ class Profiler(ICore, IObservable):
             # binetflow, binetflow tabs, nfdump, suricata
             return input_type
 
-    def join_profiler_workers(self):
+    def stop_profiler_workers(self):
+        self.stop_profiler_workers_event.set()
         for process in self.profiler_child_processes:
-            process.join()
+            try:
+                if process.is_alive():
+                    process.terminate()
+                process.join(timeout=3)
+            except (OSError, ChildProcessError):
+                # continue loop; don't abort shutdown
+                pass
 
     def mark_process_as_done_processing(self):
         """
@@ -202,7 +209,7 @@ class Profiler(ICore, IObservable):
             args=self.args,
             localnet_cache=self.localnet_cache,
             profiler_queue=self.profiler_queue,
-            stop_profiler_workers=self.stop_profiler_workers,
+            stop_profiler_workers=self.stop_profiler_workers_event,
             handle_setting_local_net_lock=self.handle_setting_local_net_lock,
             flows_to_process_q=self.flows_to_process_q,
             input_handler=input_handler_obj,
@@ -264,9 +271,8 @@ class Profiler(ICore, IObservable):
         for worker in self.workers:
             self.rec_lines += worker.received_lines
 
-        self.stop_profiler_workers.set()
         # wait for all flows to be processed by the profiler processes.
-        self.join_profiler_workers()
+        self.stop_profiler_workers()
 
         # close the queues to avoid deadlocks.
         # this step SHOULD NEVER be done before closing the workers
@@ -347,8 +353,8 @@ class Profiler(ICore, IObservable):
         # the only thing that stops this loop is the 'stop' msg
         # we're using self.should_stop() here instead of while True to be
         # able to unit test this function:D
-
         while not self.should_stop():
+
             self.lines = sum(
                 [worker.received_lines for worker in self.workers]
             )
@@ -390,4 +396,3 @@ class Profiler(ICore, IObservable):
 
             self.flows_to_process_q.put(msg, block=True, timeout=None)
             self.check_if_high_throughput_and_add_workers()
-        return None

@@ -120,7 +120,7 @@ class ProfilerWorker(Process):
         # stop_profiler_workers event
         return (
             self.stop_profiler_workers.is_set()
-            and not self.flows_to_process_q.qsize()
+            # and not self.flows_to_process_q.qsize()
         )
 
     def get_private_client_ips(
@@ -593,8 +593,8 @@ class ProfilerWorker(Process):
         This function runs in 3 different processes for faster processing of
         the flows
         """
-        try:
-            while not self.should_stop_profiler_workers():
+        while not self.should_stop_profiler_workers():
+            try:
                 msg = self.get_msg_from_queue(self.flows_to_process_q)
                 if not msg:
                     # wait for msgs
@@ -625,12 +625,16 @@ class ProfilerWorker(Process):
 
                 self.handle_setting_local_net(flow)
                 self.db.increment_processed_flows()
-        except Exception as e:
-            self.print(
-                f"[{self.name}] Problem processing line {line}. "
-                f"Line discarded. Error: {e}",
-                0,
-                1,
-            )
-        except KeyboardInterrupt:
-            return
+            except Exception as e:
+                self.print(
+                    f"[{self.name}] Problem processing line {line}. "
+                    f"Line discarded. Error: {e}",
+                    0,
+                    1,
+                )
+            except KeyboardInterrupt:
+                # on the first ctrl+c profiler AND input process should stop,
+                # so the modules receive no more flows.
+                # modules should just finish the flows they have and slips will
+                # exit gracefully
+                continue
