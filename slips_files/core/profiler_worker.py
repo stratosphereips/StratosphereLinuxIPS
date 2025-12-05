@@ -1,4 +1,7 @@
+import csv
 import json
+import os
+import time
 from dataclasses import asdict
 from multiprocessing import Process
 import ipaddress
@@ -82,6 +85,8 @@ class ProfilerWorker(Process):
         self.gw_ips = {}
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
+        self.times = {}
+        self.init_csv()
 
     def read_configuration(self):
         self.client_ips: List[
@@ -512,12 +517,22 @@ class ProfilerWorker(Process):
                 # software and weird.log flows are allowed to not have a daddr
                 return False
 
+        n = time.time()
         self.get_gateway_info(flow)
+        time_it_Took = time.time() - n
+        self.log_time("get_gateway_info", time_it_Took)
+
+        n = time.time()
 
         # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(flow):
             self.print(f"{self.whitelist.get_bloom_filters_stats()}", 2, 0)
             return True
+
+        time_it_Took = time.time() - n
+        self.log_time("is_whitelisted_flow", time_it_Took)
+
+        n = time.time()
 
         # 5th. Store the data according to the paremeters
         # Now that we have the profileid and twid, add the data from the flow
@@ -531,7 +546,14 @@ class ProfilerWorker(Process):
 
         # Create profiles for all ips we see
         self.db.add_profile(profileid, flow.starttime)
+        time_it_Took = time.time() - n
+        self.log_time("db_calls", time_it_Took)
+
+        n = time.time()
         self.store_features_going_out(flow, flow_parser)
+        time_it_Took = time.time() - n
+        self.log_time("store_features_going_out", time_it_Took)
+
         if self.analysis_direction == "all":
             self.handle_in_flow(flow)
 
@@ -540,6 +562,31 @@ class ProfilerWorker(Process):
             # the user to know that slips is working
             self.print(pprint.pp(asdict(flow)))
         return True
+
+    def init_csv(self):
+        path = os.path.join(self.output_dir, "times_each_func_took.csv")
+        with open(path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                [
+                    "get_gateway_info",
+                    "is_whitelisted_flow",
+                    "db_calls",
+                    "store_features_going_out",
+                    "process_line",
+                    "add_flow_to_profile",
+                ]
+            )
+
+    def log_time(self, what, time):
+        self.times[what] = f"{time:.2f}"
+        if what == "store_features_going_out":
+            path = os.path.join(self.output_dir, "times_each_func_took.csv")
+
+            with open(path, "a", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=self.times.keys())
+                writer.writerow(self.times)
+            self.times = {}
 
     def run(self):
         """
@@ -552,7 +599,7 @@ class ProfilerWorker(Process):
                 if not msg:
                     # wait for msgs
                     continue
-
+                self.times = {}
                 line: dict = msg["line"]
                 # TODO who is putting this True here?
                 if line is True:
@@ -562,10 +609,20 @@ class ProfilerWorker(Process):
                 self.print(f"< Received Line: {line}", 2, 0)
                 self.received_lines += 1
 
+                n = time.time()
                 flow = self.input_handler.process_line(line)
+                time_it_took = time.time() - n
+
+                self.log_time("process_line", time_it_took)
+
                 if not flow:
                     continue
+
+                n = time.time()
                 self.add_flow_to_profile(flow)
+                time_it_took = time.time() - n
+                self.log_time("add_flow_to_profile", time_it_took)
+
                 self.handle_setting_local_net(flow)
                 self.db.increment_processed_flows()
         except Exception as e:

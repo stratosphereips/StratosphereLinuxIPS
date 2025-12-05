@@ -449,7 +449,7 @@ Profiling:
   # CPU profiling
   # enable cpu profiling [true/false]
   # NOTE: the cpu profiler uses port 9001 to show the results.
-  cpu_profiler_enable: true
+  cpu_profiler_enable: false
 
   # Available options are [dev,live]
   # dev for deterministic profiling. this will give precise information
