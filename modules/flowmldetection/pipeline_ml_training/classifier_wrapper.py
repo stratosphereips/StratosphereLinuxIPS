@@ -58,7 +58,7 @@ class ClassifierWrapper:
         self.dummy_flows[MALICIOUS] = (dummy_malicious_flow, MALICIOUS)
 
     def load_classifier(
-        self, path: Union[str, Path], name: str = "classifier.pkl"
+        self, path: Union[str, Path], name: str = "classifier.bin"
     ):
         path = Path(path)
         if not path.exists() or not path.is_dir():

@@ -305,6 +305,70 @@ class ZeekDataset:
 
         return records
 
+    def next_n(self, n: int):
+        """
+        Return exactly up to `n` records from this dataset (using the same
+        indexing logic as next_batch). Advances the internal pointer by n.
+        If the epoch wraps, increments epoch and continues from start.
+        Returns a list of records (possibly empty).
+        """
+        if not hasattr(self, "valid_indices") or self.total_lines == 0:
+            raise RuntimeError("Dataset empty or not indexed")
+
+        if n <= 0:
+            return []
+
+        # If we finished an epoch and start a new one
+        if self._batch_pos >= len(self.indices):
+            self.epoch += 1
+            self._batch_pos = 0
+
+        # compute relative indices for requested n samples
+        rel_inds = self.indices[self._batch_pos : self._batch_pos + n]
+        self._batch_pos += len(rel_inds)
+
+        if not rel_inds:
+            return []
+
+        # Map relative indices -> actual file data-line positions
+        target_positions = {self.valid_indices[r] for r in rel_inds}
+        pos_to_label = {
+            self.valid_indices[r]: self.labels[r] for r in rel_inds
+        }
+
+        records = []
+        found = 0
+        with open(
+            self.current_file, "r", encoding="utf-8", errors="ignore"
+        ) as fh:
+            file_idx = 0  # counts data lines (non-# lines)
+            for line in fh:
+                if line.startswith("#"):
+                    continue
+                if file_idx in target_positions:
+                    parts = line.strip().split("\t")
+                    record = {
+                        h: self._cast(
+                            parts[i],
+                            self.types[i] if i < len(self.types) else None,
+                        )
+                        for i, h in enumerate(self.headers)
+                    }
+                    record["label"] = pos_to_label.get(file_idx, str(BENIGN))
+                    records.append(record)
+                    found += 1
+                    if found == len(target_positions):
+                        break
+                file_idx += 1
+
+        if found != len(target_positions):
+            # warn but continue (shouldn't normally happen)
+            print(
+                f"Warning: expected {len(target_positions)} records but found {found}"
+            )
+
+        return records
+
 
 # -------------------
 # Helper functions
