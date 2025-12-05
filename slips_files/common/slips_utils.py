@@ -4,6 +4,7 @@ import base64
 import binascii
 import hashlib
 from datetime import datetime, timedelta
+from multiprocessing import Process
 from re import findall
 from threading import Thread
 import netifaces
@@ -370,12 +371,22 @@ class Utils(object):
     def start_thread(self, thread: Thread, db):
         """
         A wrapper for threading.Thread().start()
-        starts the given thread and keeps track of its TID/PID in the db
+        starts the given thread and keeps track of its TID in the db
         :param thread: the thread to start
         :param db: a DBManager obj to store the thread PID
         """
         thread.start()
         db.store_pid(thread.name, int(thread._native_id))
+
+    def start_process(self, process: Process, db):
+        """
+        A wrapper for  multiprocessing.Process.start()
+        starts the given proc and keeps track of its PID in the db
+        :param process: the thread to start
+        :param db: a DBManager obj to store the thread PID
+        """
+        process.start()
+        db.store_pid(process.name, int(process.pid))
 
     def convert_ts_format(self, ts, required_format: str):
         """

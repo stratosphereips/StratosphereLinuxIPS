@@ -866,7 +866,10 @@ class ProfileHandler:
         """
         gets total flows to process from the db
         """
-        return self.r.hget(self.constants.ANALYSIS, "total_flows")
+        total_flows = self.r.hget(self.constants.ANALYSIS, "total_flows")
+        if total_flows:
+            return int(total_flows)
+        return 0
 
     def get_analysis_info(self):
         return self.r.hgetall(self.constants.ANALYSIS)

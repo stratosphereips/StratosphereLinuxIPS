@@ -73,6 +73,7 @@ from modules.timeline.timeline import Timeline
 from modules.cesnet.cesnet import CESNET
 from modules.riskiq.riskiq import RiskIQ
 from slips_files.common.markov_chains import Matrix
+from slips_files.core.profiler_worker import ProfilerWorker
 from slips_files.core.structures.evidence import (
     Attacker,
     Direction,
@@ -531,6 +532,28 @@ class ModuleFactory:
         )
         profiler.print = Mock()
         profiler.local_whitelist_path = "tests/test_whitelist.conf"
+        profiler.db = mock_db
+        return profiler
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_profiler_worker_obj(self, mock_db):
+        profiler = ProfilerWorker(
+            name="mock_name",
+            logger=self.logger,
+            output_dir="output",
+            redis_port=6379,
+            conf=Mock(),
+            ppid=Mock(),
+            args=Mock(),
+            localnet_cache={},
+            profiler_queue=Mock(),
+            stop_profiler_workers=Mock(),
+            handle_setting_local_net_lock=Mock(),
+            flows_to_process_q=Mock(),
+            input_handler=Mock(),
+            bloom_filters=Mock(),
+        )
+        profiler.print = Mock()
         profiler.db = mock_db
         return profiler
 

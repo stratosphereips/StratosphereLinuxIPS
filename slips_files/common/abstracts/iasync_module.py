@@ -113,7 +113,11 @@ class AsyncModule(IModule):
             self.print(f"Unhandled loop error: {context.get('message')}")
 
     def run(self):
-        asyncio.run(self._run_pre_main_and_main())
+        try:
+            asyncio.run(self._run_pre_main_and_main())
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            # Graceful shutdown: nothing more to do
+            pass
 
     async def _run_pre_main_and_main(self):
         """
