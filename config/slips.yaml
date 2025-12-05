@@ -389,7 +389,7 @@ exporting_alerts:
 
   # TAXII server credentials
   taxii_username: admin
-  taxii_password: changeme_before_installing_a_medallion_server
+  taxii_password: changeme_before_installing_a_medallion_server #  pragma: allowlist secret
 
 #############################
 CESNET:
@@ -449,7 +449,7 @@ Profiling:
   # CPU profiling
   # enable cpu profiling [true/false]
   # NOTE: the cpu profiler uses port 9001 to show the results.
-  cpu_profiler_enable: false
+  cpu_profiler_enable: true
 
   # Available options are [dev,live]
   # dev for deterministic profiling. this will give precise information
@@ -460,8 +460,10 @@ Profiling:
   cpu_profiler_mode: dev
 
   # decides whether the profiler tracks all processes or only one.
-  # only used  in dev mode [true,false].
-  cpu_profiler_multiprocess: false
+  # when this is set to false: The profiler profiles main.py only
+  # when it is set to true, it profiles all slips children
+  # only used in dev mode [true,false].
+  cpu_profiler_multiprocess: true
 
   # set number of tracer entries (dev mode only)
   # VizTracer uses a circular buffer to store the entries.
