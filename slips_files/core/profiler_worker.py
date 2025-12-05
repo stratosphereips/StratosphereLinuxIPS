@@ -546,33 +546,34 @@ class ProfilerWorker(Process):
         This function runs in 3 different processes for faster processing of
         the flows
         """
-        while not self.should_stop_profiler_workers():
-            msg = self.get_msg_from_queue(self.flows_to_process_q)
-            if not msg:
-                # wait for msgs
-                continue
+        try:
+            while not self.should_stop_profiler_workers():
+                msg = self.get_msg_from_queue(self.flows_to_process_q)
+                if not msg:
+                    # wait for msgs
+                    continue
 
-            line: dict = msg["line"]
-            # TODO who is putting this True here?
-            if line is True:
-                continue
+                line: dict = msg["line"]
+                # TODO who is putting this True here?
+                if line is True:
+                    continue
 
-            # Received new input data
-            self.print(f"< Received Line: {line}", 2, 0)
-            self.received_lines += 1
+                # Received new input data
+                self.print(f"< Received Line: {line}", 2, 0)
+                self.received_lines += 1
 
-            try:
                 flow = self.input_handler.process_line(line)
                 if not flow:
                     continue
                 self.add_flow_to_profile(flow)
                 self.handle_setting_local_net(flow)
                 self.db.increment_processed_flows()
-            except Exception as e:
-                self.print_traceback()
-                self.print(
-                    f"Problem processing line {line}. "
-                    f"Line discarded. Error: {e}",
-                    0,
-                    1,
-                )
+        except Exception as e:
+            self.print(
+                f"[{self.name}] Problem processing line {line}. "
+                f"Line discarded. Error: {e}",
+                0,
+                1,
+            )
+        except KeyboardInterrupt:
+            return

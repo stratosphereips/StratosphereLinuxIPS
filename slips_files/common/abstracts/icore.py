@@ -76,6 +76,7 @@ class ICore(IModule, Process):
             self.shutdown_gracefully()
 
         except KeyboardInterrupt:
+            # never print traceback on sigint :D:D:D never.
             self.keyboard_int_ctr += 1
             if self.keyboard_int_ctr >= 2:
                 return
@@ -83,5 +84,6 @@ class ICore(IModule, Process):
 
         except Exception:
             self.print(f"Problem in {self.name}", 0, 1)
+            self.print_traceback()
             self.print(traceback.format_exc(), 0, 1)
         return True
