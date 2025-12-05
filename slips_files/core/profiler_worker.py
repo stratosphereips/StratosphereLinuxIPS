@@ -3,7 +3,6 @@ import json
 import os
 import time
 from dataclasses import asdict
-from multiprocessing import Process
 import ipaddress
 import pprint
 import multiprocessing
@@ -32,7 +31,7 @@ from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 
 
-class ProfilerWorker(Process):
+class ProfilerWorker:
     def __init__(
         self,
         name,
@@ -588,7 +587,7 @@ class ProfilerWorker(Process):
                 writer.writerow(self.times)
             self.times = {}
 
-    def run(self):
+    def main(self):
         """
         This function runs in 3 different processes for faster processing of
         the flows
