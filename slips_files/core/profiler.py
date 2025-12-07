@@ -101,11 +101,12 @@ class Profiler(ICore, IObservable):
         self.stop_profiler_workers_event = multiprocessing.Event()
         # each msg received from inputprocess will be put here, and each one
         # profiler worker will retrieve msgs from this queue.
-        # the goal of this is to have main() handle the stop msg.
+        # the goal of this q is to have main() handle the stop msg.
         # so without this, only 1 of the 3 workers receives the stop msg
         # and exits, and the rest of the 2 workers AND the main() keep
         # waiting for new msgs
-        self.flows_to_process_q = multiprocessing.Queue(maxsize=5162220)
+
+        self.flows_to_process_q = multiprocessing.Queue(maxsize=50000)
         self.handle_setting_local_net_lock = multiprocessing.Lock()
         self.is_first_msg = True
         # runs a separate server process behind the scenes.

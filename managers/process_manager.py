@@ -53,7 +53,7 @@ class ProcessManager:
         # to pass flows to the profiler
         # this max size is decided based on the avg size of each flow and
         # tha max memory (4g) that this queue is allowed to use
-        self.profiler_queue = Queue(maxsize=5162220)
+        self.profiler_queue = Queue(maxsize=50000)
         self.termination_event: Event = Event()
         # to make sure we only warn the user once about
         # the pending modules
