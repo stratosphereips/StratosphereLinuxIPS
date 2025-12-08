@@ -1,5 +1,8 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import csv
+import os
+import time
 from re import split
 from typing import Dict
 from slips_files.common.abstracts.iinput_type import IInputType
@@ -148,6 +151,32 @@ class Zeek:
 class ZeekJSON(IInputType, Zeek):
     def __init__(self):
         self.line_processor_cache = {}
+        self.times = {}
+        self.init_csv()
+
+    def init_csv(self):
+        path = os.path.join("/tmp/", "zeek_json_times_each_func_took.csv")
+        with open(path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                [
+                    "get_file_type",
+                    "removing_empty_vals",
+                    "setting_conn_vals_to_0",
+                    "fill_empty_class_fields",
+                    "calling_slips_class",
+                ]
+            )
+
+    def log_time(self, what, time):
+        self.times[what] = f"{time:.2f}"
+        last_metric = "calling_slips_class"
+        if what == last_metric:
+            path = os.path.join("/tmp/", "zeek_json_times_each_func_took.csv")
+            with open(path, "a", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=self.times.keys())
+                writer.writerow(self.times)
+            self.times = {}
 
     def process_line(self, new_line: dict):
         line = new_line["data"]
@@ -156,7 +185,11 @@ class ZeekJSON(IInputType, Zeek):
         if not isinstance(line, dict):
             return False
 
+        n = time.time()
         file_type = self.get_file_type(new_line)
+        latency = time.time() - n
+        self.log_time("get_file_type", latency)
+
         line_map = LOG_MAP.get(file_type)
         if not line_map:
             return False
@@ -168,6 +201,7 @@ class ZeekJSON(IInputType, Zeek):
 
         flow_values = {"starttime": starttime, "interface": interface}
 
+        n = time.time()
         for zeek_field, slips_field in line_map.items():
             if not slips_field:
                 continue
@@ -176,12 +210,15 @@ class ZeekJSON(IInputType, Zeek):
                 val = ""
             flow_values[slips_field] = val
 
-        if file_type in LINE_TYPE_TO_SLIPS_CLASS:
-            slips_class = LINE_TYPE_TO_SLIPS_CLASS[file_type]
+        latency = time.time() - n
+        self.log_time("removing_empty_vals", latency)
 
+        if file_type in LINE_TYPE_TO_SLIPS_CLASS:
+            n = time.time()
+            slips_class = LINE_TYPE_TO_SLIPS_CLASS[file_type]
             if file_type == "conn.log":
                 flow_values["dur"] = float(flow_values.get("dur", 0) or 0)
-                for fld in (
+                for field in (
                     "sbytes",
                     "dbytes",
                     "spkts",
@@ -189,12 +226,21 @@ class ZeekJSON(IInputType, Zeek):
                     "sport",
                     "dport",
                 ):
-                    flow_values[fld] = int(flow_values.get(fld, 0) or 0)
-
+                    flow_values[field] = int(flow_values.get(field, 0) or 0)
+                latency = time.time() - n
+                self.log_time("setting_conn_vals_to_0", latency)
+            n = time.time()
             flow_values = self.fill_empty_class_fields(
                 flow_values, slips_class
             )
+            latency = time.time() - n
+            self.log_time("fill_empty_class_fields", latency)
+
+            n = time.time()
             self.flow = slips_class(**flow_values)
+            latency = time.time() - n
+            self.log_time("calling_slips_class", latency)
+
             return self.flow
 
         print(f"[Profiler] Invalid file_type: {file_type}, line: {line}")

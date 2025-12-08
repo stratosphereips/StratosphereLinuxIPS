@@ -531,22 +531,30 @@ class ProfilerWorker:
         time_it_Took = time.time() - n
         self.log_time("is_whitelisted_flow", time_it_Took)
 
-        n = time.time()
-
         # 5th. Store the data according to the paremeters
         # Now that we have the profileid and twid, add the data from the flow
         # in this tw for this profile
         self.print(f"Storing data in the profile: {profileid}", 3, 0)
+
+        n = time.time()
         flow.starttime = self.convert_starttime_to_epoch(flow.starttime)
+        time_it_Took = time.time() - n
+
+        self.log_time("convert_starttime_to_epoch", time_it_Took)
         # For this 'forward' profile, find the id in the
-        # database of the tw where the flow belongs.
+        # database of the tw where the flow belongs.        n = time.time()
+        n = time.time()
         twid = self.db.get_timewindow(flow.starttime, profileid)
+        time_it_Took = time.time() - n
+        self.log_time("get_timewindow", time_it_Took)
+
         flow_parser.twid = twid
 
+        n = time.time()
         # Create profiles for all ips we see
         self.db.add_profile(profileid, flow.starttime)
         time_it_Took = time.time() - n
-        self.log_time("db_calls", time_it_Took)
+        self.log_time("add_profile", time_it_Took)
 
         n = time.time()
         self.store_features_going_out(flow, flow_parser)
@@ -570,7 +578,9 @@ class ProfilerWorker:
                 [
                     "get_gateway_info",
                     "is_whitelisted_flow",
-                    "db_calls",
+                    "convert_starttime_to_epoch",
+                    "get_timewindow",
+                    "add_profile",
                     "store_features_going_out",
                     "process_line",
                     "add_flow_to_profile",
