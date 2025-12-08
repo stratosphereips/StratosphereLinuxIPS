@@ -448,16 +448,15 @@ class Utils(object):
             else datetime.strptime(ts, given_format)
         )
 
+    def is_unix_ts(self, time) -> bool:
+        return isinstance(time, (int, float))
+
     def get_time_format(self, time) -> Optional[str]:
         if self.is_datetime_obj(time):
             return "datetimeobj"
 
-        try:
-            # Try unix timestamp in seconds.
-            datetime.fromtimestamp(float(time))
+        if self.is_unix_ts(time):
             return "unixtimestamp"
-        except ValueError:
-            pass
 
         for time_format in self.time_formats:
             try:

@@ -135,12 +135,15 @@ class ProfilerWorker:
                 private_clients.append(ip)
         return private_clients
 
-    def convert_starttime_to_epoch(self, starttime) -> str:
+    def convert_starttime_to_unix_ts(self, starttime) -> str:
+        if utils.is_unix_ts(starttime):
+            return starttime
+
         try:
             return utils.convert_ts_format(starttime, "unixtimestamp")
         except ValueError:
             self.print(
-                f"We can not recognize time format of "
+                f"Slips can not recognize time format of "
                 f"flow.starttime: {starttime}",
                 0,
                 1,
@@ -537,7 +540,7 @@ class ProfilerWorker:
         self.print(f"Storing data in the profile: {profileid}", 3, 0)
 
         n = time.time()
-        flow.starttime = self.convert_starttime_to_epoch(flow.starttime)
+        flow.starttime = self.convert_starttime_to_unix_ts(flow.starttime)
         time_it_Took = time.time() - n
 
         self.log_time("convert_starttime_to_epoch", time_it_Took)
