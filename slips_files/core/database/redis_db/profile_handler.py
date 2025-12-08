@@ -26,6 +26,9 @@ class ProfileHandler:
 
     name = "DB"
 
+    def __init__(self):
+        self.starttime_of_first_tw = None
+
     def is_doh_server(self, ip: str) -> bool:
         """returns whether the given ip is a DoH server"""
         info: dict = self.get_ip_info(ip)
@@ -93,6 +96,9 @@ class ProfileHandler:
         aka ts of the first flow
         first tw is always timewindow1
         """
+        if self.starttime_of_first_tw:
+            return self.starttime_of_first_tw
+
         starttime_of_first_tw: str = self.r.hget(
             self.constants.ANALYSIS, "file_start"
         )
@@ -117,6 +123,8 @@ class ProfileHandler:
                    │     │      │
                    2     4      6
 
+        Note:
+            - sets self.starttime_of_first_tw
         """
         # If the option for only-one-tw was selected, we should
         # create the TW at least 100 years before the flowtime,
@@ -129,14 +137,18 @@ class ProfileHandler:
             tw_start = float(flowtime - (31536000 * 100))
             tw_number: int = 1
         else:
-            starttime_of_first_tw: float = self.get_first_flow_time()
-            if starttime_of_first_tw is not None:  #  because 0 is a valid
+            if not self.starttime_of_first_tw:
+                self.starttime_of_first_tw: float = self.get_first_flow_time()
+
+            if self.starttime_of_first_tw is not None:  #  because 0 is a
+                # valid
                 # value
                 tw_number: int = (
-                    floor((flowtime - starttime_of_first_tw) / self.width) + 1
+                    floor((flowtime - self.starttime_of_first_tw) / self.width)
+                    + 1
                 )
 
-                tw_start: float = starttime_of_first_tw + (
+                tw_start: float = self.starttime_of_first_tw + (
                     self.width * (tw_number - 1)
                 )
             else:
