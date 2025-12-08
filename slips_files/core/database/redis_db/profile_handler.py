@@ -1153,15 +1153,16 @@ class ProfileHandler:
         Returns the id of the timewindow just created
         """
         try:
-            # Add the new TW to the index of TW
-            self.r.zadd(f"tws{profileid}", {timewindow: float(startoftw)})
-            self.print(
-                f"Created and added to DB for "
-                f"{profileid}: a new tw: {timewindow}. "
-                f" with starttime : {startoftw} ",
-                0,
-                4,
-            )
+            if not self.r.zscore(f"tws{profileid}", timewindow):
+                # Add the new TW to the index of TW
+                self.r.zadd(f"tws{profileid}", {timewindow: float(startoftw)})
+                self.print(
+                    f"Created and added to DB for "
+                    f"{profileid}: a new tw: {timewindow}. "
+                    f" with starttime : {startoftw} ",
+                    0,
+                    4,
+                )
             # The creation of a TW now does not imply that it was modified.
             # You need to put data to mark is at modified.
         except redis.exceptions.ResponseError:
