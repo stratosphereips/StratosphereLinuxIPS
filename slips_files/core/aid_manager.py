@@ -1,4 +1,3 @@
-import os
 from multiprocessing import Process, Queue
 from threading import Event
 
@@ -16,59 +15,46 @@ class AIDManager:
 
     def __init__(
         self,
-        logger,
-        output_dir,
-        redis_port,
-        conf,
-        ppid,
+        db: DBManager,
         _aid_queue: Queue,
         stop_profiler_workers_event: Event,
     ):
-        self.logger = logger
-        self.output_dir = output_dir
-        self.redis_port = redis_port
-        self.conf = conf
-        self.ppid = ppid
+        self.db = db
         self._aid_queue: Queue = _aid_queue
         # returns true when this process should shutdown
         self.stop_profiler_workers_event = stop_profiler_workers_event
 
         self._process = Process(
             target=self._worker_loop,
-            args=(self._aid_queue, logger, output_dir, redis_port, conf, ppid),
+            args=(self._aid_queue, self.db),
+            name="AIDManager",
             daemon=True,
         )
+        utils.start_process(self._process, self.db)
 
-        self._process.start()
-
-    def _worker_loop(
-        self, aid_queue, logger, output_dir, redis_port, conf, ppid
-    ):
+    def _worker_loop(self, aid_queue, db: DBManager):
         """
         TRuns in its own process
         - Initialize DBManager once.
         - Loop forever processing tasks.
         """
 
-        # Each process has its own DBManager
-        db = DBManager(logger, output_dir, redis_port, conf, ppid)
-        print(f"@@@@@@ Worker started {os.getpid()} db={db}")
-
         while not self.stop_profiler_workers_event.is_set():
-            task = aid_queue.get(timeout=1)
-            if task == "stop":
-                print(f"@@@@@@ Worker {os.getpid()} shutting down")
-                break
+            try:
+                task = aid_queue.get(timeout=1)
+                if task == "stop":
+                    break
 
-            flow = task["flow"]
-            profileid = task["profileid"]
-            twid = task["twid"]
-            label = task["label"]
+                flow = task["flow"]
+                profileid = task["profileid"]
+                twid = task["twid"]
+                label = task["label"]
 
-            # CPU-heavy hashing
-            flow.aid = utils.get_aid(flow)
-            db.add_flow(flow, profileid, twid, label=label)
-            print(f"@@@@@@ Worker done: {flow.aid}")
+                # CPU-heavy hashing
+                flow.aid = utils.get_aid(flow)
+                self.db.add_flow(flow, profileid, twid, label=label)
+            except KeyboardInterrupt:
+                continue
 
     def submit_aid_task(self, flow, profileid: str, twid: str, label: str):
         """
@@ -82,7 +68,6 @@ class AIDManager:
                 "label": label,
             }
         )
-        print(f"@@@@@@ Task submitted to process {self._process.pid}")
 
     def shutdown(self, wait=True):
         """

@@ -120,11 +120,7 @@ class Profiler(ICore, IObservable):
         # because it's cpu intensive so we dont want it to
         # block the profiler workers
         self.aid_manager = AIDManager(
-            self.logger,
-            self.output_dir,
-            self.redis_port,
-            self.conf,
-            self.ppid,
+            self.db,
             self.aid_queue,
             self.stop_profiler_workers_event,
         )
