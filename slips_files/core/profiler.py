@@ -34,6 +34,7 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.icore import ICore
 from slips_files.common.style import green
+from slips_files.core.aid_manager import AIDManager
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.input_profilers.argus import Argus
 from slips_files.core.input_profilers.nfdump import Nfdump
@@ -105,7 +106,6 @@ class Profiler(ICore, IObservable):
         # so without this, only 1 of the 3 workers receives the stop msg
         # and exits, and the rest of the 2 workers AND the main() keep
         # waiting for new msgs
-
         self.flows_to_process_q = multiprocessing.Queue(maxsize=50000)
         self.handle_setting_local_net_lock = multiprocessing.Lock()
         self.is_first_msg = True
@@ -114,6 +114,20 @@ class Profiler(ICore, IObservable):
         self.localnet_cache = self.manager.dict()
         # max parallel profiler workers to start when high throughput is detected
         self.max_workers = 1
+        self.aid_queue = multiprocessing.Queue()
+        # This starts a process that handles calculatng aid hash and stores
+        # the conn fows in the db. why?
+        # because it's cpu intensive so we dont want it to
+        # block the profiler workers
+        self.aid_manager = AIDManager(
+            self.logger,
+            self.output_dir,
+            self.redis_port,
+            self.conf,
+            self.ppid,
+            self.aid_queue,
+            self.stop_profiler_workers_event,
+        )
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -230,6 +244,8 @@ class Profiler(ICore, IObservable):
             flows_to_process_q=self.flows_to_process_q,
             input_handler=input_handler_obj,
             bloom_filters=self.bloom_filters,
+            aid_queue=self.aid_queue,
+            aid_manager=self.aid_manager,
         )
         worker.main()
 
@@ -300,6 +316,7 @@ class Profiler(ICore, IObservable):
         # do nothing.
         self.flows_to_process_q.cancel_join_thread()
         self.profiler_queue.close()
+        self.aid_queue.close()
 
         self.manager.shutdown()
         self.db.set_new_incoming_flows(False)

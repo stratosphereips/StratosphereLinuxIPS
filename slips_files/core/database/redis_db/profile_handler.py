@@ -26,9 +26,6 @@ class ProfileHandler:
 
     name = "DB"
 
-    def __init__(self):
-        self.starttime_of_first_tw = None
-
     def is_doh_server(self, ip: str) -> bool:
         """returns whether the given ip is a DoH server"""
         info: dict = self.get_ip_info(ip)

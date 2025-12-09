@@ -115,6 +115,8 @@ class RedisDB(
     # slips will terminate
     connection_retry = 0
 
+    starttime_of_first_tw = None
+
     def __new__(
         cls, logger, redis_port, start_redis_server=True, flush_db=True
     ):
