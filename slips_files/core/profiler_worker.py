@@ -495,6 +495,30 @@ class ProfilerWorker:
 
         return True
 
+    def _is_supported_flow_type(self, flow) -> bool:
+        supported_types = (
+            "ssh",
+            "ssl",
+            "http",
+            "dns",
+            "conn",
+            "flow",
+            "argus",
+            "nfdump",
+            "notice",
+            "dhcp",
+            "files",
+            "arp",
+            "ftp",
+            "smtp",
+            "software",
+            "weird",
+            "tunnel",
+        )
+        return bool(
+            flow.starttime is not None and flow.type_ in supported_types
+        )
+
     def add_flow_to_profile(self, flow):
         """
         This is the main function that takes the columns of a flow

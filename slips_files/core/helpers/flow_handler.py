@@ -66,37 +66,15 @@ class FlowHandler:
     Each flow seen by slips will be a different instance of this class
     """
 
-    def __init__(self, db, symbol_handler, flow):
+    def __init__(self, db, symbol_handler, flow, profileid, twid):
         self.db = db
         self.publisher = Publisher(self.db)
         self.flow = flow
+        self.profileid = profileid
+        self.twid = twid
+
         self.symbol = symbol_handler
         self.running_non_stop: bool = self.db.is_running_non_stop()
-
-    def is_supported_flow_type(self):
-        supported_types = (
-            "ssh",
-            "ssl",
-            "http",
-            "dns",
-            "conn",
-            "flow",
-            "argus",
-            "nfdump",
-            "notice",
-            "dhcp",
-            "files",
-            "arp",
-            "ftp",
-            "smtp",
-            "software",
-            "weird",
-            "tunnel",
-        )
-        return bool(
-            self.flow.starttime is not None
-            and self.flow.type_ in supported_types
-        )
 
     def handle_conn(self):
         role = "Client"
@@ -128,8 +106,6 @@ class FlowHandler:
         # Add the srcport
         port_type = "Src"
         self.db.add_port(self.profileid, self.twid, self.flow, role, port_type)
-        # store the original flow as benign in sqlite
-        self.db.add_flow(self.flow, self.profileid, self.twid, "benign")
 
         self.db.add_mac_addr_to_profile(
             self.profileid, self.flow.smac, self.flow.interface
