@@ -1,4 +1,5 @@
 from multiprocessing import Process, Queue
+from queue import Empty
 from threading import Event
 
 from slips_files.common.slips_utils import utils
@@ -38,7 +39,6 @@ class AIDManager:
         - Initialize DBManager once.
         - Loop forever processing tasks.
         """
-
         while not self.stop_profiler_workers_event.is_set():
             try:
                 task = aid_queue.get(timeout=1)
@@ -54,6 +54,8 @@ class AIDManager:
                 flow.aid = utils.get_aid(flow)
                 self.db.add_flow(flow, profileid, twid, label=label)
             except KeyboardInterrupt:
+                continue
+            except Empty:
                 continue
 
     def submit_aid_task(self, flow, profileid: str, twid: str, label: str):
