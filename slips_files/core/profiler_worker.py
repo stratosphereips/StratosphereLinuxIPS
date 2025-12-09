@@ -11,15 +11,18 @@ from typing import (
     Union,
     Optional,
     Dict,
+    Callable,
 )
 
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 import netifaces
 import validators
 
+
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
+from slips_files.core.aid_manager import AIDManager
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
@@ -50,6 +53,8 @@ class ProfilerWorker:
             ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         ),
         bloom_filters: BFManager,
+        aid_queue: multiprocessing.Queue,
+        aid_manager: AIDManager,
     ):
         super().__init__()
         self.name = name
@@ -63,6 +68,9 @@ class ProfilerWorker:
         self.flows_to_process_q = flows_to_process_q
         self.stop_profiler_workers = stop_profiler_workers
         self.bloom_filters = bloom_filters
+        # used to pass aid tasks from workers to the the AIDManager()
+        self.aid_queue = aid_queue
+        self.aid_manager: AIDManager = aid_manager
 
         # this is an instance of that cls
         self.input_handler = input_handler
@@ -100,6 +108,9 @@ class ProfilerWorker:
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
+
+    def shutdown_gracefully(self):
+        self.aid_manager.shutdown()
 
     def get_msg_from_queue(self, q: multiprocessing.Queue):
         """
@@ -197,54 +208,83 @@ class ProfilerWorker:
         port_type = "Dst"
         self.db.add_port(profileid, twid, flow, role, port_type)
 
-        # Add the flow with all the fields interpreted
-        self.db.add_flow(
-            flow,
-            profileid=profileid,
-            twid=twid,
-            label=self.label,
-        )
+        # Add the flow with all the fields interpreted to the sqlite db
+        self.aid_manager.submit_aid_task(flow, profileid, twid, self.label)
+
         self.db.mark_profile_tw_as_modified(profileid, twid, "")
 
-    def store_features_going_out(self, flow, flow_parser: FlowHandler):
+    def get_aid_and_store_flow_in_the_db(
+        self,
+        handler_func: Callable,
+        handle_conn: Callable,
+        flow,
+        profileid,
+        twid,
+    ):
+        """
+        Checks if the given flow is handled with the
+        flow_handler.handle_conn func, and submits a task to calc aid and
+        store the conn flow in the sqlite db based on this
+        i know this is complicated, but it speeds up slips flow reading a
+        lot, it makes hash calculation non blocking of the profiler worker
+        """
+        # why are we not calling this inside handle_conn? because
+        # handle_conn is in FlowHandler class, which gets initialized once
+        # per flow, and we dont wanna have 1 executor per flow, we want
+        # one executor per profiler worker
+        if handler_func == handle_conn:
+            # Add the flow with all the fields interpreted to the sqlite db
+            self.aid_manager.submit_aid_task(flow, profileid, twid, "benign")
+
+    def store_features_going_out(self, flow, profileid, twid):
         """
         function for adding the features going out of the profile
+        aka outgoing connections
         """
         self.store_first_seen_ts(flow.starttime)
 
+        flow_handler = FlowHandler(self.db, self.symbol, flow, profileid, twid)
+
         cases = {
-            "flow": flow_parser.handle_conn,
-            "conn": flow_parser.handle_conn,
-            "nfdump": flow_parser.handle_conn,
-            "argus": flow_parser.handle_conn,
-            "dns": flow_parser.handle_dns,
-            "http": flow_parser.handle_http,
-            "ssl": flow_parser.handle_ssl,
-            "ssh": flow_parser.handle_ssh,
-            "notice": flow_parser.handle_notice,
-            "ftp": flow_parser.handle_ftp,
-            "smtp": flow_parser.handle_smtp,
-            "files": flow_parser.handle_files,
-            "arp": flow_parser.handle_arp,
-            "dhcp": flow_parser.handle_dhcp,
-            "software": flow_parser.handle_software,
-            "weird": flow_parser.handle_weird,
-            "tunnel": flow_parser.handle_tunnel,
+            "flow": flow_handler.handle_conn,
+            "conn": flow_handler.handle_conn,
+            "nfdump": flow_handler.handle_conn,
+            "argus": flow_handler.handle_conn,
+            "dns": flow_handler.handle_dns,
+            "http": flow_handler.handle_http,
+            "ssl": flow_handler.handle_ssl,
+            "ssh": flow_handler.handle_ssh,
+            "notice": flow_handler.handle_notice,
+            "ftp": flow_handler.handle_ftp,
+            "smtp": flow_handler.handle_smtp,
+            "files": flow_handler.handle_files,
+            "arp": flow_handler.handle_arp,
+            "dhcp": flow_handler.handle_dhcp,
+            "software": flow_handler.handle_software,
+            "weird": flow_handler.handle_weird,
+            "tunnel": flow_handler.handle_tunnel,
         }
         try:
             # call the function that handles this flow
-            cases[flow.type_]()
+            handler_func = cases[flow.type_]
+            handler_func()
         except KeyError:
-            for supported_type in cases:
+            # see if one of the above dict keys is a substr of the flow.type_
+            for supported_type, handler_func in cases.items():
                 if supported_type in flow.type_:
-                    cases[supported_type]()
-            return False
+                    handler_func()
+                    break
+            else:
+                return False
 
-        # if the flow type matched any of the ifs above,
-        # mark this profile as modified
-        self.db.mark_profile_tw_as_modified(
-            flow_parser.profileid, flow_parser.twid, ""
+        self.get_aid_and_store_flow_in_the_db(
+            handler_func, flow_handler.handle_conn, flow, profileid, twid
         )
+
+        # now that slips successfully parsed the flow,
+        # mark this profile as modified
+        self.db.mark_profile_tw_as_modified(profileid, twid, "")
+        return True
 
     def get_rev_profile(self, flow):
         """
@@ -526,13 +566,8 @@ class ProfilerWorker:
         It includes checking if the profile exists and how to put
         the flow correctly.
         """
-        flow_parser = FlowHandler(self.db, self.symbol, flow)
-
-        if not flow_parser.is_supported_flow_type():
+        if not self._is_supported_flow_type(flow):
             return False
-
-        profileid = f"profile_{flow.saddr}"
-        flow_parser.profileid = profileid
 
         try:
             ipaddress.ip_address(flow.saddr)
@@ -561,6 +596,7 @@ class ProfilerWorker:
         # 5th. Store the data according to the paremeters
         # Now that we have the profileid and twid, add the data from the flow
         # in this tw for this profile
+        profileid = f"profile_{flow.saddr}"
         self.print(f"Storing data in the profile: {profileid}", 3, 0)
 
         n = time.time()
@@ -568,14 +604,6 @@ class ProfilerWorker:
         time_it_Took = time.time() - n
 
         self.log_time("convert_starttime_to_epoch", time_it_Took)
-        # For this 'forward' profile, find the id in the
-        # database of the tw where the flow belongs.        n = time.time()
-        n = time.time()
-        twid = self.db.get_timewindow(flow.starttime, profileid)
-        time_it_Took = time.time() - n
-        self.log_time("get_timewindow", time_it_Took)
-
-        flow_parser.twid = twid
 
         n = time.time()
         # Create profiles for all ips we see
@@ -583,8 +611,15 @@ class ProfilerWorker:
         time_it_Took = time.time() - n
         self.log_time("add_profile", time_it_Took)
 
+        # For this 'forward' profile, find the id in the
+        # database of the tw where the flow belongs.        n = time.time()
         n = time.time()
-        self.store_features_going_out(flow, flow_parser)
+        twid = self.db.get_timewindow(flow.starttime, profileid)
+        time_it_Took = time.time() - n
+        self.log_time("get_timewindow", time_it_Took)
+
+        n = time.time()
+        self.store_features_going_out(flow, profileid, twid)
         time_it_Took = time.time() - n
         self.log_time("store_features_going_out", time_it_Took)
 
