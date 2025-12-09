@@ -9,7 +9,6 @@ from dataclasses import (
     field,
 )
 from typing import List
-from datetime import timedelta
 from slips_files.common.slips_utils import utils
 
 
@@ -56,13 +55,10 @@ class Conn(BaseFlow):
     dir_: str = "->"
 
     def __post_init__(self) -> None:
-        endtime = str(self.starttime) + str(timedelta(seconds=float(self.dur)))
-        self.endtime: str = endtime
+        self.endtime = float(self.starttime) + float(self.dur)
         self.pkts: int = self.spkts + self.dpkts
         self.bytes: int = self.sbytes + self.dbytes
         self.state_hist: str = self.history or self.state
-        # AIDs are for conn.log flows only
-        self.aid = utils.get_aid(self)
         # happens in zeek v7.1.0, set it to empty so it doesn't break slips
         if self.proto == "unknown_transport":
             self.proto = ""
