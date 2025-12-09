@@ -449,7 +449,17 @@ class Utils(object):
         )
 
     def is_unix_ts(self, time) -> bool:
-        return isinstance(time, (int, float))
+        if isinstance(time, (int, float)):
+            return True
+
+        if isinstance(time, str):
+            try:
+                float(time)
+                return True
+            except ValueError:
+                pass
+
+        return False
 
     def get_time_format(self, time) -> Optional[str]:
         if self.is_datetime_obj(time):
