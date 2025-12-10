@@ -167,6 +167,9 @@ class ZeekJSON(IInputType, Zeek):
         self.line_processor_cache = {}
         self.times = {}
         self.init_csv()
+        # to avoid object churn. creating a new dict per flow is CPU
+        # intensive, and triggers the GC more. this is for optimizations.
+        self.reusable_flow_values_dict = {}
 
     def init_csv(self):
         path = os.path.join("/tmp/", "zeek_json_times_each_func_took.csv")
@@ -213,7 +216,12 @@ class ZeekJSON(IInputType, Zeek):
         else:
             starttime = ""
 
-        flow_values = {"starttime": starttime, "interface": interface}
+        # reusing the dict to avoid obj (dict) creation per flow.
+        flow_values = self.reusable_flow_values_dict
+        flow_values.clear()
+        flow_values = flow_values.update(
+            {"starttime": starttime, "interface": interface}
+        )
 
         n = time.time()
         for zeek_field, slips_field in line_map.items():

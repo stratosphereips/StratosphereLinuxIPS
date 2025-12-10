@@ -12,14 +12,17 @@ from typing import List
 from slips_files.common.slips_utils import utils
 
 
-@dataclass(kw_only=True)
+# using slots for all dataclasses for CPU and memory optimizations
+
+
+@dataclass(kw_only=True, slots=True)
 class BaseFlow:
     """A base class for zeek flows, containing common fields."""
 
     interface: str = field(default="default")
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class Conn(BaseFlow):
     starttime: str
     uid: str
@@ -51,6 +54,12 @@ class Conn(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
+    # derived attributes must be declared because we're using "slots"
+    endtime: float = 0.0
+    pkts: int = 0
+    bytes: int = 0
+    state_hist: str = ""
+
     type_: str = "conn"
     dir_: str = "->"
 
@@ -64,7 +73,7 @@ class Conn(BaseFlow):
             self.proto = ""
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class DNS(BaseFlow):
     starttime: str
     uid: str
@@ -86,6 +95,7 @@ class DNS(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
+    answers: List[str] = field(default_factory=list)
     type_: str = "dns"
 
     def __post_init__(self) -> None:
@@ -96,7 +106,7 @@ class DNS(BaseFlow):
         )
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class HTTP(BaseFlow):
     starttime: str
     uid: str
@@ -128,7 +138,7 @@ class HTTP(BaseFlow):
         pass
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class SSL(BaseFlow):
     starttime: str
     uid: str
@@ -163,7 +173,7 @@ class SSL(BaseFlow):
     type_: str = "ssl"
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class SSH(BaseFlow):
     starttime: float
     uid: str
@@ -191,7 +201,7 @@ class SSH(BaseFlow):
     type_: str = "ssh"
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class DHCP(BaseFlow):
     starttime: float
     uids: List[str]
@@ -205,6 +215,8 @@ class DHCP(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
+    saddr: str = ""
+    daddr: str = ""
     type_: str = "dhcp"
 
     def __post_init__(self) -> None:
@@ -218,7 +230,7 @@ class DHCP(BaseFlow):
             self.saddr = self.smac
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class FTP(BaseFlow):
     starttime: float
     uid: str
@@ -233,7 +245,7 @@ class FTP(BaseFlow):
     type_: str = "ftp"
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class SMTP(BaseFlow):
     starttime: float
     uid: str
@@ -248,7 +260,7 @@ class SMTP(BaseFlow):
     type_: str = "smtp"
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class Tunnel(BaseFlow):
     starttime: str
     uid: str
@@ -267,7 +279,7 @@ class Tunnel(BaseFlow):
     type_: str = "tunnel"
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class Notice(BaseFlow):
     starttime: str
     saddr: str
@@ -290,8 +302,8 @@ class Notice(BaseFlow):
 
     # every evidence needs a uid, notice.log flows dont have one by
     # default, slips adds one to them to be able to deal with it.
-    type_: str = "notice"
     uid: str = field(default_factory=utils.generate_uid)
+    type_: str = "notice"
 
     def __post_init__(self) -> None:
         # portscan notices don't have id.orig_h or id.resp_h
@@ -314,7 +326,7 @@ class Notice(BaseFlow):
             self.dport = self.dport
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class Files(BaseFlow):
     starttime: str
     uid: str
@@ -349,7 +361,7 @@ class Files(BaseFlow):
             self.daddr = daddr
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class ARP(BaseFlow):
     starttime: str
     uid: str
@@ -385,7 +397,7 @@ class ARP(BaseFlow):
     type_: str = "arp"
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class Software(BaseFlow):
     starttime: str
     uid: str
@@ -402,6 +414,7 @@ class Software(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
+    http_browser: str = ""
     type_: str = "software"
 
     def __post_init__(self) -> None:
@@ -410,7 +423,7 @@ class Software(BaseFlow):
         self.http_browser = self.software == "HTTP::BROWSER"
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class Weird(BaseFlow):
     starttime: str
     uid: str
