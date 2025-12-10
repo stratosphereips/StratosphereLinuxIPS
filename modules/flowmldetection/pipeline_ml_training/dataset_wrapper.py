@@ -10,7 +10,7 @@
 from .commons import BENIGN, MALICIOUS, BACKGROUND
 import random
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 import pandas as pd
 import hashlib
 import json
@@ -421,12 +421,19 @@ class ZeekDataset:
 
 
 def find_and_load_datasets(
-    root_dir: Union[str, Path],
-    batch_size: int = 1000,
-    prefix_regex: str = r"^\d{3}",
-    data_subdir: str = "data",
-    seed: Optional[int] = None,
+    root_dir,
+    batch_size=1000,
+    prefix_regex=r"^\d{3}",
+    data_subdir="data",
+    seed=None,
+    persist_cache_threshold=30000,
+    cache_dir=None,
+    labeled_filenames=None,
+    file_encoding="utf-8",
+    file_errors="ignore",
+    shuffle_per_epoch=False,
 ) -> Dict[str, ZeekDataset]:
+
     import re
 
     root = Path(root_dir)
@@ -445,7 +452,17 @@ def find_and_load_datasets(
         if not data_path.is_dir():
             continue
         try:
-            ds = ZeekDataset(data_path, batch_size=batch_size, seed=seed)
+            ds = ZeekDataset(
+                data_path,
+                batch_size=batch_size,
+                seed=seed,
+                persist_cache_threshold=persist_cache_threshold,
+                cache_dir=cache_dir,
+                labeled_filenames=labeled_filenames,
+                file_encoding=file_encoding,
+                file_errors=file_errors,
+                shuffle_per_epoch=shuffle_per_epoch,
+            )
         except FileNotFoundError:
             # Skip datasets without conn.log/conn.log.labeled instead of failing the whole run
             continue
