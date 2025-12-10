@@ -1,0 +1,88 @@
+# experiments/example_full/config.yaml
+experiment_name: "example_full_run"
+root: "../../../dataset-private/"
+seed: 2025
+validation_split: 0.1
+batch_size_train: 500
+batch_size_test: 1000
+
+paths:
+  models_dir: "./models"
+  results_dir: "./results"
+  logs_dir: "./logs"
+  preprocessing_dir_name: "preprocessing"
+
+dataset_loader:
+  batch_size: 1000
+  data_subdir: "data"
+  prefix_regex: "^\\d{3}"
+  persist_cache_threshold: 30000
+
+features:
+  default_label: "Benign"
+  protocols_to_discard:
+    - "arp"
+    - "icmp"
+    - "ipv6-icmp"
+  columns_to_discard: []
+  column_types:
+    dur: "float"
+    proto: "float"
+
+preprocessing:
+  # steps are (name, type, params)
+  steps:
+    - name: "scaler"
+      type: "StandardScaler"
+      params: {}
+    - name: "pca"
+      type: "IncrementalPCA"
+      params:
+        n_components: 7
+  save_steps: true
+
+model:
+  wrapper: "SKLearnClassifierWrapper"
+  classifier_type: "SGDClassifier"
+  classifier_params:
+    loss: "hinge"
+    penalty: "l2"
+    random_state: 2025
+  save_name: "classifier.bin"
+
+commands:
+  - name: "train_seq_then_random"
+    command: "train"
+    batch_size: 400
+    validation_split: 0.05
+    mixer:
+      type: "sequence"
+      datasets: ["001", "002", "003"]
+      per_dataset_batch_size: 200
+
+  - name: "train_random_balanced"
+    command: "train"
+    batch_size: 500
+    mixer:
+      type: "random_batches"
+      datasets: ["008", "009", "010"]
+      balanced: true
+      validation_split: 0.1
+
+  - name: "train_balanced_labels"
+    command: "train"
+    batch_size: 500
+    mixer:
+      type: "balanced_by_label"
+      datasets: ["009", "015", "016"]
+      micro_batch: 32
+      # optional explicit label list
+      # labels: ["BENIGN", "MALICIOUS"]
+      validation_split: 0.1
+
+  - name: "test_all"
+    command: "test"
+    batch_size: 1000
+    mixer:
+      type: "sequence"
+      datasets: ["001", "002", "003", "008", "009", "015", "016"]
