@@ -1,0 +1,46 @@
+# default_config.yaml - package-level defaults for the pipeline
+
+experiment_name: default_experiment
+root: ../../../dataset-private/
+seed: 1111
+validation_split: 0.1
+batch_size_train: 500
+batch_size_test: 1000
+
+paths:
+  experiment_dir: ./experiments
+  preprocessing_dir_name: preprocessing
+
+dataset_loader:
+  batch_size: 500
+  data_subdir: data
+  persist_cache_threshold: 30000
+  cache_dir: ./pipeline_ml_training/cache
+  labeled_filenames:
+    - conn.log.labeled
+    - labeled-conn.log
+    - conn.log
+  file_encoding: utf-8
+  file_errors: ignore
+  shuffle_per_epoch: false
+
+features:
+  default_label: Benign
+  protocols_to_discard: [arp, ARP, icmp, igmp, ipv6-icmp, ""]
+
+preprocessing:
+  steps: []                  # by default, no preprocessing steps
+  save_steps: true
+  step_filename_template: "{name}.bin"
+
+model:
+  wrapper: SKLearnClassifierWrapper
+  classifier_type: SGDClassifier
+  classifier_params:
+    loss: hinge
+    penalty: l2
+  save_name: classifier.bin
+  classes: []
+  dummy_flows: {}
+
+commands: []   # no commands by default

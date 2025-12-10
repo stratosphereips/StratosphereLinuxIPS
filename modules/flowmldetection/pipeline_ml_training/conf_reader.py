@@ -1,11 +1,12 @@
 # pipeline_ml_training/config_reader.py
 """
-Minimal config reader focused on a single experiment directory.
+ConfigReader that first loads defaults from a YAML, then user config and merges.
 
-- YAML-first (PyYAML required)
-- Only uses paths.experiment_dir (no separate models/results/logs dirs)
-- Resolves experiment_dir_resolved and preprocessing_dir_resolved
-- Computes per-command paths under experiment_dir_resolved/commands/
+Usage:
+    cr = ConfigReader(path_or_file)                 # uses packaged default_config.yaml if present
+    cr = ConfigReader(path_or_file, defaults_path="path/to/my_defaults.yml")
+
+After load(): use helper accessors like get_commands(), get_model_spec(), get_paths(), etc.
 """
 
 import json
@@ -20,17 +21,71 @@ YAML_NAMES = ("config.yaml", "config.yml")
 JSON_NAMES = ("config.json",)
 
 
+def _load_yaml_file(path):
+    txt = Path(path).read_text(encoding="utf-8")
+    sfx = Path(path).suffix.lower()
+    if sfx in (".yaml", ".yml"):
+        data = yaml.safe_load(txt) or {}
+    elif sfx == ".json":
+        import json as _json
+
+        data = _json.loads(txt)
+    else:
+        # prefer YAML parsing, fall back to JSON
+        try:
+            data = yaml.safe_load(txt) or {}
+        except Exception:
+            import json as _json
+
+            data = _json.loads(txt)
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"Top-level config in {path} must be a mapping (dict)"
+        )
+    return data
+
+
+def _deep_merge(default, override):
+    """
+    Recursively merge override into default and return result.
+    - dicts: merge keys recursively
+    - lists: override replaces default list
+    - scalars: override replaces default scalar
+    """
+    if default is None:
+        return override
+    if override is None:
+        return default
+
+    if isinstance(default, dict) and isinstance(override, dict):
+        out = dict(default)
+        for k, v in override.items():
+            if k in default:
+                out[k] = _deep_merge(default[k], v)
+            else:
+                out[k] = v
+        return out
+    # for lists and all other types, the override replaces default
+    return override
+
+
 class ConfigReader(object):
-    def __init__(self, path_or_file):
+    def __init__(self, path_or_file, defaults_path=None):
         """
         path_or_file: path to experiment folder or to a config file.
+        defaults_path: optional path to defaults YAML. If None, looks for
+                       'default_config.yaml' next to this module.
         """
         self.base = Path(path_or_file)
+        self.defaults_path = (
+            Path(defaults_path) if defaults_path is not None else None
+        )
         self.config_path = None
-        self._raw = None
+        self._raw_user = None
+        self._raw_defaults = None
         self._resolved = None
 
-    def _find_config(self):
+    def _find_user_config(self):
         p = self.base
         if p.is_file():
             return p
@@ -41,41 +96,37 @@ class ConfigReader(object):
                     return cand
         return None
 
-    def _read_file(self, path):
-        txt = path.read_text(encoding="utf-8")
-        sfx = path.suffix.lower()
-        if sfx in (".yaml", ".yml"):
-            data = yaml.safe_load(txt) or {}
-        elif sfx == ".json":
-            data = json.loads(txt)
-        else:
-            try:
-                data = yaml.safe_load(txt) or {}
-            except Exception:
-                data = json.loads(txt)
-        if not isinstance(data, dict):
-            raise ValueError("Top-level config must be a mapping (dict)")
-        return data
+    def _find_default_config(self):
+        # explicit path wins
+        if self.defaults_path is not None:
+            if self.defaults_path.exists():
+                return self.defaults_path
+            raise FileNotFoundError(
+                f"Defaults file {str(self.defaults_path)} not found"
+            )
+        # fallback to packaged default_config.yaml next to this file
+        pack = Path(__file__).parent / "default_config.yaml"
+        if pack.exists():
+            return pack
+        return None
 
-    def _defaults(self, raw):
-        cfg = dict(raw)
-
-        # basic run settings
+    def _defaults_fallback(self, raw):
+        """
+        Ensure minimal defaults (in case defaults file is missing).
+        This mirrors the minimal defaults we want always present.
+        """
+        cfg = dict(raw) if raw is not None else {}
         cfg.setdefault("experiment_name", "experiment")
         cfg.setdefault("root", "../../../dataset-private/")
         cfg.setdefault("seed", 1111)
         cfg.setdefault("validation_split", 0.1)
         cfg.setdefault("batch_size_train", 500)
         cfg.setdefault("batch_size_test", 1000)
-
-        # single experiment dir (you control save layout under it)
         paths = cfg.get("paths") or {}
         paths.setdefault("experiment_dir", "./experiments")
-        # small helper name for where preprocessing steps are saved under the experiment dir
         paths.setdefault("preprocessing_dir_name", "preprocessing")
         cfg["paths"] = paths
 
-        # dataset-loader defaults
         ds = cfg.get("dataset_loader") or {}
         ds.setdefault("batch_size", cfg["batch_size_train"])
         ds.setdefault("data_subdir", "data")
@@ -92,7 +143,6 @@ class ConfigReader(object):
         ds.setdefault("shuffle_per_epoch", False)
         cfg["dataset_loader"] = ds
 
-        # feature extraction
         feats = cfg.get("features") or {}
         feats.setdefault("default_label", "Benign")
         feats.setdefault(
@@ -101,14 +151,12 @@ class ConfigReader(object):
         )
         cfg["features"] = feats
 
-        # preprocessing pipeline
         pc = cfg.get("preprocessing") or {}
         pc.setdefault("steps", [])
         pc.setdefault("save_steps", True)
         pc.setdefault("step_filename_template", "{name}.bin")
         cfg["preprocessing"] = pc
 
-        # model config
         model = cfg.get("model") or {}
         model.setdefault("wrapper", "SKLearnClassifierWrapper")
         model.setdefault("classifier_type", "SGDClassifier")
@@ -117,115 +165,171 @@ class ConfigReader(object):
         )
         model.setdefault("save_name", "classifier.bin")
         model.setdefault("classes", [])
-        model.setdefault(
-            "dummy_flows", {}
-        )  # optional override for dummy flows
+        model.setdefault("dummy_flows", {})
         cfg["model"] = model
 
-        # commands
         cfg.setdefault("commands", [])
         return cfg
 
     def _validate(self, cfg):
-        if "commands" not in cfg:
-            raise ValueError("config must contain 'commands' list")
-        if not isinstance(cfg["commands"], list):
-            raise ValueError("'commands' must be a list")
-        for i, c in enumerate(cfg["commands"]):
-            if not isinstance(c, dict):
-                raise ValueError("commands[{}] must be a mapping".format(i))
-            if "command" not in c:
-                raise ValueError(
-                    "commands[{}] missing 'command' key".format(i)
-                )
-            if c["command"] in ("train", "test"):
-                if "mixer" not in c:
+        # basic checks: commands is list
+        if "commands" not in cfg or not isinstance(cfg["commands"], list):
+            raise ValueError("config must include 'commands' as a list")
+        for i, cmd in enumerate(cfg["commands"]):
+            if not isinstance(cmd, dict):
+                raise ValueError(f"commands[{i}] must be a mapping")
+            if "command" not in cmd:
+                raise ValueError(f"commands[{i}] missing 'command' key")
+            if cmd.get("command") in ("train", "test"):
+                mixer = cmd.get("mixer")
+                if not isinstance(mixer, dict):
                     raise ValueError(
-                        "commands[{}] missing 'mixer' key (mixer spec required)".format(
-                            i
-                        )
+                        f"commands[{i}]: 'mixer' mapping is required for train/test"
                     )
-                if not isinstance(c["mixer"], dict):
+                mtype = mixer.get("type")
+                if mtype not in (
+                    "sequence",
+                    "random_batches",
+                    "balanced_by_label",
+                ):
                     raise ValueError(
-                        "commands[{}].mixer must be a mapping".format(i)
+                        f"commands[{i}]: unknown mixer.type '{mtype}'"
                     )
-                mtype = c["mixer"].get("type")
-                if not mtype:
-                    raise ValueError(
-                        "commands[{}].mixer must include 'type'".format(i)
-                    )
-                # basic mixer-specific checks
                 if mtype == "sequence":
-                    if not c["mixer"].get("datasets"):
+                    if not mixer.get("datasets"):
                         raise ValueError(
-                            "sequence mixer requires 'datasets' list"
+                            f"commands[{i}]: sequence mixer requires 'datasets' list"
                         )
-                elif mtype == "random_batches":
-                    if not c["mixer"].get("datasets"):
+                if mtype == "random_batches":
+                    if not mixer.get("datasets"):
                         raise ValueError(
-                            "random_batches mixer requires 'datasets' list"
+                            f"commands[{i}]: random_batches mixer requires 'datasets' list"
                         )
-                    w = c["mixer"].get("weights")
+                    w = mixer.get("weights")
                     if w is not None and len(w) != len(
-                        c["mixer"].get("datasets")
+                        mixer.get("datasets", [])
                     ):
                         raise ValueError(
-                            "random_batches weights length must equal number of datasets"
+                            f"commands[{i}]: random_batches weights length mismatch"
                         )
-                elif mtype == "balanced_by_label":
-                    if not c["mixer"].get("datasets"):
+                if mtype == "balanced_by_label":
+                    if not mixer.get("datasets"):
                         raise ValueError(
-                            "balanced_by_label mixer requires 'datasets' list"
+                            f"commands[{i}]: balanced_by_label mixer requires 'datasets' list"
                         )
-                else:
+
+            # load/new mutually exclusive
+            load_spec = cmd.get("load")
+            new_spec = cmd.get("new")
+            if load_spec is not None and new_spec is not None:
+                raise ValueError(
+                    f"commands[{i}] contains both 'load' and 'new' (mutually exclusive)"
+                )
+
+            if load_spec is not None:
+                if not isinstance(load_spec, dict):
+                    raise ValueError(f"commands[{i}].load must be a mapping")
+                if "preprocessing" in load_spec and not isinstance(
+                    load_spec.get("preprocessing"), str
+                ):
                     raise ValueError(
-                        "Unknown mixer type '{}' in commands[{}]".format(
-                            mtype, i
-                        )
+                        f"commands[{i}].load.preprocessing must be a string path"
                     )
-            else:
-                pass
+                if "model" in load_spec and not isinstance(
+                    load_spec.get("model"), str
+                ):
+                    raise ValueError(
+                        f"commands[{i}].load.model must be a string path"
+                    )
+                if "model_filename" in load_spec and not isinstance(
+                    load_spec.get("model_filename"), str
+                ):
+                    raise ValueError(
+                        f"commands[{i}].load.model_filename must be a string"
+                    )
+                if "strict" in load_spec and not isinstance(
+                    load_spec.get("strict"), bool
+                ):
+                    raise ValueError(
+                        f"commands[{i}].load.strict must be a boolean"
+                    )
+
+            if new_spec is not None:
+                if not isinstance(new_spec, dict):
+                    raise ValueError(f"commands[{i}].new must be a mapping")
+                allowed = ("model", "preprocessing_steps")
+                for k in new_spec.keys():
+                    if k not in allowed:
+                        raise ValueError(
+                            f"commands[{i}].new unknown key '{k}'"
+                        )
+                if "model" in new_spec and not isinstance(
+                    new_spec.get("model"), dict
+                ):
+                    raise ValueError(
+                        f"commands[{i}].new.model must be a mapping"
+                    )
+                if "preprocessing_steps" in new_spec and not isinstance(
+                    new_spec.get("preprocessing_steps"), list
+                ):
+                    raise ValueError(
+                        f"commands[{i}].new.preprocessing_steps must be a list"
+                    )
 
     def load(self):
         """
-        Load config file, apply defaults, validate, and compute effective values for commands.
-        Returns resolved dict.
+        Load defaults (if available), then user config, deep-merge (user overrides defaults),
+        apply minimal fallbacks, compute resolved paths and effective per-command values,
+        then validate and return the resolved config dict.
         """
         if self._resolved is not None:
             return self._resolved
-        cfg_path = self._find_config()
+
+        # load defaults if available
+        dpath = self._find_default_config()
+        if dpath is not None:
+            self._raw_defaults = _load_yaml_file(dpath)
+        else:
+            self._raw_defaults = {}
+
+        # load user config
+        cfg_path = self._find_user_config()
         if cfg_path is None:
             raise FileNotFoundError(
-                "No config file found under '{}'".format(str(self.base))
+                f"No config file found under '{str(self.base)}'"
             )
         self.config_path = cfg_path
-        self._raw = self._read_file(cfg_path)
-        self._resolved = self._defaults(self._raw)
+        self._raw_user = _load_yaml_file(cfg_path)
 
-        # compute resolved absolute experiment directory
-        exp = self._resolved.get("experiment_name")
-        base_experiments = Path(self._resolved["paths"]["experiment_dir"])
-        self._resolved["paths"]["experiment_dir_resolved"] = str(
+        # deep merge: defaults <- user (user overrides)
+        merged = _deep_merge(self._raw_defaults, self._raw_user)
+
+        # enforce minimal keys / fallback defaults
+        merged = self._defaults_fallback(merged)
+
+        # compute experiment_dir_resolved and preprocessing_dir_resolved
+        exp = merged.get("experiment_name")
+        base_experiments = Path(merged["paths"]["experiment_dir"])
+        merged["paths"]["experiment_dir_resolved"] = str(
             (base_experiments / exp).resolve()
         )
-
-        # preprocessing dir under experiment dir
-        self._resolved["paths"]["preprocessing_dir_resolved"] = str(
+        merged["paths"]["preprocessing_dir_resolved"] = str(
             (
-                Path(self._resolved["paths"]["experiment_dir_resolved"])
-                / self._resolved["paths"]["preprocessing_dir_name"]
+                Path(merged["paths"]["experiment_dir_resolved"])
+                / merged["paths"]["preprocessing_dir_name"]
             ).resolve()
         )
 
         # dataset cache dir resolved
-        ds_cache = Path(self._resolved["dataset_loader"].get("cache_dir"))
-        self._resolved["dataset_loader"]["cache_dir_resolved"] = str(
+        ds_cache = Path(merged["dataset_loader"].get("cache_dir"))
+        merged["dataset_loader"]["cache_dir_resolved"] = str(
             ds_cache.resolve()
         )
 
-        # compute effective values per command:
-        for idx, cmd in enumerate(self._resolved.get("commands", [])):
-            # effective validation split precedence: mixer -> command -> global
+        # compute per-command effective values and paths
+        commands = merged.get("commands", [])
+        for idx, cmd in enumerate(commands):
+            # effective validation split: mixer -> command -> global
             cmd_val = cmd.get("validation_split")
             mix_val = None
             if isinstance(cmd.get("mixer"), dict):
@@ -235,39 +339,32 @@ class ConfigReader(object):
             elif cmd_val is not None:
                 effective_val = float(cmd_val)
             else:
-                effective_val = float(
-                    self._resolved.get("validation_split", 0.0)
-                )
+                effective_val = float(merged.get("validation_split", 0.0))
             cmd["effective_validation_split"] = effective_val
 
-            # effective batch size precedence: command -> global (train/test)
+            # effective batch size
             if "batch_size" in cmd:
                 effective_bs = int(cmd["batch_size"])
             else:
                 if cmd.get("command") == "test":
-                    effective_bs = int(
-                        self._resolved.get("batch_size_test", 1000)
-                    )
+                    effective_bs = int(merged.get("batch_size_test", 1000))
                 else:
-                    effective_bs = int(
-                        self._resolved.get("batch_size_train", 500)
-                    )
+                    effective_bs = int(merged.get("batch_size_train", 500))
             cmd["effective_batch_size"] = effective_bs
 
-            # effective paths per-command under the single experiment dir
+            # per-command paths under experiment_dir
             safe_name = cmd.get("name") or f"cmd_{idx}"
-            exp_base = Path(self._resolved["paths"]["experiment_dir_resolved"])
+            exp_base = Path(merged["paths"]["experiment_dir_resolved"])
             cmd_base = exp_base / "commands" / f"{idx}_{safe_name}"
             cmd["paths"] = {
                 "command_dir": str(cmd_base.resolve()),
-                # convenience: where to save preprocessing and model artifacts for this command
                 "preprocessing": str((cmd_base / "preprocessing").resolve()),
                 "model": str((cmd_base / "model").resolve()),
                 "results": str((cmd_base / "results").resolve()),
                 "logs": str((cmd_base / "logs").resolve()),
             }
 
-            # pass effective_validation_split into mixer spec if present
+            # write effective values into mixer mapping if present
             if isinstance(cmd.get("mixer"), dict):
                 cmd["mixer"]["validation_split"] = cmd[
                     "effective_validation_split"
@@ -275,10 +372,13 @@ class ConfigReader(object):
                 if "batch_size" not in cmd["mixer"]:
                     cmd["mixer"]["batch_size"] = cmd["effective_batch_size"]
 
-        # final validation
-        self._validate(self._resolved)
+        # run validation
+        self._validate(merged)
+
+        self._resolved = merged
         return self._resolved
 
+    # ----------------------- helper accessors -----------------------
     def get_feature_extractor_params(self):
         cfg = self.load()
         return {
@@ -289,11 +389,6 @@ class ConfigReader(object):
         }
 
     def get_preprocessing_steps(self):
-        """
-        Returns the raw preprocessing steps spec list.
-        Each element is expected like: { name: <str>, type: <str>, params: <dict> }
-        Instantiation should be done by the pipeline (mapping type->class).
-        """
         cfg = self.load()
         return cfg["preprocessing"].get("steps", [])
 
@@ -309,19 +404,41 @@ class ConfigReader(object):
 
     def get_model_spec(self):
         cfg = self.load()
-        return cfg["model"]
+        return cfg.get("model", {})
 
     def get_dataset_loader_params(self):
         cfg = self.load()
-        return cfg["dataset_loader"]
+        return cfg.get("dataset_loader", {})
 
     def get_paths(self):
         cfg = self.load()
-        return cfg["paths"]
+        return cfg.get("paths", {})
 
     def get_commands(self):
         cfg = self.load()
         return cfg.get("commands", [])
+
+    def get_command_load_spec(self, cmd_or_idx):
+        cfg = self.load()
+        if isinstance(cmd_or_idx, int):
+            cmds = cfg.get("commands", [])
+            if cmd_or_idx < 0 or cmd_or_idx >= len(cmds):
+                return None
+            return cmds[cmd_or_idx].get("load")
+        elif isinstance(cmd_or_idx, dict):
+            return cmd_or_idx.get("load")
+        return None
+
+    def get_command_new_spec(self, cmd_or_idx):
+        cfg = self.load()
+        if isinstance(cmd_or_idx, int):
+            cmds = cfg.get("commands", [])
+            if cmd_or_idx < 0 or cmd_or_idx >= len(cmds):
+                return None
+            return cmds[cmd_or_idx].get("new")
+        elif isinstance(cmd_or_idx, dict):
+            return cmd_or_idx.get("new")
+        return None
 
     def save_effective_config(self, target):
         cfg = self.load()

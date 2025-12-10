@@ -1,4 +1,3 @@
-# experiments/example_full/config.yaml
 experiment_name: "example_full_run"
 root: "../../../dataset-private/"
 seed: 2025
@@ -7,9 +6,9 @@ batch_size_train: 500
 batch_size_test: 1000
 
 paths:
-  models_dir: "./models"
-  results_dir: "./results"
-  logs_dir: "./logs"
+  # single experiment directory: runner will create subfolders under this
+  experiment_dir: "./experiments"
+  # name for preprocessing folder under each command folder
   preprocessing_dir_name: "preprocessing"
 
 dataset_loader:
@@ -17,6 +16,15 @@ dataset_loader:
   data_subdir: "data"
   prefix_regex: "^\\d{3}"
   persist_cache_threshold: 30000
+  # optional: where dataset cache files are stored (will be resolved)
+  cache_dir: "./pipeline_ml_training/cache"
+  labeled_filenames:
+    - "conn.log.labeled"
+    - "labeled-conn.log"
+    - "conn.log"
+  file_encoding: "utf-8"
+  file_errors: "ignore"
+  shuffle_per_epoch: false
 
 features:
   default_label: "Benign"
@@ -31,6 +39,7 @@ features:
 
 preprocessing:
   # steps are (name, type, params)
+  # runner will instantiate these via factory mapping (type -> class)
   steps:
     - name: "scaler"
       type: "StandardScaler"
@@ -40,6 +49,7 @@ preprocessing:
       params:
         n_components: 7
   save_steps: true
+  step_filename_template: "{name}.bin"
 
 model:
   wrapper: "SKLearnClassifierWrapper"
@@ -49,12 +59,14 @@ model:
     penalty: "l2"
     random_state: 2025
   save_name: "classifier.bin"
+  classes: []        # optional: list class labels if desired
+  dummy_flows: {}    # optional: override default dummy flows
 
 commands:
   - name: "train_seq_then_random"
     command: "train"
-    batch_size: 400
-    validation_split: 0.05
+    batch_size: 400                # per-command override
+    validation_split: 0.05         # command-level override
     mixer:
       type: "sequence"
       datasets: ["001", "002", "003"]
@@ -76,7 +88,7 @@ commands:
       type: "balanced_by_label"
       datasets: ["009", "015", "016"]
       micro_batch: 32
-      # optional explicit label list
+      # optional explicit label list:
       # labels: ["BENIGN", "MALICIOUS"]
       validation_split: 0.1
 
