@@ -441,12 +441,14 @@ class Utils(object):
         if self.is_datetime_obj(ts):
             return ts
 
+        try:
+            f = float(ts)
+            return datetime.fromtimestamp(f)
+        except (ValueError, TypeError):
+            pass
+
         given_format = self.get_time_format(ts)
-        return (
-            datetime.fromtimestamp(float(ts))
-            if given_format == "unixtimestamp"
-            else datetime.strptime(ts, given_format)
-        )
+        return datetime.strptime(ts, given_format)
 
     def is_unix_ts(self, time) -> bool:
         if isinstance(time, (int, float)):
