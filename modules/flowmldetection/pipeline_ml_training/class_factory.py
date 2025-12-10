@@ -508,3 +508,35 @@ def build_loaders(root, dataset_loader_spec, seed=None):
             pass
 
     return loaders
+
+
+# -------------------------
+# factory
+# -------------------------
+
+
+def build_mixer(spec, loaders, rng):
+    """
+    Mixer builder for dataset mixing strategies.
+    spec: dict with at least a "type" key.
+    loaders: dataset loaders.
+    rng: random number generator.
+    """
+    t = spec.get("type")
+    # Import mixers from pipeline_ml_training.mixer
+    try:
+        from pipeline_ml_training.mixer import (
+            SequenceMixer,
+            RandomBatchesMixer,
+            BalancedByLabelMixer,
+        )
+    except Exception as e:
+        raise RuntimeError("Failed to import mixer classes: {}".format(e))
+
+    if t == "sequence":
+        return SequenceMixer(spec, loaders, rng)
+    if t == "random_batches":
+        return RandomBatchesMixer(spec, loaders, rng)
+    if t == "balanced_by_label":
+        return BalancedByLabelMixer(spec, loaders, rng)
+    raise ValueError("Unknown mixer type '{}'".format(t))
