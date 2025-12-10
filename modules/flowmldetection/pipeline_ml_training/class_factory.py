@@ -100,7 +100,6 @@ def get_classifier_class(classifier_type):
 
     # try xgboost common alias
     try:
-        xgb = importlib.import_module("xgboost")
         if classifier_type.lower() in (
             "xgbclassifier",
             "xgboost",
@@ -110,9 +109,11 @@ def get_classifier_class(classifier_type):
             from xgboost import XGBClassifier
 
             return XGBClassifier
-        # If classifier_type matches an attribute in xgboost, return it
-        if hasattr(xgb, classifier_type):
-            return getattr(xgb, classifier_type)
+
+        # Try to find in xgboost module using _find_in_modules
+        Cls = _find_in_modules(classifier_type, ["xgboost"])
+        if Cls is not None:
+            return Cls
     except Exception:
         pass
 
