@@ -164,6 +164,7 @@ class ZeekJSON(IInputType, Zeek):
     """
 
     def __init__(self):
+        super().__init__()
         self.line_processor_cache = {}
         self.times = {}
         self.init_csv()
@@ -216,10 +217,9 @@ class ZeekJSON(IInputType, Zeek):
         else:
             starttime = ""
 
-        # reusing the dict to avoid obj (dict) creation per flow.
-        flow_values = self.reusable_flow_values_dict
-        flow_values.clear()
-        flow_values = flow_values.update(
+        # reusing the dict to avoid new obj (dict) creation per flow.
+        self.reusable_flow_values_dict.clear()
+        self.reusable_flow_values_dict.update(
             {"starttime": starttime, "interface": interface}
         )
 
@@ -230,7 +230,7 @@ class ZeekJSON(IInputType, Zeek):
             val = line.get(zeek_field, "")
             if val == "-":
                 val = ""
-            flow_values[slips_field] = val
+            self.reusable_flow_values_dict[slips_field] = val
 
         latency = time.time() - n
         self.log_time("removing_empty_vals", latency)
@@ -239,7 +239,9 @@ class ZeekJSON(IInputType, Zeek):
             n = time.time()
             slips_class = LINE_TYPE_TO_SLIPS_CLASS[file_type]
             if file_type == "conn.log":
-                flow_values["dur"] = float(flow_values.get("dur", 0) or 0)
+                self.reusable_flow_values_dict["dur"] = float(
+                    self.reusable_flow_values_dict.get("dur", 0) or 0
+                )
                 for field in (
                     "sbytes",
                     "dbytes",
@@ -248,18 +250,20 @@ class ZeekJSON(IInputType, Zeek):
                     "sport",
                     "dport",
                 ):
-                    flow_values[field] = int(flow_values.get(field, 0) or 0)
+                    self.reusable_flow_values_dict[field] = int(
+                        self.reusable_flow_values_dict.get(field, 0) or 0
+                    )
                 latency = time.time() - n
                 self.log_time("setting_conn_vals_to_0", latency)
             n = time.time()
-            flow_values = self.fill_empty_class_fields(
-                flow_values, slips_class
+            self.reusable_flow_values_dict = self.fill_empty_class_fields(
+                self.reusable_flow_values_dict, slips_class
             )
             latency = time.time() - n
             self.log_time("fill_empty_class_fields", latency)
 
             n = time.time()
-            self.flow = slips_class(**flow_values)
+            self.flow = slips_class(**self.reusable_flow_values_dict)
             latency = time.time() - n
             self.log_time("calling_slips_class", latency)
 
@@ -274,7 +278,7 @@ class ZeekTabs(IInputType, Zeek):
     line_processor_cache = {}
 
     def __init__(self):
-        pass
+        super().__init__()
 
     @staticmethod
     def split(line: str) -> list:
