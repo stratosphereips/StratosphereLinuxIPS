@@ -77,6 +77,7 @@ class Utils(object):
             "%Y/%m/%d-%H:%M:%S",
             "%Y-%m-%dT%H:%M:%S",
         )
+        self.time_format_cache = {}
         # this format will be used across all modules and logfiles of slips
         # its timezone aware
         self.alerts_format = "%Y/%m/%d %H:%M:%S.%f%z"
@@ -441,14 +442,79 @@ class Utils(object):
         if self.is_datetime_obj(ts):
             return ts
 
+        # 1. Unix Timestamp / Float check (Very Fast Path)
+        # Most Zeek logs use this.
         try:
-            f = float(ts)
-            return datetime.fromtimestamp(f)
+            return datetime.fromtimestamp(float(ts))
         except (ValueError, TypeError):
             pass
 
-        given_format = self.get_time_format(ts)
-        return datetime.strptime(ts, given_format)
+        # 2. String Parsing (Optimized)
+        if isinstance(ts, str):
+            return self._convert_str_to_datetime(ts)
+
+        return None
+
+        #
+        # given_format = self.get_time_format(ts)
+        # return datetime.strptime(ts, given_format)
+
+    def _convert_str_to_datetime(self, ts: str):
+        """
+        Uses a signature (Length + Separators) to find the cached format
+        without looping.
+        this is not clean code, but we're having a latency issue and we're
+        really need to optimize per flow operations, so don't refactor
+        this for a "cleaner" version.
+        """
+        # Create a lightweight signature to differentiate formats
+        # logic: almost all formats have a separator at index 4 and 10.
+        # e.g., "2023-01-01 12..." -> 4='-', 10=' '
+        # e.g., "2023/01/01-12..." -> 4='/', 10='-'
+        try:
+            # We use a tuple as dict key: (length, char_at_4, char_at_10)
+            # This distinguishes YYYY-MM-DD vs YYYY/MM/DD and ' ' vs 'T'
+            if len(ts) >= 11:
+                signature = (len(ts), ts[4], ts[10])
+            else:
+                # Fallback for very short strings
+                signature = len(ts)
+        except IndexError:
+            # String too short to have index 10
+            signature = len(ts)
+
+        # HIT: Use cached format
+        if signature in self.time_format_cache:
+            try:
+                return datetime.strptime(ts, self.time_format_cache[signature])
+            except ValueError:
+                # Edge case: Signature collision (rare) or malformed data
+                # Remove bad cache entry and fall through to slow loop
+                del self.time_format_cache[signature]
+
+        # MISS: Find format, Cache it, Return it (Very slow)
+        found_format = self.get_and_cache_format(ts, signature)
+        if found_format:
+            return datetime.strptime(ts, found_format)
+
+        return None
+
+    def get_and_cache_format(self, time_str, signature) -> Optional[str]:
+        """
+        Slow path: Loops through all formats, finds the matching one,
+        and saves it to the cache using the signature.
+        """
+        for time_format in self.time_formats:
+            try:
+                datetime.strptime(time_str, time_format)
+                # Success! Save to cache.
+                self.format_cache[signature] = time_format
+                return time_format
+            except ValueError:
+                continue
+
+        # Removed the print() statement as it ruins performance
+        return None
 
     def is_unix_ts(self, time) -> bool:
         if isinstance(time, (int, float)):

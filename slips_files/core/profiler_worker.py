@@ -665,10 +665,6 @@ class ProfilerWorker:
             self.times = {}
 
     def main(self):
-        """
-        This function runs in 3 different processes for faster processing of
-        the flows
-        """
         while not self.should_stop_profiler_workers():
             try:
                 msg = self.get_msg_from_queue(self.flows_to_process_q)
@@ -703,7 +699,7 @@ class ProfilerWorker:
                 self.db.increment_processed_flows()
             except Exception as e:
                 self.print(
-                    f"[{self.name}] Problem processing line {line}. "
+                    f"Problem processing line {line}. "
                     f"Line discarded. Error: {e}",
                     0,
                     1,
