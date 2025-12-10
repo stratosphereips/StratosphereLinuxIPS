@@ -634,6 +634,8 @@ class ProfilerWorker:
         return True
 
     def init_csv(self):
+        if not self.name == "ProfilerWorker_Process_0":
+            return
         path = os.path.join(self.output_dir, "times_each_func_took.csv")
         with open(path, "w", newline="") as f:
             writer = csv.writer(f)
@@ -651,6 +653,8 @@ class ProfilerWorker:
             )
 
     def log_time(self, what, time):
+        if not self.name == "ProfilerWorker_Process_0":
+            return
         self.times[what] = f"{time:.2f}"
         if what == "store_features_going_out":
             path = os.path.join(self.output_dir, "times_each_func_took.csv")
