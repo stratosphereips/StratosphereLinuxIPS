@@ -82,7 +82,11 @@ class Zeek:
     classes"""
 
     def __init__(self):
-        pass
+        # why are we caching this? for optimizations. to avoid getting
+        # set(slips_class.__init__.__code__.co_varnames)
+        # on every single flow!
+        # This removes a major chunk of per flow allocations
+        self.slips_field_cache = {}
 
     def remove_subsuffix(self, file_name: str) -> str:
         """
@@ -119,7 +123,7 @@ class Zeek:
         """
         The given slips class is Conn, SSH, Weird etc.
         Suppose SSH requires an "issuer" field and the given zeek log line
-        doesn'thave one, this function fills the issuer field (or any
+        doesn't have one, this function fills the issuer field (or any
         missing field) with "".
 
         Returns a ready-to-use flow_values dict that has all the fields of
@@ -129,10 +133,15 @@ class Zeek:
         :param slips_class: the class that corresponds to the given zeek log
         line
         """
-        # get all fields of the slips_class
-        slips_class_fields = set(slips_class.__init__.__code__.co_varnames)
-        # remove 'self' from the fields
-        slips_class_fields.discard("self")
+
+        if slips_class not in self.slips_field_cache:
+            # get all fields of the slips_class
+            fields = set(slips_class.__init__.__code__.co_varnames)
+            # remove 'self' from the fields
+            fields.discard("self")
+            self.slips_field_cache[slips_class] = fields
+
+        slips_class_fields = self.slips_field_cache[slips_class]
 
         # identify fields in slips_class that are not in flow_values
         missing_fields = slips_class_fields - set(flow_values.keys())
@@ -149,6 +158,11 @@ class Zeek:
 
 
 class ZeekJSON(IInputType, Zeek):
+    """
+    An instance of this class is created once on each run, not created per
+    flow.
+    """
+
     def __init__(self):
         self.line_processor_cache = {}
         self.times = {}

@@ -72,7 +72,8 @@ class ProfilerWorker:
         self.aid_queue = aid_queue
         self.aid_manager: AIDManager = aid_manager
 
-        # this is an instance of that cls
+        # this is an instance of
+        # ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         self.input_handler = input_handler
         self.handle_setting_local_net_lock = handle_setting_local_net_lock
 
