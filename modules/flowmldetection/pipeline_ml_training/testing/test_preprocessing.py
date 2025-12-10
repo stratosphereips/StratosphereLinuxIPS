@@ -275,59 +275,23 @@ class TestPreprocessingWrapper:
         expected = X * 3 + 10
         np.testing.assert_array_equal(result, expected)
 
-    # ========== Save and Load Tests ==========
-    def test_save_creates_files(self, temp_dir, sample_data):
-        """Test save creates pickle files for all steps."""
-        X, y = sample_data
-        transformer1 = DummyTransformer()
-        transformer2 = DummyTransformer()
-
-        steps = [("scaler", transformer1), ("encoder", transformer2)]
-        wrapper = PreprocessingWrapper(steps=steps, experiment_name="test_exp")
-        wrapper.partial_fit(X, y)
-        wrapper.save(base_path=temp_dir)
-
-        base_path = Path(temp_dir) / "test_exp" / "preprocessing"
-        assert (base_path / "scaler.bin").exists()
-        assert (base_path / "encoder.bin").exists()
-
     def test_save_creates_nested_directories(self, temp_dir, sample_data):
-        """Test save creates nested directory structure."""
+        """Test save creates nested directory structure with default path."""
         X, y = sample_data
         transformer = DummyTransformer()
 
         wrapper = PreprocessingWrapper(
-            steps=[("step1", transformer)], experiment_name="nested/exp"
+            steps=[("step1", transformer)],
+            experiment_name="nested/exp",
+            base_models_dir=temp_dir,
         )
         wrapper.partial_fit(X, y)
-        wrapper.save(base_path=temp_dir)
+        wrapper.save()  # No base_path - uses default
 
         assert (Path(temp_dir) / "nested" / "exp" / "preprocessing").exists()
-
-    def test_load_restores_transformers(self, temp_dir, sample_data):
-        """Test load restores transformers from saved files."""
-        X, y = sample_data
-        transformer1 = DummyTransformer()
-        transformer2 = DummyTransformer()
-
-        # Save
-        steps = [("scaler", transformer1), ("encoder", transformer2)]
-        wrapper1 = PreprocessingWrapper(
-            steps=steps, experiment_name="test_exp"
-        )
-        wrapper1.partial_fit(X, y)
-        wrapper1.save(base_path=temp_dir)
-
-        # Load
-        wrapper2 = PreprocessingWrapper(
-            steps=[("scaler", None), ("encoder", None)],
-            experiment_name="test_exp",
-        )
-        wrapper2.load(base_path=temp_dir)
-
-        assert wrapper2.is_fitted["scaler"] is True
-        assert wrapper2.is_fitted["encoder"] is True
-        assert wrapper2._has_been_fitted_once is True
+        assert (
+            Path(temp_dir) / "nested" / "exp" / "preprocessing" / "step1.bin"
+        ).exists()
 
     def test_load_nonexistent_directory_raises_error(self, temp_dir):
         """Test load raises error if preprocessing directory doesn't exist."""
@@ -358,26 +322,6 @@ class TestPreprocessingWrapper:
 
         with pytest.raises(FileNotFoundError):
             wrapper2.load(base_path=temp_dir)
-
-    def test_load_uses_correct_file_extension(self, temp_dir, sample_data):
-        X, y = sample_data
-        transformer = DummyTransformer()
-
-        wrapper1 = PreprocessingWrapper(
-            steps=[("step1", transformer)], experiment_name="test_exp"
-        )
-        wrapper1.partial_fit(X, y)
-        wrapper1.save(base_path=temp_dir)
-
-        wrapper2 = PreprocessingWrapper(
-            steps=[("step1", None)], experiment_name="test_exp"
-        )
-
-        # Should not raise, should load successfully
-        try:
-            wrapper2.load(base_path=temp_dir)
-        except Exception as e:
-            pytest.fail(f"Unexpected exception raised: {e}")
 
     # ========== Replace Transformer Tests ==========
     def test_replace_transformer_updates_step(self):
@@ -634,3 +578,239 @@ class TestPreprocessingWrapper:
         # After both fits, mean should be mean of all three samples
         expected_mean = np.mean(np.vstack([X1, X2]), axis=0)
         np.testing.assert_array_almost_equal(scaler.mean_, expected_mean)
+
+    # ========== Updated Initialization Tests ==========
+    def test_initialization_with_custom_base_models_dir(self):
+        """Test PreprocessingWrapper initializes with custom base_models_dir."""
+        wrapper = PreprocessingWrapper(
+            base_models_dir="/custom/models", experiment_name="test_exp"
+        )
+        assert wrapper.base_models_dir == Path("/custom/models")
+        assert wrapper.experiment_name == "test_exp"
+
+    def test_initialization_with_custom_step_filename_template(self):
+        """Test PreprocessingWrapper initializes with custom step_filename_template."""
+        wrapper = PreprocessingWrapper(step_filename_template="{name}.pkl")
+        assert wrapper.step_filename_template == "{name}.pkl"
+
+    def test_initialization_defaults_include_base_models_dir(self):
+        """Test default base_models_dir is ./experiments."""
+        wrapper = PreprocessingWrapper()
+        assert wrapper.base_models_dir == Path("./experiments")
+        assert wrapper.step_filename_template == "{name}.bin"
+
+    # ========== Updated Save Tests ==========
+    def test_save_without_base_path_uses_default(self, temp_dir, sample_data):
+        """Test save uses base_models_dir/experiment_name/preprocessing when base_path is None."""
+        X, y = sample_data
+        transformer = DummyTransformer()
+
+        wrapper = PreprocessingWrapper(
+            steps=[("scaler", transformer)],
+            experiment_name="test_exp",
+            base_models_dir=temp_dir,
+        )
+        wrapper.partial_fit(X, y)
+        wrapper.save()  # No base_path argument
+
+        expected_path = (
+            Path(temp_dir) / "test_exp" / "preprocessing" / "scaler.bin"
+        )
+        assert expected_path.exists()
+
+    def test_save_with_explicit_base_path(self, temp_dir, sample_data):
+        """Test save uses provided base_path when given."""
+        X, y = sample_data
+        transformer = DummyTransformer()
+        custom_path = Path(temp_dir) / "custom_save"
+
+        wrapper = PreprocessingWrapper(steps=[("scaler", transformer)])
+        wrapper.partial_fit(X, y)
+        wrapper.save(base_path=custom_path)
+
+        assert (custom_path / "scaler.bin").exists()
+
+    def test_save_uses_step_filename_template(self, temp_dir, sample_data):
+        """Test save respects custom step_filename_template."""
+        X, y = sample_data
+        transformer1 = DummyTransformer()
+        transformer2 = DummyTransformer()
+
+        wrapper = PreprocessingWrapper(
+            steps=[("scaler", transformer1), ("encoder", transformer2)],
+            base_models_dir=temp_dir,
+            experiment_name="test_exp",
+            step_filename_template="{name}.pkl",
+        )
+        wrapper.partial_fit(X, y)
+        wrapper.save()
+
+        base_path = Path(temp_dir) / "test_exp" / "preprocessing"
+        assert (base_path / "scaler.pkl").exists()
+        assert (base_path / "encoder.pkl").exists()
+        assert not (base_path / "scaler.bin").exists()
+
+    def test_save_creates_files_with_default_template(
+        self, temp_dir, sample_data
+    ):
+        """Test save creates .bin files by default."""
+        X, y = sample_data
+        transformer1 = DummyTransformer()
+        transformer2 = DummyTransformer()
+
+        wrapper = PreprocessingWrapper(
+            steps=[("scaler", transformer1), ("encoder", transformer2)],
+            base_models_dir=temp_dir,
+            experiment_name="test_exp",
+        )
+        wrapper.partial_fit(X, y)
+        wrapper.save()
+
+        base_path = Path(temp_dir) / "test_exp" / "preprocessing"
+        assert (base_path / "scaler.bin").exists()
+        assert (base_path / "encoder.bin").exists()
+
+    # ========== Updated Load Tests ==========
+    def test_load_without_base_path_uses_default(self, temp_dir, sample_data):
+        """Test load uses base_models_dir/experiment_name/preprocessing when base_path is None."""
+        X, y = sample_data
+        transformer1 = DummyTransformer()
+        transformer2 = DummyTransformer()
+
+        # Save
+        wrapper1 = PreprocessingWrapper(
+            steps=[("scaler", transformer1), ("encoder", transformer2)],
+            experiment_name="test_exp",
+            base_models_dir=temp_dir,
+        )
+        wrapper1.partial_fit(X, y)
+        wrapper1.save()  # Uses default path
+
+        # Load
+        wrapper2 = PreprocessingWrapper(
+            steps=[("scaler", None), ("encoder", None)],
+            experiment_name="test_exp",
+            base_models_dir=temp_dir,
+        )
+        wrapper2.load()  # Uses same default path
+
+        assert wrapper2.is_fitted["scaler"] is True
+        assert wrapper2.is_fitted["encoder"] is True
+
+    def test_load_with_explicit_base_path(self, temp_dir, sample_data):
+        """Test load uses provided base_path when given."""
+        X, y = sample_data
+        transformer = DummyTransformer()
+        custom_path = Path(temp_dir) / "custom_save"
+
+        # Save
+        wrapper1 = PreprocessingWrapper(steps=[("scaler", transformer)])
+        wrapper1.partial_fit(X, y)
+        wrapper1.save(base_path=custom_path)
+
+        # Load
+        wrapper2 = PreprocessingWrapper(steps=[("scaler", None)])
+        wrapper2.load(base_path=custom_path)
+
+        assert wrapper2.is_fitted["scaler"] is True
+
+    def test_load_uses_step_filename_template(self, temp_dir, sample_data):
+        """Test load respects custom step_filename_template."""
+        X, y = sample_data
+        transformer1 = DummyTransformer()
+        transformer2 = DummyTransformer()
+
+        # Save with custom template
+        wrapper1 = PreprocessingWrapper(
+            steps=[("scaler", transformer1), ("encoder", transformer2)],
+            base_models_dir=temp_dir,
+            experiment_name="test_exp",
+            step_filename_template="{name}.pkl",
+        )
+        wrapper1.partial_fit(X, y)
+        wrapper1.save()
+
+        # Load with same custom template
+        wrapper2 = PreprocessingWrapper(
+            steps=[("scaler", None), ("encoder", None)],
+            base_models_dir=temp_dir,
+            experiment_name="test_exp",
+            step_filename_template="{name}.pkl",
+        )
+        wrapper2.load()
+
+        assert wrapper2.is_fitted["scaler"] is True
+        assert wrapper2.is_fitted["encoder"] is True
+
+    def test_load_fails_with_wrong_template(self, temp_dir, sample_data):
+        """Test load fails if using wrong step_filename_template."""
+        X, y = sample_data
+        transformer = DummyTransformer()
+
+        # Save with .pkl
+        wrapper1 = PreprocessingWrapper(
+            steps=[("scaler", transformer)],
+            base_models_dir=temp_dir,
+            experiment_name="test_exp",
+            step_filename_template="{name}.pkl",
+        )
+        wrapper1.partial_fit(X, y)
+        wrapper1.save()
+
+        # Try to load with .bin (wrong template)
+        wrapper2 = PreprocessingWrapper(
+            steps=[("scaler", None)],
+            base_models_dir=temp_dir,
+            experiment_name="test_exp",
+            step_filename_template="{name}.bin",  # Wrong!
+        )
+
+        with pytest.raises(FileNotFoundError):
+            wrapper2.load()
+
+    def test_save_and_load_roundtrip_with_custom_params(
+        self, temp_dir, sample_data
+    ):
+        """Integration test: save and load with custom base_models_dir and template."""
+        X, y = sample_data
+        transformer1 = DummyTransformer()
+        transformer2 = DummyTransformer()
+
+        # Save
+        wrapper1 = PreprocessingWrapper(
+            steps=[("step1", transformer1), ("step2", transformer2)],
+            experiment_name="roundtrip_test",
+            base_models_dir=temp_dir,
+            step_filename_template="{name}.custom",
+        )
+        wrapper1.partial_fit(X, y)
+        wrapper1.save()
+        result1 = wrapper1.transform(X)
+
+        # Load
+        wrapper2 = PreprocessingWrapper(
+            steps=[("step1", None), ("step2", None)],
+            experiment_name="roundtrip_test",
+            base_models_dir=temp_dir,
+            step_filename_template="{name}.custom",
+        )
+        wrapper2.load()
+        result2 = wrapper2.transform(X)
+
+        np.testing.assert_array_equal(result1, result2)
+        assert (
+            Path(temp_dir)
+            / "roundtrip_test"
+            / "preprocessing"
+            / "step1.custom"
+        ).exists()
+
+    def test_partial_fit_raises_error_if_transformer_is_none(
+        self, sample_data
+    ):
+        """Test partial_fit raises AttributeError if transformer is None."""
+        X, y = sample_data
+        wrapper = PreprocessingWrapper(steps=[("bad_step", None)])
+
+        with pytest.raises(AttributeError):
+            wrapper.partial_fit(X, y)

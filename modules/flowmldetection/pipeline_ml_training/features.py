@@ -75,6 +75,27 @@ class FeatureExtraction:
             (r"arp", 4.0),
         ]
 
+        self.slips_column_order = [
+            "dur",
+            "proto",
+            "sport",
+            "dport",
+            "spkts",
+            "dpkts",
+            "sbytes",
+            "dbytes",
+            "state",
+            "bytes",
+            "pkts",
+        ]
+        self.label_cols = [
+            "ground_truth_label",
+            "detailed_ground_truth_label",
+            "label",
+            "module_labels",
+            "detailed_label",
+        ]
+
     def process_batch(
         self, data: Union[pd.DataFrame, List[dict], Iterable[dict]]
     ) -> Tuple[pd.DataFrame, pd.Series]:
@@ -137,21 +158,8 @@ class FeatureExtraction:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
 
             # Reorder as in slips (only keep existing cols)
-            slips_column_order = [
-                "dur",
-                "proto",
-                "sport",
-                "dport",
-                "spkts",
-                "dpkts",
-                "sbytes",
-                "dbytes",
-                "state",
-                "bytes",
-                "pkts",
-            ]
             existing_cols = [
-                col for col in slips_column_order if col in df.columns
+                col for col in self.slips_column_order if col in df.columns
             ]
             df = df[existing_cols]
 
@@ -183,12 +191,7 @@ class FeatureExtraction:
         Default to converter.default_label if missing.
         If gt is missing, but the detailed label is malware, we assume the whole is malware.
         """
-        label_cols = [
-            "ground_truth_label",
-            "detailed_ground_truth_label",
-            "label",
-            "module_labels",
-        ]
+        label_cols = self.label_cols
         found = [c for c in label_cols if c in df.columns]
         if not found:
             return pd.Series(
@@ -220,13 +223,7 @@ class FeatureExtraction:
 
     def drop_labels(self, df: pd.DataFrame) -> pd.DataFrame:
         return df.drop(
-            [
-                "ground_truth_label",
-                "detailed_ground_truth_label",
-                "label",
-                "module_labels",
-                "detailed_label",
-            ],
+            self.label_cols,
             axis=1,
             errors="ignore",
         )

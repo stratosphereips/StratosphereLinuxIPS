@@ -1,22 +1,28 @@
 import pickle
 from pathlib import Path
-from typing import List, Tuple, Union
 
 
 class PreprocessingWrapper:
     def __init__(
         self,
-        steps: List[Tuple[str, object]] = None,
-        experiment_name: str = "default",
+        steps=None,
+        experiment_name="default",
+        base_models_dir="./experiments",
+        step_filename_template="{name}.bin",
     ):
         """
         steps: List of (step_name, transformer) tuples
         experiment_name: name of the experiment to organize saved files
+        base_models_dir: base directory to save/load models
+        step_filename_template: template for step filenames when saving/loading
         """
+
         self.steps = steps if steps is not None else []
         self.experiment_name = experiment_name
         self.is_fitted = {name: False for name, _ in self.steps}
         self._has_been_fitted_once = False
+        self.base_models_dir = Path(base_models_dir)
+        self.step_filename_template = step_filename_template
 
     def add_step(self, name: str, transformer: object):
         if self._has_been_fitted_once:
@@ -74,23 +80,35 @@ class PreprocessingWrapper:
                 raise
         return X
 
-    def save(self, base_path: Union[str, Path] = "./models"):
-        base_path = Path(base_path) / self.experiment_name / "preprocessing"
+    def save(self, base_path=None):
+        if base_path is None:
+            base_path = (
+                self.base_models_dir / self.experiment_name / "preprocessing"
+            )
+        else:
+            base_path = Path(base_path)
         base_path.mkdir(parents=True, exist_ok=True)
         for name, transformer in self.steps:
-            model_path = base_path / f"{name}.bin"
+            filename = self.step_filename_template.format(name=name)
+            model_path = base_path / filename
             with open(model_path, "wb") as f:
                 data = pickle.dumps(transformer)
                 f.write(data)
 
-    def load(self, base_path: Union[str, Path] = "./models"):
-        base_path = Path(base_path) / self.experiment_name / "preprocessing"
+    def load(self, base_path=None):
+        if base_path is None:
+            base_path = (
+                self.base_models_dir / self.experiment_name / "preprocessing"
+            )
+        else:
+            base_path = Path(base_path)
         if not base_path.exists():
             raise FileNotFoundError(
                 f"Preprocessing directory {base_path} does not exist."
             )
         for name, transformer in self.steps:
-            model_path = base_path / f"{name}.bin"
+            filename = self.step_filename_template.format(name=name)
+            model_path = base_path / filename
             if not model_path.exists():
                 raise FileNotFoundError(
                     f"Preprocessing step {name} not found at {model_path}"
@@ -109,8 +127,3 @@ class PreprocessingWrapper:
 
     def get_steps(self):
         return self.steps
-
-
-# way to load multiple transformers from files
-# make new instance with the same list of steps
-# call load to populate them from a folder, need to have the same name!

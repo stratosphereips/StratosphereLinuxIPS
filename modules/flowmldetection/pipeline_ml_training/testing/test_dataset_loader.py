@@ -1,4 +1,5 @@
 import pytest
+import re
 import tempfile
 from pathlib import Path
 from pipeline_ml_training.dataset_wrapper import (
@@ -578,29 +579,104 @@ class TestZeekDataset:
         assert len(ds) == 4  # 4 valid flows
         assert ds.batches() == 2  # 4 / 2 = 2 batches
 
-    def test_find_and_load_datasets(self, temp_dir):
-        """Test find_and_load_datasets loads multiple datasets."""
-        # Create subdirectories with datasets
-        ds1_dir = temp_dir / "001" / "data"
-        ds2_dir = temp_dir / "002" / "data"
+    @pytest.mark.parametrize(
+        "params",
+        [
+            # Default parameters
+            {},
+            # Custom batch_size
+            {"batch_size": 2},
+            # Custom prefix_regex (match only 'abc')
+            {"prefix_regex": r"^abc"},
+            # Custom data_subdir
+            {"data_subdir": "custom_data"},
+            # Custom seed
+            {"seed": 123},
+            # Custom persist_cache_threshold
+            {"persist_cache_threshold": 1},
+            # Custom cache_dir
+            {"cache_dir": None},
+            # Custom labeled_filenames
+            {"labeled_filenames": ["special.log"]},
+            # Custom file_encoding and file_errors
+            {"file_encoding": "utf-8", "file_errors": "replace"},
+            # Custom shuffle_per_epoch
+            {"shuffle_per_epoch": True},
+        ],
+    )
+    def test_find_and_load_datasets_all_options(self, temp_dir, params):
+        """Test find_and_load_datasets with all optional parameters."""
+        # Setup directories and files
+        ds1_dir = temp_dir / "001" / params.get("data_subdir", "data")
+        ds2_dir = temp_dir / "abc" / params.get("data_subdir", "data")
         ds1_dir.mkdir(parents=True)
         ds2_dir.mkdir(parents=True)
 
-        # Create conn.log files
+        # Use custom labeled filename if specified
+        filenames = params.get("labeled_filenames", None)
+        file_name = filenames[0] if filenames else "conn.log"
         for ds_dir in [ds1_dir, ds2_dir]:
-            conn_file = ds_dir / "conn.log"
+            conn_file = ds_dir / file_name
             content = """#separator \t
 #fields\tts\tuid\tproto\tlabel
 #types\ttime\tstring\tenum\tstring
 1609459200.001\tuid-1\ttcp\tBenign
 """
-            conn_file.write_text(content)
+            conn_file.write_text(
+                content, encoding=params.get("file_encoding", "utf-8")
+            )
 
-        loaders = find_and_load_datasets(temp_dir, batch_size=10)
+        # Custom cache_dir if specified
+        cache_dir = params.get("cache_dir", None)
+        if cache_dir is None:
+            cache_dir = temp_dir / "cache"
+            cache_dir.mkdir(exist_ok=True)
+            params["cache_dir"] = cache_dir
 
-        assert "001" in loaders
-        assert "002" in loaders
-        assert all(isinstance(ds, ZeekDataset) for ds in loaders.values())
+        # Run loader
+        loaders = find_and_load_datasets(
+            temp_dir,
+            batch_size=params.get("batch_size", 1000),
+            prefix_regex=params.get("prefix_regex", r"^\d{3}"),
+            data_subdir=params.get("data_subdir", "data"),
+            seed=params.get("seed", None),
+            persist_cache_threshold=params.get(
+                "persist_cache_threshold", 30000
+            ),
+            cache_dir=params.get("cache_dir", cache_dir),
+            labeled_filenames=params.get("labeled_filenames", None),
+            file_encoding=params.get("file_encoding", "utf-8"),
+            file_errors=params.get("file_errors", "ignore"),
+            shuffle_per_epoch=params.get("shuffle_per_epoch", False),
+        )
+
+        # Check correct datasets loaded according to prefix_regex
+        expected_keys = []
+        regex = params.get("prefix_regex", r"^\d{3}")
+        if re.compile(regex).match("001"):
+            expected_keys.append("001")
+        if re.compile(regex).match("abc"):
+            expected_keys.append("abc")
+        for key in expected_keys:
+            assert key in loaders
+            assert isinstance(loaders[key], ZeekDataset)
+            assert loaders[key].batch_size == params.get("batch_size", 1000)
+            assert loaders[key].file_encoding == params.get(
+                "file_encoding", "utf-8"
+            )
+            assert loaders[key].file_errors == params.get(
+                "file_errors", "ignore"
+            )
+            assert loaders[key].shuffle_per_epoch == params.get(
+                "shuffle_per_epoch", False
+            )
+            if params.get("seed", None) is not None:
+                assert loaders[key].seed == params["seed"]
+            if params.get("labeled_filenames", None):
+                assert (
+                    loaders[key].current_file.name
+                    == params["labeled_filenames"][0]
+                )
 
     def test_sample_n_from_each_dataset(self, temp_dir):
         """Test sample_n_from_each_dataset samples from each dataset."""

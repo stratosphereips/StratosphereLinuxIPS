@@ -10,14 +10,15 @@ import numpy
 # functions: save/load, fit/predict, init new classifier
 #
 class ClassifierWrapper:
-    def __init__(self, classifier, preprocessing_handler):
+    def __init__(self, classifier, preprocessing_handler, classes=None):
 
         self.classifier = classifier
         self.is_trained = False
-        self.classes = [BENIGN, MALICIOUS]
+        self.classes = classes if classes is not None else [BENIGN, MALICIOUS]
         self.dummy_flows = {}
         self.fill_dummy()
         self.preprocessing_handler = preprocessing_handler
+        assert len(self.classes) >= 2, "At least two classes must be specified"
 
     def fill_dummy(self):
         # these dummy flows are taken from slips itself
@@ -54,8 +55,25 @@ class ClassifierWrapper:
             ]
         ).reshape(1, -1)
 
+        dummy_default_flow = numpy.array(
+            [
+                10.0,  # dur
+                0.0,  # proto (tcp)
+                0.0,  # sport
+                0.0,  # dport
+                1.0,  # spkts
+                1.0,  # dpkts
+                1.0,  # sbytes
+                1.0,  # dbytes
+                1.0,  # state (Established)
+                2.0,  # bytes (sbytes + dbytes)
+                2.0,  # pkts (spkts + dpkts)
+            ]
+        ).reshape(1, -1)
+
         self.dummy_flows[BENIGN] = (dummy_benign_flow, BENIGN)
         self.dummy_flows[MALICIOUS] = (dummy_malicious_flow, MALICIOUS)
+        self.dummy_flows["default"] = (dummy_default_flow, "default")
 
     def load_classifier(
         self, path: Union[str, Path], name: str = "classifier.bin"
@@ -86,14 +104,15 @@ class ClassifierWrapper:
                 f"Warning: The initial training data does not contain samples for all classes. Missing classes: {missing_classes}"
             )
         for cls in missing_classes:
-            if not hasattr(self, "dummy_flows") or cls not in self.dummy_flows:
-                raise ValueError(
-                    f"No dummy sample provided for missing class {cls} in self.dummy_flows."
+            if not hasattr(self, "dummy_flows"):
+                raise AttributeError(
+                    "No dummy samples provided for missing classes."
                 )
             # print("class ", cls, " is missing, adding dummy flow for initial training")
-            processed_dummy = self.preprocessing_handler.transform(
-                self.dummy_flows[cls][0]
+            dummy_flow, _ = self.dummy_flows.get(
+                cls, self.dummy_flows["default"]
             )
+            processed_dummy = self.preprocessing_handler.transform(dummy_flow)
             X = numpy.concatenate([X, processed_dummy], axis=0)
             y = numpy.concatenate([y, numpy.array([cls])], axis=0)
         self.is_trained = True
@@ -133,9 +152,11 @@ class ClassifierWrapper:
 
 
 class SKLearnClassifierWrapper(ClassifierWrapper):
-    def __init__(self, classifier, preprocessing_handler=None):
+    def __init__(self, classifier, preprocessing_handler=None, classes=None):
         super().__init__(
-            classifier, preprocessing_handler=preprocessing_handler
+            classifier,
+            preprocessing_handler=preprocessing_handler,
+            classes=classes,
         )
 
     def native_fitting_function(self, X, y, *args, **kwargs):
@@ -144,9 +165,11 @@ class SKLearnClassifierWrapper(ClassifierWrapper):
 
 # wrappers for other libraries? torch, xgboost, lightgbm
 class RiverClassifierWrapper(ClassifierWrapper):
-    def __init__(self, classifier, preprocessing_handler=None):
+    def __init__(self, classifier, preprocessing_handler=None, classes=None):
         super().__init__(
-            classifier, preprocessing_handler=preprocessing_handler
+            classifier,
+            preprocessing_handler=preprocessing_handler,
+            classes=classes,
         )
 
     def native_fitting_function(self, X, y, *args, **kwargs):
