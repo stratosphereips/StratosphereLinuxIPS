@@ -1577,8 +1577,9 @@ class ProfileHandler:
         data = {f"{profileid}{self.separator}{twid}": float(timestamp)}
         self.r.zadd(self.constants.MODIFIED_TIMEWINDOWS, data)
         self.publish("tw_modified", f"{profileid}:{twid}")
-        # Check if we should close some TW
-        self.check_tw_to_close()
+        # # Check if we should close some TW
+        # self.check_tw_to_close() # @@@@@@@@@@@@@@@@@ TODO temporarily
+        #  disabled
 
     def publish_new_letter(
         self, new_symbol: str, profileid: str, twid: str, tupleid: str, flow
