@@ -5,9 +5,11 @@ GSoC 2023 SLIPS Final Report
 Daniel Yang (danielyangkang@gmail.com)
 ### Github
 https://github.com/danieltherealyang/StratosphereLinuxIPS
-### Repo Link
+
+### PRs Link
 CPU Profiling:
 https://github.com/stratosphereips/StratosphereLinuxIPS/pull/362
+
 Memory Profiling:
 https://github.com/stratosphereips/StratosphereLinuxIPS/pull/388
 
@@ -16,12 +18,19 @@ https://github.com/stratosphereips/StratosphereLinuxIPS/pull/388
 This project aims to provide a robust and easy to use profiling framework for slips. The features created should have a simple interface and minimal involvement needed to get usable interactive data to find areas to improve the program.
 
 ### Current State
-The following features are provided for CPU and memory profiling.
-Both will have live profiling mode and a development (dev) profiling mode. Live mode allows for real time data passing, primarily done through a redis channel. Dev mode aggregates the data for a single run and outputs profiling results.
-CPU dev mode integrates viztracer to collect profiling data and create a visual output for the data.
-CPU live mode uses yappi to collect data over a sampling interval of 20 seconds periodically outputting the data into the “cpu_profile” redis channel.
-Memory dev and live mode both integrate memray to collect data. Dev mode collects all process data as bin files and outputs as html files. Each process’ data is in a separate file because there is currently no viable way, supported or unsupported by memray, to combine separate process data together.
-Memory live mode is intended to be integrated into the web interface. Since only one process can be profiled at a time with live mode, the multiprocess.Process class is extended with additional functionality when the feature is enabled. The web interface should send the PID into the redis channel “memory_profile” to switch which process to profile.
+
+* The following features are provided for CPU and memory profiling. Both will have
+  * live profiling mode
+  * and a development (dev) profiling mode.
+* Live mode allows for real time data passing, primarily done through a redis channel.
+* Dev mode aggregates the data for a single run and outputs profiling results.
+* CPU dev mode integrates viztracer to collect profiling data and create a visual output for the data.
+* CPU live mode uses yappi to collect data over a sampling interval of 20 seconds periodically outputting the data into the “cpu_profile” redis channel.
+* Memory dev and live mode both integrate memray to collect data.
+* Dev mode collects all process data as bin files and outputs as html files. Each process’ data is in a separate file because there is currently no viable way, supported or unsupported by memray, to combine separate process data together.
+* Memory live mode is intended to be integrated into the web interface.
+* The web interface should send the PID into the redis channel “memory_profile” to switch which process to profile.
+
 
 ***Note***: Not recommended to run both profilers at the same time as of now. It is not tested thoroughly and could also cause issues with speed.
 
@@ -35,14 +44,19 @@ Memory live mode is intended to be integrated into the web interface. Since only
 ### CPU Profiler Dev Mode
 #### Step 1
 To start with, go to slips.yaml and make sure the feature is enabled.
+
 <img src="images/cpu-profiler-config.png">
 
-and set number of tracer entries (dev mode only) to cpu_profiler_dev_mode_entries = 1000000
+and set number of tracer entries (dev mode only) to a value suitable to you, for example
 
-The first two settings cpu_profiler_enable and cpu_profiler_mode should be self explanatory. The cpu_profiler_multiprocess setting decides whether the profiler tracks all processes or only one.
+cpu_profiler_dev_mode_entries = 1000000
+
+- The first two settings **cpu_profiler_enable** and **cpu_profiler_mode** should be self explanatory.
+
+- The **cpu_profiler_multiprocess** setting decides whether the profiler tracks all processes or only one.
 If this setting is set to: “no” then only the main process that initiates slips gets tracked.
 
-The setting ```cpu_profiler_dev_mode_entries``` sets the size of the circular buffer for the profiler. If the runtime of the profiler is too long and the data at the start of the run gets lost due to the circular buffer filling up, increase this number.
+- The setting **cpu_profiler_dev_mode_entries** sets the size of the circular buffer for the profiler. If the runtime of the profiler is too long and the data at the start of the run gets lost due to the circular buffer filling up, increase this number.
 
 
 ### Step 2
@@ -125,7 +139,7 @@ now, profile all subprocesses
 #### Step 2
 
 Now just run slips.py. You should see this at the start
-<img src="fimages/mem-profiler-starting.png">
+<img src="images/mem-profiler-starting.png">
 
 After the run is done, you should see
 
@@ -166,7 +180,7 @@ memory_profiler_multiprocess = True
 ### Step 2
 Running slips.py should result in the following output
 
-<img src="docs/images/live-mem-profiler.png">
+<img src="images/live-mem-profiler.png">
 
 The output is almost the same as normal except for the “Memory Profiler Started” message and the “Child process started - PID: <pid>”. The child process messages are an indication that the Process class was successfully patched and signal listeners are functioning correctly.
 
@@ -201,7 +215,7 @@ def _sampling_loop(self):
 ##### Step 3
 Verify that you get profiler updates at regular intervals mixed into your regular terminal output.
 
-<img src="docs/images/testing_live_cpu_profiler.png">
+<img src="images/testing_live_cpu_profiler.png">
 
 
 #### Testing Memory Profiler Live Mode
@@ -211,17 +225,17 @@ Enable live memory profiling.
 ##### Step 2
 Make sure the last two lines shown below are uncommented in the LiveMultiprocessProfiler class located in memory_profiler.py.
 
-<img src="docs/images/testinig_mem_profiler_live_mode.png">
+<img src="images/testinig_mem_profiler_live_mode.png">
 
 ##### Step 3
 Run slips.py like normal.
 You should see some red text, indicating that the signal has been received. The text is output by the MultiprocessPatchMeta class located in memory_profiler.py. The red print statements can be used to debug the signal processing steps at each point in time.
 
-<img src="docs/images/testinig_mem_profiler_live_mode_step3_1.png">
+<img src="images/testinig_mem_profiler_live_mode_step3_1.png">
 
 After a few seconds, the profiling data should pop up.
 
-<img src="docs/images/testinig_mem_profiler_live_mode_step3_2.png">
+<img src="images/testinig_mem_profiler_live_mode_step3_2.png">
 
 #### Alternate Testing Memory Profiler Live Mode
 ##### Step 1
@@ -252,14 +266,14 @@ input()
 ##### Step 3
 Just run slips.py and check if output is similar to below.
 
-<img src="docs/images/alternate_mem_profiler_testing.png">
+<img src="images/alternate_mem_profiler_testing.png">
 
 After the test finishes running, it will not terminate and just wait for input. Press [Ctrl-C] to exit and [Enter] to continue with the run.
 
 ### Implementation Specification
 #### Profiler Interface
 
-<img src="docs/images/memory_profiler_interface.png">
+<img src="images/memory_profiler_interface.png">
 
 
 The ProfilerInterface is an abstract interface that defines all the methods that a profiler class should have. The methods defined are: _create_profiler, start, stop, and print.
@@ -327,13 +341,13 @@ This method is currently a placeholder and doesn't implement memory profiling ou
 
 #### Memory Profiler Structure
 
-<img src="docs/images/memory_profiler_structure.png">
+<img src="images/memory_profiler_structure.png">
 
 The LiveProfiler class uses the Factory Method to change its behavior based on whether multiprocess profiling is desired. The control logic for this design pattern is almost identical to the MemoryProfiler and CPUProfiler classes.
 
 #### Memory Multi Process Profiler Structure
 
-<img src="docs/images/memory_multi_process_profiler_structure.png">
+<img src="images/memory_multi_process_profiler_structure.png">
 
 
 #### LiveMultiprocessProfiler Class

@@ -18,13 +18,12 @@ class ISQLite(ABC):
 
     PS: if you're gonna use cursor.anything, please always create a new cursor
     to avoid shared-cursor bugs from sqlite.
-    and use the conn_lock whenever you're accessing the conn
+    and use the conn_lock whenever you're accessing self.conn
     """
 
     # to avoid multi threading errors where multiple threads try to write to
-    # the same sqlite db at the same time
-    # must be used because we're using check_same_thread=False in
-    # sqlite3.connect()
+    # the same sqlite db at the same time this lock must be used because
+    # we're using check_same_thread=False in sqlite3.connect()
     conn_lock = Lock()
 
     def __init__(self, name: str, main_pid: int, db_file: str):
@@ -60,7 +59,8 @@ class ISQLite(ABC):
         # to avoid multi processing errors where multiple processes
         # try to write to the same sqlite db at the same time
         # this name needs to change per sqlite db, meaning trustb should have
-        # its own lock file that is different from slips' main sqlite db lockfile
+        # its own lock file that is different from slips' main sqlite db
+        # lockfile
         username = os.getenv("USER") or "unknown"
         # we're using the username and pid to create a unique lock file per
         # slips run, so that multiple instances of slips can run at the

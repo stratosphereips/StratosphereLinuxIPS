@@ -9,19 +9,24 @@ from dataclasses import (
     field,
 )
 from typing import List
-from datetime import timedelta
 from slips_files.common.slips_utils import utils
 
 
-@dataclass(kw_only=True)
+# using slots for all dataclasses for CPU and memory optimizations
+
+
+@dataclass(kw_only=True, slots=True)
 class BaseFlow:
     """A base class for zeek flows, containing common fields."""
 
     interface: str = field(default="default")
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class Conn(BaseFlow):
+    # TODO if you're going to add fields to this class remember to drop
+    #  them if they're not needed in flow ML detection or they'll cause errs
+    # drop them in the list called to_drop
     starttime: str
     uid: str
     saddr: str
@@ -52,23 +57,34 @@ class Conn(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "conn"
-    dir_: str = "->"
+    # derived attributes must be declared because we're using "slots"
+    endtime: float = 0.0
+    pkts: int = 0
+    bytes: int = 0
+    state_hist: str = ""
+
+    # will be filled by the AIDManager() later
+    aid: str = field(default="")
+    # filled later by timeline.py
+    dport_name: str = field(default="")
+    timestamp_human: str = field(default="")
+
+    interpreted_state: str = field(default="")
+
+    type_: str = field(default="conn")
+    dir_: str = field(default="->")
 
     def __post_init__(self) -> None:
-        endtime = str(self.starttime) + str(timedelta(seconds=float(self.dur)))
-        self.endtime: str = endtime
+        self.endtime = float(self.starttime) + float(self.dur)
         self.pkts: int = self.spkts + self.dpkts
         self.bytes: int = self.sbytes + self.dbytes
         self.state_hist: str = self.history or self.state
-        # AIDs are for conn.log flows only
-        self.aid = utils.get_aid(self)
         # happens in zeek v7.1.0, set it to empty so it doesn't break slips
         if self.proto == "unknown_transport":
             self.proto = ""
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class DNS(BaseFlow):
     starttime: str
     uid: str
@@ -90,7 +106,8 @@ class DNS(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "dns"
+    answers: List[str] = field(default_factory=list)
+    type_: str = field(default="dns")
 
     def __post_init__(self) -> None:
         # If the answer is only 1, Zeek gives a string
@@ -100,7 +117,7 @@ class DNS(BaseFlow):
         )
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class HTTP(BaseFlow):
     starttime: str
     uid: str
@@ -126,13 +143,13 @@ class HTTP(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "http"
+    type_: str = field(default="http")
 
     def __post_init__(self) -> None:
         pass
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class SSL(BaseFlow):
     starttime: str
     uid: str
@@ -164,10 +181,10 @@ class SSL(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "ssl"
+    type_: str = field(default="ssl")
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class SSH(BaseFlow):
     starttime: float
     uid: str
@@ -192,10 +209,10 @@ class SSH(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "ssh"
+    type_: str = field(default="ssh")
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class DHCP(BaseFlow):
     starttime: float
     uids: List[str]
@@ -209,7 +226,9 @@ class DHCP(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "dhcp"
+    saddr: str = ""
+    daddr: str = ""
+    type_: str = field(default="dhcp")
 
     def __post_init__(self) -> None:
         # Some zeek flow don't have saddr or daddr,
@@ -222,7 +241,7 @@ class DHCP(BaseFlow):
             self.saddr = self.smac
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class FTP(BaseFlow):
     starttime: float
     uid: str
@@ -234,10 +253,10 @@ class FTP(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "ftp"
+    type_: str = field(default="ftp")
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class SMTP(BaseFlow):
     starttime: float
     uid: str
@@ -249,10 +268,10 @@ class SMTP(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "smtp"
+    type_: str = field(default="smtp")
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class Tunnel(BaseFlow):
     starttime: str
     uid: str
@@ -268,10 +287,10 @@ class Tunnel(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "tunnel"
+    type_: str = field(default="tunnel")
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class Notice(BaseFlow):
     starttime: str
     saddr: str
@@ -294,8 +313,8 @@ class Notice(BaseFlow):
 
     # every evidence needs a uid, notice.log flows dont have one by
     # default, slips adds one to them to be able to deal with it.
-    type_: str = "notice"
     uid: str = field(default_factory=utils.generate_uid)
+    type_: str = field(default="notice")
 
     def __post_init__(self) -> None:
         # portscan notices don't have id.orig_h or id.resp_h
@@ -318,7 +337,7 @@ class Notice(BaseFlow):
             self.dport = self.dport
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class Files(BaseFlow):
     starttime: str
     uid: str
@@ -338,7 +357,7 @@ class Files(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "files"
+    type_: str = field(default="files")
 
     def __post_init__(self) -> None:
         if not isinstance(self.tx_hosts, list):
@@ -353,7 +372,7 @@ class Files(BaseFlow):
             self.daddr = daddr
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class ARP(BaseFlow):
     starttime: str
     uid: str
@@ -386,10 +405,10 @@ class ARP(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "arp"
+    type_: str = field(default="arp")
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class Software(BaseFlow):
     starttime: str
     uid: str
@@ -406,7 +425,8 @@ class Software(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "software"
+    http_browser: str = ""
+    type_: str = field(default="software")
 
     def __post_init__(self) -> None:
         # store info about everything except http:broswer
@@ -414,7 +434,7 @@ class Software(BaseFlow):
         self.http_browser = self.software == "HTTP::BROWSER"
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class Weird(BaseFlow):
     starttime: str
     uid: str
@@ -424,4 +444,4 @@ class Weird(BaseFlow):
     name: str
     addl: str
 
-    type_: str = "weird"
+    type_: str = field(default="weird")
