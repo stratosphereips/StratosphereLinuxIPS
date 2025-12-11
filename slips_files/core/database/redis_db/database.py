@@ -409,11 +409,23 @@ class RedisDB(
         now = time.time()
         cls.r.set(cls.constants.SLIPS_START_TIME, now)
 
-    def publish(self, channel, msg):
-        """Publish a msg in the given channel"""
+    def publish(self, channel, msg, pipeline=None):
+        """Publish a msg in the given channel.
+        adds the instructions to the given pipeline if given and returns
+        the pipeline"""
+
         # keeps track of how many msgs were published in the given channel
-        self.r.hincrby(self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel, 1)
-        self.r.publish(channel, msg)
+        if pipeline is not None:
+            pipeline.hincrby(
+                self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel, 1
+            )
+            pipeline.publish(channel, msg)
+            return pipeline
+        else:
+            self.r.hincrby(
+                self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel, 1
+            )
+            self.r.publish(channel, msg)
 
     def get_msgs_published_in_channel(self, channel: str) -> int | None:
         """returns the number of msgs published in a channel"""
@@ -560,6 +572,8 @@ class RedisDB(
         self.publish("p2p_data_request", json.dumps(data_to_send))
 
     def get_slips_internal_time(self):
+        #  SLIPS_INTERNAL_TIME is the ts of the last tw
+        #  modification detected by slips
         return self.r.get(self.constants.SLIPS_INTERNAL_TIME) or 0
 
     def set_ap_info(self, interfaces: Dict[str, str]):

@@ -1517,51 +1517,52 @@ class ProfileHandler:
     def check_tw_to_close(self, close_all=False):
         """
         Check if we should close a TW
-        Search in the modified tw list and compare when they
-        were modified with the slips internal time
+        Closes the tws that were last modified more than an hour
+        ago (self.width)
         :param close_all: close all tws no matter when they were last modified
         """
 
-        sit = self.get_slips_internal_time()
+        sit = float(self.get_slips_internal_time())
+
+        # early exit to avoid re-checking when nothing changed. Remember
+        # this func is called per flow, so it needs to be as fast as possible
+        if (
+            not close_all
+            and hasattr(self, "_last_sit")
+            and sit == self._last_sit
+        ):
+            return  # nothing changed since last run
+
+        self._last_sit = sit
 
         # sit is the ts of the last tw modification detected by slips
         # so this line means if 1h(width) passed since the last
         # modification detected, then it's time to close the tw
-        modification_time = float(sit) - self.width
+        modification_time = sit - self.width
         if close_all:
             # close all tws no matter when they were last modified
             modification_time = float("inf")
 
         # these are the tws that havent been modified in the last 1h
-        profiles_tws_to_close = self.r.zrangebyscore(
+        profiles_tws_to_close: List[str] = self.r.zrangebyscore(
             self.constants.MODIFIED_TIMEWINDOWS,
             0,
             modification_time,
-            withscores=True,
         )
+        if not profiles_tws_to_close:
+            return
 
+        # Mark the TWs as closed so module can work on its data
+        pipeline = self.r.pipeline()
         for profile_tw_to_close in profiles_tws_to_close:
-            profile_tw_to_close_id = profile_tw_to_close[0]
-            profile_tw_to_close_time = profile_tw_to_close[1]
-            self.print(
-                f"The profile id {profile_tw_to_close_id} has to be closed"
-                f" because it was"
-                f" last modifed on {profile_tw_to_close_time} and we are "
-                f"closing everything older than {modification_time}."
-                f" Current time {sit}. "
-                f"Difference: {modification_time - profile_tw_to_close_time}",
-                3,
-                0,
+            pipeline.sadd("ClosedTW", profile_tw_to_close)
+            pipeline.zrem(
+                self.constants.MODIFIED_TIMEWINDOWS, profile_tw_to_close
             )
-            self.mark_profile_tw_as_closed(profile_tw_to_close_id)
-
-    def mark_profile_tw_as_closed(self, profileid_tw):
-        """
-        Mark the TW as closed so tools can work on its data
-        """
-        self.r.sadd("ClosedTW", profileid_tw)
-        self.r.zrem(self.constants.MODIFIED_TIMEWINDOWS, profileid_tw)
-        self.publish("tw_closed", profileid_tw)
+            pipeline = self.publish(
+                "tw_closed", profile_tw_to_close, pipeline=pipeline
+            )
+        pipeline.execute()
 
     def mark_profile_tw_as_modified(self, profileid, twid, timestamp):
         """
@@ -1573,13 +1574,10 @@ class ProfileHandler:
         3- To update the internal time of slips
         4- To check if we should 'close' some TW
         """
-        timestamp = time.time()
+        timestamp = timestamp or time.time()
         data = {f"{profileid}{self.separator}{twid}": float(timestamp)}
         self.r.zadd(self.constants.MODIFIED_TIMEWINDOWS, data)
         self.publish("tw_modified", f"{profileid}:{twid}")
-        # # Check if we should close some TW
-        # self.check_tw_to_close() # @@@@@@@@@@@@@@@@@ TODO temporarily
-        #  disabled
 
     def publish_new_letter(
         self, new_symbol: str, profileid: str, twid: str, tupleid: str, flow
