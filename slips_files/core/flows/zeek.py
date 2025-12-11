@@ -24,6 +24,9 @@ class BaseFlow:
 
 @dataclass(kw_only=True, slots=True)
 class Conn(BaseFlow):
+    # TODO if you're going to add fields to this class remember to drop
+    #  them if they're not needed in flow ML detection or they'll cause errs
+    # drop them in the list called to_drop
     starttime: str
     uid: str
     saddr: str
@@ -62,6 +65,9 @@ class Conn(BaseFlow):
 
     # will be filled by the AIDManager() later
     aid: str = field(default="")
+    # filled later by timeline.py
+    dport_name: str = field(default="")
+    timestamp_human: str = field(default="")
 
     interpreted_state: str = field(default="")
 
