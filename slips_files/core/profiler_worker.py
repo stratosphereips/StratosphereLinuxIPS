@@ -579,7 +579,6 @@ class ProfilerWorker:
             if flow.type_ not in ("software", "weird"):
                 # software and weird.log flows are allowed to not have a daddr
                 return False
-
         n = time.time()
         self.get_gateway_info(flow)
         time_it_Took = time.time() - n
@@ -656,6 +655,7 @@ class ProfilerWorker:
     def log_time(self, what, time):
         if not self.name == "ProfilerWorker_Process_0":
             return
+
         self.times[what] = f"{time:.2f}"
         if what == "store_features_going_out":
             path = os.path.join(self.output_dir, "times_each_func_took.csv")

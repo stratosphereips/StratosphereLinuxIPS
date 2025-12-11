@@ -5,6 +5,9 @@ import os
 import time
 from re import split
 from typing import Dict
+from dataclasses import fields as dataclass_fields, MISSING
+
+
 from slips_files.common.abstracts.iinput_type import IInputType
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import (
@@ -132,27 +135,43 @@ class Zeek:
         :param flow_values: a dict with the values of the given zeek log line
         :param slips_class: the class that corresponds to the given zeek log
         line
+
+        All the complexity in this func is because we're using slots in the
+        slips class. we're doing so to optimize it, so don't refactor this.
         """
 
+        # Cache the dataclass field names (slot-safe)
         if slips_class not in self.slips_field_cache:
-            # get all fields of the slips_class
-            fields = set(slips_class.__init__.__code__.co_varnames)
-            # remove 'self' from the fields
-            fields.discard("self")
-            self.slips_field_cache[slips_class] = fields
+            cls_fields = {f.name for f in dataclass_fields(slips_class)}
+            self.slips_field_cache[slips_class] = cls_fields
 
         slips_class_fields = self.slips_field_cache[slips_class]
 
-        # identify fields in slips_class that are not in flow_values
-        missing_fields = slips_class_fields - set(flow_values.keys())
+        # Fill missing fields
+        for slips_cls_field in slips_class_fields:
+            if slips_cls_field not in flow_values:
+                # get dataclass field object
+                fobj = next(
+                    f
+                    for f in dataclass_fields(slips_class)
+                    if f.name == slips_cls_field
+                )
 
-        # set the missing fields in flow_values to ""
-        for field in missing_fields:
-            flow_values[field] = ""
+                if fobj.default is not MISSING:
+                    # get the default value of this field
+                    flow_values[slips_cls_field] = fobj.default
+                elif (
+                    fobj.default_factory is not MISSING
+                ):  # supports default_factory
+                    flow_values[slips_cls_field] = fobj.default_factory()
+                else:
+                    flow_values[slips_cls_field] = ""
 
-        # always use the type_ field of the slips class, this is not gonna
-        # be given to slips by zeek:D
-        flow_values["type_"] = getattr(slips_class, "type_")
+        # Explicitly fill type_ from default (slot-safe)
+        type_field = next(
+            f for f in dataclass_fields(slips_class) if f.name == "type_"
+        )
+        flow_values["type_"] = type_field.default
 
         return flow_values
 
@@ -208,8 +227,8 @@ class ZeekJSON(IInputType, Zeek):
         latency = time.time() - n
         self.log_time("get_file_type", latency)
 
-        line_map = LOG_MAP.get(file_type)
-        if not line_map:
+        zeek_fields_to_slips_fields_map = LOG_MAP.get(file_type)
+        if not zeek_fields_to_slips_fields_map:
             return False
 
         if ts := line.get("ts", False):
@@ -224,7 +243,7 @@ class ZeekJSON(IInputType, Zeek):
         )
 
         n = time.time()
-        for zeek_field, slips_field in line_map.items():
+        for zeek_field, slips_field in zeek_fields_to_slips_fields_map.items():
             if not slips_field:
                 continue
             val = line.get(zeek_field, "")

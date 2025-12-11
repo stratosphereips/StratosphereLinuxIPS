@@ -60,8 +60,13 @@ class Conn(BaseFlow):
     bytes: int = 0
     state_hist: str = ""
 
-    type_: str = "conn"
-    dir_: str = "->"
+    # will be filled by the AIDManager() later
+    aid: str = field(default="")
+
+    interpreted_state: str = field(default="")
+
+    type_: str = field(default="conn")
+    dir_: str = field(default="->")
 
     def __post_init__(self) -> None:
         self.endtime = float(self.starttime) + float(self.dur)
@@ -96,7 +101,7 @@ class DNS(BaseFlow):
     detailed_ground_truth_label: str = ""
 
     answers: List[str] = field(default_factory=list)
-    type_: str = "dns"
+    type_: str = field(default="dns")
 
     def __post_init__(self) -> None:
         # If the answer is only 1, Zeek gives a string
@@ -132,7 +137,7 @@ class HTTP(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "http"
+    type_: str = field(default="http")
 
     def __post_init__(self) -> None:
         pass
@@ -170,7 +175,7 @@ class SSL(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "ssl"
+    type_: str = field(default="ssl")
 
 
 @dataclass(kw_only=True, slots=True)
@@ -198,7 +203,7 @@ class SSH(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "ssh"
+    type_: str = field(default="ssh")
 
 
 @dataclass(kw_only=True, slots=True)
@@ -217,7 +222,7 @@ class DHCP(BaseFlow):
 
     saddr: str = ""
     daddr: str = ""
-    type_: str = "dhcp"
+    type_: str = field(default="dhcp")
 
     def __post_init__(self) -> None:
         # Some zeek flow don't have saddr or daddr,
@@ -242,7 +247,7 @@ class FTP(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "ftp"
+    type_: str = field(default="ftp")
 
 
 @dataclass(kw_only=True, slots=True)
@@ -257,7 +262,7 @@ class SMTP(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "smtp"
+    type_: str = field(default="smtp")
 
 
 @dataclass(kw_only=True, slots=True)
@@ -276,7 +281,7 @@ class Tunnel(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "tunnel"
+    type_: str = field(default="tunnel")
 
 
 @dataclass(kw_only=True, slots=True)
@@ -303,7 +308,7 @@ class Notice(BaseFlow):
     # every evidence needs a uid, notice.log flows dont have one by
     # default, slips adds one to them to be able to deal with it.
     uid: str = field(default_factory=utils.generate_uid)
-    type_: str = "notice"
+    type_: str = field(default="notice")
 
     def __post_init__(self) -> None:
         # portscan notices don't have id.orig_h or id.resp_h
@@ -346,7 +351,7 @@ class Files(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "files"
+    type_: str = field(default="files")
 
     def __post_init__(self) -> None:
         if not isinstance(self.tx_hosts, list):
@@ -394,7 +399,7 @@ class ARP(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    type_: str = "arp"
+    type_: str = field(default="arp")
 
 
 @dataclass(kw_only=True, slots=True)
@@ -415,7 +420,7 @@ class Software(BaseFlow):
     detailed_ground_truth_label: str = ""
 
     http_browser: str = ""
-    type_: str = "software"
+    type_: str = field(default="software")
 
     def __post_init__(self) -> None:
         # store info about everything except http:broswer
@@ -433,4 +438,4 @@ class Weird(BaseFlow):
     name: str
     addl: str
 
-    type_: str = "weird"
+    type_: str = field(default="weird")

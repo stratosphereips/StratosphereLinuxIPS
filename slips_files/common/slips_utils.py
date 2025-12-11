@@ -508,7 +508,7 @@ class Utils(object):
             try:
                 datetime.strptime(time_str, time_format)
                 # Success! Save to cache.
-                self.format_cache[signature] = time_format
+                self.time_format_cache[signature] = time_format
                 return time_format
             except ValueError:
                 continue
