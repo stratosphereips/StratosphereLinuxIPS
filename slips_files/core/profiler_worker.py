@@ -17,6 +17,7 @@ from typing import (
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 import netifaces
 import validators
+import gc
 
 
 from slips_files.common.printer import Printer
@@ -665,6 +666,9 @@ class ProfilerWorker:
             self.times = {}
 
     def main(self):
+        # Disable automatic GC, we'll trigger it manually
+        gc.disable()
+
         while not self.should_stop_profiler_workers():
             try:
                 msg = self.get_msg_from_queue(self.flows_to_process_q)
@@ -677,8 +681,6 @@ class ProfilerWorker:
                 if line is True:
                     continue
 
-                # Received new input data
-                self.print(f"< Received Line: {line}", 2, 0)
                 self.received_lines += 1
 
                 n = time.time()
@@ -697,6 +699,12 @@ class ProfilerWorker:
 
                 self.handle_setting_local_net(flow)
                 self.db.increment_processed_flows()
+
+                # manually run garbage collection to avoid the latency
+                # introduced by it when slips is given a huge number of flows
+                if self.received_lines % 10000 == 0:
+                    gc.collect()
+
             except Exception as e:
                 self.print(
                     f"Problem processing line {line}. "
@@ -709,4 +717,5 @@ class ProfilerWorker:
                 # so the modules receive no more flows.
                 # modules should just finish the flows they have and slips will
                 # exit gracefully
+                gc.enable()
                 continue
