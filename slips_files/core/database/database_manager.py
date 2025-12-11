@@ -997,8 +997,8 @@ class DBManager:
     def check_health(self):
         self.rdb.pubsub.check_health()
 
-    def mark_profile_tw_as_closed(self, *args, **kwargs):
-        return self.rdb.mark_profile_tw_as_closed(*args, **kwargs)
+    def client_setname(self, *args, **kwarg):
+        self.rdb.client_setname(*args, **kwarg)
 
     def mark_profile_tw_as_modified(self, *args, **kwargs):
         return self.rdb.mark_profile_tw_as_modified(*args, **kwargs)

@@ -150,9 +150,6 @@ class RedisDB(
             if not cls.get_slips_start_time():
                 cls._set_slips_start_time()
 
-            # useful for debugging using 'CLIENT LIST' redis cmd
-            cls.r.client_setname("Slips-DB")
-
         return cls._instances[cls.redis_port]
 
     def __init__(self, *args, **kwargs):
@@ -668,6 +665,11 @@ class RedisDB(
         gets the currently used commit from the db
         """
         return self.r.hget(self.constants.ANALYSIS, "commit")
+
+    def client_setname(self, name: str):
+        name = utils.sanitize(name)
+        name = name.replace(" ", "_")
+        return self.r.client_setname(name)
 
     def get_zeek_version(self):
         """

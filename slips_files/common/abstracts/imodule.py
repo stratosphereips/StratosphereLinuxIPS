@@ -60,6 +60,7 @@ class IModule(ABC, Process):
         self.db = DBManager(
             self.logger, self.output_dir, self.redis_port, self.conf, self.ppid
         )
+        self.db.client_setname(self.name)
         self.keyboard_int_ctr = 0
         self.init(**kwargs)
         # should after the module's init() so the module has a chance to
