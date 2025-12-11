@@ -549,7 +549,6 @@ class ModuleFactory:
             profiler_queue=Mock(),
             stop_profiler_workers=Mock(),
             handle_setting_local_net_lock=Mock(),
-            flows_to_process_q=Mock(),
             input_handler=Mock(),
             bloom_filters=Mock(),
         )

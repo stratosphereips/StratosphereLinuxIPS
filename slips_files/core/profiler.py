@@ -108,7 +108,6 @@ class Profiler(ICore, IObservable):
         # waiting for new msgs
         self.flows_to_process_q = multiprocessing.Queue(maxsize=50000)
         self.handle_setting_local_net_lock = multiprocessing.Lock()
-        self.is_first_msg = True
         # runs a separate server process behind the scenes.
         self.manager = multiprocessing.Manager()
         self.localnet_cache = self.manager.dict()
@@ -124,6 +123,8 @@ class Profiler(ICore, IObservable):
             self.aid_queue,
             self.stop_profiler_workers_event,
         )
+        # the event that the workers use to tell this process to stop
+        self.stop_profiler_event = multiprocessing.Event()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -195,13 +196,6 @@ class Profiler(ICore, IObservable):
             log_to_logfiles_only=True,
         )
 
-    def is_stop_msg(self, msg: str) -> bool:
-        """
-        this 'stop' msg is the last msg ever sent by the input process
-        to indicate that no more flows are coming
-        """
-        return msg == "stop"
-
     def get_msg_from_queue(self, q: multiprocessing.Queue):
         """
         retrieves a msg from the given queue
@@ -237,11 +231,11 @@ class Profiler(ICore, IObservable):
             profiler_queue=self.profiler_queue,
             stop_profiler_workers=self.stop_profiler_workers_event,
             handle_setting_local_net_lock=self.handle_setting_local_net_lock,
-            flows_to_process_q=self.flows_to_process_q,
             input_handler=input_handler_obj,
             bloom_filters=self.bloom_filters,
             aid_queue=self.aid_queue,
             aid_manager=self.aid_manager,
+            stop_profiler_event=self.stop_profiler_event,
         )
         worker.main()
 
@@ -289,13 +283,17 @@ class Profiler(ICore, IObservable):
     def should_stop(self):
         """
         overrides Imodule's should_stop()
-        the common Imodule's should_stop() stop when there's no msg in
+        the common Imodule's should_stop() return True when there's no msg in
         each channel and the termination event is set
         since this module is the one responsible for signaling the
         termination event (via process_manager) then it doesnt make sense
         to check for it. it will never be set before this module stops.
+        The "stop" msg from input.py is responsible for setting the
+        stop_profiler_event by one of the workers. once that worker sets
+        the event, it stops, and profiler takes care of stopping the rest
+        of the workers, then this profiler stops.
         """
-        return False
+        return self.stop_profiler_event.is_set()
 
     def shutdown_gracefully(self):
         for worker in self.workers:
@@ -386,50 +384,42 @@ class Profiler(ICore, IObservable):
         if client_ips:
             self.print(f"Used client IPs: {green(', '.join(client_ips))}")
 
+    def update_the_number_of_lines_read_by_all_workers(self):
+        # needed by store_flows_read_per_second()
+        self.lines = sum([worker.received_lines for worker in self.workers])
+
     def main(self):
-        # the only thing that stops this loop is the 'stop' msg
-        # we're using self.should_stop() here instead of while True to be
-        # able to unit test this function:D
+        # process the first msg only here, to determine what kind of input
+        # slips is given
+        # wait as long as needed for it
+        msg = None
+        while not msg:
+            msg = self.get_msg_from_queue(self.profiler_queue)
+            time.sleep(0.1)
+
+        self.input_handler_cls = self.get_handler_class(msg)
+        if not self.input_handler_cls:
+            self.print("Unsupported input type, exiting.")
+            return 1
+
+        line: dict = msg["line"]
+        # updates internal zeek to slips mapping if needed, just once
+        self.input_handler_cls.process_line(line)
+
+        # slips starts with 3 workers by default until it detects
+        # high throughput that 3 workers arent enough to handle
+        num_of_profiler_workers = 3
+        for worker_id in range(num_of_profiler_workers):
+            self.last_worker_id = worker_id
+            self.start_profiler_worker(worker_id)
+
+        # the only thing that stops this loop is the 'stop' msg sent by the
+        # input and recvd by one of the workers
         while not self.should_stop():
-            self.lines = sum(
-                [worker.received_lines for worker in self.workers]
-            )
+            self.update_the_number_of_lines_read_by_all_workers()
             # implemented in icore.py
             self.store_flows_read_per_second()
-
-            msg = self.get_msg_from_queue(self.profiler_queue)
-            if not msg:
-                # wait for msgs
-                continue
-
-            # ALYA, DO NOT REMOVE THIS CHECK
-            # without it, there's no way this module will know it's
-            # time to stop and no new flows are coming
-            if self.is_stop_msg(msg):
-                # shutdown gracefully will be called by ICore() once this
-                # function returns
-                return 1
-
-            if self.is_first_msg:
-                self.is_first_msg = False
-                self.input_handler_cls = self.get_handler_class(msg)
-                if not self.input_handler_cls:
-                    self.print("Unsupported input type, exiting.")
-                    return 1
-
-                line: dict = msg["line"]
-                # updates internal zeek to slips mapping if needed
-                self.input_handler_cls.process_line(line)
-
-                # slips starts with 3 workers by default until it detects
-                # high throughput that 3 workers arent enough to handle
-                num_of_profiler_workers = 3
-                for worker_id in range(num_of_profiler_workers):
-                    self.last_worker_id = worker_id
-                    self.start_profiler_worker(worker_id)
-                continue
-
-            self.flows_to_process_q.put(msg, block=True, timeout=None)
             self.check_if_high_throughput_and_add_workers()
 
+        # icore will call shutdown_gracefully() on return
         return

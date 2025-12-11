@@ -49,13 +49,13 @@ class ProfilerWorker:
         profiler_queue: multiprocessing.Queue,
         stop_profiler_workers: multiprocessing.Event,
         handle_setting_local_net_lock: multiprocessing.Lock,
-        flows_to_process_q: multiprocessing.Queue,
         input_handler: (
             ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         ),
         bloom_filters: BFManager,
         aid_queue: multiprocessing.Queue,
         aid_manager: AIDManager,
+        stop_profiler_event: multiprocessing.Event,
     ):
         super().__init__()
         self.name = name
@@ -66,12 +66,12 @@ class ProfilerWorker:
         self.ppid = ppid
         self.args = args
         self.profiler_queue = profiler_queue
-        self.flows_to_process_q = flows_to_process_q
         self.stop_profiler_workers = stop_profiler_workers
         self.bloom_filters = bloom_filters
         # used to pass aid tasks from workers to the the AIDManager()
         self.aid_queue = aid_queue
         self.aid_manager: AIDManager = aid_manager
+        self.stop_profiler_event = stop_profiler_event
 
         # this is an instance of
         # ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
@@ -666,21 +666,35 @@ class ProfilerWorker:
                 writer.writerow(self.times)
             self.times = {}
 
+    def is_stop_msg(self, msg: str) -> bool:
+        """
+        this 'stop' msg is the last msg ever sent by the input process
+        to indicate that no more flows are coming
+        """
+        return msg == "stop"
+
     def main(self):
         # Disable automatic GC, we'll trigger it manually
         gc.disable()
 
         while not self.should_stop_profiler_workers():
             try:
-                msg = self.get_msg_from_queue(self.flows_to_process_q)
+                msg = self.get_msg_from_queue(self.profiler_queue)
                 if not msg:
                     # wait for msgs
                     continue
+
                 self.times = {}
                 line: dict = msg["line"]
                 # TODO who is putting this True here?
                 if line is True:
                     continue
+
+                if self.is_stop_msg(msg):
+                    gc.collect()
+                    # this signal tells profiler.py to stop
+                    self.stop_profiler_event.set()
+                    return 1
 
                 self.received_lines += 1
 

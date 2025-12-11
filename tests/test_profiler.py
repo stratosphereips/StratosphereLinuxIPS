@@ -56,10 +56,10 @@ def test_main():
     msg = {"somemsg": 1, "line": "test line"}
     profiler.get_msg_from_queue = Mock(side_effect=[msg])
 
-    profiler.flows_to_process_q = Mock()
+    profiler.profiler_queue = Mock()
     profiler.workers = []  # so sum([...]) doesn't fail
     profiler.main()
-    profiler.flows_to_process_q.put.assert_called_once_with(msg)
+    profiler.profiler_queue.put.assert_called_once_with(msg)
 
 
 def test_main_with_first_msg():
@@ -79,12 +79,12 @@ def test_main_with_first_msg():
 
     profiler.start_profiler_worker = Mock()
 
-    profiler.flows_to_process_q = Mock()
+    profiler.profiler_queue = Mock()
     profiler.workers = []
 
     profiler.main()
 
-    profiler.flows_to_process_q.put.assert_called_once_with(second)
+    profiler.profiler_queue.put.assert_called_once_with(second)
 
 
 def test_shutdown_gracefully(monkeypatch):
