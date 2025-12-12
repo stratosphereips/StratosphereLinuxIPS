@@ -25,8 +25,8 @@ This is the main guide to the documentation related to the changes done to Slips
 
 **Report Documents:**
 
-- [Summarization Dataset Report](https://harpomaxx.github.io/gh-web-host/slips-immune-llm-results/summary_dashboard.html) - Event summarization and behavior analysis
-- [Risk Analysis Dataset Report](https://harpomaxx.github.io/gh-web-host/slips-immune-llm-results/risk_dashboard.html) - Root cause and risk assessment
+- [Summarization Dataset Report](https://stratospherelinuxips.readthedocs.io/en/develop/immune/DATASET_REPORT.html) - Event summarization and behavior analysis
+- [Risk Analysis Dataset Report](https://stratospherelinuxips.readthedocs.io/en/develop/immune/DATASET_RISK_REPORT.html) - Root cause and risk assessment
 
 **Workflow Guides:**
 - [Summarization Workflow Implementation](https://stratospherelinuxips.readthedocs.io/en/develop/immune/README_dataset_summary_workflow.html) - Step-by-step guide for generating summarization datasets
@@ -35,8 +35,8 @@ This is the main guide to the documentation related to the changes done to Slips
 
 **Datasets Evaluation (LLM-as-a-judge):**
 - [LLM Evaluation Guide](https://stratospherelinuxips.readthedocs.io/en/develop/immune/LLM_EVALUATION_GUIDE.html) - How to evaluate and compare LLM models
-- [Summarization Evaluation Results](https://stratospherelinuxips.readthedocs.io/en/develop/immune/summary_report.html) - Performance metrics for summarization models
-- [Risk Analysis Evaluation Results](https://stratospherelinuxips.readthedocs.io/en/develop/immune/risk_summary.html) - Performance metrics for risk assessment models
+- [Summarization Evaluation Results](https://harpomaxx.github.io/gh-web-host/slips-immune-llm-results/summary_dashboard.html) - Performance metrics for summarization models
+- [Risk Analysis Evaluation Results](https://harpomaxx.github.io/gh-web-host/slips-immune-llm-results/risk_dashboard.html) - Performance metrics for risk assessment models
 
 **LLM finetuning**
 - [LLM RPI Finetuning Frameworks](https://stratospherelinuxips.readthedocs.io/en/develop/immune/finetuning_frameworks_rpi_5.html)
