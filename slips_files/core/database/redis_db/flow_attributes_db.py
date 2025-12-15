@@ -5,6 +5,12 @@ import sys
 import traceback
 from typing import Generator
 
+from slips_files.core.structures.evidence import (
+    ProfileID,
+    TimeWindow,
+)
+from slips_files.core.structures.flow_attributes import FlowQuery
+
 
 class FlowAttrHandler:
     """
@@ -17,52 +23,67 @@ class FlowAttrHandler:
 
     name = "DB"
 
+    def _construct_query_key(
+        self, profileid: ProfileID, twid: TimeWindow, query: FlowQuery
+    ) -> str:
+        """
+        All queries done by this class (insertions and lookups)
+        will be using the same format of key
+
+        the format of the key in redis is
+        profile_{ip}_{tw}:{role}:{proto}:{state}:{dir}:{type}:{request}
+        e.g
+        profile_1.1.1.1_timewindow2:client:tcp:not_est:dst:ports:dst_ips
+        or
+        profile_1.1.1.1_timewindow2:server:udp:est:src:ips:dst_ports
+        """
+        role = query.role.name.lower()
+        protocol = query.protocol.name.lower()
+        state = query.state.name.lower()
+        direction = query.direction.name.lower()
+        key_type = query.type_data.name.lower()  # PORT or IP
+        # request example:
+        # if key_type=PORT: request will be IP
+        # if key_type=IP: request will be PORT
+        request = query.request.name.lower()
+
+        key = (
+            f"{str(profileid)}_{str(twid)}"
+            f":{role}:{protocol}:{state}:{direction}:{key_type}:{request}"
+        )
+        return key
+
     def get_data_from_profile_tw(
         self,
-        profileid: str,
-        twid: str,
-        direction: str,
-        state: str,
-        protocol: str,
-        role: str,
-        type_data: str,
-        property: str,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        query: FlowQuery,
     ) -> Generator:
         """
-        Get the info about a certain role (Client or Server),
-        for a particular protocol (TCP, UDP, ICMP, etc.) for a
-        particular State (Established, etc.)
+        Retrieves information for a given profile and time window
+        based on flow characteristics (role, protocol, state, direction).
 
-        :param direction: can be {src, dst}
-            This is used to know if you want the data of the src ip or
-            ports, or the data from the dst ips or ports
-        :param state: can be {est, not_est}
-        :param protocol: can be {tcp, udp, icmp, icmp6}
-        :param role: can be {client, server}
-            Depending if the traffic is going out or not, we are Client or Server
-            Client role means: the traffic is done by the given profile
-            Server role means:the traffic is going to the given profile
-        :param type_data:  = can be {port, ip}
-        :param property: {dstports, dstips, srcips, srcports}
-            The type of the property will always be the opposite of type_data
-            for example if the key is profile:1.1.1.1:timewindow2:client:tcp:not_est:dst_port
-            the property will be dstips and it will mean "get me all the
-            ports as keys, and all the dstips of the flows that had that dst
-            port"
 
+        :param flow: FlowQuery object containing:
+            - role: CLIENT or SERVER (is the traffic from or to the profile)
+            - protocol: TCP, UDP, ICMP, etc.
+            - state: EST or NOT_EST
+            - direction: SRC or DST (source/destination of traffic)
+            - data_type: PORT or IP (what we use as key in Redis)
+            - related_type: the opposite dimension of data_type
+              e.g., if data_type=PORT, related_type=IP
+              meaning "get all IPs that used this port"
+        :yield: Tuple[key, details]
+            key = port or IP (depending on data_type)
+            details = JSON-decoded dictionary with flow info
+
+        I Recommend looking at the values of the
+        profile_1.1.1.1_timewindow2:* keys
+        in redis after a slips run to get an idea of what this func is
+        querying
         """
-
         try:
-            # the format of the used key in redis is
-            # profile_{ip}_{tw}:{role}:{proto}:{state}:{dir}:{type}
-            # e.g
-            # profile_1.1.1.1_timewindow2:client:tcp:not_est:dst:port:property
-            profile_tw = f"{profileid}{self.separator}{twid}"
-            key = (
-                f"{profile_tw}"
-                f":{role}:{protocol}:{state}:{direction}:{type_data}:{property}"
-            )
-
+            key: str = self._construct_query_key(profileid, twid, query)
             cursor = 0
             while True:
                 cursor, data = self.r.hscan(key, cursor, count=100)
@@ -288,9 +309,11 @@ class FlowAttrHandler:
                 # Try suricata states
                 """
                 There are different states in which a flow can be.
-                Suricata distinguishes three flow-states for TCP and two for UDP. For TCP,
-                these are: New, Established and Closed,for UDP only new and established.
-                For each of these states Suricata can employ different timeouts.
+                Suricata distinguishes three flow-states for TCP and two
+                for UDP. For TCP, these are: New, Established and Closed,
+                for UDP only new and established.
+                For each of these states Suricata can employ different
+                 timeouts.
                 """
                 if "new" in state or "established" in state:
                     return "Established"
@@ -361,7 +384,8 @@ class FlowAttrHandler:
                     """
                     return "Not Established"
             except IndexError:
-                # suf does not exist, which means that this is some ICMP or no response was sent for UDP or TCP
+                # suf does not exist, which means that this is some ICMP or
+                # no response was sent for UDP or TCP
                 if "ECO" in pre:
                     # ICMP
                     return "Established"
@@ -372,23 +396,33 @@ class FlowAttrHandler:
                     # UDP
                     return "Established"
                 elif "INT" in pre:
-                    # UDP trying to connect, NOT preciselly not established but also NOT 'Established'. So we considered not established because there
+                    # UDP trying to connect, NOT preciselly not established
+                    # but also NOT 'Established'. So we considered not
+                    # established because there
                     # is no confirmation of what happened.
                     return "Not Established"
                 elif "EST" in pre:
                     # TCP
                     return "Established"
                 elif "RST" in pre:
-                    # TCP. When -z B is not used in argus, states are single words. Most connections are reseted when finished and therefore are established
-                    # It can happen that is reseted being not established, but we can't tell without -z b.
-                    # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
+                    # TCP. When -z B is not used in argus, states are single
+                    # words. Most connections are reseted when finished and
+                    # therefore are established
+                    # It can happen that is reseted being not established,
+                    # but we can't tell without -z b.
+                    # So we use as heuristic the amount of packets. If <=3,
+                    # then is not established because the OS retries 3 times.
                     return (
                         "Not Established" if int(pkts) <= 3 else "Established"
                     )
                 elif "FIN" in pre:
-                    # TCP. When -z B is not used in argus, states are single words. Most connections are finished with FIN when finished and therefore are established
-                    # It can happen that is finished being not established, but we can't tell without -z b.
-                    # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
+                    # TCP. When -z B is not used in argus, states are single
+                    # words. Most connections are finished with FIN when
+                    # finished and therefore are established
+                    # It can happen that is finished being not established,
+                    # but we can't tell without -z b.
+                    # So we use as heuristic the amount of packets. If <=3,
+                    # then is not established because the OS retries 3 times.
                     return (
                         "Not Established" if int(pkts) <= 3 else "Established"
                     )
@@ -406,7 +440,7 @@ class FlowAttrHandler:
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Error in getFinalStateFromFlags() in database.py line {exception_line}",
+                f"Error in getFinalStateFromFlags()" f" line {exception_line}",
                 0,
                 1,
             )
