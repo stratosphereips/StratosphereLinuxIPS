@@ -3,6 +3,7 @@
 import json
 import sys
 import traceback
+from typing import Generator
 
 
 class FlowAttrHandler:
@@ -15,6 +16,72 @@ class FlowAttrHandler:
     """
 
     name = "DB"
+
+    def get_data_from_profile_tw(
+        self,
+        profileid: str,
+        twid: str,
+        direction: str,
+        state: str,
+        protocol: str,
+        role: str,
+        type_data: str,
+        property: str,
+    ) -> Generator:
+        """
+        Get the info about a certain role (Client or Server),
+        for a particular protocol (TCP, UDP, ICMP, etc.) for a
+        particular State (Established, etc.)
+
+        :param direction: can be {src, dst}
+            This is used to know if you want the data of the src ip or
+            ports, or the data from the dst ips or ports
+        :param state: can be {est, not_est}
+        :param protocol: can be {tcp, udp, icmp, icmp6}
+        :param role: can be {client, server}
+            Depending if the traffic is going out or not, we are Client or Server
+            Client role means: the traffic is done by the given profile
+            Server role means:the traffic is going to the given profile
+        :param type_data:  = can be {port, ip}
+        :param property: {dstports, dstips, srcips, srcports}
+            The type of the property will always be the opposite of type_data
+            for example if the key is profile:1.1.1.1:timewindow2:client:tcp:not_est:dst_port
+            the property will be dstips and it will mean "get me all the
+            ports as keys, and all the dstips of the flows that had that dst
+            port"
+
+        """
+
+        try:
+            # the format of the used key in redis is
+            # profile_{ip}_{tw}:{role}:{proto}:{state}:{dir}:{type}
+            # e.g
+            # profile_1.1.1.1_timewindow2:client:tcp:not_est:dst:port:property
+            profile_tw = f"{profileid}{self.separator}{twid}"
+            key = (
+                f"{profile_tw}"
+                f":{role}:{protocol}:{state}:{direction}:{type_data}:{property}"
+            )
+
+            cursor = 0
+            while True:
+                cursor, data = self.r.hscan(key, cursor, count=100)
+                for ip_or_port, detailed_info in data.items():
+                    detailed_info = json.loads(detailed_info)
+                    yield ip_or_port, detailed_info
+
+                if cursor == 0:
+                    break
+
+        except Exception:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(
+                f"Error in getDataFromProfileTW database.py line "
+                f"{exception_line}",
+                0,
+                1,
+            )
+            self.print(traceback.format_exc(), 0, 1)
 
     def add_ips(self, profileid, twid, flow, role):
         """

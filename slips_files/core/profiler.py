@@ -346,7 +346,7 @@ class Profiler(ICore, IObservable):
             return True
         return False
 
-    def check_if_high_throughput_and_add_workers(self):
+    def _check_if_high_throughput_and_add_workers(self):
         """
         Checks for input and profile flows/sec imbalance and adds more
         profiler workers if needed.
@@ -384,13 +384,13 @@ class Profiler(ICore, IObservable):
         if client_ips:
             self.print(f"Used client IPs: {green(', '.join(client_ips))}")
 
-    def update_the_number_of_lines_read_by_all_workers(self):
+    def _update_lines_read_by_all_workers(self):
         # needed by store_flows_read_per_second()
         self.lines = sum([worker.received_lines for worker in self.workers])
 
     def main(self):
         # process the first msg only here, to determine what kind of input
-        # slips is given
+        # slips is given, then the workers will use the determined type.
         # wait as long as needed for it
         msg = None
         while not msg:
@@ -416,10 +416,13 @@ class Profiler(ICore, IObservable):
         # the only thing that stops this loop is the 'stop' msg sent by the
         # input and recvd by one of the workers
         while not self.should_stop():
-            self.update_the_number_of_lines_read_by_all_workers()
+            time.sleep(5 * 60)
+            self._update_lines_read_by_all_workers()
             # implemented in icore.py
             self.store_flows_read_per_second()
-            self.check_if_high_throughput_and_add_workers()
+            self._check_if_high_throughput_and_add_workers()
+            # PS: do not exit when max workers is reached, we need this
+            # parent up to handle the shutdown of its child workers
 
-        # icore will call shutdown_gracefully() on return
+        # ICore() will call shutdown_gracefully() on return
         return

@@ -229,14 +229,13 @@ class HorizontalPortscan:
             # For each port, see if the amount is over the threshold
             for dport in dports.keys():
                 # PortScan Type 2. Direction OUT
-                dstips: dict = dports[dport]["dstips"]
-
                 twid_identifier: str = self.get_twid_identifier(
                     profileid, twid, dport
                 )
                 if not twid_identifier:
                     continue
 
+                dstips: dict = dports[dport]["dstips"]
                 amount_of_dips = len(dstips)
 
                 if self.check_if_enough_dstips_to_trigger_an_evidence(

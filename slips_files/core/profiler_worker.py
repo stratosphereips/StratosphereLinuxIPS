@@ -681,10 +681,8 @@ class ProfilerWorker:
             try:
                 msg = self.get_msg_from_queue(self.profiler_queue)
                 if not msg:
-                    # wait for msgs
                     continue
 
-                self.times = {}
                 line: dict = msg["line"]
                 # TODO who is putting this True here?
                 if line is True:
@@ -696,6 +694,7 @@ class ProfilerWorker:
                     self.stop_profiler_event.set()
                     return 1
 
+                self.times = {}
                 self.received_lines += 1
 
                 n = time.time()

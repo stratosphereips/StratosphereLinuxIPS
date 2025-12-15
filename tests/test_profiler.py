@@ -47,7 +47,7 @@ def test_mark_process_as_done_processing(monkeypatch):
 def test_main():
     profiler = ModuleFactory().create_profiler_obj()
     profiler.last_worker_id = 0
-    profiler.check_if_high_throughput_and_add_workers = Mock()
+    profiler._check_if_high_throughput_and_add_workers = Mock()
 
     profiler.is_first_msg = False  # <--- SKIP FIRST-MSG BRANCH
 
@@ -65,7 +65,7 @@ def test_main():
 def test_main_with_first_msg():
     profiler = ModuleFactory().create_profiler_obj()
     profiler.last_worker_id = 0
-    profiler.check_if_high_throughput_and_add_workers = Mock()
+    profiler._check_if_high_throughput_and_add_workers = Mock()
     profiler.should_stop = Mock(side_effect=[False, False, True])
 
     # First msg triggers init; second msg is the one we expect to send to queue
