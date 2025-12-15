@@ -199,12 +199,12 @@ class VerticalPortscan:
         """
         sets an evidence if a vertical portscan is detected
         """
-        # if you're portscaning a port that is open it's gonna be established
-        # the amount of open ports we find is gonna be so small
-        # theoretically this is incorrect bc we'll be ignoring
-        # established connections, but usually open ports are very few
-        # compared to the whole range. so, practically this is correct to
-        # avoid FP
+        # When scanning an open port, the connection will appear as ESTABLISHED.
+        # Open ports are typically very few compared to the full port range.
+        # Ignoring ESTABLISHED connections is theoretically inaccurate because
+        # it misses scans hitting open ports, but in practice this is negligible.
+        # Focusing on non-ESTABLISHED states significantly reduces false positives
+        # while preserving the port-scan signal.
         state = "Not Established"
 
         for protocol in ("TCP", "UDP"):

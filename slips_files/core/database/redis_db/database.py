@@ -9,6 +9,9 @@ from slips_files.core.database.redis_db.constants import (
     Constants,
     Channels,
 )
+from slips_files.core.database.redis_db.flow_attributes_db import (
+    FlowAttrHandler,
+)
 from slips_files.core.database.redis_db.flow_tracker_db import FlowTracker
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
@@ -35,7 +38,12 @@ LOCALHOST = "127.0.0.1"
 
 
 class RedisDB(
-    IoCHandler, AlertHandler, ProfileHandler, P2PHandler, FlowTracker
+    IoCHandler,
+    AlertHandler,
+    ProfileHandler,
+    P2PHandler,
+    FlowTracker,
+    FlowAttrHandler,
 ):
     # this db is a singelton per port. meaning no 2 instances
     # should be created for the same port at the same time
