@@ -16,7 +16,7 @@ The tool is designed to handle new alert types without code modifications by:
 
 ### Why Not Text Parsing?
 
-Traditional approaches like `slips_dag_generator.py` use regex patterns on description text:
+Traditional approaches  use regex patterns on description text:
 ```python
 # Brittle approach - breaks when text changes
 r'horizontal port scan to port\s+(\d+/\w+)'
@@ -369,31 +369,6 @@ For very large datasets (>100K events):
 2. Use `--incident-id` to analyze specific incidents
 3. Split JSONL files by timewindow
 
-## Comparison with slips_dag_generator.py
-
-| Feature | alert_dag_parser.py | slips_dag_generator.py |
-|---------|---------------------|------------------------|
-| **Input format** | JSONL (IDEA format) | Plain text logs |
-| **Classification** | Structured fields | Regex on descriptions |
-| **Future-proof** | ✅ Yes | ❌ Requires updates |
-| **Analysis mode** | Per-incident only | Per-IP or per-analysis |
-| **Output formats** | Comprehensive only | 5 formats (compact, minimal, etc.) |
-| **New alert types** | Work automatically | Need code updates |
-| **Maintenance** | Low | High (regex patterns) |
-
-### When to Use Each Tool
-
-**Use `alert_dag_parser.py` when:**
-- Working with JSONL/IDEA format files
-- Need future-proof classification
-- Want per-incident comprehensive analysis
-- Analyzing structured alert exports
-
-**Use `slips_dag_generator.py` when:**
-- Working with plain text Slips logs
-- Need multiple output formats
-- Want IP-based timeline analysis
-- Analyzing real-time log streams
 
 ## Limitations
 
@@ -402,18 +377,6 @@ For very large datasets (>100K events):
 3. **Single output format** - Comprehensive analysis only (no minimal/compact modes)
 4. **No IP grouping** - Per-incident analysis only, not per-IP
 5. **Description fallback** - Unknown patterns use description prefix (not ideal but graceful)
-
-## Future Enhancements
-
-Potential improvements:
-
-1. **Streaming parser** - For very large files
-2. **Multiple output formats** - Add compact, minimal, pattern modes
-3. **Filtering options** - By severity, timewindow, IP range
-4. **Statistical analysis** - Incident trends, severity distribution
-5. **Export formats** - JSON, CSV, HTML reports
-6. **IP-based grouping** - Optional IP-centric analysis mode
-7. **Custom grouping** - User-defined grouping criteria
 
 ## Troubleshooting
 
@@ -449,33 +412,6 @@ Enable verbose output to see parsing details:
 python3 alert_dag_parser.py alerts.json --verbose 2>&1 | tee debug.log
 ```
 
-## Contributing
-
-When modifying the tool:
-
-1. **Maintain field-based classification** - Don't add regex on descriptions
-2. **Graceful fallbacks** - Unknown patterns should work, not crash
-3. **Test with sample datasets** - Use CTU malware capture data
-4. **Update this documentation** - Keep examples current
-
-### Testing Checklist
-
-- [ ] Parse all sample datasets without errors
-- [ ] Verify incident-event correlation
-- [ ] Check output formatting
-- [ ] Test all CLI options
-- [ ] Handle malformed JSON gracefully
-- [ ] Validate with new/unknown alert types
-
-## License
-
-Part of the slips-tools repository. See main repository for license information.
-
-## Related Tools
-
-- `slips_dag_generator.py` - DAG generator for plain text Slips logs
-- `analyze_slips_with_llm.sh` - LLM-enhanced analysis wrapper
-- Slips IDS - https://github.com/stratosphereips/StratosphereLinuxIPS
 
 ## References
 
