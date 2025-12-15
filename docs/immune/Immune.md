@@ -35,7 +35,7 @@ This is the main guide to the documentation related to the changes done to Slips
 
 **Datasets Evaluation (LLM-as-a-judge):**
 - [LLM Evaluation Guide](https://stratospherelinuxips.readthedocs.io/en/develop/immune/LLM_EVALUATION_GUIDE.html) - How to evaluate and compare LLM models
-- [Summarization Evaluation Results](https://harpomaxx.github.io/gh-web-host/slips-immune-llm-results/summary_dashboard.html) - Performance metrics for summarization models
+- [Summarization Evaluation Results](https://harpomaxx.github.io/gh-web-host/slips-immune-llm-results/summary_dashboard.html) - Performance metrics for summarization models. 
 - [Risk Analysis Evaluation Results](https://harpomaxx.github.io/gh-web-host/slips-immune-llm-results/risk_dashboard.html) - Performance metrics for risk assessment models
 
 **LLM finetuning**
