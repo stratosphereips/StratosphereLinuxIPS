@@ -9,7 +9,9 @@ from slips_files.core.structures.evidence import (
     ProfileID,
     TimeWindow,
 )
-from slips_files.core.structures.flow_attributes import FlowQuery
+from slips_files.core.structures.flow_attributes import (
+    FlowQuery,
+)
 
 
 class FlowAttrHandler:
@@ -24,7 +26,12 @@ class FlowAttrHandler:
     name = "DB"
 
     def _construct_query_key(
-        self, profileid: ProfileID, twid: TimeWindow, query: FlowQuery
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        query: FlowQuery,
+        port=None,
+        ip=None,
     ) -> str:
         """
         All queries done by this class (insertions and lookups)
@@ -36,6 +43,9 @@ class FlowAttrHandler:
         profile_1.1.1.1_timewindow2:client:tcp:not_est:dst:ports:dst_ips
         or
         profile_1.1.1.1_timewindow2:server:udp:est:src:ips:dst_ports
+
+        :kwargs ip, port: we are filtering for flows with this
+        specific port/ip.
         """
         role = query.role.name.lower()
         protocol = query.protocol.name.lower()
@@ -46,12 +56,52 @@ class FlowAttrHandler:
         # if key_type=PORT: request will be IP
         # if key_type=IP: request will be PORT
         request = query.request.name.lower()
+        if port:
+            # e.g something like
+            # profile_1.1.1.1_timewindow2:server:udp:est:src:ips:192
+            # .168.12.2:dst_ports
+            # aka get me all the dst ports my priv ip connected to 1.1.1.1 on
+            return (
+                f"{str(profileid)}_{str(twid)}"
+                f":{role}:{protocol}:{state}:{direction}:{key_type}:"
+                f"{port}:{request}"
+            )
+        elif ip:
+            # e.g something like
+            # profile_1.1.1.1_timewindow2:server:udp:est:src:ips:192
+            # .168.12.2:dst_ports
+            # aka get me all the dst ports my priv ip connected to 1.1.1.1 on
+            return (
+                f"{str(profileid)}_{str(twid)}"
+                f":{role}:{protocol}:{state}:{direction}:{key_type}:"
+                f"{ip}:{request}"
+            )
+        else:
+            return (
+                f"{str(profileid)}_{str(twid)}"
+                f":{role}:{protocol}:{state}:{direction}:{key_type}:{request}"
+            )
 
-        key = (
-            f"{str(profileid)}_{str(twid)}"
-            f":{role}:{protocol}:{state}:{direction}:{key_type}:{request}"
-        )
-        return key
+    def get_specific_ip_info_from_profile_tw(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        query: FlowQuery,
+        requested_ip: str,
+    ) -> dict:
+        key: str = self._construct_query_key(profileid, twid, query)
+        return self.r.hget(key, requested_ip) or {}
+
+    def get_specific_port_info_from_profile_tw(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        query: FlowQuery,
+        requested_port: int,
+    ) -> dict:
+        # todo make sure ports are added as ints
+        key: str = self._construct_query_key(profileid, twid, query)
+        return self.r.hget(key, requested_port) or {}
 
     def get_data_from_profile_tw(
         self,
@@ -60,9 +110,8 @@ class FlowAttrHandler:
         query: FlowQuery,
     ) -> Generator:
         """
-        Retrieves information for a given profile and time window
-        based on flow characteristics (role, protocol, state, direction).
-
+        Retrieves metadata about a given profile and time window
+        based on the given query (role, protocol, state, direction).
 
         :param flow: FlowQuery object containing:
             - role: CLIENT or SERVER (is the traffic from or to the profile)
@@ -103,104 +152,6 @@ class FlowAttrHandler:
                 1,
             )
             self.print(traceback.format_exc(), 0, 1)
-
-    def add_ips(self, profileid, twid, flow, role):
-        """
-        Function to add information about an IP address
-        The flow can go out of the IP (we are acting as Client) or into the IP
-        (we are acting as Server)
-        ip_as_obj: IP to add. It can be a dstIP or srcIP depending on the role
-        role: 'Client' or 'Server'
-        This function does two things:
-            1- Add the ip to this tw in this profile, counting how many times
-            it was contacted, and storing it in the key 'DstIPs' or 'SrcIPs'
-            in the hash of the profile
-            2- Use the ip as a key to count how many times that IP was
-            contacted on each port. We store it like this because its the
-               pefect structure to detect vertical port scans later on
-            3- Check if this IP has any detection in the threat intelligence
-            module. The information is added by the module directly in the DB.
-        """
-
-        uid = flow.uid
-        starttime = str(flow.starttime)
-        ip = flow.daddr if role == "Client" else flow.saddr
-
-        """
-        Depending if the traffic is going out or not, we are Client or Server
-        Client role means:
-            The profile corresponds to the src ip that received this flow
-            The dstip is here the one receiving data from your profile
-            So check the dst ip
-        Server role means:
-            The profile corresponds to the dst ip that received this flow
-            The srcip is here the one sending data to your profile
-            So check the src ip
-        """
-        direction = "Dst" if role == "Client" else "Src"
-
-        #############
-        # Store the Dst as IP address and notify in the channel
-        # We send the obj but when accessed as str, it is automatically
-        # converted to str
-        self.set_new_ip(ip)
-
-        #############
-
-        # OTH means that we didnt see the true src ip and dst ip
-        # from zeek docs; OTH: No SYN seen, just midstream traffic
-        # (one example of this is a “partial connection” that was not
-        # later closed).
-        if flow.state != "OTH":
-            self.ask_for_ip_info(
-                flow.saddr,
-                profileid,
-                twid,
-                flow,
-                "srcip",
-                daddr=flow.daddr,
-            )
-            self.ask_for_ip_info(
-                flow.daddr,
-                profileid,
-                twid,
-                flow,
-                "dstip",
-            )
-
-        self.update_times_contacted(ip, direction, profileid, twid)
-
-        # Get the state. Established, NotEstablished
-        summary_state = self.get_final_state_from_flags(flow.state, flow.pkts)
-        key_name = f"{direction}IPs{role}{flow.proto.upper()}{summary_state}"
-        # Get the previous data about this key
-        old_profileid_twid_data = self.get_data_from_profile_tw(
-            profileid,
-            twid,
-            direction,
-            summary_state,
-            flow.proto,
-            role,
-            "IPs",
-        )
-        profileid_twid_data: dict = self.update_ip_info(
-            old_profileid_twid_data,
-            flow.pkts,
-            flow.dport,
-            flow.spkts,
-            flow.bytes,
-            ip,
-            starttime,
-            uid,
-        )
-
-        # Store this data in the profile hash
-        self.r.hset(
-            f"{profileid}{self.separator}{twid}",
-            key_name,
-            json.dumps(profileid_twid_data),
-        )
-        return True
 
     def add_port(
         self, profileid: str, twid: str, flow: dict, role: str, port_type: str
