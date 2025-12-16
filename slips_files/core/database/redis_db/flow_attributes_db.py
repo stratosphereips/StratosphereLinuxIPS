@@ -144,19 +144,23 @@ class FlowAttrHandler:
         """
 
         # what are we adding? a dst or a src profile?
+        # why are we always using DST_PORTS?
+        # because no one cares about the sport (slips doesnt use them)
+        # dports are used in all our detections
+        # so whether we're the client or the server, we would want to know
+        # what dst port we connected to and what dstport was used when an
+        # ip connects to us on.
         totbytes = int(flow.totbytes)
+        port = flow.dport
+        request = Request.DST_PORTS
+        pkts = int(flow.pkts) - int(flow.spkts)
+
         if role == Role.CLIENT:
             direction = Direction.DST
             ip = flow.daddr
-            port = flow.dport
-            request = Request.DST_PORTS
-            pkts = int(flow.spkts)
         else:
             direction = Direction.SRC
             ip = flow.saddr
-            port = flow.sport
-            request = Request.SRC_PORTS
-            pkts = int(flow.pkts) - int(flow.spkts)
 
         #############
         # Store the Dst as IP address and notify in the channel
@@ -269,7 +273,12 @@ class FlowAttrHandler:
         return True
 
     def add_port(
-        self, profileid: str, twid: str, flow: dict, role: str, port_type: str
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        flow,
+        role: Role,
+        port_type: str,
     ):
         """
         Store info learned from ports for this flow
