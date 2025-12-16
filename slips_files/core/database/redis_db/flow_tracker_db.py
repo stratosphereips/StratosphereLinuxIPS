@@ -1,5 +1,4 @@
 import json
-import time
 
 from slips_files.common.slips_utils import utils
 
@@ -50,10 +49,7 @@ class FlowTracker:
             return False
         return True
 
-    def _get_current_minute(self) -> str:
-        return time.strftime("%Y%m%d%H%M", time.gmtime(time.time()))
-
-    def _incr_flows_analyzed_by_all_modules_per_min(self, pipe):
+    def _incr_flows_analyzed_by_all_modules_per_min(self):
         """
         Keeps track of the number of flows analyzed by all modules per minute.
         by increasing FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN by 1.
@@ -61,22 +57,19 @@ class FlowTracker:
         Adds the logic of tracking flows per min to the given pipe for
         execution
         """
-        current_minute = self._get_current_minute()
-        key = (
-            f"{self.constants.FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN}:"
-            f"{current_minute}"
-        )
-        pipe.incr(key)
-        # set expiration for 30 mins to avoid long-term storage
-        pipe.expire(key, 1800)
+        key = self.constants.FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN
+        flows_so_far = self.r.incr(key)
+
+        if flows_so_far == 1:
+            self.r.expire(
+                self.constants.FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN, 60
+            )
 
     def get_flows_analyzed_per_minute(self):
-        current_minute = self._get_current_minute()
-        key = (
-            f"{self.constants.FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN}:"
-            f"{current_minute}"
+        return (
+            self.r.get(self.constants.FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN)
+            or 0
         )
-        return self.r.get(key) or 0
 
     def _track_flow_processing_rate(self, msg: dict):
         """
@@ -117,22 +110,16 @@ class FlowTracker:
         # channel name is used here because some flow may be present in
         # conn.log and ssl.log with the same uid, so uid only is not enough
         # as an identifier.
-        key = f"{self.constants.SUBS_WHO_PROCESSED_MSG}_{channel_name}_{flow_identifier}"
+        key = f"{self.constants.SUBS_WHO_PROCESSED_MSG}_{channel_name}"
+        field = flow_identifier
 
         with self.r.pipeline() as pipe:
-            pipe.incr(key)
-            pipe.ttl(key)
+            pipe.hincrby(key, field, 1)
+            # 30 mins TTL for each key
+            pipe.hexpire(key, 1800, field)
             result = pipe.execute()
 
-        subscribers_who_processed_this_msg, ttl = result
-        # -1 means the key is new so set expiration 30mins
-        if ttl == -1:
-            self.r.expire(key, 1800)
-
+        subscribers_who_processed_this_msg, _ = result
         expected_subscribers: int = self.r.pubsub_numsub(channel_name)[0][1]
-
         if subscribers_who_processed_this_msg == expected_subscribers:
-            with self.r.pipeline() as pipe:
-                pipe.delete(key)
-                self._incr_flows_analyzed_by_all_modules_per_min(pipe)
-                pipe.execute()
+            self._incr_flows_analyzed_by_all_modules_per_min()

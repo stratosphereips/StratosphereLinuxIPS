@@ -218,11 +218,12 @@ class FlowAttrHandler:
             pkts = int(old_spkts) + int(pkts)
 
         # update the flow's dport info
-        key = str(query)
         self.r.hset(key, port, pkts)
         return True
 
-    def is_nigligble_flow(self, ip, role: Role, proto: Protocol, state: State):
+    def is_negligible_flow(
+        self, ip, role: Role, proto: Protocol, state: State
+    ):
         if (
             role == Role.CLIENT
             and proto == Protocol.TCP
@@ -270,7 +271,7 @@ class FlowAttrHandler:
         # detections they're not used)
         direction = Direction.DST
 
-        if self.is_nigligble_flow(ip, role, proto, state):
+        if self.is_negligible_flow(ip, role, proto, state):
             self.mark_profile_tw_as_modified(
                 str(profileid), str(twid), starttime
             )
@@ -337,7 +338,6 @@ class FlowAttrHandler:
             }
 
         self.mark_profile_tw_as_modified(str(profileid), str(twid), starttime)
-
         self.r.hset(key, ip, json.dumps(info))
 
     def get_final_state_from_flags(self, state, pkts):
