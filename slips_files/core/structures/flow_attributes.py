@@ -79,7 +79,6 @@ class Request(Enum):
 
     DST_PORTS = auto()
     DST_IPS = auto()
-    SRC_PORTS = auto()
     SRC_IPS = auto()
 
 
@@ -97,10 +96,10 @@ class FlowQuery:
     profile_1.1.1.1_timewindow2:client:tcp:not_est:dst:ports:dst_ips
     profile_1.1.1.1_timewindow2:server:udp:est:src:ips:192.168.1.2:dst_ports
 
-    The combination of `key_type` and `request` is constrained so that
-    the request attr is always the opposite dimension of `key_type`
-    (e.g. if the request is PORT → the key_type should always be *_IPS).
-    AND you can't use a request without specifying an IP/port attr
+
+    Constraints:
+    - if the request is PORT → the key_type should always be *_IPS and vice versa
+    - you can't use a request without specifying an IP/port attr
     """
 
     profileid: ProfileID
@@ -125,15 +124,18 @@ class FlowQuery:
     def __post_init__(self):
         #  key_type and request consistency
         if self.key_type == KeyType.PORT:
-            if self.request not in {Request.SRC_IPS, Request.DST_IPS}:
+            if self.request and self.request not in {
+                Request.SRC_IPS,
+                Request.DST_IPS,
+            }:
                 raise ValueError(
                     "When key_type=PORT, request must be SRC_IPS or DST_IPS"
                 )
 
         if self.key_type == KeyType.IP:
-            if self.request not in {Request.SRC_PORTS, Request.DST_PORTS}:
+            if self.request and self.request != Request.DST_PORTS:
                 raise ValueError(
-                    "When key_type=IP, request must be SRC_PORTS or DST_PORTS"
+                    "When key_type=IP, request must be DST_PORTS or None"
                 )
 
         # filter validation
@@ -160,21 +162,22 @@ class FlowQuery:
         # request example:
         # if key_type=PORT: request will be IP
         # if key_type=IP: request will be PORT
-        request = self.request.name.lower()
+        if self.request is not None:
+            request = self.request.name.lower()
 
         base = (
             f"{self.profileid}_{self.timewindow}"
             f":{role}:{protocol}:{state}:{direction}_{key_type}"
         )
 
-        if self.port is not None:
+        if self.port is not None and self.request is not None:
             # e.g something like
             # profile_1.1.1.1_timewindow2:server:udp:est:src:ips:192
             # .168.12.2:dst_ports
             # aka get me all the dst ports my priv ip connected to 1.1.1.1 on
             return f"{base}:{self.port}:{request}"
 
-        if self.ip is not None:
+        if self.ip is not None and self.request is not None:
             # e.g something like
             # profile_1.1.1.1_timewindow2:server:udp:est:src:ips:192
             # .168.12.2:dst_ports

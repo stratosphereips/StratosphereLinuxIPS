@@ -215,7 +215,7 @@ class FlowAttrHandler:
         key = str(query)
         if old_spkts := self.r.hget(key, port):
             # Add to this port's pkts to the existing pkts
-            pkts = old_spkts + pkts
+            pkts = int(old_spkts) + int(pkts)
 
         # update the flow's dport info
         key = str(query)
@@ -324,6 +324,7 @@ class FlowAttrHandler:
         )
         key = str(query)
         if info := self.r.hget(key, ip):
+            info = json.loads(info)
             # Add to this ip's bytes and pkts to the existing ip info
             info["pkts"] += pkts
             info["spkts"] += spkts

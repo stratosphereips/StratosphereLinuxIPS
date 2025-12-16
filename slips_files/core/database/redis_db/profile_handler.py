@@ -17,6 +17,8 @@ from typing import (
 import redis
 import validators
 
+from slips_files.core.structures.flow_attributes import Role
+
 
 class ProfileHandler:
     """
@@ -1201,9 +1203,9 @@ class ProfileHandler:
         """
         # If the traffic is going out it is part of our outtuples,
         # if not, part of our intuples
-        if role == "Client":
+        if role == Role.CLIENT:
             direction = "OutTuples"
-        elif role == "Server":
+        elif role == Role.SERVER:
             direction = "InTuples"
 
         try:
