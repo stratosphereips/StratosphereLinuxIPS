@@ -3,7 +3,7 @@
 import json
 import sys
 import traceback
-from typing import Generator, Dict, Optional
+from typing import Generator, Optional
 
 from slips_files.core.structures.evidence import (
     ProfileID,
@@ -31,23 +31,27 @@ class FlowAttrHandler:
 
     name = "DB"
 
-    def get_specific_ip_info_from_profile_tw(
+    def does_profile_tw_have_ip(
         self,
         query: FlowQuery,
         requested_ip: str,
-    ) -> dict:
+    ) -> bool:
         """
         e.g looks up
         profile_1.1.1.1_timewindow2:server:udp:est:src:ips <ip>
         """
         key = str(query)
-        return self.r.hget(key, requested_ip) or {}
+        return self.r.sismember(key, requested_ip)
 
     def get_specific_port_info_from_profile_tw(
         self,
         query: FlowQuery,
         requested_port: int,
     ) -> Optional[int]:
+        """
+        returns the numbr of pkts seen going to this port or None if the
+        port doesnt exist
+        """
         # todo make sure ports are added as ints
         key = str(query)
         return self.r.hget(key, requested_port)
@@ -150,7 +154,10 @@ class FlowAttrHandler:
         # so whether we're the client or the server, we would want to know
         # what dst port we connected to and what dstport was used when an
         # ip connects to us on.
-        totbytes = int(flow.totbytes)
+
+        # since we're dealing with ip's characteristics
+        key_type = KeyType.IP
+
         port = flow.dport
         request = Request.DST_PORTS
         pkts = int(flow.pkts) - int(flow.spkts)
@@ -207,56 +214,18 @@ class FlowAttrHandler:
             state=state,
             protocol=proto,
             role=role,
-            key_type=KeyType.IP,
+            key_type=key_type,
             request=None,
         )
-        old_info: Dict[str, int] = self.get_specific_ip_info_from_profile_tw(
-            query, ip
-        )
+        old_info: bool = self.does_profile_tw_have_ip(query, ip)
 
-        if old_info:
-            # ip exists as a part of this tw, update the port
-            query = FlowQuery(
-                profileid=profileid,
-                timewindow=twid,
-                direction=direction,
-                state=state,
-                protocol=proto,
-                role=role,
-                key_type=KeyType.IP,
-                request=request,
-                ip=ip,
-            )
-            # check if this port already exists or not
-            old_spkts: int = self.get_specific_port_info_from_profile_tw(
-                query, port
-            )
-
-            if old_spkts:
-                # Add to this port's pkts
-                pkts = old_spkts + pkts
-        else:
+        if not old_info:
             # First time seeing this ip
-            ip_data = {
-                "totalflows": 1,
-                "totalpkt": pkts,
-                "totalbytes": totbytes,
-                "stime": flow.starttime,
-            }
-            query = FlowQuery(
-                profileid=profileid,
-                timewindow=twid,
-                direction=direction,
-                state=state,
-                protocol=proto,
-                role=role,
-                key_type=KeyType.IP,
-                request=None,
-            )
             key = str(query)
-            self.r.hset(key, ip, json.dumps(ip_data))
+            self.r.sadd(key, ip)
 
-        # update the port info
+        # now that the ip exists as a part of this tw
+        # do we have existing info about the flow's dport?
         query = FlowQuery(
             profileid=profileid,
             timewindow=twid,
@@ -264,10 +233,18 @@ class FlowAttrHandler:
             state=state,
             protocol=proto,
             role=role,
-            key_type=KeyType.IP,
+            key_type=key_type,
             request=request,
             ip=ip,
         )
+
+        if old_spkts := self.get_specific_port_info_from_profile_tw(
+            query, port
+        ):
+            # Add to this port's pkts to the existing pkts
+            pkts = old_spkts + pkts
+
+        # update the flow's dport info
         key = str(query)
         self.r.hset(key, port, pkts)
         return True
