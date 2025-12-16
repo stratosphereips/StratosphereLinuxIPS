@@ -27,6 +27,11 @@ class VT(IModule):
     ]
 
     def init(self):
+        self.__read_configuration()
+        if not self.read_api_key() or self.key in ("", None):
+            # We don't have a virustotal key
+            return
+
         self.c1 = self.db.subscribe("new_flow")
         self.c2 = self.db.subscribe("new_dns")
         self.c3 = self.db.subscribe("new_url")
@@ -36,7 +41,6 @@ class VT(IModule):
             "new_url": self.c3,
         }
         # Read the conf file
-        self.__read_configuration()
         # query counter for debugging purposes
         self.counter = 0
         # Queue of API calls
