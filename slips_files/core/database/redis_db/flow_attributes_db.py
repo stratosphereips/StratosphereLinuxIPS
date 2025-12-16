@@ -3,7 +3,7 @@
 import json
 import sys
 import traceback
-from typing import Generator, Optional
+from typing import Generator
 
 from slips_files.core.structures.evidence import (
     ProfileID,
@@ -30,31 +30,6 @@ class FlowAttrHandler:
     """
 
     name = "DB"
-
-    def does_profile_tw_have_ip(
-        self,
-        query: FlowQuery,
-        requested_ip: str,
-    ) -> bool:
-        """
-        e.g looks up
-        profile_1.1.1.1_timewindow2:server:udp:est:src:ips <ip>
-        """
-        key = str(query)
-        return self.r.sismember(key, requested_ip)
-
-    def get_specific_port_info_from_profile_tw(
-        self,
-        query: FlowQuery,
-        requested_port: int,
-    ) -> Optional[int]:
-        """
-        returns the numbr of pkts seen going to this port or None if the
-        port doesnt exist
-        """
-        # todo make sure ports are added as ints
-        key = str(query)
-        return self.r.hget(key, requested_port)
 
     def get_data_from_profile_tw(
         self,
@@ -206,7 +181,7 @@ class FlowAttrHandler:
         )
         state: State = self.convert_str_to_state(summary_state)
         proto: Protocol = self.convert_str_to_proto(flow.proto)
-        ######################################################################
+
         query = FlowQuery(
             profileid=profileid,
             timewindow=twid,
@@ -217,11 +192,10 @@ class FlowAttrHandler:
             key_type=key_type,
             request=None,
         )
-        old_info: bool = self.does_profile_tw_have_ip(query, ip)
+        key = str(query)
 
-        if not old_info:
+        if not self.r.sismember(key, ip):
             # First time seeing this ip
-            key = str(query)
             self.r.sadd(key, ip)
 
         # now that the ip exists as a part of this tw
@@ -238,9 +212,8 @@ class FlowAttrHandler:
             ip=ip,
         )
 
-        if old_spkts := self.get_specific_port_info_from_profile_tw(
-            query, port
-        ):
+        key = str(query)
+        if old_spkts := self.r.hget(key, port):
             # Add to this port's pkts to the existing pkts
             pkts = old_spkts + pkts
 
@@ -249,94 +222,12 @@ class FlowAttrHandler:
         self.r.hset(key, port, pkts)
         return True
 
-    def add_port(
-        self,
-        profileid: ProfileID,
-        twid: TimeWindow,
-        flow,
-        role: Role,
-        port_type: str,
-    ):
-        """
-        Store info learned from ports for this flow
-        The flow can go out of the IP (we are acting as Client) or into the IP
-         (we are acting as Server)
-        role: 'Client' or 'Server'. Client also defines that the flow is going
-         out, Server that is going in
-        port_type: 'Dst' or 'Src'.
-        Depending if this port was a destination port or a source port
-        """
-        if self._was_flow_flipped(flow):
-            return False
-
-        dport = flow.dport
-        sport = flow.sport
-        totbytes = int(flow.bytes)
-        pkts = int(flow.pkts)
-        state = flow.state
-        proto = flow.proto.upper()
-        starttime = str(flow.starttime)
-        uid = flow.uid
-        ip = str(flow.daddr)
-        spkts = flow.spkts
-
-        # Choose which port to use based on if we were asked Dst or Src
-        port = str(sport) if port_type == "Src" else str(dport)
-
-        # If we are the Client, we want to store the dstips only
-        # If we are the Server, we want to store the srcips only
-        ip_key = "srcips" if role == "Server" else "dstips"
-
-        # Get the state. Established, NotEstablished
-        summary_state = self.get_final_state_from_flags(state, pkts)
-
-        old_profileid_twid_data = self.get_data_from_profile_tw(
-            profileid, twid, port_type, summary_state, proto, role, "Ports"
-        )
-
-        try:
-            # we already have info about this dport, update it
-            port_data = old_profileid_twid_data[port]
-            port_data["totalflows"] += 1
-            port_data["totalpkt"] += pkts
-            port_data["totalbytes"] += totbytes
-
-            # if there's a conn from this ip on this port, update the pkts
-            # of this conn
-            if ip in port_data[ip_key]:
-                port_data[ip_key][ip]["pkts"] += pkts
-                port_data[ip_key][ip]["spkts"] += spkts
-                port_data[ip_key][ip]["uid"].append(uid)
-            else:
-                port_data[ip_key][ip] = {
-                    "pkts": pkts,
-                    "spkts": spkts,
-                    "stime": starttime,
-                    "uid": [uid],
-                }
-
-        except KeyError:
-            # First time for this dport
-            port_data = {
-                "totalflows": 1,
-                "totalpkt": pkts,
-                "totalbytes": totbytes,
-                ip_key: {
-                    ip: {
-                        "pkts": pkts,
-                        "spkts": spkts,
-                        "stime": starttime,
-                        "uid": [uid],
-                    }
-                },
-            }
-        old_profileid_twid_data[port] = port_data
-        data = json.dumps(old_profileid_twid_data)
-        hash_key = f"{profileid}{self.separator}{twid}"
-        key_name = f"{port_type}Ports{role}{proto}{summary_state}"
-        self.mark_profile_tw_as_modified(profileid, twid, starttime)
-
-        if key_name == "DstPortsClientTCPNot Established":
+    def is_nigligble_flow(self, ip, role: Role, proto: Protocol, state: State):
+        if (
+            role == Role.CLIENT
+            and proto == Protocol.TCP
+            and state == State.NOT_EST
+        ):
             # this key is used in horizontal ps module only
             # to avoid unnecessary storing and filtering of data, we store
             # only unresolved non multicast non broadcast ips.
@@ -344,9 +235,109 @@ class FlowAttrHandler:
             # workaround this
             ip_resolved = self.get_dns_resolution(ip)
             if ip_resolved or self._is_multicast_or_broadcast(ip):
-                return
+                return True
+        return False
 
-        self.r.hset(hash_key, key_name, str(data))
+    def add_port(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        flow,
+        role: Role,
+    ):
+        """
+        Store info about the dst port of this flow.
+
+        The flow can go out of the IP (we are acting as Client aka the
+        profile is the srcip of this flow) or into the IP
+        (we are acting as Server aka the profile is the dstip of this  flow)
+        """
+        if self._was_flow_flipped(flow):
+            return False
+
+        dport = flow.dport
+        pkts = int(flow.pkts)
+        starttime = str(flow.starttime)
+        ip = str(flow.daddr)
+        spkts = flow.spkts
+        # since we're dealing with ports' characteristics
+        key_type = KeyType.PORT
+        summary_state = self.get_final_state_from_flags(flow.state, pkts)
+        state: State = self.convert_str_to_state(summary_state)
+        proto: Protocol = self.convert_str_to_proto(flow.proto)
+        # this is the direction of the port we're adding, it's always dst
+        # because no one cares about the src ports (at least in slips
+        # detections they're not used)
+        direction = Direction.DST
+
+        if self.is_nigligble_flow(ip, role, proto, state):
+            self.mark_profile_tw_as_modified(
+                str(profileid), str(twid), starttime
+            )
+            return
+
+        # depends on my role, i will gather info about the other ip of the
+        # flow, so if i'm the server i will gather info about the client and
+        # vice versa
+        if role == Role.CLIENT:
+            # if the profile (me) is a client, then i want to gather info
+            # about the server ips that i connected to (aka dst servers)
+            ip = flow.daddr
+            request = Request.DST_IPS
+        else:
+            # if the profile (me) is a server, then i want to gather info
+            # about the client ips that connected to me (aka src ips)
+            ip = flow.saddr
+            request = Request.SRC_IPS
+
+        # handle the flow's dstport
+        query = FlowQuery(
+            profileid=profileid,
+            timewindow=twid,
+            direction=direction,
+            state=state,
+            protocol=proto,
+            role=role,
+            key_type=key_type,
+            request=None,
+        )
+        key = str(query)
+        if not self.r.sismember(key, dport):
+            # First time seeing this port
+            self.r.sadd(key, dport)
+
+        # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@ TODO make all the ports scring
+        #  bc suricata ig has 0x ports and icmp ports are also 0x
+
+        # now that the port exists as a part of this tw
+        # do we have existing info about the dport's ips?
+        query = FlowQuery(
+            profileid=profileid,
+            timewindow=twid,
+            direction=direction,
+            state=state,
+            protocol=proto,
+            role=role,
+            key_type=key_type,
+            port=dport,
+            request=request,
+        )
+        key = str(query)
+        if info := self.r.hget(key, ip):
+            # Add to this ip's bytes and pkts to the existing ip info
+            info["pkts"] += pkts
+            info["spkts"] += spkts
+        else:
+            # first time seeing this ip in this tw
+            info = {
+                "pkts": pkts,
+                "spkts": spkts,
+                "stime": starttime,
+            }
+
+        self.mark_profile_tw_as_modified(str(profileid), str(twid), starttime)
+
+        self.r.hset(key, ip, json.dumps(info))
 
     def get_final_state_from_flags(self, state, pkts):
         """
