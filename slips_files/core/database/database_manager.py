@@ -917,9 +917,6 @@ class DBManager:
     def get_number_of_tws_in_profile(self, *args, **kwargs):
         return self.rdb.get_number_of_tws_in_profile(*args, **kwargs)
 
-    def get_srcips_from_profile_tw(self, *args, **kwargs):
-        return self.rdb.get_srcips_from_profile_tw(*args, **kwargs)
-
     def get_dstips_from_profile_tw(self, *args, **kwargs):
         return self.rdb.get_dstips_from_profile_tw(*args, **kwargs)
 

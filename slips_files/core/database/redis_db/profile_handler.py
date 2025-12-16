@@ -597,12 +597,6 @@ class ProfileHandler:
         """
         return len(self.get_tws_from_profile(profileid)) if profileid else 0
 
-    def get_srcips_from_profile_tw(self, profileid, twid):
-        """
-        Get the src ip for a specific TW for a specific profileid
-        """
-        return self.r.hget(profileid + self.separator + twid, "SrcIPs")
-
     def get_dstips_from_profile_tw(self, profileid, twid):
         """
         Get the dst ip for a specific TW for a specific profileid

@@ -569,35 +569,6 @@ def test_get_number_of_tws_in_profile(
 
 
 @pytest.mark.parametrize(
-    "profileid, twid, expected_srcips, expected_hget_call",
-    [  # Testcase 1: Existing SrcIPs data
-        (
-            "profile_1",
-            "timewindow1",
-            b'{"1.2.3.4": 3, "5.6.7.8": 1}',
-            call("profile_1_timewindow1", "SrcIPs"),
-        ),
-        # Testcase 2: No SrcIPs data
-        (
-            "profile_2",
-            "timewindow2",
-            None,
-            call("profile_2_timewindow2", "SrcIPs"),
-        ),
-    ],
-)
-def test_get_srcips_from_profile_tw(
-    profileid, twid, expected_srcips, expected_hget_call
-):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    handler.r.hget.return_value = expected_srcips
-    srcips = handler.get_srcips_from_profile_tw(profileid, twid)
-    handler.r.hget.assert_called_once_with(*expected_hget_call.args)
-    assert srcips == expected_srcips
-
-
-@pytest.mark.parametrize(
     "profileid, zrange_return_value, expected_tws",
     [  # Testcase 1: Profile with multiple timewindows
         (
