@@ -33,6 +33,7 @@ from slips_files.core.input_profilers.argus import Argus
 from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
+from slips_files.core.structures.flow_attributes import Role
 
 
 class ProfilerWorker:
@@ -197,18 +198,11 @@ class ProfilerWorker:
         saddr_as_obj = ipaddress.ip_address(flow.saddr)
         # Add the src tuple using the src ip, and dst port
         tupleid = f"{saddr_as_obj}-{flow.dport}-{flow.proto}"
-        role = "Server"
-        # create the intuple
+        role = Role.Server
+
         self.db.add_tuple(profileid, twid, tupleid, symbol, role, flow)
-
-        # Add the srcip and srcport
         self.db.add_ips(profileid, twid, flow, role)
-        port_type = "Src"
-        self.db.add_port(profileid, twid, flow, role, port_type)
-
-        # Add the dstport
-        port_type = "Dst"
-        self.db.add_port(profileid, twid, flow, role, port_type)
+        self.db.add_port(profileid, twid, flow, role)
 
         # Add the flow with all the fields interpreted to the sqlite db
         self.aid_manager.submit_aid_task(flow, profileid, twid, self.label)
@@ -719,13 +713,13 @@ class ProfilerWorker:
                 if self.received_lines % 10000 == 0:
                     gc.collect()
 
-            except Exception as e:
-                self.print(
-                    f"Problem processing line {line}. "
-                    f"Line discarded. Error: {e}",
-                    0,
-                    1,
-                )
+            # except Exception as e:
+            #     self.print(
+            #         f"Problem processing line {line}. "
+            #         f"Line discarded. Error: {e}",
+            #         0,
+            #         1,
+            #     )
             except KeyboardInterrupt:
                 # on the first ctrl+c profiler AND input process should stop,
                 # so the modules receive no more flows.

@@ -7,6 +7,7 @@ from typing import Tuple
 
 from slips_files.core.flows.suricata import SuricataFile
 from slips_files.common.slips_utils import utils
+from slips_files.core.structures.flow_attributes import Role
 
 
 class Publisher:
@@ -77,7 +78,7 @@ class FlowHandler:
         self.running_non_stop: bool = self.db.is_running_non_stop()
 
     def handle_conn(self):
-        role = "Client"
+        role = Role.CLIENT
         daddr_as_obj = ipaddress.ip_address(self.flow.daddr)
         # this identified the tuple, it's a combination
         # of daddr, dport and proto
@@ -97,15 +98,8 @@ class FlowHandler:
             self.profileid, self.twid, tupleid, symbol, role, self.flow
         )
 
-        # Add the dstip
         self.db.add_ips(self.profileid, self.twid, self.flow, role)
-        # Add the dstport
-        port_type = "Dst"
-        self.db.add_port(self.profileid, self.twid, self.flow, role, port_type)
-
-        # Add the srcport
-        port_type = "Src"
-        self.db.add_port(self.profileid, self.twid, self.flow, role, port_type)
+        self.db.add_port(self.profileid, self.twid, self.flow, role)
 
         self.db.add_mac_addr_to_profile(
             self.profileid, self.flow.smac, self.flow.interface
