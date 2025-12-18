@@ -186,14 +186,23 @@ class FlowAttrHandler:
         if self.is_info_needed_by_the_portscan_detector_modules(
             role, proto, state
         ):
-            # hash e.g. profile_tw:TCP:Not_estab:<ip>:dstports <port>
-            # <tot_pkts>
+            # hash:
+            # profile_tw:TCP:Not_estab:<ip>:dstports <port> <tot_pkts>
             key = (
                 f"{profileid}_{twid}"
                 f":{proto.name.lower()}:not_estab:"
                 f"{ip}:dstports"
             )
             self.r.hincrby(key, port, int(flow.pkts))
+
+        if self.is_info_needed_by_the_icmp_scan_detector_module(
+            role, proto, state, flow.sport
+        ):
+            # needed info for icmp scans
+            # hash:
+            # profile_tw:icmp:estab:sport:<port>:dstips <dstip> <flows_num>
+            key = f"{profileid}_{twid}:icmp:est:sport:{flow.sport}:dstips"
+            self.r.hincrby(key, flow.dstip, 1)
 
     def is_negligible_flow(
         self, ip, role: Role, proto: Protocol, state: State
@@ -298,13 +307,11 @@ class FlowAttrHandler:
         Check if the given flow info is needed by any of the network
         discovery modules (horizontal or vertical portscan)
         """
-        if (
+        return (
             role == Role.CLIENT
             and proto in (Protocol.TCP, Protocol.UDP)
             and state == State.NOT_EST
-        ):
-            return True
-        return False
+        )
 
     def is_info_needed_by_the_icmp_scan_detector_module(
         self,
