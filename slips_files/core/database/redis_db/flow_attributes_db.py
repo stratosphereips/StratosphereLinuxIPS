@@ -8,7 +8,6 @@ from typing import Generator
 from slips_files.core.structures.evidence import (
     ProfileID,
     TimeWindow,
-    Direction,
 )
 from slips_files.core.structures.flow_attributes import (
     FlowQuery,
@@ -161,16 +160,12 @@ class FlowAttrHandler:
 
 
         """
-
         if role == Role.CLIENT:
-            direction = Direction.DST
             ip = flow.daddr
         else:
-            direction = Direction.SRC
             ip = flow.saddr
 
         self.ask_modules_about_all_ips_in_flow(profileid, twid, flow)
-        self.update_times_contacted(ip, direction, profileid, twid)
 
         # Get the state. Established, NotEstablished
         summary_state: str = self.get_final_state_from_flags(

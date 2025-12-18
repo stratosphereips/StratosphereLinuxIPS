@@ -289,31 +289,6 @@ class ProfileHandler:
         daddr_obj = ipaddress.ip_address(daddr)
         return daddr_obj.is_multicast
 
-    def update_times_contacted(self, ip, direction, profileid, twid):
-        """
-        :param ip: the ip that we want to update the times we contacted
-        """
-
-        # Get the hash of the timewindow
-        profileid_twid = f"{profileid}{self.separator}{twid}"
-
-        # Get the DstIPs data for this tw in this profile
-        # The format is {'1.1.1.1' :  3}
-        ips_contacted = self.r.hget(profileid_twid, f"{direction}IPs")
-        if not ips_contacted:
-            ips_contacted = {}
-
-        try:
-            ips_contacted = json.loads(ips_contacted)
-            # Add 1 because we found this ip again
-            ips_contacted[ip] += 1
-        except (TypeError, KeyError):
-            # There was no previous data stored in the DB
-            ips_contacted[ip] = 1
-
-        ips_contacted = json.dumps(ips_contacted)
-        self.r.hset(profileid_twid, f"{direction}IPs", str(ips_contacted))
-
     def get_all_contacted_ips_in_profileid_twid(self, profileid, twid) -> dict:
         """
         Get all the contacted IPs in a given profile and TW
@@ -583,12 +558,6 @@ class ProfileHandler:
         TWs in that profile
         """
         return len(self.get_tws_from_profile(profileid)) if profileid else 0
-
-    def get_dstips_from_profile_tw(self, profileid, twid):
-        """
-        Get the dst ip for a specific TW for a specific profileid
-        """
-        return self.r.hget(profileid + self.separator + twid, "DstIPs")
 
     def get_t2_for_profile_tw(self, profileid, twid, tupleid, tuple_key: str):
         """

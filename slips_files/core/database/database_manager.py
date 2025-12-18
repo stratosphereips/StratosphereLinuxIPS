@@ -239,9 +239,6 @@ class DBManager:
         """
         cls._obj = None
 
-    def update_times_contacted(self, *args, **kwargs):
-        return self.rdb.update_times_contacted(*args, **kwargs)
-
     def update_ip_info(self, *args, **kwargs):
         return self.rdb.update_ip_info(*args, **kwargs)
 
@@ -913,9 +910,6 @@ class DBManager:
 
     def get_number_of_tws_in_profile(self, *args, **kwargs):
         return self.rdb.get_number_of_tws_in_profile(*args, **kwargs)
-
-    def get_dstips_from_profile_tw(self, *args, **kwargs):
-        return self.rdb.get_dstips_from_profile_tw(*args, **kwargs)
 
     def get_t2_for_profile_tw(self, *args, **kwargs):
         return self.rdb.get_t2_for_profile_tw(*args, **kwargs)
