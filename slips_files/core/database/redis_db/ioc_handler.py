@@ -155,7 +155,7 @@ class IoCHandler:
             # sometimes we want to send the dns query/answer to check it for
             # blacklisted ips/domains
             data_to_send.update(extra_info)
-        self.publish(self.constants.GIVE_TI, json.dumps(data_to_send))
+        self.publish(self.channels.GIVE_TI, json.dumps(data_to_send))
         return data_to_send
 
     def set_ti_feed_info(self, file, data):

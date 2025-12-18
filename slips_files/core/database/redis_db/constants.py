@@ -3,7 +3,7 @@
 class Constants:
     LOADED_TI_FILES = "loaded_TI_files_number"
     TI_FILES_INFO = "TI_files_info"
-    GIVE_TI = "give_threat_intelligence"
+
     # all keys starting with IoC_* are used for storing IoCs read from
     # online and offline TI feeds
     IOC_IPS = "IoC_ips"
@@ -76,3 +76,4 @@ class Channels:
     DNS_INFO_CHANGE = "dns_info_change"
     NEW_ALERT = "new_alert"
     EVIDENCE_ADDED = "evidence_added"
+    GIVE_TI = "get_modified_profiles_since"
