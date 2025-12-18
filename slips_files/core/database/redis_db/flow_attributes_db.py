@@ -15,8 +15,6 @@ from slips_files.core.structures.flow_attributes import (
     State,
     Role,
     Protocol,
-    KeyType,
-    Request,
 )
 
 
@@ -187,7 +185,7 @@ class FlowAttrHandler:
             # hash e.g. profile_tw:TCP:Not_estab:<ip>:dstports <port>
             # <tot_pkts>
             key = (
-                f"{profileid}_{twid}:client"
+                f"{profileid}_{twid}"
                 f":{proto.name.lower()}:not_estab:"
                 f"{ip}:dstports"
             )
@@ -195,21 +193,39 @@ class FlowAttrHandler:
 
     def is_negligible_flow(
         self, ip, role: Role, proto: Protocol, state: State
-    ):
-        if (
-            role == Role.CLIENT
-            and proto == Protocol.TCP
-            and state == State.NOT_EST
+    ) -> bool:
+        """
+        Aka is this flow negligible for the horizontal portscan module?
+        """
+        if not self.is_info_needed_by_the_portscan_detector_modules(
+            role, proto, state
         ):
-            # this key is used in horizontal ps module only
-            # to avoid unnecessary storing and filtering of data, we store
-            # only unresolved non multicast non broadcast ips.
-            # if this key is ever needed for another module, we'll need to
-            # workaround this
-            ip_resolved = self.get_dns_resolution(ip)
-            if ip_resolved or self._is_multicast_or_broadcast(ip):
-                return True
+            return False
+
+        # this key is used in horizontal ps module only
+        # to avoid unnecessary storing and filtering of data, we store
+        # only unresolved non multicast non broadcast ips.
+        # if this key is ever needed for another module, we'll need to
+        # workaround this
+        ip_resolved = self.get_dns_resolution(ip)
+        if ip_resolved or self._is_multicast_or_broadcast(ip):
+            return True
+
         return False
+
+    def _was_flow_flipped(self, flow) -> bool:
+        """
+        The majority of the FP with horizontal port scan detection
+        happen because a benign computer changes wifi, and many not
+        established conns are redone, which look like a port scan to
+        10 webpages. To avoid this, we IGNORE all the flows that have
+        in the history of flags (field history in zeek), the ^,
+        that means that the flow was swapped/flipped.
+        since this func stores info that is only needed by the horizontal
+        portscan module, we can safely ignore flipped flows.
+        """
+        state_hist = flow.state_hist if hasattr(flow, "state_hist") else ""
+        return "^" in state_hist
 
     def add_port(
         self,
@@ -228,20 +244,12 @@ class FlowAttrHandler:
         if self._was_flow_flipped(flow):
             return False
 
-        dport = flow.dport
         pkts = int(flow.pkts)
         starttime = str(flow.starttime)
         ip = str(flow.daddr)
-        spkts = flow.spkts
-        # since we're dealing with ports' characteristics
-        key_type = KeyType.PORT
         summary_state = self.get_final_state_from_flags(flow.state, pkts)
         state: State = self.convert_str_to_state(summary_state)
         proto: Protocol = self.convert_str_to_proto(flow.proto)
-        # this is the direction of the port we're adding, it's always dst
-        # because no one cares about the src ports (at least in slips
-        # detections they're not used)
-        direction = Direction.DST
 
         if self.is_negligible_flow(ip, role, proto, state):
             self.mark_profile_tw_as_modified(
@@ -256,61 +264,43 @@ class FlowAttrHandler:
             # if the profile (me) is a client, then i want to gather info
             # about the server ips that i connected to (aka dst servers)
             ip = flow.daddr
-            request = Request.DST_IPS
         else:
             # if the profile (me) is a server, then i want to gather info
             # about the client ips that connected to me (aka src ips)
             ip = flow.saddr
-            request = Request.SRC_IPS
 
-        # handle the flow's dstport
-        query = FlowQuery(
-            profileid=profileid,
-            timewindow=twid,
-            direction=direction,
-            state=state,
-            protocol=proto,
-            role=role,
-            key_type=key_type,
-            request=None,
-        )
-        key = str(query)
-        if not self.r.sismember(key, dport):
-            # First time seeing this port
-            self.r.sadd(key, dport)
-
-        # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@ TODO make all the ports scring
-        #  bc suricata ig has 0x ports and icmp ports are also 0x
-
-        # now that the port exists as a part of this tw
-        # do we have existing info about the dport's ips?
-        query = FlowQuery(
-            profileid=profileid,
-            timewindow=twid,
-            direction=direction,
-            state=state,
-            protocol=proto,
-            role=role,
-            key_type=key_type,
-            port=dport,
-            request=request,
-        )
-        key = str(query)
-        if info := self.r.hget(key, ip):
-            info = json.loads(info)
-            # Add to this ip's bytes and pkts to the existing ip info
-            info["pkts"] += pkts
-            info["spkts"] += spkts
-        else:
-            # first time seeing this ip in this tw
-            info = {
-                "pkts": pkts,
-                "spkts": spkts,
-                "stime": starttime,
-            }
+        # hash profile_tw:TCP:Not_estab:<port>:dstips <ip> <pkts>
+        if self.is_info_needed_by_the_portscan_detector_modules(
+            role, proto, state
+        ):
+            # needed info for horizontal portscans
+            # hash e.g. profile_tw:TCP:Not_estab:<ip>:dstports <port>
+            # <tot_pkts>
+            key = (
+                f"{profileid}_{twid}:"
+                f"{proto.name.lower()}:not_estab:{ip}:dstports"
+            )
+            self.r.hincrby(key, flow.dport, pkts)
 
         self.mark_profile_tw_as_modified(str(profileid), str(twid), starttime)
-        self.r.hset(key, ip, json.dumps(info))
+
+    def is_info_needed_by_the_portscan_detector_modules(
+        self,
+        role: Role,
+        proto: Protocol,
+        state: State,
+    ) -> bool:
+        """
+        Check if the given flow info is needed by any of the network
+        discovery modules (horizontal or vertical portscan)
+        """
+        if (
+            role == Role.CLIENT
+            and proto in (Protocol.TCP, Protocol.UDP)
+            and state == State.NOT_EST
+        ):
+            return True
+        return False
 
     def get_final_state_from_flags(self, state, pkts):
         """

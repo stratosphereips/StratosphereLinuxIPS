@@ -277,21 +277,6 @@ class ProfileHandler:
                     extra_info=extra_info,
                 )
 
-    def _was_flow_flipped(self, flow) -> bool:
-        """
-        The majority of the FP with horizontal port scan detection
-        happen because a benign computer changes wifi, and many not
-        established conns are redone, which look like a port scan to
-        10 webpages. To avoid this, we IGNORE all the flows that have
-        in the history of flags (field history in zeek), the ^,
-        that means that the flow was swapped/flipped.
-        The below key_name is only used by the portscan module to check
-        for horizontal portscan, which means we can safely ignore it
-        here and it won't affect the rest of slips
-        """
-        state_hist = flow.state_hist if hasattr(flow, "state_hist") else ""
-        return "^" in state_hist
-
     @staticmethod
     def _is_multicast_or_broadcast(daddr: str) -> bool:
         """
