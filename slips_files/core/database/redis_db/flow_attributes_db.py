@@ -131,11 +131,7 @@ class FlowAttrHandler:
         # ip connects to us on.
 
         # since we're dealing with ip's characteristics
-        key_type = KeyType.IP
-
         port = flow.dport
-        request = Request.DST_PORTS
-        pkts = int(flow.pkts) - int(flow.spkts)
 
         if role == Role.CLIENT:
             direction = Direction.DST
@@ -182,44 +178,20 @@ class FlowAttrHandler:
         state: State = self.convert_str_to_state(summary_state)
         proto: Protocol = self.convert_str_to_proto(flow.proto)
 
-        query = FlowQuery(
-            profileid=profileid,
-            timewindow=twid,
-            direction=direction,
-            state=state,
-            protocol=proto,
-            role=role,
-            key_type=key_type,
-            request=None,
-        )
-        key = str(query)
-
-        if not self.r.sismember(key, ip):
-            # First time seeing this ip
-            self.r.sadd(key, ip)
-
-        # now that the ip exists as a part of this tw
-        # do we have existing info about the flow's dport?
-        query = FlowQuery(
-            profileid=profileid,
-            timewindow=twid,
-            direction=direction,
-            state=state,
-            protocol=proto,
-            role=role,
-            key_type=key_type,
-            request=request,
-            ip=ip,
-        )
-
-        key = str(query)
-        if old_spkts := self.r.hget(key, port):
-            # Add to this port's pkts to the existing pkts
-            pkts = int(old_spkts) + int(pkts)
-
-        # update the flow's dport info
-        self.r.hset(key, port, pkts)
-        return True
+        # needed info for vertical portscans
+        if (
+            state == state.NOT_EST
+            and proto in (Protocol.TCP, Protocol.UDP)
+            and role == Role.CLIENT
+        ):
+            # hash e.g. profile_tw:TCP:Not_estab:<ip>:dstports <port>
+            # <tot_pkts>
+            key = (
+                f"{profileid}_{twid}:client"
+                f":{proto.name.lower()}:not_estab:"
+                f"{ip}:dstports"
+            )
+            self.r.hincrby(key, port, int(flow.pkts))
 
     def is_negligible_flow(
         self, ip, role: Role, proto: Protocol, state: State
