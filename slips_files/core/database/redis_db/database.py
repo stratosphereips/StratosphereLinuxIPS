@@ -528,10 +528,10 @@ class RedisDB(
 
     def set_new_ip(self, ip: str):
         """
-        1- Stores this new IP in the IPs hash
-        2- Publishes in the channels that there is a new IP, and that we want
-            data from the Threat Intelligence modules
-        Sometimes it can happend that the ip comes as an IP object, but when
+        1- Stores this new IP in the IPS_INFO hash
+        2- Publishes in the channels that there is a new IP.
+
+        Sometimes it can happen that the ip comes as an IP object, but when
         accessed as str, it is automatically
         converted to str
         """
@@ -545,36 +545,6 @@ class RedisDB(
             self.rcache.hset(self.constants.IPS_INFO, ip, "{}")
             # Publish that there is a new IP ready in the channel
             self.publish("new_ip", ip)
-
-    def ask_for_ip_info(
-        self, ip, profileid, twid, flow, ip_state, daddr=False
-    ):
-        """
-        is the ip param src or dst
-        """
-        # if the daddr key arg is not given, we know for sure that the ip
-        # given is the daddr
-        daddr = daddr or ip
-        data_to_send = self.give_threat_intelligence(
-            profileid,
-            twid,
-            ip_state,
-            flow.starttime,
-            flow.uid,
-            daddr,
-            proto=flow.proto.upper(),
-            lookup=ip,
-        )
-
-        if ip in self.our_ips:
-            # dont ask p2p about your own ip
-            return
-
-        # ask other peers their opinion about this IP
-        cache_age = 1000
-        # the p2p module is expecting these 2 keys
-        data_to_send.update({"cache_age": cache_age, "ip": str(ip)})
-        self.publish("p2p_data_request", json.dumps(data_to_send))
 
     def get_slips_internal_time(self):
         #  SLIPS_INTERNAL_TIME is the ts of the last tw

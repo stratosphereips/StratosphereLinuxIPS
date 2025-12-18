@@ -106,36 +106,61 @@ class FlowAttrHandler:
 
         raise ValueError(f"Unknown protocol: {str_proto}")
 
+    def ask_modules_about_all_ips_in_flow(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        flow,
+    ):
+        """
+        Ask the IP info module about saddr and daddr of this flow
+        doesn't ask for flows with "OTH" state
+        """
+        if flow.state == "OTH":
+            # OTH means that we didnt see the true src ip and dst ip.
+            # from zeek docs; OTH: No SYN seen, just midstream traffic
+            # (one example of this is a “partial connection” that was not
+            # later closed).
+            return
+
+        cases = {
+            "srcip": flow.saddr,
+            "dstip": flow.daddr,
+        }
+
+        for ip_state, ip in cases.items():
+
+            if ip in self.our_ips:
+                # dont ask p2p or other modules about your own ip
+                continue
+
+            data_to_send = self.give_threat_intelligence(
+                str(profileid),
+                str(twid),
+                ip_state,
+                flow.starttime,
+                flow.uid,
+                flow.daddr,
+                proto=flow.proto.upper(),
+                lookup=ip,
+            )
+            # ask other peers their opinion about this IP
+            # the p2p module is expecting these 2 keys
+            data_to_send.update({"cache_age": 1000, "ip": str(ip)})
+            self.publish("p2p_data_request", json.dumps(data_to_send))
+
     def add_ips(
         self, profileid: ProfileID, twid: TimeWindow, flow, role: Role
     ):
         """
-        Function to add information about an IP address
+        Function to add flow precomputations about ports/ips needed by the
+        network discovery module
 
-        :param role:
-            The flow can go out of the IP (we are acting as Client)
-            or into the IP (we are acting as Server)
+        This function:
+        1.
 
-        This function does two things:
-            1- Add the ip to this tw in this profile, counting how many times
-            it was contacted and stores it in the db
-            2- Use the ip as a key to count how many times that IP was
-            contacted on each port. We store it like this because its the
-               pefect structure to detect vertical port scans later on
-            3- Check if this IP has any detection in the threat intelligence
-            module. The information is added by the module directly in the DB.
+
         """
-
-        # what are we adding? a dst or a src profile?
-        # why are we always using DST_PORTS?
-        # because no one cares about the sport (slips doesnt use them)
-        # dports are used in all our detections
-        # so whether we're the client or the server, we would want to know
-        # what dst port we connected to and what dstport was used when an
-        # ip connects to us on.
-
-        # since we're dealing with ip's characteristics
-        port = flow.dport
 
         if role == Role.CLIENT:
             direction = Direction.DST
@@ -144,27 +169,7 @@ class FlowAttrHandler:
             direction = Direction.SRC
             ip = flow.saddr
 
-        # OTH means that we didnt see the true src ip and dst ip
-        # from zeek docs; OTH: No SYN seen, just midstream traffic
-        # (one example of this is a “partial connection” that was not
-        # later closed).
-        if flow.state != "OTH":
-            self.ask_for_ip_info(
-                flow.saddr,
-                profileid,
-                twid,
-                flow,
-                "srcip",
-                daddr=flow.daddr,
-            )
-            self.ask_for_ip_info(
-                flow.daddr,
-                profileid,
-                twid,
-                flow,
-                "dstip",
-            )
-
+        self.ask_modules_about_all_ips_in_flow(profileid, twid, flow)
         self.update_times_contacted(ip, direction, profileid, twid)
 
         # Get the state. Established, NotEstablished
@@ -185,7 +190,7 @@ class FlowAttrHandler:
                 f":{proto.name.lower()}:not_estab:"
                 f"{ip}:dstports"
             )
-            self.r.hincrby(key, port, int(flow.pkts))
+            self.r.hincrby(key, flow.dport, int(flow.pkts))
 
         if self.is_info_needed_by_the_icmp_scan_detector_module(
             role, proto, state, flow.sport

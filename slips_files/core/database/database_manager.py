@@ -222,9 +222,6 @@ class DBManager:
     def is_known_fp_md5_hash(self, *args, **kwargs):
         return self.rdb.is_known_fp_md5_hash(*args, **kwargs)
 
-    def ask_for_ip_info(self, *args, **kwargs):
-        return self.rdb.ask_for_ip_info(*args, **kwargs)
-
     def set_ap_info(self, *args, **kwargs):
         return self.rdb.set_ap_info(*args, **kwargs)
 
