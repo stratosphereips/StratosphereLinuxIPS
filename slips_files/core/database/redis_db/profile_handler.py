@@ -15,6 +15,7 @@ from typing import (
 )
 import redis
 import validators
+from redis.client import Pipeline
 
 from slips_files.core.structures.flow_attributes import Role
 
@@ -1067,7 +1068,9 @@ class ProfileHandler:
             )
         pipeline.execute()
 
-    def mark_profile_tw_as_modified(self, profileid, twid, timestamp):
+    def mark_profile_tw_as_modified(
+        self, profileid, twid, timestamp, pipe: Pipeline = None
+    ):
         """
         Mark a TW in a profile as modified
         This means:
@@ -1079,8 +1082,10 @@ class ProfileHandler:
         """
         timestamp = timestamp or time.time()
         data = {f"{profileid}{self.separator}{twid}": float(timestamp)}
-        self.r.zadd(self.constants.MODIFIED_TIMEWINDOWS, data)
+        client = pipe if pipe else self.r
+        client.zadd(self.constants.MODIFIED_TIMEWINDOWS, data)
         self.publish("tw_modified", f"{profileid}:{twid}")
+        return pipe
 
     def publish_new_letter(
         self, new_symbol: str, profileid: str, twid: str, tupleid: str, flow

@@ -5,6 +5,7 @@ import json
 import sys
 import traceback
 from typing import Generator
+from redis.client import Pipeline
 
 from slips_files.core.structures.evidence import (
     ProfileID,
@@ -106,11 +107,8 @@ class FlowAttrHandler:
 
         raise ValueError(f"Unknown protocol: {str_proto}")
 
-    def ask_modules_about_all_ips_in_flow(
-        self,
-        profileid: ProfileID,
-        twid: TimeWindow,
-        flow,
+    def _ask_modules_about_all_ips_in_flow(
+        self, profileid: ProfileID, twid: TimeWindow, flow
     ):
         """
         Ask the IP info module about saddr and daddr of this flow
@@ -129,7 +127,6 @@ class FlowAttrHandler:
         }
 
         for ip_state, ip in cases.items():
-
             if ip in self.our_ips:
                 # dont ask p2p or other modules about your own ip
                 continue
@@ -178,12 +175,16 @@ class FlowAttrHandler:
         # flow, so if i'm the server i will gather info about the client and
         # vice versa
         target_ip = flow.daddr if role == Role.CLIENT else flow.client
+        self._ask_modules_about_all_ips_in_flow(profileid, twid, flow)
 
-        self.ask_modules_about_all_ips_in_flow(profileid, twid, flow)
-        self._add_scan_detection_info(profileid, twid, flow, role, target_ip)
-        self.mark_profile_tw_as_modified(
-            str(profileid), str(twid), flow.starttime
-        )
+        with self.r.pipeline() as pipe:
+            pipe = self._add_scan_detection_info(
+                profileid, twid, flow, role, target_ip, pipe
+            )
+            pipe = self.mark_profile_tw_as_modified(
+                str(profileid), str(twid), flow.starttime, pipe=pipe
+            )
+            pipe.execute()
 
     def _add_scan_detection_info(
         self,
@@ -192,7 +193,8 @@ class FlowAttrHandler:
         flow,
         role: Role,
         target_ip: str,
-    ):
+        pipe: Pipeline,
+    ) -> Pipeline:
         """
         :param target_ip: the ip we are gathering info about, depends on the
             role of the profile in the flow, if the profile ip is the
@@ -202,7 +204,7 @@ class FlowAttrHandler:
         if not self._are_scan_detection_modules_interested_in_this_ip(
             target_ip
         ):
-            return
+            return pipe
 
         # Get the state. Established, NotEstablished
         summary_state: str = self.get_final_state_from_flags(
@@ -222,7 +224,7 @@ class FlowAttrHandler:
                 f"{profileid}_{twid}"
                 f":{str_proto}:not_estab:{target_ip}:dstports"
             )
-            self.r.hincrby(key, flow.dport, int(flow.pkts))
+            pipe.hincrby(key, flow.dport, int(flow.pkts))
 
             if not self._was_flow_flipped(flow):
                 # this hash is needed for horizontal portscans detections
@@ -232,7 +234,7 @@ class FlowAttrHandler:
                     f"{profileid}_{twid}:"
                     f"{str_proto}:not_estab:{flow.daddr}:dstports"
                 )
-                self.r.hincrby(key, flow.dport, int(flow.pkts))
+                pipe.hincrby(key, flow.dport, int(flow.pkts))
 
         if self._is_info_needed_by_the_icmp_scan_detector_module(
             role, proto, state, flow.sport
@@ -241,7 +243,9 @@ class FlowAttrHandler:
             # hash:
             # profile_tw:icmp:estab:sport:<port>:dstips <dstip> <flows_num>
             key = f"{profileid}_{twid}:icmp:est:sport:{flow.sport}:dstips"
-            self.r.hincrby(key, flow.dstip, 1)
+            pipe.hincrby(key, flow.dstip, 1)
+
+        return pipe
 
     def _was_flow_flipped(self, flow) -> bool:
         """
@@ -250,6 +254,7 @@ class FlowAttrHandler:
         established conns are redone, which look like a port scan to
         10 webpages. To avoid this, we IGNORE all the flows that have
         in the history of flags (field history in zeek), the ^,
+        that means that the flow was swapped/flipped.
         that means that the flow was swapped/flipped.
         since this func stores info that is only needed by the horizontal
         portscan module, we can safely ignore flipped flows.
