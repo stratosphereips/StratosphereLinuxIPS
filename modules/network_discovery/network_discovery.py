@@ -135,6 +135,8 @@ class NetworkDiscovery(IModule):
 
     def check_icmp_scan(self, profileid, twid):
         # Map the ICMP port scanned to it's attack
+        # TODO update the ports stored in the db in
+        #  is_info_needed_by_the_icmp_scan_detector_module() if changed here
         port_map = {
             "0x0008": EvidenceType.ICMP_ADDRESS_SCAN,
             "0x0013": EvidenceType.ICMP_TIMESTAMP_SCAN,

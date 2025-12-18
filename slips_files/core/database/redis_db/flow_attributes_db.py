@@ -17,6 +17,13 @@ from slips_files.core.structures.flow_attributes import (
     Protocol,
 )
 
+PROTO_MAP = {
+    "tcp": Protocol.TCP,
+    "udp": Protocol.UDP,
+    "icmp": Protocol.ICMP,
+    "icmp6": Protocol.ICMP6,
+}
+
 
 class FlowAttrHandler:
     """
@@ -84,21 +91,20 @@ class FlowAttrHandler:
             return State.NOT_EST
         return State.NOT_EST
 
-    def convert_str_to_proto(self, proto_as_str: str) -> Protocol:
-        match proto_as_str.lower():
-            case "tcp":
-                return Protocol.TCP
-            case "udp":
-                return Protocol.UDP
-            case "icmp":
-                return Protocol.ICMP
-            case "icmp6":
-                return Protocol.ICMP6
-            case _:
-                # match substr
-                for proto in ("tcp", "udp", "icmp6", "icmp"):
-                    if proto in proto_as_str.lower():
-                        return self.convert_str_to_proto(proto)
+    def convert_str_to_proto(self, str_proto: str) -> Protocol:
+        """converts str proto to Protocol enum"""
+        str_proto = str_proto.lower()
+
+        enum_proto = PROTO_MAP.get(str_proto)
+        if enum_proto is not None:
+            return enum_proto
+
+        # substring match
+        for k, enum_proto in PROTO_MAP.keys():
+            if k in str_proto:
+                return enum_proto
+
+        raise ValueError(f"Unknown protocol: {str_proto}")
 
     def add_ips(
         self, profileid: ProfileID, twid: TimeWindow, flow, role: Role
@@ -177,10 +183,8 @@ class FlowAttrHandler:
         proto: Protocol = self.convert_str_to_proto(flow.proto)
 
         # needed info for vertical portscans
-        if (
-            state == state.NOT_EST
-            and proto in (Protocol.TCP, Protocol.UDP)
-            and role == Role.CLIENT
+        if self.is_info_needed_by_the_portscan_detector_modules(
+            role, proto, state
         ):
             # hash e.g. profile_tw:TCP:Not_estab:<ip>:dstports <port>
             # <tot_pkts>
@@ -320,7 +324,7 @@ class FlowAttrHandler:
             and proto in (Protocol.ICMP, Protocol.ICMP6)
             and state == State.EST
             # these are the ports used for common icmp scans that slips
-            # currrently detect
+            # currently detects
             and source_port in (8, 19, 20, 23, 24)
         )
 
