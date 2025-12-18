@@ -302,6 +302,28 @@ class FlowAttrHandler:
             return True
         return False
 
+    def is_info_needed_by_the_icmp_scan_detector_module(
+        self,
+        role: Role,
+        proto: Protocol,
+        state: State,
+        source_port: int | str,
+    ) -> bool:
+
+        try:
+            source_port = int(source_port)
+        except ValueError:
+            return False
+
+        return (
+            role == Role.CLIENT
+            and proto in (Protocol.ICMP, Protocol.ICMP6)
+            and state == State.EST
+            # these are the ports used for common icmp scans that slips
+            # currrently detect
+            and source_port in (8, 19, 20, 23, 24)
+        )
+
     def get_final_state_from_flags(self, state, pkts):
         """
         Analyze the flags given and return a summary of the state. Should work
