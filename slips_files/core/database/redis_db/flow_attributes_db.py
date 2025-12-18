@@ -144,14 +144,6 @@ class FlowAttrHandler:
             direction = Direction.SRC
             ip = flow.saddr
 
-        #############
-        # Store the Dst as IP address and notify in the channel
-        # We send the obj but when accessed as str, it is automatically
-        # converted to str
-        self.set_new_ip(ip)
-
-        #############
-
         # OTH means that we didnt see the true src ip and dst ip
         # from zeek docs; OTH: No SYN seen, just midstream traffic
         # (one example of this is a “partial connection” that was not
