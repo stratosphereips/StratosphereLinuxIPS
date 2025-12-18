@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import ipaddress
 import json
 import sys
 import traceback
@@ -148,24 +149,60 @@ class FlowAttrHandler:
             data_to_send.update({"cache_age": 1000, "ip": str(ip)})
             self.publish("p2p_data_request", json.dumps(data_to_send))
 
+    def _are_scan_detection_modules_interested_in_this_ip(self, ip) -> bool:
+        """
+        Check if any of the scan detection modules (horizontal portscan,
+        vertical portscan, icmp scan) are interested in this ip
+        """
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+        except (ipaddress.AddressValueError, ValueError):
+            return True
+
+        # Is the IP multicast, private? (including localhost)
+        # The broadcast address 255.255.255.255 is reserved.
+        return (
+            ip_obj.is_multicast
+            or ip_obj.is_link_local
+            or ip_obj.is_loopback
+            or ip_obj.is_reserved
+        )
+
     def add_ips(
         self, profileid: ProfileID, twid: TimeWindow, flow, role: Role
     ):
         """
-        Function to add flow precomputations about ports/ips needed by the
-        network discovery module
-
-        This function:
-        1.
-
-
+        Function to add metadata about the flow's ips and ports
         """
-        if role == Role.CLIENT:
-            ip = flow.daddr
-        else:
-            ip = flow.saddr
+        # depends on my role, i will gather info about the other ip of the
+        # flow, so if i'm the server i will gather info about the client and
+        # vice versa
+        target_ip = flow.daddr if role == Role.CLIENT else flow.client
 
         self.ask_modules_about_all_ips_in_flow(profileid, twid, flow)
+        self._add_scan_detection_info(profileid, twid, flow, role, target_ip)
+        self.mark_profile_tw_as_modified(
+            str(profileid), str(twid), flow.starttime
+        )
+
+    def _add_scan_detection_info(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        flow,
+        role: Role,
+        target_ip: str,
+    ):
+        """
+        :param target_ip: the ip we are gathering info about, depends on the
+            role of the profile in the flow, if the profile ip is the
+            saddr, the role is client, and the target ip is the daddr,
+            and viceversa
+        """
+        if not self._are_scan_detection_modules_interested_in_this_ip(
+            target_ip
+        ):
+            return
 
         # Get the state. Established, NotEstablished
         summary_state: str = self.get_final_state_from_flags(
@@ -174,20 +211,30 @@ class FlowAttrHandler:
         state: State = self.convert_str_to_state(summary_state)
         proto: Protocol = self.convert_str_to_proto(flow.proto)
 
-        # needed info for vertical portscans
-        if self.is_info_needed_by_the_portscan_detector_modules(
+        if self._is_info_needed_by_the_portscan_detector_modules(
             role, proto, state
         ):
+            str_proto = proto.name.lower()
+            # this hash is needed for vertical portscans detections
             # hash:
             # profile_tw:TCP:Not_estab:<ip>:dstports <port> <tot_pkts>
             key = (
                 f"{profileid}_{twid}"
-                f":{proto.name.lower()}:not_estab:"
-                f"{ip}:dstports"
+                f":{str_proto}:not_estab:{target_ip}:dstports"
             )
             self.r.hincrby(key, flow.dport, int(flow.pkts))
 
-        if self.is_info_needed_by_the_icmp_scan_detector_module(
+            if not self._was_flow_flipped(flow):
+                # this hash is needed for horizontal portscans detections
+                # hash e.g. profile_tw:TCP:Not_estab:<ip>:dstports <port>
+                # <tot_pkts>
+                key = (
+                    f"{profileid}_{twid}:"
+                    f"{str_proto}:not_estab:{flow.daddr}:dstports"
+                )
+                self.r.hincrby(key, flow.dport, int(flow.pkts))
+
+        if self._is_info_needed_by_the_icmp_scan_detector_module(
             role, proto, state, flow.sport
         ):
             # needed info for icmp scans
@@ -195,28 +242,6 @@ class FlowAttrHandler:
             # profile_tw:icmp:estab:sport:<port>:dstips <dstip> <flows_num>
             key = f"{profileid}_{twid}:icmp:est:sport:{flow.sport}:dstips"
             self.r.hincrby(key, flow.dstip, 1)
-
-    def is_negligible_flow(
-        self, ip, role: Role, proto: Protocol, state: State
-    ) -> bool:
-        """
-        Aka is this flow negligible for the horizontal portscan module?
-        """
-        if not self.is_info_needed_by_the_portscan_detector_modules(
-            role, proto, state
-        ):
-            return False
-
-        # this key is used in horizontal ps module only
-        # to avoid unnecessary storing and filtering of data, we store
-        # only unresolved non multicast non broadcast ips.
-        # if this key is ever needed for another module, we'll need to
-        # workaround this
-        ip_resolved = self.get_dns_resolution(ip)
-        if ip_resolved or self._is_multicast_or_broadcast(ip):
-            return True
-
-        return False
 
     def _was_flow_flipped(self, flow) -> bool:
         """
@@ -232,64 +257,7 @@ class FlowAttrHandler:
         state_hist = flow.state_hist if hasattr(flow, "state_hist") else ""
         return "^" in state_hist
 
-    def add_port(
-        self,
-        profileid: ProfileID,
-        twid: TimeWindow,
-        flow,
-        role: Role,
-    ):
-        """
-        Store info about the dst port of this flow.
-
-        The flow can go out of the IP (we are acting as Client aka the
-        profile is the srcip of this flow) or into the IP
-        (we are acting as Server aka the profile is the dstip of this  flow)
-        """
-        if self._was_flow_flipped(flow):
-            return False
-
-        pkts = int(flow.pkts)
-        starttime = str(flow.starttime)
-        ip = str(flow.daddr)
-        summary_state = self.get_final_state_from_flags(flow.state, pkts)
-        state: State = self.convert_str_to_state(summary_state)
-        proto: Protocol = self.convert_str_to_proto(flow.proto)
-
-        if self.is_negligible_flow(ip, role, proto, state):
-            self.mark_profile_tw_as_modified(
-                str(profileid), str(twid), starttime
-            )
-            return
-
-        # depends on my role, i will gather info about the other ip of the
-        # flow, so if i'm the server i will gather info about the client and
-        # vice versa
-        if role == Role.CLIENT:
-            # if the profile (me) is a client, then i want to gather info
-            # about the server ips that i connected to (aka dst servers)
-            ip = flow.daddr
-        else:
-            # if the profile (me) is a server, then i want to gather info
-            # about the client ips that connected to me (aka src ips)
-            ip = flow.saddr
-
-        # hash profile_tw:TCP:Not_estab:<port>:dstips <ip> <pkts>
-        if self.is_info_needed_by_the_portscan_detector_modules(
-            role, proto, state
-        ):
-            # needed info for horizontal portscans
-            # hash e.g. profile_tw:TCP:Not_estab:<ip>:dstports <port>
-            # <tot_pkts>
-            key = (
-                f"{profileid}_{twid}:"
-                f"{proto.name.lower()}:not_estab:{ip}:dstports"
-            )
-            self.r.hincrby(key, flow.dport, pkts)
-
-        self.mark_profile_tw_as_modified(str(profileid), str(twid), starttime)
-
-    def is_info_needed_by_the_portscan_detector_modules(
+    def _is_info_needed_by_the_portscan_detector_modules(
         self,
         role: Role,
         proto: Protocol,
@@ -305,7 +273,7 @@ class FlowAttrHandler:
             and state == State.NOT_EST
         )
 
-    def is_info_needed_by_the_icmp_scan_detector_module(
+    def _is_info_needed_by_the_icmp_scan_detector_module(
         self,
         role: Role,
         proto: Protocol,

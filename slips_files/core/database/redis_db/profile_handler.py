@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import ipaddress
 import json
 import sys
 import time
@@ -276,18 +275,6 @@ class ProfileHandler:
                     lookup=answer,
                     extra_info=extra_info,
                 )
-
-    @staticmethod
-    def _is_multicast_or_broadcast(daddr: str) -> bool:
-        """
-        to avoid reporting port scans on the
-        broadcast or multicast addresses or invalid values
-        """
-        if daddr == "255.255.255.255":
-            return True
-
-        daddr_obj = ipaddress.ip_address(daddr)
-        return daddr_obj.is_multicast
 
     def get_all_contacted_ips_in_profileid_twid(self, profileid, twid) -> dict:
         """
@@ -686,7 +673,7 @@ class ProfileHandler:
         """Return the number of tws for this profile id"""
         return self.r.zcard(f"tws{profileid}") if profileid else False
 
-    def get_modified_tw_since_time(
+    def _get_modified_tw_since_time(
         self, time: float
     ) -> List[Tuple[str, float]]:
         """
@@ -709,7 +696,7 @@ class ProfileHandler:
         """Returns a set of modified profiles since a certain time and
         the time of the last modified profile"""
         modified_tws: List[Tuple[str, float]] = (
-            self.get_modified_tw_since_time(time)
+            self._get_modified_tw_since_time(time)
         )
         if not modified_tws:
             # no modified tws, and no time_of_last_modified_tw
@@ -1214,7 +1201,6 @@ class ProfileHandler:
 
             prev_symbols = json.dumps(prev_symbols)
             self.r.hset(profileid_twid, direction, prev_symbols)
-            self.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
 
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno

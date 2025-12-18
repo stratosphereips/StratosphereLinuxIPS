@@ -823,9 +823,6 @@ class DBManager:
     def add_out_dns(self, *args, **kwargs):
         return self.rdb.add_out_dns(*args, **kwargs)
 
-    def add_port(self, *args, **kwargs):
-        return self.rdb.add_port(*args, **kwargs)
-
     def get_final_state_from_flags(self, *args, **kwargs):
         return self.rdb.get_final_state_from_flags(*args, **kwargs)
 
@@ -943,7 +940,7 @@ class DBManager:
         return self.rdb.get_number_of_tws(*args, **kwargs)
 
     def get_modified_tw_since_time(self, *args, **kwargs):
-        return self.rdb.get_modified_tw_since_time(*args, **kwargs)
+        return self.rdb._get_modified_tw_since_time(*args, **kwargs)
 
     def get_modified_profiles_since(self, *args, **kwargs):
         return self.rdb.get_modified_profiles_since(*args, **kwargs)

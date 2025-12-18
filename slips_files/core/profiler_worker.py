@@ -202,7 +202,6 @@ class ProfilerWorker:
 
         self.db.add_tuple(profileid, twid, tupleid, symbol, role, flow)
         self.db.add_ips(profileid, twid, flow, role)
-        self.db.add_port(profileid, twid, flow, role)
 
         # Add the flow with all the fields interpreted to the sqlite db
         self.aid_manager.submit_aid_task(flow, profileid, twid, self.label)

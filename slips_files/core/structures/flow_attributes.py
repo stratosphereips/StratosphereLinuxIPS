@@ -48,6 +48,12 @@ class Role(Enum):
     Represents the role of the profile in the flow.
     Used for describing profiles.
 
+    The flow can go out of the IP (we are acting as Client)
+    or into the IP (we are acting as Server), check the docs of
+    Analysis direction
+    https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#modifying-the-configuration-file
+    for more info.
+
     CLIENT: traffic originated by the profile.
     SERVER: traffic destined to the profile.
     """

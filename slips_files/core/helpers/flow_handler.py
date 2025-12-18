@@ -99,7 +99,6 @@ class FlowHandler:
         )
 
         self.db.add_ips(self.profileid, self.twid, self.flow, role)
-        self.db.add_port(self.profileid, self.twid, self.flow, role)
 
         self.db.add_mac_addr_to_profile(
             self.profileid, self.flow.smac, self.flow.interface
