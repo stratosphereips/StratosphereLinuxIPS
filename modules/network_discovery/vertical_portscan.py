@@ -1,5 +1,9 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import json
+from typing import Dict
+
+
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Evidence,
@@ -12,6 +16,10 @@ from slips_files.core.structures.evidence import (
     Direction,
     Victim,
     Proto,
+)
+from slips_files.core.structures.flow_attributes import (
+    State,
+    Protocol,
 )
 
 
@@ -205,21 +213,22 @@ class VerticalPortscan:
         # it misses scans hitting open ports, but in practice this is negligible.
         # Focusing on non-ESTABLISHED states significantly reduces false positives
         # while preserving the port-scan signal.
-        state = "Not Established"
-
-        for protocol in ("TCP", "UDP"):
-            dstips: dict = self.get_not_established_dst_ips(
-                protocol, state, profileid, twid
-            )
-
+        for protocol in (Protocol.TCP, Protocol.UDP):
             # For each dstip, see if the amount of ports
             # connections is over the threshold
-            for dstip in dstips.keys():
-                dst_ports: dict = dstips[dstip]["dstports"]
+            for (
+                dstip,
+                metadata,
+            ) in self.db.get_dstips_with_not_established_flows(
+                profileid, twid, protocol
+            ):
+                metadata: Dict[str, float] = json.loads(metadata)
+
                 # Get the total amount of pkts sent to all
                 # ports on the same host
-                pkts_sent = sum(dst_ports[dport] for dport in dst_ports)
-                amount_of_dports = len(dst_ports)
+                amount_of_dports, total_pkts_sent_to_all_dports = (
+                    self.db.get_info_about_not_established_flows(dstip)
+                )
 
                 twid_identifier: str = self.get_twid_identifier(
                     profileid, twid, dstip
@@ -227,16 +236,17 @@ class VerticalPortscan:
                 if self.check_if_enough_dports_to_trigger_an_evidence(
                     twid_identifier, amount_of_dports
                 ):
+                    # todo remove uid usage
                     evidence_details = {
-                        "timestamp": dstips[dstip]["stime"],
-                        "pkts_sent": pkts_sent,
-                        "protocol": protocol,
-                        "profileid": profileid,
-                        "twid": twid,
-                        "uid": dstips[dstip]["uid"],
+                        "timestamp": metadata["first_seen"],
+                        "pkts_sent": total_pkts_sent_to_all_dports,
+                        "protocol": protocol.name.lower(),
+                        "profileid": str(profileid),
+                        "twid": str(twid),
+                        "uid": metadata["uid_of_first_seen"],
                         "amount_of_dports": amount_of_dports,
                         "dstip": dstip,
-                        "state": state,
+                        "state": State.NOT_EST.name.lower(),
                     }
 
                     self.set_evidence_vertical_portscan(evidence_details)
