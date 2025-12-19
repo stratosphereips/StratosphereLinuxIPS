@@ -28,6 +28,7 @@ from enum import Enum
 from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
+BROADCAST_ADDR = "255.255.255.255"
 
 
 class Utils(object):
@@ -285,6 +286,23 @@ class Utils(object):
         else:
             # invalid ip
             return
+
+    def are_scan_detection_modules_interested_in_this_ip(self, ip) -> bool:
+        """
+        Check if any of the scan detection modules (horizontal portscan,
+        vertical portscan, icmp scan) are interested in this ip
+        """
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+        except (ipaddress.AddressValueError, ValueError):
+            return False
+
+        return not (
+            ip_obj.is_multicast
+            or ip_obj.is_link_local
+            or ip_obj.is_loopback
+            or ip_obj.is_reserved
+        )
 
     def calculate_confidence(self, pkts_sent):
         """

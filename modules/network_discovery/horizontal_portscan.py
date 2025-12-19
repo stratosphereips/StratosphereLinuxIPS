@@ -1,9 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import ipaddress
-from typing import List
+from typing import List, Protocol
 
-import validators
 
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
@@ -17,8 +15,6 @@ from slips_files.core.structures.evidence import (
     IoCType,
     Direction,
 )
-
-BROADCAST_ADDR = "255.255.255.255"
 
 
 class HorizontalPortscan:
@@ -194,26 +190,14 @@ class HorizontalPortscan:
         self.db.set_evidence(evidence)
 
     @staticmethod
-    def is_valid_saddr(profileid: str):
-        """
-        to avoid reporting port scans on the
-        broadcast or multicast addresses or invalid values
-        """
-        saddr = profileid.split("_")[1]
-        if validators.ipv4(saddr) or validators.ipv6(saddr):
-            saddr_obj = ipaddress.ip_address(saddr)
-            return not saddr_obj.is_multicast and saddr != BROADCAST_ADDR
-
-        return False
-
-    @staticmethod
     def is_valid_twid(twid: str) -> bool:
         return not (twid in ("", None) or "timewindow" not in twid)
 
     def check(self, profileid: str, twid: str):
-        if not self.is_valid_saddr(profileid) or not self.is_valid_twid(twid):
+        if not utils.are_scan_detection_modules_interested_in_this_ip(
+            profileid.ip
+        ) or not self.is_valid_twid(twid):
             return False
-
         # if you're portscaning a port that is open it's gonna be established
         # the amount of open ports we find is gonna be so small
         # theoretically this is incorrect bc we'll be ignoring
@@ -221,7 +205,7 @@ class HorizontalPortscan:
         # but usually open ports are very few compared to the whole range
         # so, practically this is correct to avoid FP
         state = "Not Established"
-        for protocol in ("TCP", "UDP"):
+        for protocol in (Protocol.TCP, Protocol.UDP):
             dports: dict = self.get_not_estab_dst_ports(
                 protocol, state, profileid, twid
             )

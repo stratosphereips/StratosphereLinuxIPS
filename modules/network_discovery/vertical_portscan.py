@@ -214,6 +214,12 @@ class VerticalPortscan:
             ) in self.db.get_dstips_with_not_established_flows(
                 profileid, twid, protocol
             ):
+                if not (
+                    utils.are_scan_detection_modules_interested_in_this_ip(
+                        dstip
+                    )
+                ):
+                    continue
                 # Get the total amount of pkts sent to all
                 # ports on the same host
                 amount_of_dports: int

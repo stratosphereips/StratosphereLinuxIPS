@@ -1,12 +1,12 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import ipaddress
 import json
 import sys
 import traceback
 from typing import Iterator, Tuple
 from redis.client import Pipeline
 from modules.network_discovery.icmp_scan_ports import ICMP_SCAN_PORTS
+from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     ProfileID,
     TimeWindow,
@@ -202,23 +202,6 @@ class FlowAttrHandler:
             data_to_send.update({"cache_age": 1000, "ip": str(ip)})
             self.publish("p2p_data_request", json.dumps(data_to_send))
 
-    def _are_scan_detection_modules_interested_in_this_ip(self, ip) -> bool:
-        """
-        Check if any of the scan detection modules (horizontal portscan,
-        vertical portscan, icmp scan) are interested in this ip
-        """
-        try:
-            ip_obj = ipaddress.ip_address(ip)
-        except (ipaddress.AddressValueError, ValueError):
-            return False
-
-        return not (
-            ip_obj.is_multicast
-            or ip_obj.is_link_local
-            or ip_obj.is_loopback
-            or ip_obj.is_reserved
-        )
-
     def add_ips(
         self, profileid: ProfileID, twid: TimeWindow, flow, role: Role
     ):
@@ -289,7 +272,7 @@ class FlowAttrHandler:
             saddr, the role is client, and the target ip is the daddr,
             and viceversa
         """
-        if not self._are_scan_detection_modules_interested_in_this_ip(
+        if not utils.are_scan_detection_modules_interested_in_this_ip(
             target_ip
         ):
             return pipe
