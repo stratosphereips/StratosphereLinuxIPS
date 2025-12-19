@@ -12,7 +12,6 @@ from slips_files.core.structures.evidence import (
     TimeWindow,
 )
 from slips_files.core.structures.flow_attributes import (
-    FlowQuery,
     State,
     Role,
     Protocol,
@@ -37,34 +36,45 @@ class FlowAttrHandler:
 
     name = "DB"
 
+    def _update_portscan_index_hash(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        proto: Protocol,
+        ip: str,
+        last_seen_timestamp: float,
+    ):
+        """
+        updates the hash that keeps track of IPs that have contacted a
+        certain profile_tw
+        PS: these ips can be source or dst ips depending on the
+        analysis_direction in slips.yaml (depending on the role of the
+        profile)
+
+        hash:
+        profile_tw:[tcp|udp]:not_estab:ips <ip> {
+        first_seen:..., last_seen:...}
+
+
+        :param last_seen_timestamp: last seen flow of this ip in this
+        profile_tw
+        """
+        proto = proto.name.lower()
+        key = f"{profileid}_{twid}:{proto}:not_estab:ips"
+        old_info: str = self.r.hget(key, ip)
+        try:
+            new_info = json.loads(old_info)
+        except json.JSONDecodeError:
+            new_info = {"first_seen": last_seen_timestamp}
+        new_info["last_seen"] = last_seen_timestamp
+        self.r.hset(key, ip, json.dumps(new_info))
+
     def get_data_from_profile_tw(
         self,
-        query: FlowQuery,
     ) -> Generator:
-        """
-        Retrieves metadata about a given profile and time window
-        based on the given query (role, protocol, state, direction).
 
-        :param flow: FlowQuery object containing:
-            - role: CLIENT or SERVER (is the traffic from or to the profile)
-            - protocol: TCP, UDP, ICMP, etc.
-            - state: EST or NOT_EST
-            - direction: SRC or DST (source/destination of traffic)
-            - data_type: PORT or IP (what we use as key in Redis)
-            - related_type: the opposite dimension of data_type
-              e.g., if data_type=PORT, related_type=IP
-              meaning "get all IPs that used this port"
-        :yield: Tuple[key, details]
-            key = port or IP (depending on data_type)
-            details = JSON-decoded dictionary with flow info
-
-        I Recommend looking at the values of the
-        profile_1.1.1.1_timewindow2:* keys
-        in redis after a slips run to get an idea of what this func is
-        querying
-        """
         try:
-            key: str = str(query)
+            key: str = ""
             cursor = 0
             while True:
                 cursor, data = self.r.hscan(key, cursor, count=100)
@@ -154,11 +164,9 @@ class FlowAttrHandler:
         try:
             ip_obj = ipaddress.ip_address(ip)
         except (ipaddress.AddressValueError, ValueError):
-            return True
+            return False
 
-        # Is the IP multicast, private? (including localhost)
-        # The broadcast address 255.255.255.255 is reserved.
-        return (
+        return not (
             ip_obj.is_multicast
             or ip_obj.is_link_local
             or ip_obj.is_loopback
@@ -219,16 +227,22 @@ class FlowAttrHandler:
             str_proto = proto.name.lower()
             # this hash is needed for vertical portscans detections
             # hash:
-            # profile_tw:TCP:Not_estab:<ip>:dstports <port> <tot_pkts>
+            # profile_tw:[tcp|udp]:Not_estab:<ip>:dstports <port> <tot_pkts>
             key = (
                 f"{profileid}_{twid}"
                 f":{str_proto}:not_estab:{target_ip}:dstports"
             )
             pipe.hincrby(key, flow.dport, int(flow.pkts))
+            # we keep an index hash of target_ips to be able to access the
+            # key above using them
+            self._update_portscan_index_hash(
+                profileid, twid, proto, target_ip, flow.timestamp
+            )
 
             if not self._was_flow_flipped(flow):
                 # this hash is needed for horizontal portscans detections
-                # hash e.g. profile_tw:TCP:Not_estab:<ip>:dstports <port>
+                # hash e.g. profile_tw:[tcp|udp]:Not_estab:<ip>:dstports
+                # <port>
                 # <tot_pkts>
                 key = (
                     f"{profileid}_{twid}:"
@@ -243,7 +257,7 @@ class FlowAttrHandler:
             # hash:
             # profile_tw:icmp:estab:sport:<port>:dstips <dstip> <flows_num>
             key = f"{profileid}_{twid}:icmp:est:sport:{flow.sport}:dstips"
-            pipe.hincrby(key, flow.dstip, 1)
+            pipe.hincrby(key, flow.daddr, 1)
 
         return pipe
 
@@ -285,7 +299,6 @@ class FlowAttrHandler:
         state: State,
         source_port: int | str,
     ) -> bool:
-
         try:
             source_port = int(source_port)
         except ValueError:
