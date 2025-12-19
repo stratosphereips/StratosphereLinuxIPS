@@ -820,6 +820,16 @@ class DBManager:
     def get_dstips_with_not_established_flows(self, *args, **kwargs):
         return self.rdb.get_dstips_with_not_established_flows(*args, **kwargs)
 
+    def get_dstports_of_not_established_flows(self, *args, **kwargs):
+        return self.rdb.get_dstports_of_not_established_flows(*args, **kwargs)
+
+    def get_amount_of_dstips_for_not_established_flows_on_port(
+        self, *args, **kwargs
+    ):
+        return self.rdb.get_amount_of_dstips_for_not_established_flows_on_port(
+            *args, **kwargs
+        )
+
     def get_timewindow(self, *args, **kwargs):
         return self.rdb.get_timewindow(*args, **kwargs)
 

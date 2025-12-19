@@ -33,18 +33,17 @@ class FlowAttrHandler:
     This class Contains all the logic related to flows attributes and
     categorizing
 
-    Hashes managed by this class:
+    values managed by this class:
 
     .. vertical portscans detections ..
-    profile_tw:[tcp|udp]:not_estab:ips <ip> {first_seen:..., last_seen:...}
-    profile_tw:[tcp|udp]:not_estab:<ip>:dstports <port> <tot_pkts>
+    hash: profile_tw:[tcp|udp]:not_estab:ips <ip> {first_seen:...,
+    last_seen:...}
+    hash profile_tw:[tcp|udp]:not_estab:<ip>:dstports <port> <tot_pkts>
 
     ..horizontal portscans detections ..
-    profile_tw:[tcp|udp]:not_estab:dstports:total_dstips <port> <tot_dst_ips>
-    profile_tw:[tcp|udp]:not_estab:dstports:total_packets <port> <tot_pkts>
-
-    # .. both portscan detections ..
-
+    hash: profile_tw:[tcp|udp]:not_estab:dstports:total_packets <port>
+    <tot_pkts>
+    set profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips  [ip, ip, .. ]
 
 
     .. ICMP scan detections ..
@@ -111,23 +110,10 @@ class FlowAttrHandler:
         proto: Protocol,
     ) -> Iterator:
         """
-        used by vertical and horizontal portscan modules
+        used by vertical portscan modules
         """
         proto = proto.name.lower()
         key = f"{profileid}_{twid}:{proto}:not_estab:ips"
-        yield from self._hscan(key)
-
-    def get_dports_of_not_established_flows(
-        self,
-        profileid: ProfileID,
-        twid: TimeWindow,
-        proto: Protocol,
-    ) -> Iterator:
-        """
-        used by vertical  portscan modules
-        """
-        proto = proto.name.lower()
-        key = f"{profileid}_{twid}:{proto}:not_estab:ports"
         yield from self._hscan(key)
 
     #
@@ -269,6 +255,42 @@ class FlowAttrHandler:
             total_pkts_sent_to_all_dports += int(pkts)
 
         return amount_of_dports, total_pkts_sent_to_all_dports
+
+    def get_dstports_of_not_established_flows(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        proto: Protocol,
+    ) -> Iterator[Tuple[str, int]]:
+        str_proto = proto.name.lower()
+        key = (
+            f"{profileid}_{twid}:"
+            f"{str_proto}:not_estab:dstports:total_packets"
+        )
+        yield from self._hscan(key)
+
+    def get_amount_of_dstips_for_not_established_flows_on_port(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        proto: Protocol,
+        dport: str,
+    ) -> int:
+        """
+        returns the length of the set for horizontal portscan detection
+         profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips  [ip,
+         ip, ip...]
+        """
+        str_proto = proto.name.lower()
+        key = (
+            f"{profileid}_{twid}:"
+            f"{str_proto}:not_estab:dstport:{dport}:dstips"
+        )
+        try:
+            amount_of_dstips = self.r.scard(key)
+        except TypeError:
+            amount_of_dstips = 0
+        return amount_of_dstips
 
     def _add_scan_detection_info(
         self,
