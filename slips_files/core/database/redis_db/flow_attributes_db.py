@@ -4,7 +4,7 @@ import ipaddress
 import json
 import sys
 import traceback
-from typing import Generator, Iterator
+from typing import Iterator, Tuple
 from redis.client import Pipeline
 from modules.network_discovery.icmp_scan_ports import ICMP_SCAN_PORTS
 from slips_files.core.structures.evidence import (
@@ -32,9 +32,33 @@ class FlowAttrHandler:
     and for easier pattern recognition.
     This class Contains all the logic related to flows attributes and
     categorizing
+
+    Hashes managed by this class:
+
+    .. vertical portscans detections ..
+    profile_tw:[tcp|udp]:not_estab:<ip>:dstports <port> <tot_pkts>
+
+    ..horizontal portscans detections ..
+    profile_tw:[tcp|udp]:not_estab:<ip>:dstports <port> <tot_pkts>
+
+    .. both portscan detections ..
+    profile_tw:[tcp|udp]:not_estab:ips <ip> {first_seen:..., last_seen:...}
+
+    .. ICMP scan detections ..
+    profile_tw:icmp:estab:sport:<port>:dstips <dstip> <flows_num>
+
     """
 
     name = "DB"
+
+    def _hscan(self, key: str, count: int = 100) -> Iterator:
+        cursor = 0
+        while True:
+            cursor, data = self.r.hscan(key, cursor, count=count)
+            for k, v in data.items():
+                yield k, v
+            if cursor == 0:
+                break
 
     def _update_portscan_index_hash(
         self,
@@ -42,7 +66,7 @@ class FlowAttrHandler:
         twid: TimeWindow,
         proto: Protocol,
         ip: str,
-        last_seen_timestamp: float,
+        flow,
     ):
         """
         updates the hash that keeps track of IPs that have contacted a
@@ -61,11 +85,19 @@ class FlowAttrHandler:
         """
         proto = proto.name.lower()
         key = f"{profileid}_{twid}:{proto}:not_estab:ips"
+        last_seen_timestamp = flow.starttime
+
         old_info: str = self.r.hget(key, ip)
         try:
             new_info = json.loads(old_info)
-        except json.JSONDecodeError:
-            new_info = {"first_seen": last_seen_timestamp}
+        except (json.JSONDecodeError, TypeError):
+            new_info = {
+                # TODO this first seen and last seen isnt the start and
+                #  endtime of the attack, it can be any ip, fix it.
+                "first_seen": last_seen_timestamp,
+                "uid_of_first_seen": flow.uid,
+            }
+
         new_info["last_seen"] = last_seen_timestamp
         self.r.hset(key, ip, json.dumps(new_info))
 
@@ -79,42 +111,34 @@ class FlowAttrHandler:
         used by vertical and horizontal portscan modules
         """
         key = f"{profileid}_{twid}:{proto}:not_estab:ips"
-        cursor = 0
-        while True:
-            cursor, data = self.r.hscan(key, cursor, count=100)
-            for ip, timestamps in data.items():
-                timestamps: str
-                timestamps: dict = json.loads(timestamps)
-                yield ip, timestamps
+        yield from self._hscan(key)
 
-            if cursor == 0:
-                break
-
-    def get_data_from_profile_tw(
-        self,
-    ) -> Generator:
-
-        try:
-            key: str = ""
-            cursor = 0
-            while True:
-                cursor, data = self.r.hscan(key, cursor, count=100)
-                for ip_or_port, detailed_info in data.items():
-                    detailed_info = json.loads(detailed_info)
-                    yield ip_or_port, detailed_info
-
-                if cursor == 0:
-                    break
-
-        except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(
-                f"Error in getDataFromProfileTW database.py line "
-                f"{exception_line}",
-                0,
-                1,
-            )
-            self.print(traceback.format_exc(), 0, 1)
+    #
+    # def get_data_from_profile_tw(
+    #     self,
+    # ) -> Generator:
+    #
+    #     try:
+    #         key: str = ""
+    #         cursor = 0
+    #         while True:
+    #             cursor, data = self.r.hscan(key, cursor, count=100)
+    #             for ip_or_port, detailed_info in data.items():
+    #                 detailed_info = json.loads(detailed_info)
+    #                 yield ip_or_port, detailed_info
+    #
+    #             if cursor == 0:
+    #                 break
+    #
+    #     except Exception:
+    #         exception_line = sys.exc_info()[2].tb_lineno
+    #         self.print(
+    #             f"Error in getDataFromProfileTW database.py line "
+    #             f"{exception_line}",
+    #             0,
+    #             1,
+    #         )
+    #         self.print(traceback.format_exc(), 0, 1)
 
     def convert_str_to_state(self, state_as_str: str) -> State:
         if state_as_str == "Established":
@@ -215,6 +239,39 @@ class FlowAttrHandler:
             )
             pipe.execute()
 
+    def get_info_about_not_established_flows(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        proto: Protocol,
+        dstip: str,
+    ) -> Tuple[int, int]:
+        """
+        When a conn like this happens
+        profile -> given dstip:dstport
+        this function returns the number of pkts_sent to all dports of the
+        given dstip
+        and the amount_of_dports seen in flows from the given profile
+        -> the given dstip
+        Used for detecting vertical portscans
+        returns (amount_of_dports, total_pkts_sent_to_all_dports)
+        """
+        str_proto = proto.name.lower()
+        key = f"{profileid}_{twid}:{str_proto}:not_estab:{dstip}:dstports"
+
+        try:
+            amount_of_dports = int(self.r.hlen(key))
+        except ValueError:
+            amount_of_dports = 0
+        try:
+            total_pkts_sent_to_all_dports = int(
+                self.r.hget(key, "total_pkts_sent_to_all_dports")
+            )
+        except ValueError:
+            total_pkts_sent_to_all_dports = 0
+
+        return amount_of_dports, total_pkts_sent_to_all_dports
+
     def _add_scan_detection_info(
         self,
         profileid: ProfileID,
@@ -257,14 +314,13 @@ class FlowAttrHandler:
             # we keep an index hash of target_ips to be able to access the
             # key above using them
             self._update_portscan_index_hash(
-                profileid, twid, proto, target_ip, flow.timestamp
+                profileid, twid, proto, target_ip, flow
             )
 
             if not self._was_flow_flipped(flow):
                 # this hash is needed for horizontal portscans detections
                 # hash e.g. profile_tw:[tcp|udp]:Not_estab:<ip>:dstports
-                # <port>
-                # <tot_pkts>
+                # <port>  <tot_pkts>
                 key = (
                     f"{profileid}_{twid}:"
                     f"{str_proto}:not_estab:{flow.daddr}:dstports"
@@ -279,7 +335,6 @@ class FlowAttrHandler:
             # profile_tw:icmp:estab:sport:<port>:dstips <dstip> <flows_num>
             key = f"{profileid}_{twid}:icmp:est:sport:{flow.sport}:dstips"
             pipe.hincrby(key, flow.daddr, 1)
-
         return pipe
 
     def _was_flow_flipped(self, flow) -> bool:
