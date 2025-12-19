@@ -36,13 +36,16 @@ class FlowAttrHandler:
     Hashes managed by this class:
 
     .. vertical portscans detections ..
+    profile_tw:[tcp|udp]:not_estab:ips <ip> {first_seen:..., last_seen:...}
     profile_tw:[tcp|udp]:not_estab:<ip>:dstports <port> <tot_pkts>
 
     ..horizontal portscans detections ..
-    profile_tw:[tcp|udp]:not_estab:<ip>:dstports <port> <tot_pkts>
+    profile_tw:[tcp|udp]:not_estab:dstports:total_dstips <port> <tot_dst_ips>
+    profile_tw:[tcp|udp]:not_estab:dstports:total_packets <port> <tot_pkts>
 
-    .. both portscan detections ..
-    profile_tw:[tcp|udp]:not_estab:ips <ip> {first_seen:..., last_seen:...}
+    # .. both portscan detections ..
+
+
 
     .. ICMP scan detections ..
     profile_tw:icmp:estab:sport:<port>:dstips <dstip> <flows_num>
@@ -112,6 +115,19 @@ class FlowAttrHandler:
         """
         proto = proto.name.lower()
         key = f"{profileid}_{twid}:{proto}:not_estab:ips"
+        yield from self._hscan(key)
+
+    def get_dports_of_not_established_flows(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        proto: Protocol,
+    ) -> Iterator:
+        """
+        used by vertical  portscan modules
+        """
+        proto = proto.name.lower()
+        key = f"{profileid}_{twid}:{proto}:not_estab:ports"
         yield from self._hscan(key)
 
     #
@@ -248,12 +264,9 @@ class FlowAttrHandler:
         except TypeError:
             amount_of_dports = 0
 
-        try:
-            total_pkts_sent_to_all_dports = int(
-                self.r.hget(key, "total_pkts_sent_to_all_dports")
-            )
-        except TypeError:
-            total_pkts_sent_to_all_dports = 0
+        total_pkts_sent_to_all_dports = 0
+        for _, pkts in self._hscan(key):
+            total_pkts_sent_to_all_dports += int(pkts)
 
         return amount_of_dports, total_pkts_sent_to_all_dports
 
@@ -297,20 +310,31 @@ class FlowAttrHandler:
             )
             pipe.hincrby(key, flow.dport, int(flow.pkts))
             # we keep an index hash of target_ips to be able to access the
-            # key above using them
+            # diff variants of the key above using them
             self._update_portscan_index_hash(
                 profileid, twid, proto, target_ip, flow
             )
 
             if not self._was_flow_flipped(flow):
-                # this hash is needed for horizontal portscans detections
-                # hash e.g. profile_tw:[tcp|udp]:Not_estab:<ip>:dstports
-                # <port>  <tot_pkts>
+                # these hashes are needed for horizontal portscans detections
+                # HASH:
+                # profile_tw:[tcp|udp]:not_estab:dstports:total_packets
+                # <dport> <tot_pkts>
+                # SET
+                # profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips  [ip,
+                # ip, ip...]
                 key = (
                     f"{profileid}_{twid}:"
-                    f"{str_proto}:not_estab:{flow.daddr}:dstports"
+                    f"{str_proto}:not_estab:dstports:total_packets"
                 )
                 pipe.hincrby(key, flow.dport, int(flow.pkts))
+
+                key = (
+                    f"{profileid}_{twid}:"
+                    f"{str_proto}:not_estab:dstport:"
+                    f"{flow.dport}:dstips"
+                )
+                pipe.sadd(key, flow.daddr)
 
         if self._is_info_needed_by_the_icmp_scan_detector_module(
             role, proto, state, flow.sport
