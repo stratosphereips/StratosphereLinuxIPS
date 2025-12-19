@@ -15,6 +15,7 @@ from slips_files.core.structures.evidence import (
     IoCType,
     Direction,
 )
+from slips_files.core.structures.flow_attributes import State
 
 
 class HorizontalPortscan:
@@ -71,29 +72,6 @@ class HorizontalPortscan:
             return False
 
         return f"{profileid}:{twid}:dport:{dport}"
-
-    def get_packets_sent(self, dstips: dict) -> int:
-        """
-        returns the total amount of packets sent to all dst IPs
-        :param dstips: dict with info about  in the following format
-        { dstip:  {
-                        'pkts': src+dst packets sent to this dstip,
-                       'spkts': src packets sent to this dstip,
-                       'stime': timestamp of the first flow in the uid list,
-                       'uid': [uids of flows to this ip]
-                   }
-        }
-        """
-        pkts_sent = 0
-        for dstip in dstips:
-            if "spkts" not in dstips[dstip]:
-                # In argus files there are no src pkts, only pkts.
-                # So it is better to have the total pkts than
-                # to have no packets count
-                pkts_sent += int(dstips[dstip]["pkts"])
-            else:
-                pkts_sent += int(dstips[dstip]["spkts"])
-        return pkts_sent
 
     def are_dstips_greater_or_eq_minimum_dstips(self, dstips) -> bool:
         return dstips >= self.minimum_dstips_to_set_evidence
@@ -193,48 +171,46 @@ class HorizontalPortscan:
     def is_valid_twid(twid: str) -> bool:
         return not (twid in ("", None) or "timewindow" not in twid)
 
-    def check(self, profileid: str, twid: str):
+    def check(self, profileid: ProfileID, twid: TimeWindow):
         if not utils.are_scan_detection_modules_interested_in_this_ip(
             profileid.ip
-        ) or not self.is_valid_twid(twid):
+        ):
             return False
         # if you're portscaning a port that is open it's gonna be established
         # the amount of open ports we find is gonna be so small
         # theoretically this is incorrect bc we'll be ignoring
         # established evidence,
         # but usually open ports are very few compared to the whole range
-        # so, practically this is correct to avoid FP
-        state = "Not Established"
+        # so, practically using not established only this is correct to
+        # avoid FP
         for protocol in (Protocol.TCP, Protocol.UDP):
-            dports: dict = self.get_not_estab_dst_ports(
-                protocol, state, profileid, twid
-            )
-
             # For each port, see if the amount is over the threshold
-            for dport in dports.keys():
-                # PortScan Type 2. Direction OUT
-                twid_identifier: str = self.get_twid_identifier(
-                    profileid, twid, dport
+            for (
+                dport,
+                total_pkts,
+            ) in self.db.get_dstports_of_not_established_flows(
+                profileid, twid, protocol
+            ):
+
+                amount_of_dstips: int = (
+                    self.db.get_amount_of_dstips_for_not_established_flows_on_port(
+                        profileid, twid, protocol, dport
+                    )
                 )
-                if not twid_identifier:
-                    continue
-
-                dstips: dict = dports[dport]["dstips"]
-                amount_of_dips = len(dstips)
-
                 if self.check_if_enough_dstips_to_trigger_an_evidence(
-                    twid_identifier, amount_of_dips
+                    profileid, twid, dport, amount_of_dstips
                 ):
                     evidence = {
-                        "protocol": protocol,
-                        "profileid": profileid,
-                        "twid": twid,
-                        "uids": self.get_uids(dstips),
+                        "protocol": protocol.name.lower(),
+                        "profileid": str(profileid),
+                        "twid": str(twid),
+                        "uids": [],
                         "dport": dport,
-                        "pkts_sent": self.get_packets_sent(dstips),
-                        "timestamp": next(iter(dstips.values()))["stime"],
-                        "state": state,
-                        "amount_of_dips": amount_of_dips,
+                        "pkts_sent": total_pkts,
+                        "timestamp": "",  # TODO,
+                        "state": State.NOT_EST.name.lower(),
+                        "amount_of_dips": amount_of_dstips,
                     }
 
                     self.set_evidence_horizontal_portscan(evidence)
+        return
