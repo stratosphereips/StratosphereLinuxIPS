@@ -796,6 +796,9 @@ class DBManager:
     def get_intuples_from_profile_tw(self, *args, **kwargs):
         return self.rdb.get_intuples_from_profile_tw(*args, **kwargs)
 
+    def get_info_about_not_established_flows(self, *args, **kwargs):
+        return self.rdb.get_info_about_not_established_flows(*args, **kwargs)
+
     def incr_msgs_received_in_channel(self, *args, **kwargs):
         return self.rdb.incr_msgs_received_in_channel(*args, **kwargs)
 

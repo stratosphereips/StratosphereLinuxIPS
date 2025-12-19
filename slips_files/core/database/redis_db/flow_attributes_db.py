@@ -110,6 +110,7 @@ class FlowAttrHandler:
         """
         used by vertical and horizontal portscan modules
         """
+        proto = proto.name.lower()
         key = f"{profileid}_{twid}:{proto}:not_estab:ips"
         yield from self._hscan(key)
 
@@ -261,13 +262,14 @@ class FlowAttrHandler:
 
         try:
             amount_of_dports = int(self.r.hlen(key))
-        except ValueError:
+        except TypeError:
             amount_of_dports = 0
+
         try:
             total_pkts_sent_to_all_dports = int(
                 self.r.hget(key, "total_pkts_sent_to_all_dports")
             )
-        except ValueError:
+        except TypeError:
             total_pkts_sent_to_all_dports = 0
 
         return amount_of_dports, total_pkts_sent_to_all_dports

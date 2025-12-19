@@ -1084,7 +1084,15 @@ class ProfileHandler:
         data = {f"{profileid}{self.separator}{twid}": float(timestamp)}
         client = pipe if pipe else self.r
         client.zadd(self.constants.MODIFIED_TIMEWINDOWS, data)
-        self.publish("tw_modified", f"{profileid}:{twid}")
+        self.publish(
+            "tw_modified",
+            json.dumps(
+                {
+                    "profileid": profileid,
+                    "twid": twid,
+                }
+            ),
+        )
         return pipe
 
     def publish_new_letter(
