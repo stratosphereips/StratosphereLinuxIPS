@@ -140,13 +140,14 @@ class VerticalPortscan:
         return more_than_min and exceeded_twid_threshold
 
     def check_if_enough_dports_to_trigger_an_evidence(
-        self, twid_identifier: str, amount_of_dports: int
+        self, profileid, twid, dstip, amount_of_dports: int
     ) -> bool:
         """
         checks if the scanned sports are enough to trigger and evidence
         to make sure the amount of dports reported each evidence
         is higher than the previous one +15
         """
+        twid_identifier = f"{profileid}:{twid}:dstip:{dstip}"
         twid_threshold: int = self.cached_thresholds_per_tw.get(
             twid_identifier, 0
         )
@@ -194,16 +195,7 @@ class VerticalPortscan:
         )
         return dstips
 
-    def get_twid_identifier(
-        self, profileid: str, twid: str, dstip: str
-    ) -> str:
-        """
-        returns the key that identifies this vertical portscan in the
-        given tw
-        """
-        return f"{profileid}:{twid}:dstip:{dstip}"
-
-    def check(self, profileid, twid):
+    def check(self, profileid: ProfileID, twid: TimeWindow):
         """
         sets an evidence if a vertical portscan is detected
         """
@@ -222,20 +214,20 @@ class VerticalPortscan:
             ) in self.db.get_dstips_with_not_established_flows(
                 profileid, twid, protocol
             ):
-                metadata: Dict[str, float] = json.loads(metadata)
-
                 # Get the total amount of pkts sent to all
                 # ports on the same host
+                amount_of_dports: int
+                total_pkts_sent_to_all_dports: int
                 amount_of_dports, total_pkts_sent_to_all_dports = (
-                    self.db.get_info_about_not_established_flows(dstip)
+                    self.db.get_info_about_not_established_flows(
+                        profileid, twid, protocol, dstip
+                    )
                 )
 
-                twid_identifier: str = self.get_twid_identifier(
-                    profileid, twid, dstip
-                )
                 if self.check_if_enough_dports_to_trigger_an_evidence(
-                    twid_identifier, amount_of_dports
+                    profileid, twid, dstip, amount_of_dports
                 ):
+                    metadata: Dict[str, float] = json.loads(metadata)
                     # todo remove uid usage
                     evidence_details = {
                         "timestamp": metadata["first_seen"],

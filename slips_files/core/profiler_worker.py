@@ -676,16 +676,17 @@ class ProfilerWorker:
                 if not msg:
                     continue
 
-                line: dict = msg["line"]
-                # TODO who is putting this True here?
-                if line is True:
-                    continue
-
                 if self.is_stop_msg(msg):
                     gc.collect()
                     # this signal tells profiler.py to stop
                     self.stop_profiler_event.set()
                     return 1
+
+                line: dict = msg["line"]
+
+                # TODO who is putting this True here?
+                if line is True:
+                    continue
 
                 self.times = {}
                 self.received_lines += 1
