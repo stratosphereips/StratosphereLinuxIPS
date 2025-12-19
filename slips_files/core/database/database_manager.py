@@ -814,6 +814,9 @@ class DBManager:
     def set_dhcp_flow(self, *args, **kwargs):
         return self.rdb.set_dhcp_flow(*args, **kwargs)
 
+    def get_dstips_with_not_established_flows(self, *args, **kwargs):
+        return self.rdb.get_dstips_with_not_established_flows(*args, **kwargs)
+
     def get_timewindow(self, *args, **kwargs):
         return self.rdb.get_timewindow(*args, **kwargs)
 

@@ -4,9 +4,9 @@ import ipaddress
 import json
 import sys
 import traceback
-from typing import Generator
+from typing import Generator, Iterator
 from redis.client import Pipeline
-
+from modules.network_discovery.icmp_scan_ports import ICMP_SCAN_PORTS
 from slips_files.core.structures.evidence import (
     ProfileID,
     TimeWindow,
@@ -68,6 +68,27 @@ class FlowAttrHandler:
             new_info = {"first_seen": last_seen_timestamp}
         new_info["last_seen"] = last_seen_timestamp
         self.r.hset(key, ip, json.dumps(new_info))
+
+    def get_dstips_with_not_established_flows(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        proto: Protocol,
+    ) -> Iterator:
+        """
+        used by vertical and horizontal portscan modules
+        """
+        key = f"{profileid}_{twid}:{proto}:not_estab:ips"
+        cursor = 0
+        while True:
+            cursor, data = self.r.hscan(key, cursor, count=100)
+            for ip, timestamps in data.items():
+                timestamps: str
+                timestamps: dict = json.loads(timestamps)
+                yield ip, timestamps
+
+            if cursor == 0:
+                break
 
     def get_data_from_profile_tw(
         self,
@@ -310,7 +331,7 @@ class FlowAttrHandler:
             and state == State.EST
             # these are the ports used for common icmp scans that slips
             # currently detects
-            and source_port in (8, 19, 20, 23, 24)
+            and source_port in ICMP_SCAN_PORTS
         )
 
     def get_final_state_from_flags(self, state, pkts):
