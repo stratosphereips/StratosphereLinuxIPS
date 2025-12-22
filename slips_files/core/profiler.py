@@ -111,7 +111,7 @@ class Profiler(ICore, IObservable):
         self.manager = multiprocessing.Manager()
         self.localnet_cache = self.manager.dict()
         # max parallel profiler workers to start when high throughput is detected
-        self.max_workers = 1
+        self.max_workers = 10
         self.aid_queue = multiprocessing.Queue()
         # This starts a process that handles calculatng aid hash and stores
         # the conn fows in the db. why?
@@ -345,33 +345,36 @@ class Profiler(ICore, IObservable):
         Checks for input and profile flows/sec imbalance and adds more
         profiler workers if needed.
         """
-
         if self.max_workers_started():
             return
 
-        if not self.did_5min_pass_since_last_throughput_check():
-            return
+        self.print("@@@@@@@@@@@@@@@@ sleeping???    ")
+        time.sleep(60)
 
-        profiler_fps = self.db.get_module_flows_per_second(self.name)
-        input_fps = self.db.get_module_flows_per_second("Input")
+        # if not self.did_5min_pass_since_last_throughput_check():
+        #     return
 
-        if float(input_fps) > (
-            float(profiler_fps) * 1.1
-        ):  # 10% more input fps than profiler fps
-            worker_id = self.last_worker_id + 1
-            self.start_profiler_worker(worker_id)
-            self.last_worker_id = worker_id
+        # profiler_fps = self.db.get_module_flows_per_second(self.name)
+        # input_fps = self.db.get_module_flows_per_second("Input")
+        # @@@@@ todo reset this func to what ist was
+        # if float(input_fps) > (
+        #     float(profiler_fps) * 1.1
+        # ):  # 10% more input fps than profiler fps
+        worker_id = self.last_worker_id + 1
+        self.start_profiler_worker(worker_id)
+        self.last_worker_id = worker_id
+        self.print(
+            f"Warning: High throughput detected. Started "
+            f"additional worker: "
+            f"ProfilerWorker_{worker_id} to handle the flows."
+        )
+
+        if self.last_worker_id == self.max_workers - 1:
             self.print(
-                f"Warning: High throughput detected. Started "
-                f"additional worker: "
-                f"ProfilerWorker_{worker_id} to handle the flows."
+                f"Maximum number of profiler workers "
+                f"({self.max_workers}) started."
             )
-
-            if self.last_worker_id == self.max_workers - 1:
-                self.print(
-                    f"Maximum number of profiler workers "
-                    f"({self.max_workers}) started."
-                )
+        time.sleep(70 * 100)
 
     def pre_main(self):
         client_ips = [str(ip) for ip in self.client_ips]
@@ -410,7 +413,7 @@ class Profiler(ICore, IObservable):
         # the only thing that stops this loop is the 'stop' msg sent by the
         # input and recvd by one of the workers
         while not self.should_stop():
-            time.sleep(5 * 60)
+            # time.sleep(5 * 60) TODO uncomment this
             self._update_lines_read_by_all_workers()
             # implemented in icore.py
             self.store_flows_read_per_second()

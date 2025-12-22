@@ -639,6 +639,18 @@ class ProfilerWorker(IModule):
         """
         return msg == "stop"
 
+    def pre_main(self):
+        """
+        if this profiler worker was started late after slips detected
+        latency, it won't know about the processors published in the new_zeek_fields_line
+        channel. this pre_main takes care of that
+        """
+        if line_processors := self.db.get_line_processors():
+            for file_type, indices in line_processors.items():
+                self.input_handler.line_processor_cache.update(
+                    {file_type: json.loads(indices)}
+                )
+
     def main(self):
         # Disable automatic GC, we'll trigger it manually
         gc.disable()

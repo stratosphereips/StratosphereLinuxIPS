@@ -70,6 +70,7 @@ class Constants:
     SUBS_WHO_PROCESSED_MSG = "number_of_subscribers_who_processed_this_msg"
     FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN = "flows_analyzed_per_minute"
     MODULES_FLOWS_PER_SECOND = "modules_processed_flows_per_second"
+    LINE_PROCESSORS = "line_processors"
 
 
 class Channels:

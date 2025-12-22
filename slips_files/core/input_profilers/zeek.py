@@ -182,8 +182,9 @@ class ZeekJSON(IInputType, Zeek):
     flow.
     """
 
-    def __init__(self):
+    def __init__(self, db):
         super().__init__()
+        self.db = db
         self.line_processor_cache = {}
         self.times = {}
         self.init_csv()
@@ -362,10 +363,14 @@ class ZeekTabs(IInputType, Zeek):
 
         indices = {file_type: indices_of_each_slips_field}
         self.line_processor_cache.update(indices)
-
+        # for currently started profiler workers to know about the new file
+        # indices
         self.db.publish(
             self.db.channels.NEW_ZEEK_FIELDS_LINE, json.dumps(indices)
         )
+        # if slips starts more profilers later, they can access the
+        # processors from the db directly
+        self.db.store_lines_processors(file_type, indices_of_each_slips_field)
 
     def get_value_at(self, line: list, index: int, default_=""):
         try:

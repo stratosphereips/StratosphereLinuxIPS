@@ -764,6 +764,12 @@ class DBManager:
     def is_profile_malicious(self, *args, **kwargs):
         return self.rdb.is_profile_malicious(*args, **kwargs)
 
+    def store_lines_processors(self, *args, **kwargs):
+        return self.rdb.store_lines_processors(*args, **kwargs)
+
+    def get_line_processors(self, *args, **kwargs):
+        return self.rdb.get_line_processors(*args, **kwargs)
+
     def set_ti_feed_info(self, *args, **kwargs):
         return self.rdb.set_ti_feed_info(*args, **kwargs)
 

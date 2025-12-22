@@ -378,9 +378,10 @@ class NetworkDiscovery(IModule):
 
     def main(self):
         if msg := self.get_msg("tw_modified"):
+            msg = json.loads(msg["data"])
             # Get the profileid and twid
-            profileid = msg["data"].split(":")[0]
-            twid = msg["data"].split(":")[1]
+            profileid = msg["profileid"]
+            twid = msg["twid"]
             # Start of the port scan detection
             self.print(
                 f"Running the detection of portscans in profile "
@@ -388,7 +389,12 @@ class NetworkDiscovery(IModule):
                 3,
                 0,
             )
+            try:
+                profileid = ProfileID(ip=profileid.split("_")[-1])
+            except ValueError:
+                return
 
+            twid = TimeWindow(number=int(twid.replace("timewindow", "")))
             # For port scan detection, we will measure different things:
 
             # 1. Vertical port scan:
@@ -410,7 +416,7 @@ class NetworkDiscovery(IModule):
 
             self.horizontal_ps.check(profileid, twid)
             self.vertical_ps.check(profileid, twid)
-            self.check_icmp_scan(profileid, twid)
+            #             self.check_icmp_scan(profileid, twid)
 
         if msg := self.get_msg("new_notice"):
             data = json.loads(msg["data"])

@@ -1224,6 +1224,15 @@ class ProfileHandler:
             )
             self.print(traceback.format_exc(), 0, 1)
 
+    def store_lines_processors(self, file_type: str, indices: dict):
+        self.r.hset(
+            self.constants.LINE_PROCESSORS, file_type, json.dumps(indices)
+        )
+
+    def get_line_processors(self) -> dict:
+        # the keys are very limite d we can safely use hgetall here
+        return self.r.hgetall(self.constants.LINE_PROCESSORS)
+
     def get_modules_labels_of_a_profile(self, profileid):
         """
         Get labels set by modules in the profile.
