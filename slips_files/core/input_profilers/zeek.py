@@ -1,12 +1,12 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import csv
+import json
 import os
 import time
 from re import split
-from typing import Dict
+from typing import Dict, Tuple
 from dataclasses import fields as dataclass_fields, MISSING
-
 
 from slips_files.common.abstracts.iinput_type import IInputType
 from slips_files.common.slips_utils import utils
@@ -282,11 +282,11 @@ class ZeekJSON(IInputType, Zeek):
             self.log_time("fill_empty_class_fields", latency)
 
             n = time.time()
-            self.flow = slips_class(**self.reusable_flow_values_dict)
+            flow = slips_class(**self.reusable_flow_values_dict)
             latency = time.time() - n
             self.log_time("calling_slips_class", latency)
 
-            return self.flow
+            return flow
 
         print(f"[Profiler] Invalid file_type: {file_type}, line: {line}")
         return False
@@ -296,8 +296,9 @@ class ZeekTabs(IInputType, Zeek):
     separator = "\t"
     line_processor_cache = {}
 
-    def __init__(self):
+    def __init__(self, db):
         super().__init__()
+        self.db = db
 
     @staticmethod
     def split(line: str) -> list:
@@ -358,21 +359,28 @@ class ZeekTabs(IInputType, Zeek):
         )
 
         file_type: str = self.get_file_type(fields_line)
-        self.line_processor_cache.update(
-            {file_type: indices_of_each_slips_field}
+
+        indices = {file_type: indices_of_each_slips_field}
+        self.line_processor_cache.update(indices)
+
+        self.db.publish(
+            self.db.channels.NEW_ZEEK_FIELDS_LINE, json.dumps(indices)
         )
 
     def get_value_at(self, line: list, index: int, default_=""):
         try:
+            index = int(index)
             val = line[index]
             return default_ if val == "-" else val
         except IndexError:
             return default_
 
-    def process_line(self, new_line: dict):
+    def process_line(self, new_line: dict) -> Tuple[bool, str]:
         """
         Process the tab line from zeek.
         :param new_line: a dict with "type" and "data" keys
+        returns True if a flow was sucessfully processed,
+        and false with an err str if it's a fields line or an error occurred
         """
         line: str = new_line["data"]
 
@@ -381,7 +389,7 @@ class ZeekTabs(IInputType, Zeek):
             # to some slips obj (SSL, Con, SSH, etc...)
             # cache the mapping for later use
             self.update_line_processor_cache(new_line)
-            return
+            return False, "Field line processed"
 
         file_type: str = self.get_file_type(new_line)
         # this dict is the name of each slips field and the index of it
@@ -390,13 +398,7 @@ class ZeekTabs(IInputType, Zeek):
         line_processor = self.line_processor_cache.get(file_type)
 
         if not line_processor:
-            print(
-                f"Slips is unable to handle the given zeek log line! "
-                f"{new_line}",
-                0,
-                1,
-            )
-            return
+            return False, "unknown line_processor"
 
         line: list = self.split(line)
 
@@ -442,8 +444,8 @@ class ZeekTabs(IInputType, Zeek):
             )
 
             # create the corresponding object using the mapped class
-            self.flow = slips_class(**flow_values)
-            return self.flow
+            flow = slips_class(**flow_values)
+            return flow, ""
 
         print(f"[Profiler] Invalid file_type: {log_type}, line: {line}")
-        return False
+        return False, "Invalid file_type: {log_type}, line: {line}"

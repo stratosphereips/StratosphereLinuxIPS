@@ -91,13 +91,15 @@ class RedisDB(
         "new_tunnel",
         "check_jarm_hash",
         "control_channel",
-        "new_module_flow" "cpu_profile",
+        "new_module_flow",
+        "cpu_profile",
         "memory_profile",
         "fides2network",
         "network2fides",
         "fides2slips",
         "slips2fides",
         "iris_internal",
+        "new_zeek_fields_line",
     }
 
     separator = "_"

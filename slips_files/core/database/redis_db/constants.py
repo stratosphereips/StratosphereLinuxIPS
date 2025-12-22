@@ -77,3 +77,4 @@ class Channels:
     NEW_ALERT = "new_alert"
     EVIDENCE_ADDED = "evidence_added"
     GIVE_TI = "get_modified_profiles_since"
+    NEW_ZEEK_FIELDS_LINE = "new_zeek_fields_line"

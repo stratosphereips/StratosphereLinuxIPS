@@ -269,7 +269,7 @@ class Profiler(ICore, IObservable):
             self.print("Can't determine input type.")
             return None
 
-        input_handler_cls = SUPPORTED_INPUT_TYPES[input_type]()
+        input_handler_cls = SUPPORTED_INPUT_TYPES[input_type](self.db)
         return input_handler_cls
 
     def should_stop(self):
@@ -288,6 +288,8 @@ class Profiler(ICore, IObservable):
         return self.stop_profiler_event.is_set()
 
     def shutdown_gracefully(self):
+        self.aid_manager.shutdown()
+
         for worker in self.workers:
             self.rec_lines += worker.received_lines
 

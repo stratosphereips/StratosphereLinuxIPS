@@ -72,6 +72,7 @@ class DBManager:
         if start_sqlite:
             self.sqlite = SQLiteDB(self.logger, output_dir, main_pid)
         self.all_interfaces = utils.get_all_interfaces(self.conf.get_args())
+        self.channels = self.rdb.channels
 
     def is_db_malformed(self, db_path: str) -> bool:
         try:

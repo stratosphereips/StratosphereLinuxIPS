@@ -20,11 +20,9 @@ import validators
 import gc
 
 from slips_files.common.abstracts.imodule import IModule
-from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
 from slips_files.core.aid_manager import AIDManager
-from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
@@ -36,6 +34,8 @@ from slips_files.core.structures.flow_attributes import Role
 
 
 class ProfilerWorker(IModule):
+    name = "ProfilerWorker"
+
     def init(
         self,
         name,
@@ -55,18 +55,17 @@ class ProfilerWorker(IModule):
         self.aid_queue = aid_queue
         self.aid_manager: AIDManager = aid_manager
         self.stop_profiler_event = stop_profiler_event
-
         # this is an instance of
         # ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         self.input_handler = input_handler
         self.handle_setting_local_net_lock = handle_setting_local_net_lock
-
-        self.printer = Printer(self.logger, self.name)
-        self.db = DBManager(
-            self.logger, self.output_dir, self.redis_port, self.conf, self.ppid
-        )
-
         self.read_configuration()
+
+        self.c1 = self.db.subscribe("new_zeek_fields_line")
+        self.channels = {
+            "new_zeek_fields_line": self.c1,
+        }
+
         self.received_lines = 0
         self.localnet_cache = localnet_cache
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
@@ -90,12 +89,6 @@ class ProfilerWorker(IModule):
         self.analysis_direction = self.conf.analysis_direction()
         self.label = self.conf.label()
         self.width = self.conf.get_tw_width_as_float()
-
-    def print(self, *args, **kwargs):
-        return self.printer.print(*args, **kwargs)
-
-    def shutdown_gracefully(self):
-        self.aid_manager.shutdown()
 
     def get_msg_from_queue(self, q: multiprocessing.Queue):
         """
@@ -631,6 +624,14 @@ class ProfilerWorker(IModule):
                 writer.writerow(self.times)
             self.times = {}
 
+    def update_the_files_input_handler_knows_about(self, msg: dict):
+        """
+        updates the input handler with the new zeek fields
+        recvd in the msg
+        """
+        msg: dict = json.loads(msg["data"])
+        self.input_handler.line_processor_cache.update(msg)
+
     def is_stop_msg(self, msg: str) -> bool:
         """
         this 'stop' msg is the last msg ever sent by the input process
@@ -641,8 +642,11 @@ class ProfilerWorker(IModule):
     def main(self):
         # Disable automatic GC, we'll trigger it manually
         gc.disable()
-
         try:
+            for _ in range(3):
+                if msg := self.get_msg("new_zeek_fields_line"):
+                    self.update_the_files_input_handler_knows_about(msg)
+
             msg = self.get_msg_from_queue(self.profiler_queue)
             if not msg:
                 return
@@ -655,20 +659,21 @@ class ProfilerWorker(IModule):
 
             line: dict = msg["line"]
 
-            # TODO who is putting this True here?
-            if line is True:
-                return
-
             self.times = {}
             self.received_lines += 1
 
             n = time.time()
-            flow = self.input_handler.process_line(line)
+            flow, err = self.input_handler.process_line(line)
             time_it_took = time.time() - n
 
             self.log_time("process_line", time_it_took)
 
             if not flow:
+                # put back the msg in queue until this profiler gets a
+                # msg in new_zeek_fields_line about the unknown line_processor
+                # or another worker that knows how to process this line does it
+                if err == "unknown line_processor":
+                    self.profiler_queue.put(msg)
                 return
 
             n = time.time()
