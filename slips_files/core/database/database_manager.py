@@ -823,10 +823,8 @@ class DBManager:
     def get_dstports_of_not_established_flows(self, *args, **kwargs):
         return self.rdb.get_dstports_of_not_established_flows(*args, **kwargs)
 
-    def get_amount_of_dstips_for_not_established_flows_on_port(
-        self, *args, **kwargs
-    ):
-        return self.rdb.get_amount_of_dstips_for_not_established_flows_on_port(
+    def get_total_dstips_for_not_estab_flows_on_port(self, *args, **kwargs):
+        return self.rdb.get_total_dstips_for_not_estab_flows_on_port(
             *args, **kwargs
         )
 

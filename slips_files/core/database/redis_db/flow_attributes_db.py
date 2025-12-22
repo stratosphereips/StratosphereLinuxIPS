@@ -108,7 +108,7 @@ class FlowAttrHandler:
         profileid: ProfileID,
         twid: TimeWindow,
         proto: Protocol,
-    ) -> Iterator:
+    ) -> Iterator[Tuple[str, str]]:
         """
         used by vertical portscan modules
         """
@@ -269,7 +269,7 @@ class FlowAttrHandler:
         )
         yield from self._hscan(key)
 
-    def get_amount_of_dstips_for_not_established_flows_on_port(
+    def get_total_dstips_for_not_estab_flows_on_port(
         self,
         profileid: ProfileID,
         twid: TimeWindow,

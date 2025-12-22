@@ -147,6 +147,9 @@ class VerticalPortscan:
         to make sure the amount of dports reported each evidence
         is higher than the previous one +15
         """
+        if not dstip:
+            return False
+
         twid_identifier = f"{profileid}:{twid}:dstip:{dstip}"
         twid_threshold: int = self.cached_thresholds_per_tw.get(
             twid_identifier, 0
@@ -159,52 +162,17 @@ class VerticalPortscan:
             return True
         return False
 
-    def get_not_established_dst_ips(
-        self, protocol: str, state: str, profileid: str, twid: str
-    ) -> dict:
-        """
-        Get the list of dstips that we tried to connect to
-            (not established flows)
-          these unknowns are the info this function retrieves
-          profileid -> unknown_dstip:unknown_dstports
-
-         here, the profileid given is the client.
-         :return: the following dict
-         {
-             dst_ip: {
-                 totalflows: total flows seen by the profileid
-                 totalpkt: total packets seen by the profileid
-                 totalbytes: total bytes sent by the profileid
-                 stime: timestamp of the first flow seen from
-                        this profileid -> this dstip
-                 uid: list of uids where the given profileid was
-                        contacting the dst_ip on this dstport
-                 dstports: dst ports seen in all flows where the given
-                        profileid was srcip
-                     {
-                         <str port>: < int spkts sent to this port>
-                     }
-             }
-        """
-        direction = "Dst"
-        role = "Client"
-        type_data = "IPs"
-
-        dstips: dict = self.db.get_data_from_profile_tw(
-            profileid, twid, direction, state, protocol, role, type_data
-        )
-        return dstips
-
     def check(self, profileid: ProfileID, twid: TimeWindow):
         """
         sets an evidence if a vertical portscan is detected
         """
-        # When scanning an open port, the connection will appear as ESTABLISHED.
+        # When scanning an open port, the connection will appear as
+        # ESTABLISHED.
         # Open ports are typically very few compared to the full port range.
         # Ignoring ESTABLISHED connections is theoretically inaccurate because
-        # it misses scans hitting open ports, but in practice this is negligible.
-        # Focusing on non-ESTABLISHED states significantly reduces false positives
-        # while preserving the port-scan signal.
+        # it misses scans hitting open ports, but in practice this is
+        # negligible. Focusing on non-ESTABLISHED states significantly
+        # reduces false positives while preserving the port-scan signal.
         for protocol in (Protocol.TCP, Protocol.UDP):
             # For each dstip, see if the amount of ports
             # connections is over the threshold
