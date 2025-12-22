@@ -71,10 +71,8 @@ class AIDManager:
             }
         )
 
-    def shutdown(self, wait=True):
+    def shutdown(self):
         """
         Gracefully stop the background process.
         """
         self._aid_queue.put("stop")  # sentinel
-        if wait:
-            self._process.join()

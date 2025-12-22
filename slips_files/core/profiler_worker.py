@@ -642,9 +642,15 @@ class ProfilerWorker(IModule):
     def pre_main(self):
         """
         if this profiler worker was started late after slips detected
-        latency, it won't know about the processors published in the new_zeek_fields_line
-        channel. this pre_main takes care of that
+        latency, it won't know about the processors published in the
+        new_zeek_fields_line channel. this pre_main takes care of that
         """
+        worker_number = self.name.split("_")[-1]
+        self.print(
+            f"Started Profiler Worker {green(worker_number)} [PID"
+            f" {green(os.getpid())}]"
+        )
+
         if line_processors := self.db.get_line_processors():
             for file_type, indices in line_processors.items():
                 self.input_handler.line_processor_cache.update(

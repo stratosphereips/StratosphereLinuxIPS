@@ -127,6 +127,7 @@ class HorizontalPortscan:
             profileid.ip
         ):
             return False
+
         # if you're portscaning a port that is open it's gonna be established
         # the amount of open ports we find is gonna be so small
         # theoretically this is incorrect bc we'll be ignoring

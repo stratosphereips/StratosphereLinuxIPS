@@ -10,7 +10,6 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-import os
 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -209,21 +208,6 @@ class Profiler(ICore, IObservable):
     def start_profiler_worker(self, worker_id: int = None):
         """starts A profiler worker for faster processing of the flows"""
         worker_name = f"ProfilerWorker_Process_{worker_id}"
-        # proc = multiprocessing.Process(
-        #     target=self.worker,
-        #     args=(
-        #         worker_name,
-        #         self.input_handler_cls,
-        #     ),
-        #     name=worker_name,
-        #     # daemon=True,
-        # )
-        worker_number = worker_name.split("_")[-1]
-        self.print(
-            f"Started Profiler Worker {green(worker_number)} [PID"
-            f" {green(os.getpid())}]"
-        )
-
         worker = ProfilerWorker(
             logger=self.logger,
             output_dir=self.output_dir,
@@ -348,33 +332,28 @@ class Profiler(ICore, IObservable):
         if self.max_workers_started():
             return
 
-        self.print("@@@@@@@@@@@@@@@@ sleeping???    ")
-        time.sleep(60)
+        if not self.did_5min_pass_since_last_throughput_check():
+            return
 
-        # if not self.did_5min_pass_since_last_throughput_check():
-        #     return
-
-        # profiler_fps = self.db.get_module_flows_per_second(self.name)
-        # input_fps = self.db.get_module_flows_per_second("Input")
-        # @@@@@ todo reset this func to what ist was
-        # if float(input_fps) > (
-        #     float(profiler_fps) * 1.1
-        # ):  # 10% more input fps than profiler fps
-        worker_id = self.last_worker_id + 1
-        self.start_profiler_worker(worker_id)
-        self.last_worker_id = worker_id
-        self.print(
-            f"Warning: High throughput detected. Started "
-            f"additional worker: "
-            f"ProfilerWorker_{worker_id} to handle the flows."
-        )
-
-        if self.last_worker_id == self.max_workers - 1:
+        profiler_fps = self.db.get_module_flows_per_second(self.name)
+        input_fps = self.db.get_module_flows_per_second("Input")
+        if float(input_fps) > (
+            float(profiler_fps) * 1.1
+        ):  # 10% more input fps than profiler fps
+            worker_id = self.last_worker_id + 1
+            self.start_profiler_worker(worker_id)
+            self.last_worker_id = worker_id
             self.print(
-                f"Maximum number of profiler workers "
-                f"({self.max_workers}) started."
+                f"Warning: High throughput detected. Started "
+                f"additional worker: "
+                f"ProfilerWorker_{worker_id} to handle the flows."
             )
-        time.sleep(70 * 100)
+
+            if self.last_worker_id == self.max_workers - 1:
+                self.print(
+                    f"Maximum number of profiler workers "
+                    f"({self.max_workers}) started."
+                )
 
     def pre_main(self):
         client_ips = [str(ip) for ip in self.client_ips]
