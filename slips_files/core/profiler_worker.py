@@ -19,7 +19,7 @@ import netifaces
 import validators
 import gc
 
-
+from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
@@ -28,7 +28,6 @@ from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
-from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.input_profilers.argus import Argus
 from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
@@ -36,39 +35,22 @@ from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 from slips_files.core.structures.flow_attributes import Role
 
 
-class ProfilerWorker:
-    def __init__(
+class ProfilerWorker(IModule):
+    def init(
         self,
         name,
-        logger,
-        output_dir,
-        redis_port,
-        conf,
-        ppid: int,
-        args,
         localnet_cache: Dict[str, str],
         profiler_queue: multiprocessing.Queue,
-        stop_profiler_workers: multiprocessing.Event,
         handle_setting_local_net_lock: multiprocessing.Lock,
         input_handler: (
             ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         ),
-        bloom_filters: BFManager,
         aid_queue: multiprocessing.Queue,
         aid_manager: AIDManager,
         stop_profiler_event: multiprocessing.Event,
     ):
-        super().__init__()
         self.name = name
-        self.logger = logger
-        self.output_dir = output_dir
-        self.redis_port = redis_port
-        self.conf = conf
-        self.ppid = ppid
-        self.args = args
         self.profiler_queue = profiler_queue
-        self.stop_profiler_workers = stop_profiler_workers
-        self.bloom_filters = bloom_filters
         # used to pass aid tasks from workers to the the AIDManager()
         self.aid_queue = aid_queue
         self.aid_manager: AIDManager = aid_manager
@@ -125,16 +107,6 @@ class ProfilerWorker:
             return None
         except Exception:
             return None
-
-    def should_stop_profiler_workers(self) -> bool:
-        # cant use while self.flows_to_process_q.qsize() != 0 only here
-        # because when the thread starts, this qsize is 0, so we need
-        # another indicator that we are at the end of the flows. aka the
-        # stop_profiler_workers event
-        return (
-            self.stop_profiler_workers.is_set()
-            # and not self.flows_to_process_q.qsize()
-        )
 
     def get_private_client_ips(
         self,
@@ -670,60 +642,52 @@ class ProfilerWorker:
         # Disable automatic GC, we'll trigger it manually
         gc.disable()
 
-        while not self.should_stop_profiler_workers():
-            try:
-                msg = self.get_msg_from_queue(self.profiler_queue)
-                if not msg:
-                    continue
+        try:
+            msg = self.get_msg_from_queue(self.profiler_queue)
+            if not msg:
+                return
 
-                if self.is_stop_msg(msg):
-                    gc.collect()
-                    # this signal tells profiler.py to stop
-                    self.stop_profiler_event.set()
-                    return 1
+            if self.is_stop_msg(msg):
+                gc.collect()
+                # this signal tells profiler.py to stop
+                self.stop_profiler_event.set()
+                return 1
 
-                line: dict = msg["line"]
+            line: dict = msg["line"]
 
-                # TODO who is putting this True here?
-                if line is True:
-                    continue
+            # TODO who is putting this True here?
+            if line is True:
+                return
 
-                self.times = {}
-                self.received_lines += 1
+            self.times = {}
+            self.received_lines += 1
 
-                n = time.time()
-                flow = self.input_handler.process_line(line)
-                time_it_took = time.time() - n
+            n = time.time()
+            flow = self.input_handler.process_line(line)
+            time_it_took = time.time() - n
 
-                self.log_time("process_line", time_it_took)
+            self.log_time("process_line", time_it_took)
 
-                if not flow:
-                    continue
+            if not flow:
+                return
 
-                n = time.time()
-                self.add_flow_to_profile(flow)
-                time_it_took = time.time() - n
-                self.log_time("add_flow_to_profile", time_it_took)
+            n = time.time()
+            self.add_flow_to_profile(flow)
+            time_it_took = time.time() - n
+            self.log_time("add_flow_to_profile", time_it_took)
 
-                self.handle_setting_local_net(flow)
-                self.db.increment_processed_flows()
+            self.handle_setting_local_net(flow)
+            self.db.increment_processed_flows()
 
-                # manually run garbage collection to avoid the latency
-                # introduced by it when slips is given a huge number of flows
-                if self.received_lines % 10000 == 0:
-                    gc.collect()
+            # manually run garbage collection to avoid the latency
+            # introduced by it when slips is given a huge number of flows
+            if self.received_lines % 10000 == 0:
+                gc.collect()
 
-            # except Exception as e:
-            #     self.print(
-            #         f"Problem processing line {line}. "
-            #         f"Line discarded. Error: {e}",
-            #         0,
-            #         1,
-            #     )
-            except KeyboardInterrupt:
-                # on the first ctrl+c profiler AND input process should stop,
-                # so the modules receive no more flows.
-                # modules should just finish the flows they have and slips will
-                # exit gracefully
-                gc.enable()
-                continue
+        except KeyboardInterrupt:
+            # on the first ctrl+c profiler AND input process should stop,
+            # so the modules receive no more flows.
+            # modules should just finish the flows they have and slips will
+            # exit gracefully
+            gc.enable()
+            return 1

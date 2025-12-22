@@ -31,7 +31,6 @@ from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 
 from slips_files.common.abstracts.iobserver import IObservable
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.icore import ICore
 from slips_files.common.style import green
 from slips_files.core.aid_manager import AIDManager
@@ -207,54 +206,47 @@ class Profiler(ICore, IObservable):
         except Exception:
             return None
 
-    def worker(
-        self,
-        name,
-        input_handler_obj: (
-            ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
-        ),
-    ):
-        worker_number = name.split("_")[-1]
+    def start_profiler_worker(self, worker_id: int = None):
+        """starts A profiler worker for faster processing of the flows"""
+        worker_name = f"ProfilerWorker_Process_{worker_id}"
+        # proc = multiprocessing.Process(
+        #     target=self.worker,
+        #     args=(
+        #         worker_name,
+        #         self.input_handler_cls,
+        #     ),
+        #     name=worker_name,
+        #     # daemon=True,
+        # )
+        worker_number = worker_name.split("_")[-1]
         self.print(
             f"Started Profiler Worker {green(worker_number)} [PID"
             f" {green(os.getpid())}]"
         )
+
         worker = ProfilerWorker(
-            name=name,
             logger=self.logger,
             output_dir=self.output_dir,
             redis_port=self.redis_port,
+            termination_event=self.stop_profiler_workers_event,
             conf=self.conf,
             ppid=self.ppid,
-            args=self.args,
+            slips_args=self.args,
+            bloom_filters_manager=self.bloom_filters,
+            # module specific kwargs
+            name=worker_name,
             localnet_cache=self.localnet_cache,
             profiler_queue=self.profiler_queue,
-            stop_profiler_workers=self.stop_profiler_workers_event,
             handle_setting_local_net_lock=self.handle_setting_local_net_lock,
-            input_handler=input_handler_obj,
-            bloom_filters=self.bloom_filters,
+            input_handler=self.input_handler_obj,
             aid_queue=self.aid_queue,
             aid_manager=self.aid_manager,
             stop_profiler_event=self.stop_profiler_event,
         )
-        worker.main()
+        worker.start()
+        self.profiler_child_processes.append(worker)
 
-    def start_profiler_worker(self, worker_id: int = None):
-        """starts A profiler worker for faster processing of the flows"""
-        worker_name = f"ProfilerWorker_Process_{worker_id}"
-        proc = multiprocessing.Process(
-            target=self.worker,
-            args=(
-                worker_name,
-                self.input_handler_cls,
-            ),
-            name=worker_name,
-            daemon=True,
-        )
-        utils.start_process(proc, self.db)
-        self.profiler_child_processes.append(proc)
-
-    def get_handler_class(
+    def get_handler_obj(
         self, first_msg: dict
     ) -> ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump:
         """
@@ -397,14 +389,14 @@ class Profiler(ICore, IObservable):
             msg = self.get_msg_from_queue(self.profiler_queue)
             time.sleep(0.1)
 
-        self.input_handler_cls = self.get_handler_class(msg)
-        if not self.input_handler_cls:
+        self.input_handler_obj = self.get_handler_obj(msg)
+        if not self.input_handler_obj:
             self.print("Unsupported input type, exiting.")
             return 1
 
         line: dict = msg["line"]
         # updates internal zeek to slips mapping if needed, just once
-        self.input_handler_cls.process_line(line)
+        self.input_handler_obj.process_line(line)
 
         # slips starts with 3 workers by default until it detects
         # high throughput that 3 workers arent enough to handle
