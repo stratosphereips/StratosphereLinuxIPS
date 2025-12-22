@@ -9,7 +9,7 @@ from slips_files.core.database.redis_db.constants import (
     Constants,
     Channels,
 )
-from slips_files.core.database.redis_db.flow_attributes_db import (
+from slips_files.core.database.redis_db.scan_detections_db import (
     FlowAttrHandler,
 )
 from slips_files.core.database.redis_db.flow_tracker_db import FlowTracker
