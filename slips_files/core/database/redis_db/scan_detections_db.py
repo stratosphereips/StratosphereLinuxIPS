@@ -43,11 +43,12 @@ class FlowAttrHandler:
     ..horizontal portscans detections ..
     hash: profile_tw:[tcp|udp]:not_estab:dstports:total_packets <port>
     <tot_pkts>
-    zset profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips  [ip, ip, .. ]
+    zset profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips:timestamps  [ip, ip, .. ]
 
 
     .. ICMP scan detections ..
     profile_tw:icmp:estab:sport:<port>:dstips <dstip> <flows_num>
+    zset profile_tw:icmp:estab:sport:<port>:dstips:timestamps  [ip, ip, .. ]
 
     """
 
@@ -278,8 +279,9 @@ class FlowAttrHandler:
     ) -> int:
         """
         returns the length of the set for horizontal portscan detection
-         profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips  [ip,
+         profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips:timestamps  [ip,
          ip, ip...]
+
         """
         str_proto = proto.name.lower()
         key = (
@@ -302,8 +304,9 @@ class FlowAttrHandler:
         """
         returns the first  timestamp of the attack for
         horizontal portscan detection
-         profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips  [ip,
+         profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips:timestamps  [ip,
          ip, ip...]
+
         """
         str_proto = proto.name.lower()
         key = (
@@ -347,10 +350,10 @@ class FlowAttrHandler:
         state: State = self.convert_str_to_state(summary_state)
         proto: Protocol = self.convert_str_to_proto(flow.proto)
 
+        str_proto = proto.name.lower()
         if self._is_info_needed_by_the_portscan_detector_modules(
             role, proto, state
         ):
-            str_proto = proto.name.lower()
             # this hash is needed for vertical portscans detections
             # hash:
             # profile_tw:[tcp|udp]:Not_estab:<ip>:dstports <port> <tot_pkts>
@@ -370,19 +373,21 @@ class FlowAttrHandler:
                 # HASH:
                 # profile_tw:[tcp|udp]:not_estab:dstports:total_packets
                 # <dport> <tot_pkts>
-                # SET
-                # profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips  [ip,
-                # ip, ip...]
                 key = (
                     f"{profileid}_{twid}:"
                     f"{str_proto}:not_estab:dstports:total_packets"
                 )
                 pipe.hincrby(key, flow.dport, int(flow.pkts))
 
+                # ZSET
+                # profile_tw:[tcp|udp]:not_estab:dport:
+                # [port]:dstips:timestamps  [ip,
+                # ip, ip...]
+                # each ip has the flow starttime as score
                 key = (
                     f"{profileid}_{twid}:"
                     f"{str_proto}:not_estab:dstport:"
-                    f"{flow.dport}:dstips"
+                    f"{flow.dport}:dstips:timestamps"
                 )
                 pipe.zadd(key, {flow.daddr: flow.starttime})
 
@@ -394,6 +399,18 @@ class FlowAttrHandler:
             # profile_tw:icmp:estab:sport:<port>:dstips <dstip> <flows_num>
             key = f"{profileid}_{twid}:icmp:est:sport:{flow.sport}:dstips"
             pipe.hincrby(key, flow.daddr, 1)
+
+            # ZSET
+            #  profile_tw:icmp:estab:sport:<port>:dstips:timestamps [ip,
+            # ip, ip...]
+            # each ip has the flow starttime as score
+            key = (
+                f"{profileid}_{twid}:"
+                f"{str_proto}:not_estab:dstport:"
+                f"{flow.dport}:dstips:timestamps"
+            )
+            pipe.zadd(key, {flow.daddr: flow.starttime})
+
         return pipe
 
     def _was_flow_flipped(self, flow) -> bool:
