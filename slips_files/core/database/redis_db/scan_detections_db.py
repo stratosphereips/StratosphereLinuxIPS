@@ -3,7 +3,7 @@
 import json
 import sys
 import traceback
-from typing import Iterator, Tuple
+from typing import Iterator, Tuple, Dict, Any
 from redis.client import Pipeline
 from modules.network_discovery.icmp_scan_ports import ICMP_SCAN_PORTS
 from slips_files.common.slips_utils import utils
@@ -25,15 +25,16 @@ PROTO_MAP = {
 }
 
 
-class FlowAttrHandler:
+class ScanDetectionsHandler:
     """
     Helper class for the Redis class in database.py
-    Slips splits each flow into different attributes for categorizing them,
-    and for easier pattern recognition.
-    This class Contains all the logic related to flows attributes and
-    categorizing
+    Slips splits each flow into different categories for scan detections (
+    vertical horizontal or icmps scans)
 
-    values managed by this class:
+    This class Contains all the logic related to preping the needed info
+    for the scan detection modules
+
+    Entries managed by this class:
 
     .. vertical portscans detections ..
     hash: profile_tw:[tcp|udp]:not_estab:ips <ip> {first_seen:...,
@@ -47,14 +48,15 @@ class FlowAttrHandler:
 
 
     .. ICMP scan detections ..
-    profile_tw:icmp:estab:sport:<port>:dstips <dstip> <flows_num>
-    zset profile_tw:icmp:estab:sport:<port>:dstips:timestamps  [ip, ip, .. ]
+    profile_tw:icmp:est:sport:<port>:dstips <dstip> <pkts_num>
+    zset profile_tw:icmp:est:sport:<port>:dstips:timestamps  [ip, ip, .. ]
 
     """
 
     name = "DB"
 
     def _hscan(self, key: str, count: int = 100) -> Iterator:
+        # TODO make this more generic to be used in other places
         cursor = 0
         while True:
             cursor, data = self.r.hscan(key, cursor, count=count)
@@ -378,7 +380,8 @@ class FlowAttrHandler:
                     f"{str_proto}:not_estab:dstports:total_packets"
                 )
                 pipe.hincrby(key, flow.dport, int(flow.pkts))
-
+                # TODO make sure the stored ts is the starttime, so if a
+                #  daddr is present dont zadd
                 # ZSET
                 # profile_tw:[tcp|udp]:not_estab:dport:
                 # [port]:dstips:timestamps  [ip,
@@ -394,24 +397,91 @@ class FlowAttrHandler:
         if self._is_info_needed_by_the_icmp_scan_detector_module(
             role, proto, state, flow.sport
         ):
+            # some tools produce a hex port, we need it as int
             # needed info for icmp scans
             # hash:
-            # profile_tw:icmp:estab:sport:<port>:dstips <dstip> <flows_num>
+            # profile_tw:icmp:est:sport:<port>:dstips <dstip> <pkts_num>
             key = f"{profileid}_{twid}:icmp:est:sport:{flow.sport}:dstips"
-            pipe.hincrby(key, flow.daddr, 1)
+            pipe.hincrby(key, flow.daddr, flow.spkts)
 
+            # TODO make sure the stored ts is the starttime, so if a
+            #  daddr is present dont zadd
             # ZSET
-            #  profile_tw:icmp:estab:sport:<port>:dstips:timestamps [ip,
+            #  profile_tw:icmp:est:sport:<port>:dstips:timestamps [ip,
             # ip, ip...]
-            # each ip has the flow starttime as score
+            # each ip has the starttime of the first flow to it as score
             key = (
-                f"{profileid}_{twid}:"
-                f"{str_proto}:not_estab:dstport:"
-                f"{flow.dport}:dstips:timestamps"
+                f"{profileid}_{twid}:icmp:est:sport:"
+                f"{flow.sport}:dstips:timestamps"
             )
             pipe.zadd(key, {flow.daddr: flow.starttime})
 
         return pipe
+
+    def get_icmp_attack_info_to_single_host(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        sport: str | int,
+    ) -> Dict[str, Any]:
+        """
+        this func should be called once we confirm that the len of this key is 1
+        to avoid performance issues when doing hgetall on a big hash
+        hash: profile_tw:icmp:est:sport:<port>:dstips
+        return a dict with <scanned_ip>: the scanned host
+        <pkts_sent>: is the total pkts sent to that host
+        <attack_ts>  is the starttime of the first flow seen to the scanned
+        ip by the given profile
+        """
+        sport = int(sport)
+        key = f"{profileid}_{twid}:icmp:est:sport:{sport}:dstips"
+        scanned_ip_info = self.r.hgetall(key)
+        if not scanned_ip_info:
+            return {}
+
+        for scanned_ip, pkts_sent in scanned_ip_info.items():
+            # key = profile_tw:icmp:est:sport:<port>:dstips:timestamps
+            key = (
+                f"{profileid}_{twid}:icmp:est:sport:"
+                f"{sport}:dstips:timestamps"
+            )
+            ts_of_attack = self.r.zscore(key, scanned_ip)
+
+            return {
+                "scanned_ip": scanned_ip,
+                "pkts_sent": int(pkts_sent),
+                "attack_ts": ts_of_attack,
+            }
+
+    def get_info_about_icmp_flows_using_sport(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        sport: str | int,
+    ) -> Tuple[int, int]:
+        """
+        Used for detecting icmp scans
+        When a conn like this happens
+        profile:sport -> given <any_ip>:<any_port>
+        this function returns the number_of_flows that had the given
+        profile and sport in them and the number of differnt dstips scanned
+
+        :param sport: the icmp source port used in the flows
+        returns (amount_of_scanned_ips, number_of_flows)
+        """
+        sport = int(sport)
+        key = f"{profileid}_{twid}:icmp:est:sport:{sport}:dstips"
+
+        try:
+            amount_of_scanned_ips = int(self.r.hlen(key))
+        except TypeError:
+            amount_of_scanned_ips = 0
+
+        number_of_flows = 0
+        for _, flows in self._hscan(key):
+            number_of_flows += int(flows)
+
+        return amount_of_scanned_ips, number_of_flows
 
     def _was_flow_flipped(self, flow) -> bool:
         """

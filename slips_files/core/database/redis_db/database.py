@@ -10,7 +10,7 @@ from slips_files.core.database.redis_db.constants import (
     Channels,
 )
 from slips_files.core.database.redis_db.scan_detections_db import (
-    FlowAttrHandler,
+    ScanDetectionsHandler,
 )
 from slips_files.core.database.redis_db.flow_tracker_db import FlowTracker
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
@@ -43,7 +43,7 @@ class RedisDB(
     ProfileHandler,
     P2PHandler,
     FlowTracker,
-    FlowAttrHandler,
+    ScanDetectionsHandler,
 ):
     # this db is a singelton per port. meaning no 2 instances
     # should be created for the same port at the same time

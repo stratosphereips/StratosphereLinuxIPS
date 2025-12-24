@@ -897,6 +897,9 @@ class DBManager:
     def get_total_flows(self, *args, **kwargs):
         return self.rdb.get_total_flows(*args, **kwargs)
 
+    def get_info_about_icmp_flows_using_sport(self, *args, **kwargs):
+        return self.rdb.get_info_about_icmp_flows_using_sport(*args, **kwargs)
+
     def increment_processed_flows(self, *args, **kwargs):
         return self.rdb.increment_processed_flows(*args, **kwargs)
 
@@ -1103,6 +1106,9 @@ class DBManager:
 
     def get_separator(self):
         return self.rdb.separator
+
+    def get_icmp_attack_info_to_single_host(self, *args, **kwargs):
+        return self.rdb.get_icmp_attack_info_to_single_host(*args, **kwargs)
 
     def get_normal_label(self):
         return self.rdb.normal_label
