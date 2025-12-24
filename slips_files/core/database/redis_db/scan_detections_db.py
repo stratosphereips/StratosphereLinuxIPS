@@ -5,7 +5,6 @@ import sys
 import traceback
 from typing import Iterator, Tuple, Dict, Any
 from redis.client import Pipeline
-from modules.network_discovery.icmp_scan_ports import ICMP_SCAN_PORTS
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     ProfileID,
@@ -145,13 +144,6 @@ class ScanDetectionsHandler:
     #             1,
     #         )
     #         self.print(traceback.format_exc(), 0, 1)
-
-    def convert_str_to_state(self, state_as_str: str) -> State:
-        if state_as_str == "Established":
-            return State.EST
-        elif state_as_str == "Not Established":
-            return State.NOT_EST
-        return State.NOT_EST
 
     def convert_str_to_proto(self, str_proto: str) -> Protocol:
         """converts str proto to Protocol enum"""
@@ -349,7 +341,7 @@ class ScanDetectionsHandler:
         summary_state: str = self.get_final_state_from_flags(
             flow.state, flow.pkts
         )
-        state: State = self.convert_str_to_state(summary_state)
+        state: State = utils.convert_str_to_state(summary_state)
         proto: Protocol = self.convert_str_to_proto(flow.proto)
 
         str_proto = proto.name.lower()
@@ -394,7 +386,7 @@ class ScanDetectionsHandler:
                 )
                 pipe.zadd(key, {flow.daddr: flow.starttime})
 
-        if self._is_info_needed_by_the_icmp_scan_detector_module(
+        if utils.is_info_needed_by_the_icmp_scan_detector_module(
             role, proto, state, flow.sport
         ):
             # some tools produce a hex port, we need it as int
@@ -512,27 +504,6 @@ class ScanDetectionsHandler:
             role == Role.CLIENT
             and proto in (Protocol.TCP, Protocol.UDP)
             and state == State.NOT_EST
-        )
-
-    def _is_info_needed_by_the_icmp_scan_detector_module(
-        self,
-        role: Role,
-        proto: Protocol,
-        state: State,
-        source_port: int | str,
-    ) -> bool:
-        try:
-            source_port = int(source_port)
-        except ValueError:
-            return False
-
-        return (
-            role == Role.CLIENT
-            and proto in (Protocol.ICMP, Protocol.ICMP6)
-            and state == State.EST
-            # these are the ports used for common icmp scans that slips
-            # currently detects
-            and source_port in ICMP_SCAN_PORTS
         )
 
     def get_final_state_from_flags(self, state, pkts):
