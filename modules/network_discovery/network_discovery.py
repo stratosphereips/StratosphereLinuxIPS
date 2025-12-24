@@ -3,6 +3,7 @@
 import json
 from typing import List
 
+from modules.network_discovery.icmp_scan_ports import ICMP_SCAN_PORTS
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
@@ -20,6 +21,17 @@ from slips_files.core.structures.evidence import (
     IoCType,
     Direction,
 )
+from slips_files.core.structures.flow_attributes import Protocol
+
+# TODO update the ports stored in the db in
+#  is_info_needed_by_the_icmp_scan_detector_module() if changed here
+ICMP_SCAN_PORT_MAP = {
+    8: EvidenceType.ICMP_ADDRESS_SCAN,
+    19: EvidenceType.ICMP_TIMESTAMP_SCAN,
+    20: EvidenceType.ICMP_TIMESTAMP_SCAN,
+    23: EvidenceType.ICMP_ADDRESS_MASK_SCAN,
+    24: EvidenceType.ICMP_ADDRESS_MASK_SCAN,
+}
 
 
 class NetworkDiscovery(IModule):
@@ -50,7 +62,7 @@ class NetworkDiscovery(IModule):
         self.separator = "_"
         # The minimum amount of ports to scan in vertical scan
         self.port_scan_minimum_dports = 5
-        self.pingscan_minimum_flows = 5
+        self.pingscan_minimum_pkts = 5
         self.pingscan_minimum_scanned_ips = 5
         # time in seconds to wait before alerting port scan
         self.time_to_wait_before_generating_new_alert = 25
@@ -133,107 +145,99 @@ class NetworkDiscovery(IModule):
             Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
         """
 
-    def check_icmp_scan(self, profileid, twid):
-        # Map the ICMP port scanned to it's attack
-        # TODO update the ports stored in the db in
-        #  is_info_needed_by_the_icmp_scan_detector_module() if changed here
-        port_map = {
-            "0x0008": EvidenceType.ICMP_ADDRESS_SCAN,
-            "0x0013": EvidenceType.ICMP_TIMESTAMP_SCAN,
-            "0x0014": EvidenceType.ICMP_TIMESTAMP_SCAN,
-            "0x0017": EvidenceType.ICMP_ADDRESS_MASK_SCAN,
-            "0x0018": EvidenceType.ICMP_ADDRESS_MASK_SCAN,
-        }
-
-        direction = "Src"
-        role = "Client"
-        type_data = "Ports"
-        protocol = "ICMP"
-        state = "Established"
-        sports = self.db.get_data_from_profile_tw(
-            profileid, twid, direction, state, protocol, role, type_data
-        )
-        for sport, sport_info in sports.items():
-            # get the name of this attack
-            attack: EvidenceType = port_map.get(sport)
+    def check_icmp_scan(self, profileid: ProfileID, twid: TimeWindow):
+        for sport in ICMP_SCAN_PORTS:
+            # get the name of the attack that we can detect on this port
+            attack: EvidenceType = ICMP_SCAN_PORT_MAP.get(sport)
             if not attack:
                 return
 
-            # get the IPs attacked
-            scanned_ips = sport_info["dstips"]
+            # get the number IPs attacked to answer:
             # are we pinging a single IP or ping scanning several IPs?
-            amount_of_scanned_ips = len(scanned_ips)
-
+            amount_of_scanned_ips, number_of_flows = (
+                self.db.get_info_about_icmp_flows_using_sport(
+                    profileid, twid, sport
+                )
+            )
+            # is the attacker pinging a single host for reachability or the
+            # entire network?
             if amount_of_scanned_ips == 1:
-                # how many icmp flows were found?
-                for scanned_ip, scan_info in scanned_ips.items():
-                    icmp_flows_uids = scan_info["uid"]
-                    number_of_flows = len(icmp_flows_uids)
-                    # how many flows are responsible for this attack
-                    # (from this srcip to this dstip on the same port)
-                    cache_key = (
-                        f"{profileid}:{twid}:dstip:"
-                        f"{scanned_ip}:{sport}:{attack}"
-                    )
-                    prev_flows = self.cache_det_thresholds.get(cache_key, 0)
+                print("@@@@@@@@@@@@@@@@ amount_of_scanned_ips == 1:")
+                self._handle_icmp_scanning_one_host(profileid, twid, sport)
+            # elif amount_of_scanned_ips > 1:
+            #     # this srcip is scanning several IPs (a network maybe)
+            #
+            #     # to avoid reporting so many evidence
+            #     cache_key = f"{profileid}:{twid}:{attack}"
+            #     prev_scanned_ips = self.cache_det_thresholds.get(cache_key, 0)
+            #     # detect every 5, 10, 15, etc. scanned IPs
+            #     if (
+            #         amount_of_scanned_ips % self.pingscan_minimum_scanned_ips
+            #         == 0
+            #         and prev_scanned_ips < amount_of_scanned_ips
+            #     ):
+            #         pkts_sent = 0
+            #         uids = []
+            #         for scanned_ip, scan_info in scanned_ips.items():
+            #             # get the total amount of pkts sent to all scanned IP
+            #             pkts_sent += scan_info["spkts"]
+            #             # get all flows that were part of this scan
+            #             uids.extend(scan_info["uid"])
+            #             timestamp = scan_info["stime"]
+            #
+            #         self.set_evidence_icmp_scan(
+            #             amount_of_scanned_ips,
+            #             timestamp,
+            #             pkts_sent,
+            #             protocol,
+            #             profileid,
+            #             twid,
+            #             uids,
+            #             attack,
+            #         )
+            #         self.cache_det_thresholds[cache_key] = (
+            #             amount_of_scanned_ips
+            #         )
 
-                    # We detect a scan every Threshold. So we detect when there
-                    # is 5,10,15 etc. scan to the same dstip on the same port
-                    # The idea is that after X dips we detect a connection.
-                    # And then we 'reset' the counter
-                    # until we see again X more.
-                    if (
-                        number_of_flows % self.pingscan_minimum_flows == 0
-                        and prev_flows < number_of_flows
-                    ):
-                        self.cache_det_thresholds[cache_key] = number_of_flows
-                        pkts_sent = scan_info["spkts"]
-                        timestamp = scan_info["stime"]
-                        self.set_evidence_icmp_scan(
-                            amount_of_scanned_ips,
-                            timestamp,
-                            pkts_sent,
-                            protocol,
-                            profileid,
-                            twid,
-                            icmp_flows_uids,
-                            attack,
-                            scanned_ip=scanned_ip,
-                        )
+    def _handle_icmp_scanning_one_host(
+        self, profileid: ProfileID, twid: TimeWindow, sport: int | str
+    ):
 
-            elif amount_of_scanned_ips > 1:
-                # this srcip is scanning several IPs (a network maybe)
-                # how many dstips scanned by this srcip on this port?
-                cache_key = f"{profileid}:{twid}:{attack}"
-                prev_scanned_ips = self.cache_det_thresholds.get(cache_key, 0)
-                # detect every 5, 10, 15 scanned IPs
-                if (
-                    amount_of_scanned_ips % self.pingscan_minimum_scanned_ips
-                    == 0
-                    and prev_scanned_ips < amount_of_scanned_ips
-                ):
-                    pkts_sent = 0
-                    uids = []
-                    for scanned_ip, scan_info in scanned_ips.items():
-                        # get the total amount of pkts sent to all scanned IP
-                        pkts_sent += scan_info["spkts"]
-                        # get all flows that were part of this scan
-                        uids.extend(scan_info["uid"])
-                        timestamp = scan_info["stime"]
+        # how many flows are responsible for this attack
+        attack_info = self.db.get_icmp_attack_info_to_single_host(
+            profileid, twid, sport
+        )
+        scanned_ip = attack_info["scanned_ip"]
+        pkts_sent = attack_info["pkts_sent"]
 
-                    self.set_evidence_icmp_scan(
-                        amount_of_scanned_ips,
-                        timestamp,
-                        pkts_sent,
-                        protocol,
-                        profileid,
-                        twid,
-                        uids,
-                        attack,
-                    )
-                    self.cache_det_thresholds[cache_key] = (
-                        amount_of_scanned_ips
-                    )
+        attack = ICMP_SCAN_PORT_MAP.get(sport)
+        cache_key = (
+            f"{profileid}:{twid}:dstip:" f"{scanned_ip}:{sport}:{attack}"
+        )
+        prev_pkts = self.cache_det_thresholds.get(cache_key, 0)
+
+        # We detect a scan every Threshold. So we detect when there
+        # is 5,10,15 etc. scan to the same dstip on the same port
+        # The idea is that after X dips we detect a connection.
+        # And then we 'reset' the counter
+        # until we see again X more.
+        if (
+            pkts_sent % self.pingscan_minimum_pkts == 0
+            and prev_pkts < pkts_sent
+        ):
+            self.cache_det_thresholds[cache_key] = pkts_sent
+            amount_of_scanned_ips = 1
+            self.set_evidence_icmp_scan(
+                amount_of_scanned_ips,
+                attack_info["attack_ts"],
+                pkts_sent,
+                Protocol.ICMP.name.lower(),
+                profileid,
+                twid,
+                [],
+                attack,
+                scanned_ip=scanned_ip,
+            )
 
     def set_evidence_icmp_scan(
         self,
@@ -241,33 +245,31 @@ class NetworkDiscovery(IModule):
         timestamp: str,
         pkts_sent: int,
         protocol: str,
-        profileid: str,
-        twid: str,
+        profileid: ProfileID,
+        twid: TimeWindow,
         icmp_flows_uids: List[str],
         attack: EvidenceType,
         scanned_ip: str = False,
     ):
         confidence = utils.calculate_confidence(pkts_sent)
-
         threat_level = ThreatLevel.MEDIUM
-        srcip = profileid.split("_")[-1]
+        srcip = profileid.ip
 
         victim = None
         if number_of_scanned_ips == 1:
             description = (
                 f"ICMP scanning {scanned_ip} ICMP scan type: {attack}. "
-                f"Total packets sent: {pkts_sent} over "
-                f"{len(icmp_flows_uids)} flows. "
+                f"Total packets sent: {pkts_sent}. "
                 f"Confidence: {confidence}. by Slips"
             )
             if scanned_ip:
                 victim = Victim(
                     value=scanned_ip,
-                    direction=Direction.DST,  #  TODO is it?
+                    direction=Direction.DST,
                     ioc_type=IoCType.IP,
                 )
         else:
-            # not a single victim, there are many
+            # not Victim here bc there's not a single victim, there are many
             description = (
                 f"ICMP scanning {number_of_scanned_ips} different IPs."
                 f" ICMP scan type: {attack}. "
@@ -286,8 +288,8 @@ class NetworkDiscovery(IModule):
             threat_level=threat_level,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=srcip),
-            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            profile=profileid,
+            timewindow=twid,
             uid=icmp_flows_uids,
             timestamp=timestamp,
             proto=Proto(protocol.lower()),
@@ -379,10 +381,9 @@ class NetworkDiscovery(IModule):
     def main(self):
         if msg := self.get_msg("tw_modified"):
             msg = json.loads(msg["data"])
-            # Get the profileid and twid
             profileid = msg["profileid"]
             twid = msg["twid"]
-            # Start of the port scan detection
+
             self.print(
                 f"Running the detection of portscans in profile "
                 f"{profileid} TW {twid}",
@@ -416,7 +417,7 @@ class NetworkDiscovery(IModule):
 
             self.horizontal_ps.check(profileid, twid)
             self.vertical_ps.check(profileid, twid)
-            #             self.check_icmp_scan(profileid, twid)
+            self.check_icmp_scan(profileid, twid)
 
         if msg := self.get_msg("new_notice"):
             data = json.loads(msg["data"])
