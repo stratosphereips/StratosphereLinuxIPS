@@ -202,9 +202,7 @@ class ProfilerWorker(IModule):
         aka outgoing connections
         """
         self.store_first_seen_ts(flow.starttime)
-
         flow_handler = FlowHandler(self.db, self.symbol, flow, profileid, twid)
-
         cases = {
             "flow": flow_handler.handle_conn,
             "conn": flow_handler.handle_conn,

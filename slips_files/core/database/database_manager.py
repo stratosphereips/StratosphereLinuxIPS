@@ -882,6 +882,9 @@ class DBManager:
     def get_used_redis_port(self):
         return self.rdb.get_used_port()
 
+    def get_attack_starttime(self, *args, **kwargs):
+        return self.rdb.get_attack_starttime(*args, **kwargs)
+
     def is_blocked_profile_and_tw(self, *args, **kwargs):
         return self.rdb.is_blocked_profile_and_tw(*args, **kwargs)
 

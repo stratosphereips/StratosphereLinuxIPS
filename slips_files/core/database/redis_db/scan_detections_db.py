@@ -43,7 +43,7 @@ class FlowAttrHandler:
     ..horizontal portscans detections ..
     hash: profile_tw:[tcp|udp]:not_estab:dstports:total_packets <port>
     <tot_pkts>
-    set profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips  [ip, ip, .. ]
+    zset profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips  [ip, ip, .. ]
 
 
     .. ICMP scan detections ..
@@ -287,10 +287,38 @@ class FlowAttrHandler:
             f"{str_proto}:not_estab:dstport:{dport}:dstips"
         )
         try:
-            amount_of_dstips = self.r.scard(key)
+            amount_of_dstips = int(self.r.zcard(key))
         except TypeError:
             amount_of_dstips = 0
         return amount_of_dstips
+
+    def get_attack_starttime(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        proto: Protocol,
+        dport: str,
+    ) -> str:
+        """
+        returns the first  timestamp of the attack for
+        horizontal portscan detection
+         profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips  [ip,
+         ip, ip...]
+        """
+        str_proto = proto.name.lower()
+        key = (
+            f"{profileid}_{twid}:"
+            f"{str_proto}:not_estab:dstport:{dport}:dstips"
+        )
+        try:
+            min_item = self.r.zrange(key, 0, 0, withscores=True)
+            if not min_item:
+                return ""
+
+            first_timestamp = str(int(min_item[0][1]))
+            return first_timestamp
+        except TypeError:
+            return ""
 
     def _add_scan_detection_info(
         self,
@@ -356,7 +384,7 @@ class FlowAttrHandler:
                     f"{str_proto}:not_estab:dstport:"
                     f"{flow.dport}:dstips"
                 )
-                pipe.sadd(key, flow.daddr)
+                pipe.zadd(key, {flow.daddr: flow.starttime})
 
         if self._is_info_needed_by_the_icmp_scan_detector_module(
             role, proto, state, flow.sport

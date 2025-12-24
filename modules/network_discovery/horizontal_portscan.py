@@ -115,7 +115,7 @@ class HorizontalPortscan:
                 number=int(evidence["twid"].replace("timewindow", ""))
             ),
             uid=evidence["uids"],
-            timestamp=evidence["timestamp"],
+            timestamp=evidence["first_timestamp"],  # TODO use last_timestamp
             proto=Proto(evidence["protocol"].lower()),
             dst_port=evidence["dport"],
         )
@@ -143,6 +143,7 @@ class HorizontalPortscan:
             ) in self.db.get_dstports_of_not_established_flows(
                 profileid, twid, protocol
             ):
+                dport, total_pkts = int(dport), int(total_pkts)
                 amount_of_dstips: int = (
                     self.db.get_total_dstips_for_not_estab_flows_on_port(
                         profileid, twid, protocol, dport
@@ -151,6 +152,9 @@ class HorizontalPortscan:
                 if self.check_if_enough_dstips_to_trigger_an_evidence(
                     profileid, twid, dport, amount_of_dstips
                 ):
+                    first_timestamp = self.db.get_attack_starttime(
+                        profileid, twid, protocol, dport
+                    )
                     evidence = {
                         "protocol": protocol.name.lower(),
                         "profileid": str(profileid),
@@ -158,7 +162,7 @@ class HorizontalPortscan:
                         "uids": [],
                         "dport": dport,
                         "pkts_sent": total_pkts,
-                        "timestamp": "",  # TODO,
+                        "first_timestamp": first_timestamp,
                         "state": State.NOT_EST.name.lower(),
                         "amount_of_dips": amount_of_dstips,
                     }
