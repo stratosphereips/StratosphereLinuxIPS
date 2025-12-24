@@ -190,13 +190,14 @@ class VerticalPortscan:
                     continue
                 # Get the total amount of pkts sent to all
                 # ports on the same host
-                amount_of_dports: int
-                total_pkts_sent_to_all_dports: int
                 amount_of_dports, total_pkts_sent_to_all_dports = (
                     self.db.get_info_about_not_established_flows(
                         profileid, twid, protocol, dstip
                     )
                 )
+                amount_of_dports, total_pkts_sent_to_all_dports = int(
+                    amount_of_dports
+                ), int(total_pkts_sent_to_all_dports)
 
                 if self.check_if_enough_dports_to_trigger_an_evidence(
                     profileid, twid, dstip, amount_of_dports
