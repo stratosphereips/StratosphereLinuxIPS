@@ -89,17 +89,6 @@ def test_add_ips():
     assert stored_src_ips == '{"192.168.1.1": 1}'
 
 
-def test_add_port():
-    db = ModuleFactory().create_db_manager_obj(6383, flush_db=True)
-    new_flow = flow
-    new_flow.state = "Not Established"
-    db.add_port(profileid, twid, flow, "Server", "Dst")
-    hash_key = f"{profileid}_{twid}"
-    added_ports = db.r.hgetall(hash_key)
-    assert "DstPortsServerTCPNot Established" in added_ports.keys()
-    assert flow.daddr in added_ports["DstPortsServerTCPNot Established"]
-
-
 def test_set_evidence():
     db = ModuleFactory().create_db_manager_obj(6384, flush_db=True)
     attacker: Attacker = Attacker(

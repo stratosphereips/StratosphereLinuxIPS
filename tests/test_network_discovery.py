@@ -555,7 +555,7 @@ def test_check_icmp_scan(
     expected_cache_det_thresholds,
 ):
     network_discovery = ModuleFactory().create_network_discovery_obj()
-    network_discovery.pingscan_minimum_flows = 5
+    network_discovery.pingscan_minimum_pkts = 5
     network_discovery.pingscan_minimum_scanned_ips = 5
     network_discovery.cache_det_thresholds = {}
 

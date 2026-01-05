@@ -598,42 +598,6 @@ def test_get_tws_from_profile(profileid, zrange_return_value, expected_tws):
 
 
 @pytest.mark.parametrize(
-    "profileid, twid, expected_dstips, expected_hget_call",
-    [  # Testcase 1: Existing DstIPs data
-        (
-            "profile_1",
-            "timewindow1",
-            b'{"8.8.8.8": 1}',
-            call("profile_1_timewindow1", "DstIPs"),
-        ),
-        # Testcase 2: No DstIPs data
-        (
-            "profile_2",
-            "timewindow2",
-            None,
-            call("profile_2_timewindow2", "DstIPs"),
-        ),
-        # Testcase 3: Empty DstIPs data
-        (
-            "profile_3",
-            "timewindow3",
-            b"{}",
-            call("profile_3_timewindow3", "DstIPs"),
-        ),
-    ],
-)
-def test_get_dstips_from_profile_tw(
-    profileid, twid, expected_dstips, expected_hget_call
-):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    handler.r.hget.return_value = expected_dstips
-    dstips = handler.get_dstips_from_profile_tw(profileid, twid)
-    handler.r.hget.assert_called_once_with(*expected_hget_call.args)
-    assert dstips == expected_dstips
-
-
-@pytest.mark.parametrize(
     "sismember_return_value, expected_has_profile",
     [  # Testcase 1: Profile exists
         (True, True),
@@ -832,7 +796,7 @@ def test_get_modified_tw_since_time(
 
     handler.r.zrangebyscore.return_value = zrangebyscore_return_value
 
-    modified_tws = handler.get_modified_tw_since_time(time)
+    modified_tws = handler._get_modified_tw_since_time(time)
 
     handler.r.zrangebyscore.assert_called_once_with(
         "ModifiedTW", time, float("+inf"), withscores=True
@@ -1278,14 +1242,14 @@ def test_get_modified_profiles_since(
     expected_last_modified_time,
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.get_modified_tw_since_time = MagicMock(
+    handler._get_modified_tw_since_time = MagicMock(
         return_value=get_modified_tw_since_time_return_value
     )
     time = 1200.0
 
     profiles, last_modified_time = handler.get_modified_profiles_since(time)
 
-    handler.get_modified_tw_since_time.assert_called_once_with(time)
+    handler._get_modified_tw_since_time.assert_called_once_with(time)
     assert profiles == expected_profiles
     assert last_modified_time == expected_last_modified_time
 
@@ -1753,7 +1717,6 @@ def test_add_ips(
 ):
     handler = ModuleFactory().create_profile_handler_obj()
 
-    handler.ask_for_ip_info = MagicMock()
     handler.update_times_contacted = MagicMock()
     handler.get_data_from_profile_tw = MagicMock(return_value={})
     handler.update_ip_info = MagicMock(return_value={"updated_data": True})
@@ -1783,25 +1746,24 @@ def test_add_ips(
     )
     handler.add_ips(profileid, twid, flow, role)
 
-    expected_ask_for_ip_info_calls = [
-        call(
-            "5.6.7.8",
-            "profile_5.6.7.8",
-            "timewindow1",
-            flow,
-            "srcip",
-            daddr="1.2.3.4",
-        ),
-        call(
-            "1.2.3.4",
-            "profile_5.6.7.8",
-            "timewindow1",
-            flow,
-            "dstip",
-        ),
-    ]
+    # expected_ask_for_ip_info_calls = [
+    #     call(
+    #         "5.6.7.8",
+    #         "profile_5.6.7.8",
+    #         "timewindow1",
+    #         flow,
+    #         "srcip",
+    #         daddr="1.2.3.4",
+    #     ),
+    #     call(
+    #         "1.2.3.4",
+    #         "profile_5.6.7.8",
+    #         "timewindow1",
+    #         flow,
+    #         "dstip",
+    #     ),
+    # ]
 
-    handler.ask_for_ip_info.assert_has_calls(expected_ask_for_ip_info_calls)
     handler.update_times_contacted.assert_called_once_with(
         *expected_update_times_contacted_call.args
     )

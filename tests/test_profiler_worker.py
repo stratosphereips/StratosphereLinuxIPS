@@ -566,7 +566,7 @@ def test_run_no_msg():
     profiler.add_flow_to_profile = Mock()
     profiler.input_handler = Mock()
     profiler.print = Mock()
-    profiler.get_handler_class = Mock()
+    profiler.get_handler_obj = Mock()
     profiler.print_traceback = Mock()
 
     profiler.should_stop_profiler_workers.side_effect = [
@@ -579,7 +579,7 @@ def test_run_no_msg():
 
     profiler.run()
 
-    profiler.get_handler_class.assert_not_called()
+    profiler.get_handler_obj.assert_not_called()
     profiler.input_handler.process_line.assert_not_called()
     profiler.add_flow_to_profile.assert_not_called()
     profiler.print.assert_not_called()

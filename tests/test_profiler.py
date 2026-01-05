@@ -74,8 +74,8 @@ def test_main_with_first_msg():
 
     profiler.get_msg_from_queue = Mock(side_effect=[first, second])
 
-    profiler.input_handler_cls = Mock()
-    profiler.get_handler_class = Mock(return_value=profiler.input_handler_cls)
+    profiler.input_handler_obj = Mock()
+    profiler.get_handler_obj = Mock(return_value=profiler.input_handler_obj)
 
     profiler.start_profiler_worker = Mock()
 
