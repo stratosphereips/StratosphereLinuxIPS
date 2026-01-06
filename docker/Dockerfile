@@ -62,9 +62,10 @@ RUN apt-get update -o Acquire::Retries=5 -o Acquire::https::No-Cache=True \
 
 
 
-# why are we compiling redis instead od just using apt?
+# why are we compiling redis instead of just using apt?
 # to support running slips on the rpi (arm64). the rpi uses jemmalloc by default, which expects a different page size
 # than the default on x86_64
+# also even when not in the RPI, slips need redis v8 to work, and its not available via the official redis repo
 WORKDIR /
 RUN pip3 install --no-cache-dir --upgrade pip \
     && curl -O https://download.redis.io/redis-stable.tar.gz \

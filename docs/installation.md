@@ -207,7 +207,7 @@ Slips depends on three major elements:
 
 - Python 3.10.12
 - Zeek 8.0.0
-- Redis database 7.0.4
+- Redis database v8 
 
 
 To install these elements, the script will use the APT package manager. After that, it will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node JS and several npm packages.
@@ -279,6 +279,20 @@ To make sure that zeek can be found in the system we will add its link to a know
 
 PS: Slips supports the latest zeek release by default, make sure you install it and not the LTS.
 
+#### Installing Redis v8
+
+Install redis v8 from source as it's not available it their official repositories.
+
+```
+curl -L https://download.redis.io/redis-stable.tar.gz -o /tmp/redis-stable.tar.gz \
+    && mkdir -p /redis-stable \
+    && tar xzf redis-stable.tar.gz -C / \
+    && cd /redis-stable \
+    && make distclean \
+    && make MALLOC=libc
+```
+
+Please remember to add /redis-stable/src to your PATH for slips to be able to use it.
 
 #### Running Slips for the First Time
 
