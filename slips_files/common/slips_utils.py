@@ -25,13 +25,8 @@ from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 from dataclasses import is_dataclass, asdict
 from enum import Enum
 
-from modules.network_discovery.icmp_scan_ports import ICMP_SCAN_PORTS
+
 from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
-from slips_files.core.structures.flow_attributes import (
-    State,
-    Role,
-    Protocol,
-)
 
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
@@ -309,34 +304,6 @@ class Utils(object):
             or ip_obj.is_link_local
             or ip_obj.is_loopback
             or ip_obj.is_reserved
-        )
-
-    def convert_str_to_state(self, state_as_str: str) -> State:
-        if state_as_str == "Established":
-            return State.EST
-        elif state_as_str == "Not Established":
-            return State.NOT_EST
-        return State.NOT_EST
-
-    def is_info_needed_by_the_icmp_scan_detector_module(
-        self,
-        role: Role,
-        proto: Protocol,
-        state: State,
-        source_port: int | str,
-    ) -> bool:
-        try:
-            source_port = int(source_port)
-        except ValueError:
-            return False
-
-        return (
-            role == Role.CLIENT
-            and proto in (Protocol.ICMP, Protocol.ICMP6)
-            and state == State.EST
-            # these are the ports used for common icmp scans that slips
-            # currently detects
-            and source_port in ICMP_SCAN_PORTS
         )
 
     def calculate_confidence(self, pkts_sent):
