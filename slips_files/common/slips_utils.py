@@ -289,7 +289,7 @@ class Utils(object):
             # invalid ip
             return
 
-    def are_scan_detection_modules_interested_in_this_ip(self, ip) -> bool:
+    def are_detection_modules_interested_in_this_ip(self, ip) -> bool:
         """
         Check if any of the scan detection modules (horizontal portscan,
         vertical portscan, icmp scan) are interested in this ip

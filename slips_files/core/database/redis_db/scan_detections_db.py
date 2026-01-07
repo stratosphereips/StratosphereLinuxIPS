@@ -196,7 +196,7 @@ class ScanDetectionsHandler:
         self._ask_modules_about_all_ips_in_flow(profileid, twid, flow)
 
         with self.r.pipeline() as pipe:
-            pipe = self._add_scan_detection_info(
+            pipe = self._store_flow_info_if_needed_by_detection_modules(
                 profileid, twid, flow, role, target_ip, pipe
             )
             pipe = self.mark_profile_tw_as_modified(
@@ -350,7 +350,117 @@ class ScanDetectionsHandler:
 
         return state == State.EST and proto == Protocol.TCP
 
-    def _add_scan_detection_info(
+    def _store_vertical_portscan_info(
+        self, pipe, profileid, twid, proto, target_ip, flow
+    ) -> Pipeline:
+        str_proto = proto.name.lower()
+        # this hash is needed for vertical portscans detections
+        # hash:
+        # profile_tw:[tcp|udp]:Not_estab:<ip>:dstports <port> <tot_pkts>
+        key = (
+            f"{profileid}_{twid}"
+            f":{str_proto}:not_estab:{target_ip}:dstports"
+        )
+        pipe.hincrby(key, flow.dport, int(flow.pkts))
+        # increment the total pkts sent to this target ip on this
+        # proto so slips can retreieve it in O(1) when setting and
+        # evidence
+        key = (
+            f"{profileid}_{twid}"
+            f":{str_proto}:not_estab:"
+            f"{target_ip}:dstports:tot_pkts_sum"
+        )
+        pipe.incrby(key, flow.spkts)
+
+        # we keep an index hash of target_ips to be able to access the
+        # diff variants of the key above using them
+        self._update_portscan_index_hash(
+            profileid, twid, proto, target_ip, flow
+        )
+        return pipe
+
+    def _store_horizontal_portscan_info(
+        self, pipe, profileid, twid, proto, flow
+    ) -> Pipeline:
+        str_proto = proto.name.lower()
+        if not self._was_flow_flipped(flow):
+            # these hashes are needed for horizontal portscans detections
+            # HASH:
+            # profile_tw:[tcp|udp]:not_estab:dstports:total_packets
+            # <dport> <tot_pkts>
+            key = (
+                f"{profileid}_{twid}:"
+                f"{str_proto}:not_estab:dstports:total_packets"
+            )
+            pipe.hincrby(key, flow.dport, int(flow.pkts))
+            # TODO make sure the stored ts is the starttime, so if a
+            #  daddr is present dont zadd
+            # ZSET
+            # profile_tw:[tcp|udp]:not_estab:dport:
+            # [port]:dstips:timestamps  [ip,
+            # ip, ip...]
+            # each ip has the flow starttime as score
+            key = (
+                f"{profileid}_{twid}:"
+                f"{str_proto}:not_estab:dstport:"
+                f"{flow.dport}:dstips:timestamps"
+            )
+            pipe.zadd(key, {flow.daddr: flow.starttime})
+        return pipe
+
+    def _store_icmp_scan_info(self, pipe, profileid, twid, flow) -> Pipeline:
+        # some tools produce a hex port, we need it as int
+        # needed info for icmp scans
+        # hash:
+        # profile_tw:icmp:est:sport:<port>:dstips <dstip> <pkts_num>
+        key = f"{profileid}_{twid}:icmp:est:sport:{flow.sport}:dstips"
+        pipe.hincrby(key, flow.daddr, flow.spkts)
+
+        # TODO make sure the stored ts is the starttime, so if a
+        #  daddr is present dont zadd
+        # ZSET
+        #  profile_tw:icmp:est:sport:<port>:dstips:timestamps [ip,
+        # ip, ip...]
+        # each ip has the starttime of the first flow to it as score
+        key = (
+            f"{profileid}_{twid}:icmp:est:sport:"
+            f"{flow.sport}:dstips:timestamps"
+        )
+        pipe.zadd(key, {flow.daddr: flow.starttime})
+        # incr the tot pkts sent to all dstips. needed for setting
+        # evidence when the profile is icmp scanning more than 1 ip.
+        key = (
+            f"{profileid}_{twid}:icmp:est:sport:"
+            f"{flow.sport}:dstips:tot_pkts_sum"
+        )
+        pipe.incrby(key, flow.spkts)
+        return pipe
+
+    def _store_conn_to_multiple_ports_info(
+        self, pipe, profileid, twid, role, flow
+    ):
+        # updates the following:
+        # zset profile_tw:tcp:estab:ips <ip> <first_seen>
+        # hash profile_tw:tcp:estab:<ip>:dstports <port> <tot_pkts>
+        if role == role.CLIENT:
+            key = f"{profileid}_{twid}:tcp:est:dstips"
+            pipe.zadd(key, {flow.daddr: flow.starttime})
+
+            key = f"{profileid}_{twid}:tcp:est:{flow.daddr}:dstports"
+            pipe.hincrby(key, flow.dport, flow.spkts)
+
+        elif role == role.SERVER:
+            client_profileid = ProfileID(ip=flow.saddr)
+            key = f"{client_profileid}_{twid}:tcp:est:dstips"
+            pipe.zadd(key, {flow.saddr: flow.starttime})
+
+            key = (
+                f"{client_profileid}_{twid}:tcp:est:" f"{flow.saddr}:dstports"
+            )
+            pipe.hincrby(key, flow.dport, flow.spkts)
+        return pipe
+
+    def _store_flow_info_if_needed_by_detection_modules(
         self,
         profileid: ProfileID,
         twid: TimeWindow,
@@ -365,9 +475,7 @@ class ScanDetectionsHandler:
             saddr, the role is client, and the target ip is the daddr,
             and viceversa
         """
-        if not utils.are_scan_detection_modules_interested_in_this_ip(
-            target_ip
-        ):
+        if not utils.are_detection_modules_interested_in_this_ip(target_ip):
             return pipe
 
         # Get the state. Established, NotEstablished
@@ -377,110 +485,29 @@ class ScanDetectionsHandler:
         state: State = self.convert_str_to_state(summary_state)
         proto: Protocol = self.convert_str_to_proto(flow.proto)
 
-        str_proto = proto.name.lower()
         if self._is_info_needed_by_the_portscan_detector_modules(
             role, proto, state
         ):
-            # this hash is needed for vertical portscans detections
-            # hash:
-            # profile_tw:[tcp|udp]:Not_estab:<ip>:dstports <port> <tot_pkts>
-            key = (
-                f"{profileid}_{twid}"
-                f":{str_proto}:not_estab:{target_ip}:dstports"
-            )
-            pipe.hincrby(key, flow.dport, int(flow.pkts))
-            # increment the total pkts sent to this target ip on this
-            # proto so slips can retreieve it in O(1) when setting and
-            # evidence
-            key = (
-                f"{profileid}_{twid}"
-                f":{str_proto}:not_estab:"
-                f"{target_ip}:dstports:tot_pkts_sum"
-            )
-            pipe.incrby(key, flow.spkts)
 
-            # we keep an index hash of target_ips to be able to access the
-            # diff variants of the key above using them
-            self._update_portscan_index_hash(
-                profileid, twid, proto, target_ip, flow
+            pipe = self._store_vertical_portscan_info(
+                pipe, profileid, twid, proto, target_ip, flow
             )
 
-            if not self._was_flow_flipped(flow):
-                # these hashes are needed for horizontal portscans detections
-                # HASH:
-                # profile_tw:[tcp|udp]:not_estab:dstports:total_packets
-                # <dport> <tot_pkts>
-                key = (
-                    f"{profileid}_{twid}:"
-                    f"{str_proto}:not_estab:dstports:total_packets"
-                )
-                pipe.hincrby(key, flow.dport, int(flow.pkts))
-                # TODO make sure the stored ts is the starttime, so if a
-                #  daddr is present dont zadd
-                # ZSET
-                # profile_tw:[tcp|udp]:not_estab:dport:
-                # [port]:dstips:timestamps  [ip,
-                # ip, ip...]
-                # each ip has the flow starttime as score
-                key = (
-                    f"{profileid}_{twid}:"
-                    f"{str_proto}:not_estab:dstport:"
-                    f"{flow.dport}:dstips:timestamps"
-                )
-                pipe.zadd(key, {flow.daddr: flow.starttime})
+            pipe = self._store_horizontal_portscan_info(
+                pipe, profileid, twid, proto, flow
+            )
 
         if self.is_info_needed_by_the_icmp_scan_detector_module(
             role, proto, state, flow.sport
         ):
-            # some tools produce a hex port, we need it as int
-            # needed info for icmp scans
-            # hash:
-            # profile_tw:icmp:est:sport:<port>:dstips <dstip> <pkts_num>
-            key = f"{profileid}_{twid}:icmp:est:sport:{flow.sport}:dstips"
-            pipe.hincrby(key, flow.daddr, flow.spkts)
-
-            # TODO make sure the stored ts is the starttime, so if a
-            #  daddr is present dont zadd
-            # ZSET
-            #  profile_tw:icmp:est:sport:<port>:dstips:timestamps [ip,
-            # ip, ip...]
-            # each ip has the starttime of the first flow to it as score
-            key = (
-                f"{profileid}_{twid}:icmp:est:sport:"
-                f"{flow.sport}:dstips:timestamps"
-            )
-            pipe.zadd(key, {flow.daddr: flow.starttime})
-            # incr the tot pkts sent to all dstips. needed for setting
-            # evidence when the profile is icmp scanning more than 1 ip.
-            key = (
-                f"{profileid}_{twid}:icmp:est:sport:"
-                f"{flow.sport}:dstips:tot_pkts_sum"
-            )
-            pipe.incrby(key, flow.spkts)
+            pipe = self._store_icmp_scan_info(pipe, profileid, twid, flow)
 
         if self.is_info_needed_by_the_conn_to_multiple_ports_detector(
             flow, proto, state
         ):
-            # updates the following:
-            # zset profile_tw:tcp:estab:ips <ip> <first_seen>
-            # hash profile_tw:tcp:estab:<ip>:dstports <port> <tot_pkts>
-            if role == role.CLIENT:
-                key = f"{profileid}_{twid}:tcp:est:dstips"
-                pipe.zadd(key, {flow.daddr: flow.starttime})
-
-                key = f"{profileid}_{twid}:tcp:est:{flow.daddr}:dstports"
-                pipe.hincrby(key, flow.dport, flow.spkts)
-
-            elif role == role.SERVER:
-                client_profileid = ProfileID(ip=flow.saddr)
-                key = f"{client_profileid}_{twid}:tcp:est:dstips"
-                pipe.zadd(key, {flow.saddr: flow.starttime})
-
-                key = (
-                    f"{client_profileid}_{twid}:tcp:est:"
-                    f"{flow.saddr}:dstports"
-                )
-                pipe.hincrby(key, flow.dport, flow.spkts)
+            pipe = self._store_conn_to_multiple_ports_info(
+                pipe, profileid, twid, role, flow
+            )
 
         return pipe
 

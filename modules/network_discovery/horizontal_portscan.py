@@ -123,9 +123,7 @@ class HorizontalPortscan:
         self.db.set_evidence(evidence)
 
     def check(self, profileid: ProfileID, twid: TimeWindow):
-        if not utils.are_scan_detection_modules_interested_in_this_ip(
-            profileid.ip
-        ):
+        if not utils.are_detection_modules_interested_in_this_ip(profileid.ip):
             return False
 
         # if you're portscaning a port that is open it's gonna be established

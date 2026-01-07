@@ -183,9 +183,7 @@ class VerticalPortscan:
                 profileid, twid, protocol
             ):
                 if not (
-                    utils.are_scan_detection_modules_interested_in_this_ip(
-                        dstip
-                    )
+                    utils.are_detection_modules_interested_in_this_ip(dstip)
                 ):
                     continue
                 # Get the total amount of pkts sent to all
