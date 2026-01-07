@@ -59,7 +59,7 @@ class ScanDetectionsHandler:
 
     .. conn to multiple ports ..
     zset profile_tw:tcp:estab:ips <ip> <first_seen>
-        hash profile_tw:tcp:estab:<ip>:dstports <port> <tot_pkts>
+    hash profile_tw:tcp:estab:<ip>:dstports <port> <uid>
 
     """
 
@@ -331,7 +331,31 @@ class ScanDetectionsHandler:
             and source_port in ICMP_SCAN_PORTS
         )
 
-    def is_info_needed_by_the_conn_to_multiple_ports_detector(
+    def is_there_estab_tcp_flows(
+        self,
+        saddr: str,
+        daddr: str,
+        twid: str,
+    ) -> bool:
+        """
+        checks whethere there were estab tcp flows from the given saddr,
+        to the given daddr in the given tw
+        """
+        key = f"profile_{saddr}_{twid}:tcp:est:dstips"
+        return True if self.r.zscore(key, daddr) else False
+
+    def get_dstports_of_flows(
+        self, profileid: str, daddr: str, twid: str
+    ) -> Iterator[Tuple[str, str]]:
+        """
+        returns a dict of dstports going from the given profile to daddr in
+        the given tw
+        format of the returned dict {<port> : <uid_of_the_flow>}
+        """
+        key = f"{profileid}_{twid}:tcp:est:daddr:dstports"
+        yield from self._hscan(key)
+
+    def _is_info_needed_by_the_conn_to_multiple_ports_detector(
         self,
         flow,
         proto: Protocol,
@@ -441,23 +465,21 @@ class ScanDetectionsHandler:
     ):
         # updates the following:
         # zset profile_tw:tcp:estab:ips <ip> <first_seen>
-        # hash profile_tw:tcp:estab:<ip>:dstports <port> <tot_pkts>
+        # hash profile_tw:tcp:estab:<ip>:dstports <port> <uid>
         if role == role.CLIENT:
             key = f"{profileid}_{twid}:tcp:est:dstips"
             pipe.zadd(key, {flow.daddr: flow.starttime})
 
             key = f"{profileid}_{twid}:tcp:est:{flow.daddr}:dstports"
-            pipe.hincrby(key, flow.dport, flow.spkts)
+            pipe.hset(key, flow.dport, flow.uid)
 
         elif role == role.SERVER:
             client_profileid = ProfileID(ip=flow.saddr)
             key = f"{client_profileid}_{twid}:tcp:est:dstips"
             pipe.zadd(key, {flow.saddr: flow.starttime})
 
-            key = (
-                f"{client_profileid}_{twid}:tcp:est:" f"{flow.saddr}:dstports"
-            )
-            pipe.hincrby(key, flow.dport, flow.spkts)
+            key = f"{client_profileid}_{twid}:tcp:est:{flow.saddr}:dstports"
+            pipe.hset(key, flow.dport, flow.uid)
         return pipe
 
     def _store_flow_info_if_needed_by_detection_modules(
@@ -502,7 +524,7 @@ class ScanDetectionsHandler:
         ):
             pipe = self._store_icmp_scan_info(pipe, profileid, twid, flow)
 
-        if self.is_info_needed_by_the_conn_to_multiple_ports_detector(
+        if self._is_info_needed_by_the_conn_to_multiple_ports_detector(
             flow, proto, state
         ):
             pipe = self._store_conn_to_multiple_ports_info(
