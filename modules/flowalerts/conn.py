@@ -41,6 +41,8 @@ class Conn(IFlowalertsAnalyzer):
         self.our_ips: List[str] = utils.get_own_ips(ret="List")
         self.input_type: str = self.db.get_input_type()
         self.multiple_reconnection_attempts_threshold = 5
+        # to avoid duplicate evidence
+        self.conn_to_multiple_ports_tracker = {}
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -616,15 +618,19 @@ class Conn(IFlowalertsAnalyzer):
 
         dstports, uids = zip(*rows)
 
-        self.set_evidence.connection_to_multiple_ports(
-            profileid,
-            twid,
-            flow,
-            victim,
-            attacker,
-            list(dstports),
-            list(uids),
-        )
+        # avoid setting more than one evidence reporting the same exact ports
+        cache_key = f"{profileid}_{twid}"
+        if len(uids) > self.conn_to_multiple_ports_tracker.get(cache_key, 0):
+            self.set_evidence.connection_to_multiple_ports(
+                profileid,
+                twid,
+                flow,
+                victim,
+                attacker,
+                list(dstports),
+                list(uids),
+            )
+            self.conn_to_multiple_ports_tracker[cache_key] = len(uids)
 
     def is_well_known_org(self, ip):
         """get the SNI, ASN, and  rDNS of the IP to check if it belongs
@@ -769,6 +775,10 @@ class Conn(IFlowalertsAnalyzer):
 
         self.set_evidence.conn_to_private_ip(twid, flow)
 
+    def cleanup_conn_to_multiple_ports_tracker(self, profile_tw):
+        """to avoid having useless keys"""
+        del self.conn_to_multiple_ports_tracker[profile_tw]
+
     async def analyze(self, msg):
         if utils.is_msg_intended_for(msg, "new_flow"):
             msg = json.loads(msg["data"])
@@ -808,3 +818,4 @@ class Conn(IFlowalertsAnalyzer):
             profileid = f"{profileid_tw[0]}_{profileid_tw[1]}"
             twid = profileid_tw[-1]
             self.detect_data_upload_in_twid(profileid, twid)
+            self.cleanup_conn_to_multiple_ports_tracker(profileid_tw)
