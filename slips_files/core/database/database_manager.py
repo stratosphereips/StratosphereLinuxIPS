@@ -802,6 +802,12 @@ class DBManager:
     def get_info_about_not_established_flows(self, *args, **kwargs):
         return self.rdb.get_info_about_not_established_flows(*args, **kwargs)
 
+    def is_there_estab_tcp_flows(self, *args, **kwargs):
+        return self.rdb.is_there_estab_tcp_flows(*args, **kwargs)
+
+    def get_dstports_of_flows(self, *args, **kwargs):
+        return self.rdb.get_dstports_of_flows(*args, **kwargs)
+
     def incr_msgs_received_in_channel(self, *args, **kwargs):
         return self.rdb.incr_msgs_received_in_channel(*args, **kwargs)
 

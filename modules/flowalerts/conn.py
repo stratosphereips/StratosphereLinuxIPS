@@ -592,35 +592,29 @@ class Conn(IFlowalertsAnalyzer):
             # dport is known, we are considering only unknown services
             return
 
+        profile_ip = profileid.split("_")[-1]
         # Connection to multiple ports to the destination IP
-        if profileid.split("_")[1] == flow.saddr:
-            direction = "Dst"
-            state = ESTAB
-            protocol = "TCP"
-            role = "Client"
-            type_data = "IPs"
-
-            # get all the dst ips with established tcp connections
-            daddrs = self.db.get_data_from_profile_tw(
-                profileid,
-                twid,
-                direction,
-                state,
-                protocol,
-                role,
-                type_data,
-            )
-
-            # make sure we find established connections to this daddr
-            if flow.daddr not in daddrs:
+        # profile -> dstips multiple dstports on condition that the dstip
+        # is one of these dstips
+        if profile_ip == flow.saddr:
+            if not self.db.is_there_estab_tcp_flows(
+                profile_ip, flow.daddr, twid
+            ):
                 return
 
-            dstports = list(daddrs[flow.daddr]["dstports"])
+            dstports = []
+            uids = []
+            for port, uid in self.db.get_dstports_of_flows(
+                profileid, flow.daddr, twid
+            ):
+                dstports.append(port)
+                uids.append(uid)
+
             if len(dstports) <= 1:
                 return
 
             victim: str = flow.daddr
-            attacker: str = profileid.split("_")[-1]
+            attacker: str = profile_ip
             self.set_evidence.connection_to_multiple_ports(
                 profileid,
                 twid,
@@ -628,35 +622,32 @@ class Conn(IFlowalertsAnalyzer):
                 victim,
                 attacker,
                 dstports,
-                daddrs[flow.daddr]["uid"],
+                uids,
             )
 
         # Connection to multiple port to the Source IP.
-        # Happens in the mode 'all'
-        elif profileid.split("_")[-1] == flow.daddr:
-            direction = "Src"
-            state = ESTAB
-            protocol = "TCP"
-            role = "Server"
-            type_data = "IPs"
+        # ips -> profile:dstports
+        elif profile_ip == flow.daddr:
+            # Happens in the mode 'all'
+            if not self.db.is_there_estab_tcp_flows(
+                flow.daddr, profile_ip, twid
+            ):
+                return
 
             # get all the src ips with established tcp connections
-            saddrs = self.db.get_data_from_profile_tw(
-                profileid,
-                twid,
-                direction,
-                state,
-                protocol,
-                role,
-                type_data,
-            )
-            dstports = list(saddrs[flow.saddr]["dstports"])
+            daddr_profile = f"profile_{flow.daddr}"
+            dstports = []
+            uids = []
+            for port, uid in self.db.get_dstports_of_flows(
+                daddr_profile, flow.saddr, twid
+            ):
+                dstports.append(port)
+                uids.append(uid)
             if len(dstports) <= 1:
                 return
 
-            uids = saddrs[flow.saddr]["uid"]
             attacker: str = flow.daddr
-            victim: str = profileid.split("_")[-1]
+            victim: str = profile_ip
 
             self.set_evidence.connection_to_multiple_ports(
                 profileid,
