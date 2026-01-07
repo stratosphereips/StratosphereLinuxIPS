@@ -210,10 +210,11 @@ class VerticalPortscan:
                         "protocol": protocol.name.lower(),
                         "profileid": str(profileid),
                         "twid": str(twid),
-                        "uid": metadata["uid_of_first_seen"],
+                        "uid": [metadata["uid_of_first_seen"]],
                         "amount_of_dports": amount_of_dports,
                         "dstip": dstip,
                         "state": State.NOT_EST.name.lower(),
                     }
+                    print("@@@@@@@@@@@@@@@@ wooohooo done setting evidence")
 
                     self.set_evidence_vertical_portscan(evidence_details)

@@ -40,6 +40,9 @@ class ScanDetectionsHandler:
     hash: profile_tw:[tcp|udp]:not_estab:ips <ip> {first_seen:...,
     last_seen:...}
     hash profile_tw:[tcp|udp]:not_estab:<ip>:dstports <port> <tot_pkts>
+    int profile_tw:[tcp|udp]:not_estab:<ip>:tot_pkts_sum
+    <tot_pkts_sent_to_all_ports>
+
 
     ..horizontal portscans detections ..
     hash: profile_tw:[tcp|udp]:not_estab:dstports:total_packets <port>
@@ -239,16 +242,18 @@ class ScanDetectionsHandler:
         returns (amount_of_dports, total_pkts_sent_to_all_dports)
         """
         str_proto = proto.name.lower()
-        key = f"{profileid}_{twid}:{str_proto}:not_estab:{dstip}:dstports"
+        key = f"{profileid}_{twid}:{str_proto}:not_estab:" f"{dstip}:dstports"
 
         try:
             amount_of_dports = int(self.r.hlen(key))
         except TypeError:
             amount_of_dports = 0
 
-        total_pkts_sent_to_all_dports = 0
-        for _, pkts in self._hscan(key):
-            total_pkts_sent_to_all_dports += int(pkts)
+        key = (
+            f"{profileid}_{twid}:{str_proto}:not_estab:"
+            f"{dstip}:dstports:tot_pkts_sum"
+        )
+        total_pkts_sent_to_all_dports = self.r.get(key)
 
         return amount_of_dports, total_pkts_sent_to_all_dports
 
@@ -385,6 +390,16 @@ class ScanDetectionsHandler:
                 f":{str_proto}:not_estab:{target_ip}:dstports"
             )
             pipe.hincrby(key, flow.dport, int(flow.pkts))
+            # increment the total pkts sent to this target ip on this
+            # proto so slips can retreieve it in O(1) when setting and
+            # evidence
+            key = (
+                f"{profileid}_{twid}"
+                f":{str_proto}:not_estab:"
+                f"{target_ip}:dstports:tot_pkts_sum"
+            )
+            pipe.incrby(key, flow.spkts)
+
             # we keep an index hash of target_ips to be able to access the
             # diff variants of the key above using them
             self._update_portscan_index_hash(
