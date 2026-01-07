@@ -51,8 +51,10 @@ class ScanDetectionsHandler:
 
 
     .. ICMP scan detections ..
-    profile_tw:icmp:est:sport:<port>:dstips <dstip> <pkts_num>
+    hash profile_tw:icmp:est:sport:<port>:dstips <dstip> <pkts_num>
     zset profile_tw:icmp:est:sport:<port>:dstips:timestamps  [ip, ip, .. ]
+    int profile_tw:icmp:est:sport:<port>:dstips:tot_pkts_sum
+    <tot_pkts_sent_to_all_ports>
 
     """
 
@@ -451,6 +453,13 @@ class ScanDetectionsHandler:
                 f"{flow.sport}:dstips:timestamps"
             )
             pipe.zadd(key, {flow.daddr: flow.starttime})
+            # incr the tot pkts sent to all dstips. needed for setting
+            # evidence when the profile is icmp scanning more than 1 ip.
+            key = (
+                f"{profileid}_{twid}:icmp:est:sport:"
+                f"{flow.sport}:dstips:tot_pkts_sum"
+            )
+            pipe.incrby(key, flow.spkts)
 
         return pipe
 
@@ -488,6 +497,31 @@ class ScanDetectionsHandler:
                 "pkts_sent": int(pkts_sent),
                 "attack_ts": ts_of_attack,
             }
+
+    def get_icmp_attack_info_to_several_hosts(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        sport: str | int,
+    ) -> Dict[str, int]:
+        key = (
+            f"{profileid}_{twid}:icmp:est:sport:"
+            f"{sport}:dstips:tot_pkts_sum"
+        )
+        total_pkts_sent = self.r.get(key)
+        key = (
+            f"{profileid}_{twid}:icmp:est:sport:" f"{sport}:dstips:timestamps"
+        )
+        # get the lowest timestamp in that zset (aka the timestamp of the
+        # first ip scanned)
+        lowest = self.r.zrange(
+            key, 0, 0, withscores=True  # startp  # stop  # include the score
+        )
+        attack_start = 0
+        if lowest:
+            attack_start = lowest[0][1]
+
+        return {"starttime": attack_start, "total_pkts_sent": total_pkts_sent}
 
     def get_info_about_icmp_flows_using_sport(
         self,

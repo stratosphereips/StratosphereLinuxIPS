@@ -1110,6 +1110,9 @@ class DBManager:
     def get_icmp_attack_info_to_single_host(self, *args, **kwargs):
         return self.rdb.get_icmp_attack_info_to_single_host(*args, **kwargs)
 
+    def get_icmp_attack_info_to_several_hosts(self, *args, **kwargs):
+        return self.rdb.get_icmp_attack_info_to_several_hosts(*args, **kwargs)
+
     def get_normal_label(self):
         return self.rdb.normal_label
 

@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
-from typing import List
+from typing import List, Dict
 
 from modules.network_discovery.icmp_scan_ports import ICMP_SCAN_PORTS
 from slips_files.common.flow_classifier import FlowClassifier
@@ -21,7 +21,6 @@ from slips_files.core.structures.evidence import (
     IoCType,
     Direction,
 )
-from slips_files.core.structures.flow_attributes import Protocol
 
 # TODO update the ports stored in the db in
 #  is_info_needed_by_the_icmp_scan_detector_module() if changed here
@@ -113,40 +112,46 @@ class NetworkDiscovery(IModule):
 
         self.db.set_evidence(evidence)
 
-    def check_portscan_type3(self):
-        """
-        ###
-        # PortScan Type 3. Direction OUT
-        # Considering all the flows in this TW, for all the Dst IP, get the
-         sum of all the pkts send to each dst port TCP No tEstablished
-        totalpkts = int(data[dport]['totalpkt'])
-        # If for each port, more than X amount of packets were sent,
-        report an evidence
-        if totalpkts > 3:
-            # Type of evidence
-            evidence_type = 'PortScanType3'
-            # Key
-            key = 'dport' + ':' + dport + ':' + evidence_type
-            # Description
-            description = 'Too Many Not Estab TCP to same port {} from IP: {}.
-             Amount: {}'.format(dport, profileid.split('_')[1], totalpkts)
-            # Threat level
-            threat_level = 50
-            # Confidence. By counting how much we are over the threshold.
-            if totalpkts >= 10:
-                # 10 pkts or more, receive the max confidence
-                confidence = 1
-            else:
-                # Between 3 and 10 pkts compute a kind of linear grow
-                confidence = totalpkts / 10.0
-            self.db.setEvidence(profileid, twid, evidence_type,
-            threat_level, confidence)
-            self.print('Too Many Not Estab TCP to same port {} from IP: {}.
-            Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
-        """
+    def _handle_icmp_scanning_several_hosts(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        attack,
+        sport: int,
+        amount_of_scanned_ips: int,
+    ):
+
+        # to avoid reporting so many evidence
+        cache_key = f"{profileid}:{twid}:{attack}"
+        prev_scanned_ips = self.cache_det_thresholds.get(cache_key, 0)
+        # detect every 5, 10, 15, etc. scanned IPs
+        if (
+            amount_of_scanned_ips % self.pingscan_minimum_scanned_ips == 0
+            and prev_scanned_ips < amount_of_scanned_ips
+        ):
+            attack_info: Dict[str, int]
+            attack_info = self.db.get_icmp_attack_info_to_several_hosts(
+                profileid, twid, sport
+            )
+            print(
+                f"@@@@@@@@@@@@@@@@ here!!! amount_of_scanned_ips: "
+                f"{amount_of_scanned_ips} {profileid} {twid}"
+            )
+            uids = []
+            self.set_evidence_icmp_scan(
+                amount_of_scanned_ips,
+                attack_info["starttime"],
+                int(attack_info["total_pkts_sent"]),
+                profileid,
+                twid,
+                uids,
+                attack,
+            )
+            self.cache_det_thresholds[cache_key] = amount_of_scanned_ips
 
     def check_icmp_scan(self, profileid: ProfileID, twid: TimeWindow):
         for sport in ICMP_SCAN_PORTS:
+            sport: int
             # get the name of the attack that we can detect on this port
             attack: EvidenceType = ICMP_SCAN_PORT_MAP.get(sport)
             if not attack:
@@ -162,42 +167,12 @@ class NetworkDiscovery(IModule):
             # is the attacker pinging a single host for reachability or the
             # entire network?
             if amount_of_scanned_ips == 1:
-                print("@@@@@@@@@@@@@@@@ amount_of_scanned_ips == 1:")
                 self._handle_icmp_scanning_one_host(profileid, twid, sport)
-            # elif amount_of_scanned_ips > 1:
-            #     # this srcip is scanning several IPs (a network maybe)
-            #
-            #     # to avoid reporting so many evidence
-            #     cache_key = f"{profileid}:{twid}:{attack}"
-            #     prev_scanned_ips = self.cache_det_thresholds.get(cache_key, 0)
-            #     # detect every 5, 10, 15, etc. scanned IPs
-            #     if (
-            #         amount_of_scanned_ips % self.pingscan_minimum_scanned_ips
-            #         == 0
-            #         and prev_scanned_ips < amount_of_scanned_ips
-            #     ):
-            #         pkts_sent = 0
-            #         uids = []
-            #         for scanned_ip, scan_info in scanned_ips.items():
-            #             # get the total amount of pkts sent to all scanned IP
-            #             pkts_sent += scan_info["spkts"]
-            #             # get all flows that were part of this scan
-            #             uids.extend(scan_info["uid"])
-            #             timestamp = scan_info["stime"]
-            #
-            #         self.set_evidence_icmp_scan(
-            #             amount_of_scanned_ips,
-            #             timestamp,
-            #             pkts_sent,
-            #             protocol,
-            #             profileid,
-            #             twid,
-            #             uids,
-            #             attack,
-            #         )
-            #         self.cache_det_thresholds[cache_key] = (
-            #             amount_of_scanned_ips
-            #         )
+            elif amount_of_scanned_ips > 1:
+                # this srcip is scanning several IPs (a network maybe)
+                self._handle_icmp_scanning_several_hosts(
+                    profileid, twid, attack, sport, amount_of_scanned_ips
+                )
 
     def _handle_icmp_scanning_one_host(
         self, profileid: ProfileID, twid: TimeWindow, sport: int | str
@@ -230,7 +205,6 @@ class NetworkDiscovery(IModule):
                 amount_of_scanned_ips,
                 attack_info["attack_ts"],
                 pkts_sent,
-                Protocol.ICMP.name.lower(),
                 profileid,
                 twid,
                 [],
@@ -243,7 +217,6 @@ class NetworkDiscovery(IModule):
         number_of_scanned_ips: int,
         timestamp: str,
         pkts_sent: int,
-        protocol: str,
         profileid: ProfileID,
         twid: TimeWindow,
         icmp_flows_uids: List[str],
@@ -272,8 +245,7 @@ class NetworkDiscovery(IModule):
             description = (
                 f"ICMP scanning {number_of_scanned_ips} different IPs."
                 f" ICMP scan type: {attack}. "
-                f"Total packets sent: {pkts_sent} over "
-                f"{len(icmp_flows_uids)} flows. "
+                f"Total packets sent: {pkts_sent}. "
                 f"Confidence: {confidence}. by Slips"
             )
 
@@ -291,7 +263,7 @@ class NetworkDiscovery(IModule):
             timewindow=twid,
             uid=icmp_flows_uids,
             timestamp=timestamp,
-            proto=Proto(protocol.lower()),
+            proto=Proto("icmp"),
             victim=victim,
         )
 
