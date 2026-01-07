@@ -56,6 +56,11 @@ class ScanDetectionsHandler:
     int profile_tw:icmp:est:sport:<port>:dstips:tot_pkts_sum
     <tot_pkts_sent_to_all_ports>
 
+
+    .. conn to multiple ports ..
+    zset profile_tw:tcp:estab:ips <ip> <first_seen>
+        hash profile_tw:tcp:estab:<ip>:dstports <port> <tot_pkts>
+
     """
 
     name = "DB"
@@ -123,33 +128,6 @@ class ScanDetectionsHandler:
         proto = proto.name.lower()
         key = f"{profileid}_{twid}:{proto}:not_estab:ips"
         yield from self._hscan(key)
-
-    #
-    # def get_data_from_profile_tw(
-    #     self,
-    # ) -> Generator:
-    #
-    #     try:
-    #         key: str = ""
-    #         cursor = 0
-    #         while True:
-    #             cursor, data = self.r.hscan(key, cursor, count=100)
-    #             for ip_or_port, detailed_info in data.items():
-    #                 detailed_info = json.loads(detailed_info)
-    #                 yield ip_or_port, detailed_info
-    #
-    #             if cursor == 0:
-    #                 break
-    #
-    #     except Exception:
-    #         exception_line = sys.exc_info()[2].tb_lineno
-    #         self.print(
-    #             f"Error in getDataFromProfileTW database.py line "
-    #             f"{exception_line}",
-    #             0,
-    #             1,
-    #         )
-    #         self.print(traceback.format_exc(), 0, 1)
 
     def convert_str_to_proto(self, str_proto: str) -> Protocol:
         """converts str proto to Protocol enum"""
@@ -353,6 +331,25 @@ class ScanDetectionsHandler:
             and source_port in ICMP_SCAN_PORTS
         )
 
+    def is_info_needed_by_the_conn_to_multiple_ports_detector(
+        self,
+        flow,
+        proto: Protocol,
+        state: State,
+    ) -> bool:
+        """
+        that detection in done in detect_connection_to_multiple_ports()
+        """
+        dport_name = flow.appproto
+        if not dport_name:
+            dport_name = self.get_port_info(f"{flow.dport}/{flow.proto}")
+
+        if dport_name:
+            # dport is known, we are considering only unknown services
+            return False
+
+        return state == State.EST and proto == Protocol.TCP
+
     def _add_scan_detection_info(
         self,
         profileid: ProfileID,
@@ -460,6 +457,30 @@ class ScanDetectionsHandler:
                 f"{flow.sport}:dstips:tot_pkts_sum"
             )
             pipe.incrby(key, flow.spkts)
+
+        if self.is_info_needed_by_the_conn_to_multiple_ports_detector(
+            flow, proto, state
+        ):
+            # updates the following:
+            # zset profile_tw:tcp:estab:ips <ip> <first_seen>
+            # hash profile_tw:tcp:estab:<ip>:dstports <port> <tot_pkts>
+            if role == role.CLIENT:
+                key = f"{profileid}_{twid}:tcp:est:dstips"
+                pipe.zadd(key, {flow.daddr: flow.starttime})
+
+                key = f"{profileid}_{twid}:tcp:est:{flow.daddr}:dstports"
+                pipe.hincrby(key, flow.dport, flow.spkts)
+
+            elif role == role.SERVER:
+                client_profileid = ProfileID(ip=flow.saddr)
+                key = f"{client_profileid}_{twid}:tcp:est:dstips"
+                pipe.zadd(key, {flow.saddr: flow.starttime})
+
+                key = (
+                    f"{client_profileid}_{twid}:tcp:est:"
+                    f"{flow.saddr}:dstports"
+                )
+                pipe.hincrby(key, flow.dport, flow.spkts)
 
         return pipe
 

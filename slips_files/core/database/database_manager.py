@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import (
     List,
     Dict,
-    Generator,
 )
 
 
@@ -793,9 +792,6 @@ class DBManager:
 
     def cache_url_info_by_virustotal(self, *args, **kwargs):
         return self.rdb.cache_url_info_by_virustotal(*args, **kwargs)
-
-    def get_data_from_profile_tw(self, *args, **kwargs) -> Generator:
-        return self.rdb.get_data_from_profile_tw(*args, **kwargs)
 
     def get_outtuples_from_profile_tw(self, *args, **kwargs):
         return self.rdb.get_outtuples_from_profile_tw(*args, **kwargs)
