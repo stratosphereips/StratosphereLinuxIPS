@@ -348,11 +348,10 @@ class ScanDetectionsHandler:
         self, profileid: str, daddr: str, twid: str
     ) -> Iterator[Tuple[str, str]]:
         """
-        returns a dict of dstports going from the given profile to daddr in
-        the given tw
-        format of the returned dict {<port> : <uid_of_the_flow>}
+         Yields (dstport, uid) pairs for flows going from the given profile
+        to daddr in the given time window.
         """
-        key = f"{profileid}_{twid}:tcp:est:daddr:dstports"
+        key = f"{profileid}_{twid}:tcp:est:{daddr}:dstports"
         yield from self._hscan(key)
 
     def _is_info_needed_by_the_conn_to_multiple_ports_detector(

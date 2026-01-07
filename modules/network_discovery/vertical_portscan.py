@@ -213,6 +213,5 @@ class VerticalPortscan:
                         "dstip": dstip,
                         "state": State.NOT_EST.name.lower(),
                     }
-                    print("@@@@@@@@@@@@@@@@ wooohooo done setting evidence")
 
                     self.set_evidence_vertical_portscan(evidence_details)

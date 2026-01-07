@@ -133,10 +133,6 @@ class NetworkDiscovery(IModule):
             attack_info = self.db.get_icmp_attack_info_to_several_hosts(
                 profileid, twid, sport
             )
-            print(
-                f"@@@@@@@@@@@@@@@@ here!!! amount_of_scanned_ips: "
-                f"{amount_of_scanned_ips} {profileid} {twid}"
-            )
             uids = []
             self.set_evidence_icmp_scan(
                 amount_of_scanned_ips,

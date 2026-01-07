@@ -600,6 +600,7 @@ class Conn(IFlowalertsAnalyzer):
             profile_key = profileid
 
         elif profile_ip == flow.daddr:
+            # happens if direction_analysis = "all"
             src_ip, other_ip = flow.daddr, flow.saddr
             attacker, victim = flow.daddr, profile_ip
             profile_key = f"profile_{flow.daddr}"
