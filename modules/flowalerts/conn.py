@@ -593,71 +593,37 @@ class Conn(IFlowalertsAnalyzer):
             return
 
         profile_ip = profileid.split("_")[-1]
-        # Connection to multiple ports to the destination IP
-        # profile -> dstips multiple dstports on condition that the dstip
-        # is one of these dstips
+
         if profile_ip == flow.saddr:
-            if not self.db.is_there_estab_tcp_flows(
-                profile_ip, flow.daddr, twid
-            ):
-                return
+            src_ip, other_ip = profile_ip, flow.daddr
+            attacker, victim = profile_ip, flow.daddr
+            profile_key = profileid
 
-            dstports = []
-            uids = []
-            for port, uid in self.db.get_dstports_of_flows(
-                profileid, flow.daddr, twid
-            ):
-                dstports.append(port)
-                uids.append(uid)
-
-            if len(dstports) <= 1:
-                return
-
-            victim: str = flow.daddr
-            attacker: str = profile_ip
-            self.set_evidence.connection_to_multiple_ports(
-                profileid,
-                twid,
-                flow,
-                victim,
-                attacker,
-                dstports,
-                uids,
-            )
-
-        # Connection to multiple port to the Source IP.
-        # ips -> profile:dstports
         elif profile_ip == flow.daddr:
-            # Happens in the mode 'all'
-            if not self.db.is_there_estab_tcp_flows(
-                flow.daddr, profile_ip, twid
-            ):
-                return
+            src_ip, other_ip = flow.daddr, flow.saddr
+            attacker, victim = flow.daddr, profile_ip
+            profile_key = f"profile_{flow.daddr}"
+        else:
+            return
 
-            # get all the src ips with established tcp connections
-            daddr_profile = f"profile_{flow.daddr}"
-            dstports = []
-            uids = []
-            for port, uid in self.db.get_dstports_of_flows(
-                daddr_profile, flow.saddr, twid
-            ):
-                dstports.append(port)
-                uids.append(uid)
-            if len(dstports) <= 1:
-                return
+        if not self.db.is_there_estab_tcp_flows(src_ip, other_ip, twid):
+            return
 
-            attacker: str = flow.daddr
-            victim: str = profile_ip
+        rows = list(self.db.get_dstports_of_flows(profile_key, other_ip, twid))
+        if len(rows) <= 1:
+            return
 
-            self.set_evidence.connection_to_multiple_ports(
-                profileid,
-                twid,
-                flow,
-                victim,
-                attacker,
-                dstports,
-                uids,
-            )
+        dstports, uids = zip(*rows)
+
+        self.set_evidence.connection_to_multiple_ports(
+            profileid,
+            twid,
+            flow,
+            victim,
+            attacker,
+            list(dstports),
+            list(uids),
+        )
 
     def is_well_known_org(self, ip):
         """get the SNI, ASN, and  rDNS of the IP to check if it belongs
