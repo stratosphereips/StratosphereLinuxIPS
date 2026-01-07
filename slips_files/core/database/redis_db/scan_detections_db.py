@@ -490,7 +490,6 @@ class ScanDetectionsHandler:
         :param sport: the icmp source port used in the flows
         returns (amount_of_scanned_ips, number_of_flows)
         """
-        sport = int(sport)
         key = f"{profileid}_{twid}:icmp:est:sport:{sport}:dstips"
 
         try:

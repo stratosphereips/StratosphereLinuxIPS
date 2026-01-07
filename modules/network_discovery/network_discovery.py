@@ -202,7 +202,6 @@ class NetworkDiscovery(IModule):
     def _handle_icmp_scanning_one_host(
         self, profileid: ProfileID, twid: TimeWindow, sport: int | str
     ):
-
         # how many flows are responsible for this attack
         attack_info = self.db.get_icmp_attack_info_to_single_host(
             profileid, twid, sport
