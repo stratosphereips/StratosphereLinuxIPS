@@ -775,9 +775,9 @@ class Conn(IFlowalertsAnalyzer):
 
         self.set_evidence.conn_to_private_ip(twid, flow)
 
-    def cleanup_conn_to_multiple_ports_tracker(self, profile_tw):
+    def cleanup_conn_to_multiple_ports_tracker(self, profile_tw: List[str]):
         """to avoid having useless keys"""
-        del self.conn_to_multiple_ports_tracker[profile_tw]
+        self.conn_to_multiple_ports_tracker.pop("_".join(profile_tw), None)
 
     async def analyze(self, msg):
         if utils.is_msg_intended_for(msg, "new_flow"):
@@ -814,7 +814,7 @@ class Conn(IFlowalertsAnalyzer):
             self.check_device_changing_ips(twid, flow)
 
         elif utils.is_msg_intended_for(msg, "tw_closed"):
-            profileid_tw = msg["data"].split("_")
+            profileid_tw: List[str] = msg["data"].split("_")
             profileid = f"{profileid_tw[0]}_{profileid_tw[1]}"
             twid = profileid_tw[-1]
             self.detect_data_upload_in_twid(profileid, twid)

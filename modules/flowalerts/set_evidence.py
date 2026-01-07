@@ -1033,7 +1033,8 @@ class SetEvidenceHelper:
         confidence: float = 0.5
         twid: int = int(twid.replace("timewindow", ""))
         description = (
-            f"Connection to multiple ports {dstports} of " f"IP: {attacker}. "
+            f"Connection to multiple ports {dstports} from {attacker} to "
+            f"{victim}. "
         )
 
         if attacker in profileid:
