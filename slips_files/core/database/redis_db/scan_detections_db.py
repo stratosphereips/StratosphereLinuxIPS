@@ -226,17 +226,13 @@ class ScanDetectionsHandler:
         """
         str_proto = proto.name.lower()
         key = f"{profileid}_{twid}:{str_proto}:not_estab:" f"{dstip}:dstports"
-
-        try:
-            amount_of_dports = int(self.r.hlen(key))
-        except TypeError:
-            amount_of_dports = 0
+        amount_of_dports = self.r.hlen(key) or 0
 
         key = (
             f"{profileid}_{twid}:{str_proto}:not_estab:"
             f"{dstip}:dstports:tot_pkts_sum"
         )
-        total_pkts_sent_to_all_dports = self.r.get(key)
+        total_pkts_sent_to_all_dports = self.r.get(key) or 0
 
         return amount_of_dports, total_pkts_sent_to_all_dports
 
