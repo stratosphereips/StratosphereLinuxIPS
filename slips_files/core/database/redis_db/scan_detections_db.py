@@ -82,7 +82,8 @@ class ScanDetectionsHandler:
         proto: Protocol,
         ip: str,
         flow,
-    ):
+        pipe,
+    ) -> Pipeline:
         """
         updates the hash that keeps track of IPs that have contacted a
         certain profile_tw
@@ -114,7 +115,9 @@ class ScanDetectionsHandler:
             }
 
         new_info["last_seen"] = last_seen_timestamp
-        self.r.hset(key, ip, json.dumps(new_info))
+        pipe.hset(key, ip, json.dumps(new_info))
+        pipe.expire(key, self.tw_width, nx=True)
+        return pipe
 
     def get_dstips_with_not_established_flows(
         self,
@@ -385,6 +388,7 @@ class ScanDetectionsHandler:
             f":{str_proto}:not_estab:{target_ip}:dstports"
         )
         pipe.hincrby(key, flow.dport, int(flow.pkts))
+        pipe.expire(key, self.tw_width, nx=True)
         # increment the total pkts sent to this target ip on this
         # proto so slips can retreieve it in O(1) when setting and
         # evidence
@@ -393,12 +397,13 @@ class ScanDetectionsHandler:
             f":{str_proto}:not_estab:"
             f"{target_ip}:dstports:tot_pkts_sum"
         )
-        pipe.incrby(key, flow.spkts)
+        pipe.incrby(key, int(flow.spkts))
+        pipe.expire(key, self.tw_width, nx=True)
 
         # we keep an index hash of target_ips to be able to access the
         # diff variants of the key above using them
-        self._update_portscan_index_hash(
-            profileid, twid, proto, target_ip, flow
+        pipe = self._update_portscan_index_hash(
+            profileid, twid, proto, target_ip, flow, pipe
         )
         return pipe
 
@@ -416,6 +421,8 @@ class ScanDetectionsHandler:
                 f"{str_proto}:not_estab:dstports:total_packets"
             )
             pipe.hincrby(key, flow.dport, int(flow.pkts))
+            pipe.expire(key, self.tw_width, nx=True)
+
             # TODO make sure the stored ts is the starttime, so if a
             #  daddr is present dont zadd
             # ZSET
@@ -429,6 +436,8 @@ class ScanDetectionsHandler:
                 f"{flow.dport}:dstips:timestamps"
             )
             pipe.zadd(key, {flow.daddr: flow.starttime})
+            pipe.expire(key, self.tw_width, nx=True)
+
         return pipe
 
     def _store_icmp_scan_info(self, pipe, profileid, twid, flow) -> Pipeline:
@@ -438,6 +447,7 @@ class ScanDetectionsHandler:
         # profile_tw:icmp:est:sport:<port>:dstips <dstip> <pkts_num>
         key = f"{profileid}_{twid}:icmp:est:sport:{flow.sport}:dstips"
         pipe.hincrby(key, flow.daddr, flow.spkts)
+        pipe.expire(key, self.tw_width, nx=True)
 
         # TODO make sure the stored ts is the starttime, so if a
         #  daddr is present dont zadd
@@ -450,6 +460,8 @@ class ScanDetectionsHandler:
             f"{flow.sport}:dstips:timestamps"
         )
         pipe.zadd(key, {flow.daddr: flow.starttime})
+        pipe.expire(key, self.tw_width, nx=True)
+
         # incr the tot pkts sent to all dstips. needed for setting
         # evidence when the profile is icmp scanning more than 1 ip.
         key = (
@@ -457,6 +469,7 @@ class ScanDetectionsHandler:
             f"{flow.sport}:dstips:tot_pkts_sum"
         )
         pipe.incrby(key, flow.spkts)
+        pipe.expire(key, self.tw_width, nx=True)
         return pipe
 
     def _store_conn_to_multiple_ports_info(
@@ -468,17 +481,21 @@ class ScanDetectionsHandler:
         if role == role.CLIENT:
             key = f"{profileid}_{twid}:tcp:est:dstips"
             pipe.zadd(key, {flow.daddr: flow.starttime})
+            pipe.expire(key, self.tw_width, nx=True)
 
             key = f"{profileid}_{twid}:tcp:est:{flow.daddr}:dstports"
             pipe.hset(key, flow.dport, flow.uid)
+            pipe.expire(key, self.tw_width, nx=True)
 
         elif role == role.SERVER:
             client_profileid = ProfileID(ip=flow.saddr)
             key = f"{client_profileid}_{twid}:tcp:est:dstips"
             pipe.zadd(key, {flow.saddr: flow.starttime})
+            pipe.expire(key, self.tw_width, nx=True)
 
             key = f"{client_profileid}_{twid}:tcp:est:{flow.saddr}:dstports"
             pipe.hset(key, flow.dport, flow.uid)
+            pipe.expire(key, self.tw_width, nx=True)
         return pipe
 
     def _store_flow_info_if_needed_by_detection_modules(
@@ -499,6 +516,9 @@ class ScanDetectionsHandler:
         if not utils.are_detection_modules_interested_in_this_ip(target_ip):
             return pipe
 
+        if not hasattr(self, "tw_width"):
+            self.tw_width: float = self.conf.get_tw_width_in_seconds()
+
         # Get the state. Established, NotEstablished
         summary_state: str = self.get_final_state_from_flags(
             flow.state, flow.pkts
@@ -509,7 +529,6 @@ class ScanDetectionsHandler:
         if self._is_info_needed_by_the_portscan_detector_modules(
             role, proto, state
         ):
-
             pipe = self._store_vertical_portscan_info(
                 pipe, profileid, twid, proto, target_ip, flow
             )
