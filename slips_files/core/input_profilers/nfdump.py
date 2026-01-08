@@ -1,5 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+from typing import Tuple
+
 from slips_files.common.abstracts.iinput_type import IInputType
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.nfdump import NfdumpConn
@@ -11,7 +13,7 @@ class Nfdump(IInputType):
     def __init__(self):
         pass
 
-    def process_line(self, new_line):
+    def process_line(self, new_line) -> Tuple[bool, str]:
         """
         Process the line and extract columns for nfdump
         """
@@ -44,4 +46,4 @@ class Nfdump(IInputType):
             sbytes=get_value_at(12),
             dbytes=get_value_at(14),
         )
-        return self.flow
+        return self.flow, ""

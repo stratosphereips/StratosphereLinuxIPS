@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import sys
 import traceback
+from typing import Tuple
 
 from slips_files.common.abstracts.iinput_type import IInputType
 from slips_files.common.slips_utils import utils
@@ -16,7 +17,7 @@ class Argus(IInputType):
         """returns true if we're reading argus flows from stdin"""
         return "-f" in sys.argv and "argus" in sys.argv
 
-    def process_line(self, new_line: dict):
+    def process_line(self, new_line: dict) -> Tuple[bool, str]:
         """
         Process the line and extract columns for argus
         """
@@ -26,7 +27,7 @@ class Argus(IInputType):
         # make sure we have a map of each field and its' index
         if not hasattr(self, "column_idx"):
             self.define_columns(new_line)
-            return
+            return False, "Defined Columns"
 
         line = new_line["data"]
         nline = line.strip().split(self.separator)
@@ -61,7 +62,7 @@ class Argus(IInputType):
             interface="default",
         )
 
-        return self.flow
+        return self.flow, ""
 
     def get_predefined_argus_column_indices(self):
         """default column indices in case of reading argus from stdin"""

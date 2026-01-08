@@ -690,7 +690,6 @@ class ProfilerWorker(IModule):
                 # or another worker that knows how to process this line does it
                 if err == "unknown line_processor":
                     self.profiler_queue.put(msg)
-
                 return
 
             n = time.time()
@@ -713,5 +712,9 @@ class ProfilerWorker(IModule):
             # exit gracefully
             gc.enable()
             return 1
-        except Exception as e:
-            self.print(f"Unable to process flow: {msg}: {e}", 0, 1)
+        except Exception:
+            self.print(
+                f"Unable to process flow: {msg}: " f"{self.print_traceback()}",
+                0,
+                1,
+            )

@@ -216,12 +216,12 @@ class ZeekJSON(IInputType, Zeek):
                 writer.writerow(self.times)
             self.times = {}
 
-    def process_line(self, new_line: dict):
+    def process_line(self, new_line: dict) -> Tuple[bool, str]:
         line = new_line["data"]
         interface = new_line["interface"]
 
         if not isinstance(line, dict):
-            return False
+            return False, "The given zeek line is not a dict"
 
         n = time.time()
         file_type = self.get_file_type(new_line)
@@ -230,7 +230,7 @@ class ZeekJSON(IInputType, Zeek):
 
         zeek_fields_to_slips_fields_map = LOG_MAP.get(file_type)
         if not zeek_fields_to_slips_fields_map:
-            return False
+            return False, "Can't find zeek_fields_to_slips_fields_map"
 
         if ts := line.get("ts", False):
             starttime = utils.convert_to_datetime(ts)
@@ -287,10 +287,11 @@ class ZeekJSON(IInputType, Zeek):
             latency = time.time() - n
             self.log_time("calling_slips_class", latency)
 
-            return flow
+            return flow, ""
 
-        print(f"[Profiler] Invalid file_type: {file_type}, line: {line}")
-        return False
+        err = f"Invalid file_type: {file_type}, line: {line}"
+        print(err)
+        return False, err
 
 
 class ZeekTabs(IInputType, Zeek):
@@ -453,4 +454,4 @@ class ZeekTabs(IInputType, Zeek):
             return flow, ""
 
         print(f"[Profiler] Invalid file_type: {log_type}, line: {line}")
-        return False, "Invalid file_type: {log_type}, line: {line}"
+        return False, f"Invalid file_type: {log_type}, line: {line}"

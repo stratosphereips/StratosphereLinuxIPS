@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+from typing import Tuple
 
 from slips_files.common.abstracts.iinput_type import IInputType
 from slips_files.common.slips_utils import utils
@@ -35,7 +36,7 @@ class Suricata(IInputType):
 
         return cnames + ips
 
-    def process_line(self, line) -> None:
+    def process_line(self, line) -> Tuple[bool, str]:
         """Read suricata json input and store it in column_values"""
 
         # convert to dict if it's not a dict already
@@ -46,7 +47,7 @@ class Suricata(IInputType):
             line = json.loads(line.get("data", False))
 
         if not line:
-            return
+            return False, "Can't parse suricata dictionary"
 
         event_type = line["event_type"]
         flow_id = line["flow_id"]
@@ -192,6 +193,6 @@ class Suricata(IInputType):
             )
 
         else:
-            return False
+            return False, "Unable to recognize event type."
 
-        return self.flow
+        return self.flow, ""
