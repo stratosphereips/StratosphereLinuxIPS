@@ -49,15 +49,15 @@ class NetworkDiscovery(IModule):
         self.c1 = self.db.subscribe("tw_modified")
         self.c2 = self.db.subscribe("new_notice")
         self.c3 = self.db.subscribe("new_dhcp")
+        self.c4 = self.db.subscribe("tw_closed")
         self.channels = {
             "tw_modified": self.c1,
             "new_notice": self.c2,
             "new_dhcp": self.c3,
+            "tw_closed": self.c4,
         }
-        # We need to know that after a detection, if we receive another flow
-        # that does not modify the count for the detection, we are not
-        # re-detecting again only because the threshold was overcomed last time.
-        self.cache_det_thresholds = {}
+        # To make sure each evidence has more pkts than the last one
+        self.cache_detection_thresholds = {}
         self.separator = "_"
         # The minimum amount of ports to scan in vertical scan
         self.port_scan_minimum_dports = 5
@@ -122,8 +122,8 @@ class NetworkDiscovery(IModule):
     ):
 
         # to avoid reporting so many evidence
-        cache_key = f"{profileid}:{twid}:{attack}"
-        prev_scanned_ips = self.cache_det_thresholds.get(cache_key, 0)
+        cache_key = f"{profileid}_{twid}:{attack}"
+        prev_scanned_ips = self.cache_detection_thresholds.get(cache_key, 0)
         # detect every 5, 10, 15, etc. scanned IPs
         if (
             amount_of_scanned_ips % self.pingscan_minimum_scanned_ips == 0
@@ -143,7 +143,7 @@ class NetworkDiscovery(IModule):
                 uids,
                 attack,
             )
-            self.cache_det_thresholds[cache_key] = amount_of_scanned_ips
+            self.cache_detection_thresholds[cache_key] = amount_of_scanned_ips
 
     def check_icmp_scan(self, profileid: ProfileID, twid: TimeWindow):
         for sport in ICMP_SCAN_PORTS:
@@ -182,9 +182,9 @@ class NetworkDiscovery(IModule):
 
         attack = ICMP_SCAN_PORT_MAP.get(sport)
         cache_key = (
-            f"{profileid}:{twid}:dstip:" f"{scanned_ip}:{sport}:{attack}"
+            f"{profileid}_{twid}:dstip:" f"{scanned_ip}:{sport}:{attack}"
         )
-        prev_pkts = self.cache_det_thresholds.get(cache_key, 0)
+        prev_pkts = self.cache_detection_thresholds.get(cache_key, 0)
 
         # We detect a scan every Threshold. So we detect when there
         # is 5,10,15 etc. scan to the same dstip on the same port
@@ -195,7 +195,7 @@ class NetworkDiscovery(IModule):
             pkts_sent % self.pingscan_minimum_pkts == 0
             and prev_pkts < pkts_sent
         ):
-            self.cache_det_thresholds[cache_key] = pkts_sent
+            self.cache_detection_thresholds[cache_key] = pkts_sent
             amount_of_scanned_ips = 1
             self.set_evidence_icmp_scan(
                 amount_of_scanned_ips,
@@ -342,6 +342,27 @@ class NetworkDiscovery(IModule):
                 profileid, twid, flow, number_of_requested_addrs
             )
 
+    def cleanup_cache_dicts(self, profile_tw: List[str]):
+        """
+        removes closed timewindows from cache dicts to
+        avoid storing useless info in mem
+        """
+        profile_tw: str = "_".join(profile_tw)
+
+        for cache_dict in (
+            self.cache_detection_thresholds,
+            self.horizontal_ps.cached_thresholds_per_tw,
+            self.vertical_ps.cached_thresholds_per_tw,
+        ):
+            new_cache = {}
+            for key, threshold in cache_dict.items():
+                if profile_tw in key:
+                    continue
+                new_cache[key] = threshold
+
+            cache_dict.clear()
+            cache_dict.update(new_cache)
+
     def pre_main(self):
         utils.drop_root_privs_permanently()
 
@@ -398,3 +419,7 @@ class NetworkDiscovery(IModule):
             twid = msg["twid"]
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
             self.check_dhcp_scan(profileid, twid, flow)
+
+        if msg := self.get_msg("tw_closed"):
+            profileid_tw: List[str] = msg["data"].split("_")
+            self.cleanup_cache_dicts(profileid_tw)
