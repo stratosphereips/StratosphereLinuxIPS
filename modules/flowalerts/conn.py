@@ -776,7 +776,7 @@ class Conn(IFlowalertsAnalyzer):
         self.set_evidence.conn_to_private_ip(twid, flow)
 
     def cleanup_conn_to_multiple_ports_tracker(self, profile_tw: List[str]):
-        """to avoid having useless keys"""
+        """to avoid having useless keys in mem"""
         self.conn_to_multiple_ports_tracker.pop("_".join(profile_tw), None)
 
     async def analyze(self, msg):

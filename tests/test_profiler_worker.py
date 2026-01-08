@@ -252,7 +252,7 @@ def test_read_configuration(
     mock_conf.ts_format.return_value = "unixtimestamp"
     mock_conf.analysis_direction.return_value = "all"
     mock_conf.label.return_value = "malicious"
-    mock_conf.get_tw_width_as_float.return_value = 1.0
+    mock_conf.get_tw_width_in_seconds.return_value = 1.0
     mock_conf.client_ips.return_value = ["192.168.1.1", "10.0.0.1"]
     profiler.conf = mock_conf
     profiler.read_configuration()

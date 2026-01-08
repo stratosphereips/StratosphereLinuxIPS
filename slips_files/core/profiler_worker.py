@@ -88,7 +88,7 @@ class ProfilerWorker(IModule):
         self.timeformat = self.conf.ts_format()
         self.analysis_direction = self.conf.analysis_direction()
         self.label = self.conf.label()
-        self.width = self.conf.get_tw_width_as_float()
+        self.width = self.conf.get_tw_width_in_seconds()
 
     def get_msg_from_queue(self, q: multiprocessing.Queue):
         """

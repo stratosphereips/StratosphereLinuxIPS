@@ -181,7 +181,7 @@ class DBManager:
     @classmethod
     def read_configuration(cls):
         conf = ConfigParser()
-        cls.width = conf.get_tw_width_as_float()
+        cls.width = conf.get_tw_width_in_seconds()
 
     def get_sqlite_db_path(self) -> str:
         return self.sqlite.get_db_path()

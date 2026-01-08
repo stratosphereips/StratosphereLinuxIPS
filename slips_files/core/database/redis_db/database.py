@@ -213,7 +213,7 @@ class RedisDB(
         # By default False. Meaning we don't DELETE the DB by default.
         cls.deletePrevdb: bool = conf.delete_prev_db()
         cls.disabled_detections: List[str] = conf.disabled_detections()
-        cls.width = conf.get_tw_width_as_float()
+        cls.width = conf.get_tw_width_in_seconds()
         cls.client_ips: List[str] = conf.client_ips()
 
     @classmethod

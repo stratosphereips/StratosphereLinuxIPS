@@ -25,7 +25,6 @@ from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 from dataclasses import is_dataclass, asdict
 from enum import Enum
 
-
 from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
 
 

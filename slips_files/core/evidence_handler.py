@@ -117,7 +117,7 @@ class EvidenceHandler(ICore):
 
     def read_configuration(self):
         conf = ConfigParser()
-        self.width: float = conf.get_tw_width_as_float()
+        self.width: float = conf.get_tw_width_in_seconds()
         self.detection_threshold = conf.evidence_detection_threshold()
         self.print(
             f"Detection Threshold: {self.detection_threshold} "

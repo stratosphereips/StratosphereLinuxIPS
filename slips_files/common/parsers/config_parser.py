@@ -212,7 +212,7 @@ class ConfigParser(object):
             "parameters", "store_a_copy_of_zeek_files", True
         )
 
-    def get_tw_width_as_float(self):
+    def get_tw_width_in_seconds(self):
         try:
             twid_width = self.read_configuration(
                 "parameters", "time_window_width", 3600
@@ -237,7 +237,7 @@ class ConfigParser(object):
         )
 
     def get_tw_width(self) -> str:
-        twid_width = self.get_tw_width_as_float()
+        twid_width = self.get_tw_width_in_seconds()
         # timedelta puts it in the form of X days, hours:minutes:seconds
         total_seconds = int(timedelta(seconds=twid_width).total_seconds())
         days, remainder = divmod(
