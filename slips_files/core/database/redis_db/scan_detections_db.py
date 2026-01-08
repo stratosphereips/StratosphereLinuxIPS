@@ -261,6 +261,9 @@ class ScanDetectionsHandler:
         dport: str,
     ) -> int:
         """
+        counts the unique dst ips where the profile has not established
+        flows to on the given dst port.
+
         returns the length of the set for horizontal portscan detection
          profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips:timestamps  [ip,
          ip, ip...]
@@ -269,7 +272,7 @@ class ScanDetectionsHandler:
         str_proto = proto.name.lower()
         key = (
             f"{profileid}_{twid}:"
-            f"{str_proto}:not_estab:dstport:{dport}:dstips"
+            f"{str_proto}:not_estab:dstport:{dport}:dstips:timestamps"
         )
         try:
             amount_of_dstips = int(self.r.zcard(key))
@@ -294,7 +297,7 @@ class ScanDetectionsHandler:
         str_proto = proto.name.lower()
         key = (
             f"{profileid}_{twid}:"
-            f"{str_proto}:not_estab:dstport:{dport}:dstips"
+            f"{str_proto}:not_estab:dstport:{dport}:dstips:timestamps"
         )
         try:
             min_item = self.r.zrange(key, 0, 0, withscores=True)
