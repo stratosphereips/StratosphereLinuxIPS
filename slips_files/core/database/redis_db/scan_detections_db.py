@@ -66,7 +66,6 @@ class ScanDetectionsHandler:
     name = "DB"
 
     def _hscan(self, key: str, count: int = 100) -> Iterator:
-        # TODO make this more generic to be used in other places
         cursor = 0
         while True:
             cursor, data = self.r.hscan(key, cursor, count=count)
@@ -101,17 +100,17 @@ class ScanDetectionsHandler:
         """
         proto = proto.name.lower()
         key = f"{profileid}_{twid}:{proto}:not_estab:ips"
+
+        # last seen is now. this flow.
         last_seen_timestamp = flow.starttime
 
         old_info: str = self.r.hget(key, ip)
         try:
             new_info = json.loads(old_info)
         except (json.JSONDecodeError, TypeError):
+            # first time for this ip, first seen is the same as the last seen
             new_info = {
-                # TODO this first seen and last seen isnt the start and
-                #  endtime of the attack, it can be any ip, fix it.
                 "first_seen": last_seen_timestamp,
-                "uid_of_first_seen": flow.uid,
             }
 
         new_info["last_seen"] = last_seen_timestamp
@@ -422,8 +421,6 @@ class ScanDetectionsHandler:
             pipe.hincrby(key, flow.dport, int(flow.pkts))
             pipe.expire(key, self.tw_width, nx=True)
 
-            # TODO make sure the stored ts is the starttime, so if a
-            #  daddr is present dont zadd
             # ZSET
             # profile_tw:[tcp|udp]:not_estab:dport:
             # [port]:dstips:timestamps  [ip,
@@ -434,7 +431,9 @@ class ScanDetectionsHandler:
                 f"{str_proto}:not_estab:dstport:"
                 f"{flow.dport}:dstips:timestamps"
             )
-            pipe.zadd(key, {flow.daddr: flow.starttime})
+            # To make sure the stored ts is the first seen ts of this
+            # daddr, we use nx=True, so if a daddr is present we dont zadd
+            pipe.zadd(key, {flow.daddr: flow.starttime}, nx=True)
             pipe.expire(key, self.tw_width, nx=True)
 
         return pipe
@@ -448,8 +447,6 @@ class ScanDetectionsHandler:
         pipe.hincrby(key, flow.daddr, flow.spkts)
         pipe.expire(key, self.tw_width, nx=True)
 
-        # TODO make sure the stored ts is the starttime, so if a
-        #  daddr is present dont zadd
         # ZSET
         #  profile_tw:icmp:est:sport:<port>:dstips:timestamps [ip,
         # ip, ip...]
@@ -458,7 +455,9 @@ class ScanDetectionsHandler:
             f"{profileid}_{twid}:icmp:est:sport:"
             f"{flow.sport}:dstips:timestamps"
         )
-        pipe.zadd(key, {flow.daddr: flow.starttime})
+        # To make sure the stored ts is the first seen ts of this
+        # daddr, we use nx=True, so if a daddr is present we dont zadd
+        pipe.zadd(key, {flow.daddr: flow.starttime}, nx=True)
         pipe.expire(key, self.tw_width, nx=True)
 
         # incr the tot pkts sent to all dstips. needed for setting
@@ -479,7 +478,7 @@ class ScanDetectionsHandler:
         # hash profile_tw:tcp:estab:<ip>:dstports <port> <uid>
         if role == role.CLIENT:
             key = f"{profileid}_{twid}:tcp:est:dstips"
-            pipe.zadd(key, {flow.daddr: flow.starttime})
+            pipe.zadd(key, {flow.daddr: flow.starttime}, nx=True)
             pipe.expire(key, self.tw_width, nx=True)
 
             key = f"{profileid}_{twid}:tcp:est:{flow.daddr}:dstports"
@@ -489,7 +488,7 @@ class ScanDetectionsHandler:
         elif role == role.SERVER:
             client_profileid = ProfileID(ip=flow.saddr)
             key = f"{client_profileid}_{twid}:tcp:est:dstips"
-            pipe.zadd(key, {flow.saddr: flow.starttime})
+            pipe.zadd(key, {flow.saddr: flow.starttime}, nx=True)
             pipe.expire(key, self.tw_width, nx=True)
 
             key = f"{client_profileid}_{twid}:tcp:est:{flow.saddr}:dstports"

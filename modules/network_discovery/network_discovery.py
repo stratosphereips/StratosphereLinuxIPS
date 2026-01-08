@@ -73,7 +73,7 @@ class NetworkDiscovery(IModule):
     def check_icmp_sweep(self, twid, flow):
         """
         Use our own Zeek scripts to detect ICMP scans.
-        Threshold is on the scripts and it is 25 ICMP flows
+        Threshold is defined in the scripts and it is 25 ICMP flows
         """
         scan_mapping = {
             "TimestampScan": EvidenceType.ICMP_TIMESTAMP_SCAN,

@@ -207,7 +207,7 @@ class VerticalPortscan:
                         "protocol": protocol.name.lower(),
                         "profileid": str(profileid),
                         "twid": str(twid),
-                        "uid": [metadata["uid_of_first_seen"]],
+                        "uid": [],
                         "amount_of_dports": amount_of_dports,
                         "dstip": dstip,
                         "state": State.NOT_EST.name.lower(),
