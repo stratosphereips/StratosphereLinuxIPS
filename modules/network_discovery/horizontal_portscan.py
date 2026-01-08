@@ -78,7 +78,7 @@ class HorizontalPortscan:
         if not dport:
             return False
 
-        twid_identifier = f"{profileid}:{twid}:dport:{dport}"
+        twid_identifier = f"{profileid}_{twid}:dport:{dport}"
         twid_threshold = self.cached_thresholds_per_tw.get(twid_identifier, 0)
 
         if self.should_set_evidence(amount_of_dips, twid_threshold):

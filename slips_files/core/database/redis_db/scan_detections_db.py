@@ -517,7 +517,7 @@ class ScanDetectionsHandler:
             return pipe
 
         if not hasattr(self, "tw_width"):
-            self.tw_width: float = self.conf.get_tw_width_in_seconds()
+            self.tw_width = int(self.conf.get_tw_width_in_seconds())
 
         # Get the state. Established, NotEstablished
         summary_state: str = self.get_final_state_from_flags(

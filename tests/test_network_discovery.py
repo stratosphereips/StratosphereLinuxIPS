@@ -557,7 +557,7 @@ def test_check_icmp_scan(
     network_discovery = ModuleFactory().create_network_discovery_obj()
     network_discovery.pingscan_minimum_pkts = 5
     network_discovery.pingscan_minimum_scanned_ips = 5
-    network_discovery.cache_det_thresholds = {}
+    network_discovery.cache_detection_thresholds = {}
 
     network_discovery.db.get_data_from_profile_tw = Mock()
     network_discovery.db.get_data_from_profile_tw.return_value = sports
@@ -572,5 +572,6 @@ def test_check_icmp_scan(
         == expected_set_evidence_calls
     )
     assert (
-        network_discovery.cache_det_thresholds == expected_cache_det_thresholds
+        network_discovery.cache_detection_thresholds
+        == expected_cache_det_thresholds
     )

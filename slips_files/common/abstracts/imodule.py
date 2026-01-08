@@ -150,6 +150,13 @@ class IModule(ABC, Process):
 
     def get_msg(self, channel: str) -> Optional[dict]:
         try:
+            if channel not in self.channels:
+                self.print(
+                    f"Module didn't subscribe to {channel} and is "
+                    f"trying to get msgs from it."
+                )
+                return None
+
             message = self.db.get_message(self.channels[channel])
             if utils.is_msg_intended_for(message, channel):
                 self.channel_tracker[channel]["msg_received"] = True

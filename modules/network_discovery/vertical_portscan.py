@@ -68,8 +68,7 @@ class VerticalPortscan:
         description = (
             f'new vertical port scan to IP {evidence["dstip"]} from {saddr}. '
             f'Total {evidence["amount_of_dports"]} '
-            f'dst {evidence["protocol"]} ports '
-            f"were scanned. "
+            f'{evidence["protocol"].upper()} ports were scanned. '
             f'Total packets sent to all ports: {evidence["pkts_sent"]}. '
             f"Confidence: {confidence}. by Slips"
         )

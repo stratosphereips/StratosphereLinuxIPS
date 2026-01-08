@@ -164,6 +164,7 @@ class RedisDB(
 
     def __init__(self, *args, **kwargs):
         self.set_new_incoming_flows(True)
+        self.conf = ConfigParser()
 
     @classmethod
     def _set_redis_options(cls):
