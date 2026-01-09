@@ -675,37 +675,33 @@ class Conn(IFlowalertsAnalyzer):
                     return True
             return False
 
-    def _is_ok_to_connect_to_ip_outside_localnet(self, flow) -> bool:
+    def _is_ok_to_connect_to_ip_outside_localnet(self, ip) -> bool:
         """
         returns true if it's ok to connect to the given IP even if it's
         "outside the given local network"
         """
-        for ip in (flow.saddr, flow.daddr):
-            ip_obj = ipaddress.ip_address(ip)
-            return (
-                # because slips only knows about the ipv4 local networks
-                not validators.ipv4(ip)
-                or ip in SPECIAL_IPV4
-                or not ip_obj.is_private
-                or ip_obj.is_loopback
-                or ip_obj.is_multicast
-            )
+        ip_obj = ipaddress.ip_address(ip)
+        return (
+            # because slips only knows about the ipv4 local networks
+            not validators.ipv4(ip)
+            or ip in SPECIAL_IPV4
+            or not ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_multicast
+        )
 
     def _is_dns(self, flow) -> bool:
         return str(flow.dport) == "53" and flow.proto.lower() == "udp"
 
-    def check_different_localnet_usage(
-        self,
-        twid,
-        flow,
-        what_to_check="",
-    ):
+    def check_different_localnet_usage(self, twid, flow, what_to_check=""):
         """
         alerts when a connection to a private ip that
         doesn't belong to our local network is found
+
         for example:
-        If we are on 192.168.1.0/24 then detect anything
-        coming from/to 10.0.0.0/8
+            If we are on 192.168.1.0/24 then detect anything
+            coming from/to 10.0.0.0/8
+
         :param what_to_check: can be 'srcip' or 'dstip'
         PS: most changes here should be in
         dns.py::check_different_localnet_usage() so remember to update both:D
@@ -714,10 +710,9 @@ class Conn(IFlowalertsAnalyzer):
             # dns flows are checked fot this same detection in dns.py
             return
 
-        if self._is_ok_to_connect_to_ip_outside_localnet(flow):
-            return
-
         ip_to_check = flow.saddr if what_to_check == "srcip" else flow.daddr
+        if self._is_ok_to_connect_to_ip_outside_localnet(ip_to_check):
+            return
 
         ip_obj = ipaddress.ip_address(ip_to_check)
         own_local_network = self.db.get_local_network(flow.interface)
