@@ -110,7 +110,7 @@ def test_min_dports_threshold(get_test_conns, expected_return_val: bool):
     amount_of_dports = len(conns[dstip]["dstports"])
 
     assert (
-        vertical_ps.check_if_enough_dports_to_trigger_an_evidence(
+        vertical_ps.check_if_enough_pkts_to_trigger_an_evidence(
             cache_key, amount_of_dports
         )
         == expected_return_val
@@ -150,7 +150,7 @@ def test_check_if_enough_dports_to_trigger_an_evidence(
     key: str = vertical_ps.get_twid_identifier(profileid, timewindow, dstip)
     vertical_ps.cached_thresholds_per_tw[key] = ports_reported_last_evidence
 
-    enough: bool = vertical_ps.check_if_enough_dports_to_trigger_an_evidence(
+    enough: bool = vertical_ps.check_if_enough_pkts_to_trigger_an_evidence(
         key, cur_amount_of_dports
     )
     assert enough == expected_return_val

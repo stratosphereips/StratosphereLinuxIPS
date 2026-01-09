@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import json
 from typing import Dict
-
+from math import log10
 
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
@@ -98,66 +98,47 @@ class VerticalPortscan:
 
         self.db.set_evidence(evidence)
 
-    def are_dports_greater_or_eq_minimum_dports(self, dports: int) -> bool:
-        return dports >= self.minimum_dports_to_set_evidence
-
     @staticmethod
-    def are_dports_greater_or_eq_last_evidence(
-        dports: int, ports_reported_last_evidence: int
+    def log(n: int) -> int:
+        if n <= 0:
+            return 0
+        return int(log10(n))
+
+    def should_set_evidence(
+        self, current_threshold: int, last_threshold: int
     ) -> bool:
         """
-         To make sure the amount of dports reported
-         each evidence is higher than the previous one +15
-         so the first alert will always report 5
-         dports, and then 20+,35+. etc
-
-        :param dports: dports to report in the current evidence
-        :param ports_reported_last_evidence: the amount of
-            ports reported in the last evidence in the current
-            evidence's timewindow
-        """
-        if ports_reported_last_evidence == 0:
-            # first portscan evidence in this threshold, no past evidence
-            # to compare with
-            return True
-        return dports >= ports_reported_last_evidence + 15
-
-    def should_set_evidence(self, dports: int, twid_threshold: int) -> bool:
-        """
-        Makes sure the given dports are more than the minimum dports number
-        we should alert on, and that is it more than the dports of
+        Makes sure the given dports are more than the dports of
         the last evidence
+        """
+        return current_threshold > last_threshold
 
+    def check_if_enough_pkts_to_trigger_an_evidence(
+        self, profileid, twid, dstip, total_pkts_sent_to_all_dports: int
+    ) -> bool:
+        """
+        checks if the pkts used so far are enough to trigger a new
+        evidence
+
+        Returns True only when log10(pkts) exceeds the logarithmic
+        bucket of the last reported evidence.
         The goal is to never get an evidence that's
          1 or 2 ports more than the previous one so we dont
          have so many portscan evidence
-        """
-        more_than_min = self.are_dports_greater_or_eq_minimum_dports(dports)
-        exceeded_twid_threshold = self.are_dports_greater_or_eq_last_evidence(
-            dports, twid_threshold
-        )
-        return more_than_min and exceeded_twid_threshold
 
-    def check_if_enough_dports_to_trigger_an_evidence(
-        self, profileid, twid, dstip, amount_of_dports: int
-    ) -> bool:
-        """
-        checks if the scanned sports are enough to trigger and evidence
-        to make sure the amount of dports reported each evidence
-        is higher than the previous one +15
         """
         if not dstip:
             return False
 
         twid_identifier = f"{profileid}:{twid}:dstip:{dstip}"
-        twid_threshold: int = self.cached_thresholds_per_tw.get(
-            twid_identifier, 0
-        )
 
-        if self.should_set_evidence(amount_of_dports, twid_threshold):
-            # keep track of the max reported dstips
+        last_threshold = self.cached_thresholds_per_tw.get(twid_identifier, -1)
+        current_threshold = self.log(total_pkts_sent_to_all_dports)
+
+        if self.should_set_evidence(current_threshold, last_threshold):
+            # keep track of the reported log(dstport)
             # in the last evidence in this twid
-            self.cached_thresholds_per_tw[twid_identifier] = amount_of_dports
+            self.cached_thresholds_per_tw[twid_identifier] = current_threshold
             return True
         return False
 
@@ -196,11 +177,10 @@ class VerticalPortscan:
                     amount_of_dports
                 ), int(total_pkts_sent_to_all_dports)
 
-                if self.check_if_enough_dports_to_trigger_an_evidence(
-                    profileid, twid, dstip, amount_of_dports
+                if self.check_if_enough_pkts_to_trigger_an_evidence(
+                    profileid, twid, dstip, total_pkts_sent_to_all_dports
                 ):
                     metadata: Dict[str, float] = json.loads(metadata)
-                    # todo remove uid usage
                     evidence_details = {
                         "timestamp": metadata["first_seen"],
                         "pkts_sent": total_pkts_sent_to_all_dports,
