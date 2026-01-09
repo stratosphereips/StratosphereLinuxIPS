@@ -32,7 +32,7 @@ class HorizontalPortscan:
         # is increased exponentially every evidence, and is reset each timewindow
         self.minimum_dstips_to_set_evidence = 5
 
-    def check_if_enough_dstips_to_trigger_an_evidence(
+    def check_if_enough_pkts_to_trigger_an_evidence(
         self, profileid, twid, dport, total_pkts: int
     ) -> bool:
         """
@@ -96,6 +96,16 @@ class HorizontalPortscan:
 
         self.db.set_evidence(evidence)
 
+    def should_set_evidence(
+        self, amount_of_dstips, profileid, twid, dport, total_pkts
+    ) -> bool:
+        return (
+            amount_of_dstips > self.minimum_dstips_to_set_evidence
+            and self.check_if_enough_pkts_to_trigger_an_evidence(
+                profileid, twid, dport, total_pkts
+            )
+        )
+
     def check(self, profileid: ProfileID, twid: TimeWindow):
         if not utils.are_detection_modules_interested_in_this_ip(profileid.ip):
             return False
@@ -121,8 +131,8 @@ class HorizontalPortscan:
                         profileid, twid, protocol, dport
                     )
                 )
-                if self.check_if_enough_dstips_to_trigger_an_evidence(
-                    profileid, twid, dport, total_pkts
+                if self.should_set_evidence(
+                    amount_of_dstips, profileid, twid, dport, total_pkts
                 ):
                     first_timestamp = self.db.get_attack_starttime(
                         profileid, twid, protocol, dport

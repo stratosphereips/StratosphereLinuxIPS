@@ -29,25 +29,15 @@ class VerticalPortscan:
     established flows on TCP and UDP protocols
     2. For each dst IP, slips checks the amount of
     destination ports we connected to
-    3. The first evidence will be triggered if the amount of
-    destination ports for 1 IP is 5+
-    4. then we set evidence on 20+,35+. etc
+    3. then we trigger evidence based on a log scaled of the pkts seen
+        during the attack
+        so we set an evidence every 10, 100, 1000 etc.
+            log(10 pkts) = one evidence
+            log(100 pkts) = another evidence
 
-    The result of this combining of evidence is that the dst ports
-     scanned in each evidence will be = the previous scanned ports +15
+        this scaled is done to avoid duplicate evidence
 
-    this combining is done to avoid duplicate evidence
-    the downside to this is that if you do more than 1 portscan
-    in the same timewindow, all portscans starting
-    from the second portscan will be ignored if they don't exceed
-    the number of dports of the first portscan
-
-    so as a rule, each evidence should have X ports scanned. this
-    X should ALWAYS be the last portscan+15,
-    if this X is the last portscan +14, we don't
-    set the evidence.
-
-    5. Once the timewindow ends, Slips resets
+    4. Once the timewindow ends, Slips resets
      all counters, we go back to step 1
     """
 
@@ -126,6 +116,21 @@ class VerticalPortscan:
             return True
         return False
 
+    def should_set_evidence(
+        self,
+        amount_of_dports,
+        profileid,
+        twid,
+        dstip,
+        total_pkts_sent_to_all_dports,
+    ) -> bool:
+        return (
+            amount_of_dports > self.minimum_dports_to_set_evidence
+            and self.check_if_enough_pkts_to_trigger_an_evidence(
+                profileid, twid, dstip, total_pkts_sent_to_all_dports
+            )
+        )
+
     def check(self, profileid: ProfileID, twid: TimeWindow):
         """
         sets an evidence if a vertical portscan is detected
@@ -161,8 +166,12 @@ class VerticalPortscan:
                     amount_of_dports
                 ), int(total_pkts_sent_to_all_dports)
 
-                if self.check_if_enough_pkts_to_trigger_an_evidence(
-                    profileid, twid, dstip, total_pkts_sent_to_all_dports
+                if self.should_set_evidence(
+                    amount_of_dports,
+                    profileid,
+                    twid,
+                    dstip,
+                    total_pkts_sent_to_all_dports,
                 ):
                     metadata: Dict[str, float] = json.loads(metadata)
                     evidence_details = {
