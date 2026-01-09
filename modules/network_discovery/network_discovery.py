@@ -112,6 +112,22 @@ class NetworkDiscovery(IModule):
 
         self.db.set_evidence(evidence)
 
+    def _should_set_icmp_scan_evidence(
+        self, profileid, twid, attack, amount_of_scanned_ips
+    ):
+        # to avoid reporting so many evidence
+        twid_identifier = f"{profileid}_{twid}:{attack}"
+
+        last_threshold = self.cached_thresholds_per_tw.get(twid_identifier, 0)
+        current_threshold = utils.log10(amount_of_scanned_ips)
+
+        if current_threshold > last_threshold:
+            self.cache_detection_thresholds[twid_identifier] = (
+                current_threshold
+            )
+            return True
+        return False
+
     def _handle_icmp_scanning_several_hosts(
         self,
         profileid: ProfileID,
@@ -120,14 +136,8 @@ class NetworkDiscovery(IModule):
         sport: int,
         amount_of_scanned_ips: int,
     ):
-
-        # to avoid reporting so many evidence
-        cache_key = f"{profileid}_{twid}:{attack}"
-        prev_scanned_ips = self.cache_detection_thresholds.get(cache_key, 0)
-        # detect every 5, 10, 15, etc. scanned IPs
-        if (
-            amount_of_scanned_ips % self.pingscan_minimum_scanned_ips == 0
-            and prev_scanned_ips < amount_of_scanned_ips
+        if self._should_set_icmp_scan_evidence(
+            profileid, twid, attack, amount_of_scanned_ips
         ):
             attack_info: Dict[str, int]
             attack_info = self.db.get_icmp_attack_info_to_several_hosts(
@@ -143,7 +153,6 @@ class NetworkDiscovery(IModule):
                 uids,
                 attack,
             )
-            self.cache_detection_thresholds[cache_key] = amount_of_scanned_ips
 
     def check_icmp_scan(self, profileid: ProfileID, twid: TimeWindow):
         for sport in ICMP_SCAN_PORTS:
