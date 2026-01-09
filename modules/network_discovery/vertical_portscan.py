@@ -108,8 +108,8 @@ class VerticalPortscan:
         self, current_threshold: int, last_threshold: int
     ) -> bool:
         """
-        Makes sure the given dports are more than the dports of
-        the last evidence
+        Makes sure the current threshold exceeds the threshold of last
+        evidence in this tw. to force the log scale.
         """
         return current_threshold > last_threshold
 
@@ -122,6 +122,7 @@ class VerticalPortscan:
 
         Returns True only when log10(pkts) exceeds the logarithmic
         bucket of the last reported evidence.
+
         The goal is to never get an evidence that's
          1 or 2 ports more than the previous one so we dont
          have so many portscan evidence
@@ -132,12 +133,11 @@ class VerticalPortscan:
 
         twid_identifier = f"{profileid}:{twid}:dstip:{dstip}"
 
-        last_threshold = self.cached_thresholds_per_tw.get(twid_identifier, -1)
+        last_threshold = self.cached_thresholds_per_tw.get(twid_identifier, 0)
         current_threshold = self.log(total_pkts_sent_to_all_dports)
 
         if self.should_set_evidence(current_threshold, last_threshold):
-            # keep track of the reported log(dstport)
-            # in the last evidence in this twid
+            # keep track of the reported evidence's log(pkts)
             self.cached_thresholds_per_tw[twid_identifier] = current_threshold
             return True
         return False

@@ -1,5 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+from math import log10
+
 from slips_files.core.structures.flow_attributes import Protocol
 
 from slips_files.common.slips_utils import utils
@@ -31,58 +33,46 @@ class HorizontalPortscan:
         # is increased exponentially every evidence, and is reset each timewindow
         self.minimum_dstips_to_set_evidence = 5
 
-    def are_dstips_greater_or_eq_minimum_dstips(self, dstips) -> bool:
-        return dstips >= self.minimum_dstips_to_set_evidence
+    def should_set_evidence(
+        self, current_threshold: int, last_threshold: int
+    ) -> bool:
+        """
+        Makes sure the current threshold exceeds the threshold of last
+        evidence in this tw. to force the log scale.
+        """
+        return current_threshold > last_threshold
 
     @staticmethod
-    def are_ips_greater_or_eq_last_evidence(
-        dstips: int, ips_reported_last_evidence: int
-    ) -> bool:
-        """
-        Makes sure the amount of dports reported
-         each evidence is higher than the previous one +15
-        so the first alert will always report 5 dstips,
-        and then 20+,35+. etc
-
-        :param dstips: dstips to report in the current evidence
-        :param ips_reported_last_evidence: the amount of
-            ips reported in the last evidence in the current
-            evidence's timewindow
-        """
-        # the goal is to never get an evidence that's 1 or 2 ports
-        #  more than the previous one so we dont have so many
-        #  portscan evidence
-        if ips_reported_last_evidence == 0:
-            # first portscan evidence in this threshold, no past evidence
-            # to compare with
-            return True
-
-        return dstips >= ips_reported_last_evidence + 15
-
-    def should_set_evidence(self, dstips: int, twid_threshold: int) -> bool:
-        more_than_min = self.are_dstips_greater_or_eq_minimum_dstips(dstips)
-        exceeded_twid_threshold = self.are_ips_greater_or_eq_last_evidence(
-            dstips, twid_threshold
-        )
-        return more_than_min and exceeded_twid_threshold
+    def log(n: int) -> int:
+        if n <= 0:
+            return 0
+        return int(log10(n))
 
     def check_if_enough_dstips_to_trigger_an_evidence(
-        self, profileid, twid, dport, amount_of_dips: int
+        self, profileid, twid, dport, total_pkts: int
     ) -> bool:
         """
-        checks if the scanned dst ips are enough to trigger and
+        checks if the pkts used so far are enough to trigger a new
         evidence
-        to make sure the amount of scanned dst ips reported each
-        evidence is higher than the previous one +15
+
+        Returns True only when log10(pkts) exceeds the logarithmic
+        bucket of the last reported evidence.
+
+        The goal is to never get an evidence that's
+         1 or 2 ports more than the previous one so we dont
+         have so many portscan evidence
         """
         if not dport:
             return False
 
         twid_identifier = f"{profileid}_{twid}:dport:{dport}"
-        twid_threshold = self.cached_thresholds_per_tw.get(twid_identifier, 0)
 
-        if self.should_set_evidence(amount_of_dips, twid_threshold):
-            self.cached_thresholds_per_tw[twid_identifier] = amount_of_dips
+        last_threshold = self.cached_thresholds_per_tw.get(twid_identifier, 0)
+        current_threshold = self.log(total_pkts)
+
+        if self.should_set_evidence(current_threshold, last_threshold):
+            # keep track of the reported evidence's log(pkts)
+            self.cached_thresholds_per_tw[twid_identifier] = current_threshold
             return True
         return False
 
@@ -148,7 +138,7 @@ class HorizontalPortscan:
                     )
                 )
                 if self.check_if_enough_dstips_to_trigger_an_evidence(
-                    profileid, twid, dport, amount_of_dstips
+                    profileid, twid, dport, total_pkts
                 ):
                     first_timestamp = self.db.get_attack_starttime(
                         profileid, twid, protocol, dport
