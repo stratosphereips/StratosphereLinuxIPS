@@ -4,6 +4,7 @@ import base64
 import binascii
 import hashlib
 from datetime import datetime, timedelta
+from math import log10
 from multiprocessing import Process
 from re import findall
 from threading import Thread
@@ -131,6 +132,12 @@ class Utils(object):
         for str_lvl, int_value in self.threat_levels.items():
             if threat_level <= int_value:
                 return str_lvl
+
+    @staticmethod
+    def log10(n: int) -> int:
+        if n <= 0:
+            return 0
+        return int(log10(n))
 
     def is_valid_threat_level(self, threat_level):
         return threat_level in self.threat_levels

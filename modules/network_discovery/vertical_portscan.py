@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import json
 from typing import Dict
-from math import log10
 
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
@@ -98,21 +97,6 @@ class VerticalPortscan:
 
         self.db.set_evidence(evidence)
 
-    @staticmethod
-    def log(n: int) -> int:
-        if n <= 0:
-            return 0
-        return int(log10(n))
-
-    def should_set_evidence(
-        self, current_threshold: int, last_threshold: int
-    ) -> bool:
-        """
-        Makes sure the current threshold exceeds the threshold of last
-        evidence in this tw. to force the log scale.
-        """
-        return current_threshold > last_threshold
-
     def check_if_enough_pkts_to_trigger_an_evidence(
         self, profileid, twid, dstip, total_pkts_sent_to_all_dports: int
     ) -> bool:
@@ -134,9 +118,9 @@ class VerticalPortscan:
         twid_identifier = f"{profileid}:{twid}:dstip:{dstip}"
 
         last_threshold = self.cached_thresholds_per_tw.get(twid_identifier, 0)
-        current_threshold = self.log(total_pkts_sent_to_all_dports)
+        current_threshold = utils.log10(total_pkts_sent_to_all_dports)
 
-        if self.should_set_evidence(current_threshold, last_threshold):
+        if current_threshold > last_threshold:
             # keep track of the reported evidence's log(pkts)
             self.cached_thresholds_per_tw[twid_identifier] = current_threshold
             return True

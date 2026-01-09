@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-from math import log10
 
 from slips_files.core.structures.flow_attributes import Protocol
 
@@ -33,21 +32,6 @@ class HorizontalPortscan:
         # is increased exponentially every evidence, and is reset each timewindow
         self.minimum_dstips_to_set_evidence = 5
 
-    def should_set_evidence(
-        self, current_threshold: int, last_threshold: int
-    ) -> bool:
-        """
-        Makes sure the current threshold exceeds the threshold of last
-        evidence in this tw. to force the log scale.
-        """
-        return current_threshold > last_threshold
-
-    @staticmethod
-    def log(n: int) -> int:
-        if n <= 0:
-            return 0
-        return int(log10(n))
-
     def check_if_enough_dstips_to_trigger_an_evidence(
         self, profileid, twid, dport, total_pkts: int
     ) -> bool:
@@ -68,9 +52,9 @@ class HorizontalPortscan:
         twid_identifier = f"{profileid}_{twid}:dport:{dport}"
 
         last_threshold = self.cached_thresholds_per_tw.get(twid_identifier, 0)
-        current_threshold = self.log(total_pkts)
+        current_threshold = utils.log10(total_pkts)
 
-        if self.should_set_evidence(current_threshold, last_threshold):
+        if current_threshold > last_threshold:
             # keep track of the reported evidence's log(pkts)
             self.cached_thresholds_per_tw[twid_identifier] = current_threshold
             return True
