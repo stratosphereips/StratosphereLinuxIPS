@@ -73,7 +73,7 @@ def test_check_if_enough_dstips_to_trigger_an_evidence(
     key: str = horizontal_ps.get_twid_identifier(profileid, timewindow, dport)
     horizontal_ps.cached_thresholds_per_tw[key] = prev_amount_of_dstips
 
-    enough: bool = horizontal_ps.check_if_enough_dstips_to_trigger_an_evidence(
+    enough: bool = horizontal_ps.check_if_enough_pkts_to_trigger_an_evidence(
         key, cur_amount_of_dstips
     )
     assert enough == expected_return_val
@@ -92,7 +92,7 @@ def test_check_if_enough_dstips_to_trigger_an_evidence_no_cache():
     key = horizontal_ps.get_twid_identifier(profileid, timewindow, dport)
     cur_amount_of_dstips = 10
 
-    enough = horizontal_ps.check_if_enough_dstips_to_trigger_an_evidence(
+    enough = horizontal_ps.check_if_enough_pkts_to_trigger_an_evidence(
         key, cur_amount_of_dstips
     )
     assert enough is True
@@ -107,7 +107,7 @@ def test_check_if_enough_dstips_to_trigger_an_evidence_less_than_minimum():
     key = horizontal_ps.get_twid_identifier(profileid, timewindow, dport)
     cur_amount_of_dstips = 3
 
-    enough = horizontal_ps.check_if_enough_dstips_to_trigger_an_evidence(
+    enough = horizontal_ps.check_if_enough_pkts_to_trigger_an_evidence(
         key, cur_amount_of_dstips
     )
     assert enough is False
@@ -142,7 +142,7 @@ def test_check_if_enough_dstips_to_trigger_an_evidence_equal_min_dips():
     dport = 80
     key = horizontal_ps.get_twid_identifier(profileid, timewindow, dport)
     amount_of_dips = horizontal_ps.minimum_dstips_to_set_evidence
-    enough = horizontal_ps.check_if_enough_dstips_to_trigger_an_evidence(
+    enough = horizontal_ps.check_if_enough_pkts_to_trigger_an_evidence(
         key, amount_of_dips
     )
     assert enough is True
@@ -175,7 +175,7 @@ def test_check_if_enough_dstips_to_trigger_an_evidence_min_dstips_threshold(
     amount_of_dips = len(dports[dport]["dstips"])
 
     assert (
-        horizontal_ps.check_if_enough_dstips_to_trigger_an_evidence(
+        horizontal_ps.check_if_enough_pkts_to_trigger_an_evidence(
             cache_key, amount_of_dips
         )
         == expected_return_val

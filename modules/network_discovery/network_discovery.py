@@ -57,14 +57,9 @@ class NetworkDiscovery(IModule):
             "tw_closed": self.c4,
         }
         # To make sure each evidence has more pkts than the last one
-        self.cache_detection_thresholds = {}
+        self.cached_thresholds_per_tw = {}
         self.separator = "_"
-        # The minimum amount of ports to scan in vertical scan
-        self.port_scan_minimum_dports = 5
-        self.pingscan_minimum_pkts = 5
         self.pingscan_minimum_scanned_ips = 5
-        # time in seconds to wait before alerting port scan
-        self.time_to_wait_before_generating_new_alert = 25
         # when a client is seen requesting this minimum addresses in 1 tw,
         # slips sets dhcp scan evidence
         self.minimum_requested_addrs = 4
@@ -115,6 +110,9 @@ class NetworkDiscovery(IModule):
     def _should_set_icmp_scan_evidence(
         self, profileid, twid, attack, amount_of_scanned_ips
     ):
+        if amount_of_scanned_ips < self.pingscan_minimum_scanned_ips:
+            return False
+
         # to avoid reporting so many evidence
         twid_identifier = f"{profileid}_{twid}:{attack}"
 
@@ -122,9 +120,7 @@ class NetworkDiscovery(IModule):
         current_threshold = utils.log10(amount_of_scanned_ips)
 
         if current_threshold > last_threshold:
-            self.cache_detection_thresholds[twid_identifier] = (
-                current_threshold
-            )
+            self.cached_thresholds_per_tw[twid_identifier] = current_threshold
             return True
         return False
 
@@ -179,10 +175,27 @@ class NetworkDiscovery(IModule):
                     profileid, twid, attack, sport, amount_of_scanned_ips
                 )
 
+    def _should_set_icmp_scanning_one_host_evidence(
+        self, profileid, twid, scanned_ip, sport, attack, pkts_sent
+    ) -> bool:
+        """
+        we only set an evidence every 10, 100 , 1000 pkts. (log scale)
+        """
+        twid_identifier = (
+            f"{profileid}_{twid}:dstip:{scanned_ip}:{sport}:{attack}"
+        )
+        last_threshold = self.cached_thresholds_per_tw.get(twid_identifier, 0)
+        current_threshold = utils.log10(pkts_sent)
+
+        if current_threshold > last_threshold:
+            # keep track of the reported evidence's log(pkts)
+            self.cached_thresholds_per_tw[twid_identifier] = current_threshold
+            return True
+        return False
+
     def _handle_icmp_scanning_one_host(
         self, profileid: ProfileID, twid: TimeWindow, sport: int | str
     ):
-        # how many flows are responsible for this attack
         attack_info = self.db.get_icmp_attack_info_to_single_host(
             profileid, twid, sport
         )
@@ -190,21 +203,10 @@ class NetworkDiscovery(IModule):
         pkts_sent = attack_info["pkts_sent"]
 
         attack = ICMP_SCAN_PORT_MAP.get(sport)
-        cache_key = (
-            f"{profileid}_{twid}:dstip:" f"{scanned_ip}:{sport}:{attack}"
-        )
-        prev_pkts = self.cache_detection_thresholds.get(cache_key, 0)
 
-        # We detect a scan every Threshold. So we detect when there
-        # is 5,10,15 etc. scan to the same dstip on the same port
-        # The idea is that after X dips we detect a connection.
-        # And then we 'reset' the counter
-        # until we see again X more.
-        if (
-            pkts_sent % self.pingscan_minimum_pkts == 0
-            and prev_pkts < pkts_sent
+        if self._should_set_icmp_scanning_one_host_evidence(
+            profileid, twid, scanned_ip, sport, attack, pkts_sent
         ):
-            self.cache_detection_thresholds[cache_key] = pkts_sent
             amount_of_scanned_ips = 1
             self.set_evidence_icmp_scan(
                 amount_of_scanned_ips,
@@ -359,7 +361,7 @@ class NetworkDiscovery(IModule):
         profile_tw: str = "_".join(profile_tw)
 
         for cache_dict in (
-            self.cache_detection_thresholds,
+            self.cached_thresholds_per_tw,
             self.horizontal_ps.cached_thresholds_per_tw,
             self.vertical_ps.cached_thresholds_per_tw,
         ):
