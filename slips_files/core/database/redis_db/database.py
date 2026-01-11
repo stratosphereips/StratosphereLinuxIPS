@@ -65,7 +65,6 @@ class RedisDB(
         "give_threat_intelligence",
         "new_letters",
         "ip_info_change",
-        "dns_info_change",
         "tw_closed",
         "core_messages",
         "new_blocking",

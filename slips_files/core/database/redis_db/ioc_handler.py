@@ -514,7 +514,6 @@ class IoCHandler:
             # Store
             domain_data = json.dumps(domain_data)
             self.rcache.hset(self.constants.DOMAINS_INFO, domain, domain_data)
-            self.r.publish(self.channels.DNS_INFO_CHANGE, domain)
 
     def cache_url_info_by_virustotal(self, url: str, urldata: dict):
         """
