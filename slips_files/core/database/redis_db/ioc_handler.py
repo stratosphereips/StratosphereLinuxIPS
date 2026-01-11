@@ -10,6 +10,8 @@ from typing import (
 )
 
 from slips_files.common.data_structures.trie import Trie
+from cachetools import TTLCache
+
 
 # for future developers, remember to invalidate_trie_cache() on every
 # change to the self.constants.IOC_DOMAINS key or slips will keep using an
@@ -25,10 +27,16 @@ class IoCHandler:
 
     name = "DB"
 
-    def __init__(self):
+    def setup(self, *args, **kwargs):
         # used for faster domain lookups
         self.trie = None
         self.is_trie_cached = False
+
+        self.twid_width = self.conf.get_tw_width_in_seconds()
+        self.give_threat_intelligence_cache = TTLCache(
+            maxsize=10_000,
+            ttl=self.twid_width,
+        )
 
     def _build_trie(self):
         """Retrieve domains from Redis and construct the trie."""
@@ -129,6 +137,17 @@ class IoCHandler:
         data = self.rcache.hget(self.constants.TI_FILES_INFO, file)
         return json.loads(data) if data else {}
 
+    def should_give_threat_intelligence(self, ip: str) -> bool:
+        """
+        determines whether to ask threat intel module about the ip or not
+        based on whether we've asked about it once in the past hour.
+        """
+        if ip in self.give_threat_intelligence_cache:
+            return False
+
+        self.give_threat_intelligence_cache[ip] = True
+        return True
+
     def give_threat_intelligence(
         self,
         profileid,
@@ -141,6 +160,10 @@ class IoCHandler:
         lookup="",
         extra_info: dict = False,
     ):
+        # to avoid asking about the same ip so many times
+        if not self.should_give_threat_intelligence(lookup):
+            return
+
         data_to_send = {
             "to_lookup": str(lookup),
             "profileid": str(profileid),

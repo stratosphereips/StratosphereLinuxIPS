@@ -140,6 +140,7 @@ class RedisDB(
         # start the redis server using cli if it's not started?
         cls.start_server = start_redis_server
         cls.printer = Printer(logger, cls.name)
+        cls.conf = ConfigParser()
 
         if cls.redis_port not in cls._instances:
             cls._set_redis_options()
@@ -163,8 +164,15 @@ class RedisDB(
         return cls._instances[cls.redis_port]
 
     def __init__(self, *args, **kwargs):
+        self.call_mixins_setup()
         self.set_new_incoming_flows(True)
-        self.conf = ConfigParser()
+
+    def call_mixins_setup(self):
+        # call setup() on all mixins
+        for cls in type(self).__mro__:
+            setup = getattr(cls, "setup", None)
+            if callable(setup):
+                setup(self)
 
     @classmethod
     def _set_redis_options(cls):

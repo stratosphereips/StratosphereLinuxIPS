@@ -157,7 +157,8 @@ class SymbolHandler:
         try:
             self.print(
                 f"Starting compute symbol. Profileid: {profileid}, "
-                f"Tupleid {tupleid}, time:{twid} ({type(twid)}), dur:{current_duration}, size:{current_size}",
+                f"Tupleid {tupleid}, time:{twid} ({type(twid)}), "
+                f"dur:{current_duration}, size:{current_size}",
                 3,
                 0,
             )
