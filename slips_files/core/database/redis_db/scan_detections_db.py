@@ -65,6 +65,9 @@ class ScanDetectionsHandler:
 
     name = "DB"
 
+    def setup(self, *args, **kwargs):
+        self.use_local_p2p: bool = self.conf.use_local_p2p()
+
     def _hscan(self, key: str, count: int = 100) -> Iterator:
         cursor = 0
         while True:
@@ -180,10 +183,12 @@ class ScanDetectionsHandler:
                 proto=flow.proto.upper(),
                 lookup=ip,
             )
-            # ask other peers their opinion about this IP
-            # the p2p module is expecting these 2 keys
-            data_to_send.update({"cache_age": 1000, "ip": str(ip)})
-            self.publish("p2p_data_request", json.dumps(data_to_send))
+
+            if self.use_local_p2p:
+                # ask other peers their opinion about this IP
+                # the p2p module is expecting these 2 keys
+                data_to_send.update({"cache_age": 1000, "ip": str(ip)})
+                self.publish("p2p_data_request", json.dumps(data_to_send))
 
     def add_ips(
         self, profileid: ProfileID, twid: TimeWindow, flow, role: Role
