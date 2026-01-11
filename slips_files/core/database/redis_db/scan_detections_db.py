@@ -4,6 +4,8 @@ import json
 import sys
 import traceback
 from typing import Iterator, Tuple, Dict, Any
+
+from cachetools import TTLCache
 from redis.client import Pipeline
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
@@ -67,6 +69,21 @@ class ScanDetectionsHandler:
 
     def setup(self, *args, **kwargs):
         self.use_local_p2p: bool = self.conf.use_local_p2p()
+        self.ask_ip_cache = TTLCache(
+            maxsize=10_000,
+            ttl=self.twid_width,
+        )
+
+    def _should_ask_modules_about_ip(self, ip: str) -> bool:
+        """
+        determines whether to ask threat intel module about the ip or not
+        based on whether we've asked about it once in the past hour.
+        """
+        if ip in self.ask_ip_cache:
+            return False
+
+        self.ask_ip_cache[ip] = True
+        return True
 
     def _hscan(self, key: str, count: int = 100) -> Iterator:
         cursor = 0
@@ -156,6 +173,7 @@ class ScanDetectionsHandler:
         Ask the IP info module about saddr and daddr of this flow
         doesn't ask for flows with "OTH" state
         """
+
         if flow.state == "OTH":
             # OTH means that we didnt see the true src ip and dst ip.
             # from zeek docs; OTH: No SYN seen, just midstream traffic
@@ -169,6 +187,10 @@ class ScanDetectionsHandler:
         }
 
         for ip_state, ip in cases.items():
+            # to avoid asking about the same ip so many times
+            if not self._should_ask_modules_about_ip(ip):
+                continue
+
             if ip in self.our_ips:
                 # dont ask p2p or other modules about your own ip
                 continue
