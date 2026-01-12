@@ -547,25 +547,30 @@ class ProfileHandler:
         """
         return len(self.get_tws_from_profile(profileid)) if profileid else 0
 
-    def get_t2_for_profile_tw(self, profileid, twid, tupleid, tuple_key: str):
+    def get_t2_for_profile_tw(
+        self, profileid, twid, tupleid, direction: str
+    ) -> Tuple[Optional[float], Optional[float]]:
         """
         Get T1 and the previous_time for this previous_time, twid and tupleid
+
+        :param tupleid: = f"{daddr}-{flow.dport}-{flow.proto}"
+        :param direction: can be 'InTuples' or 'OutTuples'
+
+        returns a tuple with 2 timestamps, a ts can be None if not found
         """
+        # updates the hash
+        # profileid_twid:[outtuples|intuples]:timestamps <tupleid> [
+        # <float_ts1>, <float_ts2>]
+
         try:
-            hash_id = profileid + self.separator + twid
-            data = self.r.hget(hash_id, tuple_key)
-            if not data:
-                return False, False
-            data = json.loads(data)
-            try:
-                (_, previous_two_timestamps) = data[tupleid]
-                return previous_two_timestamps
-            except KeyError:
-                return False, False
+            key = f"{profileid}_{twid}:{direction}:timestamps"
+            prev_two_timestamps = self.r.hget(key, tupleid)
+            return prev_two_timestamps if prev_two_timestamps else (None, None)
         except Exception as e:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Error in getT2ForProfileTW in database.py line {exception_line}",
+                f"Error in get_t2_for_profile_tw in profile_handler.py "
+                f"line {exception_line}",
                 0,
                 1,
             )
@@ -1118,22 +1123,6 @@ class ProfileHandler:
         }
         to_send = json.dumps(to_send)
         self.publish("new_letters", to_send)
-
-    #
-    # def get_previous_symbols(self, profileid: str, twid: str, direction:
-    # str, tupleid: str):
-    #     """
-    #     returns all the InTuples or OutTuples for this profileid in this TW
-    #     """
-    #     profileid_twid = f'{profileid}{self.separator}{twid}'
-    #
-    #     tuples = self.r.hget(profileid_twid, direction) or '{}'
-    #     tuples = json.loads(tuples)
-    #
-    #     # Get the last symbols of letters in the DB
-    #     prev_symbols = tuples[tupleid][0]
-    #     return prev_symbols
-    #
 
     def add_tuple(
         self,

@@ -73,7 +73,7 @@ def test_compute_periodicity(
     profileid = "test_profile"
     tupleid = "test_tuple"
 
-    result = symbol_handler.compute_periodicity(
+    result = symbol_handler._compute_periodicity(
         now_ts, last_ts, last_last_ts, tto, tt1, tt2, tt3, profileid, tupleid
     )
 
@@ -93,7 +93,7 @@ def test_compute_periodicity(
 )
 def test_compute_duration(current_duration, td1, td2, expected_result):
     symbol_handler = ModuleFactory().create_symbol_handler_obj()
-    result = symbol_handler.compute_duration(current_duration, td1, td2)
+    result = symbol_handler._compute_duration(current_duration, td1, td2)
     assert result == expected_result
 
 
@@ -110,7 +110,7 @@ def test_compute_duration(current_duration, td1, td2, expected_result):
 )
 def test_compute_size(current_size, ts1, ts2, expected_result):
     symbol_handler = ModuleFactory().create_symbol_handler_obj()
-    result = symbol_handler.compute_size(current_size, ts1, ts2)
+    result = symbol_handler._compute_size(current_size, ts1, ts2)
     assert result == expected_result
 
 
@@ -135,7 +135,7 @@ def test_compute_size(current_size, ts1, ts2, expected_result):
 )
 def test_compute_letter(periodicity, size, duration, expected_result):
     symbol_handler = ModuleFactory().create_symbol_handler_obj()
-    result = symbol_handler.compute_letter(periodicity, size, duration)
+    result = symbol_handler._compute_letter(periodicity, size, duration)
     assert result == expected_result
 
 
@@ -156,7 +156,7 @@ def test_compute_letter(periodicity, size, duration, expected_result):
 )
 def test_compute_timechar(T2, expected_result):
     symbol_handler = ModuleFactory().create_symbol_handler_obj()
-    result = symbol_handler.compute_timechar(T2)
+    result = symbol_handler._compute_timechar(T2)
     assert result == expected_result
 
 

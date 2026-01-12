@@ -139,6 +139,7 @@ class Utils(object):
             return 0
         return int(log10(n))
 
+    @staticmethod
     def is_valid_ip(ip: str) -> bool:
         try:
             ipaddress.ip_address(ip)

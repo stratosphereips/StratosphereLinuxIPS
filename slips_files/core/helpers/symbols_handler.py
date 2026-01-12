@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from datetime import timedelta
-from ipaddress import ip_address
 import traceback
 from slips_files.common.printer import Printer
+from slips_files.common.slips_utils import utils
 from slips_files.core.output import Output
 
 
@@ -17,7 +17,7 @@ class SymbolHandler:
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
 
-    def compute_periodicity(
+    def _compute_periodicity(
         self,
         now_ts: float,
         last_ts: float,
@@ -30,7 +30,7 @@ class SymbolHandler:
         tupleid: str,
     ):
         zeros = ""
-        if last_last_ts is False or last_ts is False:
+        if last_last_ts is None or last_ts is None:
             TD = -1
             T1 = None
             T2 = None
@@ -65,7 +65,7 @@ class SymbolHandler:
         )
         return TD, zeros, T2
 
-    def compute_duration(
+    def _compute_duration(
         self, current_duration: float, td1: float, td2: float
     ):
         """Function to compute letter of the duration"""
@@ -76,7 +76,7 @@ class SymbolHandler:
         else:
             return 3
 
-    def compute_size(self, current_size: int, ts1: float, ts2: float):
+    def _compute_size(self, current_size: int, ts1: float, ts2: float):
         """Function to compute letter of the size"""
         if current_size <= ts1:
             return 1
@@ -85,7 +85,7 @@ class SymbolHandler:
         else:
             return 3
 
-    def compute_letter(self, periodicity: int, size: int, duration: int):
+    def _compute_letter(self, periodicity: int, size: int, duration: int):
         """
         Function to compute letter based on the periodicity, size, and duration of the flow
         """
@@ -123,7 +123,7 @@ class SymbolHandler:
         }
         return periodicity_map[str(periodicity)][str(size)][str(duration)]
 
-    def compute_timechar(self, t2):
+    def _compute_timechar(self, t2):
         if t2 and not isinstance(t2, bool):
             time_thresholds = [(5, "."), (60, ","), (300, "+"), (3600, "*")]
 
@@ -135,20 +135,24 @@ class SymbolHandler:
         # Return empty string if no conditions are met
         return ""
 
-    def compute(self, flow, twid: str, tuple_key: str):
+    def compute(self, flow, twid: str, direction: str):
         """
         This function computes the new symbol for the tuple according to the
         original stratosphere IPS model of letters
         Here we do not apply any detection model, we just create the letters
         as one more feature twid is the starttime of the flow
-        :param tuple_key: can be 'InTuples' or 'OutTuples'
-        return the following tuple (symbol_to_add, (previous_two_timestamps))
+
+        :param direction: can be 'InTuples' or 'OutTuples'
+
+        returns the following tuple (symbol_to_add, (previous_two_timestamps))
         previous_two_timestamps is a tuple with the ts of the last flow,
         and the ts of the flow before the last flow
         """
-        daddr_as_obj = ip_address(flow.daddr)
+        if not utils.is_valid_ip(flow.daddr):
+            return
+
         profileid = f"profile_{flow.saddr}"
-        tupleid = f"{daddr_as_obj}-{flow.dport}-{flow.proto}"
+        field = f"{flow.daddr}-{flow.dport}-{flow.proto}"
 
         current_duration = float(flow.dur)
         current_size = int(flow.bytes)
@@ -157,7 +161,7 @@ class SymbolHandler:
         try:
             self.print(
                 f"Starting compute symbol. Profileid: {profileid}, "
-                f"Tupleid {tupleid}, time:{twid} ({type(twid)}), "
+                f"Tupleid {field}, time:{twid} ({type(twid)}), "
                 f"dur:{current_duration}, size:{current_size}",
                 3,
                 0,
@@ -168,11 +172,11 @@ class SymbolHandler:
             td1, td2 = 0.1, 10.0
             ts1, ts2 = 250.0, 1100.0
 
-            (last_last_ts, last_ts) = self.db.get_t2_for_profile_tw(
-                profileid, twid, tupleid, tuple_key
+            last_last_ts, last_ts = self.db.get_t2_for_profile_tw(
+                profileid, twid, field, direction
             )
 
-            periodicity, zeros, T2 = self.compute_periodicity(
+            periodicity, zeros, T2 = self._compute_periodicity(
                 now_ts,
                 last_ts,
                 last_last_ts,
@@ -181,15 +185,15 @@ class SymbolHandler:
                 tt2,
                 tt3,
                 profileid,
-                tupleid,
+                field,
             )
-            duration = self.compute_duration(current_duration, td1, td2)
-            size = self.compute_size(current_size, ts1, ts2)
-            letter = self.compute_letter(periodicity, size, duration)
-            timechar = self.compute_timechar(T2)
+            duration = self._compute_duration(current_duration, td1, td2)
+            size = self._compute_size(current_size, ts1, ts2)
+            letter = self._compute_letter(periodicity, size, duration)
+            timechar = self._compute_timechar(T2)
 
             self.print(
-                f"Profileid: {profileid}, Tuple: {tupleid}, Periodicity: {periodicity}, "
+                f"Profileid: {profileid}, Tuple: {field}, Periodicity: {periodicity}, "
                 f"Duration: {duration}, Size: {size}, Letter: {letter}. TimeChar: {timechar}",
                 3,
                 0,
