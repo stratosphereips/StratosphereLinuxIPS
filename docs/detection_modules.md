@@ -154,7 +154,7 @@ The path of the file can be modified by changing the ```RiskIQ_credentials_path`
 
 This module is used to detect command and control channels in a network by analyzing the features of the network flows and representing them as Stratosphere Behavioral Letters(Stratoletters). This is achieved through the use of a recurrent neural network, which is trained on these letters to identify and classify potential C&C traffic.
 
-### Stratoletters
+### Strato letters
 
 Stratoletters is a method used to represent network flows in a concise and standardized manner.
 Stratoletters encodes information about the periodicity, duration, and size of network flows into a string of letter(s) and character(s).

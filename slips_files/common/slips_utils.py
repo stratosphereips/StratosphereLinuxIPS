@@ -139,6 +139,13 @@ class Utils(object):
             return 0
         return int(log10(n))
 
+    def is_valid_ip(ip: str) -> bool:
+        try:
+            ipaddress.ip_address(ip)
+            return True
+        except ValueError:
+            return False
+
     def is_valid_threat_level(self, threat_level):
         return threat_level in self.threat_levels
 

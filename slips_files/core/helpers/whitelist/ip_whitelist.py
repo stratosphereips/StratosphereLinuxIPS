@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import ipaddress
 import json
 from typing import List, Dict
 
 from slips_files.common.abstracts.iwhitelist_analyzer import IWhitelistAnalyzer
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Direction,
 )
@@ -33,14 +33,6 @@ class IPAnalyzer(IWhitelistAnalyzer):
         """
         return flow.answers if flow.type_ == "dns" else []
 
-    @staticmethod
-    def is_valid_ip(ip: str) -> bool:
-        try:
-            ipaddress.ip_address(ip)
-            return True
-        except ValueError:
-            return False
-
     def is_whitelisted(
         self, ip: str, direction: Direction, what_to_ignore: str
     ) -> bool:
@@ -53,7 +45,7 @@ class IPAnalyzer(IWhitelistAnalyzer):
         if not self.enable_local_whitelist:
             return False
 
-        if not self.is_valid_ip(ip):
+        if not utils.is_valid_ip(ip):
             return False
 
         if ip not in self.manager.bloom_filters.ips:
