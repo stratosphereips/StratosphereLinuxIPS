@@ -565,7 +565,10 @@ class ProfileHandler:
         try:
             key = f"{profileid}_{twid}:{direction}:timestamps"
             prev_two_timestamps = self.r.hget(key, tupleid)
-            return prev_two_timestamps if prev_two_timestamps else (None, None)
+            if prev_two_timestamps:
+                return json.loads(prev_two_timestamps)
+            else:
+                return None, None
         except Exception as e:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
@@ -1129,22 +1132,22 @@ class ProfileHandler:
         profileid: str,
         twid: str,
         tupleid: str,
-        symbol: Tuple,
-        role: str,
+        new_symbol: Tuple,
+        role: Role,
         flow,
     ):
         """
         Add the tuple going in or out for this profile
         and if there was previous symbols for this profile, append the new
         symbol to it
-        before adding the tuple to the db
 
-        :param tupleid:  a dash separated str with the following format
+
+        :param tupleid: a dash separated str with the following format
         daddr-dport-proto
-        :param symbol:  (symbol, (symbol_to_add, previous_two_timestamps))
-        T1: is the time diff between the past flow and the past-past flow.
-        last_ts: the timestamp of the last flow
-        :param role: 'Client' or 'Server'
+        :param new_symbol: (symbol, (symbol_to_add, previous_two_timestamps))
+            T1: is the time diff between the past flow and the past-past flow.
+            last_ts: the timestamp of the last flow
+
         """
         # If the traffic is going out it is part of our outtuples,
         # if not, part of our intuples
@@ -1152,64 +1155,42 @@ class ProfileHandler:
             direction = "OutTuples"
         elif role == Role.SERVER:
             direction = "InTuples"
+        else:
+            return
+
+        symbol_to_add, previous_two_timestamps = new_symbol
+
+        symbols_key = f"{profileid}_{twid}:{direction}"
+        timestamps_key = f"{profileid}_{twid}:{direction}:timestamps"
 
         try:
-            profileid_twid = f"{profileid}{self.separator}{twid}"
-
-            # prev_symbols is a dict with {tulpeid: ['symbols_so_far',
-            # [timestamps]]}
-            prev_symbols: str = self.r.hget(profileid_twid, direction) or "{}"
-            prev_symbols: dict = json.loads(prev_symbols)
-
-            try:
-                # Get the last symbols of letters in the DB
-                prev_symbol: str = prev_symbols[tupleid][0]
-
-                # Separate the symbol to add and the previous data
-                (symbol_to_add, previous_two_timestamps) = symbol
-                self.print(
-                    f"Not the first time for tuple {tupleid} as an "
-                    f"{direction} for "
-                    f"{profileid} in TW {twid}. Add the symbol: {symbol_to_add}. "
-                    f"Store previous_times: {previous_two_timestamps}. "
-                    f"Prev Data: {prev_symbols}",
-                    3,
-                    0,
-                )
-
-                # Add it to form the string of letters
+            prev_symbol = self.r.hget(symbols_key, tupleid)
+            if not prev_symbol:
                 new_symbol = f"{prev_symbol}{symbol_to_add}"
-
                 self.publish_new_letter(
                     new_symbol, profileid, twid, tupleid, flow
                 )
 
-                prev_symbols[tupleid] = (new_symbol, previous_two_timestamps)
-                self.print(
-                    f"\tLetters so far for tuple {tupleid}:" f" {new_symbol}",
-                    3,
-                    0,
-                )
-            except (TypeError, KeyError):
-                # TODO check that this condition is triggered correctly
-                #  only for the first case and not the rest after...
-                # There was no previous data stored in the DB to append
-                # the given symbol to.
                 self.print(
                     f"First time for tuple {tupleid} as an"
-                    f" {direction} for {profileid} in TW {twid}",
+                    f" {direction} for {profileid} in {twid}",
                     3,
                     0,
                 )
-                prev_symbols[tupleid] = symbol
+            else:
+                new_symbol = symbol_to_add
 
-            prev_symbols = json.dumps(prev_symbols)
-            self.r.hset(profileid_twid, direction, prev_symbols)
+            # (second_to_last_flow_ts, last_flow_ts) = previous_two_timestamps
+            self.r.hset(symbols_key, tupleid, new_symbol)
+            self.r.hset(
+                timestamps_key, tupleid, json.dumps(previous_two_timestamps)
+            )
 
-        except Exception:
+        except Exception as e:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Error in add_tuple in database.py line {exception_line}",
+                f"Error in add_tuple in database.py line {exception_line} "
+                f"{e}",
                 0,
                 1,
             )

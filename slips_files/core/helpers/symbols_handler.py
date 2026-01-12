@@ -172,10 +172,10 @@ class SymbolHandler:
             td1, td2 = 0.1, 10.0
             ts1, ts2 = 250.0, 1100.0
 
-            last_last_ts, last_ts = self.db.get_t2_for_profile_tw(
+            timestamps = self.db.get_t2_for_profile_tw(
                 profileid, twid, field, direction
             )
-
+            last_last_ts, last_ts = timestamps
             periodicity, zeros, T2 = self._compute_periodicity(
                 now_ts,
                 last_ts,
@@ -193,8 +193,10 @@ class SymbolHandler:
             timechar = self._compute_timechar(T2)
 
             self.print(
-                f"Profileid: {profileid}, Tuple: {field}, Periodicity: {periodicity}, "
-                f"Duration: {duration}, Size: {size}, Letter: {letter}. TimeChar: {timechar}",
+                f"Profileid: {profileid}, Tuple: {field}, "
+                f"Periodicity: {periodicity}, "
+                f"Duration: {duration}, Size: {size}, "
+                f"Letter: {letter}. TimeChar: {timechar}",
                 3,
                 0,
             )
