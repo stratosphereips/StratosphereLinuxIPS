@@ -79,12 +79,6 @@ class FlowHandler:
 
     def handle_conn(self):
         role = Role.CLIENT
-        daddr_as_obj = ipaddress.ip_address(self.flow.daddr)
-        # this identified the tuple, it's a combination
-        # of daddr, dport and proto
-        # this is legacy code and refactoring it will
-        # break many things, so i wont:D
-        tupleid = f"{daddr_as_obj}-{self.flow.dport}-{self.flow.proto}"
 
         # Compute the symbol for this flow, for this TW, for this profile.
         # The symbol is based on the 'letters' of the original
@@ -94,9 +88,7 @@ class FlowHandler:
         # Change symbol for its internal data. Symbol is a tuple and is
         # confusing if we ever change the API
         # Add the out tuple
-        self.db.add_tuple(
-            self.profileid, self.twid, tupleid, symbol, role, self.flow
-        )
+        self.db.add_tuple(self.profileid, self.twid, symbol, role, self.flow)
 
         self.db.add_ips(self.profileid, self.twid, self.flow, role)
 

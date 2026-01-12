@@ -202,7 +202,6 @@ def set_intuples(ip, timewindow):
     data = []
     profileid = f"profile_{ip}"
     if intuples := db.get_intuples_from_profile_tw(profileid, timewindow):
-        intuples = json.loads(intuples)
         for key, value in intuples.items():
             ip, port, protocol = key.split("-")
             ip_info = get_ip_info(ip)
@@ -226,7 +225,6 @@ def set_outtuples(ip, timewindow):
     data = []
     profileid = f"profile_{ip}"
     if outtuples := db.get_outtuples_from_profile_tw(profileid, timewindow):
-        outtuples = json.loads(outtuples)
         for key, value in outtuples.items():
             ip, port, protocol = key.split("-")
             ip_info = get_ip_info(ip)

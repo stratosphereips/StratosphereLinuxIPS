@@ -160,12 +160,14 @@ class ProfilerWorker(IModule):
 
         symbol = self.symbol.compute(flow, twid, "InTuples")
 
-        saddr_as_obj = ipaddress.ip_address(flow.saddr)
+        if not utils.is_valid_ip(flow.saddr):
+            return
+
         # Add the src tuple using the src ip, and dst port
-        tupleid = f"{saddr_as_obj}-{flow.dport}-{flow.proto}"
+
         role = Role.Server
 
-        self.db.add_tuple(profileid, twid, tupleid, symbol, role, flow)
+        self.db.add_tuple(profileid, twid, symbol, role, flow)
         self.db.add_ips(profileid, twid, flow, role)
 
         # Add the flow with all the fields interpreted to the sqlite db

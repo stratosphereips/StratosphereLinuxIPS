@@ -35,7 +35,7 @@ class ProfileHandler:
 
     def get_outtuples_from_profile_tw(self, profileid, twid):
         """Get the out tuples"""
-        return self.r.hget(profileid + self.separator + twid, "OutTuples")
+        return self.r.hgetall(f"{profileid}_{twid}:OutTuples")
 
     def set_new_incoming_flows(self, will_slips_have_more_flows: bool):
         """A flag indicating if slips is still receiving new flows from
@@ -52,7 +52,7 @@ class ProfileHandler:
 
     def get_intuples_from_profile_tw(self, profileid, twid):
         """Get the in tuples"""
-        return self.r.hget(profileid + self.separator + twid, "InTuples")
+        return self.r.hget(f"{profileid}{self.separator}{twid}:InTuples")
 
     def get_dhcp_flows(self, profileid, twid) -> list:
         """
@@ -559,7 +559,7 @@ class ProfileHandler:
         returns a tuple with 2 timestamps, a ts can be None if not found
         """
         # updates the hash
-        # profileid_twid:[outtuples|intuples]:timestamps <tupleid> [
+        # profileid_twid:[InTuples|OutTuples]:timestamps <tupleid> [
         # <float_ts1>, <float_ts2>]
 
         try:
@@ -567,8 +567,7 @@ class ProfileHandler:
             prev_two_timestamps = self.r.hget(key, tupleid)
             if prev_two_timestamps:
                 return json.loads(prev_two_timestamps)
-            else:
-                return None, None
+            return None, None
         except Exception as e:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
@@ -1131,7 +1130,6 @@ class ProfileHandler:
         self,
         profileid: str,
         twid: str,
-        tupleid: str,
         new_symbol: Tuple,
         role: Role,
         flow,
@@ -1140,24 +1138,27 @@ class ProfileHandler:
         Add the tuple going in or out for this profile
         and if there was previous symbols for this profile, append the new
         symbol to it
-
-
-        :param tupleid: a dash separated str with the following format
         daddr-dport-proto
         :param new_symbol: (symbol, (symbol_to_add, previous_two_timestamps))
-            T1: is the time diff between the past flow and the past-past flow.
-            last_ts: the timestamp of the last flow
+            where (T1, last_flow_ts) =
+            previous_two_timestamps
+            T1: is the time diff between the past flow and the past-past
+            flow.
+            last_flow_ts: the timestamp of the last flow
 
         """
         # If the traffic is going out it is part of our outtuples,
         # if not, part of our intuples
         if role == Role.CLIENT:
             direction = "OutTuples"
+            ip = flow.daddr
         elif role == Role.SERVER:
             direction = "InTuples"
+            ip = flow.saddr
         else:
             return
 
+        tupleid = f"{ip}-{flow.dport}-{flow.proto}"
         symbol_to_add, previous_two_timestamps = new_symbol
 
         symbols_key = f"{profileid}_{twid}:{direction}"
@@ -1180,7 +1181,6 @@ class ProfileHandler:
             else:
                 new_symbol = symbol_to_add
 
-            # (second_to_last_flow_ts, last_flow_ts) = previous_two_timestamps
             self.r.hset(symbols_key, tupleid, new_symbol)
             self.r.hset(
                 timestamps_key, tupleid, json.dumps(previous_two_timestamps)
