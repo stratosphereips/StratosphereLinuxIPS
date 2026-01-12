@@ -1077,8 +1077,10 @@ class ProfileHandler:
         1- To add it to the list of ModifiedTW
         2- Add the timestamp received to the time_of_last_modification
            in the TW itself
-        3- To update the internal time of slips
-        4- To check if we should 'close' some TW
+
+        Modules wait for a TW modification to do some detections.
+        check the "tw_modified" channel usages to know why this func is
+        useful
         """
         timestamp = timestamp or time.time()
         data = {f"{profileid}{self.separator}{twid}": float(timestamp)}

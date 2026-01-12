@@ -989,6 +989,9 @@ class DBManager:
     def add_all_user_agent_to_profile(self, *args, **kwargs):
         return self.rdb.add_all_user_agent_to_profile(*args, **kwargs)
 
+    def get_ip_last_seen_ts(self, *args, **kwargs):
+        return self.rdb.get_ip_last_seen_ts(*args, **kwargs)
+
     def get_software_from_profile(self, *args, **kwargs):
         return self.rdb.get_software_from_profile(*args, **kwargs)
 

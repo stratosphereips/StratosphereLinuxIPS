@@ -1,7 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import json
-from typing import Dict
 
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
@@ -147,7 +145,7 @@ class VerticalPortscan:
             # connections is over the threshold
             for (
                 dstip,
-                metadata,
+                first_seen_ts,
             ) in self.db.get_dstips_with_not_established_flows(
                 profileid, twid, protocol
             ):
@@ -166,6 +164,10 @@ class VerticalPortscan:
                     amount_of_dports
                 ), int(total_pkts_sent_to_all_dports)
 
+                # todo use this later
+                # last_seen = self.db.get_ip_last_seen_ts(
+                #     profileid, twid, dstip)
+
                 if self.should_set_evidence(
                     amount_of_dports,
                     profileid,
@@ -173,9 +175,8 @@ class VerticalPortscan:
                     dstip,
                     total_pkts_sent_to_all_dports,
                 ):
-                    metadata: Dict[str, float] = json.loads(metadata)
                     evidence_details = {
-                        "timestamp": metadata["first_seen"],
+                        "timestamp": first_seen_ts,
                         "pkts_sent": total_pkts_sent_to_all_dports,
                         "protocol": protocol.name.lower(),
                         "profileid": str(profileid),

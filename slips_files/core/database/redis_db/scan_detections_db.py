@@ -39,8 +39,8 @@ class ScanDetectionsHandler:
     Entries managed by this class:
 
     .. vertical portscans detections ..
-    hash: profile_tw:[tcp|udp]:not_estab:ips <ip> {first_seen:...,
-    last_seen:...}
+    zset: profile_tw:[tcp|udp]:not_estab:ips:first_seen <ip> first_seen
+    zset: profile_tw:[tcp|udp]:not_estab:ips:last_seen <ip> last_seen
     hash profile_tw:[tcp|udp]:not_estab:<ip>:dstports <port> <tot_pkts>
     int profile_tw:[tcp|udp]:not_estab:<ip>:tot_pkts_sum
     <tot_pkts_sent_to_all_ports>
@@ -94,6 +94,16 @@ class ScanDetectionsHandler:
             if cursor == 0:
                 break
 
+    def _zscan(self, key: str, count: int = 100) -> Iterator:
+        """scans a ZSET"""
+        cursor = 0
+        while True:
+            cursor, items = self.r.zscan(key, cursor=cursor, count=count)
+            for member, score in items:
+                yield member, score
+            if cursor == 0:
+                break
+
     def _update_portscan_index_hash(
         self,
         profileid: ProfileID,
@@ -110,32 +120,27 @@ class ScanDetectionsHandler:
         analysis_direction in slips.yaml (depending on the role of the
         profile)
 
-        hash:
-        profile_tw:[tcp|udp]:not_estab:ips <ip> {
-        first_seen:..., last_seen:...}
+        ZSET:
+        profile_tw:[tcp|udp]:not_estab:ips:first_seen <ip> first_seen
+        profile_tw:[tcp|udp]:not_estab:ips:last_seen <ip> last_seen
 
 
         :param last_seen_timestamp: last seen flow of this ip in this
         profile_tw
         """
         proto = proto.name.lower()
-        key = f"{profileid}_{twid}:{proto}:not_estab:ips"
+        base = f"{profileid}_{twid}:{proto}:not_estab:ips"
 
-        # last seen is now. this flow.
-        last_seen_timestamp = flow.starttime
-
-        old_info: str = self.r.hget(key, ip)
-        try:
-            new_info = json.loads(old_info)
-        except (json.JSONDecodeError, TypeError):
-            # first time for this ip, first seen is the same as the last seen
-            new_info = {
-                "first_seen": last_seen_timestamp,
-            }
-
-        new_info["last_seen"] = last_seen_timestamp
-        pipe.hset(key, ip, json.dumps(new_info))
+        # if no first seen ts is set, then this flow is the first seen
+        key = f"{base}:first_seen"
+        pipe.zadd(key, {ip: flow.starttime}, nx=True)
         pipe.expire(key, self.tw_width, nx=True)
+
+        key = f"{base}:last_seen"
+        # last seen is now. this flow.
+        pipe.zadd(key, {ip: flow.starttime})
+        pipe.expire(key, self.tw_width, nx=True)
+
         return pipe
 
     def get_dstips_with_not_established_flows(
@@ -146,10 +151,19 @@ class ScanDetectionsHandler:
     ) -> Iterator[Tuple[str, str]]:
         """
         used by vertical portscan modules
+        returns (ip, first_seen ts)
         """
+        # :first_seen or last_seen here will give us the same ips
         proto = proto.name.lower()
-        key = f"{profileid}_{twid}:{proto}:not_estab:ips"
-        yield from self._hscan(key)
+        key = f"{profileid}_{twid}:{proto}:not_estab:ips:first_seen"
+        yield from self._zscan(key)
+
+    def get_ip_last_seen_ts(
+        self, profileid: ProfileID, twid: TimeWindow, proto: Protocol, ip: str
+    ):
+        proto = proto.name.lower()
+        key = f"{profileid}_{twid}:{proto}:not_estab:ips:last_seen"
+        return self.r.zscore(key, ip)
 
     def convert_str_to_proto(self, str_proto: str) -> Protocol:
         """converts str proto to Protocol enum"""
