@@ -1064,17 +1064,59 @@ class ProfileHandler:
         if not profiles_tws_to_close:
             return
 
-        # Mark the TWs as closed so module can work on its data
-        pipeline = self.r.pipeline()
+        # Mark the TWs as closed so modules can work on its data
+        pipe = self.r.pipeline()
         for profile_tw_to_close in profiles_tws_to_close:
-            pipeline.sadd("ClosedTW", profile_tw_to_close)
-            pipeline.zrem(
-                self.constants.MODIFIED_TIMEWINDOWS, profile_tw_to_close
+            pipe.zrem(self.constants.MODIFIED_TIMEWINDOWS, profile_tw_to_close)
+            pipe = self.publish(
+                "tw_closed", profile_tw_to_close, pipeline=pipe
             )
-            pipeline = self.publish(
-                "tw_closed", profile_tw_to_close, pipeline=pipeline
+            pipe = self._delete_past_timewindows(profile_tw_to_close, pipe)
+        pipe.execute()
+
+    def _delete_past_timewindows(self, closed_profile_tw: str, pipe):
+        """
+        Deletes the past timewindows data from redis, starting from the
+        given tw-1, so that redis only has info about the current
+        timewindow and the one before it
+
+        why do we keep 2 tws instead of the current one in redis? see PR
+        #1765 in slips repo
+
+        :param closed_profile_tw: a str like profile_8.8.8.8_timewindow7
+        """
+        # todo handle flows that have a ts in the very future that cause
+        #  this func to del all tws!!
+        try:
+            profile, ip, tw = closed_profile_tw.split("_")
+            closed_tw = int(tw.replace("timewindow", ""))
+        except ValueError:
+            self.print(
+                f"Unable to delete old Timewindwos info from"
+                f" {closed_profile_tw}"
             )
-        pipeline.execute()
+            return pipe
+
+        if closed_tw < 2:
+            # slips needs to always remember 2 tws, now tws to delete now
+            return pipe
+
+        profileid = f"{profile}_{ip}"
+        # to avoid deleting so many keys at once which causes mem spikes
+        BATCH = 500
+        for tw_to_close in range(closed_tw - 2, -1, -1):
+            for i, key in enumerate(
+                self.r.scan_iter(
+                    match=f"{profileid}_timewindow{tw_to_close}", count=1000
+                )
+            ):
+                pipe.unlink(key)
+
+                if i % BATCH == 0:
+                    pipe.execute()
+                    pipe = self.r.pipeline()
+
+        return pipe
 
     def mark_profile_tw_as_modified(
         self, profileid, twid, timestamp, pipe: Pipeline = None

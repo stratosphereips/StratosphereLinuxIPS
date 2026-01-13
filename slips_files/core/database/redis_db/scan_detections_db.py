@@ -125,12 +125,10 @@ class ScanDetectionsHandler:
         # if no first seen ts is set, then this flow is the first seen
         key = f"{base}:first_seen"
         pipe.zadd(key, {ip: flow.starttime}, nx=True)
-        pipe.expire(key, self.tw_width, nx=True)
 
         key = f"{base}:last_seen"
         # last seen is now. this flow.
         pipe.zadd(key, {ip: flow.starttime})
-        pipe.expire(key, self.tw_width, nx=True)
 
         return pipe
 
@@ -397,7 +395,6 @@ class ScanDetectionsHandler:
             f":{str_proto}:not_estab:{target_ip}:dstports"
         )
         pipe.hincrby(key, flow.dport, int(flow.pkts))
-        pipe.expire(key, self.tw_width, nx=True)
         # increment the total pkts sent to this target ip on this
         # proto so slips can retreieve it in O(1) when setting and
         # evidence
@@ -407,7 +404,6 @@ class ScanDetectionsHandler:
             f"{target_ip}:dstports:tot_pkts_sum"
         )
         pipe.incrby(key, int(flow.spkts))
-        pipe.expire(key, self.tw_width, nx=True)
 
         # we keep an index hash of target_ips to be able to access the
         # diff variants of the key above using them
@@ -430,7 +426,6 @@ class ScanDetectionsHandler:
                 f"{str_proto}:not_estab:dstports:total_packets"
             )
             pipe.hincrby(key, flow.dport, int(flow.pkts))
-            pipe.expire(key, self.tw_width, nx=True)
 
             # ZSET
             # profile_tw:[tcp|udp]:not_estab:dport:
@@ -445,7 +440,6 @@ class ScanDetectionsHandler:
             # To make sure the stored ts is the first seen ts of this
             # daddr, we use nx=True, so if a daddr is present we dont zadd
             pipe.zadd(key, {flow.daddr: flow.starttime}, nx=True)
-            pipe.expire(key, self.tw_width, nx=True)
 
         return pipe
 
@@ -458,21 +452,17 @@ class ScanDetectionsHandler:
         if role == role.CLIENT:
             key = f"{profileid}_{twid}:tcp:est:dstips"
             pipe.zadd(key, {flow.daddr: flow.starttime}, nx=True)
-            pipe.expire(key, self.tw_width, nx=True)
 
             key = f"{profileid}_{twid}:tcp:est:{flow.daddr}:dstports"
             pipe.hset(key, flow.dport, flow.uid)
-            pipe.expire(key, self.tw_width, nx=True)
 
         elif role == role.SERVER:
             client_profileid = ProfileID(ip=flow.saddr)
             key = f"{client_profileid}_{twid}:tcp:est:dstips"
             pipe.zadd(key, {flow.saddr: flow.starttime}, nx=True)
-            pipe.expire(key, self.tw_width, nx=True)
 
             key = f"{client_profileid}_{twid}:tcp:est:{flow.saddr}:dstports"
             pipe.hset(key, flow.dport, flow.uid)
-            pipe.expire(key, self.tw_width, nx=True)
         return pipe
 
     def _store_flow_info_if_needed_by_detection_modules(
