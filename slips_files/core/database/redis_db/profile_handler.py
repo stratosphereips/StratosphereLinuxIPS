@@ -558,16 +558,17 @@ class ProfileHandler:
 
         returns a tuple with 2 timestamps, a ts can be None if not found
         """
-        # updates the hash
-        # profileid_twid:[InTuples|OutTuples]:timestamps <tupleid> [
-        # <float_ts1>, <float_ts2>]
-
         try:
-            key = f"{profileid}_{twid}:{direction}:timestamps"
-            prev_two_timestamps = self.r.hget(key, tupleid)
-            if prev_two_timestamps:
-                return json.loads(prev_two_timestamps)
-            return None, None
+            base = f"{profileid}_{twid}:{direction}"
+
+            delats_key = f"{base}:deltas"
+            delta = self.r.zscore(delats_key, tupleid)
+
+            last_flow_ts_key = f"{base}:last_flow_ts"
+            last_flow_ts = self.r.zscore(last_flow_ts_key, tupleid)
+
+            return delta, last_flow_ts
+
         except Exception as e:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
@@ -1130,7 +1131,7 @@ class ProfileHandler:
         self,
         profileid: str,
         twid: str,
-        new_symbol: Tuple,
+        new_symbol: Tuple[str, Tuple[float, float]],
         role: Role,
         flow,
     ):
@@ -1158,11 +1159,14 @@ class ProfileHandler:
         else:
             return
 
-        tupleid = f"{ip}-{flow.dport}-{flow.proto}"
-        symbol_to_add, previous_two_timestamps = new_symbol
+        base = f"{profileid}_{twid}:{direction}"
+        symbols_key = f"{base}:symbols"
+        delats_key = f"{base}:deltas"
+        last_flow_ts_key = f"{base}:last_flow_ts"
 
-        symbols_key = f"{profileid}_{twid}:{direction}"
-        timestamps_key = f"{profileid}_{twid}:{direction}:timestamps"
+        tupleid = f"{ip}-{flow.dport}-{flow.proto}"
+        symbol_to_add, timestamps = new_symbol
+        last_2_flows_diff, last_ts = timestamps
 
         try:
             prev_symbol = self.r.hget(symbols_key, tupleid)
@@ -1182,9 +1186,10 @@ class ProfileHandler:
                 new_symbol = symbol_to_add
 
             self.r.hset(symbols_key, tupleid, new_symbol)
-            self.r.hset(
-                timestamps_key, tupleid, json.dumps(previous_two_timestamps)
-            )
+            if last_2_flows_diff:
+                self.r.zadd(delats_key, {tupleid: last_2_flows_diff})
+            if last_ts:
+                self.r.zadd(last_flow_ts_key, {tupleid: last_ts})
 
         except Exception as e:
             exception_line = sys.exc_info()[2].tb_lineno

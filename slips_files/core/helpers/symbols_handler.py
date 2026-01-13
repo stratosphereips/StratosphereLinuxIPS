@@ -145,8 +145,11 @@ class SymbolHandler:
         :param direction: can be 'InTuples' or 'OutTuples'
 
         returns the following tuple (symbol_to_add, (previous_two_timestamps))
-        previous_two_timestamps is a tuple with the ts of the last flow,
-        and the ts of the flow before the last flow
+        previous_two_timestamps is a tuple with (diff, given_flow_ts)
+            diff: is the time diff between the past flow and the past-past
+            flow.
+            given_flow_ts: the timestamp of the last flow
+
         """
         if not utils.is_valid_ip(flow.daddr):
             return
@@ -156,7 +159,7 @@ class SymbolHandler:
 
         current_duration = float(flow.dur)
         current_size = int(flow.bytes)
-        now_ts = float(flow.starttime)
+        given_flow_ts = float(flow.starttime)
 
         try:
             self.print(
@@ -175,11 +178,14 @@ class SymbolHandler:
             timestamps = self.db.get_t2_for_profile_tw(
                 profileid, twid, field, direction
             )
-            last_last_ts, last_ts = timestamps
+            # last_2_flows_diff is the time diff between the past flow
+            # and the past-past flow.
+            last_2_flows_diff, last_ts = timestamps
+
             periodicity, zeros, T2 = self._compute_periodicity(
-                now_ts,
+                given_flow_ts,
                 last_ts,
-                last_last_ts,
+                last_2_flows_diff,
                 tto,
                 tt1,
                 tt2,
@@ -202,7 +208,8 @@ class SymbolHandler:
             )
 
             symbol = zeros + letter + timechar
-            return symbol, (last_ts, now_ts)
+            new_diff = last_ts
+            return symbol, (new_diff, given_flow_ts)
 
         except Exception:
             self.print("Error in compute_symbol in Profiler Process.", 0, 1)
