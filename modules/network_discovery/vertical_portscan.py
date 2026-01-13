@@ -85,7 +85,7 @@ class VerticalPortscan:
 
         self.db.set_evidence(evidence)
 
-    def check_if_enough_pkts_to_trigger_an_evidence(
+    def check_if_enough_dports_to_trigger_an_evidence(
         self, profileid, twid, dstip, total_pkts_sent_to_all_dports: int
     ) -> bool:
         """
@@ -98,7 +98,6 @@ class VerticalPortscan:
         The goal is to never get an evidence that's
          1 or 2 ports more than the previous one so we dont
          have so many portscan evidence
-
         """
         if not dstip:
             return False
@@ -120,12 +119,11 @@ class VerticalPortscan:
         profileid,
         twid,
         dstip,
-        total_pkts_sent_to_all_dports,
     ) -> bool:
         return (
             amount_of_dports > self.minimum_dports_to_set_evidence
-            and self.check_if_enough_pkts_to_trigger_an_evidence(
-                profileid, twid, dstip, total_pkts_sent_to_all_dports
+            and self.check_if_enough_dports_to_trigger_an_evidence(
+                profileid, twid, dstip, amount_of_dports
             )
         )
 
@@ -173,7 +171,6 @@ class VerticalPortscan:
                     profileid,
                     twid,
                     dstip,
-                    total_pkts_sent_to_all_dports,
                 ):
                     evidence_details = {
                         "timestamp": first_seen_ts,

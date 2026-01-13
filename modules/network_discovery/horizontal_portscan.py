@@ -33,7 +33,7 @@ class HorizontalPortscan:
         self.minimum_dstips_to_set_evidence = 5
 
     def check_if_enough_pkts_to_trigger_an_evidence(
-        self, profileid, twid, dport, total_pkts: int
+        self, profileid, twid, dport, dstips: int
     ) -> bool:
         """
         checks if the pkts used so far are enough to trigger a new
@@ -52,7 +52,7 @@ class HorizontalPortscan:
         twid_identifier = f"{profileid}_{twid}:dport:{dport}"
 
         last_threshold = self.cached_thresholds_per_tw.get(twid_identifier, 0)
-        current_threshold = utils.log10(total_pkts)
+        current_threshold = utils.log10(dstips)
 
         if current_threshold > last_threshold:
             # keep track of the reported evidence's log(pkts)
@@ -97,12 +97,12 @@ class HorizontalPortscan:
         self.db.set_evidence(evidence)
 
     def should_set_evidence(
-        self, amount_of_dstips, profileid, twid, dport, total_pkts
+        self, amount_of_dstips: int, profileid, twid, dport
     ) -> bool:
         return (
             amount_of_dstips > self.minimum_dstips_to_set_evidence
             and self.check_if_enough_pkts_to_trigger_an_evidence(
-                profileid, twid, dport, total_pkts
+                profileid, twid, dport, amount_of_dstips
             )
         )
 
@@ -132,7 +132,7 @@ class HorizontalPortscan:
                     )
                 )
                 if self.should_set_evidence(
-                    amount_of_dstips, profileid, twid, dport, total_pkts
+                    amount_of_dstips, profileid, twid, dport
                 ):
                     first_timestamp = self.db.get_attack_starttime(
                         profileid, twid, protocol, dport
