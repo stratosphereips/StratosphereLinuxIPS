@@ -419,6 +419,8 @@ class Main:
 
         if not hasattr(self, "total_flows"):
             self.total_flows = self.db.get_total_flows()
+        if not self.total_flows:
+            return ""
 
         flows_percentage = int(
             (self.db.get_processed_flows_so_far() / self.total_flows) * 100
