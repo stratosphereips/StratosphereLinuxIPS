@@ -654,7 +654,7 @@ class Main:
             self.c1 = self.db.subscribe("control_channel")
 
             self.metadata_man.add_metadata_if_enabled()
-
+            self.proc_man.start_timewindow_updater()
             self.input_process = self.proc_man.start_input_process()
             # obtain the list of active processes
             children = multiprocessing.active_children()

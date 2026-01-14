@@ -840,6 +840,12 @@ class DBManager:
     def get_timewindow(self, *args, **kwargs):
         return self.rdb.get_timewindow(*args, **kwargs)
 
+    def get_current_timewindow(self, *args, **kwargs):
+        return self.rdb.get_current_timewindow(*args, **kwargs)
+
+    def set_current_timewindow(self, *args, **kwargs):
+        return self.rdb.set_current_timewindow(*args, **kwargs)
+
     def add_out_http(self, *args, **kwargs):
         return self.rdb.add_out_http(*args, **kwargs)
 

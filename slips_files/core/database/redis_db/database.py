@@ -139,6 +139,7 @@ class RedisDB(
         cls.start_server = start_redis_server
         cls.printer = Printer(logger, cls.name)
         cls.conf = ConfigParser()
+        cls.args = cls.conf.get_args()
 
         if cls.redis_port not in cls._instances:
             cls._set_redis_options()

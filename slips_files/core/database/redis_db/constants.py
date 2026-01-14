@@ -3,7 +3,7 @@
 class Constants:
     LOADED_TI_FILES = "loaded_TI_files_number"
     TI_FILES_INFO = "TI_files_info"
-
+    CURRENT_TIMEWINDOW = "current_timewindow"
     # all keys starting with IoC_* are used for storing IoCs read from
     # online and offline TI feeds
     IOC_IPS = "IoC_ips"
