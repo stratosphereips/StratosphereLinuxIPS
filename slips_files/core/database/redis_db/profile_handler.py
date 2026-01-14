@@ -1036,7 +1036,8 @@ class ProfileHandler:
         Check if we should close a TW
         Closes the tws that were last modified more than an hour
         ago (self.width)
-        :param close_all: close all tws no matter when they were last modified
+        :param close_all: close all tws no matter when they were last
+        modified, happens when slips is stopping
         """
 
         sit = float(self.get_slips_internal_time())
@@ -1076,8 +1077,19 @@ class ProfileHandler:
             pipe = self.publish(
                 "tw_closed", profile_tw_to_close, pipeline=pipe
             )
-            pipe = self._delete_past_timewindows(profile_tw_to_close, pipe)
+            if not close_all:
+                # if slips isn't stopping, then do regular
+                # cleanup of the past
+                pipe = self._delete_past_timewindows(profile_tw_to_close, pipe)
         pipe.execute()
+
+    def get_current_timewindow(self) -> Optional[str]:
+        """returns the current timewindow if slips is running real-time (
+        not pcap/log files)"""
+        if not self.args.interface:
+            return
+
+        return self.r.get(self.constants.CURRENT_TIMEWINDOW)
 
     def _delete_past_timewindows(self, closed_profile_tw: str, pipe):
         """
