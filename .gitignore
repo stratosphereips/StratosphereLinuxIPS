@@ -177,4 +177,4 @@ appendonly.aof
 /slipsOut/metadata/slips.yaml
 /slipsOut/metadata/whitelist.conf
 /p2p_db.sqlite
-
+modules/flowmldetection/pipeline_ml_training/
