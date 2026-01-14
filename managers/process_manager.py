@@ -454,17 +454,24 @@ class ProcessManager:
         )
 
     def start_timewindow_updater(self):
-        """whys is this not started in the redis db? because each module
+        """
+        Starts a thread that keeps track of the current timewindow if
+        running on an interface
+
+        why is this not started in the redis db? because each module
         has a db insteance, and we don't want a thread per module,
-        so starrting this thread once in main is enough"""
-        tw_width: float = self.main.conf.get_tw_width_in_seconds
+        so starrting this thread once in main is enough
+        """
+        if not self.main.args.interface:
+            return
+        tw_width: float = self.main.conf.get_tw_width_in_seconds()
         t = threading.Thread(
             target=timewindow_updater,
             name="timewindow_updater",
             args=(self.main.db, tw_width, self.termination_event),
             daemon=True,
         )
-        utils.start_thread(t)
+        utils.start_thread(t, self.main.db)
 
     def start_update_manager(self, local_files=False, ti_feeds=False):
         """

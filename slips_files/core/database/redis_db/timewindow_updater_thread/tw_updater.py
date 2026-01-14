@@ -14,6 +14,5 @@ def timewindow_updater(db, tw_width: float, stop_event: Event):
         now = time.time()
         cur_tw = db.get_timewindow(now, "", add_to_db=False)
         db.set_current_timewindow(cur_tw)
-
         # to avoid busy waiting
         stop_event.wait(tw_width)

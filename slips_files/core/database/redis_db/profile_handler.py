@@ -1091,6 +1091,9 @@ class ProfileHandler:
 
         return self.r.get(self.constants.CURRENT_TIMEWINDOW)
 
+    def set_current_timewindow(self, timewindow: str) -> Optional[str]:
+        self.r.set(self.constants.CURRENT_TIMEWINDOW, timewindow)
+
     def _delete_past_timewindows(self, closed_profile_tw: str, pipe):
         """
         Deletes the past timewindows data from redis, starting from the
@@ -1118,6 +1121,9 @@ class ProfileHandler:
 
         current_timewindow: Optional[str] = self.get_current_timewindow()
         if current_timewindow:
+            current_timewindow = int(
+                current_timewindow.replace("timewindow", "")
+            )
             # Zeek flows don't arrive in chronological order. this is to
             # make sure that we never close incorrect tws when a zeek flow
             # too far in the past or too far in the future is found.
