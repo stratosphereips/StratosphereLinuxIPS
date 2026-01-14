@@ -362,10 +362,12 @@ class Utils(object):
             return True
 
         filename = os.path.basename(filepath)
-        # remove all extensions from filename
-        while "." in filename:
-            filename = filename.rsplit(".", 1)[0]
-        return filename not in SUPPORTED_LOGFILES
+        if filename.endswith(".log.labeled"):
+            filename = filename[: -len(".log.labeled")]
+        elif filename.endswith(".log"):
+            filename = filename[: -len(".log")]
+        logfile_type = filename.rsplit(".", 1)[-1]
+        return logfile_type not in SUPPORTED_LOGFILES
 
     def start_thread(self, thread: Thread, db):
         """
