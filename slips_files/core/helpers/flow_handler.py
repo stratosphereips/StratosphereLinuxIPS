@@ -67,15 +67,16 @@ class FlowHandler:
     Each flow seen by slips will be a different instance of this class
     """
 
-    def __init__(self, db, symbol_handler, flow, profileid, twid):
+    def __init__(
+        self, db, symbol_handler, flow, profileid, twid, is_running_non_stop
+    ):
         self.db = db
         self.publisher = Publisher(self.db)
         self.flow = flow
         self.profileid = profileid
         self.twid = twid
-
         self.symbol = symbol_handler
-        self.running_non_stop: bool = self.db.is_running_non_stop()
+        self.running_non_stop: bool = is_running_non_stop
 
     def handle_conn(self):
         role = Role.CLIENT

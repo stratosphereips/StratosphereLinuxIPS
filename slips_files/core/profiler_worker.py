@@ -78,6 +78,7 @@ class ProfilerWorker(IModule):
         self.first_flow = True
         self.times = {}
         self.init_csv()
+        self.is_running_non_stop: bool = self.db.is_running_non_stop()
 
     def read_configuration(self):
         self.client_ips: List[
@@ -204,7 +205,14 @@ class ProfilerWorker(IModule):
         aka outgoing connections
         """
         self.store_first_seen_ts(flow.starttime)
-        flow_handler = FlowHandler(self.db, self.symbol, flow, profileid, twid)
+        flow_handler = FlowHandler(
+            self.db,
+            self.symbol,
+            flow,
+            profileid,
+            twid,
+            self.is_running_non_stop,
+        )
         cases = {
             "flow": flow_handler.handle_conn,
             "conn": flow_handler.handle_conn,
@@ -243,7 +251,6 @@ class ProfilerWorker(IModule):
 
         # now that slips successfully parsed the flow,
         # mark this profile as modified
-        # @@@@@@@@@@@@@ !! TODO this is the second suspect,
         self.db.mark_profile_tw_as_modified(profileid, twid, "")
         return True
 
