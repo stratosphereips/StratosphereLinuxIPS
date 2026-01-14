@@ -104,10 +104,12 @@ class ProfileHandler:
         if starttime_of_first_tw:
             return float(starttime_of_first_tw)
 
-    def get_timewindow(self, flowtime, profileid):
+    def get_timewindow(self, flowtime, profileid, add_to_db=True):
         """
         This function returns the TW in the database where the flow belongs.
         Returns the time window id
+        :kwarg add_new: Adds the newly recognized tw to the db.
+
         DISCLAIMER:
 
             if the given flowtime is == the starttime of a tw, it will
@@ -124,6 +126,7 @@ class ProfileHandler:
 
         Note:
             - sets self.starttime_of_first_tw
+
         """
         # If the option for only-one-tw was selected, we should
         # create the TW at least 100 years before the flowtime,
@@ -157,7 +160,9 @@ class ProfileHandler:
 
         tw_id: str = f"timewindow{tw_number}"
 
-        self.add_new_tw(profileid, tw_id, tw_start)
+        if add_to_db:
+            self.add_new_tw(profileid, tw_id, tw_start)
+
         return tw_id
 
     def add_out_http(
