@@ -1102,14 +1102,12 @@ class ProfileHandler:
 
         :param closed_profile_tw: a str like profile_8.8.8.8_timewindow7
         """
-        # todo handle flows that have a ts in the very future that cause
-        #  this func to del all tws!!
         try:
             profile, ip, tw = closed_profile_tw.split("_")
             closed_tw = int(tw.replace("timewindow", ""))
         except ValueError:
             self.print(
-                f"Unable to delete old Timewindwos info from"
+                f"Unable to delete old timewindows info from"
                 f" {closed_profile_tw}"
             )
             return pipe
@@ -1118,10 +1116,19 @@ class ProfileHandler:
             # slips needs to always remember 2 tws, now tws to delete now
             return pipe
 
+        current_timewindow: Optional[str] = self.get_current_timewindow()
+        if current_timewindow:
+            # Zeek flows don't arrive in chronological order. this is to
+            # make sure that we never close incorrect tws when a zeek flow
+            # too far in the past or too far in the future is found.
+            tws_to_close = current_timewindow - 2
+        else:
+            tws_to_close = closed_tw - 2
+
         profileid = f"{profile}_{ip}"
         # to avoid deleting so many keys at once which causes mem spikes
         BATCH = 500
-        for tw_to_close in range(closed_tw - 2, -1, -1):
+        for tw_to_close in range(tws_to_close, -1, -1):
             for i, key in enumerate(
                 self.r.scan_iter(
                     match=f"{profileid}_timewindow{tw_to_close}", count=1000
