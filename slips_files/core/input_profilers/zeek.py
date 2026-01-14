@@ -105,7 +105,13 @@ class Zeek:
         # slips thinks it's reading a conn file
         # because we use the file path as the file 'type'
         # to fix this, only use the file name as file 'type'
-        return self.remove_subsuffix(file_type.split("/")[-1])
+        base_name = self.remove_subsuffix(file_type.split("/")[-1])
+        if base_name.endswith(".log.labeled"):
+            base_name = base_name[: -len(".log.labeled")]
+        elif base_name.endswith(".log"):
+            base_name = base_name[: -len(".log")]
+        log_type = base_name.rsplit(".", 1)[-1]
+        return f"{log_type}.log"
 
     def get_line_processor(self, new_line: dict) -> Dict[str, str]:
         """ """
