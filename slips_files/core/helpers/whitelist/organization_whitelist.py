@@ -138,16 +138,16 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         returns true if the ASN of the given IP is listed in
          the ASNs of the given org
         """
-        ip_data = self.db.get_ip_info(ip)
+        ip_data = self.db.get_asn_info(ip)
         if not ip_data:
             return
 
         try:
-            ip_asn = ip_data["asn"]["number"]
+            asn_number = ip_data["number"]
         except KeyError:
             return
 
-        return self._is_asn_in_org(ip_asn, org)
+        return self._is_asn_in_org(asn_number, org)
 
     def _is_asn_in_org(self, asn: str, org: str) -> bool:
         """

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import time
 import ipaddress
+from typing import Dict
+
 import ipwhois
 import json
 import requests
@@ -25,11 +27,12 @@ class ASN:
             # errors are printed in IP_info
             pass
 
-    def get_cached_asn(self, ip):
+    def get_cached_asn(self, ip) -> Dict[str, Dict[str, str]]:
         """
         If this ip belongs to a cached ip range, return the cached asn info of it
         :param ip: str
-        if teh range of this ip was found, this function returns a dict with {'number' , 'org'}
+        if the range of this ip was found, this function returns a dict
+        with # {"asn": {"org": .. , "number": .. }}
         """
         first_octet: str = utils.get_first_octet(ip)
         if not first_octet:
@@ -65,7 +68,7 @@ class ASN:
         """
         try:
             return (
-                time.time() - cached_data["asn"]["timestamp"]
+                time.time() - cached_data["timestamp"]
             ) > self.update_period
         except (KeyError, TypeError):
             # no there's no cached asn info,or no timestamp, or
@@ -96,7 +99,7 @@ class ASN:
 
         return ip_info
 
-    def cache_ip_range(self, ip: str):
+    def cache_ip_range(self, ip: str) -> Dict[str, Dict[str, str]]:
         """
         Get the range of the given ip and
         cache the asn of the whole ip range
@@ -170,19 +173,15 @@ class ASN:
 
         return asn
 
-    def update_ip_info(self, ip, cached_ip_info, asn: dict):
+    def update_ip_info(self, ip: str, asn: Dict[str, Dict[str, str | float]]):
         """
-        if an asn is found using this module, we update the IP's
-        info in the db in 'IPsinfo' key with
-        the ASN info we found
-        asn is a dict with 2 keys 'number' and 'org'
+        store the new asn info to the db
         :param asn: new asn to add to the db. found by this module.
-        :param cached_ip_info: old info from 'IPsInfo' key in the db
+         e.g {"asn": {"org": .. , "number": .. }}
         """
-        asn.update({"timestamp": time.time()})
-        cached_ip_info.update(asn)
+        asn["asn"].update({"timestamp": time.time()})
         # store the ASN we found in 'IPsInfo'
-        self.db.set_ip_info(ip, cached_ip_info)
+        self.db.set_ip_info(ip, asn)
 
     def get_asn(self, ip, cached_ip_info):
         """
@@ -191,27 +190,29 @@ class ASN:
         """
         # do we have asn cached for this range?
         if cached_asn := self.get_cached_asn(ip):
-            self.update_ip_info(ip, cached_ip_info, cached_asn)
+            self.update_ip_info(ip, cached_asn)
             return
 
         else:
-            # now we have 2 options, either search for the ASN in our offline db, or online
-            # either way we need to cache the asn of this ip's range so we don't search for ips in the same range
+            # now we have 2 options,
+            # either search for the ASN in our offline db, or online
+            # either way we need to cache the asn of this ip's range so we
+            # don't search for ips in the same range
             # cache this range in our redis db
             if asn := self.cache_ip_range(ip):
                 # range is cached and we managed to get the number and org of
                 # the given ip using whois
                 # no need to search online or offline
-                self.update_ip_info(ip, cached_ip_info, asn)
+                self.update_ip_info(ip, asn)
                 return
 
             # we don't have it cached in our db, get it from geolite
             if asn := self.get_asn_info_from_geolite(ip):
-                self.update_ip_info(ip, cached_ip_info, asn)
+                self.update_ip_info(ip, asn)
                 return
 
             # can't find asn in mmdb or using whois library, try using ip-info
             if asn := self.get_asn_online(ip):
                 # found it online
-                self.update_ip_info(ip, cached_ip_info, asn)
+                self.update_ip_info(ip, asn)
                 return

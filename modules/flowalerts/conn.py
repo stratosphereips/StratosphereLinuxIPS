@@ -636,9 +636,8 @@ class Conn(IFlowalertsAnalyzer):
         """get the SNI, ASN, and  rDNS of the IP to check if it belongs
         to a well-known org"""
 
-        ip_data = self.db.get_ip_info(ip)
+        sni = self.db.get_ip_info(ip, "SNI") or False
         try:
-            sni = ip_data["SNI"]
             if isinstance(sni, list):
                 # SNI is a list of dicts, each dict contains the
                 # 'server_name' and 'port'
@@ -651,11 +650,7 @@ class Conn(IFlowalertsAnalyzer):
             # No SNI data for this ip
             sni = False
 
-        try:
-            rdns = ip_data["reverse_dns"]
-        except (KeyError, TypeError):
-            # No SNI data for this ip
-            rdns = False
+        rdns = self.db.get_ip_info(ip, "reverse_dns") or False
 
         flow_domains = [rdns, sni]
         for org in utils.supported_orgs:

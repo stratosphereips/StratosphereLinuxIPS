@@ -30,8 +30,7 @@ class ProfileHandler:
 
     def is_doh_server(self, ip: str) -> bool:
         """returns whether the given ip is a DoH server"""
-        info: dict = self.get_ip_info(ip)
-        return info.get("is_doh_server", False) if info else False
+        return self.get_ip_info(ip, "is_doh_server") or False
 
     def get_outtuples_from_profile_tw(self, profileid, twid):
         """Get the out tuples"""
