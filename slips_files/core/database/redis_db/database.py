@@ -84,6 +84,7 @@ class RedisDB(
         "new_software",
         "new_tunnel",
         "p2p_data_request",
+        "http_lifecycle_logger",
         "remove_old_files",
         "export_evidence",
         "p2p_gopy",

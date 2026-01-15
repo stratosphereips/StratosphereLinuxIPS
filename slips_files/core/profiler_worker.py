@@ -684,6 +684,23 @@ class ProfilerWorker(IModule):
 
             line: dict = msg["line"]
 
+            if "http.log" in line["type"]:
+                http_flow = line["data"]
+                uid = http_flow["uid"]
+                now = time.time()
+                dur = now - self.db.get_http_last_operation_ts(uid)
+                self.db.publish(
+                    "http_lifecycle_logger",
+                    json.dumps(
+                        {
+                            "uid": uid,
+                            "operation": "from_input_to_profiler",
+                            "time_it_took": dur,
+                        }
+                    ),
+                )
+                self.db.set_http_last_operation_ts(uid, now)
+
             self.times = {}
             self.received_lines += 1
 
