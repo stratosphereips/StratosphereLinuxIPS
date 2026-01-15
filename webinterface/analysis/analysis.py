@@ -49,67 +49,48 @@ def get_ip_info(ip):
     :param ip: active IP
     :return: all data about the IP in database
     """
-    data = {
-        "geocountry": "-",
-        "asnorg": "-",
-        "reverse_dns": "-",
-        "threat_intel": "-",
-        "url": "-",
-        "down_file": "-",
-        "ref_file": "-",
-        "com_file": "-",
+
+    geocountry = db.get_ip_info(ip, "geocountry") or "-"
+    reverse_dns = db.get_rdns_info(ip) or "-"
+
+    threatintel = db.get_ip_info(ip, "threatintelligence")
+    threatintel_info = [
+        (
+            threatintel.get("description", "-")
+            + ","
+            + threatintel.get("threat_level", "-")
+            + " threat level"
+            if threatintel
+            else "-"
+        )
+    ]
+
+    asnorg = "-"
+    asn = db.get_asn_info(ip)
+    if asn:
+        if "org" in asn:
+            asnorg = asn["org"]
+        elif "number" in asn:
+            asnorg = asn["number"]
+
+    vt_scores = db.get_ip_info(ip, "VirusTotal")
+    url, down_file, ref_file, com_file = "-", "-", "-", "-"
+    if vt_scores:
+        url = vt_scores.get("URL", "-")
+        down_file = vt_scores.get("down_file", "-")
+        ref_file = vt_scores.get("ref_file", "-")
+        com_file = vt_scores.get("com_file", "-")
+
+    return {
+        "geocountry": geocountry,
+        "asnorg": asnorg,
+        "reverse_dns": reverse_dns,
+        "threat_intel": threatintel_info,
+        "url": url,
+        "down_file": down_file,
+        "ref_file": ref_file,
+        "com_file": com_file,
     }
-    if ip_info := db.get_ip_info(ip):
-        # Hardcoded decapsulation due to the complexity of data inside.
-        # Ex: {"asn":{"asnorg": "CESNET", "timestamp": 0.001}}
-        # set geocountry
-        geocountry = ip_info.get("geocountry", "-")
-
-        # set asn
-        asn = ip_info.get("asn", False)
-        asnorg = "-"
-        if asn:
-            # we have the asn key, do we have the org to display?
-            if "org" in asn:
-                asnorg = asn["org"]
-            elif "number" in asn:
-                asnorg = asn["number"]
-
-        reverse_dns = ip_info.get("reverse_dns", "-")
-
-        # set threatintel
-        threatintel = ip_info.get("threatintelligence", False)
-        threatintel_info = [
-            (
-                threatintel.get("description", "-")
-                + ","
-                + threatintel.get("threat_level", "-")
-                + " threat level"
-                if threatintel
-                else "-"
-            )
-        ]
-        # set vt
-        vt_scores = ip_info.get("VirusTotal", False)
-        url, down_file, ref_file, com_file = "-", "-", "-", "-"
-        if vt_scores:
-            url = vt_scores.get("URL", "-")
-            down_file = vt_scores.get("down_file", "-")
-            ref_file = vt_scores.get("ref_file", "-")
-            com_file = vt_scores.get("com_file", "-")
-
-        # set data
-        data = {
-            "geocountry": geocountry,
-            "asnorg": asnorg,
-            "reverse_dns": reverse_dns,
-            "threat_intel": threatintel_info,
-            "url": url,
-            "down_file": down_file,
-            "ref_file": ref_file,
-            "com_file": com_file,
-        }
-    return data
 
 
 # ----------------------------------------
