@@ -73,7 +73,7 @@ class Trust(IModule):
     authors = ["Dita", "Alya Gomaa"]
     pigeon_port = 6668
     rename_with_port = False
-    slips_update_channel = "ip_info_change"
+    # slips_update_channel = "ip_info_change"
     p2p_data_request_channel = "p2p_data_request"
     gopy_channel_raw = "p2p_gopy"
     pygo_channel_raw = "p2p_pygo"
@@ -101,7 +101,7 @@ class Trust(IModule):
 
         self.gopy_channel = self.gopy_channel_raw + str_port
         self.pygo_channel = self.pygo_channel_raw + str_port
-        self.storage_name = "IPsInfo"
+        self.storage_name = self.db.constants.IPS_INFO
         if self.rename_redis_ip_info:
             self.storage_name += str(self.port)
         self.c1 = self.db.subscribe("report_to_peers")
