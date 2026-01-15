@@ -475,7 +475,6 @@ class ProfileHandler:
         self.print(f"Adding SSL flow to DB: {flow}", 3, 0)
         # Check if the server_name (SNI) is detected by the threat intelligence.
         # Empty field in the end, cause we have extra field for the IP.
-        # If server_name is not empty, set in the IPsInfo and send to TI
         if not flow.server_name:
             return False
 
@@ -492,27 +491,28 @@ class ProfileHandler:
 
         # Save new server name in the IPInfo. There might be several
         # server_name per IP.
-        if ipdata := self.get_ip_info(flow.daddr):
-            sni_ipdata = ipdata.get("SNI", [])
-        else:
-            sni_ipdata = []
+        cached_sni: Optional[List[dict]] = self.get_ip_info(flow.daddr, "SNI")
 
-        sni_port = {"server_name": flow.server_name, "dport": flow.dport}
+        if not cached_sni:
+            cached_sni = []
+
+        new_sni = {"server_name": flow.server_name, "dport": flow.dport}
         # We do not want any duplicates.
-        if sni_port not in sni_ipdata:
+        if new_sni not in cached_sni:
+            # only add this SNI to our db if it has a DNS resolution
             # Verify that the SNI is equal to any of the domains in the DNS
             # resolution
-            # only add this SNI to our db if it has a DNS resolution
-            if dns_resolutions := self.r.hgetall("DNSresolution"):
-                # dns_resolutions is a dict with {ip:{'ts'..,'domains':...,
-                # 'uid':..}}
-                for ip, resolution in dns_resolutions.items():
-                    resolution = json.loads(resolution)
-                    if sni_port["server_name"] in resolution["domains"]:
-                        # add SNI to our db as it has a DNS resolution
-                        sni_ipdata.append(sni_port)
-                        self.set_ip_info(flow.daddr, {"SNI": sni_ipdata})
-                        break
+            resolution = self.r.hget("DNSresolution", flow.daddr)
+            if not resolution:
+                return
+
+            resolution = json.loads(resolution)
+            if new_sni["server_name"] not in resolution["domains"]:
+                return
+
+            # add SNI to our db as it has a DNS resolution
+            cached_sni.append(new_sni)
+            self.set_ip_info(flow.daddr, {"SNI": cached_sni})
 
     def get_profileid_from_ip(self, ip: str) -> Optional[str]:
         """
