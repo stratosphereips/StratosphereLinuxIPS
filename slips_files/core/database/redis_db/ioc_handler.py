@@ -515,6 +515,15 @@ class IoCHandler:
             domain_data = json.dumps(domain_data)
             self.rcache.hset(self.constants.DOMAINS_INFO, domain, domain_data)
 
+    def get_url_info(self, url, info_type):
+        key = f"{self.constants.VT_CACHED_URL_INFO}:{info_type}"
+        data = self.rcache.hget(key, url)
+        try:
+            data = json.loads(data)
+        except json.decoder.JSONDecodeError:
+            pass
+        return data
+
     def cache_url_info_by_virustotal(self, url: str, urldata: dict):
         """
         Store information for this URL
@@ -522,36 +531,11 @@ class IoCHandler:
         going to store for this IP.
         If it was not there before we store it. If it was there before, we
         overwrite it
-        this is used to cache url info by the virustotal module only
         """
-        data = self.is_cached_url_by_vt(url)
-        if data is False:
-            # This URL is not in the dictionary, add it first:
-            self._store_new_url(url)
-            # Now get the data, which should be empty, but just in case
-            data = self.get_ip_info(url)
-        # empty dicts evaluate to False
-        dict_has_keys = bool(data)
-        if dict_has_keys:
-            # loop through old data found in the db
-            for key in iter(data):
-                # Get the new data that has the same key
-                data_to_store = urldata[key]
-                # If there is data previously stored, check if we have this key already
-                try:
-                    # We modify value in any case, because there might be new info
-                    _ = data[key]
-                except KeyError:
-                    # There is no data for the key so far.
-                    pass
-                    # Publish the changes
-                    # self.r.publish('url_info_change', url)
-                data[key] = data_to_store
-                newdata_str = json.dumps(data)
-                self.rcache.hset(
-                    self.constants.VT_CACHED_URL_INFO, url, newdata_str
+        for info_type, info_val in urldata.items():
+            for key, val in info_val.items():
+                key = (
+                    f"{self.constants.VT_CACHED_URL_INFO}:{info_type}:"
+                    f"{key}"
                 )
-        else:
-            # URL found in the database but has no keys , set the keys now
-            urldata = json.dumps(urldata)
-            self.rcache.hset(self.constants.VT_CACHED_URL_INFO, url, urldata)
+                self.rcache.hset(key, url, val)
