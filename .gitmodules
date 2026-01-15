@@ -18,3 +18,6 @@
 [submodule "SlipsWeb"]
 	path = SlipsWeb
 	url = https://github.com/stratosphereips/SlipsWeb.git
+[submodule "modules/flowmldetection/pipeline_ml_training"]
+	path = modules/flowmldetection/pipeline_ml_training
+	url = https://github.com/stratosphereips/pipeline_ml_training_for_SLIPS.git
