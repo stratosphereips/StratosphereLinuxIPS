@@ -31,6 +31,7 @@ from typing import (
     Dict,
     Optional,
     Tuple,
+    Any,
 )
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
@@ -511,50 +512,26 @@ class RedisDB(
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
 
-    def get_ip_info(self, ip: str) -> Optional[dict]:
+    def get_ip_info(self, ip: str, info_type: str) -> Optional[dict | list]:
         """
         Return information about this IP from IPsInfo key
-        :return: a dictionary or False if there is no IP in the database
+        :param info_type: can be "DNS_resolution", "geocountry", "SNI",
+        "asn", "reverse_dns", "threat_level", "score", "confidence",
+        "VirusTotal",  "threatintelligence", "is_doh_server"
         """
-        data = self.rcache.hget(self.constants.IPS_INFO, ip)
-        return json.loads(data) if data else None
-
-    def _get_from_ip_info(self, ip: str, info_to_get: str):
-        """
-        :param ip: the key to get from the ip info hash
-        :param info_to_get: the value to get from the ip info hash
-        """
-        if utils.is_ignored_ip(ip):
+        key = f"{self.constants.IPS_INFO}:{info_type}"
+        data = self.rcache.hget(key, ip)
+        if not data:
             return
 
-        ip_info = self.get_ip_info(ip)
-        if not ip_info:
-            return
-
-        info = ip_info.get(info_to_get)
-        if not info:
-            return
-        return info
+        try:
+            data = json.loads(data)
+        except (json.decoder.JSONDecodeError, TypeError):
+            pass
+        return data
 
     def set_new_ip(self, ip: str):
-        """
-        1- Stores this new IP in the IPS_INFO hash
-        2- Publishes in the channels that there is a new IP.
-
-        Sometimes it can happen that the ip comes as an IP object, but when
-        accessed as str, it is automatically
-        converted to str
-        """
-        data = self.get_ip_info(ip)
-        if data is False:
-            # If there is no data about this IP
-            # Set this IP for the first time in the IPsInfo
-            # Its VERY important that the data of the first time we see an IP
-            # must be '{}', an empty dictionary! if not the logic breaks.
-            # We use the empty dictionary to find if an IP exists or not
-            self.rcache.hset(self.constants.IPS_INFO, ip, "{}")
-            # Publish that there is a new IP ready in the channel
-            self.publish("new_ip", ip)
+        self.publish("new_ip", ip)
 
     def get_slips_internal_time(self):
         #  SLIPS_INTERNAL_TIME is the ts of the last tw
@@ -697,35 +674,23 @@ class RedisDB(
         """
         return self.r.hget(self.constants.ANALYSIS, "output_dir")
 
-    def set_ip_info(self, ip: str, to_store: dict):
+    def set_ip_info(self, ip: str, to_store: Dict[str, Any]):
         """
         Store information for this IP
-        We receive a dictionary, such as {
-        'geocountry': 'rumania'} to
+        We receive a dictionary, such as {'geocountry': 'rumania'} to
         store for this IP.
         If it was not there before we store it. If it was there before, we
         overwrite it
         """
-        # Get the previous info already stored
-        cached_ip_info = self.get_ip_info(ip)
-        if not cached_ip_info:
-            # This IP is not in the dictionary, add it first:
-            self.set_new_ip(ip)
-            cached_ip_info = {}
-
-        # make sure we don't already have the same info about this IP in our db
-        is_new_info = False
         for info_type, info_val in to_store.items():
-            if info_type not in cached_ip_info and not is_new_info:
-                is_new_info = True
+            # info_type can be "DNS_resolution", "geocountry", "SNI",
+            # "asn", "reverse_dns", "threat_level", "score", "confidence",
+            # "VirusTotal", "threatintelligence"
+            if isinstance(info_val, dict) or isinstance(info_val, list):
+                info_val = json.dumps(info_val)
 
-            cached_ip_info[info_type] = info_val
-
-        self.rcache.hset(
-            self.constants.IPS_INFO, ip, json.dumps(cached_ip_info)
-        )
-        if is_new_info:
-            self.r.publish("ip_info_change", ip)
+            key = f"{self.constants.IPS_INFO}:{info_type}"
+            self.rcache.hset(key, ip, info_val)
 
     def get_redis_pid(self):
         """returns the pid of the current redis server"""
@@ -1051,21 +1016,21 @@ class RedisDB(
         returns asn info about the given IP
         returns a dict with "number" and "org" keys
         """
-        return self._get_from_ip_info(ip, "asn")
+        return self.get_ip_info(ip, "asn")
 
     def get_rdns_info(self, ip: str) -> Optional[str]:
         """
         returns rdns info about the given IP
         returns a str with the rdns or none
         """
-        return self._get_from_ip_info(ip, "reverse_dns")
+        return self.get_ip_info(ip, "reverse_dns")
 
     def get_sni_info(self, ip: str) -> Optional[str]:
         """
         returns sni info about the given IP
         returns the server name or none
         """
-        sni = self._get_from_ip_info(ip, "SNI")
+        sni = self.get_ip_info(ip, "SNI")
         if not sni:
             return
         sni = sni[0] if isinstance(sni, list) else sni
@@ -1083,28 +1048,20 @@ class RedisDB(
         TI lists?
         :return: string containing AS, rDNS, and SNI of the IP.
         """
-        cached_info: Optional[Dict[str, str]] = self.get_ip_info(ip)
-        id = {}
-        if not cached_info:
-            return id
-
-        sni = cached_info.get("SNI")
-        if sni:
-            sni = sni[0] if isinstance(sni, list) else sni
-            sni = sni.get("server_name")
-
         id = {
-            "AS": cached_info.get("asn"),
-            "rDNS": cached_info.get("reverse_dns"),
-            "SNI": sni,
+            "AS": self.get_asn_info(ip),
+            "rDNS": self.get_rdns_info(ip),
+            "SNI": self.get_sni_info(ip),
         }
 
         if get_ti_data:
-            id.update(
-                {"TI": cached_info.get("threatintelligence", {}).get("source")}
-            )
+            ti = self.get_ip_info(ip, "threatintelligence")
+            if ti:
+                src = ti.get("source")
+                if src:
+                    id.update({"TI": src})
 
-        if domains := cached_info.get("DNS_resolution", []):
+        if domains := self.get_ip_info(ip, "DNS_resolution"):
             domains: List[str]
             id.update({"queries": domains})
 

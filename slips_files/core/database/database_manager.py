@@ -49,6 +49,7 @@ class DBManager:
         self.rdb = RedisDB(
             self.logger, redis_port, start_redis_server, **kwargs
         )
+        self.constants = self.rdb.constants
 
         self.trust_db = None
         if self.conf.use_local_p2p():
