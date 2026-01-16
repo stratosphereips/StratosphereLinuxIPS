@@ -394,8 +394,12 @@ class EvidenceHandler(ICore):
 
     def log_time(self, uids, op):
         now = time.time()
+
         for uid in uids:
-            dur = now - self.db.get_http_last_operation_ts(uid)
+            last_time = self.db.get_http_last_operation_ts(uid)
+            if not last_time:
+                return
+            dur = now - last_time
             self.db.publish(
                 "http_lifecycle_logger",
                 json.dumps(

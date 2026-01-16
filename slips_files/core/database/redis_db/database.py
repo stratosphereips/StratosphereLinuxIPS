@@ -984,6 +984,12 @@ class RedisDB(
         """Return the field separator"""
         return self.separator
 
+    def set_http_last_operation_ts(self, uid, ts):
+        self.r.hset("http_last_op_ts", uid, ts)
+
+    def get_http_last_operation_ts(self, uid):
+        return float(self.r.hget("http_last_op_ts", uid) or 0)
+
     def store_tranco_whitelisted_domains(self, domains: List[str]):
         """
         store whitelisted domains from tranco whitelist in the db
@@ -1049,8 +1055,12 @@ class RedisDB(
         TI lists?
         :return: string containing AS, rDNS, and SNI of the IP.
         """
+        asn = self.get_asn_info(ip)
+        if asn:
+            asn = f"{asn.get("number", "")}, {asn.get("org", "")}"
+
         id = {
-            "AS": self.get_asn_info(ip),
+            "AS": asn,
             "rDNS": self.get_rdns_info(ip),
             "SNI": self.get_sni_info(ip),
         }
