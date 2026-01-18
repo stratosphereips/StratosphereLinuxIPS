@@ -812,7 +812,7 @@ class Utils(object):
                 id += f"{domain}, "
             ip_identification.pop("DNS_resolution")
 
-        for key, piece_of_info in ip_identification.values():
+        for key, piece_of_info in ip_identification.items():
             if not piece_of_info:
                 continue
 

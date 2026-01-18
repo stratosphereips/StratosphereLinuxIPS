@@ -224,7 +224,7 @@ class ScanDetectionsHandler:
         # depends on my role, i will gather info about the other ip of the
         # flow, so if i'm the server i will gather info about the client and
         # vice versa
-        target_ip = flow.daddr if role == Role.CLIENT else flow.client
+        target_ip = flow.daddr if role == Role.CLIENT else flow.saddr
         self._ask_modules_about_all_ips_in_flow(profileid, twid, flow)
 
         with self.r.pipeline() as pipe:
