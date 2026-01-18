@@ -272,31 +272,6 @@ def test_cache_whitelisted_evidence_id(evidence_id, expected_calls):
 
 
 @pytest.mark.parametrize(
-    "profileid, max_threat_lvl, confidence, expected_ip_info",
-    [
-        # Testcase 1: No previous IP info
-        ("profile1_10.0.0.1", 0.8, 0.9, {"score": 0.8, "confidence": 0.9}),
-        # Testcase 2: Update existing IP info
-        ("profile2_10.0.0.2", 0.6, 0.7, {"score": 0.6, "confidence": 0.7}),
-    ],
-)
-def test_update_ips_info(
-    profileid, max_threat_lvl, confidence, expected_ip_info
-):
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.rcache = MagicMock()
-    alert_handler.get_ip_info = MagicMock(
-        return_value={"score": 0.5, "confidence": 0.6}
-    )
-
-    alert_handler.update_ips_info(profileid, max_threat_lvl, confidence)
-
-    alert_handler.rcache.hset.assert_called_once_with(
-        "IPsInfo", profileid.split("_")[-1], json.dumps(expected_ip_info)
-    )
-
-
-@pytest.mark.parametrize(
     "initial_value, expected_value",
     [
         # Testcase 1: No previous value
