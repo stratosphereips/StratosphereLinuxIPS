@@ -1,7 +1,5 @@
-import csv
 import json
 import os
-import time
 from dataclasses import asdict
 import ipaddress
 import pprint
@@ -76,8 +74,6 @@ class ProfilerWorker(IModule):
         self.gw_ips = {}
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
-        self.times = {}
-        self.init_csv()
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
 
     def read_configuration(self):
@@ -545,50 +541,28 @@ class ProfilerWorker(IModule):
             if flow.type_ not in ("software", "weird"):
                 # software and weird.log flows are allowed to not have a daddr
                 return False
-        n = time.time()
+
         self.get_gateway_info(flow)
-        time_it_Took = time.time() - n
-        self.log_time("get_gateway_info", time_it_Took)
-
-        n = time.time()
-
         # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(flow):
             self.print(f"{self.whitelist.get_bloom_filters_stats()}", 2, 0)
             return True
-
-        time_it_Took = time.time() - n
-        self.log_time("is_whitelisted_flow", time_it_Took)
 
         # 5th. Store the data according to the paremeters
         # Now that we have the profileid and twid, add the data from the flow
         # in this tw for this profile
         profileid = f"profile_{flow.saddr}"
         self.print(f"Storing data in the profile: {profileid}", 3, 0)
-
-        n = time.time()
         flow.starttime = self.convert_starttime_to_unix_ts(flow.starttime)
-        time_it_Took = time.time() - n
 
-        self.log_time("convert_starttime_to_epoch", time_it_Took)
-
-        n = time.time()
         # Create profiles for all ips we see
         self.db.add_profile(profileid, flow.starttime)
-        time_it_Took = time.time() - n
-        self.log_time("add_profile", time_it_Took)
 
         # For this 'forward' profile, find the id in the
         # database of the tw where the flow belongs.        n = time.time()
-        n = time.time()
         twid = self.db.get_timewindow(flow.starttime, profileid)
-        time_it_Took = time.time() - n
-        self.log_time("get_timewindow", time_it_Took)
 
-        n = time.time()
         self.store_features_going_out(flow, profileid, twid)
-        time_it_Took = time.time() - n
-        self.log_time("store_features_going_out", time_it_Took)
 
         if self.analysis_direction == "all":
             self.handle_in_flow(flow)
@@ -598,38 +572,6 @@ class ProfilerWorker(IModule):
             # the user to know that slips is working
             self.print(pprint.pp(asdict(flow)))
         return True
-
-    def init_csv(self):
-        if not self.name == "ProfilerWorker_Process_0":
-            return
-        path = os.path.join(self.output_dir, "times_each_func_took.csv")
-        with open(path, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(
-                [
-                    "get_gateway_info",
-                    "is_whitelisted_flow",
-                    "convert_starttime_to_epoch",
-                    "get_timewindow",
-                    "add_profile",
-                    "store_features_going_out",
-                    "process_line",
-                    "add_flow_to_profile",
-                ]
-            )
-
-    def log_time(self, what, time):
-        if not self.name == "ProfilerWorker_Process_0":
-            return
-
-        self.times[what] = f"{time:.2f}"
-        if what == "store_features_going_out":
-            path = os.path.join(self.output_dir, "times_each_func_took.csv")
-
-            with open(path, "a", newline="") as f:
-                writer = csv.DictWriter(f, fieldnames=self.times.keys())
-                writer.writerow(self.times)
-            self.times = {}
 
     def update_the_files_input_handler_knows_about(self, msg: dict):
         """
@@ -684,14 +626,8 @@ class ProfilerWorker(IModule):
 
             line: dict = msg["line"]
 
-            self.times = {}
             self.received_lines += 1
-
-            n = time.time()
             flow, err = self.input_handler.process_line(line)
-            time_it_took = time.time() - n
-
-            self.log_time("process_line", time_it_took)
 
             if not flow:
                 # put back the msg in queue until this profiler gets a
@@ -701,11 +637,7 @@ class ProfilerWorker(IModule):
                     self.profiler_queue.put(msg)
                 return
 
-            n = time.time()
             self.add_flow_to_profile(flow)
-            time_it_took = time.time() - n
-            self.log_time("add_flow_to_profile", time_it_took)
-
             self.handle_setting_local_net(flow)
             self.db.increment_processed_flows()
 
