@@ -32,6 +32,9 @@ from modules.flowalerts.dns import DNS
 from modules.flowalerts.downloaded_file import DownloadedFile
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
+from slips_files.core.database.redis_db.scan_detections_db import (
+    ScanDetectionsHandler,
+)
 from modules.flowalerts.notice import Notice
 from modules.flowalerts.smtp import SMTP
 from modules.flowalerts.software import Software
@@ -538,19 +541,22 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_profiler_worker_obj(self, mock_db):
         profiler = ProfilerWorker(
-            name="mock_name",
             logger=self.logger,
             output_dir="output",
             redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
             conf=Mock(),
             ppid=Mock(),
-            args=Mock(),
+            bloom_filters_manager=Mock(),
+            name="mock_name",
             localnet_cache={},
             profiler_queue=Mock(),
-            stop_profiler_workers=Mock(),
             handle_setting_local_net_lock=Mock(),
             input_handler=Mock(),
-            bloom_filters=Mock(),
+            aid_queue=Mock(),
+            aid_manager=Mock(),
+            stop_profiler_event=Mock(),
         )
         profiler.print = Mock()
         profiler.db = mock_db
@@ -842,6 +848,18 @@ class ModuleFactory:
 
     def create_profile_handler_obj(self):
         handler = ProfileHandler()
+        handler.constants = Constants()
+        handler.r = Mock()
+        handler.rcache = Mock()
+        handler.separator = "_"
+        handler.width = 3600
+        handler.print = Mock()
+        handler.starttime_of_first_tw = None
+        handler.publish = Mock()
+        return handler
+
+    def create_scan_detections_db(self):
+        handler = ScanDetectionsHandler()
         handler.constants = Constants()
         handler.r = Mock()
         handler.rcache = Mock()
