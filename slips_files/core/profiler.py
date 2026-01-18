@@ -384,7 +384,7 @@ class Profiler(ICore, IObservable):
 
         # slips starts with 3 workers by default until it detects
         # high throughput that 3 workers arent enough to handle
-        num_of_profiler_workers = 3
+        num_of_profiler_workers = 5
         for worker_id in range(num_of_profiler_workers):
             self.last_worker_id = worker_id
             self.start_profiler_worker(worker_id)

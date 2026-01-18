@@ -812,10 +812,15 @@ class Utils(object):
                 id += f"{domain}, "
             ip_identification.pop("DNS_resolution")
 
-        for piece_of_info in ip_identification.values():
+        for key, piece_of_info in ip_identification.values():
             if not piece_of_info:
                 continue
-            id += f"{piece_of_info}, "
+
+            id += f"{key}: "
+            if isinstance(piece_of_info, dict):
+                id += f"{self.get_ip_identification_as_str(piece_of_info)}, "
+            else:
+                id += f"{piece_of_info}, "
         return id
 
     def get_branch_info(self):
