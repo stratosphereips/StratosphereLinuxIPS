@@ -1055,12 +1055,8 @@ class RedisDB(
         TI lists?
         :return: string containing AS, rDNS, and SNI of the IP.
         """
-        asn = self.get_asn_info(ip)
-        if asn:
-            asn = f"{asn.get("number", "")}, {asn.get("org", "")}"
-
         id = {
-            "AS": asn,
+            "AS": self.get_asn_info(ip),
             "rDNS": self.get_rdns_info(ip),
             "SNI": self.get_sni_info(ip),
         }
