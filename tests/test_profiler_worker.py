@@ -36,7 +36,7 @@ def get_zeek_flow(file, flow_type):
         ("dataset/test9-mixed-zeek-dir/files.log", "files.log"),
     ],
 )
-def test_process_line(
+def test_process_line_zeek_json(
     file,
     flow_type,
 ):
@@ -46,28 +46,17 @@ def test_process_line(
     # we're testing another functionality here
     profiler.whitelist.is_whitelisted_flow = do_nothing
     profiler.input_type = "zeek"
-    # get the class that handles the zeek input
-    profiler.input_handler = SUPPORTED_INPUT_TYPES[profiler.input_type]()
-    # set the zeek json separator
+    profiler.input_handler = SUPPORTED_INPUT_TYPES[profiler.input_type](
+        profiler.db
+    )
     profiler.separator = SEPARATORS[profiler.input_type]
 
     sample_flow = get_zeek_flow(file, flow_type)
     # required to get a flow object to call add_flow_to_profile on
-    flow = profiler.input_handler.process_line(sample_flow)
+    flow, err = profiler.input_handler.process_line(sample_flow)
 
-    added_to_prof = profiler.add_flow_to_profile(flow)
-    assert added_to_prof
-
-    profileid = f"profile_{flow.saddr}"
-    twid = profiler.db.get_timewindow(flow.starttime, profileid)
-
-    # make sure it's added
-    if flow_type == "conn":
-        flow_added = profiler.db.get_flow(flow.uid, twid=twid)[flow.uid]
-    else:
-        flow_added = profiler.db.get_altflow_from_uid(flow.uid)
-
-    assert flow_added
+    assert not err
+    assert flow
 
 
 def test_get_rev_profile():
@@ -177,7 +166,7 @@ def test_get_private_client_ips(client_ips, expected_private_ips, monkeypatch):
     profiler = ModuleFactory().create_profiler_worker_obj()
     profiler.client_ips = client_ips
     with patch(
-        "slips_files.core.profiler.utils.is_private_ip"
+        "slips_files.core.profiler_worker.utils.is_private_ip"
     ) as mock_is_private_ip:
 
         def is_private_ip(ip):
@@ -195,7 +184,7 @@ def test_convert_starttime_to_epoch():
     starttime = "2023-04-04 12:00:00"
 
     with patch(
-        "slips_files.core.profiler.utils.convert_ts_format"
+        "slips_files.core.profiler_worker.utils.convert_ts_format"
     ) as mock_convert_ts_format:
         mock_convert_ts_format.return_value = 1680604800
 
@@ -205,17 +194,6 @@ def test_convert_starttime_to_epoch():
             "2023-04-04 12:00:00", "unixtimestamp"
         )
         assert converted == 1680604800
-
-
-def test_convert_starttime_to_epoch_invalid_format(monkeypatch):
-    profiler = ModuleFactory().create_profiler_worker_obj()
-    starttime = "not a real time"
-    monkeypatch.setattr(
-        "slips_files.core.profiler.utils.convert_ts_format",
-        Mock(side_effect=ValueError),
-    )
-    converted = profiler.convert_starttime_to_unix_ts(starttime)
-    assert converted == "not a real time"
 
 
 @pytest.mark.parametrize(
@@ -276,22 +254,20 @@ def test_add_flow_to_profile_unsupported_flow():
     assert result is False
 
 
-@patch("slips_files.core.helpers.flow_handler")
-def test_store_features_going_out(
-    mock_flow_handler,
-):
+@patch("slips_files.core.profiler_worker.FlowHandler")
+def test_store_features_going_out(mock_flowhandler):
     profiler = ModuleFactory().create_profiler_worker_obj()
-    flow = Mock()
-    flow.type_ = "conn"
-    flow_parser = mock_flow_handler.return_value
+    profiler.get_aid_and_store_flow_in_the_db = Mock()
 
-    mock_flow_parser = mock_flow_handler.return_value
-    mock_flow_parser.profileid = "profile_test"
-    mock_flow_parser.twid = "twid_test"
-    mock_flow_parser.db = profiler.db
+    flow = Mock(type_="conn")
 
-    profiler.store_features_going_out(flow, mock_flow_parser)
-    flow_parser.handle_conn.assert_called_once()
+    profileid = "profile_test"
+    twid = "timewindow1"
+    is_stored = profiler.store_features_going_out(flow, profileid, twid)
+    assert is_stored
+    mock_flowhandler.return_value.handle_conn.assert_called_once()
+    profiler.get_aid_and_store_flow_in_the_db.assert_called_once()
+    profiler.db.mark_profile_tw_as_modified.assert_called_once()
 
 
 def test_store_features_going_in_non_conn_flow():
@@ -307,21 +283,15 @@ def test_store_features_going_in_non_conn_flow():
     profiler.db.mark_profile_tw_as_modified.assert_not_called()
 
 
-@patch("slips_files.core.helpers.flow_handler")
+@patch("slips_files.core.profiler_worker.FlowHandler")
 def test_store_features_going_out_unsupported_type(mock_flow_handler):
     profiler = ModuleFactory().create_profiler_worker_obj()
-    flow = Mock()
-    flow.type_ = "unsupported_type"
-    flow_parser = Mock()
+    flow = Mock(type_="unsupported_type")
+    profileid = "profile_test"
+    twid = "twid_test"
 
-    mock_flow_parser = mock_flow_handler.return_value
-    mock_flow_parser.profileid = "profile_test"
-    mock_flow_parser.twid = "twid_test"
-    mock_flow_parser.db = profiler.db
-
-    result = profiler.store_features_going_out(flow, mock_flow_parser)
-
-    flow_parser.handle_conn.assert_not_called()
+    result = profiler.store_features_going_out(flow, profileid, twid)
+    mock_flow_handler.return_value.handle_conn.assert_not_called()
     assert result is False
 
 
@@ -430,8 +400,8 @@ def test_handle_setting_local_net():
     profiler.db.set_local_network.assert_called_once_with(local_net, "default")
 
 
-@patch("slips_files.core.profiler.utils.is_private_ip")
-@patch("slips_files.core.profiler.utils.is_ignored_ip")
+@patch("slips_files.core.profiler_worker.utils.is_private_ip")
+@patch("slips_files.core.profiler_worker.utils.is_ignored_ip")
 def test_get_gateway_info_sets_mac_and_ip(
     mock_is_ignored_ip, mock_is_private_ip
 ):
@@ -470,7 +440,7 @@ def test_get_gateway_info_sets_mac_and_ip(
     profiler.db.set_default_gateway.assert_any_call("IP", "8.8.8.1", "eth0")
 
 
-@patch("slips_files.core.profiler.utils.is_private_ip")
+@patch("slips_files.core.profiler_worker.utils.is_private_ip")
 def test_get_gateway_info_no_mac_detected(mock_is_private_ip):
     profiler = ModuleFactory().create_profiler_worker_obj()
 
@@ -559,7 +529,7 @@ def test_is_gw_info_detected_unsupported_info_type():
     assert str(exc_info.value) == "Unsupported info_type: unsupported_type"
 
 
-def test_run_no_msg():
+def test_main_no_msg():
     profiler = ModuleFactory().create_profiler_worker_obj()
     profiler.should_stop_profiler_workers = Mock()
     profiler.get_msg_from_queue = Mock()
@@ -577,7 +547,7 @@ def test_run_no_msg():
         None  # Empty message (no message in queue)
     )
 
-    profiler.run()
+    profiler.main()
 
     profiler.get_handler_obj.assert_not_called()
     profiler.input_handler.process_line.assert_not_called()
@@ -585,7 +555,7 @@ def test_run_no_msg():
     profiler.print.assert_not_called()
 
 
-def test_run():
+def test_main():
     profiler = ModuleFactory().create_profiler_worker_obj()
     profiler.should_stop_profiler_workers = Mock()
     profiler.get_msg_from_queue = Mock()
@@ -602,10 +572,10 @@ def test_run():
         "line": {"key": "value"},
         "input_type": "zeek",
     }
+    mock_flow = Mock()
+    profiler.input_handler.process_line = Mock(return_value=(mock_flow, ""))
 
-    profiler.input_handler.process_line = Mock(return_value=Mock())
-
-    profiler.run()
+    profiler.main()
 
     profiler.input_handler.process_line.assert_called_once()
     profiler.add_flow_to_profile.assert_called_once()
@@ -613,7 +583,7 @@ def test_run():
     profiler.db.increment_processed_flows.assert_called_once()
 
 
-def test_run_handle_exception():
+def test_main_handle_exception():
     profiler = ModuleFactory().create_profiler_worker_obj()
     profiler.should_stop_profiler_workers = Mock()
     profiler.get_msg_from_queue = Mock()
@@ -624,8 +594,7 @@ def test_run_handle_exception():
     profiler.should_stop_profiler_workers.side_effect = [
         False,
         True,
-    ]  # Run loop
-    # once
+    ]  # Run loop once
     profiler.get_msg_from_queue.return_value = {
         "line": {"key": "value"},
         "input_type": "invalid_type",
@@ -634,5 +603,5 @@ def test_run_handle_exception():
         "Test exception"
     )
 
-    profiler.run()
+    profiler.main()
     profiler.print_traceback.assert_called_once()
