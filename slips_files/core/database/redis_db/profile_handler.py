@@ -982,7 +982,7 @@ class ProfileHandler:
         if not is_dhcp_set:
             self.r.hset(profileid, "dhcp", "true")
 
-    def add_profile(self, profileid, starttime, confidence=0.05):
+    def add_profile(self, profileid, starttime, confidence=0.05) -> bool:
         """
         Add a new profile to the DB. Both the list of profiles and the
          hashmap of profile data
@@ -994,18 +994,19 @@ class ProfileHandler:
                 # we already have this profile
                 return False
 
-            # Add the profile to the index. The index is called 'profiles'
-            self.r.sadd(self.constants.PROFILES, str(profileid))
-            # Create the hashmap with the profileid.
-            # The hasmap of each profile is named with the profileid
-            # Add the start time of profile
-            self.r.hset(profileid, "starttime", starttime)
-            # For now duration of the TW is fixed
-            self.r.hset(profileid, "duration", self.width)
-            # When a new profiled is created assign threat level = 0
-            # and confidence = 0.05
+            with self.r.pipeline() as pipe:
+                pipe.sadd(self.constants.PROFILES, str(profileid))
+                # Create the hashmap with the profileid.
+                # The hasmap of each profile is named with the profileid
+                # Add the start time of profile
+                pipe.hset(profileid, "starttime", starttime)
+                # For now duration of the TW is fixed
+                pipe.hset(profileid, "duration", self.width)
+                # When a new profiled is created assign threat level = 0
+                # and confidence = 0.05
+                pipe.hset(profileid, "confidence", confidence)
+                pipe.execute()
 
-            self.r.hset(profileid, "confidence", confidence)
             # The IP of the profile should also be added as a new IP
             # we know about.
             ip = profileid.split(self.separator)[1]
@@ -1013,11 +1014,13 @@ class ProfileHandler:
             self.set_new_ip(ip)
             # Publish that we have a new profile
             self.publish("new_profile", ip)
+
             return True
         except redis.exceptions.ResponseError as inst:
             self.print("Error in add_profile in database.py", 0, 1)
             self.print(type(inst), 0, 1)
             self.print(inst, 0, 1)
+            return False
 
     def set_module_label_for_profile(self, profileid, module, label):
         """
