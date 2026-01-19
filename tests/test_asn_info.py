@@ -152,25 +152,25 @@ def test_get_cached_asn(ip_address, first_octet, cached_data, expected_result):
         ),
         # Testcase 2: Cached data with no timestamp
         (
-            {"asn": {}},
+            {},
             3600,
             True,
         ),
         # Testcase 3: Cached data with old timestamp
         (
-            {"asn": {"timestamp": time.time() - 7200}},
+            {"timestamp": time.time() - 7200},
             3600,
             True,
         ),
         # Testcase 4: Cached data with recent timestamp
         (
-            {"asn": {"timestamp": time.time() - 1800}},
+            {"timestamp": time.time() - 1800},
             3600,
             False,
         ),
     ],
 )
-def test_update_asn(cached_data, update_period, expected_result):
+def test_should_update_asn(cached_data, update_period, expected_result):
     asn_info = ModuleFactory().create_asn_obj()
     asn_info.update_period = update_period
     result = asn_info.should_update_asn(cached_data)
@@ -246,69 +246,54 @@ def test_get_asn_online(
 
 
 @pytest.mark.parametrize(
-    "ip, cached_ip_info, asn, expected_call",
+    "ip, asn, expected_call",
     [
-        # Testcase 1: Update with new ASN info
+        # Testcase 1: New ASN info
         (
             "192.168.1.1",
-            {},
             {"asn": {"number": "AS12345", "org": "Test Org"}},
             (
                 "192.168.1.1",
                 {
-                    "asn": {"number": "AS12345", "org": "Test Org"},
-                    "timestamp": 1625097600,
+                    "asn": {
+                        "number": "AS12345",
+                        "org": "Test Org",
+                        "timestamp": 1625097600,
+                    }
                 },
             ),
         ),
-        # Testcase 2: Update existing ASN info
+        # Testcase 2: Existing ASN info (still overwritten, no merge)
         (
             "10.0.0.1",
-            {"country": "US"},
             {"asn": {"number": "AS67890", "org": "Another Org"}},
             (
                 "10.0.0.1",
                 {
-                    "country": "US",
-                    "asn": {"number": "AS67890", "org": "Another Org"},
-                    "timestamp": 1625097600,
-                },
-            ),
-        ),
-        # Testcase 3: Update with empty ASN info
-        (
-            "172.16.0.1",
-            {"some_key": "some_value"},
-            {},
-            (
-                "172.16.0.1",
-                {
-                    "some_key": "some_value",
-                    "timestamp": 1625097600,
+                    "asn": {
+                        "number": "AS67890",
+                        "org": "Another Org",
+                        "timestamp": 1625097600,
+                    }
                 },
             ),
         ),
     ],
 )
-def test_update_ip_info(ip, cached_ip_info, asn, expected_call):
+def test_update_ip_info_in_the_db(ip, asn, expected_call):
     asn_info = ModuleFactory().create_asn_obj()
-
     with patch("time.time", return_value=1625097600):
-        asn_info.update_ip_info(ip, cached_ip_info, asn)
-
-        asn_info.db.set_ip_info.assert_called_once_with(*expected_call)
-        expected_cached_ip_info = expected_call[1]
-        assert cached_ip_info == expected_cached_ip_info
+        asn_info.update_ip_info_in_the_db(ip, asn)
+    asn_info.db.set_ip_info.assert_called_once_with(*expected_call)
 
 
 @pytest.mark.parametrize(
-    "ip, cached_ip_info, cached_asn, cache_ip_range_result, "
+    "ip, cached_asn, cache_ip_range_result, "
     "geolite_asn, online_asn, expected_result, expected_calls",
     [
-        # Testcase 1: ASN found in cached range
+        # ASN found in cached range
         (
             "192.168.1.1",
-            {},
             {"asn": {"number": "AS12345", "org": "Cached Org"}},
             None,
             None,
@@ -316,22 +301,20 @@ def test_update_ip_info(ip, cached_ip_info, asn, expected_call):
             {"asn": {"number": "AS12345", "org": "Cached Org"}},
             [call.get_cached_asn("192.168.1.1")],
         ),
-        # Testcase 2: ASN found by cache_ip_range
+        # ASN found by cache_ip_range
         (
             "8.8.8.8",
             {},
-            None,
             {"asn": {"number": "AS15169", "org": "Google LLC"}},
             None,
             None,
             {"asn": {"number": "AS15169", "org": "Google LLC"}},
             [call.get_cached_asn("8.8.8.8"), call.cache_ip_range("8.8.8.8")],
         ),
-        # Testcase 3: ASN found in GeoLite database
+        # ASN found in GeoLite database
         (
             "1.1.1.1",
             {},
-            None,
             None,
             {"asn": {"number": "AS13335", "org": "Cloudflare, Inc."}},
             None,
@@ -342,11 +325,10 @@ def test_update_ip_info(ip, cached_ip_info, asn, expected_call):
                 call.get_asn_info_from_geolite("1.1.1.1"),
             ],
         ),
-        # Testcase 4: ASN found online
+        # ASN found online
         (
             "203.0.113.1",
             {},
-            None,
             None,
             None,
             {"asn": {"number": "AS64496", "org": "Example ISP"}},
@@ -362,7 +344,6 @@ def test_update_ip_info(ip, cached_ip_info, asn, expected_call):
 )
 def test_get_asn_with_result(
     ip,
-    cached_ip_info,
     cached_asn,
     cache_ip_range_result,
     geolite_asn,
@@ -381,9 +362,10 @@ def test_get_asn_with_result(
     ) as mock_get_geolite, patch.object(
         asn_info, "get_asn_online", return_value=online_asn
     ) as mock_get_online, patch.object(
-        asn_info, "update_ip_info"
+        asn_info, "update_ip_info_in_the_db"
     ) as mock_update_ip_info:
-        asn_info.get_asn(ip, cached_ip_info)
+
+        asn_info.get_asn(ip)
 
         actual_calls = (
             mock_get_cached_asn.mock_calls
@@ -392,16 +374,12 @@ def test_get_asn_with_result(
             + mock_get_online.mock_calls
         )
         assert actual_calls == expected_calls
-
-        mock_update_ip_info.assert_called_once_with(
-            ip, cached_ip_info, expected_result
-        )
+        mock_update_ip_info.assert_called_once_with(ip, expected_result)
 
 
 def test_get_asn_without_result():
     """Testcase: ASN not found anywhere."""
     ip = "10.0.0.1"
-    cached_ip_info = {}
     expected_calls = [
         call.get_cached_asn("10.0.0.1"),
         call.cache_ip_range("10.0.0.1"),
@@ -420,9 +398,10 @@ def test_get_asn_without_result():
     ) as mock_get_geolite, patch.object(
         asn_info, "get_asn_online", return_value=None
     ) as mock_get_online, patch.object(
-        asn_info, "update_ip_info"
+        asn_info, "update_ip_info_in_the_db"
     ) as mock_update_ip_info:
-        asn_info.get_asn(ip, cached_ip_info)
+
+        asn_info.get_asn(ip)
 
         actual_calls = (
             mock_get_cached_asn.mock_calls

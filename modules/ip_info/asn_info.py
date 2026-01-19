@@ -32,7 +32,7 @@ class ASN:
         If this ip belongs to a cached ip range, return the cached asn info of it
         :param ip: str
         if the range of this ip was found, this function returns a dict
-        with # {"asn": {"org": .. , "number": .. }}
+        with  {"asn": {"org": .. , "number": .. }}
         """
         first_octet: str = utils.get_first_octet(ip)
         if not first_octet:
@@ -59,12 +59,13 @@ class ASN:
                     asn_info["asn"].update({"number": range_info["number"]})
                 return asn_info
 
-    def should_update_asn(self, cached_data) -> bool:
+    def should_update_asn(self, cached_data: Dict[str, float]) -> bool:
         """
         Returns True if
         - no asn data is found in the db OR ip has no cached info
         - OR a month has passed since we last updated asn info in the db
         :param cached_data: ip cached info from the database, dict
+        e.g cached_data = {"timestamp": 1625097600}
         """
         try:
             return (
@@ -173,24 +174,26 @@ class ASN:
 
         return asn
 
-    def update_ip_info(self, ip: str, asn: Dict[str, Dict[str, str | float]]):
+    def update_ip_info_in_the_db(
+        self, ip: str, asn: Dict[str, Dict[str, str | float]]
+    ):
         """
         store the new asn info to the db
         :param asn: new asn to add to the db. found by this module.
-         e.g {"asn": {"org": .. , "number": .. }}
+         e.g {"asn": {"org": .. , "number": .. , "timestamp": .. }}
         """
         asn["asn"].update({"timestamp": time.time()})
         # store the ASN we found in 'IPsInfo'
         self.db.set_ip_info(ip, asn)
 
-    def get_asn(self, ip, cached_ip_info):
+    def get_asn(self, ip):
         """
         Gets ASN info about IP, either cached, from our offline mmdb or
         from ip-api.com
         """
         # do we have asn cached for this range?
         if cached_asn := self.get_cached_asn(ip):
-            self.update_ip_info(ip, cached_asn)
+            self.update_ip_info_in_the_db(ip, cached_asn)
             return
 
         else:
@@ -203,16 +206,16 @@ class ASN:
                 # range is cached and we managed to get the number and org of
                 # the given ip using whois
                 # no need to search online or offline
-                self.update_ip_info(ip, asn)
+                self.update_ip_info_in_the_db(ip, asn)
                 return
 
             # we don't have it cached in our db, get it from geolite
             if asn := self.get_asn_info_from_geolite(ip):
-                self.update_ip_info(ip, asn)
+                self.update_ip_info_in_the_db(ip, asn)
                 return
 
             # can't find asn in mmdb or using whois library, try using ip-info
             if asn := self.get_asn_online(ip):
                 # found it online
-                self.update_ip_info(ip, asn)
+                self.update_ip_info_in_the_db(ip, asn)
                 return

@@ -573,7 +573,7 @@ class IPInfo(AsyncModule):
         # passed since last ASN update on this IP
         asn = self.db.get_asn_info(ip)
         if self.asn.should_update_asn(asn):
-            self.asn.get_asn(ip, asn)
+            self.asn.get_asn(ip)
 
         self.get_rdns(ip)
 
