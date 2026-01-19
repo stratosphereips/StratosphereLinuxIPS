@@ -6,6 +6,8 @@ import pytest
 from unittest.mock import MagicMock, call
 import json
 from unittest.mock import ANY
+
+from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     ProfileID,
     TimeWindow,
@@ -289,6 +291,25 @@ def test_init_evidence_number(initial_value, expected_value):
 
     alert_handler.r.set.assert_called_once_with(
         "number_of_evidence", expected_value
+    )
+
+
+@pytest.mark.parametrize(
+    "max_threat_level, cur_threat_level, expected_max",
+    [
+        ("info", "info", utils.threat_levels["info"]),
+        ("critical", "info", utils.threat_levels["critical"]),
+        ("high", "critical", utils.threat_levels["critical"]),
+    ],
+)
+def test_update_max_threat_level(
+    max_threat_level, cur_threat_level, expected_max
+):
+    db = ModuleFactory().create_db_manager_obj(6393, flush_db=True)
+    profileid = "profile_192.168.1.1"
+    db.set_max_threat_level(profileid, max_threat_level)
+    assert (
+        db.update_max_threat_level(profileid, cur_threat_level) == expected_max
     )
 
 

@@ -150,6 +150,7 @@ class ModuleFactory:
         conf.get_tw_width_as_float = Mock(return_value=3600.0)
         conf.client_ips = Mock(return_value=[])
         conf.use_local_p2p = Mock(return_value=False)
+        conf.width = Mock(return_value=3600)
 
         with (
             # to prevent config/redis.conf from being overwritten
