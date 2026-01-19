@@ -636,9 +636,11 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_flow_handler_obj(self, flow, mock_db):
         symbol = SymbolHandler(self.logger, mock_db)
-        flow_handler = FlowHandler(mock_db, symbol, flow)
-        flow_handler.profileid = "profile_id"
-        flow_handler.twid = "timewindow_id"
+        profileid = "profile_id"
+        twid = "timewindow1"
+        flow_handler = FlowHandler(
+            mock_db, symbol, flow, profileid, twid, False
+        )
         return flow_handler
 
     @patch(DB_MANAGER, name="mock_db")
