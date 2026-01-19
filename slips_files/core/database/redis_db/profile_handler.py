@@ -1242,10 +1242,7 @@ class ProfileHandler:
         try:
             prev_symbol = self.r.hget(symbols_key, tupleid)
             if not prev_symbol:
-                new_symbol = f"{prev_symbol}{symbol_to_add}"
-                self.publish_new_letter(
-                    new_symbol, profileid, twid, tupleid, flow
-                )
+                new_symbol = symbol_to_add
 
                 self.print(
                     f"First time for tuple {tupleid} as an"
@@ -1254,7 +1251,10 @@ class ProfileHandler:
                     0,
                 )
             else:
-                new_symbol = symbol_to_add
+                new_symbol = f"{prev_symbol}{symbol_to_add}"
+                self.publish_new_letter(
+                    new_symbol, profileid, twid, tupleid, flow
+                )
 
             self.r.hset(symbols_key, tupleid, new_symbol)
             if last_2_flows_diff:
