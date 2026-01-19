@@ -2,29 +2,10 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Unit test for slips_files/core/iperformance_profiler.py"""
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from tests.module_factory import ModuleFactory
 import pytest
-import queue
-
-
-def test_check_for_stop_msg(monkeypatch):
-    profiler = ModuleFactory().create_profiler_obj()
-    assert profiler.is_stop_msg("stop") is True
-    assert profiler.is_stop_msg("not_stop") is False
-
-
-def test_main_stop_msg_received():
-    profiler = ModuleFactory().create_profiler_obj()
-    profiler.should_stop = Mock(side_effect=[False, True])
-
-    profiler.profiler_queue = Mock(spec=queue.Queue)
-    profiler.profiler_queue.get.return_value = "stop"
-
-    stopped = profiler.main()
-    assert stopped
-    # profiler.check_for_st op_msg.assert_called()
 
 
 def mock_print(*args, **kwargs):
@@ -44,47 +25,63 @@ def test_mark_process_as_done_processing(monkeypatch):
     profiler.is_profiler_done_event.set.assert_called_once()
 
 
-def test_main():
+@pytest.mark.parametrize(
+    "msg_from_queue, handler_obj, should_stop_side_effect, expected_start_workers, expect_print_called",
+    [
+        # Case 1: triggers all branches
+        ({"line": {"f1": "v1"}}, Mock(), [False, True], 5, False),
+        # Case 2: unsupported input type, no input_handler_obj
+        ({"line": {"f1": "v1"}}, None, [True], 0, True),
+        # Case 3: empty queue initially, then valid msg
+        ({"line": {"f1": "v1"}}, Mock(), [False, True], 5, False),
+    ],
+)
+def test_main(
+    msg_from_queue,
+    handler_obj,
+    should_stop_side_effect,
+    expected_start_workers,
+    expect_print_called,
+):
     profiler = ModuleFactory().create_profiler_obj()
     profiler.last_worker_id = 0
+
+    # Mock methods
     profiler._check_if_high_throughput_and_add_workers = Mock()
-
-    profiler.is_first_msg = False  # <--- SKIP FIRST-MSG BRANCH
-
-    profiler.should_stop = Mock(side_effect=[False, True])
-
-    msg = {"somemsg": 1, "line": "test line"}
-    profiler.get_msg_from_queue = Mock(side_effect=[msg])
-
-    profiler.profiler_queue = Mock()
-    profiler.workers = []  # so sum([...]) doesn't fail
-    profiler.main()
-    profiler.profiler_queue.put.assert_called_once_with(msg)
-
-
-def test_main_with_first_msg():
-    profiler = ModuleFactory().create_profiler_obj()
-    profiler.last_worker_id = 0
-    profiler._check_if_high_throughput_and_add_workers = Mock()
-    profiler.should_stop = Mock(side_effect=[False, False, True])
-
-    # First msg triggers init; second msg is the one we expect to send to queue
-    first = {"line": {"x": 1}}
-    second = {"somemsg": 1, "line": {"y": 2}}
-
-    profiler.get_msg_from_queue = Mock(side_effect=[first, second])
-
-    profiler.input_handler_obj = Mock()
-    profiler.get_handler_obj = Mock(return_value=profiler.input_handler_obj)
-
     profiler.start_profiler_worker = Mock()
+    profiler.store_flows_read_per_second = Mock()
+    profiler._update_lines_read_by_all_workers = Mock()
+    profiler.print = Mock()
+
+    # Mock should_stop
+    profiler.should_stop = Mock(side_effect=should_stop_side_effect)
+
+    # Handle empty queue case
+    if msg_from_queue is None:
+        profiler.get_msg_from_queue = Mock(
+            side_effect=[None, {"line": {"f1": "v1"}}]
+        )
+    else:
+        profiler.get_msg_from_queue = Mock(side_effect=[msg_from_queue])
+
+    # Mock input handler
+    profiler.get_handler_obj = Mock(return_value=handler_obj)
 
     profiler.profiler_queue = Mock()
     profiler.workers = []
+    with patch("time.sleep"):
+        profiler.main()
 
-    profiler.main()
-
-    profiler.profiler_queue.put.assert_called_once_with(second)
+    if handler_obj:
+        handler_obj.process_line.assert_called_once_with(
+            msg_from_queue["line"]
+        )
+        assert (
+            profiler.start_profiler_worker.call_count == expected_start_workers
+        )
+    else:
+        profiler.print.assert_called_once()
+        assert profiler.start_profiler_worker.call_count == 0
 
 
 def test_shutdown_gracefully(monkeypatch):

@@ -382,8 +382,8 @@ class Profiler(ICore, IObservable):
         # updates internal zeek to slips mapping if needed, just once
         self.input_handler_obj.process_line(line)
 
-        # slips starts with 3 workers by default until it detects
-        # high throughput that 3 workers arent enough to handle
+        # slips starts with these workers by default until it detects
+        # high throughput that these workers arent enough to handle
         num_of_profiler_workers = 5
         for worker_id in range(num_of_profiler_workers):
             self.last_worker_id = worker_id
@@ -392,7 +392,7 @@ class Profiler(ICore, IObservable):
         # the only thing that stops this loop is the 'stop' msg sent by the
         # input and recvd by one of the workers
         while not self.should_stop():
-            # time.sleep(5 * 60) TODO uncomment this
+            time.sleep(5 * 60)
             self._update_lines_read_by_all_workers()
             # implemented in icore.py
             self.store_flows_read_per_second()

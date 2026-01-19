@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 """Unit test for slips_files/core/iperformance_profiler.py"""
-
+import queue
 from unittest.mock import Mock, MagicMock
 
 from tests.module_factory import ModuleFactory
@@ -553,6 +553,23 @@ def test_main_no_msg():
     profiler.input_handler.process_line.assert_not_called()
     profiler.add_flow_to_profile.assert_not_called()
     profiler.print.assert_not_called()
+
+
+def test_is_stop_msg(monkeypatch):
+    profiler = ModuleFactory().create_profiler_worker_obj()
+    assert profiler.is_stop_msg("stop") is True
+    assert profiler.is_stop_msg("not_stop") is False
+
+
+def test_main_stop_msg_received():
+    profiler = ModuleFactory().create_profiler_worker_obj()
+    profiler.should_stop = Mock(side_effect=[False, True])
+
+    profiler.profiler_queue = Mock(spec=queue.Queue)
+    profiler.profiler_queue.get.return_value = "stop"
+
+    stopped = profiler.main()
+    assert stopped
 
 
 def test_main():
