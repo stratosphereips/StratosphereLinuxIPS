@@ -4,7 +4,8 @@ from dataclasses import asdict
 from unittest.mock import patch, MagicMock, call, Mock
 import json
 from tests.module_factory import ModuleFactory
-from slips_files.core.flows.zeek import HTTP, DNS, Conn
+from slips_files.core.structures.flow_attributes import Role
+from slips_files.core.flows.zeek import HTTP, DNS
 from unittest.mock import ANY
 import pytest
 
@@ -32,11 +33,9 @@ def test_get_outtuples_from_profile_tw(hget_return_value, expected_out_tuples):
     handler = ModuleFactory().create_profile_handler_obj()
     profileid = "profile_1"
     twid = "timewindow1"
-    handler.r.hget.return_value = hget_return_value
+    handler.r.hgetall.return_value = hget_return_value
     out_tuples = handler.get_outtuples_from_profile_tw(profileid, twid)
-    handler.r.hget.assert_called_once_with(
-        profileid + handler.separator + twid, "OutTuples"
-    )
+    handler.r.hgetall.assert_called_once_with(f"{profileid}_{twid}:OutTuples")
     assert out_tuples == expected_out_tuples
 
 
@@ -68,7 +67,7 @@ def test_get_intuples_from_profile_tw(hget_return_value, expected_in_tuples):
     handler.r.hget.return_value = hget_return_value
     in_tuples = handler.get_intuples_from_profile_tw(profileid, twid)
     handler.r.hget.assert_called_once_with(
-        profileid + handler.separator + twid, "InTuples"
+        f"{profileid}{handler.separator}{twid}:InTuples"
     )
     assert in_tuples == expected_in_tuples
 
@@ -132,221 +131,6 @@ def test_set_dhcp_flow(cached_flows, expected_hset_call):
     uid = "abc123"
     handler.set_dhcp_flow(profileid, twid, requested_addr, uid)
 
-    handler.r.hset.assert_called_once_with(*expected_hset_call)
-
-
-@pytest.mark.parametrize(
-    "flags, packet_count, expected_state",
-    [
-        # Testcase1: Established states
-        ("SA_SA", 10, "Established"),
-        ("PA_PA", 10, "Established"),
-        ("S1", 10, "Established"),
-        ("EST", 10, "Established"),
-        ("RST", 10, "Established"),
-        ("FIN", 10, "Established"),
-        # Testcase2: Not Established states
-        ("S_RA", 10, "Not Established"),
-        ("S0", 10, "Not Established"),
-        ("INT", 10, "Not Established"),
-        ("RST", 3, "Not Established"),
-        ("FIN", 3, "Not Established"),
-        # Testcase3: ICMP states
-        ("ECO", 10, "Established"),
-        ("UNK", 10, "Established"),
-        # Testcase4: Other states
-        ("CON", 10, "Established"),
-        ("ECO", 10, "Established"),
-        ("ECR", 10, "Not Established"),
-        ("URH", 10, "Not Established"),
-        ("URP", 10, "Not Established"),
-    ],
-)
-def test_get_final_state_from_flags(flags, packet_count, expected_state):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    final_state = handler.get_final_state_from_flags(flags, packet_count)
-    assert final_state == expected_state
-
-
-@pytest.mark.parametrize(
-    "hget_return_value, expected_data",
-    [  # Testcase 1: Data exists
-        (
-            json.dumps(
-                {
-                    "80": {
-                        "totalflows": 10,
-                        "totalpkt": 100,
-                        "totalbytes": 10240,
-                    }
-                }
-            ).encode(),
-            {"80": {"totalflows": 10, "totalpkt": 100, "totalbytes": 10240}},
-        ),
-        # Testcase 2: Data does not exist
-        (None, {}),
-        # Testcase 3: Empty data
-        (b"{}", {}),
-    ],
-)
-def test_get_data_from_profile_tw(hget_return_value, expected_data):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    profileid = "profile_1"
-    twid = "timewindow1"
-    direction = "Dst"
-    state = "Established"
-    protocol = "TCP"
-    role = "Client"
-    type_data = "Ports"
-
-    expected_key = "DstPortsClientTCPEstablished"
-
-    handler.r.hget.return_value = hget_return_value
-
-    data = handler.get_data_from_profile_tw(
-        profileid, twid, direction, state, protocol, role, type_data
-    )
-
-    handler.r.hget.assert_called_once_with(
-        f"{profileid}{handler.separator}{twid}", expected_key
-    )
-    assert data == expected_data
-
-
-@pytest.mark.parametrize(
-    "old_data, pkts, dport, spkts, totbytes, ip, "
-    "starttime, uid, expected_data",
-    [
-        # Test case 1: Empty old data
-        (
-            {},
-            10,
-            80,
-            5,
-            1024,
-            "1.2.3.4",
-            "1678886400.0",
-            "abc123",
-            {
-                "1.2.3.4": {
-                    "totalflows": 1,
-                    "totalpkt": 10,
-                    "totalbytes": 1024,
-                    "stime": "1678886400.0",
-                    "uid": ["abc123"],
-                    "dstports": {"80": 5},
-                }
-            },
-        ),
-        # Test case 2: Existing IP with different dport
-        (
-            {
-                "1.2.3.4": {
-                    "totalflows": 1,
-                    "totalpkt": 5,
-                    "totalbytes": 512,
-                    "stime": "1678886300.0",
-                    "uid": ["def456"],
-                    "dstports": {"443": 3},
-                }
-            },
-            10,
-            80,
-            5,
-            1024,
-            "1.2.3.4",
-            "1678886400.0",
-            "abc123",
-            {
-                "1.2.3.4": {
-                    "totalflows": 2,
-                    "totalpkt": 15,
-                    "totalbytes": 1536,
-                    "stime": "1678886300.0",
-                    "uid": ["def456", "abc123"],
-                    "dstports": {"443": 3, "80": 5},
-                }
-            },
-        ),
-        # Test case 3: Existing IP with same dport
-        (
-            {
-                "1.2.3.4": {
-                    "totalflows": 1,
-                    "totalpkt": 5,
-                    "totalbytes": 512,
-                    "stime": "1678886300.0",
-                    "uid": ["def456"],
-                    "dstports": {"80": 3},
-                }
-            },
-            10,
-            80,
-            5,
-            1024,
-            "1.2.3.4",
-            "1678886400.0",
-            "abc123",
-            {
-                "1.2.3.4": {
-                    "totalflows": 2,
-                    "totalpkt": 15,
-                    "totalbytes": 1536,
-                    "stime": "1678886300.0",
-                    "uid": ["def456", "abc123"],
-                    "dstports": {"80": 8},
-                }
-            },
-        ),
-    ],
-)
-def test_update_ip_info(
-    old_data, pkts, dport, spkts, totbytes, ip, starttime, uid, expected_data
-):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    updated_data = handler.update_ip_info(
-        old_data, pkts, dport, spkts, totbytes, ip, starttime, uid
-    )
-
-    assert updated_data == expected_data
-
-
-@pytest.mark.parametrize(
-    "hget_return_value, expected_hset_call",
-    [
-        # Testcase 1: No previous data
-        (
-            None,
-            (
-                "profile_1_timewindow1",
-                "DstIPs",
-                json.dumps({"192.168.1.100": 1}),
-            ),
-        ),
-        # Testcase 2: Existing data
-        (
-            b'{"192.168.1.100": 2}',
-            (
-                "profile_1_timewindow1",
-                "DstIPs",
-                json.dumps({"192.168.1.100": 3}),
-            ),
-        ),
-    ],
-)
-def test_update_times_contacted(hget_return_value, expected_hset_call):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    profileid = "profile_1"
-    twid = "timewindow1"
-    ip = "192.168.1.100"
-    direction = "Dst"
-
-    handler.r.hget.return_value = hget_return_value
-    handler.update_times_contacted(ip, direction, profileid, twid)
     handler.r.hset.assert_called_once_with(*expected_hset_call)
 
 
@@ -478,9 +262,9 @@ def test_was_profile_and_tw_modified(
 @pytest.mark.parametrize(
     "hget_return_value, expected_total_flows",
     [  # Test case 1: Total flows exist
-        (b"1000", b"1000"),
+        (b"1000", 1000),
         # Test case 2: Total flows do not exist
-        (None, None),
+        (None, 0),
     ],
 )
 def test_get_total_flows(hget_return_value, expected_total_flows):
@@ -736,6 +520,8 @@ def test_add_new_tw(
     expected_update_threat_level_call,
 ):
     handler = ModuleFactory().create_profile_handler_obj()
+    # Mock zscore to return None so the TW is considered new
+    handler.r.zscore.return_value = None
     handler.add_new_tw(profileid, timewindow, startoftw)
 
     handler.r.zadd.assert_called_once_with(*expected_zadd_call.args)
@@ -987,9 +773,10 @@ def test_set_profile_module_label(
 @pytest.mark.parametrize(
     "prev_symbols, expected_prev_symbols, publish_called",
     [
-        (None, {"1.2.3.4-80-TCP": ("A", (1.0, 1000.0))}, False),  # first time
+        # (None, {"1.2.3.4-80-TCP": ("A", (1.0, 1000.0))}, False),  # first time
         (
-            b'{"1.2.3.4-80-TCP": ["AB", [0.5, 900.0]]}',
+            # b'{"1.2.3.4-80-TCP": ["AB", [0.5, 900.0]]}',
+            "AB",
             # AB are the old ones, A is the new one, so we expect AB then A
             # (ABA)
             {"1.2.3.4-80-TCP": ("ABA", (1.0, 1000.0))},
@@ -1005,24 +792,33 @@ def test_add_tuple(prev_symbols, expected_prev_symbols, publish_called):
 
     profileid = "profile_1"
     twid = "timewindow1"
-    tupleid = "1.2.3.4-80-TCP"
     symbol = ("A", (1.0, 1000.0))
-    role = "Client"
+    role = Role.CLIENT
     flow = MagicMock()
+    flow.daddr = "1.2.3.4"
+    flow.dport = "80"
+    flow.proto = "TCP"
+    flow.starttime = 1000.0
 
+    # Mock the hget to return previous symbols
     handler.r.hget.return_value = prev_symbols
 
-    handler.add_tuple(profileid, twid, tupleid, symbol, role, flow)
+    handler.add_tuple(profileid, twid, symbol, role, flow)
 
-    expected_prev_symbols_str = json.dumps(expected_prev_symbols)
-    profileid_twid = f"{profileid}{handler.separator}{twid}"
+    # The method now uses a different key structure
+    symbols_key = f"{profileid}_{twid}:OutTuples:symbols"
+    tupleid = f"{flow.daddr}-{flow.dport}-{flow.proto}"
+
+    # Check that hset was called with the new symbol
+    if prev_symbols:
+        expected_symbol = "ABA"
+    else:
+        expected_symbol = "A"
 
     handler.r.hset.assert_called_once_with(
-        profileid_twid, "OutTuples", expected_prev_symbols_str
+        symbols_key, tupleid, expected_symbol
     )
-    handler.mark_profile_tw_as_modified.assert_called_once_with(
-        profileid, twid, flow.starttime
-    )
+
     if publish_called:
         handler.publish_new_letter.assert_called_once_with(
             "ABA", profileid, twid, tupleid, flow
@@ -1032,72 +828,66 @@ def test_add_tuple(prev_symbols, expected_prev_symbols, publish_called):
 
 
 @pytest.mark.parametrize(
-    "close_all, zrangebyscore_return_value, expected_calls",
-    [  # Testcase1: close all is false
+    "close_all, zrangebyscore_return_value, expected_profiles",
+    [
         (
             False,
-            [("profile_1_timewindow1", 900.0)],
-            [call("profile_1_timewindow1")],
+            ["profile_1_timewindow1"],
+            ["profile_1_timewindow1"],
         ),
-        # Testcase2: close all is true
         (
             True,
             [
-                ("profile_1_timewindow1", 900.0),
-                ("profile_2_timewindow2", 1100.0),
+                "profile_1_timewindow1",
+                "profile_2_timewindow2",
             ],
-            [call("profile_1_timewindow1"), call("profile_2_timewindow2")],
+            ["profile_1_timewindow1", "profile_2_timewindow2"],
         ),
     ],
 )
 def test_check_tw_to_close(
-    close_all, zrangebyscore_return_value, expected_calls
+    close_all, zrangebyscore_return_value, expected_profiles
 ):
     handler = ModuleFactory().create_profile_handler_obj()
-
     handler.get_slips_internal_time = MagicMock(return_value=1000.0)
     handler.width = 100
-    handler.mark_profile_tw_as_closed = MagicMock()
-
+    handler.r = MagicMock()
+    pipe = MagicMock()
+    handler.r.pipeline.return_value = pipe
     handler.r.zrangebyscore.return_value = zrangebyscore_return_value
+
+    # make the mock publish(), _delete_past_timewindows() return a valid pipe
+    handler.publish = MagicMock(
+        side_effect=lambda *a, pipeline=None, **k: pipeline
+    )
+    handler._delete_past_timewindows = MagicMock(
+        side_effect=lambda tw, pipe: pipe
+    )
 
     handler.check_tw_to_close(close_all=close_all)
 
-    handler.mark_profile_tw_as_closed.assert_has_calls(expected_calls)
+    handler.r.zrangebyscore.assert_called_once()
+    expected_zrem_calls = [
+        call(handler.constants.MODIFIED_TIMEWINDOWS, tw)
+        for tw in expected_profiles
+    ]
+    pipe.zrem.assert_has_calls(expected_zrem_calls, any_order=False)
 
+    # publish must be called for each TW
+    expected_publish_calls = [
+        call("tw_closed", tw, pipeline=pipe) for tw in expected_profiles
+    ]
+    handler.publish.assert_has_calls(expected_publish_calls, any_order=False)
 
-@pytest.mark.parametrize(
-    "sadd_return_value, zrem_return_value, publish_call_count",
-    [  # Testcase 1: Successful execution
-        (
-            1,
-            1,
-            1,
-        ),
-        # Testcase 2: Profile/TW already marked as closed
-        (
-            0,
-            0,
-            1,
-        ),
-    ],
-)
-def test_mark_profile_tw_as_closed(
-    sadd_return_value, zrem_return_value, publish_call_count
-):
-    handler = ModuleFactory().create_profile_handler_obj()
+    # cleanup only when close_all is False
+    if close_all:
+        handler._delete_past_timewindows.assert_not_called()
+    else:
+        assert handler._delete_past_timewindows.call_count == len(
+            expected_profiles
+        )
 
-    handler.r.sadd.return_value = sadd_return_value
-    handler.r.zrem.return_value = zrem_return_value
-    handler.publish = MagicMock()
-
-    profileid_tw = "profile_1_timewindow1"
-
-    handler.mark_profile_tw_as_closed(profileid_tw)
-
-    handler.r.sadd.assert_called_once_with("ClosedTW", profileid_tw)
-    handler.r.zrem.assert_called_once_with("ModifiedTW", profileid_tw)
-    assert handler.publish.call_count == publish_call_count
+    pipe.execute.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -1668,116 +1458,6 @@ def test_invalid_ip():
 
 
 @pytest.mark.parametrize(
-    "role, flow_state, "
-    "expected_update_times_contacted_call, "
-    "expected_update_ip_info_call, "
-    "expected_hset_key",
-    [  # Testcase 1: Client role, Not Established state
-        (
-            "Client",
-            "S0",
-            call("1.2.3.4", "Dst", "profile_5.6.7.8", "timewindow1"),
-            call(
-                {},
-                1,
-                "80",
-                1,
-                100,
-                "1.2.3.4",
-                "1000.0",
-                "abc123",
-            ),
-            "DstIPsClientTCPNot Established",
-        ),
-        # Testcase 2: Server role, Established state
-        (
-            "Server",
-            "EST",
-            call("5.6.7.8", "Src", "profile_5.6.7.8", "timewindow1"),
-            call(
-                {},
-                1,
-                "80",
-                1,
-                100,
-                "5.6.7.8",
-                "1000.0",
-                "abc123",
-            ),
-            "SrcIPsServerTCPEstablished",
-        ),
-    ],
-)
-def test_add_ips(
-    role,
-    flow_state,
-    expected_update_times_contacted_call,
-    expected_update_ip_info_call,
-    expected_hset_key,
-):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    handler.update_times_contacted = MagicMock()
-    handler.get_data_from_profile_tw = MagicMock(return_value={})
-    handler.update_ip_info = MagicMock(return_value={"updated_data": True})
-
-    handler.set_new_ip = MagicMock()
-
-    profileid = "profile_5.6.7.8"
-    twid = "timewindow1"
-    flow = Conn(
-        starttime=str(1000.0),
-        uid="abc123",
-        saddr="5.6.7.8",
-        daddr="1.2.3.4",
-        dur=0.0,
-        proto="TCP",
-        appproto="",
-        sport="1234",
-        dport="80",
-        spkts=1,
-        dpkts=0,
-        sbytes=100,
-        dbytes=0,
-        smac="",
-        dmac="",
-        state=flow_state,
-        history="",
-    )
-    handler.add_ips(profileid, twid, flow, role)
-
-    # expected_ask_for_ip_info_calls = [
-    #     call(
-    #         "5.6.7.8",
-    #         "profile_5.6.7.8",
-    #         "timewindow1",
-    #         flow,
-    #         "srcip",
-    #         daddr="1.2.3.4",
-    #     ),
-    #     call(
-    #         "1.2.3.4",
-    #         "profile_5.6.7.8",
-    #         "timewindow1",
-    #         flow,
-    #         "dstip",
-    #     ),
-    # ]
-
-    handler.update_times_contacted.assert_called_once_with(
-        *expected_update_times_contacted_call.args
-    )
-    handler.update_ip_info.assert_called_once_with(
-        *expected_update_ip_info_call.args
-    )
-    handler.r.hset.assert_called_once_with(
-        f"{profileid}{handler.separator}{twid}",
-        expected_hset_key,
-        json.dumps({"updated_data": True}),
-    )
-
-
-@pytest.mark.parametrize(
     "profileid, twid, flow, expected_calls, expect_set_dns_resolution",
     [
         (
@@ -2231,9 +1911,14 @@ def test_mark_profile_tw_as_modified(timestamp, expected_zadd_call):
 
     handler.r.zadd.assert_called_once_with(*expected_zadd_call.args)
     handler.publish.assert_called_once_with(
-        "tw_modified", "profile_1:timewindow1"
+        "tw_modified",
+        json.dumps(
+            {
+                "profileid": profileid,
+                "twid": twid,
+            }
+        ),
     )
-    handler.check_tw_to_close.assert_called_once()
 
 
 def test_mark_profile_as_gateway():

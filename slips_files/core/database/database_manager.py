@@ -240,9 +240,6 @@ class DBManager:
         """
         cls._obj = None
 
-    def update_ip_info(self, *args, **kwargs):
-        return self.rdb.update_ip_info(*args, **kwargs)
-
     def get_slips_internal_time(self, *args, **kwargs):
         return self.rdb.get_slips_internal_time(*args, **kwargs)
 
