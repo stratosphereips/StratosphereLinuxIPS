@@ -18,7 +18,7 @@ from tests.module_factory import ModuleFactory
 def test_is_slips_peer(p2p_enabled, is_private, peer_trust, expected):
     arp = ModuleFactory().create_arp_filter_obj()
     with patch(
-        "slips_files.core.profiler.utils.is_private_ip",
+        "modules.arp.filter.utils.is_private_ip",
         return_value=is_private,
     ), patch.object(
         arp.db,
