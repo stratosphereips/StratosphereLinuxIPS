@@ -27,6 +27,7 @@ from slips_files.core.database.redis_db.constants import (
 )
 from slips_files.core.evidence_handler import EvidenceHandler
 from modules.rnn_cc_detection.rnn_cc_detection import CCDetection
+from slips_files.core.evidence_logger import EvidenceLogger
 from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
 from modules.flowalerts.downloaded_file import DownloadedFile
@@ -774,6 +775,14 @@ class ModuleFactory:
             bloom_filters_manager=Mock(),
         )
         handler.db = mock_db
+        return handler
+
+    def create_evidence_loggr_obj(self):
+        handler = EvidenceLogger(
+            logger_stop_signal=Mock(),
+            evidence_logger_q=Mock(),
+            output_dir="/tmp",
+        )
         return handler
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
