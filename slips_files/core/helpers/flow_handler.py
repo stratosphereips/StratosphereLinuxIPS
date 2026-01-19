@@ -36,9 +36,7 @@ class FlowHandler:
         # confusing if we ever change the API
         # Add the out tuple
         self.db.add_tuple(self.profileid, self.twid, symbol, role, self.flow)
-
         self.db.add_ips(self.profileid, self.twid, self.flow, role)
-
         self.db.add_mac_addr_to_profile(
             self.profileid, self.flow.smac, self.flow.interface
         )

@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Optional
 
@@ -88,7 +87,6 @@ class Request(Enum):
     SRC_IPS = auto()
 
 
-@dataclass(frozen=True, slots=True)
 class FlowQuery:
     """
     Describes a Redis flow query and is able to fully render itself

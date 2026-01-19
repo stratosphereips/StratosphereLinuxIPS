@@ -12,17 +12,14 @@ from typing import List
 from slips_files.common.slips_utils import utils
 
 
-# using slots for all dataclasses for CPU and memory optimizations
-
-
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True)
 class BaseFlow:
     """A base class for zeek flows, containing common fields."""
 
     interface: str = field(default="default")
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True)
 class Conn(BaseFlow):
     # TODO if you're going to add fields to this class remember to drop
     #  them if they're not needed in flow ML detection or they'll cause errs
@@ -57,7 +54,6 @@ class Conn(BaseFlow):
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
-    # derived attributes must be declared because we're using "slots"
     endtime: float = 0.0
     pkts: int = 0
     bytes: int = 0
@@ -84,7 +80,7 @@ class Conn(BaseFlow):
             self.proto = ""
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True)
 class DNS(BaseFlow):
     starttime: str
     uid: str
@@ -117,7 +113,7 @@ class DNS(BaseFlow):
         )
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True)
 class HTTP(BaseFlow):
     starttime: str
     uid: str
@@ -149,7 +145,7 @@ class HTTP(BaseFlow):
         pass
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True)
 class SSL(BaseFlow):
     starttime: str
     uid: str
@@ -184,7 +180,7 @@ class SSL(BaseFlow):
     type_: str = field(default="ssl")
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True)
 class SSH(BaseFlow):
     starttime: float
     uid: str
@@ -212,7 +208,7 @@ class SSH(BaseFlow):
     type_: str = field(default="ssh")
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True)
 class DHCP(BaseFlow):
     starttime: float
     uids: List[str]
@@ -241,7 +237,7 @@ class DHCP(BaseFlow):
             self.saddr = self.smac
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True)
 class FTP(BaseFlow):
     starttime: float
     uid: str
@@ -256,7 +252,7 @@ class FTP(BaseFlow):
     type_: str = field(default="ftp")
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True)
 class SMTP(BaseFlow):
     starttime: float
     uid: str
@@ -271,7 +267,7 @@ class SMTP(BaseFlow):
     type_: str = field(default="smtp")
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True)
 class Tunnel(BaseFlow):
     starttime: str
     uid: str
@@ -290,7 +286,7 @@ class Tunnel(BaseFlow):
     type_: str = field(default="tunnel")
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True)
 class Notice(BaseFlow):
     starttime: str
     saddr: str
@@ -337,7 +333,7 @@ class Notice(BaseFlow):
             self.dport = self.dport
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True)
 class Files(BaseFlow):
     starttime: str
     uid: str
@@ -372,7 +368,7 @@ class Files(BaseFlow):
             self.daddr = daddr
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True)
 class ARP(BaseFlow):
     starttime: str
     uid: str
@@ -408,7 +404,7 @@ class ARP(BaseFlow):
     type_: str = field(default="arp")
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True)
 class Software(BaseFlow):
     starttime: str
     uid: str
@@ -434,7 +430,7 @@ class Software(BaseFlow):
         self.http_browser = self.software == "HTTP::BROWSER"
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True)
 class Weird(BaseFlow):
     starttime: str
     uid: str
