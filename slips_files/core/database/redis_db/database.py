@@ -9,6 +9,7 @@ from slips_files.core.database.redis_db.constants import (
     Constants,
     Channels,
 )
+from slips_files.core.database.redis_db.publisher import Publisher
 from slips_files.core.database.redis_db.scan_detections_db import (
     ScanDetectionsHandler,
 )
@@ -39,12 +40,14 @@ LOCALHOST = "127.0.0.1"
 
 
 class RedisDB(
+    # these are all Mixin classes
     IoCHandler,
     AlertHandler,
     ProfileHandler,
     P2PHandler,
     FlowTracker,
     ScanDetectionsHandler,
+    Publisher,
 ):
     # this db is a singelton per port. meaning no 2 instances
     # should be created for the same port at the same time

@@ -947,6 +947,15 @@ class DBManager:
     def has_profile(self, *args, **kwargs):
         return self.rdb.has_profile(*args, **kwargs)
 
+    def publish_new_dhcp(self, *args, **kwargs):
+        return self.rdb.publish_new_dhcp(*args, **kwargs)
+
+    def publish_new_mac(self, *args, **kwargs):
+        return self.rdb.publish_new_mac(*args, **kwargs)
+
+    def publish_new_software(self, *args, **kwargs):
+        return self.rdb.publish_new_software(*args, **kwargs)
+
     def get_profiles_len(self, *args, **kwargs):
         return self.rdb.get_profiles_len(*args, **kwargs)
 
