@@ -1011,20 +1011,21 @@ Slips checks both TCP and UDP connections for port scans.
 Slips considers an IP performing a vertical port scan if it scans 6 or more different
 destination ports
 
-We detect a scan every threshold. So we detect when
-there is 6, 9, 12, etc. destination ports per destination IP.
+Slips reports evidence of a vertical portscan based on a log scale.
+meaning every 10, 100, 1000 ports scanned will generate an evidence.
+This avoids generating one port scan alert per flow in a long scan.
 
 #### Horizontal port scans
 
 Slips checks both TCP and UDP connections for horizontal port scans.
 
-
 Slips considers an IP performing a horizontal port scan if it contacted more than 3
 destination IPs on a specific port with not established connections.
 
 
-We detect a scan every threshold. So we detect when
-there is 6, 9, 12, etc. destination destination IPs.
+Slips reports evidence of a horizontal portscan based on a log scale.
+meaning every 10, 100, 1000 ports scanned will generate an evidence.
+This avoids generating one port scan alert per flow in a long scan.
 
 
 #### PING Sweeps
