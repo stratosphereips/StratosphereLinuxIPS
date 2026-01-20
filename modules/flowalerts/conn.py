@@ -688,6 +688,36 @@ class Conn(IFlowalertsAnalyzer):
     def _is_dns(self, flow) -> bool:
         return str(flow.dport) == "53" and flow.proto.lower() == "udp"
 
+    def should_check_diff_localnet(self, flow) -> bool:
+        """
+        returns true when it's a non-dns flow where
+        1. both ips are private
+        2. the flow is from a public ip -> a private ip
+        """
+        if self._is_dns(flow):
+            # dns flows are checked fot this same detection in dns.py
+            return False
+
+        for ip in (flow.saddr, flow.daddr):
+            ip_obj = ipaddress.ip_address(ip)
+            if (
+                not validators.ipv4(ip)
+                or ip in SPECIAL_IPV4
+                or ip_obj.is_loopback
+                or ip_obj.is_multicast
+            ):
+                return False
+
+        saddr_obj = ipaddress.ip_address(flow.saddr)
+        daddr_obj = ipaddress.ip_address(flow.daddr)
+
+        is_saddr_private = utils.is_private_ip(saddr_obj)
+        is_daddr_private = utils.is_private_ip(daddr_obj)
+
+        return (is_saddr_private and is_daddr_private) or (
+            not is_saddr_private and is_daddr_private
+        )
+
     def check_different_localnet_usage(self, twid, flow, what_to_check=""):
         """
         alerts when a connection to a private ip that
@@ -701,8 +731,7 @@ class Conn(IFlowalertsAnalyzer):
         PS: most changes here should be in
         dns.py::check_different_localnet_usage() so remember to update both:D
         """
-        if self._is_dns(flow):
-            # dns flows are checked fot this same detection in dns.py
+        if not self.should_check_diff_localnet(flow):
             return
 
         ip_to_check = flow.saddr if what_to_check == "srcip" else flow.daddr
