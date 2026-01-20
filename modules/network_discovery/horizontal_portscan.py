@@ -36,10 +36,10 @@ class HorizontalPortscan:
         self, profileid, twid, dport, dstips: int
     ) -> bool:
         """
-        checks if the pkts used so far are enough to trigger a new
+        checks if the dstips used so far are enough to trigger a new
         evidence
 
-        Returns True only when log10(pkts) exceeds the logarithmic
+        Returns True only when log10(dstips) exceeds the logarithmic
         bucket of the last reported evidence.
 
         The goal is to never get an evidence that's

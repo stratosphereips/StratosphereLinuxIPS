@@ -86,13 +86,13 @@ class VerticalPortscan:
         self.db.set_evidence(evidence)
 
     def check_if_enough_dports_to_trigger_an_evidence(
-        self, profileid, twid, dstip, total_pkts_sent_to_all_dports: int
+        self, profileid, twid, dstip, amount_of_dports: int
     ) -> bool:
         """
-        checks if the pkts used so far are enough to trigger a new
+        checks if the dports scanned so far are enough to trigger a new
         evidence
 
-        Returns True only when log10(pkts) exceeds the logarithmic
+        Returns True only when int(log10(dports)) exceeds the logarithmic
         bucket of the last reported evidence.
 
         The goal is to never get an evidence that's
@@ -105,7 +105,7 @@ class VerticalPortscan:
         twid_identifier = f"{profileid}:{twid}:dstip:{dstip}"
 
         last_threshold = self.cached_thresholds_per_tw.get(twid_identifier, 0)
-        current_threshold = utils.log10(total_pkts_sent_to_all_dports)
+        current_threshold = utils.log10(amount_of_dports)
 
         if current_threshold > last_threshold:
             # keep track of the reported evidence's log(pkts)
