@@ -33,10 +33,21 @@ jobs:
     - name: Enable memory overcommit (for Redis)
       run: sysctl vm.overcommit_memory=1
 
+    - name: Install Redis
+      run: |
+        curl -L https://download.redis.io/redis-stable.tar.gz -o /tmp/redis-stable.tar.gz \
+        && mkdir -p /redis-stable \
+        && tar xzf redis-stable.tar.gz -C / \
+        && cd /redis-stable \
+        && make distclean \
+        && make MALLOC=libc
+
     - name: Install APT dependencies
       run: |
-        sudo apt-get update --fix-missing && sudo apt-get -y --no-install-recommends install $(cat install/apt_dependencies.txt)
-        sudo apt-get -y install font-manager
+        sudo apt-get update --fix-missing && \
+        sudo apt-get -y --no-install-recommends install \
+        $(grep -Ev '^(redis|redis-server)$' install/apt_dependencies.txt)
+
 
     - name: Save APT Cache
       uses: actions/cache@v4

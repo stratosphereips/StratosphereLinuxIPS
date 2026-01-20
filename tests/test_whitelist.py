@@ -77,9 +77,7 @@ def test_is_ignored_flow_type(
 
 def test_get_src_domains_of_flow():
     whitelist = ModuleFactory().create_whitelist_obj()
-    whitelist.db.get_ip_info.return_value = {
-        "SNI": [{"server_name": "sni.com"}]
-    }
+    whitelist.db.get_ip_info.return_value = [{"server_name": "sni.com"}]
     whitelist.db.get_dns_resolution.return_value = {
         "domains": ["dns_resolution.com"]
     }
