@@ -36,11 +36,15 @@ jobs:
     - name: Install Redis
       run: |
         curl -L https://download.redis.io/redis-stable.tar.gz -o /tmp/redis-stable.tar.gz \
-        && mkdir -p /redis-stable \
-        && tar xzf redis-stable.tar.gz -C / \
-        && cd /redis-stable \
+        && mkdir -p /usr/local/bin/redis-stable && cd /usr/local/bin/redis-stable \
+        && tar xzf /tmp/redis-stable.tar.gz -C / \
+        && cd /usr/local/bin/redis-stable \
         && make distclean \
         && make MALLOC=libc
+
+
+    - name: Add Redis to PATH
+      run: echo "/usr/local/bin/redis-stable" >> $GITHUB_PATH
 
     - name: Install APT dependencies
       run: |
