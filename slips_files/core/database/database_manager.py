@@ -804,7 +804,7 @@ class DBManager:
         return self.rdb.is_there_estab_tcp_flows(*args, **kwargs)
 
     def get_dstports_of_flows(self, *args, **kwargs):
-        return self.rdb.get_dstports_of_flows(*args, **kwargs)
+        yield from self.rdb.get_dstports_of_flows(*args, **kwargs)
 
     def incr_msgs_received_in_channel(self, *args, **kwargs):
         return self.rdb.incr_msgs_received_in_channel(*args, **kwargs)
@@ -825,10 +825,14 @@ class DBManager:
         return self.rdb.set_dhcp_flow(*args, **kwargs)
 
     def get_dstips_with_not_established_flows(self, *args, **kwargs):
-        return self.rdb.get_dstips_with_not_established_flows(*args, **kwargs)
+        yield from self.rdb.get_dstips_with_not_established_flows(
+            *args, **kwargs
+        )
 
     def get_dstports_of_not_established_flows(self, *args, **kwargs):
-        return self.rdb.get_dstports_of_not_established_flows(*args, **kwargs)
+        yield from self.rdb.get_dstports_of_not_established_flows(
+            *args, **kwargs
+        )
 
     def get_total_dstips_for_not_estab_flows_on_port(self, *args, **kwargs):
         return self.rdb.get_total_dstips_for_not_estab_flows_on_port(
