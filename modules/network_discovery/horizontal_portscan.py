@@ -32,7 +32,7 @@ class HorizontalPortscan:
         # is increased exponentially every evidence, and is reset each timewindow
         self.minimum_dstips_to_set_evidence = 5
 
-    def check_if_enough_pkts_to_trigger_an_evidence(
+    def check_if_enough_dstips_to_trigger_an_evidence(
         self, profileid, twid, dport, dstips: int
     ) -> bool:
         """
@@ -101,7 +101,7 @@ class HorizontalPortscan:
     ) -> bool:
         return (
             amount_of_dstips > self.minimum_dstips_to_set_evidence
-            and self.check_if_enough_pkts_to_trigger_an_evidence(
+            and self.check_if_enough_dstips_to_trigger_an_evidence(
                 profileid, twid, dport, amount_of_dstips
             )
         )

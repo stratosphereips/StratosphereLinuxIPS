@@ -85,6 +85,21 @@ def test_sanitize(input_string, expected_output):
 
 
 @pytest.mark.parametrize(
+    "ip, expected_val",
+    [
+        ("224.0.0.1", False),
+        ("255.255.255.255", False),
+        ("invalid", False),
+        ("1.1.1.1", True),
+    ],
+)
+def test_are_detection_modules_interested_in_this_ip(ip, expected_val):
+    utils = ModuleFactory().create_utils_obj()
+    res = utils.are_detection_modules_interested_in_this_ip(ip)
+    assert res == expected_val
+
+
+@pytest.mark.parametrize(
     "data, expected_type",
     [
         # testcase1: IPv4 address
