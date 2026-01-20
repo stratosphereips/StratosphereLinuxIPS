@@ -940,5 +940,5 @@ class ModuleFactory:
                 Mock(),  # args
             )
             cc_detection.db = mock_db
-            cc_detection.exporter = Mock()
+            cc_detection.letters_exporter = Mock()
             return cc_detection
