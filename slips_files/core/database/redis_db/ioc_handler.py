@@ -80,8 +80,9 @@ class IoCHandler:
         # get the feed name from the given url
         feed_to_delete = url.split("/")[-1]
         # get all domains that are read from TI files in our db
-        ioc_domains = self.rcache.hgetall(self.constants.IOC_DOMAINS)
-        for domain, domain_description in ioc_domains.items():
+        for domain, domain_description in self._hscan(
+            self.constants.IOC_DOMAINS, redis_client=self.rcache
+        ):
             domain_description = json.loads(domain_description)
             if feed_to_delete in domain_description["source"]:
                 # this entry has the given feed as source, delete it
@@ -89,8 +90,9 @@ class IoCHandler:
                 self._invalidate_trie_cache()
 
         # get all IPs that are read from TI files in our db
-        ioc_ips = self.rcache.hgetall(self.constants.IOC_IPS)
-        for ip, ip_description in ioc_ips.items():
+        for ip, ip_description in self._hscan(
+            self.constants.IOC_IPS, redis_client=self.rcache
+        ):
             ip_description = json.loads(ip_description)
             if feed_to_delete in ip_description["source"]:
                 # this entry has the given feed as source, delete it

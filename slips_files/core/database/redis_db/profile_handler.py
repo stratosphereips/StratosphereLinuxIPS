@@ -33,8 +33,13 @@ class ProfileHandler:
         return self.get_ip_info(ip, "is_doh_server") or False
 
     def get_outtuples_from_profile_tw(self, profileid, twid):
-        """Get the out tuples"""
-        return self.r.hgetall(f"{profileid}_{twid}:OutTuples")
+        """
+        returns (tupleid, symbols)
+        tupleid = f"{ip}-{flow.dport}-{flow.proto}"
+        symbols = "ABA.." (stratoletters)
+        """
+        symbols_key = f"{profileid}_{twid}:OutTuples:symbols"
+        yield from self._hscan(symbols_key)
 
     def set_new_incoming_flows(self, will_slips_have_more_flows: bool):
         """A flag indicating if slips is still receiving new flows from
@@ -50,8 +55,13 @@ class ProfileHandler:
         return self.r.get(self.constants.WILL_SLIPS_HAVE_MORE_FLOWS) == "yes"
 
     def get_intuples_from_profile_tw(self, profileid, twid):
-        """Get the in tuples"""
-        return self.r.hget(f"{profileid}{self.separator}{twid}:InTuples")
+        """
+        returns (tupleid, symbols)
+        tupleid = f"{ip}-{flow.dport}-{flow.proto}"
+        symbols = "ABA.." (stratoletters)
+        """
+        symbols_key = f"{profileid}_{twid}:InTuples:symbols"
+        yield from self._hscan(symbols_key)
 
     def get_dhcp_flows(self, profileid, twid) -> list:
         """
@@ -1101,6 +1111,9 @@ class ProfileHandler:
         Deletes the past timewindows data from redis, starting from the
         given tw-1, so that redis only has info about the current
         timewindow and the one before it
+
+        Deleted keys are the ones following the format
+        profileid_timewindowX (aka keys needed for the portscan module only)
 
         why do we keep 2 tws instead of the current one in redis? see PR
         #1765 in slips repo

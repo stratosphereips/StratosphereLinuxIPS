@@ -792,10 +792,10 @@ class DBManager:
         return self.rdb.cache_url_info_by_virustotal(*args, **kwargs)
 
     def get_outtuples_from_profile_tw(self, *args, **kwargs):
-        return self.rdb.get_outtuples_from_profile_tw(*args, **kwargs)
+        yield from self.rdb.get_outtuples_from_profile_tw(*args, **kwargs)
 
     def get_intuples_from_profile_tw(self, *args, **kwargs):
-        return self.rdb.get_intuples_from_profile_tw(*args, **kwargs)
+        yield from self.rdb.get_intuples_from_profile_tw(*args, **kwargs)
 
     def get_info_about_not_established_flows(self, *args, **kwargs):
         return self.rdb.get_info_about_not_established_flows(*args, **kwargs)

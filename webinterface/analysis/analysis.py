@@ -182,14 +182,16 @@ def set_intuples(ip, timewindow):
     """
     data = []
     profileid = f"profile_{ip}"
-    if intuples := db.get_intuples_from_profile_tw(profileid, timewindow):
-        for key, value in intuples.items():
-            ip, port, protocol = key.split("-")
-            ip_info = get_ip_info(ip)
+    for tupleid, symbols in db.get_intuples_from_profile_tw(
+        profileid, timewindow
+    ):
 
-            outtuple_dict = dict({"tuple": key, "string": value[0]})
-            outtuple_dict.update(ip_info)
-            data.append(outtuple_dict)
+        ip, port, protocol = tupleid.split("-")
+        ip_info = get_ip_info(ip)
+
+        outtuple_dict = dict({"tuple": tupleid, "string": symbols})
+        outtuple_dict.update(ip_info)
+        data.append(outtuple_dict)
 
     return {"data": data}
 
@@ -202,17 +204,16 @@ def set_outtuples(ip, timewindow):
     :param timewindow: active timewindow
     :return: (tuple, key, ip_info)
     """
-
     data = []
     profileid = f"profile_{ip}"
-    if outtuples := db.get_outtuples_from_profile_tw(profileid, timewindow):
-        for key, value in outtuples.items():
-            ip, port, protocol = key.split("-")
-            ip_info = get_ip_info(ip)
-            outtuple_dict = dict({"tuple": key, "string": value[0]})
-            outtuple_dict.update(ip_info)
-            data.append(outtuple_dict)
-
+    for tupleid, symbols in db.get_outtuples_from_profile_tw(
+        profileid, timewindow
+    ):
+        ip, port, protocol = tupleid.split("-")
+        ip_info = get_ip_info(ip)
+        outtuple_dict = dict({"tuple": tupleid, "string": symbols})
+        outtuple_dict.update(ip_info)
+        data.append(outtuple_dict)
     return {"data": data}
 
 

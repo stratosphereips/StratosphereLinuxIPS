@@ -76,10 +76,15 @@ class ScanDetectionsHandler:
         self.ask_ip_cache[ip] = True
         return True
 
-    def _hscan(self, key: str, count: int = 100) -> Iterator:
+    def _hscan(
+        self, key: str, redis_client=None, count: int = 100
+    ) -> Iterator:
+        if not redis_client:
+            redis_client = self.r
+
         cursor = 0
         while True:
-            cursor, data = self.r.hscan(key, cursor, count=count)
+            cursor, data = redis_client.hscan(key, cursor, count=count)
             for k, v in data.items():
                 yield k, v
             if cursor == 0:
