@@ -229,10 +229,8 @@ def set_timeline_flows(ip, timewindow):
         profileid, timewindow
     ):
         for key, value in timeline_flows.items():
-            value = json.loads(value)
-
             # convert timestamp to date
-            timestamp = value["ts"]
+            timestamp = value["starttime"]
             dt_obj = ts_to_date(timestamp, seconds=True)
             value["ts"] = dt_obj
 
