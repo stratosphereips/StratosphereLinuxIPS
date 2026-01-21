@@ -78,9 +78,9 @@ jobs:
 
     - name: Start redis server
       run: |
-        sudo service redis-server start
-        redis-cli ping
+        sudo systemctl start redis
         redis-server --daemonize yes
+        redis-cli ping
 
     - name: Print zeek version
       run: (command -v zeek && zeek --version) || (command -v bro && bro --version)

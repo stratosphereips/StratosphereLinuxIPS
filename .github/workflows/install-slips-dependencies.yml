@@ -43,8 +43,11 @@ jobs:
         echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
 
         sudo apt-get update
-        # Force install Redis 6.8.4
         sudo apt-get install -y redis-server=6:8.4.0-1*
+        # to double check that its running
+        sudo systemctl start redis
+        sudo systemctl status redis
+        redis-cli ping
 
 
     - name: Install APT dependencies
