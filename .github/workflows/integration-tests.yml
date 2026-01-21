@@ -78,8 +78,9 @@ jobs:
 
     - name: Start redis server
       run: |
-        sudo systemctl start redis
-        redis-server --daemonize yes
+        which /usr/bin/redis-server
+        # add /usr/bin to path
+        export PATH=$PATH:/usr/bin && redis-server --daemonize yes
         redis-cli ping
 
     - name: Print zeek version
