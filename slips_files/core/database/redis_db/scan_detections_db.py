@@ -159,8 +159,11 @@ class ScanDetectionsHandler:
         key = f"{profileid}_{twid}:{proto}:not_estab:ips:last_seen"
         return self.r.zscore(key, ip)
 
-    def convert_str_to_proto(self, str_proto: str) -> Protocol:
+    def _convert_str_to_proto(self, str_proto: str) -> Protocol | None:
         """converts str proto to Protocol enum"""
+        if not str_proto:
+            return
+
         str_proto = str_proto.lower()
 
         enum_proto = PROTO_MAP.get(str_proto)
@@ -168,11 +171,9 @@ class ScanDetectionsHandler:
             return enum_proto
 
         # substring match
-        for k, enum_proto in PROTO_MAP.keys():
+        for k, enum_proto in PROTO_MAP.items():
             if k in str_proto:
                 return enum_proto
-
-        raise ValueError(f"Unknown protocol: {str_proto}")
 
     def _ask_modules_about_all_ips_in_flow(
         self, profileid: ProfileID, twid: TimeWindow, flow
@@ -378,6 +379,10 @@ class ScanDetectionsHandler:
         """
         that detection in done in detect_connection_to_multiple_ports()
         """
+        if not proto:
+            # sometimes zeek has "unknown_transport" as the proto
+            return False
+
         dport_name = flow.appproto
         if not dport_name:
             dport_name = self.get_port_info(f"{flow.dport}/{flow.proto}")
@@ -496,7 +501,7 @@ class ScanDetectionsHandler:
             flow.state, flow.pkts
         )
         state: State = self.convert_str_to_state(summary_state)
-        proto: Protocol = self.convert_str_to_proto(flow.proto)
+        proto: Protocol = self._convert_str_to_proto(flow.proto)
 
         if self._is_info_needed_by_the_portscan_detector_modules(
             role, proto, state

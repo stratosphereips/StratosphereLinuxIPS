@@ -160,16 +160,11 @@ class ProfilerWorker(IModule):
         if not utils.is_valid_ip(flow.saddr):
             return
 
-        # Add the src tuple using the src ip, and dst port
-
-        role = Role.Server
-
+        role = Role.SERVER
         self.db.add_tuple(profileid, twid, symbol, role, flow)
         self.db.add_ips(profileid, twid, flow, role)
-
         # Add the flow with all the fields interpreted to the sqlite db
         self.aid_manager.submit_aid_task(flow, profileid, twid, self.label)
-
         self.db.mark_profile_tw_as_modified(profileid, twid, "")
 
     def get_aid_and_store_flow_in_the_db(
