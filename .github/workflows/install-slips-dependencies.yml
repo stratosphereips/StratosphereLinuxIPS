@@ -33,21 +33,7 @@ jobs:
     - name: Enable memory overcommit (for Redis)
       run: sysctl vm.overcommit_memory=1
 
-    - name: Install Redis v8.4.0
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y lsb-release curl gnupg
 
-        curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
-        sudo chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg
-        echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
-
-        sudo apt-get update
-        sudo apt-get install -y redis-server=6:8.4.0-1*
-        # to double check that its running
-        sudo systemctl start redis
-        sudo systemctl status redis
-        redis-cli ping
 
 
     - name: Install APT dependencies

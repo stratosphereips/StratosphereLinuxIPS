@@ -7,16 +7,16 @@ on:
       - 'develop'
 
 jobs:
-  # uses the common workflow that builds slips
-  install-dependencies-using-reusable-workflow:
-    uses: ./.github/workflows/install-slips-dependencies.yml
+#  # uses the common workflow that builds slips
+#  install-dependencies-using-reusable-workflow:
+#    uses: ./.github/workflows/install-slips-dependencies.yml
 
 
   integration-tests:
     runs-on: ubuntu-22.04
     timeout-minutes: 1800
-    # make this job depend on the first job
-    needs: install-dependencies-using-reusable-workflow
+#    # make this job depend on the first job
+#    needs: install-dependencies-using-reusable-workflow
 
     # suppress tensorflow warnings
     env:
@@ -39,6 +39,23 @@ jobs:
       with:
         ref: ${{ github.ref }}
         fetch-depth: ''
+
+    - name: Install Redis v8.4.0
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y lsb-release curl gnupg
+
+        curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+        sudo chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg
+        echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
+
+        sudo apt-get update
+        sudo apt-get install -y redis-server=6:8.4.0-1*
+        # to double check that its running
+        sudo systemctl start redis
+        sudo systemctl status redis
+        redis-cli ping
+
 
     - name: Restore Zeek Build from Cache
       id: zeek-cache
@@ -63,13 +80,7 @@ jobs:
         sudo apt-get -y --no-install-recommends install \
         $(grep -Ev '^(redis|redis-server)$' install/apt_dependencies.txt)
 
-    - name: Start redis server
-      run: |
-        which redis-server
-        # add /usr/bin to path
-        export PATH=$PATH:/usr/bin
-        redis-server --daemonize yes
-        redis-cli ping
+
 
     - name: Install Zeek
       run: |

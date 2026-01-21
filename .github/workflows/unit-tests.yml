@@ -7,14 +7,14 @@ on:
       - 'develop'
 
 jobs:
-  # uses the common workflow that builds slips
-  install-dependencies-using-reusable-workflow:
-    uses: ./.github/workflows/install-slips-dependencies.yml
+#  # uses the common workflow that builds slips
+#  install-dependencies-using-reusable-workflow:
+#    uses: ./.github/workflows/install-slips-dependencies.yml
 
   unit-tests:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
-    needs: install-dependencies-using-reusable-workflow
+#    needs: install-dependencies-using-reusable-workflow
 
     env:
       TF_CPP_MIN_LOG_LEVEL: 3
@@ -69,8 +69,10 @@ jobs:
           - test_output.py
           - test_riskiq.py
           - test_spamhaus.py
+          - test_scan_detection_db.py
           - test_circllu.py
           - test_evidence_handler.py
+          - test_evidence_logger.py
           - test_evidence_formatter.py
           - test_alert_handler.py
           - test_redis_manager.py
@@ -96,6 +98,22 @@ jobs:
         ref: ${{ github.ref }}
         fetch-depth: 0
 
+    - name: Install Redis v8.4.0
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y lsb-release curl gnupg
+
+        curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+        sudo chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg
+        echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
+
+        sudo apt-get update
+        sudo apt-get install -y redis-server=6:8.4.0-1*
+        # to double check that its running
+        sudo systemctl start redis
+        sudo systemctl status redis
+        redis-cli ping
+
     - name: Set up Python
       uses: actions/setup-python@v6
       with:
@@ -117,8 +135,9 @@ jobs:
 
     - name: Install apt dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y $(cat install/apt_dependencies.txt)
+        sudo apt-get update --fix-missing && \
+        sudo apt-get -y --no-install-recommends install \
+        $(grep -Ev '^(redis|redis-server)$' install/apt_dependencies.txt)
 
     - name: Restore Python dependencies
       id: python-cache
@@ -135,8 +154,6 @@ jobs:
     - name: Install Python dependencies
       run: python3 -m pip install -r install/requirements.txt
 
-    - name: Start redis server
-      run: redis-server --daemonize yes
 
     - name: Run Unit Tests for ${{ matrix.test_file }}
       run: |
@@ -146,6 +163,6 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v5
       with:
-        name: test_slips_locally-integration-tests-output
+        name: test_slips_locally-unit-tests-output
         path: |
-          output/integration_tests
+          output/unit_tests
