@@ -61,8 +61,8 @@ def enough_dstips_to_reach_the_threshold():
 def test_check_if_enough_dstips_to_trigger_an_evidence(
     prev_bucket, cur_amount_of_dstips, expected
 ):
-    profileid = "profile_1.1.1.1"
-    timewindow = "timewindow0"
+    profileid = ProfileID(ip="1.1.1.1")
+    timewindow = TimeWindow(number=0)
     dport = 5555
 
     horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
@@ -84,8 +84,8 @@ def test_check_if_enough_dstips_to_trigger_an_evidence_no_cache():
     """
     horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
     horizontal_ps.cached_thresholds_per_tw = {}
-    profileid = "profile_1.1.1.1"
-    timewindow = "timewindow0"
+    profileid = ProfileID(ip="1.1.1.1")
+    timewindow = TimeWindow(number=0)
     dport = 5555
 
     cur_amount_of_dstips = 10

@@ -103,7 +103,11 @@ class HorizontalPortscan:
         self.db.set_evidence(evidence)
 
     def should_set_evidence(
-        self, amount_of_dstips: int, profileid, twid, dport
+        self,
+        amount_of_dstips: int,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        dport,
     ) -> bool:
         return (
             amount_of_dstips > self.minimum_dstips_to_set_evidence
