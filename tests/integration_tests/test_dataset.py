@@ -26,21 +26,23 @@ alerts_file = "alerts.log"
         (
             "dataset/test4-malicious.binetflow",
             2,
-            "Horizontal port scan to port  81",
+            "Horizontal port scan to port http-alt 81/tcp. "
+            "From 192.168.2.12 to 11 unique destination IPs.",
             "test4/",
             6662,
         ),
         (
             "dataset/test3-mixed.binetflow",
             20,
-            "Horizontal port scan to port  3389/TCP",
+            "Horizontal port scan to port rdp 3389/tcp. "
+            "From 46.166.151.160 to 19 unique destination IPs",
             "test3/",
             6663,
         ),
         (
             "dataset/test2-malicious.binetflow",
             1,
-            "Detected Long Connection.",
+            "Long Connection.",
             "test2/",
             6664,
         ),
