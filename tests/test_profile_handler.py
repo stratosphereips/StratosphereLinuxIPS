@@ -11,63 +11,72 @@ import pytest
 
 
 @pytest.mark.parametrize(
-    "hget_return_value, expected_out_tuples",
-    [  # Testcase 1: Existing OutTuples
+    "hscan_return_value, expected_out_tuples",
+    [
+        # Testcase 1: Existing OutTuples
         (
-            b'[("1.2.3.4", 80, "6.7.8.9", 12345)]',
-            b'[("1.2.3.4", 80, "6.7.8.9", 12345)]',
+            [(b"tupleid1", b"ABA")],
+            [(b"tupleid1", b"ABA")],
         ),
         # Testcase 2: No OutTuples found
         (
-            None,
-            None,
+            [],
+            [],
         ),
-        # Testcase 3: Empty OutTuples list
+        # Testcase 3: Multiple OutTuples
         (
-            b"[]",
-            b"[]",
+            [(b"t1", b"AB"), (b"t2", b"BAA")],
+            [(b"t1", b"AB"), (b"t2", b"BAA")],
         ),
     ],
 )
-def test_get_outtuples_from_profile_tw(hget_return_value, expected_out_tuples):
+def test_get_outtuples_from_profile_tw(
+    hscan_return_value, expected_out_tuples
+):
     handler = ModuleFactory().create_profile_handler_obj()
     profileid = "profile_1"
     twid = "timewindow1"
-    handler.r.hgetall.return_value = hget_return_value
-    out_tuples = handler.get_outtuples_from_profile_tw(profileid, twid)
-    handler.r.hgetall.assert_called_once_with(f"{profileid}_{twid}:OutTuples")
+
+    handler._hscan = Mock(return_value=iter(hscan_return_value))
+
+    out_tuples = list(handler.get_outtuples_from_profile_tw(profileid, twid))
+
+    handler._hscan.assert_called_once_with(
+        f"{profileid}_{twid}:OutTuples:symbols"
+    )
     assert out_tuples == expected_out_tuples
 
 
 @pytest.mark.parametrize(
-    "hget_return_value, expected_in_tuples",
-    [  # Testcase 1: Existing InTuples
+    "hscan_return_value, expected_in_tuples",
+    [
+        # Testcase 1: Existing InTuples
         (
-            b'[("5.6.7.8", 90, "1.2.3.4", 54321)]',
-            b'[("5.6.7.8", 90, "1.2.3.4", 54321)]',
+            [(b"tupleid1", b"ABA")],
+            [(b"tupleid1", b"ABA")],
         ),
         # Testcase 2: No InTuples found
         (
-            None,
-            None,
+            [],
+            [],
         ),
-        # Testcase 3: Empty InTuples list
+        # Testcase 3: Multiple InTuples
         (
-            b"[]",
-            b"[]",
+            [(b"t1", b"AB"), (b"t2", b"BAA")],
+            [(b"t1", b"AB"), (b"t2", b"BAA")],
         ),
     ],
 )
-def test_get_intuples_from_profile_tw(hget_return_value, expected_in_tuples):
+def test_get_intuples_from_profile_tw(hscan_return_value, expected_in_tuples):
     handler = ModuleFactory().create_profile_handler_obj()
-
     profileid = "profile_1"
     twid = "timewindow1"
+    handler._hscan = Mock(return_value=iter(hscan_return_value))
 
-    handler.r.hget.return_value = hget_return_value
-    in_tuples = handler.get_intuples_from_profile_tw(profileid, twid)
-    handler.r.hget.assert_called_once_with(
-        f"{profileid}{handler.separator}{twid}:InTuples"
+    in_tuples = list(handler.get_intuples_from_profile_tw(profileid, twid))
+
+    handler._hscan.assert_called_once_with(
+        f"{profileid}_{twid}:InTuples:symbols"
     )
     assert in_tuples == expected_in_tuples
 
@@ -2022,23 +2031,37 @@ def test_add_profile_new_profile():
     handler.set_new_ip = MagicMock()
     handler.publish = MagicMock()
 
-    profileid = "profile_1"
+    profileid = f"profile{handler.separator}1"
     starttime = 1678886400.0
-    duration = 3600.0
+    duration = handler.width
 
     handler.r.sismember.return_value = False
 
+    pipe = MagicMock()
+    handler.r.pipeline = MagicMock(return_value=pipe)
+    pipe.__enter__ = MagicMock(return_value=pipe)
+    pipe.__exit__ = MagicMock(return_value=False)
+
     result = handler.add_profile(profileid, starttime)
+
     assert result is True
 
-    handler.r.sadd.assert_called_once_with("profiles", profileid)
-    handler.r.hset.assert_has_calls(
+    handler.r.sismember.assert_called_once_with(
+        handler.constants.PROFILES, profileid
+    )
+    handler.r.pipeline.assert_called_once()
+
+    pipe.sadd.assert_called_once_with(handler.constants.PROFILES, profileid)
+    pipe.hset.assert_has_calls(
         [
             call(profileid, "starttime", starttime),
             call(profileid, "duration", duration),
             call(profileid, "confidence", 0.05),
-        ]
+        ],
+        any_order=False,
     )
+    pipe.execute.assert_called_once()
+
     ip = profileid.split(handler.separator)[1]
     handler.set_new_ip.assert_called_once_with(ip)
     handler.publish.assert_called_once_with("new_profile", ip)
