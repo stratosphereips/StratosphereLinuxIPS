@@ -54,12 +54,6 @@ class HorizontalPortscan:
         last_threshold = self.cached_thresholds_per_tw.get(twid_identifier, 0)
         current_threshold = utils.log10(dstips)
 
-        if "10.0.2.112" in profileid.ip and "80" in str(dport):
-            print(
-                f"@@@@@@@@@@@@@@@@ 10.0.2.112 dstips{dstips}, "
-                f"cur: {current_threshold}, last: {last_threshold}"
-            )
-
         if current_threshold > last_threshold:
             # keep track of the reported evidence's log(pkts)
             self.cached_thresholds_per_tw[twid_identifier] = current_threshold
