@@ -32,7 +32,8 @@ def test_horizontal(path, output_dir, redis_port):
     output_dir = create_output_dir(output_dir)
 
     expected_evidence = (
-        "Horizontal port scan to port  80/TCP. " "From 10.0.2.112"
+        "Horizontal port scan to port http 80/tcp. "
+        "From 10.0.2.112 to 10 unique destination IPs"
     )
 
     output_file = os.path.join(output_dir, "slips_output.txt")
