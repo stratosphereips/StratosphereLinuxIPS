@@ -33,7 +33,7 @@ class HorizontalPortscan:
         self.minimum_dstips_to_set_evidence = 5
 
     def check_if_enough_dstips_to_trigger_an_evidence(
-        self, profileid, twid, dport, dstips: int
+        self, profileid: ProfileID, twid: TimeWindow, dport, dstips: int
     ) -> bool:
         """
         checks if the dstips used so far are enough to trigger a new
@@ -53,6 +53,12 @@ class HorizontalPortscan:
 
         last_threshold = self.cached_thresholds_per_tw.get(twid_identifier, 0)
         current_threshold = utils.log10(dstips)
+
+        if "10.0.2.112" in profileid.ip and "80" in str(dport):
+            print(
+                f"@@@@@@@@@@@@@@@@ 10.0.2.112 dstips{dstips}, "
+                f"cur: {current_threshold}, last: {last_threshold}"
+            )
 
         if current_threshold > last_threshold:
             # keep track of the reported evidence's log(pkts)
