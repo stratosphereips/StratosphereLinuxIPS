@@ -25,7 +25,11 @@ class BFManager:
         # the parent pid of this module, used for strating the db
         self.ppid = ppid
         self.db = DBManager(
-            self.logger, self.output_dir, self.redis_port, self.conf, self.ppid
+            self.logger,
+            self.output_dir,
+            self.redis_port,
+            self.conf,
+            self.ppid,
         )
         self.org_filters = {}
 

@@ -27,11 +27,15 @@ from slips_files.core.database.redis_db.constants import (
 )
 from slips_files.core.evidence_handler import EvidenceHandler
 from modules.rnn_cc_detection.rnn_cc_detection import CCDetection
+from slips_files.core.evidence_logger import EvidenceLogger
 from slips_files.core.helpers.notify import Notify
 from modules.flowalerts.dns import DNS
 from modules.flowalerts.downloaded_file import DownloadedFile
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
+from slips_files.core.database.redis_db.scan_detections_db import (
+    ScanDetectionsHandler,
+)
 from modules.flowalerts.notice import Notice
 from modules.flowalerts.smtp import SMTP
 from modules.flowalerts.software import Software
@@ -73,6 +77,7 @@ from modules.timeline.timeline import Timeline
 from modules.cesnet.cesnet import CESNET
 from modules.riskiq.riskiq import RiskIQ
 from slips_files.common.markov_chains import Matrix
+from slips_files.core.profiler_worker import ProfilerWorker
 from slips_files.core.structures.evidence import (
     Attacker,
     Direction,
@@ -145,6 +150,7 @@ class ModuleFactory:
         conf.get_tw_width_as_float = Mock(return_value=3600.0)
         conf.client_ips = Mock(return_value=[])
         conf.use_local_p2p = Mock(return_value=False)
+        conf.width = Mock(return_value=3600)
 
         with (
             # to prevent config/redis.conf from being overwritten
@@ -535,6 +541,30 @@ class ModuleFactory:
         return profiler
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_profiler_worker_obj(self, mock_db):
+        profiler = ProfilerWorker(
+            logger=self.logger,
+            output_dir="output",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
+            name="mock_name",
+            localnet_cache={},
+            profiler_queue=Mock(),
+            handle_setting_local_net_lock=Mock(),
+            input_handler=Mock(),
+            aid_queue=Mock(),
+            aid_manager=Mock(),
+            stop_profiler_event=Mock(),
+        )
+        profiler.print = Mock()
+        profiler.db = mock_db
+        return profiler
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_redis_manager_obj(self, mock_db):
         main = self.create_main_obj()
         main.db = mock_db
@@ -608,9 +638,11 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_flow_handler_obj(self, flow, mock_db):
         symbol = SymbolHandler(self.logger, mock_db)
-        flow_handler = FlowHandler(mock_db, symbol, flow)
-        flow_handler.profileid = "profile_id"
-        flow_handler.twid = "timewindow_id"
+        profileid = "profile_id"
+        twid = "timewindow1"
+        flow_handler = FlowHandler(
+            mock_db, symbol, flow, profileid, twid, False
+        )
         return flow_handler
 
     @patch(DB_MANAGER, name="mock_db")
@@ -746,6 +778,14 @@ class ModuleFactory:
         handler.db = mock_db
         return handler
 
+    def create_evidence_loggr_obj(self):
+        handler = EvidenceLogger(
+            logger_stop_signal=Mock(),
+            evidence_logger_q=Mock(),
+            output_dir="/tmp",
+        )
+        return handler
+
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_cesnet_obj(self, mock_db):
         output_dir = "dummy_output_dir"
@@ -826,6 +866,18 @@ class ModuleFactory:
         handler.separator = "_"
         handler.width = 3600
         handler.print = Mock()
+        handler.starttime_of_first_tw = None
+        handler.publish = Mock()
+        return handler
+
+    def create_scan_detections_db(self):
+        handler = ScanDetectionsHandler()
+        handler.constants = Constants()
+        handler.r = Mock()
+        handler.rcache = Mock()
+        handler.separator = "_"
+        handler.width = 3600
+        handler.print = Mock()
         return handler
 
     def create_process_manager_obj(self):
@@ -888,5 +940,5 @@ class ModuleFactory:
                 Mock(),  # args
             )
             cc_detection.db = mock_db
-            cc_detection.exporter = Mock()
+            cc_detection.letters_exporter = Mock()
             return cc_detection

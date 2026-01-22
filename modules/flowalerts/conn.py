@@ -41,6 +41,8 @@ class Conn(IFlowalertsAnalyzer):
         self.our_ips: List[str] = utils.get_own_ips(ret="List")
         self.input_type: str = self.db.get_input_type()
         self.multiple_reconnection_attempts_threshold = 5
+        # to avoid duplicate evidence
+        self.conn_to_multiple_ports_tracker = {}
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -592,89 +594,50 @@ class Conn(IFlowalertsAnalyzer):
             # dport is known, we are considering only unknown services
             return
 
-        # Connection to multiple ports to the destination IP
-        if profileid.split("_")[1] == flow.saddr:
-            direction = "Dst"
-            state = ESTAB
-            protocol = "TCP"
-            role = "Client"
-            type_data = "IPs"
+        profile_ip = profileid.split("_")[-1]
 
-            # get all the dst ips with established tcp connections
-            daddrs = self.db.get_data_from_profile_tw(
-                profileid,
-                twid,
-                direction,
-                state,
-                protocol,
-                role,
-                type_data,
-            )
+        if profile_ip == flow.saddr:
+            src_ip, other_ip = profile_ip, flow.daddr
+            attacker, victim = profile_ip, flow.daddr
+            profile_key = profileid
 
-            # make sure we find established connections to this daddr
-            if flow.daddr not in daddrs:
-                return
+        elif profile_ip == flow.daddr:
+            # happens if direction_analysis = "all"
+            src_ip, other_ip = flow.daddr, flow.saddr
+            attacker, victim = flow.daddr, profile_ip
+            profile_key = f"profile_{flow.daddr}"
+        else:
+            return
 
-            dstports = list(daddrs[flow.daddr]["dstports"])
-            if len(dstports) <= 1:
-                return
+        if not self.db.is_there_estab_tcp_flows(src_ip, other_ip, twid):
+            return
 
-            victim: str = flow.daddr
-            attacker: str = profileid.split("_")[-1]
+        rows = list(self.db.get_dstports_of_flows(profile_key, other_ip, twid))
+        if len(rows) <= 1:
+            return
+
+        dstports, uids = zip(*rows)
+
+        # avoid setting more than one evidence reporting the same exact ports
+        cache_key = f"{profileid}_{twid}"
+        if len(uids) > self.conn_to_multiple_ports_tracker.get(cache_key, 0):
             self.set_evidence.connection_to_multiple_ports(
                 profileid,
                 twid,
                 flow,
                 victim,
                 attacker,
-                dstports,
-                daddrs[flow.daddr]["uid"],
+                list(dstports),
+                list(uids),
             )
-
-        # Connection to multiple port to the Source IP.
-        # Happens in the mode 'all'
-        elif profileid.split("_")[-1] == flow.daddr:
-            direction = "Src"
-            state = ESTAB
-            protocol = "TCP"
-            role = "Server"
-            type_data = "IPs"
-
-            # get all the src ips with established tcp connections
-            saddrs = self.db.get_data_from_profile_tw(
-                profileid,
-                twid,
-                direction,
-                state,
-                protocol,
-                role,
-                type_data,
-            )
-            dstports = list(saddrs[flow.saddr]["dstports"])
-            if len(dstports) <= 1:
-                return
-
-            uids = saddrs[flow.saddr]["uid"]
-            attacker: str = flow.daddr
-            victim: str = profileid.split("_")[-1]
-
-            self.set_evidence.connection_to_multiple_ports(
-                profileid,
-                twid,
-                flow,
-                victim,
-                attacker,
-                dstports,
-                uids,
-            )
+            self.conn_to_multiple_ports_tracker[cache_key] = len(uids)
 
     def is_well_known_org(self, ip):
         """get the SNI, ASN, and  rDNS of the IP to check if it belongs
         to a well-known org"""
 
-        ip_data = self.db.get_ip_info(ip)
+        sni = self.db.get_ip_info(ip, "SNI") or False
         try:
-            sni = ip_data["SNI"]
             if isinstance(sni, list):
                 # SNI is a list of dicts, each dict contains the
                 # 'server_name' and 'port'
@@ -687,11 +650,7 @@ class Conn(IFlowalertsAnalyzer):
             # No SNI data for this ip
             sni = False
 
-        try:
-            rdns = ip_data["reverse_dns"]
-        except (KeyError, TypeError):
-            # No SNI data for this ip
-            rdns = False
+        rdns = self.db.get_ip_info(ip, "reverse_dns") or False
 
         flow_domains = [rdns, sni]
         for org in utils.supported_orgs:
@@ -711,49 +670,73 @@ class Conn(IFlowalertsAnalyzer):
                     return True
             return False
 
-    def _is_ok_to_connect_to_ip_outside_localnet(self, flow) -> bool:
+    def _is_ok_to_connect_to_ip_outside_localnet(self, ip) -> bool:
         """
         returns true if it's ok to connect to the given IP even if it's
         "outside the given local network"
         """
-        for ip in (flow.saddr, flow.daddr):
-            ip_obj = ipaddress.ip_address(ip)
-            return (
-                # because slips only knows about the ipv4 local networks
-                not validators.ipv4(ip)
-                or ip in SPECIAL_IPV4
-                or not ip_obj.is_private
-                or ip_obj.is_loopback
-                or ip_obj.is_multicast
-            )
+        ip_obj = ipaddress.ip_address(ip)
+        return (
+            # because slips only knows about the ipv4 local networks
+            not validators.ipv4(ip)
+            or ip in SPECIAL_IPV4
+            or not ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_multicast
+        )
 
     def _is_dns(self, flow) -> bool:
         return str(flow.dport) == "53" and flow.proto.lower() == "udp"
 
-    def check_different_localnet_usage(
-        self,
-        twid,
-        flow,
-        what_to_check="",
-    ):
+    def should_check_diff_localnet(self, flow) -> bool:
+        """
+        returns true when it's a non-dns flow where
+        1. both ips are private
+        2. the flow is from a public ip -> a private ip
+        """
+        if self._is_dns(flow):
+            # dns flows are checked fot this same detection in dns.py
+            return False
+
+        for ip in (flow.saddr, flow.daddr):
+            ip_obj = ipaddress.ip_address(ip)
+            if (
+                not validators.ipv4(ip)
+                or ip in SPECIAL_IPV4
+                or ip_obj.is_loopback
+                or ip_obj.is_multicast
+            ):
+                return False
+
+        saddr_obj = ipaddress.ip_address(flow.saddr)
+        daddr_obj = ipaddress.ip_address(flow.daddr)
+
+        is_saddr_private = utils.is_private_ip(saddr_obj)
+        is_daddr_private = utils.is_private_ip(daddr_obj)
+
+        return (is_saddr_private and is_daddr_private) or (
+            not is_saddr_private and is_daddr_private
+        )
+
+    def check_different_localnet_usage(self, twid, flow, what_to_check=""):
         """
         alerts when a connection to a private ip that
         doesn't belong to our local network is found
+
         for example:
-        If we are on 192.168.1.0/24 then detect anything
-        coming from/to 10.0.0.0/8
+            If we are on 192.168.1.0/24 then detect anything
+            coming from/to 10.0.0.0/8
+
         :param what_to_check: can be 'srcip' or 'dstip'
         PS: most changes here should be in
         dns.py::check_different_localnet_usage() so remember to update both:D
         """
-        if self._is_dns(flow):
-            # dns flows are checked fot this same detection in dns.py
-            return
-
-        if self._is_ok_to_connect_to_ip_outside_localnet(flow):
+        if not self.should_check_diff_localnet(flow):
             return
 
         ip_to_check = flow.saddr if what_to_check == "srcip" else flow.daddr
+        if self._is_ok_to_connect_to_ip_outside_localnet(ip_to_check):
+            return
 
         ip_obj = ipaddress.ip_address(ip_to_check)
         own_local_network = self.db.get_local_network(flow.interface)
@@ -811,6 +794,10 @@ class Conn(IFlowalertsAnalyzer):
 
         self.set_evidence.conn_to_private_ip(twid, flow)
 
+    def cleanup_conn_to_multiple_ports_tracker(self, profile_tw: List[str]):
+        """to avoid having useless keys in mem"""
+        self.conn_to_multiple_ports_tracker.pop("_".join(profile_tw), None)
+
     async def analyze(self, msg):
         if utils.is_msg_intended_for(msg, "new_flow"):
             msg = json.loads(msg["data"])
@@ -846,7 +833,8 @@ class Conn(IFlowalertsAnalyzer):
             self.check_device_changing_ips(twid, flow)
 
         elif utils.is_msg_intended_for(msg, "tw_closed"):
-            profileid_tw = msg["data"].split("_")
+            profileid_tw: List[str] = msg["data"].split("_")
             profileid = f"{profileid_tw[0]}_{profileid_tw[1]}"
             twid = profileid_tw[-1]
             self.detect_data_upload_in_twid(profileid, twid)
+            self.cleanup_conn_to_multiple_ports_tracker(profileid_tw)

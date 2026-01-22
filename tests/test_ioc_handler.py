@@ -5,9 +5,11 @@ import json
 from tests.module_factory import ModuleFactory
 
 
+from unittest.mock import Mock
+
+
 @pytest.mark.parametrize(
-    "profileid, twid, ip_state, starttime, uid, daddr, "
-    "proto, lookup, extra_info, expected_data",
+    "profileid, twid, ip_state, starttime, uid, daddr, proto, lookup, extra_info, expected_data",
     [
         # Testcase 1: Minimal required parameters
         (
@@ -24,7 +26,7 @@ from tests.module_factory import ModuleFactory
                 "to_lookup": "lookup1",
                 "profileid": "1",
                 "twid": "tw1",
-                "proto": "False",
+                "proto": "False",  # str(False)
                 "ip_state": "state1",
                 "stime": 1234,
                 "uid": "uid1",
@@ -70,7 +72,9 @@ def test_give_threat_intelligence(
     expected_data,
 ):
     ioc_handler = ModuleFactory().create_ioc_handler_obj()
+    ioc_handler._should_ask_modules_about_ip = Mock(return_value=True)
     ioc_handler.publish = mocker.Mock()
+
     result = ioc_handler.give_threat_intelligence(
         profileid,
         twid,
@@ -84,7 +88,7 @@ def test_give_threat_intelligence(
     )
 
     ioc_handler.publish.assert_called_with(
-        "give_threat_intelligence", json.dumps(expected_data)
+        ioc_handler.channels.GIVE_TI, json.dumps(expected_data)
     )
     assert result == expected_data
 
@@ -199,7 +203,6 @@ def test_set_info_for_domains(mocker, domain, info_to_set, expected_data):
     ioc_handler.rcache.hset.assert_called_with(
         "DomainsInfo", domain, expected_data_str
     )
-    ioc_handler.r.publish.assert_called_with("dns_info_change", domain)
 
 
 def test__store_new_url(mocker):

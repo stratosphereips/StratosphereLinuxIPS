@@ -35,6 +35,7 @@ termcolor==3.2.0
 yappi==1.7.3
 pytest-sugar==1.1.1
 aid_hash
+cachetools
 black==25.9.0
 ruff==0.14.3
 pre-commit==4.3.0
@@ -45,4 +46,5 @@ pybloom_live
 pyyaml
 pytest-asyncio
 vulture
+detect-secrets
 git+https://github.com/SECEF/python-idmefv2.git

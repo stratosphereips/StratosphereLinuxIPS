@@ -437,35 +437,19 @@ class AlertHandler:
 
         return old_max_threat_level_float
 
-    def update_ips_info(self, profileid, max_threat_lvl, confidence):
-        """
-        sets the score and confidence of the given ip in the db
-        when it causes an evidence
-        these 2 values will be needed when sharing with peers
-        """
-        score_confidence = {"score": max_threat_lvl, "confidence": confidence}
-        ip = profileid.split("_")[-1]
-
-        if cached_ip_info := self.get_ip_info(ip):
-            # append the score and confidence to the already existing data
-            cached_ip_info.update(score_confidence)
-            score_confidence = cached_ip_info
-
-        self.rcache.hset("IPsInfo", ip, json.dumps(score_confidence))
-
     def update_threat_level(
         self, profileid: str, threat_level: str, confidence: float
     ):
         """
-        Update the threat level of a certain profile
-        Updates the profileid key and the IPsInfo key with the
+        1. Update the threat level of a certain profile
+        2. Updates the profileid key and the IPsInfo key with the
          new score and confidence of this profile
-        Stores the max threat level of the given profile as the score
+        2. Stores the max threat level of the given profile as the score
         in IPsInfo
         :param threat_level: available options are 'low',
          'medium' 'critical' etc
-        Do not call this function directy from the db, always call it user
-        dbmanager.update_threat_level() to update the trustdb too:D
+        Do not call this function directy from this class, always call it
+        from dbmanager.update_threat_level() to update the trustdb too:D
         """
         self.r.hset(profileid, "threat_level", threat_level)
 
@@ -473,4 +457,7 @@ class AlertHandler:
             profileid, threat_level
         )
 
-        self.update_ips_info(profileid, max_threat_lvl, confidence)
+        ip = profileid.split("_")[-1]
+        score_confidence = {"score": max_threat_lvl, "confidence": confidence}
+
+        self.set_ip_info(ip, score_confidence)

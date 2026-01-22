@@ -149,6 +149,11 @@ class FlowMLDetection(IModule):
                 "bytes",
                 "flow_source",
                 "interface",
+                "aid",
+                "state_hist",
+                "dport_name",
+                "interpreted_state",
+                "timestamp_human",
             ]
             for field in to_drop:
                 try:

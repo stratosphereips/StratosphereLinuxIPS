@@ -55,6 +55,7 @@ class Main:
         self.input_type = False
         self.proc_man = ProcessManager(self)
         self.gw_info_printed = False
+        self.localnet_info_printed = False
         # in testing mode we manually set the following params
         # TODO use mocks instead of this testing param
         if not testing:
@@ -411,8 +412,10 @@ class Main:
 
     def get_analyzed_flows_percentage(self) -> str:
         """
-        returns a str with the percentage of analyzed flows so far to be
-        logged in the stats
+        returns a str with the percentage of analyzed flows so far (by
+        the profiler only) to be logged in the stats.
+
+        runs every 5s.
         """
         if self.is_total_flows_unknown():
             return ""
@@ -420,10 +423,21 @@ class Main:
         if not hasattr(self, "total_flows"):
             self.total_flows = self.db.get_total_flows()
 
-        flows_percentage = int(
-            (self.db.get_processed_flows_so_far() / self.total_flows) * 100
-        )
-        return f"Analyzed Flows: {green(flows_percentage)}{green('%')}. "
+        processed = self.db.get_flow_analyzed_by_the_profiler_so_far()
+        if not processed:
+            return ""
+
+        percentage = (processed / self.total_flows) * 100
+        # in very large pcaps, thousands of flows are nothing compared to
+        # the tot flows, so if the percentage is int, slips would print 0%
+        # for a while, so we take the first number after the floating point
+        # to avoid this
+        if percentage < 1:
+            percentage = f"{percentage:.1f}"
+        else:
+            percentage = int(percentage)
+
+        return f"Analyzed Flows: {green(percentage)}{green('%')}. "
 
     def is_total_flows_unknown(self) -> bool:
         """
@@ -460,6 +474,21 @@ class Main:
             if mac := self.db.get_gateway_mac(interface):
                 self.print(f"Detected gateway MAC: {green(mac)}")
             self.gw_info_printed = True
+
+    def print_localnet_info(self):
+        if self.localnet_info_printed:
+            return
+
+        for interface in utils.get_all_interfaces(self.args):
+            local_net = self.db.get_local_network(interface)
+            if not local_net:
+                continue
+
+            to_print = f"Used local network: {green(local_net)}"
+            if interface != "default":
+                to_print += f" for interface {green(interface)}."
+            self.print(to_print)
+            self.localnet_info_printed = True
 
     def prepare_locks_dir(self):
         """
@@ -625,7 +654,7 @@ class Main:
             self.c1 = self.db.subscribe("control_channel")
 
             self.metadata_man.add_metadata_if_enabled()
-
+            self.proc_man.start_timewindow_updater()
             self.input_process = self.proc_man.start_input_process()
             # obtain the list of active processes
             children = multiprocessing.active_children()
@@ -655,6 +684,7 @@ class Main:
                 # more traffic to come
                 time.sleep(5)
                 self.print_gw_info()
+                self.print_localnet_info()
 
                 # if you remove the below logic anywhere before the
                 # above sleep() statement, it will try to get the return

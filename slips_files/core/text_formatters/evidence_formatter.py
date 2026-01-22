@@ -163,16 +163,10 @@ class EvidenceFormatter:
                 continue
 
             cached_info = self.db.get_ip_identification(entity.value) or {}
-            info_parts = []
-            for info_type, info in cached_info.items():
-                if not info:
-                    continue
-
-                cleaned_type = info_type.replace("_", " ")
-                info_parts.append(f"{cleaned_type}: {info}")
-
-            if info_parts:
-                results.append(f"IP {entity.value}: " + ", ".join(info_parts))
+            if cached_info:
+                info = utils.get_ip_identification_as_str(cached_info)
+                if info:
+                    results.append(f"IP {entity.value}: {info}")
 
         return ", ".join(results)
 

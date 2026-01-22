@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
-from typing import List, Dict
+from typing import List, Dict, Any
 import tldextract
 
 from slips_files.common.abstracts.iwhitelist_analyzer import IWhitelistAnalyzer
@@ -35,8 +35,9 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         returns the domains of this IP, e.g. the DNS resolution, the SNI, etc.
         """
         domains = []
-        if ip_data := self.db.get_ip_info(ip):
-            if sni_info := ip_data.get("SNI", [{}])[0]:
+        if ip_data := self.db.get_ip_info(ip, "SNI"):
+            ip_data: List[Dict[str, Any]]
+            if sni_info := ip_data[0]:
                 domains.append(sni_info.get("server_name", ""))
 
         try:

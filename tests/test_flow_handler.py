@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+from slips_files.core.structures.flow_attributes import Role
 from tests.module_factory import ModuleFactory
-import pytest
 
 from unittest.mock import Mock, call
 from slips_files.core.flows.zeek import DHCP
@@ -9,30 +9,6 @@ import json
 from dataclasses import asdict
 
 
-def test_is_supported_flow_not_ts(flow):
-    flow.starttime = None
-    flow_handler = ModuleFactory().create_flow_handler_obj(flow)
-    assert flow_handler.is_supported_flow_type() is False
-
-
-@pytest.mark.parametrize(
-    "flow_type, expected_val",
-    [
-        ("dhcp", True),
-        ("oscp", False),
-        ("notice", True),
-    ],
-)
-def test_is_supported_flow_without_ts(
-    flow_type: str, expected_val: bool, flow
-):
-    # just change the flow_type
-    flow.type_ = flow_type
-    flow_handler = ModuleFactory().create_flow_handler_obj(flow)
-    assert flow_handler.is_supported_flow_type() == expected_val
-
-
-# testing handle_dns
 def test_handle_dns():
     flow = Mock()
     flow_handler = ModuleFactory().create_flow_handler_obj(flow)
@@ -46,7 +22,6 @@ def test_handle_dns():
     )
 
 
-# testing handle_ftp
 def test_handle_ftp():
     flow = Mock()
     flow.used_port = 21  # Assuming FTP typically uses port 21
@@ -59,7 +34,6 @@ def test_handle_ftp():
     )
 
 
-# testing handle_http
 def test_handle_http():
     flow = Mock()
     flow_handler = ModuleFactory().create_flow_handler_obj(flow)
@@ -136,59 +110,55 @@ def test_handle_tunnel(flow):
     )
 
 
-# testing handle_conn
 def test_handle_conn(flow):
     flow_handler = ModuleFactory().create_flow_handler_obj(flow)
     flow.daddr = "192.168.1.1"
     flow.dport = 80
     flow.proto = "tcp"
     flow.interface = "eth0"
+    flow.smac = "aa:bb:cc:dd:ee:ff"
+    flow.dmac = "11:22:33:44:55:66"
+    flow.saddr = "10.0.0.1"
 
     mock_symbol = Mock()
     mock_symbol.compute.return_value = ("A", "B", "C")
     flow_handler.symbol = mock_symbol
 
+    flow_handler.running_non_stop = False
+
     flow_handler.handle_conn()
 
-    flow_handler.db.add_tuple.assert_called_with(
+    flow_handler.symbol.compute.assert_called_once_with(
+        flow, flow_handler.twid, "OutTuples"
+    )
+
+    flow_handler.db.add_tuple.assert_called_once_with(
         flow_handler.profileid,
         flow_handler.twid,
-        "192.168.1.1-80-tcp",
         ("A", "B", "C"),
-        "Client",
+        Role.CLIENT,
         flow,
     )
-    flow_handler.db.add_ips.assert_called_with(
-        flow_handler.profileid, flow_handler.twid, flow, "Client"
+
+    flow_handler.db.add_ips.assert_called_once_with(
+        flow_handler.profileid,
+        flow_handler.twid,
+        flow,
+        Role.CLIENT,
     )
-    flow_handler.db.add_port.assert_has_calls(
+
+    flow_handler.db.add_mac_addr_to_profile.assert_called_once_with(
+        flow_handler.profileid,
+        flow.smac,
+        flow.interface,
+    )
+
+    flow_handler.db.publish_new_mac.assert_has_calls(
         [
-            call(
-                flow_handler.profileid,
-                flow_handler.twid,
-                flow,
-                "Client",
-                "Dst",
-            ),
-            call(
-                flow_handler.profileid,
-                flow_handler.twid,
-                flow,
-                "Client",
-                "Src",
-            ),
+            call(flow.smac, flow.saddr),
+            call(flow.dmac, flow.daddr),
         ]
     )
-    flow_handler.db.add_flow.assert_called_with(
-        flow, flow_handler.profileid, flow_handler.twid, "benign"
-    )
-    flow_handler.db.add_mac_addr_to_profile.assert_called_with(
-        flow_handler.profileid, flow.smac, flow.interface
-    )
-    if not flow_handler.running_non_stop:
-        flow_handler.publisher.new_MAC.assert_has_calls(
-            [call(flow.smac, flow.saddr), call(flow.dmac, flow.daddr)]
-        )
 
 
 # testing handle_files
@@ -219,7 +189,7 @@ def test_handle_arp(flow):
     flow.daddr = "192.168.1.1"
     flow.saddr = "192.168.1.2"
     flow.interface = "eth0"
-    flow_handler.publisher = Mock()
+
     flow_handler.handle_arp()
 
     expected_payload = {
@@ -233,7 +203,7 @@ def test_handle_arp(flow):
     flow_handler.db.add_mac_addr_to_profile.assert_called_with(
         flow_handler.profileid, flow.smac, flow.interface
     )
-    flow_handler.publisher.new_MAC.assert_has_calls(
+    flow_handler.db.publish_new_mac.assert_has_calls(
         [call(flow.dmac, flow.daddr), call(flow.smac, flow.saddr)]
     )
     flow_handler.db.add_altflow.assert_called_with(
@@ -259,17 +229,14 @@ def test_handle_smtp(flow):
     )
 
 
-# testing handle_software
 def test_handle_software(flow):
     flow_handler = ModuleFactory().create_flow_handler_obj(flow)
-    flow_handler.publisher = Mock()
-
     flow_handler.handle_software()
 
     flow_handler.db.add_software_to_profile.assert_called_with(
         flow_handler.profileid, flow
     )
-    flow_handler.publisher.new_software.assert_called_with(
+    flow_handler.db.publish_new_software.assert_called_with(
         flow_handler.profileid, flow
     )
     flow_handler.db.add_altflow.assert_called_with(
@@ -277,7 +244,6 @@ def test_handle_software(flow):
     )
 
 
-# testing handle_notice
 def test_handle_notice(flow):
     flow_handler = ModuleFactory().create_flow_handler_obj(flow)
 
@@ -303,7 +269,6 @@ def test_handle_notice(flow):
     )
 
 
-# testing handle_dhcp
 def test_handle_dhcp():
     flow = DHCP(
         starttime=1234567890,
@@ -316,10 +281,10 @@ def test_handle_dhcp():
         interface="eth0",
     )
     flow_handler = ModuleFactory().create_flow_handler_obj(flow)
-    flow_handler.publisher = Mock()
+
     flow_handler.handle_dhcp()
 
-    flow_handler.publisher.new_MAC.assert_called_with(flow.smac, flow.saddr)
+    flow_handler.db.publish_new_mac.assert_called_with(flow.smac, flow.saddr)
     flow_handler.db.add_mac_addr_to_profile.assert_called_with(
         flow_handler.profileid, flow.smac, flow.interface
     )
@@ -327,7 +292,7 @@ def test_handle_dhcp():
     flow_handler.db.mark_profile_as_dhcp.assert_called_with(
         flow_handler.profileid
     )
-    flow_handler.publisher.new_dhcp.assert_called_with(
+    flow_handler.db.publish_new_dhcp.assert_called_with(
         flow_handler.profileid, flow
     )
 

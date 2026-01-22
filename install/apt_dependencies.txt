@@ -27,5 +27,3 @@ yara
 libnotify-bin
 wireless-tools
 arp-scan
-redis-server
-redis

@@ -3,9 +3,11 @@
 from typing import Dict
 
 import pytest
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock, call, Mock
 import json
 from unittest.mock import ANY
+
+from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     ProfileID,
     TimeWindow,
@@ -15,6 +17,7 @@ from slips_files.core.structures.evidence import (
     Direction,
     IoCType,
     ThreatLevel,
+    Victim,
 )
 from tests.module_factory import ModuleFactory
 from slips_files.core.structures.alerts import Alert
@@ -272,31 +275,6 @@ def test_cache_whitelisted_evidence_id(evidence_id, expected_calls):
 
 
 @pytest.mark.parametrize(
-    "profileid, max_threat_lvl, confidence, expected_ip_info",
-    [
-        # Testcase 1: No previous IP info
-        ("profile1_10.0.0.1", 0.8, 0.9, {"score": 0.8, "confidence": 0.9}),
-        # Testcase 2: Update existing IP info
-        ("profile2_10.0.0.2", 0.6, 0.7, {"score": 0.6, "confidence": 0.7}),
-    ],
-)
-def test_update_ips_info(
-    profileid, max_threat_lvl, confidence, expected_ip_info
-):
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.rcache = MagicMock()
-    alert_handler.get_ip_info = MagicMock(
-        return_value={"score": 0.5, "confidence": 0.6}
-    )
-
-    alert_handler.update_ips_info(profileid, max_threat_lvl, confidence)
-
-    alert_handler.rcache.hset.assert_called_once_with(
-        "IPsInfo", profileid.split("_")[-1], json.dumps(expected_ip_info)
-    )
-
-
-@pytest.mark.parametrize(
     "initial_value, expected_value",
     [
         # Testcase 1: No previous value
@@ -314,6 +292,93 @@ def test_init_evidence_number(initial_value, expected_value):
 
     alert_handler.r.set.assert_called_once_with(
         "number_of_evidence", expected_value
+    )
+
+
+@pytest.mark.parametrize(
+    "evidence_exists, whitelisted, expected",
+    [
+        (None, False, True),  # new evidence, not whitelisted → added
+        ("{}", False, False),  # already exists → ignored
+        (None, True, False),  # whitelisted → ignored
+    ],
+)
+def test_set_evidence(evidence_exists, whitelisted, expected):
+    db = ModuleFactory().create_alert_handler_obj()
+
+    db.add_profile = Mock()
+    db.is_detection_disabled = Mock(return_value=False)
+    db.is_whitelisted_evidence = Mock(return_value=whitelisted)
+    db.publish = Mock()
+    db.set_flow_causing_evidence = Mock()
+    db._get_more_info_about_evidence = Mock(side_effect=lambda e: e)
+
+    db.constants = Mock()
+    db.constants.NUMBER_OF_EVIDENCE = "num_evidence"
+
+    db.channels = Mock()
+    db.channels.EVIDENCE_ADDED = "evidence_added"
+
+    db.r = Mock()
+    db.r.hget = Mock(return_value=evidence_exists)
+    db.r.hset = Mock()
+    db.r.incr = Mock()
+
+    test_ip = "192.168.1.1"
+
+    attacker = Attacker(
+        direction=Direction.SRC,
+        ioc_type=IoCType.IP,
+        value=test_ip,
+    )
+    victim = Victim(
+        direction=Direction.DST,
+        ioc_type=IoCType.IP,
+        value="8.8.8.8",
+    )
+
+    evidence = Evidence(
+        evidence_type=EvidenceType.SSH_SUCCESSFUL,
+        attacker=attacker,
+        victim=victim,
+        threat_level=ThreatLevel.INFO,
+        confidence=0.8,
+        description=f"SSH Successful to IP : 8.8.8.8 . From IP {test_ip}",
+        profile=ProfileID(ip=test_ip),
+        timewindow=TimeWindow(number=1),
+        uid=["123"],
+        timestamp="1233242354.3",
+    )
+
+    result = db.set_evidence(evidence)
+
+    assert result is expected
+
+    if expected:
+        db.r.hset.assert_called_once()
+        db.r.incr.assert_called_once_with(db.constants.NUMBER_OF_EVIDENCE)
+        db.publish.assert_called_once()
+    else:
+        db.r.hset.assert_not_called()
+        db.publish.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "max_threat_level, cur_threat_level, expected_max",
+    [
+        ("info", "info", utils.threat_levels["info"]),
+        ("critical", "info", utils.threat_levels["critical"]),
+        ("high", "critical", utils.threat_levels["critical"]),
+    ],
+)
+def test_update_max_threat_level(
+    max_threat_level, cur_threat_level, expected_max
+):
+    db = ModuleFactory().create_db_manager_obj(6393, flush_db=True)
+    profileid = "profile_192.168.1.1"
+    db.set_max_threat_level(profileid, max_threat_level)
+    assert (
+        db.update_max_threat_level(profileid, cur_threat_level) == expected_max
     )
 
 

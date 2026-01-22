@@ -647,16 +647,25 @@ class DNS(IFlowalertsAnalyzer):
         """
         for ip in (flow.saddr, flow.daddr):
             ip_obj = ipaddress.ip_address(ip)
-            return (
+            if (
                 # if the ip is the dns server that slips detected,
                 # it's ok to connect to it
                 ip == self.detected_dns_ip
                 or not validators.ipv4(ip)
                 or ip in SPECIAL_IPV4
-                or not ip_obj.is_private
                 or ip_obj.is_loopback
                 or ip_obj.is_multicast
-            )
+            ):
+                return False
+
+        saddr_obj = ipaddress.ip_address(flow.saddr)
+        daddr_obj = ipaddress.ip_address(flow.daddr)
+        is_saddr_private = utils.is_private_ip(saddr_obj)
+        is_daddr_private = utils.is_private_ip(daddr_obj)
+
+        return (is_saddr_private and is_daddr_private) or (
+            not is_saddr_private and is_daddr_private
+        )
 
     def check_different_localnet_usage(
         self,

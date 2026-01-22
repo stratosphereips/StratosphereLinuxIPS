@@ -1,4 +1,61 @@
-#!/bin/sh
+#!/usr/bin/env bash
+
+add_line_if_missing() {
+    local LINE="$1"
+    local FILE="$2"
+
+    # create file if it doesn't exist
+    [ -f "$FILE" ] || touch "$FILE"
+
+    # check if line exists
+    if ! grep -Fxq "$LINE" "$FILE"; then
+        echo "$LINE" >> "$FILE"
+        echo "Added line to $FILE"
+    fi
+}
+
+add_redis_path() {
+    local REDIS_PATH="/redis-stable/src"
+    local LINE="export PATH=\"\$PATH:$REDIS_PATH\""
+
+    # detect original user
+    local USER
+    if [ -n "$SUDO_USER" ]; then
+        USER="$SUDO_USER"
+    else
+        USER=$(whoami)
+    fi
+
+    local USER_HOME
+    USER_HOME=$(eval echo "~$USER")
+
+    # detect user's shell
+    local USER_SHELL
+    USER_SHELL=$(getent passwd "$USER" | cut -d: -f7)
+    [ -z "$USER_SHELL" ] && USER_SHELL="$SHELL"
+
+    # pick RC file
+    local RC
+    if [[ $USER_SHELL == *"zsh" ]]; then
+        RC="$USER_HOME/.zshrc"
+    else
+        RC="$USER_HOME/.bashrc"
+    fi
+
+    # add to RC file if missing
+    add_line_if_missing "$LINE" "$RC"
+
+    # add to current session if not already in PATH
+    case ":$PATH:" in
+        *":$REDIS_PATH:"*)
+            ;;  # already in PATH
+        *)
+            export PATH="$PATH:$REDIS_PATH"
+            ;;
+    esac
+
+    echo "Redis path added to RC ($RC) and current session"
+}
 
 
 print_green() {
@@ -86,33 +143,39 @@ print_green "Installing Slips dependencies ..."
 
 exit_on_cmd_failure
 
-
-print_green "Installing Zeek"
-UBUNTU_VERSION=$(lsb_release -r | awk '{print $2}')
-ZEEK_REPO_URL="download.opensuse.org/repositories/security:/zeek/xUbuntu_${UBUNTU_VERSION}"
-
-# Add the repository to the sources list
-echo "deb http://${ZEEK_REPO_URL}/ /" |  tee /etc/apt/sources.list.d/security:zeek.list \
-&& curl -fsSL "https://${ZEEK_REPO_URL}/Release.key" | gpg --dearmor |  tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
-&& sudo apt update && sudo apt install -y --no-install-recommends --fix-missing zeek-8.0
-
-# create a symlink to zeek so that slips can find it
-ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
-export PATH=$PATH:/usr/local/zeek/bin
-echo "export PATH=$PATH:/usr/local/zeek/bin" >> ~/.bashrc
-
-# dont continue with slips installation if zeek isn't installed
 if ! check_zeek_or_bro; then
+  print_green "Installing Zeek"
+  UBUNTU_VERSION=$(lsb_release -r | awk '{print $2}')
+  ZEEK_REPO_URL="download.opensuse.org/repositories/security:/zeek/xUbuntu_${UBUNTU_VERSION}"
+
+  # Add the repository to the sources list
+  sudo echo "deb http://${ZEEK_REPO_URL}/ /" | sudo tee /etc/apt/sources.list.d/security:zeek.list \
+  && curl -fsSL "https://${ZEEK_REPO_URL}/Release.key" | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
+  && sudo apt update && sudo apt install -y --no-install-recommends --fix-missing zeek-8.0
+
+  # create a symlink to zeek so that slips can find it
+  sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+  export PATH=$PATH:/usr/local/zeek/bin
+  echo "export PATH=$PATH:/usr/local/zeek/bin" >> ~/.bashrc
+
+  # dont continue with slips installation if zeek isn't installed
+  if ! check_zeek_or_bro; then
     echo "Problem installing Slips. Aborting."
     exit 1
+  fi
 fi
 
 
 print_green "Installing Redis"
-curl -fsSL https://packages.redis.io/gpg |  gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" > /etc/apt/sources.list.d/redis.list
-sudo apt-get update
-sudo apt install -y --no-install-recommends redis
+curl -L https://download.redis.io/redis-stable.tar.gz -o /tmp/redis-stable.tar.gz \
+    && mkdir -p /redis-stable \
+    && tar xzf redis-stable.tar.gz -C / \
+    && cd /redis-stable \
+    && make distclean \
+    && make MALLOC=libc
+
+add_redis_path
+
 
 exit_on_cmd_failure
 

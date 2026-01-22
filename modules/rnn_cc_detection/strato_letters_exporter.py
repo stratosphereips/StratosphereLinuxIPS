@@ -1,7 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import json
-from typing import Dict, List
 import csv
 import os
 
@@ -9,6 +7,9 @@ from slips_files.common.parsers.config_parser import ConfigParser
 
 
 class StratoLettersExporter:
+    """exports the letters to strato_letters.tsv in the slips output dir
+    before slips stops."""
+
     def __init__(self, db):
         self.db = db
         self.read_configuration()
@@ -41,20 +42,10 @@ class StratoLettersExporter:
             return
 
         saddr = profileid.split("_")[-1]
-        out_tuples: str = self.db.get_outtuples_from_profile_tw(
-            profileid, twid
-        )
-
-        if out_tuples is None:
-            return
-
-        out_tuples: Dict[str, List[str, List[float]]] = json.loads(out_tuples)
-
         with open(self.starto_letters_file, "a") as f:
             writer = csv.writer(f, delimiter="\t")
-
-            for outtuple, info in out_tuples.items():
-                outtuple: str
-                info: List[str, List[float]]
-                letters = info[0]
-                writer.writerow([f"{saddr}-{outtuple}-{twid}", letters])
+            for tupleid, symbols in self.db.get_outtuples_from_profile_tw(
+                profileid, twid
+            ):
+                tupleid: str
+                writer.writerow([f"{saddr}-{tupleid}-{twid}", symbols])

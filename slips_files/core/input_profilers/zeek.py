@@ -1,7 +1,10 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import json
 from re import split
-from typing import Dict
+from typing import Dict, Tuple
+from dataclasses import fields, MISSING
+
 from slips_files.common.abstracts.iinput_type import IInputType
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import (
@@ -78,9 +81,6 @@ class Zeek:
     """class that contains functions needed by the zeek-tabs and zeekjson
     classes"""
 
-    def __init__(self):
-        pass
-
     def remove_subsuffix(self, file_name: str) -> str:
         """
         turns any x.log.y to x.log only
@@ -91,7 +91,7 @@ class Zeek:
 
     def get_file_type(self, new_line: dict) -> str:
         """
-        returnx x.log. always. no atter whats the name given to slips
+        returns x.log. always. no matter whats the name given to slips
         """
         file_type = new_line["type"]
         # all zeek lines received from stdin should be of type conn
@@ -114,10 +114,9 @@ class Zeek:
 
     def fill_empty_class_fields(self, flow_values: dict, slips_class):
         """
-        The given slips class is Conn, SSH, Weird etc.
-        Suppose SSH requires an "issuer" field and the given zeek log line
-        doesn'thave one, this function fills the issuer field (or any
-        missing field) with "".
+        - Fill missing dataclass fields with their default value
+        (or empty string if no default exists).
+        - Always force `type_` from the slips class, never from Zeek input.
 
         Returns a ready-to-use flow_values dict that has all the fields of
         the given slips_class
@@ -126,62 +125,82 @@ class Zeek:
         :param slips_class: the class that corresponds to the given zeek log
         line
         """
-        # get all fields of the slips_class
-        slips_class_fields = set(slips_class.__init__.__code__.co_varnames)
-        # remove 'self' from the fields
-        slips_class_fields.discard("self")
+        for f in fields(slips_class):
+            name = f.name
+            # `type_` is enforced later
+            if name == "type_":
+                continue
 
-        # identify fields in slips_class that are not in flow_values
-        missing_fields = slips_class_fields - set(flow_values.keys())
+            if name in flow_values:
+                continue
 
-        # set the missing fields in flow_values to ""
-        for field in missing_fields:
-            flow_values[field] = ""
+            if f.default is not MISSING:
+                flow_values[name] = f.default
+            elif f.default_factory is not MISSING:  # type: ignore
+                flow_values[name] = f.default_factory()  # type: ignore
+            else:
+                flow_values[name] = ""
 
         # always use the type_ field of the slips class, this is not gonna
-        # be given to slips by zeek:D
+        # be given to slips by zeek
         flow_values["type_"] = getattr(slips_class, "type_")
 
         return flow_values
 
 
 class ZeekJSON(IInputType, Zeek):
-    def __init__(self):
-        self.line_processor_cache = {}
+    """
+    An instance of this class is created once on each run, not created per
+    flow.
+    """
 
-    def process_line(self, new_line: dict):
+    def __init__(self, db):
+        super().__init__()
+        self.db = db
+        self.line_processor_cache = {}
+        # to avoid object churn. creating a new dict per flow is CPU
+        # intensive, and triggers the GC more. this is for optimizations.
+        self.reusable_flow_values_dict = {}
+
+    def process_line(self, new_line: dict) -> Tuple[bool, str]:
         line = new_line["data"]
         interface = new_line["interface"]
 
         if not isinstance(line, dict):
-            return False
+            return False, "The given zeek line is not a dict"
 
         file_type = self.get_file_type(new_line)
-        line_map = LOG_MAP.get(file_type)
-        if not line_map:
-            return False
+
+        zeek_fields_to_slips_fields_map = LOG_MAP.get(file_type)
+        if not zeek_fields_to_slips_fields_map:
+            return False, "Can't find zeek_fields_to_slips_fields_map"
 
         if ts := line.get("ts", False):
             starttime = utils.convert_to_datetime(ts)
         else:
             starttime = ""
 
-        flow_values = {"starttime": starttime, "interface": interface}
+        # reusing the dict to avoid new obj (dict) creation per flow.
+        self.reusable_flow_values_dict.clear()
+        self.reusable_flow_values_dict.update(
+            {"starttime": starttime, "interface": interface}
+        )
 
-        for zeek_field, slips_field in line_map.items():
+        for zeek_field, slips_field in zeek_fields_to_slips_fields_map.items():
             if not slips_field:
                 continue
             val = line.get(zeek_field, "")
             if val == "-":
                 val = ""
-            flow_values[slips_field] = val
+            self.reusable_flow_values_dict[slips_field] = val
 
         if file_type in LINE_TYPE_TO_SLIPS_CLASS:
             slips_class = LINE_TYPE_TO_SLIPS_CLASS[file_type]
-
             if file_type == "conn.log":
-                flow_values["dur"] = float(flow_values.get("dur", 0) or 0)
-                for fld in (
+                self.reusable_flow_values_dict["dur"] = float(
+                    self.reusable_flow_values_dict.get("dur", 0) or 0
+                )
+                for field in (
                     "sbytes",
                     "dbytes",
                     "spkts",
@@ -189,24 +208,29 @@ class ZeekJSON(IInputType, Zeek):
                     "sport",
                     "dport",
                 ):
-                    flow_values[fld] = int(flow_values.get(fld, 0) or 0)
-
-            flow_values = self.fill_empty_class_fields(
-                flow_values, slips_class
+                    self.reusable_flow_values_dict[field] = int(
+                        self.reusable_flow_values_dict.get(field, 0) or 0
+                    )
+            self.reusable_flow_values_dict = self.fill_empty_class_fields(
+                self.reusable_flow_values_dict, slips_class
             )
-            self.flow = slips_class(**flow_values)
-            return self.flow
 
-        print(f"[Profiler] Invalid file_type: {file_type}, line: {line}")
-        return False
+            flow = slips_class(**self.reusable_flow_values_dict)
+
+            return flow, ""
+
+        err = f"Invalid file_type: {file_type}, line: {line}"
+        print(err)
+        return False, err
 
 
 class ZeekTabs(IInputType, Zeek):
     separator = "\t"
     line_processor_cache = {}
 
-    def __init__(self):
-        pass
+    def __init__(self, db):
+        super().__init__()
+        self.db = db
 
     @staticmethod
     def split(line: str) -> list:
@@ -267,21 +291,32 @@ class ZeekTabs(IInputType, Zeek):
         )
 
         file_type: str = self.get_file_type(fields_line)
-        self.line_processor_cache.update(
-            {file_type: indices_of_each_slips_field}
+
+        indices = {file_type: indices_of_each_slips_field}
+        self.line_processor_cache.update(indices)
+        # for currently started profiler workers to know about the new file
+        # indices
+        self.db.publish(
+            self.db.channels.NEW_ZEEK_FIELDS_LINE, json.dumps(indices)
         )
+        # if slips starts more profilers later, they can access the
+        # processors from the db directly
+        self.db.store_lines_processors(file_type, indices_of_each_slips_field)
 
     def get_value_at(self, line: list, index: int, default_=""):
         try:
+            index = int(index)
             val = line[index]
             return default_ if val == "-" else val
         except IndexError:
             return default_
 
-    def process_line(self, new_line: dict):
+    def process_line(self, new_line: dict) -> Tuple[bool, str]:
         """
         Process the tab line from zeek.
         :param new_line: a dict with "type" and "data" keys
+        returns True if a flow was sucessfully processed,
+        and false with an err str if it's a fields line or an error occurred
         """
         line: str = new_line["data"]
 
@@ -290,7 +325,7 @@ class ZeekTabs(IInputType, Zeek):
             # to some slips obj (SSL, Con, SSH, etc...)
             # cache the mapping for later use
             self.update_line_processor_cache(new_line)
-            return
+            return False, "Field line processed"
 
         file_type: str = self.get_file_type(new_line)
         # this dict is the name of each slips field and the index of it
@@ -299,13 +334,7 @@ class ZeekTabs(IInputType, Zeek):
         line_processor = self.line_processor_cache.get(file_type)
 
         if not line_processor:
-            print(
-                f"Slips is unable to handle the given zeek log line! "
-                f"{new_line}",
-                0,
-                1,
-            )
-            return
+            return False, "unknown line_processor"
 
         line: list = self.split(line)
 
@@ -351,8 +380,8 @@ class ZeekTabs(IInputType, Zeek):
             )
 
             # create the corresponding object using the mapped class
-            self.flow = slips_class(**flow_values)
-            return self.flow
+            flow = slips_class(**flow_values)
+            return flow, ""
 
         print(f"[Profiler] Invalid file_type: {log_type}, line: {line}")
-        return False
+        return False, f"Invalid file_type: {log_type}, line: {line}"

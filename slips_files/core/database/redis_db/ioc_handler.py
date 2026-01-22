@@ -11,6 +11,7 @@ from typing import (
 
 from slips_files.common.data_structures.trie import Trie
 
+
 # for future developers, remember to invalidate_trie_cache() on every
 # change to the self.constants.IOC_DOMAINS key or slips will keep using an
 # invalid cache to lookup malicious domains
@@ -25,10 +26,12 @@ class IoCHandler:
 
     name = "DB"
 
-    def __init__(self):
+    def setup(self, *args, **kwargs):
         # used for faster domain lookups
         self.trie = None
         self.is_trie_cached = False
+
+        self.twid_width = self.conf.get_tw_width_in_seconds()
 
     def _build_trie(self):
         """Retrieve domains from Redis and construct the trie."""
@@ -77,8 +80,9 @@ class IoCHandler:
         # get the feed name from the given url
         feed_to_delete = url.split("/")[-1]
         # get all domains that are read from TI files in our db
-        ioc_domains = self.rcache.hgetall(self.constants.IOC_DOMAINS)
-        for domain, domain_description in ioc_domains.items():
+        for domain, domain_description in self._hscan(
+            self.constants.IOC_DOMAINS, redis_client=self.rcache
+        ):
             domain_description = json.loads(domain_description)
             if feed_to_delete in domain_description["source"]:
                 # this entry has the given feed as source, delete it
@@ -86,8 +90,9 @@ class IoCHandler:
                 self._invalidate_trie_cache()
 
         # get all IPs that are read from TI files in our db
-        ioc_ips = self.rcache.hgetall(self.constants.IOC_IPS)
-        for ip, ip_description in ioc_ips.items():
+        for ip, ip_description in self._hscan(
+            self.constants.IOC_IPS, redis_client=self.rcache
+        ):
             ip_description = json.loads(ip_description)
             if feed_to_delete in ip_description["source"]:
                 # this entry has the given feed as source, delete it
@@ -141,6 +146,10 @@ class IoCHandler:
         lookup="",
         extra_info: dict = False,
     ):
+        # to avoid asking about the same ip so many times
+        if not self._should_ask_modules_about_ip(lookup):
+            return
+
         data_to_send = {
             "to_lookup": str(lookup),
             "profileid": str(profileid),
@@ -155,7 +164,7 @@ class IoCHandler:
             # sometimes we want to send the dns query/answer to check it for
             # blacklisted ips/domains
             data_to_send.update(extra_info)
-        self.publish(self.constants.GIVE_TI, json.dumps(data_to_send))
+        self.publish(self.channels.GIVE_TI, json.dumps(data_to_send))
         return data_to_send
 
     def set_ti_feed_info(self, file, data):
@@ -507,7 +516,15 @@ class IoCHandler:
             # Store
             domain_data = json.dumps(domain_data)
             self.rcache.hset(self.constants.DOMAINS_INFO, domain, domain_data)
-            self.r.publish(self.channels.DNS_INFO_CHANGE, domain)
+
+    def get_url_info(self, url, info_type):
+        key = f"{self.constants.VT_CACHED_URL_INFO}:{info_type}"
+        data = self.rcache.hget(key, url)
+        try:
+            data = json.loads(data)
+        except json.decoder.JSONDecodeError:
+            pass
+        return data
 
     def cache_url_info_by_virustotal(self, url: str, urldata: dict):
         """
@@ -516,36 +533,11 @@ class IoCHandler:
         going to store for this IP.
         If it was not there before we store it. If it was there before, we
         overwrite it
-        this is used to cache url info by the virustotal module only
         """
-        data = self.is_cached_url_by_vt(url)
-        if data is False:
-            # This URL is not in the dictionary, add it first:
-            self._store_new_url(url)
-            # Now get the data, which should be empty, but just in case
-            data = self.get_ip_info(url)
-        # empty dicts evaluate to False
-        dict_has_keys = bool(data)
-        if dict_has_keys:
-            # loop through old data found in the db
-            for key in iter(data):
-                # Get the new data that has the same key
-                data_to_store = urldata[key]
-                # If there is data previously stored, check if we have this key already
-                try:
-                    # We modify value in any case, because there might be new info
-                    _ = data[key]
-                except KeyError:
-                    # There is no data for the key so far.
-                    pass
-                    # Publish the changes
-                    # self.r.publish('url_info_change', url)
-                data[key] = data_to_store
-                newdata_str = json.dumps(data)
-                self.rcache.hset(
-                    self.constants.VT_CACHED_URL_INFO, url, newdata_str
+        for info_type, info_val in urldata.items():
+            for key, val in info_val.items():
+                key = (
+                    f"{self.constants.VT_CACHED_URL_INFO}:{info_type}:"
+                    f"{key}"
                 )
-        else:
-            # URL found in the database but has no keys , set the keys now
-            urldata = json.dumps(urldata)
-            self.rcache.hset(self.constants.VT_CACHED_URL_INFO, url, urldata)
+                self.rcache.hset(key, url, val)

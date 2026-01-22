@@ -3,7 +3,7 @@
 class Constants:
     LOADED_TI_FILES = "loaded_TI_files_number"
     TI_FILES_INFO = "TI_files_info"
-    GIVE_TI = "give_threat_intelligence"
+    CURRENT_TIMEWINDOW = "current_timewindow"
     # all keys starting with IoC_* are used for storing IoCs read from
     # online and offline TI feeds
     IOC_IPS = "IoC_ips"
@@ -19,7 +19,7 @@ class Constants:
     # used for Kalipso
     DOMAINS_INFO = "DomainsInfo"
     IPS_INFO = "IPsInfo"
-    PROCESSED_FLOWS = "processed_flows_so_far"
+    PROCESSED_FLOWS_BY_PROFILER = "processed_flows_by_profiler_so_far"
     MALICIOUS_PROFILES = "malicious_profiles"
     FLOWS_CAUSING_EVIDENCE = "flows_causing_evidence"
     PROCESSED_EVIDENCE = "processed_evidence"
@@ -69,9 +69,12 @@ class Constants:
     WILL_SLIPS_HAVE_MORE_FLOWS = "will_slips_have_more_flows"
     SUBS_WHO_PROCESSED_MSG = "number_of_subscribers_who_processed_this_msg"
     FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN = "flows_analyzed_per_minute"
+    MODULES_FLOWS_PER_SECOND = "modules_processed_flows_per_second"
+    LINE_PROCESSORS = "line_processors"
 
 
 class Channels:
-    DNS_INFO_CHANGE = "dns_info_change"
     NEW_ALERT = "new_alert"
     EVIDENCE_ADDED = "evidence_added"
+    GIVE_TI = "get_modified_profiles_since"
+    NEW_ZEEK_FIELDS_LINE = "new_zeek_fields_line"

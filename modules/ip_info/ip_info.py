@@ -565,18 +565,15 @@ class IPInfo(AsyncModule):
 
         # Do we have cached info about this ip in redis?
         # If yes, load it
-        cached_ip_info = self.db.get_ip_info(ip)
-        if not cached_ip_info:
-            cached_ip_info = {}
-
-        # Get the geocountry
-        if cached_ip_info == {} or "geocountry" not in cached_ip_info:
+        geocountry = self.db.get_ip_info(ip, "geocountry")
+        if not geocountry:
             self.get_geocountry(ip)
 
         # only update the ASN for this IP if more than 1 month
         # passed since last ASN update on this IP
-        if self.asn.should_update_asn(cached_ip_info):
-            self.asn.get_asn(ip, cached_ip_info)
+        asn = self.db.get_asn_info(ip)
+        if self.asn.should_update_asn(asn):
+            self.asn.get_asn(ip)
 
         self.get_rdns(ip)
 

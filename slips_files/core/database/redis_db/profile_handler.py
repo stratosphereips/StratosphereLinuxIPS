@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import ipaddress
 import json
 import sys
 import time
@@ -16,6 +15,9 @@ from typing import (
 )
 import redis
 import validators
+from redis.client import Pipeline
+
+from slips_files.core.structures.flow_attributes import Role
 
 
 class ProfileHandler:
@@ -28,12 +30,16 @@ class ProfileHandler:
 
     def is_doh_server(self, ip: str) -> bool:
         """returns whether the given ip is a DoH server"""
-        info: dict = self.get_ip_info(ip)
-        return info.get("is_doh_server", False) if info else False
+        return self.get_ip_info(ip, "is_doh_server") or False
 
     def get_outtuples_from_profile_tw(self, profileid, twid):
-        """Get the out tuples"""
-        return self.r.hget(profileid + self.separator + twid, "OutTuples")
+        """
+        returns (tupleid, symbols)
+        tupleid = f"{ip}-{flow.dport}-{flow.proto}"
+        symbols = "ABA.." (stratoletters)
+        """
+        symbols_key = f"{profileid}_{twid}:OutTuples:symbols"
+        yield from self._hscan(symbols_key)
 
     def set_new_incoming_flows(self, will_slips_have_more_flows: bool):
         """A flag indicating if slips is still receiving new flows from
@@ -49,8 +55,13 @@ class ProfileHandler:
         return self.r.get(self.constants.WILL_SLIPS_HAVE_MORE_FLOWS) == "yes"
 
     def get_intuples_from_profile_tw(self, profileid, twid):
-        """Get the in tuples"""
-        return self.r.hget(profileid + self.separator + twid, "InTuples")
+        """
+        returns (tupleid, symbols)
+        tupleid = f"{ip}-{flow.dport}-{flow.proto}"
+        symbols = "ABA.." (stratoletters)
+        """
+        symbols_key = f"{profileid}_{twid}:InTuples:symbols"
+        yield from self._hscan(symbols_key)
 
     def get_dhcp_flows(self, profileid, twid) -> list:
         """
@@ -93,16 +104,21 @@ class ProfileHandler:
         aka ts of the first flow
         first tw is always timewindow1
         """
+        if self.starttime_of_first_tw:
+            return self.starttime_of_first_tw
+
         starttime_of_first_tw: str = self.r.hget(
             self.constants.ANALYSIS, "file_start"
         )
         if starttime_of_first_tw:
             return float(starttime_of_first_tw)
 
-    def get_timewindow(self, flowtime, profileid):
+    def get_timewindow(self, flowtime, profileid, add_to_db=True):
         """
         This function returns the TW in the database where the flow belongs.
         Returns the time window id
+        :kwarg add_new: Adds the newly recognized tw to the db.
+
         DISCLAIMER:
 
             if the given flowtime is == the starttime of a tw, it will
@@ -117,6 +133,9 @@ class ProfileHandler:
                    │     │      │
                    2     4      6
 
+        Note:
+            - sets self.starttime_of_first_tw
+
         """
         # If the option for only-one-tw was selected, we should
         # create the TW at least 100 years before the flowtime,
@@ -129,14 +148,18 @@ class ProfileHandler:
             tw_start = float(flowtime - (31536000 * 100))
             tw_number: int = 1
         else:
-            starttime_of_first_tw: float = self.get_first_flow_time()
-            if starttime_of_first_tw is not None:  #  because 0 is a valid
+            if not self.starttime_of_first_tw:
+                self.starttime_of_first_tw: float = self.get_first_flow_time()
+
+            if self.starttime_of_first_tw is not None:  #  because 0 is a
+                # valid
                 # value
                 tw_number: int = (
-                    floor((flowtime - starttime_of_first_tw) / self.width) + 1
+                    floor((flowtime - self.starttime_of_first_tw) / self.width)
+                    + 1
                 )
 
-                tw_start: float = starttime_of_first_tw + (
+                tw_start: float = self.starttime_of_first_tw + (
                     self.width * (tw_number - 1)
                 )
             else:
@@ -146,7 +169,9 @@ class ProfileHandler:
 
         tw_id: str = f"timewindow{tw_number}"
 
-        self.add_new_tw(profileid, tw_id, tw_start)
+        if add_to_db:
+            self.add_new_tw(profileid, tw_id, tw_start)
+
         return tw_id
 
     def add_out_http(
@@ -266,492 +291,6 @@ class ProfileHandler:
                     extra_info=extra_info,
                 )
 
-    def _was_flow_flipped(self, flow) -> bool:
-        """
-        The majority of the FP with horizontal port scan detection
-        happen because a benign computer changes wifi, and many not
-        established conns are redone, which look like a port scan to
-        10 webpages. To avoid this, we IGNORE all the flows that have
-        in the history of flags (field history in zeek), the ^,
-        that means that the flow was swapped/flipped.
-        The below key_name is only used by the portscan module to check
-        for horizontal portscan, which means we can safely ignore it
-        here and it won't affect the rest of slips
-        """
-        state_hist = flow.state_hist if hasattr(flow, "state_hist") else ""
-        return "^" in state_hist
-
-    @staticmethod
-    def _is_multicast_or_broadcast(daddr: str) -> bool:
-        """
-        to avoid reporting port scans on the
-        broadcast or multicast addresses or invalid values
-        """
-        if daddr == "255.255.255.255":
-            return True
-
-        daddr_obj = ipaddress.ip_address(daddr)
-        return daddr_obj.is_multicast
-
-    def add_port(
-        self, profileid: str, twid: str, flow: dict, role: str, port_type: str
-    ):
-        """
-        Store info learned from ports for this flow
-        The flow can go out of the IP (we are acting as Client) or into the IP
-         (we are acting as Server)
-        role: 'Client' or 'Server'. Client also defines that the flow is going
-         out, Server that is going in
-        port_type: 'Dst' or 'Src'.
-        Depending if this port was a destination port or a source port
-        """
-        # Extract variables from columns
-        dport = flow.dport
-        sport = flow.sport
-        totbytes = int(flow.bytes)
-        pkts = int(flow.pkts)
-        state = flow.state
-        proto = flow.proto.upper()
-        starttime = str(flow.starttime)
-        uid = flow.uid
-        ip = str(flow.daddr)
-        spkts = flow.spkts
-
-        if self._was_flow_flipped(flow):
-            return False
-
-        # Choose which port to use based if we were asked Dst or Src
-        port = str(sport) if port_type == "Src" else str(dport)
-
-        # If we are the Client, we want to store the dstips only
-        # If we are the Server, we want to store the srcips only
-        ip_key = "srcips" if role == "Server" else "dstips"
-
-        # Get the state. Established, NotEstablished
-        summary_state = self.get_final_state_from_flags(state, pkts)
-
-        old_profileid_twid_data = self.get_data_from_profile_tw(
-            profileid, twid, port_type, summary_state, proto, role, "Ports"
-        )
-
-        try:
-            # we already have info about this dport, update it
-            port_data = old_profileid_twid_data[port]
-            port_data["totalflows"] += 1
-            port_data["totalpkt"] += pkts
-            port_data["totalbytes"] += totbytes
-
-            # if there's a conn from this ip on this port, update the pkts
-            # of this conn
-            if ip in port_data[ip_key]:
-                port_data[ip_key][ip]["pkts"] += pkts
-                port_data[ip_key][ip]["spkts"] += spkts
-                port_data[ip_key][ip]["uid"].append(uid)
-            else:
-                port_data[ip_key][ip] = {
-                    "pkts": pkts,
-                    "spkts": spkts,
-                    "stime": starttime,
-                    "uid": [uid],
-                }
-
-        except KeyError:
-            # First time for this dport
-            port_data = {
-                "totalflows": 1,
-                "totalpkt": pkts,
-                "totalbytes": totbytes,
-                ip_key: {
-                    ip: {
-                        "pkts": pkts,
-                        "spkts": spkts,
-                        "stime": starttime,
-                        "uid": [uid],
-                    }
-                },
-            }
-        old_profileid_twid_data[port] = port_data
-        data = json.dumps(old_profileid_twid_data)
-        hash_key = f"{profileid}{self.separator}{twid}"
-        key_name = f"{port_type}Ports{role}{proto}{summary_state}"
-        self.mark_profile_tw_as_modified(profileid, twid, starttime)
-
-        if key_name == "DstPortsClientTCPNot Established":
-            # this key is used in horizontal ps module only
-            # to avoid unnecessary storing and filtering of data, we store
-            # only unresolved non multicast non broadcast ips.
-            # if this key is ever needed for another module, we'll need to
-            # workaround this
-            ip_resolved = self.get_dns_resolution(ip)
-            if ip_resolved or self._is_multicast_or_broadcast(ip):
-                return
-
-        self.r.hset(hash_key, key_name, str(data))
-
-    def get_final_state_from_flags(self, state, pkts):
-        """
-        Analyze the flags given and return a summary of the state. Should work
-         with Argus and Bro flags
-        We receive the pakets to distinguish some Reset connections
-        """
-        try:
-            pre = state.split("_")[0]
-            try:
-                # Try suricata states
-                """
-                There are different states in which a flow can be.
-                Suricata distinguishes three flow-states for TCP and two for UDP. For TCP,
-                these are: New, Established and Closed,for UDP only new and established.
-                For each of these states Suricata can employ different timeouts.
-                """
-                if "new" in state or "established" in state:
-                    return "Established"
-                elif "closed" in state:
-                    return "Not Established"
-
-                # We have varius type of states depending on the type of flow.
-                # For Zeek
-                if state in ("S0", "REJ", "RSTOS0", "RSTRH", "SH", "SHR"):
-                    return "Not Established"
-                elif state in ("S1", "SF", "S2", "S3", "RSTO", "RSTP", "OTH"):
-                    return "Established"
-
-                # For Argus
-                suf = state.split("_")[1]
-                if "S" in pre and "A" in pre and "S" in suf and "A" in suf:
-                    """
-                    Examples:
-                    SA_SA
-                    SR_SA
-                    FSRA_SA
-                    SPA_SPA
-                    SRA_SPA
-                    FSA_FSA
-                    FSA_FSPA
-                    SAEC_SPA
-                    SRPA_SPA
-                    FSPA_SPA
-                    FSRPA_SPA
-                    FSPA_FSPA
-                    FSRA_FSPA
-                    SRAEC_SPA
-                    FSPA_FSRPA
-                    FSAEC_FSPA
-                    FSRPA_FSPA
-                    SRPAEC_SPA
-                    FSPAEC_FSPA
-                    SRPAEC_FSRPA
-                    """
-                    return "Established"
-                elif "PA" in pre and "PA" in suf:
-                    # Tipical flow that was reported in the middle
-                    """
-                    Examples:
-                    PA_PA
-                    FPA_FPA
-                    """
-                    return "Established"
-                elif "ECO" in pre:
-                    return "ICMP Echo"
-                elif "ECR" in pre:
-                    return "ICMP Reply"
-                elif "URH" in pre:
-                    return "ICMP Host Unreachable"
-                elif "URP" in pre:
-                    return "ICMP Port Unreachable"
-                else:
-                    """
-                    Examples:
-                    S_RA
-                    S_R
-                    A_R
-                    S_SA
-                    SR_SA
-                    FA_FA
-                    SR_RA
-                    SEC_RA
-                    """
-                    return "Not Established"
-            except IndexError:
-                # suf does not exist, which means that this is some ICMP or no response was sent for UDP or TCP
-                if "ECO" in pre:
-                    # ICMP
-                    return "Established"
-                elif "UNK" in pre:
-                    # ICMP6 unknown upper layer
-                    return "Established"
-                elif "CON" in pre:
-                    # UDP
-                    return "Established"
-                elif "INT" in pre:
-                    # UDP trying to connect, NOT preciselly not established but also NOT 'Established'. So we considered not established because there
-                    # is no confirmation of what happened.
-                    return "Not Established"
-                elif "EST" in pre:
-                    # TCP
-                    return "Established"
-                elif "RST" in pre:
-                    # TCP. When -z B is not used in argus, states are single words. Most connections are reseted when finished and therefore are established
-                    # It can happen that is reseted being not established, but we can't tell without -z b.
-                    # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
-                    return (
-                        "Not Established" if int(pkts) <= 3 else "Established"
-                    )
-                elif "FIN" in pre:
-                    # TCP. When -z B is not used in argus, states are single words. Most connections are finished with FIN when finished and therefore are established
-                    # It can happen that is finished being not established, but we can't tell without -z b.
-                    # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
-                    return (
-                        "Not Established" if int(pkts) <= 3 else "Established"
-                    )
-                else:
-                    """
-                    Examples:
-                    S_
-                    FA_
-                    PA_
-                    FSA_
-                    SEC_
-                    SRPA_
-                    """
-                    return "Not Established"
-        except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(
-                f"Error in getFinalStateFromFlags() in database.py line {exception_line}",
-                0,
-                1,
-            )
-            self.print(traceback.format_exc(), 0, 1)
-
-    def get_data_from_profile_tw(
-        self,
-        profileid: str,
-        twid: str,
-        direction: str,
-        state: str,
-        protocol: str,
-        role: str,
-        type_data: str,
-    ) -> dict:
-        """
-        Get the info about a certain role (Client or Server),
-        for a particular protocol (TCP, UDP, ICMP, etc.) for a
-        particular State (Established, etc.)
-
-        :param direction: 'Dst' or 'Src'. This is used to know if you
-        want the data of the src ip or ports, or the data from
-        the dst ips or ports
-        :param state: can be 'Established' or 'NotEstablished'
-        :param protocol: can be 'TCP', 'UDP', 'ICMP' or 'IPV6ICMP'
-
-        :param role: can be 'Client' or 'Server'
-        Depending if the traffic is going out or not, we are Client or Server
-        Client role means: the traffic is done by the given profile
-        Server role means:the traffic is going to the given profile
-
-        :param type_data: can be 'Ports' or 'IPs'
-        """
-
-        try:
-            # key_name = [Src,Dst] + [Port,IP] + [Client,Server] +
-            # [TCP,UDP, ICMP, ICMP6] + [Established,
-            # Not Establihed]
-            # Example: key_name = 'SrcPortClientTCPEstablished'
-            key = direction + type_data + role + protocol.upper() + state
-            data = self.r.hget(f"{profileid}{self.separator}{twid}", key)
-
-            if data:
-                return json.loads(data)
-
-            self.print(
-                f"There is no data for Key: {key}. Profile {profileid} TW {twid}",
-                3,
-                0,
-            )
-            return {}
-        except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(
-                f"Error in getDataFromProfileTW database.py line "
-                f"{exception_line}",
-                0,
-                1,
-            )
-            self.print(traceback.format_exc(), 0, 1)
-
-    def update_ip_info(
-        self,
-        old_profileid_twid_data: dict,
-        pkts,
-        dport,
-        spkts,
-        totbytes,
-        ip,
-        starttime,
-        uid,
-    ) -> dict:
-        """
-        #  Updates how many times each individual DstPort was contacted,
-        the total flows sent by this ip and their uids,
-        the total packets sent by this ip,
-        and total bytes sent by this ip
-        """
-        dport = str(dport)
-        spkts = int(spkts)
-        pkts = int(pkts)
-        totbytes = int(totbytes)
-        if ip in old_profileid_twid_data:
-            # update info about an existing ip
-            ip_data = old_profileid_twid_data[ip]
-            ip_data["totalflows"] += 1
-            ip_data["totalpkt"] += pkts
-            ip_data["totalbytes"] += totbytes
-            ip_data["uid"].append(uid)
-
-            ip_data["dstports"]: dict
-
-            if dport in ip_data["dstports"]:
-                ip_data["dstports"][dport] += spkts
-            else:
-                ip_data["dstports"].update({dport: spkts})
-        else:
-            # First time seeing this ip
-            ip_data = {
-                "totalflows": 1,
-                "totalpkt": pkts,
-                "totalbytes": totbytes,
-                "stime": starttime,
-                "uid": [uid],
-                "dstports": {dport: spkts},
-            }
-        old_profileid_twid_data.update({ip: ip_data})
-
-        return old_profileid_twid_data
-
-    def update_times_contacted(self, ip, direction, profileid, twid):
-        """
-        :param ip: the ip that we want to update the times we contacted
-        """
-
-        # Get the hash of the timewindow
-        profileid_twid = f"{profileid}{self.separator}{twid}"
-
-        # Get the DstIPs data for this tw in this profile
-        # The format is {'1.1.1.1' :  3}
-        ips_contacted = self.r.hget(profileid_twid, f"{direction}IPs")
-        if not ips_contacted:
-            ips_contacted = {}
-
-        try:
-            ips_contacted = json.loads(ips_contacted)
-            # Add 1 because we found this ip again
-            ips_contacted[ip] += 1
-        except (TypeError, KeyError):
-            # There was no previous data stored in the DB
-            ips_contacted[ip] = 1
-
-        ips_contacted = json.dumps(ips_contacted)
-        self.r.hset(profileid_twid, f"{direction}IPs", str(ips_contacted))
-
-    def add_ips(self, profileid, twid, flow, role):
-        """
-        Function to add information about an IP address
-        The flow can go out of the IP (we are acting as Client) or into the IP
-        (we are acting as Server)
-        ip_as_obj: IP to add. It can be a dstIP or srcIP depending on the role
-        role: 'Client' or 'Server'
-        This function does two things:
-            1- Add the ip to this tw in this profile, counting how many times
-            it was contacted, and storing it in the key 'DstIPs' or 'SrcIPs'
-            in the hash of the profile
-            2- Use the ip as a key to count how many times that IP was
-            contacted on each port. We store it like this because its the
-               pefect structure to detect vertical port scans later on
-            3- Check if this IP has any detection in the threat intelligence
-            module. The information is added by the module directly in the DB.
-        """
-
-        uid = flow.uid
-        starttime = str(flow.starttime)
-        ip = flow.daddr if role == "Client" else flow.saddr
-
-        """
-        Depending if the traffic is going out or not, we are Client or Server
-        Client role means:
-            The profile corresponds to the src ip that received this flow
-            The dstip is here the one receiving data from your profile
-            So check the dst ip
-        Server role means:
-            The profile corresponds to the dst ip that received this flow
-            The srcip is here the one sending data to your profile
-            So check the src ip
-        """
-        direction = "Dst" if role == "Client" else "Src"
-
-        #############
-        # Store the Dst as IP address and notify in the channel
-        # We send the obj but when accessed as str, it is automatically
-        # converted to str
-        self.set_new_ip(ip)
-
-        #############
-
-        # OTH means that we didnt see the true src ip and dst ip
-        # from zeek docs; OTH: No SYN seen, just midstream traffic
-        # (one example of this is a “partial connection” that was not
-        # later closed).
-        if flow.state != "OTH":
-            self.ask_for_ip_info(
-                flow.saddr,
-                profileid,
-                twid,
-                flow,
-                "srcip",
-                daddr=flow.daddr,
-            )
-            self.ask_for_ip_info(
-                flow.daddr,
-                profileid,
-                twid,
-                flow,
-                "dstip",
-            )
-
-        self.update_times_contacted(ip, direction, profileid, twid)
-
-        # Get the state. Established, NotEstablished
-        summary_state = self.get_final_state_from_flags(flow.state, flow.pkts)
-        key_name = f"{direction}IPs{role}{flow.proto.upper()}{summary_state}"
-        # Get the previous data about this key
-        old_profileid_twid_data = self.get_data_from_profile_tw(
-            profileid,
-            twid,
-            direction,
-            summary_state,
-            flow.proto,
-            role,
-            "IPs",
-        )
-        profileid_twid_data: dict = self.update_ip_info(
-            old_profileid_twid_data,
-            flow.pkts,
-            flow.dport,
-            flow.spkts,
-            flow.bytes,
-            ip,
-            starttime,
-            uid,
-        )
-
-        # Store this data in the profile hash
-        self.r.hset(
-            f"{profileid}{self.separator}{twid}",
-            key_name,
-            json.dumps(profileid_twid_data),
-        )
-        return True
-
     def get_all_contacted_ips_in_profileid_twid(self, profileid, twid) -> dict:
         """
         Get all the contacted IPs in a given profile and TW
@@ -866,7 +405,10 @@ class ProfileHandler:
         """
         gets total flows to process from the db
         """
-        return self.r.hget(self.constants.ANALYSIS, "total_flows")
+        total_flows = self.r.hget(self.constants.ANALYSIS, "total_flows")
+        if total_flows:
+            return int(total_flows)
+        return 0
 
     def get_analysis_info(self):
         return self.r.hgetall(self.constants.ANALYSIS)
@@ -942,7 +484,6 @@ class ProfileHandler:
         self.print(f"Adding SSL flow to DB: {flow}", 3, 0)
         # Check if the server_name (SNI) is detected by the threat intelligence.
         # Empty field in the end, cause we have extra field for the IP.
-        # If server_name is not empty, set in the IPsInfo and send to TI
         if not flow.server_name:
             return False
 
@@ -959,27 +500,28 @@ class ProfileHandler:
 
         # Save new server name in the IPInfo. There might be several
         # server_name per IP.
-        if ipdata := self.get_ip_info(flow.daddr):
-            sni_ipdata = ipdata.get("SNI", [])
-        else:
-            sni_ipdata = []
+        cached_sni: Optional[List[dict]] = self.get_ip_info(flow.daddr, "SNI")
 
-        sni_port = {"server_name": flow.server_name, "dport": flow.dport}
+        if not cached_sni:
+            cached_sni = []
+
+        new_sni = {"server_name": flow.server_name, "dport": flow.dport}
         # We do not want any duplicates.
-        if sni_port not in sni_ipdata:
+        if new_sni not in cached_sni:
+            # only add this SNI to our db if it has a DNS resolution
             # Verify that the SNI is equal to any of the domains in the DNS
             # resolution
-            # only add this SNI to our db if it has a DNS resolution
-            if dns_resolutions := self.r.hgetall("DNSresolution"):
-                # dns_resolutions is a dict with {ip:{'ts'..,'domains':...,
-                # 'uid':..}}
-                for ip, resolution in dns_resolutions.items():
-                    resolution = json.loads(resolution)
-                    if sni_port["server_name"] in resolution["domains"]:
-                        # add SNI to our db as it has a DNS resolution
-                        sni_ipdata.append(sni_port)
-                        self.set_ip_info(flow.daddr, {"SNI": sni_ipdata})
-                        break
+            resolution = self.r.hget("DNSresolution", flow.daddr)
+            if not resolution:
+                return
+
+            resolution = json.loads(resolution)
+            if new_sni["server_name"] not in resolution["domains"]:
+                return
+
+            # add SNI to our db as it has a DNS resolution
+            cached_sni.append(new_sni)
+            self.set_ip_info(flow.daddr, {"SNI": cached_sni})
 
     def get_profileid_from_ip(self, ip: str) -> Optional[str]:
         """
@@ -1019,37 +561,33 @@ class ProfileHandler:
         """
         return len(self.get_tws_from_profile(profileid)) if profileid else 0
 
-    def get_srcips_from_profile_tw(self, profileid, twid):
-        """
-        Get the src ip for a specific TW for a specific profileid
-        """
-        return self.r.hget(profileid + self.separator + twid, "SrcIPs")
-
-    def get_dstips_from_profile_tw(self, profileid, twid):
-        """
-        Get the dst ip for a specific TW for a specific profileid
-        """
-        return self.r.hget(profileid + self.separator + twid, "DstIPs")
-
-    def get_t2_for_profile_tw(self, profileid, twid, tupleid, tuple_key: str):
+    def get_t2_for_profile_tw(
+        self, profileid, twid, tupleid, direction: str
+    ) -> Tuple[Optional[float], Optional[float]]:
         """
         Get T1 and the previous_time for this previous_time, twid and tupleid
+
+        :param tupleid: = f"{daddr}-{flow.dport}-{flow.proto}"
+        :param direction: can be 'InTuples' or 'OutTuples'
+
+        returns a tuple with 2 timestamps, a ts can be None if not found
         """
         try:
-            hash_id = profileid + self.separator + twid
-            data = self.r.hget(hash_id, tuple_key)
-            if not data:
-                return False, False
-            data = json.loads(data)
-            try:
-                (_, previous_two_timestamps) = data[tupleid]
-                return previous_two_timestamps
-            except KeyError:
-                return False, False
+            base = f"{profileid}_{twid}:{direction}"
+
+            delats_key = f"{base}:deltas"
+            delta = self.r.zscore(delats_key, tupleid)
+
+            last_flow_ts_key = f"{base}:last_flow_ts"
+            last_flow_ts = self.r.zscore(last_flow_ts_key, tupleid)
+
+            return delta, last_flow_ts
+
         except Exception as e:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Error in getT2ForProfileTW in database.py line {exception_line}",
+                f"Error in get_t2_for_profile_tw in profile_handler.py "
+                f"line {exception_line}",
                 0,
                 1,
             )
@@ -1138,15 +676,16 @@ class ProfileHandler:
         Returns the id of the timewindow just created
         """
         try:
-            # Add the new TW to the index of TW
-            self.r.zadd(f"tws{profileid}", {timewindow: float(startoftw)})
-            self.print(
-                f"Created and added to DB for "
-                f"{profileid}: a new tw: {timewindow}. "
-                f" with starttime : {startoftw} ",
-                0,
-                4,
-            )
+            if not self.r.zscore(f"tws{profileid}", timewindow):
+                # Add the new TW to the index of TW
+                self.r.zadd(f"tws{profileid}", {timewindow: float(startoftw)})
+                self.print(
+                    f"Created and added to DB for "
+                    f"{profileid}: a new tw: {timewindow}. "
+                    f" with starttime : {startoftw} ",
+                    0,
+                    4,
+                )
             # The creation of a TW now does not imply that it was modified.
             # You need to put data to mark is at modified.
         except redis.exceptions.ResponseError:
@@ -1157,7 +696,7 @@ class ProfileHandler:
         """Return the number of tws for this profile id"""
         return self.r.zcard(f"tws{profileid}") if profileid else False
 
-    def get_modified_tw_since_time(
+    def _get_modified_tw_since_time(
         self, time: float
     ) -> List[Tuple[str, float]]:
         """
@@ -1180,7 +719,7 @@ class ProfileHandler:
         """Returns a set of modified profiles since a certain time and
         the time of the last modified profile"""
         modified_tws: List[Tuple[str, float]] = (
-            self.get_modified_tw_since_time(time)
+            self._get_modified_tw_since_time(time)
         )
         if not modified_tws:
             # no modified tws, and no time_of_last_modified_tw
@@ -1453,7 +992,7 @@ class ProfileHandler:
         if not is_dhcp_set:
             self.r.hset(profileid, "dhcp", "true")
 
-    def add_profile(self, profileid, starttime, confidence=0.05):
+    def add_profile(self, profileid, starttime, confidence=0.05) -> bool:
         """
         Add a new profile to the DB. Both the list of profiles and the
          hashmap of profile data
@@ -1465,18 +1004,18 @@ class ProfileHandler:
                 # we already have this profile
                 return False
 
-            # Add the profile to the index. The index is called 'profiles'
-            self.r.sadd(self.constants.PROFILES, str(profileid))
-            # Create the hashmap with the profileid.
-            # The hasmap of each profile is named with the profileid
-            # Add the start time of profile
-            self.r.hset(profileid, "starttime", starttime)
-            # For now duration of the TW is fixed
-            self.r.hset(profileid, "duration", self.width)
-            # When a new profiled is created assign threat level = 0
-            # and confidence = 0.05
+            with self.r.pipeline() as pipe:
+                pipe.sadd(self.constants.PROFILES, str(profileid))
+                # Create the hashmap with the profileid.
+                # The hasmap of each profile is named with the profileid
+                # Add the start time of profile
+                pipe.hset(profileid, "starttime", starttime)
+                pipe.hset(profileid, "duration", self.width)
+                # When a new profiled is created assign threat level = 0
+                # and confidence = 0.05
+                pipe.hset(profileid, "confidence", confidence)
+                pipe.execute()
 
-            self.r.hset(profileid, "confidence", confidence)
             # The IP of the profile should also be added as a new IP
             # we know about.
             ip = profileid.split(self.separator)[1]
@@ -1484,11 +1023,13 @@ class ProfileHandler:
             self.set_new_ip(ip)
             # Publish that we have a new profile
             self.publish("new_profile", ip)
+
             return True
         except redis.exceptions.ResponseError as inst:
             self.print("Error in add_profile in database.py", 0, 1)
             self.print(type(inst), 0, 1)
             self.print(inst, 0, 1)
+            return False
 
     def set_module_label_for_profile(self, profileid, module, label):
         """
@@ -1504,68 +1045,151 @@ class ProfileHandler:
     def check_tw_to_close(self, close_all=False):
         """
         Check if we should close a TW
-        Search in the modified tw list and compare when they
-        were modified with the slips internal time
-        :param close_all: close all tws no matter when they were last modified
+        Closes the tws that were last modified more than an hour
+        ago (self.width)
+        :param close_all: close all tws no matter when they were last
+        modified, happens when slips is stopping
         """
 
-        sit = self.get_slips_internal_time()
+        sit = float(self.get_slips_internal_time())
+
+        # early exit to avoid re-checking when nothing changed. Remember
+        # this func is called per flow, so it needs to be as fast as possible
+        if (
+            not close_all
+            and hasattr(self, "_last_sit")
+            and sit == self._last_sit
+        ):
+            return  # nothing changed since last run
+
+        self._last_sit = sit
 
         # sit is the ts of the last tw modification detected by slips
         # so this line means if 1h(width) passed since the last
         # modification detected, then it's time to close the tw
-        modification_time = float(sit) - self.width
+        modification_time = sit - self.width
         if close_all:
             # close all tws no matter when they were last modified
             modification_time = float("inf")
 
         # these are the tws that havent been modified in the last 1h
-        profiles_tws_to_close = self.r.zrangebyscore(
+        profiles_tws_to_close: List[str] = self.r.zrangebyscore(
             self.constants.MODIFIED_TIMEWINDOWS,
             0,
             modification_time,
-            withscores=True,
         )
+        if not profiles_tws_to_close:
+            return
 
+        # Mark the TWs as closed so modules can work on its data
+        pipe = self.r.pipeline()
         for profile_tw_to_close in profiles_tws_to_close:
-            profile_tw_to_close_id = profile_tw_to_close[0]
-            profile_tw_to_close_time = profile_tw_to_close[1]
-            self.print(
-                f"The profile id {profile_tw_to_close_id} has to be closed"
-                f" because it was"
-                f" last modifed on {profile_tw_to_close_time} and we are "
-                f"closing everything older than {modification_time}."
-                f" Current time {sit}. "
-                f"Difference: {modification_time - profile_tw_to_close_time}",
-                3,
-                0,
+            pipe.zrem(self.constants.MODIFIED_TIMEWINDOWS, profile_tw_to_close)
+            pipe = self.publish(
+                "tw_closed", profile_tw_to_close, pipeline=pipe
             )
-            self.mark_profile_tw_as_closed(profile_tw_to_close_id)
+            if not close_all:
+                # if slips isn't stopping, then do regular
+                # cleanup of the past
+                pipe = self._delete_past_timewindows(profile_tw_to_close, pipe)
+        pipe.execute()
 
-    def mark_profile_tw_as_closed(self, profileid_tw):
-        """
-        Mark the TW as closed so tools can work on its data
-        """
-        self.r.sadd("ClosedTW", profileid_tw)
-        self.r.zrem(self.constants.MODIFIED_TIMEWINDOWS, profileid_tw)
-        self.publish("tw_closed", profileid_tw)
+    def get_current_timewindow(self) -> Optional[str]:
+        """returns the current timewindow if slips is running real-time (
+        not pcap/log files)"""
+        if not self.args.interface:
+            return
 
-    def mark_profile_tw_as_modified(self, profileid, twid, timestamp):
+        return self.r.get(self.constants.CURRENT_TIMEWINDOW)
+
+    def set_current_timewindow(self, timewindow: str) -> Optional[str]:
+        self.r.set(self.constants.CURRENT_TIMEWINDOW, timewindow)
+
+    def _delete_past_timewindows(self, closed_profile_tw: str, pipe):
+        """
+        Deletes the past timewindows data from redis, starting from the
+        given tw-1, so that redis only has info about the current
+        timewindow and the one before it
+
+        Deleted keys are the ones following the format
+        profileid_timewindowX (aka keys needed for the portscan module only)
+
+        why do we keep 2 tws instead of the current one in redis? see PR
+        #1765 in slips repo
+
+        :param closed_profile_tw: a str like profile_8.8.8.8_timewindow7
+        """
+        try:
+            profile, ip, tw = closed_profile_tw.split("_")
+            closed_tw = int(tw.replace("timewindow", ""))
+        except ValueError:
+            self.print(
+                f"Unable to delete old timewindows info from"
+                f" {closed_profile_tw}"
+            )
+            return pipe
+
+        if closed_tw < 2:
+            # slips needs to always remember 2 tws, now tws to delete now
+            return pipe
+
+        current_timewindow: Optional[str] = self.get_current_timewindow()
+        if current_timewindow:
+            current_timewindow = int(
+                current_timewindow.replace("timewindow", "")
+            )
+            # Zeek flows don't arrive in chronological order. this is to
+            # make sure that we never close incorrect tws when a zeek flow
+            # too far in the past or too far in the future is found.
+            tws_to_close = current_timewindow - 2
+        else:
+            tws_to_close = closed_tw - 2
+
+        profileid = f"{profile}_{ip}"
+        # to avoid deleting so many keys at once which causes mem spikes
+        BATCH = 500
+        for tw_to_close in range(tws_to_close, -1, -1):
+            for i, key in enumerate(
+                self.r.scan_iter(
+                    match=f"{profileid}_timewindow{tw_to_close}", count=1000
+                )
+            ):
+                pipe.unlink(key)
+
+                if i % BATCH == 0:
+                    pipe.execute()
+                    pipe = self.r.pipeline()
+
+        return pipe
+
+    def mark_profile_tw_as_modified(
+        self, profileid, twid, timestamp, pipe: Pipeline = None
+    ):
         """
         Mark a TW in a profile as modified
         This means:
         1- To add it to the list of ModifiedTW
         2- Add the timestamp received to the time_of_last_modification
            in the TW itself
-        3- To update the internal time of slips
-        4- To check if we should 'close' some TW
+
+        Modules wait for a TW modification to do some detections.
+        check the "tw_modified" channel usages to know why this func is
+        useful
         """
-        timestamp = time.time()
+        timestamp = timestamp or time.time()
         data = {f"{profileid}{self.separator}{twid}": float(timestamp)}
-        self.r.zadd(self.constants.MODIFIED_TIMEWINDOWS, data)
-        self.publish("tw_modified", f"{profileid}:{twid}")
-        # Check if we should close some TW
-        self.check_tw_to_close()
+        client = pipe if pipe else self.r
+        client.zadd(self.constants.MODIFIED_TIMEWINDOWS, data)
+        self.publish(
+            "tw_modified",
+            json.dumps(
+                {
+                    "profileid": profileid,
+                    "twid": twid,
+                }
+            ),
+        )
+        return pipe
 
     def publish_new_letter(
         self, new_symbol: str, profileid: str, twid: str, tupleid: str, flow
@@ -1589,113 +1213,88 @@ class ProfileHandler:
         to_send = json.dumps(to_send)
         self.publish("new_letters", to_send)
 
-    #
-    # def get_previous_symbols(self, profileid: str, twid: str, direction:
-    # str, tupleid: str):
-    #     """
-    #     returns all the InTuples or OutTuples for this profileid in this TW
-    #     """
-    #     profileid_twid = f'{profileid}{self.separator}{twid}'
-    #
-    #     tuples = self.r.hget(profileid_twid, direction) or '{}'
-    #     tuples = json.loads(tuples)
-    #
-    #     # Get the last symbols of letters in the DB
-    #     prev_symbols = tuples[tupleid][0]
-    #     return prev_symbols
-    #
-
     def add_tuple(
         self,
         profileid: str,
         twid: str,
-        tupleid: str,
-        symbol: Tuple,
-        role: str,
+        new_symbol: Tuple[str, Tuple[float, float]],
+        role: Role,
         flow,
     ):
         """
         Add the tuple going in or out for this profile
         and if there was previous symbols for this profile, append the new
         symbol to it
-        before adding the tuple to the db
-
-        :param tupleid:  a dash separated str with the following format
         daddr-dport-proto
-        :param symbol:  (symbol, (symbol_to_add, previous_two_timestamps))
-        T1: is the time diff between the past flow and the past-past flow.
-        last_ts: the timestamp of the last flow
-        :param role: 'Client' or 'Server'
+        :param new_symbol: (symbol, (symbol_to_add, previous_two_timestamps))
+            where (T1, last_flow_ts) =
+            previous_two_timestamps
+            T1: is the time diff between the past flow and the past-past
+            flow.
+            last_flow_ts: the timestamp of the last flow
+
         """
         # If the traffic is going out it is part of our outtuples,
         # if not, part of our intuples
-        if role == "Client":
+        if role == Role.CLIENT:
             direction = "OutTuples"
-        elif role == "Server":
+            ip = flow.daddr
+        elif role == Role.SERVER:
             direction = "InTuples"
+            ip = flow.saddr
+        else:
+            return
+
+        base = f"{profileid}_{twid}:{direction}"
+        symbols_key = f"{base}:symbols"
+        delats_key = f"{base}:deltas"
+        last_flow_ts_key = f"{base}:last_flow_ts"
+
+        tupleid = f"{ip}-{flow.dport}-{flow.proto}"
+        symbol_to_add, timestamps = new_symbol
+        last_2_flows_diff, last_ts = timestamps
 
         try:
-            profileid_twid = f"{profileid}{self.separator}{twid}"
+            prev_symbol = self.r.hget(symbols_key, tupleid)
+            if not prev_symbol:
+                new_symbol = symbol_to_add
 
-            # prev_symbols is a dict with {tulpeid: ['symbols_so_far',
-            # [timestamps]]}
-            prev_symbols: str = self.r.hget(profileid_twid, direction) or "{}"
-            prev_symbols: dict = json.loads(prev_symbols)
-
-            try:
-                # Get the last symbols of letters in the DB
-                prev_symbol: str = prev_symbols[tupleid][0]
-
-                # Separate the symbol to add and the previous data
-                (symbol_to_add, previous_two_timestamps) = symbol
                 self.print(
-                    f"Not the first time for tuple {tupleid} as an "
-                    f"{direction} for "
-                    f"{profileid} in TW {twid}. Add the symbol: {symbol_to_add}. "
-                    f"Store previous_times: {previous_two_timestamps}. "
-                    f"Prev Data: {prev_symbols}",
+                    f"First time for tuple {tupleid} as an"
+                    f" {direction} for {profileid} in {twid}",
                     3,
                     0,
                 )
-
-                # Add it to form the string of letters
+            else:
                 new_symbol = f"{prev_symbol}{symbol_to_add}"
-
                 self.publish_new_letter(
                     new_symbol, profileid, twid, tupleid, flow
                 )
 
-                prev_symbols[tupleid] = (new_symbol, previous_two_timestamps)
-                self.print(
-                    f"\tLetters so far for tuple {tupleid}:" f" {new_symbol}",
-                    3,
-                    0,
-                )
-            except (TypeError, KeyError):
-                # TODO check that this condition is triggered correctly
-                #  only for the first case and not the rest after...
-                # There was no previous data stored in the DB to append
-                # the given symbol to.
-                self.print(
-                    f"First time for tuple {tupleid} as an"
-                    f" {direction} for {profileid} in TW {twid}",
-                    3,
-                    0,
-                )
-                prev_symbols[tupleid] = symbol
+            self.r.hset(symbols_key, tupleid, new_symbol)
+            if last_2_flows_diff:
+                self.r.zadd(delats_key, {tupleid: last_2_flows_diff})
+            if last_ts:
+                self.r.zadd(last_flow_ts_key, {tupleid: last_ts})
 
-            prev_symbols = json.dumps(prev_symbols)
-            self.r.hset(profileid_twid, direction, prev_symbols)
-            self.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
-
-        except Exception:
+        except Exception as e:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Error in add_tuple in database.py line {exception_line}",
+                f"Error in add_tuple in database.py line {exception_line} "
+                f"{e}",
                 0,
                 1,
             )
             self.print(traceback.format_exc(), 0, 1)
+
+    def store_lines_processors(self, file_type: str, indices: dict):
+        self.r.hset(
+            self.constants.LINE_PROCESSORS, file_type, json.dumps(indices)
+        )
+
+    def get_line_processors(self) -> dict:
+        # the keys are very limite d we can safely use hgetall here
+        return self.r.hgetall(self.constants.LINE_PROCESSORS)
 
     def get_modules_labels_of_a_profile(self, profileid):
         """
