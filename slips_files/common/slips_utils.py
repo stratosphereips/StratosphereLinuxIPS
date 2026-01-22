@@ -919,6 +919,18 @@ class Utils(object):
             ts = ts + "0" * (6 - len(ts.split(".")[-1]))
         return ts
 
+    def _convert_str_port_to_int(self, port) -> int:
+        if isinstance(port, str):
+            try:
+                return int(port)
+            except ValueError:
+                try:
+                    return int("0x008", 16)
+                except Exception:
+                    pass
+
+        return port
+
     def get_aid(self, flow):
         """
         calculates the  AID hash of the flow aka All-ID of the flow
@@ -936,12 +948,14 @@ class Utils(object):
             "icmp": aid_hash.FlowTuple.make_icmp,
         }
         try:
+            int_sport = self._convert_str_port_to_int(flow.sport)
+            int_dport = self._convert_str_port_to_int(flow.dport)
+
             tpl = cases[proto](
-                ts, flow.saddr, flow.daddr, flow.sport, flow.dport
+                ts, flow.saddr, flow.daddr, int_sport, int_dport
             )
             return self.aid.calc(tpl)
-        except KeyError:
-            # proto doesn't have an aid.FlowTuple  method
+        except Exception:
             return ""
 
     def to_json_serializable(self, obj: Any) -> Any:
