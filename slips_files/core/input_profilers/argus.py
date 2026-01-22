@@ -10,7 +10,8 @@ from slips_files.core.flows.argus import ArgusConn
 
 
 class Argus(IInputType):
-    def __init__(self):
+    def __init__(self, db):
+        self.db = db
         self.from_stdin = self.reading_flows_from_stdin()
 
     def reading_flows_from_stdin(self) -> bool:

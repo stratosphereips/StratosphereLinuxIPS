@@ -10,14 +10,13 @@ from slips_files.core.flows.nfdump import NfdumpConn
 class Nfdump(IInputType):
     separator = ","
 
-    def __init__(self):
-        pass
+    def __init__(self, db):
+        self.db = db
 
     def process_line(self, new_line) -> Tuple[bool, str]:
         """
         Process the line and extract columns for nfdump
         """
-        self.separator = ","
         line = new_line["data"]
         nline = line.strip().split(self.separator)
 

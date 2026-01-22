@@ -16,8 +16,8 @@ from slips_files.core.flows.suricata import (
 
 
 class Suricata(IInputType):
-    def __init__(self):
-        pass
+    def __init__(self, db):
+        self.db = db
 
     def get_answers(self, line: dict) -> list:
         """
