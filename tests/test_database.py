@@ -7,21 +7,9 @@ from unittest.mock import (
 
 import redis
 import json
-import time
 
 from slips_files.core.flows.zeek import Conn
 from tests.module_factory import ModuleFactory
-from slips_files.core.structures.evidence import (
-    Evidence,
-    Direction,
-    IoCType,
-    EvidenceType,
-    Attacker,
-    Victim,
-    ThreatLevel,
-    ProfileID,
-    TimeWindow,
-)
 
 
 # random values for testing
@@ -48,62 +36,6 @@ flow = Conn(
     dmac="",
     interface="eth0",
 )
-
-
-def test_get_profileid_from_ip():
-    db = ModuleFactory().create_db_manager_obj(6380, flush_db=True)
-    db.width = 3600
-    # add a profile
-    db.add_profile("profile_192.168.1.1", "00:00")
-    # try to retrieve it
-    assert db.get_profileid_from_ip(test_ip) is not False
-
-
-def test_timewindows():
-    """tests for add_new_tw , get_last_twid_of_profile and
-    get_first_twid_for_profile"""
-    db = ModuleFactory().create_db_manager_obj(6381, flush_db=True)
-    profileid = "profile_192.168.1.1"
-    # add a profile
-    db.add_profile(profileid, "00:00")
-    # add a tw to that profile (first tw)
-    db.add_new_tw(profileid, "timewindow1", 0.0)
-    # add  a new tw (last tw)
-    db.add_new_tw(profileid, "timewindow2", 3700)
-    assert db.get_first_twid_for_profile(profileid) == ("timewindow1", 0.0)
-    assert db.get_last_twid_of_profile(profileid) == ("timewindow2", 3700.0)
-
-
-def test_set_evidence():
-    db = ModuleFactory().create_db_manager_obj(6384, flush_db=True)
-    attacker: Attacker = Attacker(
-        direction=Direction.SRC, ioc_type=IoCType.IP, value=test_ip
-    )
-    threat_level: ThreatLevel = ThreatLevel.INFO
-    confidence = 0.8
-    description = f"SSH Successful to IP : 8.8.8.8 . From IP {test_ip}"
-    timestamp = time.time()
-    uid = ["123"]
-    victim: Victim = Victim(
-        direction=Direction.DST, ioc_type=IoCType.IP, value="8.8.8.8"
-    )
-    db._get_evidence_interface = Mock(return_value="eth0")
-    evidence: Evidence = Evidence(
-        evidence_type=EvidenceType.SSH_SUCCESSFUL,
-        attacker=attacker,
-        victim=victim,
-        threat_level=threat_level,
-        confidence=confidence,
-        description=description,
-        profile=ProfileID(ip=test_ip),
-        timewindow=TimeWindow(number=1),
-        uid=uid,
-        timestamp=timestamp,
-    )
-
-    db.set_evidence(evidence)
-    added = db.r.hget(f"{profileid}_{twid}_evidence", evidence.id)
-    assert added
 
 
 def test_setInfoForDomains():

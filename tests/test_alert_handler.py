@@ -3,7 +3,7 @@
 from typing import Dict
 
 import pytest
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock, call, Mock
 import json
 from unittest.mock import ANY
 
@@ -17,6 +17,7 @@ from slips_files.core.structures.evidence import (
     Direction,
     IoCType,
     ThreatLevel,
+    Victim,
 )
 from tests.module_factory import ModuleFactory
 from slips_files.core.structures.alerts import Alert
@@ -292,6 +293,74 @@ def test_init_evidence_number(initial_value, expected_value):
     alert_handler.r.set.assert_called_once_with(
         "number_of_evidence", expected_value
     )
+
+
+@pytest.mark.parametrize(
+    "evidence_exists, whitelisted, expected",
+    [
+        (None, False, True),  # new evidence, not whitelisted → added
+        ("{}", False, False),  # already exists → ignored
+        (None, True, False),  # whitelisted → ignored
+    ],
+)
+def test_set_evidence(evidence_exists, whitelisted, expected):
+    db = ModuleFactory().create_alert_handler_obj()
+
+    db.add_profile = Mock()
+    db.is_detection_disabled = Mock(return_value=False)
+    db.is_whitelisted_evidence = Mock(return_value=whitelisted)
+    db.publish = Mock()
+    db.set_flow_causing_evidence = Mock()
+    db._get_more_info_about_evidence = Mock(side_effect=lambda e: e)
+
+    db.constants = Mock()
+    db.constants.NUMBER_OF_EVIDENCE = "num_evidence"
+
+    db.channels = Mock()
+    db.channels.EVIDENCE_ADDED = "evidence_added"
+
+    db.r = Mock()
+    db.r.hget = Mock(return_value=evidence_exists)
+    db.r.hset = Mock()
+    db.r.incr = Mock()
+
+    test_ip = "192.168.1.1"
+
+    attacker = Attacker(
+        direction=Direction.SRC,
+        ioc_type=IoCType.IP,
+        value=test_ip,
+    )
+    victim = Victim(
+        direction=Direction.DST,
+        ioc_type=IoCType.IP,
+        value="8.8.8.8",
+    )
+
+    evidence = Evidence(
+        evidence_type=EvidenceType.SSH_SUCCESSFUL,
+        attacker=attacker,
+        victim=victim,
+        threat_level=ThreatLevel.INFO,
+        confidence=0.8,
+        description=f"SSH Successful to IP : 8.8.8.8 . From IP {test_ip}",
+        profile=ProfileID(ip=test_ip),
+        timewindow=TimeWindow(number=1),
+        uid=["123"],
+        timestamp="1233242354.3",
+    )
+
+    result = db.set_evidence(evidence)
+
+    assert result is expected
+
+    if expected:
+        db.r.hset.assert_called_once()
+        db.r.incr.assert_called_once_with(db.constants.NUMBER_OF_EVIDENCE)
+        db.publish.assert_called_once()
+    else:
+        db.r.hset.assert_not_called()
+        db.publish.assert_not_called()
 
 
 @pytest.mark.parametrize(

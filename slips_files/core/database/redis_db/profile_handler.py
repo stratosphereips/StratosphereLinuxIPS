@@ -1010,7 +1010,6 @@ class ProfileHandler:
                 # The hasmap of each profile is named with the profileid
                 # Add the start time of profile
                 pipe.hset(profileid, "starttime", starttime)
-                # For now duration of the TW is fixed
                 pipe.hset(profileid, "duration", self.width)
                 # When a new profiled is created assign threat level = 0
                 # and confidence = 0.05
