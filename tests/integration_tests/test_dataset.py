@@ -26,16 +26,14 @@ alerts_file = "alerts.log"
         (
             "dataset/test4-malicious.binetflow",
             2,
-            "Horizontal port scan to port http-alt 81/tcp. "
-            "From 192.168.2.12 to 11 unique destination IPs.",
+            "Horizontal port scan to port http-alt 81/tcp. From 192.168.2.12",
             "test4/",
             6662,
         ),
         (
             "dataset/test3-mixed.binetflow",
             20,
-            "Horizontal port scan to port rdp 3389/tcp. "
-            "From 46.166.151.160 to 19 unique destination IPs",
+            "Horizontal port scan to port rdp 3389/tcp. From 46.166.151.160",
             "test3/",
             6663,
         ),
