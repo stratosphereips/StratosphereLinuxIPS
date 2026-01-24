@@ -47,7 +47,11 @@ class ExportingAlerts(IModule):
         if export_to_slack:
             self.slack.send_init_msg()
 
-        if export_to_stix and self.stix.is_running_non_stop:
+        if (
+            export_to_stix
+            and self.stix.is_running_non_stop
+            and not self.stix.direct_export
+        ):
             # This thread is responsible for waiting n seconds before
             # each push to the stix server
             # it starts the timer when the first alert happens
@@ -82,9 +86,18 @@ class ExportingAlerts(IModule):
                 self.slack.export(msg_to_send)
 
             if self.stix.should_export():
-                added_to_stix: bool = self.stix.add_to_stix_file(evidence)
-                if added_to_stix:
-                    # now export to taxii
-                    self.stix.export()
+                if self.stix.direct_export:
+                    exported = self.stix.export_evidence_direct(evidence)
+                    if not exported:
+                        self.print(
+                            "Problem in export_evidence_direct()", 0, 3
+                        )
                 else:
-                    self.print("Problem in add_to_stix_file()", 0, 3)
+                    added_to_stix: bool = self.stix.add_to_stix_file(
+                        evidence
+                    )
+                    if added_to_stix:
+                        # now export to taxii
+                        self.stix.export()
+                    else:
+                        self.print("Problem in add_to_stix_file()", 0, 3)
