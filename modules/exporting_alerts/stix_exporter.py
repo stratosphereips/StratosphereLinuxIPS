@@ -290,8 +290,21 @@ class StixExporter(IExporter):
         self._log_export(
             f"Export start target={self._base_url()} "
             f"collection={self.collection_name} "
-            f"new_objects={len(new_objects)}"
+            f"new_objects={len(new_objects)} "
+            f"total_objects={len(objects)} "
+            f"last_exported_count={self.last_exported_count}"
         )
+        sample = []
+        for obj in new_objects[:5]:
+            sample.append(
+                {
+                    "id": obj.get("id"),
+                    "type": obj.get("type"),
+                    "pattern": obj.get("pattern"),
+                }
+            )
+        if sample:
+            self._log_export(f"Export sample objects={sample}")
         collection = self.create_collection()
         if not collection:
             return False
@@ -302,7 +315,14 @@ class StixExporter(IExporter):
             status = collection.add_objects(envelope)
         except Exception as err:
             self.print(f"Failed to push bundle to TAXII collection: {err}", 0, 3)
-            self._log_export(f"Export failed: push error {err}")
+            response = getattr(err, "response", None)
+            if response is not None:
+                self._log_export(
+                    f"Export failed: HTTP {response.status_code} "
+                    f"response={response.text[:2000]}"
+                )
+            else:
+                self._log_export(f"Export failed: push error {err}")
             return False
         if getattr(status, "failure_count", 0):
             self.print(
@@ -394,6 +414,10 @@ class StixExporter(IExporter):
         pattern = patterns_map.get(ioc_type)
         if not pattern:
             self.print(f"Can't set pattern for STIX. {attacker}", 0, 3)
+            self._log_export(
+                f"Evidence skipped: unsupported ioc_type={ioc_type} "
+                f"attacker={attacker}"
+            )
             return ""
         return pattern
 
@@ -474,7 +498,9 @@ class StixExporter(IExporter):
             attacker = (evidence.get("victim") or {}).get("value")
         if not attacker:
             self.print("Evidence missing attacker value; skipping.", 0, 3)
-            self._log_export("Evidence skipped: missing attacker value.")
+            self._log_export(
+                f"Evidence skipped: missing attacker value id={evidence.get('id')}"
+            )
             return False
 
         evidence_id = evidence.get("id")
@@ -503,7 +529,8 @@ class StixExporter(IExporter):
                 f"Unable to build STIX pattern for attacker {attacker}.", 0, 3
             )
             self._log_export(
-                f"Evidence skipped: invalid STIX pattern attacker={attacker}"
+                f"Evidence skipped: invalid STIX pattern "
+                f"id={evidence_id} attacker={attacker} ioc_type={ioc_type}"
             )
             return False
 
@@ -537,8 +564,8 @@ class StixExporter(IExporter):
             f"Indicator added to STIX bundle at {self.stix_filename}", 2, 0
         )
         self._log_export(
-            f"Evidence exported id={evidence_id} "
-            f"attacker={attacker} stix_file={self.stix_filename}"
+            f"Evidence exported id={evidence_id} attacker={attacker} "
+            f"ioc_type={ioc_type} stix_file={self.stix_filename}"
         )
         return True
 
