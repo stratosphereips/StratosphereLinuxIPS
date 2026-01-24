@@ -24,13 +24,26 @@ class StixExporter(IExporter):
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.output_dir = self._resolve_output_dir()
         self.stix_filename = os.path.join(self.output_dir, "STIX_data.json")
+        self.export_log_path = os.path.join(
+            self.output_dir, "stix_exporter.log"
+        )
         self.configs_read: bool = self.read_configuration()
         self.export_to_taxii_thread = None
         self.last_exported_count = 0
+        self._log_export(
+            f"Init output_dir={self.output_dir} stix_file={self.stix_filename}"
+        )
         if self.should_export():
             self.print(
                 f"Exporting alerts to STIX 2 / TAXII every "
                 f"{self.push_delay} seconds."
+            )
+            self._log_export(
+                "Export enabled "
+                f"target={self._base_url()} "
+                f"discovery_path={self.discovery_path} "
+                f"collection={self.collection_name} "
+                f"push_delay={self.push_delay}"
             )
             self.exported_evidence_ids = set()
             self.bundle_objects: List[Indicator] = []
@@ -43,6 +56,10 @@ class StixExporter(IExporter):
                     daemon=True,
                     name="stix_exporter_to_taxii_thread",
                 )
+        else:
+            self._log_export(
+                f"Export disabled export_to={self.export_to}"
+            )
 
     def start_exporting_thread(self):
         # This thread is responsible for waiting n seconds before
@@ -75,6 +92,23 @@ class StixExporter(IExporter):
         # urljoin discards url path if relative path does not start with /
         adjusted = path if path.startswith("/") else f"/{path}"
         return urljoin(self._base_url(), adjusted)
+
+    def _log_export(self, message: str) -> None:
+        timestamp = (
+            datetime.utcnow()
+            .replace(tzinfo=timezone.utc)
+            .isoformat()
+        )
+        line = f"{timestamp} {message}\n"
+        try:
+            with open(self.export_log_path, "a", encoding="utf-8") as log_file:
+                log_file.write(line)
+        except OSError as err:
+            self.print(
+                f"Unable to write STIX exporter log: {err}",
+                0,
+                3,
+            )
 
     def _resolve_output_dir(self) -> str:
         """
@@ -167,9 +201,11 @@ class StixExporter(IExporter):
                 0,
                 3,
             )
+            self._log_export("Export skipped: collection_name missing.")
             return None
 
         discovery_url = self._build_url(self.discovery_path)
+        self._log_export(f"Resolving TAXII collection via {discovery_url}")
         try:
             server = Server(
                 discovery_url,
@@ -182,6 +218,7 @@ class StixExporter(IExporter):
 
         if not server.api_roots:
             self.print("TAXII server returned no API roots.", 0, 3)
+            self._log_export("Export failed: no API roots in discovery.")
             return None
 
         for api_root in server.api_roots:
@@ -207,6 +244,9 @@ class StixExporter(IExporter):
             0,
             3,
         )
+        self._log_export(
+            f"Export failed: collection '{self.collection_name}' not found."
+        )
         return None
 
     def read_stix_file(self) -> str:
@@ -222,26 +262,36 @@ class StixExporter(IExporter):
         STIX_data.json bundle as a TAXII envelope.
         """
         if not self.should_export():
+            self._log_export("Export skipped: stix not enabled.")
             return False
 
         stix_data: str = self.read_stix_file()
         if len(stix_data.strip()) == 0:
+            self._log_export("Export skipped: STIX_data.json is empty.")
             return False
 
         try:
             bundle_dict = json.loads(stix_data)
         except json.JSONDecodeError as err:
             self.print(f"STIX_data.json is not valid JSON: {err}", 0, 3)
+            self._log_export(f"Export failed: invalid JSON {err}")
             return False
 
         objects = bundle_dict.get("objects") or []
         if not objects:
+            self._log_export("Export skipped: STIX bundle has no objects.")
             return False
 
         new_objects = objects[self.last_exported_count :]
         if not new_objects:
+            self._log_export("Export skipped: no new STIX objects.")
             return False
 
+        self._log_export(
+            f"Export start target={self._base_url()} "
+            f"collection={self.collection_name} "
+            f"new_objects={len(new_objects)}"
+        )
         collection = self.create_collection()
         if not collection:
             return False
@@ -252,6 +302,7 @@ class StixExporter(IExporter):
             status = collection.add_objects(envelope)
         except Exception as err:
             self.print(f"Failed to push bundle to TAXII collection: {err}", 0, 3)
+            self._log_export(f"Export failed: push error {err}")
             return False
         if getattr(status, "failure_count", 0):
             self.print(
@@ -267,6 +318,11 @@ class StixExporter(IExporter):
                     0,
                     3,
                 )
+            self._log_export(
+                f"Export completed with failures "
+                f"success={status.success_count} "
+                f"failure={status.failure_count}"
+            )
 
         self.last_exported_count = len(objects)
 
@@ -275,6 +331,10 @@ class StixExporter(IExporter):
             f"collection '{self.collection_name}'.",
             2,
             0,
+        )
+        self._log_export(
+            f"Export success count={len(new_objects)} "
+            f"collection={self.collection_name}"
         )
         return True
 
@@ -414,6 +474,7 @@ class StixExporter(IExporter):
             attacker = (evidence.get("victim") or {}).get("value")
         if not attacker:
             self.print("Evidence missing attacker value; skipping.", 0, 3)
+            self._log_export("Evidence skipped: missing attacker value.")
             return False
 
         evidence_id = evidence.get("id")
@@ -422,6 +483,9 @@ class StixExporter(IExporter):
                 f"Evidence {evidence_id} already exported; skipping.",
                 3,
                 0,
+            )
+            self._log_export(
+                f"Evidence skipped: already exported id={evidence_id}"
             )
             return False
 
@@ -437,6 +501,9 @@ class StixExporter(IExporter):
         if not pattern:
             self.print(
                 f"Unable to build STIX pattern for attacker {attacker}.", 0, 3
+            )
+            self._log_export(
+                f"Evidence skipped: invalid STIX pattern attacker={attacker}"
             )
             return False
 
@@ -469,6 +536,10 @@ class StixExporter(IExporter):
         self.print(
             f"Indicator added to STIX bundle at {self.stix_filename}", 2, 0
         )
+        self._log_export(
+            f"Evidence exported id={evidence_id} "
+            f"attacker={attacker} stix_file={self.stix_filename}"
+        )
         return True
 
     def schedule_sending_to_taxii_server(self):
@@ -484,6 +555,10 @@ class StixExporter(IExporter):
             # server again but there's no
             # new alerts in stix_data.json yet
             if os.path.exists(self.stix_filename):
+                self._log_export(
+                    f"Scheduler tick: attempting export "
+                    f"stix_file={self.stix_filename}"
+                )
                 self.export()
             else:
                 self.print(
@@ -491,4 +566,7 @@ class StixExporter(IExporter):
                     f"no new alerts in STIX_data.json.",
                     2,
                     0,
+                )
+                self._log_export(
+                    "Scheduler tick: no STIX_data.json found to export."
                 )
