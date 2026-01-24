@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+import queue
+import threading
 
 from modules.exporting_alerts.slack_exporter import SlackExporter
 from modules.exporting_alerts.stix_exporter import StixExporter
@@ -25,9 +27,46 @@ class ExportingAlerts(IModule):
         self.c1 = self.db.subscribe("export_evidence")
         self.channels = {"export_evidence": self.c1}
         self.print("Subscribed to export_evidence channel.", 1, 0)
+        self.direct_export_q = None
+        self.direct_export_stop = None
+        self.direct_export_workers = []
+
+    def _start_direct_export_workers(self):
+        self.direct_export_q = queue.Queue()
+        self.direct_export_stop = threading.Event()
+        self.direct_export_workers = []
+        for idx in range(self.stix.direct_export_workers):
+            worker = threading.Thread(
+                target=self._direct_export_worker,
+                name=f"stix_direct_export_worker_{idx}",
+                daemon=True,
+            )
+            worker.start()
+            self.direct_export_workers.append(worker)
+        self.stix._log_export(
+            f"Direct export workers started count={len(self.direct_export_workers)}"
+        )
+
+    def _direct_export_worker(self):
+        while True:
+            if self.direct_export_stop and self.direct_export_stop.is_set():
+                if self.direct_export_q and self.direct_export_q.empty():
+                    return
+            try:
+                evidence = self.direct_export_q.get(timeout=1)
+            except queue.Empty:
+                continue
+            try:
+                self.stix.export_evidence_direct(evidence)
+            finally:
+                self.direct_export_q.task_done()
 
     def shutdown_gracefully(self):
         self.slack.shutdown_gracefully()
+        if self.direct_export_stop:
+            self.direct_export_stop.set()
+            for worker in self.direct_export_workers:
+                worker.join(timeout=5)
         self.stix.shutdown_gracefully()
 
     def pre_main(self):
@@ -47,11 +86,9 @@ class ExportingAlerts(IModule):
         if export_to_slack:
             self.slack.send_init_msg()
 
-        if (
-            export_to_stix
-            and self.stix.is_running_non_stop
-            and not self.stix.direct_export
-        ):
+        if export_to_stix and self.stix.direct_export:
+            self._start_direct_export_workers()
+        elif export_to_stix and self.stix.is_running_non_stop:
             # This thread is responsible for waiting n seconds before
             # each push to the stix server
             # it starts the timer when the first alert happens
@@ -87,11 +124,14 @@ class ExportingAlerts(IModule):
 
             if self.stix.should_export():
                 if self.stix.direct_export:
-                    exported = self.stix.export_evidence_direct(evidence)
-                    if not exported:
-                        self.print(
-                            "Problem in export_evidence_direct()", 0, 3
-                        )
+                    if not self.direct_export_q:
+                        self._start_direct_export_workers()
+                    self.direct_export_q.put(evidence)
+                    qsize = self.direct_export_q.qsize()
+                    self.stix._log_export(
+                        f"Direct export queued id={evidence.get('id')} "
+                        f"queue_size={qsize}"
+                    )
                 else:
                     added_to_stix: bool = self.stix.add_to_stix_file(
                         evidence
