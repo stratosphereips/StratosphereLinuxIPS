@@ -28,10 +28,12 @@ class StixExporter(IExporter):
             self.output_dir, "stix_exporter.log"
         )
         self.direct_export = False
-        self.collection_cache = None
+        self.collection_cache = threading.local()
         self.direct_export_attempts = 0
         self.direct_export_success = 0
         self.direct_export_fail = 0
+        self.direct_export_workers = 1
+        self.exported_evidence_lock = threading.Lock()
         self.configs_read: bool = self.read_configuration()
         self.export_to_taxii_thread = None
         self.last_exported_count = 0
@@ -49,7 +51,8 @@ class StixExporter(IExporter):
                 f"discovery_path={self.discovery_path} "
                 f"collection={self.collection_name} "
                 f"push_delay={self.push_delay} "
-                f"direct_export={self.direct_export}"
+                f"direct_export={self.direct_export} "
+                f"direct_export_workers={self.direct_export_workers}"
             )
             self.exported_evidence_ids = set()
             self.last_exported_count = 0
@@ -261,11 +264,12 @@ class StixExporter(IExporter):
         return None
 
     def _get_collection_cached(self):
-        if self.collection_cache is not None:
-            return self.collection_cache
+        cached = getattr(self.collection_cache, "collection", None)
+        if cached is not None:
+            return cached
         collection = self.create_collection()
         if collection:
-            self.collection_cache = collection
+            self.collection_cache.collection = collection
         return collection
 
     def read_stix_file(self) -> str:
@@ -409,6 +413,7 @@ class StixExporter(IExporter):
         self.taxii_username = conf.taxii_username()
         self.taxii_password = conf.taxii_password()
         self.direct_export = bool(conf.taxii_direct_export())
+        self.direct_export_workers = conf.taxii_direct_export_workers()
         # push delay exists -> create a thread that waits
         # push delay doesn't exist -> running using file not interface
         # -> only push to taxii server once before
@@ -520,16 +525,18 @@ class StixExporter(IExporter):
             return None
 
         evidence_id = evidence.get("id")
-        if evidence_id and evidence_id in self.exported_evidence_ids:
-            self.print(
-                f"Evidence {evidence_id} already exported; skipping.",
-                3,
-                0,
-            )
-            self._log_export(
-                f"Evidence skipped: already exported id={evidence_id}"
-            )
-            return None
+        if evidence_id:
+            with self.exported_evidence_lock:
+                if evidence_id in self.exported_evidence_ids:
+                    self.print(
+                        f"Evidence {evidence_id} already exported; skipping.",
+                        3,
+                        0,
+                    )
+                    self._log_export(
+                        f"Evidence skipped: already exported id={evidence_id}"
+                    )
+                    return None
 
         self.print(
             f"Processing evidence {evidence_id or attacker} "
@@ -594,7 +601,8 @@ class StixExporter(IExporter):
         self._write_bundle()
 
         if evidence_id:
-            self.exported_evidence_ids.add(evidence_id)
+            with self.exported_evidence_lock:
+                self.exported_evidence_ids.add(evidence_id)
 
         self.print(
             f"Indicator added to STIX bundle at {self.stix_filename}", 2, 0
@@ -619,6 +627,7 @@ class StixExporter(IExporter):
         envelope = {"objects": [indicator_payload]}
 
         self.direct_export_attempts += 1
+        start = time.time()
         self._log_export(
             f"Direct export attempt id={evidence_id} attacker={attacker} "
             f"ioc_type={ioc_type} "
@@ -645,6 +654,10 @@ class StixExporter(IExporter):
                 )
             else:
                 self._log_export(f"Direct export failed: push error {err}")
+            duration = time.time() - start
+            self._log_export(
+                f"Direct export duration_seconds={duration:.3f}"
+            )
             return False
 
         if getattr(status, "failure_count", 0):
@@ -659,15 +672,22 @@ class StixExporter(IExporter):
                 self._log_export(
                     f"Direct export failure for {obj_id}: {reason}"
                 )
+            duration = time.time() - start
+            self._log_export(
+                f"Direct export duration_seconds={duration:.3f}"
+            )
             return False
 
         self.direct_export_success += 1
         if evidence_id:
-            self.exported_evidence_ids.add(evidence_id)
+            with self.exported_evidence_lock:
+                self.exported_evidence_ids.add(evidence_id)
+        duration = time.time() - start
         self._log_export(
             f"Direct export success id={evidence_id} "
             f"success={status.success_count} "
-            f"collection={self.collection_name}"
+            f"collection={self.collection_name} "
+            f"duration_seconds={duration:.3f}"
         )
         return True
 
