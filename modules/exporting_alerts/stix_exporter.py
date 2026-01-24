@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import ipaddress
 import json
 import os
 import threading
@@ -248,10 +249,24 @@ class StixExporter(IExporter):
         envelope = {"objects": new_objects}
 
         try:
-            collection.add_objects(envelope)
+            status = collection.add_objects(envelope)
         except Exception as err:
             self.print(f"Failed to push bundle to TAXII collection: {err}", 0, 3)
             return False
+        if getattr(status, "failure_count", 0):
+            self.print(
+                f"TAXII rejected {status.failure_count} object(s).",
+                0,
+                3,
+            )
+            for failure in status.failures[:5]:
+                obj_id = failure.get("id")
+                reason = failure.get("message")
+                self.print(
+                    f"TAXII failure for {obj_id}: {reason}",
+                    0,
+                    3,
+                )
 
         self.last_exported_count = len(objects)
 
@@ -298,8 +313,21 @@ class StixExporter(IExporter):
         return True
 
     def get_ioc_pattern(self, ioc_type: str, attacker) -> str:
+        if ioc_type in ("ip", "ip_range"):
+            try:
+                if ioc_type == "ip":
+                    ip_obj = ipaddress.ip_address(attacker)
+                    ip_value = attacker
+                else:
+                    ip_obj = ipaddress.ip_network(attacker, strict=False)
+                    ip_value = str(ip_obj)
+            except ValueError:
+                self.print(f"Invalid IP value for STIX: {attacker}", 0, 3)
+                return ""
+            addr_type = "ipv4-addr" if ip_obj.version == 4 else "ipv6-addr"
+            return f"[{addr_type}:value = '{ip_value}']"
+
         patterns_map = {
-            "ip": f"[ip-addr:value = '{attacker}']",
             "domain": f"[domain-name:value = '{attacker}']",
             "url": f"[url:value = '{attacker}']",
         }
