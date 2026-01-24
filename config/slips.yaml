@@ -387,6 +387,9 @@ exporting_alerts:
   # 3600 = 1h
   push_delay: 3600
 
+  # If true, export each evidence directly to TAXII without writing STIX_data.json
+  direct_export: true
+
   # TAXII server credentials
   taxii_username: admin
   taxii_password: changeme_before_installing_a_medallion_server #  pragma: allowlist secret
