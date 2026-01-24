@@ -216,6 +216,17 @@ class ScanDetectionsHandler:
             )
 
             if self.use_local_p2p:
+                if data_to_send is None:
+                    data_to_send = {
+                        "to_lookup": str(ip),
+                        "profileid": str(profileid),
+                        "twid": str(twid),
+                        "proto": str(flow.proto.upper()),
+                        "ip_state": ip_state,
+                        "stime": flow.starttime,
+                        "uid": flow.uid,
+                        "daddr": flow.daddr,
+                    }
                 # ask other peers their opinion about this IP
                 # the p2p module is expecting these 2 keys
                 data_to_send.update({"cache_age": 1000, "ip": str(ip)})
