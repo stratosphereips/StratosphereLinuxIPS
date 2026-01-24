@@ -27,6 +27,11 @@ class StixExporter(IExporter):
         self.export_log_path = os.path.join(
             self.output_dir, "stix_exporter.log"
         )
+        self.direct_export = False
+        self.collection_cache = None
+        self.direct_export_attempts = 0
+        self.direct_export_success = 0
+        self.direct_export_fail = 0
         self.configs_read: bool = self.read_configuration()
         self.export_to_taxii_thread = None
         self.last_exported_count = 0
@@ -43,19 +48,25 @@ class StixExporter(IExporter):
                 f"target={self._base_url()} "
                 f"discovery_path={self.discovery_path} "
                 f"collection={self.collection_name} "
-                f"push_delay={self.push_delay}"
+                f"push_delay={self.push_delay} "
+                f"direct_export={self.direct_export}"
             )
             self.exported_evidence_ids = set()
-            self.bundle_objects: List[Indicator] = []
             self.last_exported_count = 0
-            self._load_existing_bundle()
-            self._ensure_bundle_file()
-            if self.is_running_non_stop:
-                self.export_to_taxii_thread = threading.Thread(
-                    target=self.schedule_sending_to_taxii_server,
-                    daemon=True,
-                    name="stix_exporter_to_taxii_thread",
+            if self.direct_export:
+                self._log_export(
+                    "Direct export enabled; skipping STIX_data.json storage."
                 )
+            else:
+                self.bundle_objects: List[Indicator] = []
+                self._load_existing_bundle()
+                self._ensure_bundle_file()
+                if self.is_running_non_stop:
+                    self.export_to_taxii_thread = threading.Thread(
+                        target=self.schedule_sending_to_taxii_server,
+                        daemon=True,
+                        name="stix_exporter_to_taxii_thread",
+                    )
         else:
             self._log_export(
                 f"Export disabled export_to={self.export_to}"
@@ -249,6 +260,14 @@ class StixExporter(IExporter):
         )
         return None
 
+    def _get_collection_cached(self):
+        if self.collection_cache is not None:
+            return self.collection_cache
+        collection = self.create_collection()
+        if collection:
+            self.collection_cache = collection
+        return collection
+
     def read_stix_file(self) -> str:
         if not os.path.exists(self.stix_filename):
             return ""
@@ -263,6 +282,9 @@ class StixExporter(IExporter):
         """
         if not self.should_export():
             self._log_export("Export skipped: stix not enabled.")
+            return False
+        if self.direct_export:
+            self._log_export("Export skipped: direct_export enabled.")
             return False
 
         stix_data: str = self.read_stix_file()
@@ -361,7 +383,7 @@ class StixExporter(IExporter):
     def shutdown_gracefully(self):
         """Exits gracefully"""
         # We need to publish to taxii server before stopping
-        if self.should_export():
+        if self.should_export() and not self.direct_export:
             self.export()
 
     def should_export(self) -> bool:
@@ -386,6 +408,7 @@ class StixExporter(IExporter):
         self.collection_name = conf.collection_name()
         self.taxii_username = conf.taxii_username()
         self.taxii_password = conf.taxii_password()
+        self.direct_export = bool(conf.taxii_direct_export())
         # push delay exists -> create a thread that waits
         # push delay doesn't exist -> running using file not interface
         # -> only push to taxii server once before
@@ -483,14 +506,7 @@ class StixExporter(IExporter):
             if value not in (None, "", [], {})
         }
 
-    def add_to_stix_file(self, evidence: dict) -> bool:
-        """
-        Function to export evidence to a STIX_data.json file in the cwd.
-        It keeps appending the given indicator to STIX_data.json until they're
-         sent to the
-        taxii server
-        evidence is a dictionary that contains the alert data
-        """
+    def _build_indicator(self, evidence: dict):
         attacker = (evidence.get("attacker") or {}).get("value")
         if not attacker:
             attacker = (evidence.get("profile") or {}).get("ip")
@@ -501,7 +517,7 @@ class StixExporter(IExporter):
             self._log_export(
                 f"Evidence skipped: missing attacker value id={evidence.get('id')}"
             )
-            return False
+            return None
 
         evidence_id = evidence.get("id")
         if evidence_id and evidence_id in self.exported_evidence_ids:
@@ -513,7 +529,7 @@ class StixExporter(IExporter):
             self._log_export(
                 f"Evidence skipped: already exported id={evidence_id}"
             )
-            return False
+            return None
 
         self.print(
             f"Processing evidence {evidence_id or attacker} "
@@ -532,7 +548,7 @@ class StixExporter(IExporter):
                 f"Evidence skipped: invalid STIX pattern "
                 f"id={evidence_id} attacker={attacker} ioc_type={ioc_type}"
             )
-            return False
+            return None
 
         indicator_labels = self._build_indicator_labels(evidence)
         valid_from = self._build_valid_from(evidence)
@@ -552,7 +568,27 @@ class StixExporter(IExporter):
             labels=indicator_labels or None,
             allow_custom=True,
             custom_properties=custom_properties or None,
-        )  # the pattern language that the indicator pattern is expressed in.
+        )
+        return indicator, evidence_id, attacker, ioc_type
+
+    def add_to_stix_file(self, evidence: dict) -> bool:
+        """
+        Function to export evidence to a STIX_data.json file in the cwd.
+        It keeps appending the given indicator to STIX_data.json until they're
+         sent to the
+        taxii server
+        evidence is a dictionary that contains the alert data
+        """
+        if self.direct_export:
+            self._log_export(
+                "Direct export enabled: skipping STIX_data.json write."
+            )
+            return False
+
+        indicator_data = self._build_indicator(evidence)
+        if not indicator_data:
+            return False
+        indicator, evidence_id, attacker, ioc_type = indicator_data
 
         self.bundle_objects.append(indicator)
         self._write_bundle()
@@ -569,11 +605,82 @@ class StixExporter(IExporter):
         )
         return True
 
+    def export_evidence_direct(self, evidence: dict) -> bool:
+        if not self.should_export():
+            self._log_export("Direct export skipped: stix not enabled.")
+            return False
+
+        indicator_data = self._build_indicator(evidence)
+        if not indicator_data:
+            return False
+        indicator, evidence_id, attacker, ioc_type = indicator_data
+
+        indicator_payload = json.loads(indicator.serialize())
+        envelope = {"objects": [indicator_payload]}
+
+        self.direct_export_attempts += 1
+        self._log_export(
+            f"Direct export attempt id={evidence_id} attacker={attacker} "
+            f"ioc_type={ioc_type} "
+            f"target={self._base_url()} collection={self.collection_name}"
+        )
+
+        collection = self._get_collection_cached()
+        if not collection:
+            self.direct_export_fail += 1
+            return False
+
+        try:
+            status = collection.add_objects(envelope)
+        except Exception as err:
+            self.direct_export_fail += 1
+            self.print(
+                f"Failed to push indicator to TAXII collection: {err}", 0, 3
+            )
+            response = getattr(err, "response", None)
+            if response is not None:
+                self._log_export(
+                    f"Direct export failed: HTTP {response.status_code} "
+                    f"response={response.text[:2000]}"
+                )
+            else:
+                self._log_export(f"Direct export failed: push error {err}")
+            return False
+
+        if getattr(status, "failure_count", 0):
+            self.direct_export_fail += 1
+            self._log_export(
+                f"Direct export failed: status failures="
+                f"{status.failure_count}"
+            )
+            for failure in status.failures[:5]:
+                obj_id = failure.get("id")
+                reason = failure.get("message")
+                self._log_export(
+                    f"Direct export failure for {obj_id}: {reason}"
+                )
+            return False
+
+        self.direct_export_success += 1
+        if evidence_id:
+            self.exported_evidence_ids.add(evidence_id)
+        self._log_export(
+            f"Direct export success id={evidence_id} "
+            f"success={status.success_count} "
+            f"collection={self.collection_name}"
+        )
+        return True
+
     def schedule_sending_to_taxii_server(self):
         """
         Responsible for publishing STIX_data.json to the taxii server every
         self.push_delay seconds when running on an interface only
         """
+        if self.direct_export:
+            self._log_export(
+                "Scheduler disabled: direct_export enabled."
+            )
+            return
         while True:
             # on an interface, we use the push delay from slips.yaml
             # on files, we push once when slips is stopping
