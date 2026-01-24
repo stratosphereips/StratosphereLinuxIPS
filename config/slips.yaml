@@ -390,6 +390,9 @@ exporting_alerts:
   # If true, export each evidence directly to TAXII without writing STIX_data.json
   direct_export: true
 
+  # Number of worker threads for direct TAXII export
+  direct_export_workers: 4
+
   # TAXII server credentials
   taxii_username: admin
   taxii_password: changeme_before_installing_a_medallion_server #  pragma: allowlist secret
