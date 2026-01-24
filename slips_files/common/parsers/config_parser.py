@@ -370,6 +370,16 @@ class ConfigParser(object):
             "exporting_alerts", "direct_export", False
         )
 
+    def taxii_direct_export_workers(self):
+        workers = self.read_configuration(
+            "exporting_alerts", "direct_export_workers", 2
+        )
+        try:
+            workers = int(workers)
+        except ValueError:
+            workers = 2
+        return max(1, workers)
+
     def long_connection_threshold(self):
         """
         returns threshold in seconds
