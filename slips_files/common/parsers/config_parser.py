@@ -365,6 +365,11 @@ class ConfigParser(object):
             "exporting_alerts", "taxii_password", False
         )
 
+    def taxii_direct_export(self):
+        return self.read_configuration(
+            "exporting_alerts", "direct_export", False
+        )
+
     def long_connection_threshold(self):
         """
         returns threshold in seconds
