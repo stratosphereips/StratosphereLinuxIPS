@@ -365,6 +365,11 @@ class ConfigParser(object):
             "exporting_alerts", "taxii_password", False
         )
 
+    def taxii_version(self):
+        return self.read_configuration(
+            "exporting_alerts", "taxii_version", 2
+        )
+
     def taxii_direct_export(self):
         return self.read_configuration(
             "exporting_alerts", "direct_export", False
