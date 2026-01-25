@@ -670,7 +670,46 @@ class StixExporter(IExporter):
         package_id = f"example:STIXPackage-{uuid4()}"
         indicator_id = f"example:indicator-{uuid4()}"
         title = escape(evidence.get("evidence_type", "Slips Alert"))
-        description = escape(evidence.get("description", ""))
+        description_text = evidence.get("description") or ""
+        meta: Dict[str, object] = {}
+        victim_value = (evidence.get("victim") or {}).get("value")
+        if victim_value:
+            meta["victim"] = victim_value
+        src_port = evidence.get("src_port")
+        if src_port:
+            meta["src_port"] = src_port
+        dst_port = evidence.get("dst_port")
+        if dst_port:
+            meta["dst_port"] = dst_port
+        if meta:
+            description_text = (
+                f"{description_text}\n\nSLIPS_META:"
+                f"{json.dumps(meta, separators=(',', ':'))}"
+            )
+        description = escape(description_text)
+
+        valid_from = self._build_valid_from(evidence)
+        valid_from_text = None
+        if valid_from:
+            valid_from_text = (
+                valid_from.astimezone(timezone.utc)
+                .replace(microsecond=0)
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
+        created_text = (
+            datetime.utcnow()
+            .replace(tzinfo=timezone.utc, microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+        valid_time_xml = ""
+        if valid_from_text:
+            valid_time_xml = (
+                "<indicator:Valid_Time_Position>"
+                f"<indicator:Start_Time>{valid_from_text}</indicator:Start_Time>"
+                "</indicator:Valid_Time_Position>"
+            )
 
         stix_xml = f"""
         <stix:STIX_Package
@@ -692,6 +731,8 @@ class StixExporter(IExporter):
             <stix:Indicator id="{indicator_id}" xsi:type="indicator:IndicatorType">
               <indicator:Title>{title}</indicator:Title>
               <indicator:Description>{description}</indicator:Description>
+              {valid_time_xml}
+              <indicator:Created_Time>{created_text}</indicator:Created_Time>
               <indicator:Observable>
                 <cybox:Object>
                   {properties_xml}
