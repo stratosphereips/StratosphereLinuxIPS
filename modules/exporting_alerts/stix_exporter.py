@@ -33,6 +33,10 @@ class StixExporter(IExporter):
         self.direct_export_success = 0
         self.direct_export_fail = 0
         self.direct_export_workers = 1
+        self.direct_export_max_workers = 1
+        self.direct_export_retry_max = 0
+        self.direct_export_retry_backoff = 0.0
+        self.direct_export_retry_max_delay = 0.0
         self.exported_evidence_lock = threading.Lock()
         self.configs_read: bool = self.read_configuration()
         self.export_to_taxii_thread = None
@@ -52,7 +56,11 @@ class StixExporter(IExporter):
                 f"collection={self.collection_name} "
                 f"push_delay={self.push_delay} "
                 f"direct_export={self.direct_export} "
-                f"direct_export_workers={self.direct_export_workers}"
+                f"direct_export_workers={self.direct_export_workers} "
+                f"direct_export_max_workers={self.direct_export_max_workers} "
+                f"direct_export_retry_max={self.direct_export_retry_max} "
+                f"direct_export_retry_backoff={self.direct_export_retry_backoff} "
+                f"direct_export_retry_max_delay={self.direct_export_retry_max_delay}"
             )
             self.exported_evidence_ids = set()
             self.last_exported_count = 0
@@ -414,6 +422,12 @@ class StixExporter(IExporter):
         self.taxii_password = conf.taxii_password()
         self.direct_export = bool(conf.taxii_direct_export())
         self.direct_export_workers = conf.taxii_direct_export_workers()
+        self.direct_export_max_workers = conf.taxii_direct_export_max_workers()
+        self.direct_export_retry_max = conf.taxii_direct_export_retry_max()
+        self.direct_export_retry_backoff = conf.taxii_direct_export_retry_backoff()
+        self.direct_export_retry_max_delay = (
+            conf.taxii_direct_export_retry_max_delay()
+        )
         # push delay exists -> create a thread that waits
         # push delay doesn't exist -> running using file not interface
         # -> only push to taxii server once before
