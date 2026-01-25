@@ -392,6 +392,12 @@ exporting_alerts:
 
   # Number of worker threads for direct TAXII export
   direct_export_workers: 4
+  # Upper bound for auto-scaling direct export workers
+  direct_export_max_workers: 12
+  # Retry settings for direct TAXII export
+  direct_export_retry_max: 3
+  direct_export_retry_backoff: 0.5
+  direct_export_retry_max_delay: 5.0
 
   # TAXII server credentials
   taxii_username: admin
