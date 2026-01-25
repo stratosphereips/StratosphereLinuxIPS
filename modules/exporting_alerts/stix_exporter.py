@@ -672,13 +672,57 @@ class StixExporter(IExporter):
         title = escape(evidence.get("evidence_type", "Slips Alert"))
         description = escape(evidence.get("description", ""))
 
-        stix_xml = f\"\"\"\n        <stix:STIX_Package\n          xmlns:stix=\"http://stix.mitre.org/stix-1\"\n          xmlns:indicator=\"http://stix.mitre.org/Indicator-2\"\n          xmlns:cybox=\"http://cybox.mitre.org/cybox-2\"\n          xmlns:AddressObj=\"http://cybox.mitre.org/objects#AddressObject-2\"\n          xmlns:DomainNameObj=\"http://cybox.mitre.org/objects#DomainNameObject-1\"\n          xmlns:URIObj=\"http://cybox.mitre.org/objects#URIObject-2\"\n          xmlns:example=\"http://example.com\"\n          xmlns:stixCommon=\"http://stix.mitre.org/common-1\"\n          xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n          id=\"{package_id}\"\n          version=\"1.2\">\n          <stix:STIX_Header>\n            <stix:Title>{title}</stix:Title>\n          </stix:STIX_Header>\n          <stix:Indicators>\n            <stix:Indicator id=\"{indicator_id}\" xsi:type=\"indicator:IndicatorType\">\n              <indicator:Title>{title}</indicator:Title>\n              <indicator:Description>{description}</indicator:Description>\n              <indicator:Observable>\n                <cybox:Object>\n                  {properties_xml}\n                </cybox:Object>\n              </indicator:Observable>\n            </stix:Indicator>\n          </stix:Indicators>\n        </stix:STIX_Package>\n        \"\"\"\n        return textwrap.dedent(stix_xml).strip()
+        stix_xml = f"""
+        <stix:STIX_Package
+          xmlns:stix="http://stix.mitre.org/stix-1"
+          xmlns:indicator="http://stix.mitre.org/Indicator-2"
+          xmlns:cybox="http://cybox.mitre.org/cybox-2"
+          xmlns:AddressObj="http://cybox.mitre.org/objects#AddressObject-2"
+          xmlns:DomainNameObj="http://cybox.mitre.org/objects#DomainNameObject-1"
+          xmlns:URIObj="http://cybox.mitre.org/objects#URIObject-2"
+          xmlns:example="http://example.com"
+          xmlns:stixCommon="http://stix.mitre.org/common-1"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          id="{package_id}"
+          version="1.2">
+          <stix:STIX_Header>
+            <stix:Title>{title}</stix:Title>
+          </stix:STIX_Header>
+          <stix:Indicators>
+            <stix:Indicator id="{indicator_id}" xsi:type="indicator:IndicatorType">
+              <indicator:Title>{title}</indicator:Title>
+              <indicator:Description>{description}</indicator:Description>
+              <indicator:Observable>
+                <cybox:Object>
+                  {properties_xml}
+                </cybox:Object>
+              </indicator:Observable>
+            </stix:Indicator>
+          </stix:Indicators>
+        </stix:STIX_Package>
+        """
+        return textwrap.dedent(stix_xml).strip()
 
     def _build_taxii1_inbox_message(
         self, collection_name: str, stix_xml: str
     ) -> str:
         message_id = uuid4()
-        inbox_xml = f\"\"\"\n        <taxii_11:Inbox_Message\n          xmlns:taxii_11=\"http://taxii.mitre.org/messages/taxii_xml_binding-1.1\"\n          message_id=\"{message_id}\">\n          <taxii_11:Destination_Collection_Names>\n            <taxii_11:Collection_Name>{escape(collection_name)}</taxii_11:Collection_Name>\n          </taxii_11:Destination_Collection_Names>\n          <taxii_11:Content_Block>\n            <taxii_11:Content_Binding>urn:stix.mitre.org:xml:1.2</taxii_11:Content_Binding>\n            <taxii_11:Content>\n        {stix_xml}\n            </taxii_11:Content>\n          </taxii_11:Content_Block>\n        </taxii_11:Inbox_Message>\n        \"\"\"\n        return textwrap.dedent(inbox_xml).strip()
+        inbox_xml = f"""
+        <taxii_11:Inbox_Message
+          xmlns:taxii_11="http://taxii.mitre.org/messages/taxii_xml_binding-1.1"
+          message_id="{message_id}">
+          <taxii_11:Destination_Collection_Names>
+            <taxii_11:Collection_Name>{escape(collection_name)}</taxii_11:Collection_Name>
+          </taxii_11:Destination_Collection_Names>
+          <taxii_11:Content_Block>
+            <taxii_11:Content_Binding>urn:stix.mitre.org:xml:1.2</taxii_11:Content_Binding>
+            <taxii_11:Content>
+        {stix_xml}
+            </taxii_11:Content>
+          </taxii_11:Content_Block>
+        </taxii_11:Inbox_Message>
+        """
+        return textwrap.dedent(inbox_xml).strip()
 
     def _export_taxii1(
         self,
