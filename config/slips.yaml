@@ -376,6 +376,11 @@ exporting_alerts:
   # TAXII 2 discovery endpoint (relative path or full URL)
   discovery_path: /taxii2/
 
+  # TAXII protocol version
+  # - 2 (default) for Medallion / TAXII 2.1
+  # - 1 for OpenTAXII / TAXII 1.x
+  taxii_version: 2
+
   # Collection (ID or title) on the server you want to push STIX data to
   collection_name: Alerts
 
