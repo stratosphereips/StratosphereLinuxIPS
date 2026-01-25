@@ -681,12 +681,6 @@ class StixExporter(IExporter):
         dst_port = evidence.get("dst_port")
         if dst_port:
             meta["dst_port"] = dst_port
-        if meta:
-            description_text = (
-                f"{description_text}\n\nSLIPS_META:"
-                f"{json.dumps(meta, separators=(',', ':'))}"
-            )
-        description = escape(description_text)
 
         valid_from = self._build_valid_from(evidence)
         valid_from_text = None
@@ -697,12 +691,23 @@ class StixExporter(IExporter):
                 .isoformat()
                 .replace("+00:00", "Z")
             )
+            meta["observed"] = valid_from_text
+
         created_text = (
             datetime.utcnow()
             .replace(tzinfo=timezone.utc, microsecond=0)
             .isoformat()
             .replace("+00:00", "Z")
         )
+        meta["created"] = created_text
+
+        if meta:
+            description_text = (
+                f"{description_text}\n\nSLIPS_META:"
+                f"{json.dumps(meta, separators=(',', ':'))}"
+            )
+        description = escape(description_text)
+
         valid_time_xml = ""
         if valid_from_text:
             valid_time_xml = (
