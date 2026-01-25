@@ -711,9 +711,7 @@ class StixExporter(IExporter):
         <taxii_11:Inbox_Message
           xmlns:taxii_11="http://taxii.mitre.org/messages/taxii_xml_binding-1.1"
           message_id="{message_id}">
-          <taxii_11:Destination_Collection_Names>
-            <taxii_11:Collection_Name>{escape(collection_name)}</taxii_11:Collection_Name>
-          </taxii_11:Destination_Collection_Names>
+          <taxii_11:Destination_Collection_Name>{escape(collection_name)}</taxii_11:Destination_Collection_Name>
           <taxii_11:Content_Block>
             <taxii_11:Content_Binding>urn:stix.mitre.org:xml:1.2</taxii_11:Content_Binding>
             <taxii_11:Content>
