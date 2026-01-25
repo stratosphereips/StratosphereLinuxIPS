@@ -3,6 +3,7 @@
 import json
 import queue
 import threading
+import time
 
 from modules.exporting_alerts.slack_exporter import SlackExporter
 from modules.exporting_alerts.stix_exporter import StixExporter
@@ -30,12 +31,15 @@ class ExportingAlerts(IModule):
         self.direct_export_q = None
         self.direct_export_stop = None
         self.direct_export_workers = []
+        self.direct_export_start_lock = threading.Lock()
 
-    def _start_direct_export_workers(self):
-        self.direct_export_q = queue.Queue()
-        self.direct_export_stop = threading.Event()
-        self.direct_export_workers = []
-        for idx in range(self.stix.direct_export_workers):
+    def _start_direct_export_workers(self, count: int):
+        if not self.direct_export_q:
+            self.direct_export_q = queue.Queue()
+        if not self.direct_export_stop:
+            self.direct_export_stop = threading.Event()
+        start_idx = len(self.direct_export_workers)
+        for idx in range(start_idx, start_idx + count):
             worker = threading.Thread(
                 target=self._direct_export_worker,
                 name=f"stix_direct_export_worker_{idx}",
@@ -47,17 +51,97 @@ class ExportingAlerts(IModule):
             f"Direct export workers started count={len(self.direct_export_workers)}"
         )
 
+    def _ensure_direct_export_workers(self, queue_size: int):
+        with self.direct_export_start_lock:
+            # prune dead workers
+            alive_workers = []
+            for worker in self.direct_export_workers:
+                if worker.is_alive():
+                    alive_workers.append(worker)
+                else:
+                    self.stix._log_export(
+                        f"Direct export worker died name={worker.name}"
+                    )
+            if len(alive_workers) != len(self.direct_export_workers):
+                self.direct_export_workers = alive_workers
+
+            if not self.direct_export_workers:
+                self._start_direct_export_workers(
+                    self.stix.direct_export_workers
+                )
+                return
+
+            max_workers = max(
+                self.stix.direct_export_workers,
+                self.stix.direct_export_max_workers,
+            )
+            target = len(self.direct_export_workers)
+            if queue_size > target * 2 and target < max_workers:
+                target = min(max_workers, target + 1)
+
+            if target > len(self.direct_export_workers):
+                self._start_direct_export_workers(
+                    target - len(self.direct_export_workers)
+                )
+
     def _direct_export_worker(self):
         while True:
             if self.direct_export_stop and self.direct_export_stop.is_set():
                 if self.direct_export_q and self.direct_export_q.empty():
                     return
             try:
-                evidence = self.direct_export_q.get(timeout=1)
+                item = self.direct_export_q.get(timeout=1)
             except queue.Empty:
                 continue
             try:
-                self.stix.export_evidence_direct(evidence)
+                evidence = item.get("evidence")
+                enqueued_at = item.get("enqueued_at")
+                attempt = item.get("attempt", 1)
+                evidence_id = (
+                    evidence.get("id") if isinstance(evidence, dict) else None
+                )
+                queue_delay = (
+                    time.time() - enqueued_at
+                    if isinstance(enqueued_at, (int, float))
+                    else None
+                )
+                self.stix._log_export(
+                    f"Direct export dequeue id={evidence_id} "
+                    f"attempt={attempt} "
+                    f"queue_delay_seconds={queue_delay}"
+                )
+                exported = self.stix.export_evidence_direct(evidence)
+                if not exported:
+                    retry_max = self.stix.direct_export_retry_max
+                    if attempt <= retry_max:
+                        backoff = self.stix.direct_export_retry_backoff * (
+                            2 ** (attempt - 1)
+                        )
+                        if backoff > self.stix.direct_export_retry_max_delay:
+                            backoff = self.stix.direct_export_retry_max_delay
+                        self.stix._log_export(
+                            f"Direct export retry scheduled id={evidence_id} "
+                            f"attempt={attempt} backoff_seconds={backoff}"
+                        )
+                        time.sleep(backoff)
+                        self.direct_export_q.put(
+                            {
+                                "evidence": evidence,
+                                "enqueued_at": enqueued_at,
+                                "attempt": attempt + 1,
+                            }
+                        )
+                        qsize = self.direct_export_q.qsize()
+                        self._ensure_direct_export_workers(qsize)
+                    else:
+                        self.stix._log_export(
+                            f"Direct export dropped id={evidence_id} "
+                            f"attempts={attempt}"
+                        )
+            except Exception as err:
+                self.stix._log_export(
+                    f"Direct export worker error: {err}"
+                )
             finally:
                 self.direct_export_q.task_done()
 
@@ -87,7 +171,7 @@ class ExportingAlerts(IModule):
             self.slack.send_init_msg()
 
         if export_to_stix and self.stix.direct_export:
-            self._start_direct_export_workers()
+            self._start_direct_export_workers(self.stix.direct_export_workers)
         elif export_to_stix and self.stix.is_running_non_stop:
             # This thread is responsible for waiting n seconds before
             # each push to the stix server
@@ -125,9 +209,18 @@ class ExportingAlerts(IModule):
             if self.stix.should_export():
                 if self.stix.direct_export:
                     if not self.direct_export_q:
-                        self._start_direct_export_workers()
-                    self.direct_export_q.put(evidence)
+                        self._start_direct_export_workers(
+                            self.stix.direct_export_workers
+                        )
+                    self.direct_export_q.put(
+                        {
+                            "evidence": evidence,
+                            "enqueued_at": time.time(),
+                            "attempt": 1,
+                        }
+                    )
                     qsize = self.direct_export_q.qsize()
+                    self._ensure_direct_export_workers(qsize)
                     self.stix._log_export(
                         f"Direct export queued id={evidence.get('id')} "
                         f"queue_size={qsize}"
