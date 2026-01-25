@@ -5,13 +5,16 @@ import json
 import os
 import threading
 import time
+import textwrap
 from datetime import datetime, timezone
 from uuid import uuid4
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
+import requests
 from stix2 import Bundle, Indicator, parse
 from taxii2client.v21 import Server
+from xml.sax.saxutils import escape
 
 from slips_files.common.abstracts.iexporter import IExporter
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -38,6 +41,8 @@ class StixExporter(IExporter):
         self.direct_export_retry_backoff = 0.0
         self.direct_export_retry_max_delay = 0.0
         self.exported_evidence_lock = threading.Lock()
+        self.taxii_version = 2
+        self.taxii1_inbox_path = "/services/inbox"
         self.configs_read: bool = self.read_configuration()
         self.export_to_taxii_thread = None
         self.last_exported_count = 0
@@ -46,14 +51,15 @@ class StixExporter(IExporter):
         )
         if self.should_export():
             self.print(
-                f"Exporting alerts to STIX 2 / TAXII every "
-                f"{self.push_delay} seconds."
+                f"Exporting alerts to STIX / TAXII {self.taxii_version} "
+                f"every {self.push_delay} seconds."
             )
             self._log_export(
                 "Export enabled "
                 f"target={self._base_url()} "
                 f"discovery_path={self.discovery_path} "
                 f"collection={self.collection_name} "
+                f"taxii_version={self.taxii_version} "
                 f"push_delay={self.push_delay} "
                 f"direct_export={self.direct_export} "
                 f"direct_export_workers={self.direct_export_workers} "
@@ -217,6 +223,11 @@ class StixExporter(IExporter):
             stix_file.write(self._serialize_bundle())
 
     def create_collection(self):
+        if self.taxii_version == 1:
+            self._log_export(
+                "TAXII 1 configured; skipping TAXII 2 collection discovery."
+            )
+            return None
         if not self.collection_name:
             self.print(
                 "collection_name is missing in slips.yaml; cannot export STIX.",
@@ -292,6 +303,11 @@ class StixExporter(IExporter):
         Exports evidence/alerts to a TAXII 2.x collection by pushing the
         STIX_data.json bundle as a TAXII envelope.
         """
+        if self.taxii_version == 1:
+            self._log_export(
+                "Export skipped: TAXII 1 requires direct_export."
+            )
+            return False
         if not self.should_export():
             self._log_export("Export skipped: stix not enabled.")
             return False
@@ -420,6 +436,7 @@ class StixExporter(IExporter):
         self.collection_name = conf.collection_name()
         self.taxii_username = conf.taxii_username()
         self.taxii_password = conf.taxii_password()
+        self.taxii_version = self._normalize_taxii_version(conf.taxii_version())
         self.direct_export = bool(conf.taxii_direct_export())
         self.direct_export_workers = conf.taxii_direct_export_workers()
         self.direct_export_max_workers = conf.taxii_direct_export_max_workers()
@@ -428,11 +445,24 @@ class StixExporter(IExporter):
         self.direct_export_retry_max_delay = (
             conf.taxii_direct_export_retry_max_delay()
         )
+        if self.taxii_version == 1 and not self.direct_export:
+            self._log_export(
+                "TAXII 1 selected; forcing direct_export=true."
+            )
+            self.direct_export = True
         # push delay exists -> create a thread that waits
         # push delay doesn't exist -> running using file not interface
         # -> only push to taxii server once before
         # stopping
         return True
+
+    def _normalize_taxii_version(self, value) -> int:
+        if value is None:
+            return 2
+        text = str(value).strip().lower()
+        if text.startswith("1"):
+            return 1
+        return 2
 
     def get_ioc_pattern(self, ioc_type: str, attacker) -> str:
         if ioc_type in ("ip", "ip_range"):
@@ -592,6 +622,142 @@ class StixExporter(IExporter):
         )
         return indicator, evidence_id, attacker, ioc_type
 
+    def _build_taxii1_cybox_properties(
+        self, attacker: str, ioc_type: str
+    ) -> Optional[str]:
+        if ioc_type in ("ip", "ip_range"):
+            try:
+                if ioc_type == "ip":
+                    ip_obj = ipaddress.ip_address(attacker)
+                    ip_value = attacker
+                else:
+                    ip_obj = ipaddress.ip_network(attacker, strict=False)
+                    ip_value = str(ip_obj)
+            except ValueError:
+                return None
+            addr_type = "ipv4-addr" if ip_obj.version == 4 else "ipv6-addr"
+            return (
+                f'<cybox:Properties xsi:type="AddressObj:AddressObjectType" '
+                f'category="{addr_type}">'
+                f"<AddressObj:Address_Value>{escape(ip_value)}</AddressObj:Address_Value>"
+                "</cybox:Properties>"
+            )
+
+        if ioc_type == "domain":
+            return (
+                '<cybox:Properties xsi:type="DomainNameObj:DomainNameObjectType">'
+                f"<DomainNameObj:Value>{escape(attacker)}</DomainNameObj:Value>"
+                "</cybox:Properties>"
+            )
+
+        if ioc_type == "url":
+            return (
+                '<cybox:Properties xsi:type="URIObj:URIObjectType">'
+                "<URIObj:Type>URL</URIObj:Type>"
+                f"<URIObj:Value>{escape(attacker)}</URIObj:Value>"
+                "</cybox:Properties>"
+            )
+
+        return None
+
+    def _build_taxii1_package(
+        self, evidence: dict, attacker: str, ioc_type: str
+    ) -> Optional[str]:
+        properties_xml = self._build_taxii1_cybox_properties(attacker, ioc_type)
+        if not properties_xml:
+            return None
+
+        package_id = f"example:STIXPackage-{uuid4()}"
+        indicator_id = f"example:indicator-{uuid4()}"
+        title = escape(evidence.get("evidence_type", "Slips Alert"))
+        description = escape(evidence.get("description", ""))
+
+        stix_xml = f\"\"\"\n        <stix:STIX_Package\n          xmlns:stix=\"http://stix.mitre.org/stix-1\"\n          xmlns:indicator=\"http://stix.mitre.org/Indicator-2\"\n          xmlns:cybox=\"http://cybox.mitre.org/cybox-2\"\n          xmlns:AddressObj=\"http://cybox.mitre.org/objects#AddressObject-2\"\n          xmlns:DomainNameObj=\"http://cybox.mitre.org/objects#DomainNameObject-1\"\n          xmlns:URIObj=\"http://cybox.mitre.org/objects#URIObject-2\"\n          xmlns:example=\"http://example.com\"\n          xmlns:stixCommon=\"http://stix.mitre.org/common-1\"\n          xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n          id=\"{package_id}\"\n          version=\"1.2\">\n          <stix:STIX_Header>\n            <stix:Title>{title}</stix:Title>\n          </stix:STIX_Header>\n          <stix:Indicators>\n            <stix:Indicator id=\"{indicator_id}\" xsi:type=\"indicator:IndicatorType\">\n              <indicator:Title>{title}</indicator:Title>\n              <indicator:Description>{description}</indicator:Description>\n              <indicator:Observable>\n                <cybox:Object>\n                  {properties_xml}\n                </cybox:Object>\n              </indicator:Observable>\n            </stix:Indicator>\n          </stix:Indicators>\n        </stix:STIX_Package>\n        \"\"\"\n        return textwrap.dedent(stix_xml).strip()
+
+    def _build_taxii1_inbox_message(
+        self, collection_name: str, stix_xml: str
+    ) -> str:
+        message_id = uuid4()
+        inbox_xml = f\"\"\"\n        <taxii_11:Inbox_Message\n          xmlns:taxii_11=\"http://taxii.mitre.org/messages/taxii_xml_binding-1.1\"\n          message_id=\"{message_id}\">\n          <taxii_11:Destination_Collection_Names>\n            <taxii_11:Collection_Name>{escape(collection_name)}</taxii_11:Collection_Name>\n          </taxii_11:Destination_Collection_Names>\n          <taxii_11:Content_Block>\n            <taxii_11:Content_Binding>urn:stix.mitre.org:xml:1.2</taxii_11:Content_Binding>\n            <taxii_11:Content>\n        {stix_xml}\n            </taxii_11:Content>\n          </taxii_11:Content_Block>\n        </taxii_11:Inbox_Message>\n        \"\"\"\n        return textwrap.dedent(inbox_xml).strip()
+
+    def _export_taxii1(
+        self,
+        evidence: dict,
+        evidence_id: Optional[str],
+        attacker: str,
+        ioc_type: str,
+        start_ts: float,
+    ) -> bool:
+        if not self.collection_name:
+            self.direct_export_fail += 1
+            self._log_export("Direct export failed: collection_name missing.")
+            return False
+
+        stix_xml = self._build_taxii1_package(evidence, attacker, ioc_type)
+        if not stix_xml:
+            self.direct_export_fail += 1
+            self._log_export(
+                f"Direct export failed: unsupported ioc_type={ioc_type} attacker={attacker}"
+            )
+            return False
+
+        inbox_xml = self._build_taxii1_inbox_message(
+            self.collection_name, stix_xml
+        )
+        headers = {
+            "Content-Type": "application/xml",
+            "Accept": "application/xml",
+            "X-TAXII-Content-Type": "urn:taxii.mitre.org:message:xml:1.1",
+            "X-TAXII-Accept": "urn:taxii.mitre.org:message:xml:1.1",
+            "X-TAXII-Protocol": "urn:taxii.mitre.org:protocol:http:1.0",
+            "X-TAXII-Services": "urn:taxii.mitre.org:services:1.1",
+        }
+        auth = None
+        if self.taxii_username and self.taxii_password:
+            auth = (self.taxii_username, self.taxii_password)
+        inbox_url = self._build_url(self.taxii1_inbox_path)
+
+        try:
+            response = requests.post(
+                inbox_url,
+                data=inbox_xml.encode("utf-8"),
+                headers=headers,
+                auth=auth,
+                timeout=10,
+            )
+        except Exception as err:
+            self.direct_export_fail += 1
+            self._log_export(f"Direct export failed: TAXII 1 request error {err}")
+            duration = time.time() - start_ts
+            self._log_export(
+                f"Direct export duration_seconds={duration:.3f}"
+            )
+            return False
+
+        if not response.ok or 'status_type="FAILURE"' in response.text:
+            self.direct_export_fail += 1
+            self._log_export(
+                f"Direct export failed: HTTP {response.status_code} "
+                f"response={response.text[:2000]}"
+            )
+            duration = time.time() - start_ts
+            self._log_export(
+                f"Direct export duration_seconds={duration:.3f}"
+            )
+            return False
+
+        self.direct_export_success += 1
+        if evidence_id:
+            with self.exported_evidence_lock:
+                self.exported_evidence_ids.add(evidence_id)
+        duration = time.time() - start_ts
+        self._log_export(
+            f"Direct export success id={evidence_id} "
+            f"collection={self.collection_name} "
+            f"duration_seconds={duration:.3f}"
+        )
+        return True
+
     def add_to_stix_file(self, evidence: dict) -> bool:
         """
         Function to export evidence to a STIX_data.json file in the cwd.
@@ -637,16 +803,22 @@ class StixExporter(IExporter):
             return False
         indicator, evidence_id, attacker, ioc_type = indicator_data
 
-        indicator_payload = json.loads(indicator.serialize())
-        envelope = {"objects": [indicator_payload]}
-
         self.direct_export_attempts += 1
         start = time.time()
         self._log_export(
             f"Direct export attempt id={evidence_id} attacker={attacker} "
             f"ioc_type={ioc_type} "
-            f"target={self._base_url()} collection={self.collection_name}"
+            f"target={self._base_url()} collection={self.collection_name} "
+            f"taxii_version={self.taxii_version}"
         )
+
+        if self.taxii_version == 1:
+            return self._export_taxii1(
+                evidence, evidence_id, attacker, ioc_type, start
+            )
+
+        indicator_payload = json.loads(indicator.serialize())
+        envelope = {"objects": [indicator_payload]}
 
         collection = self._get_collection_cached()
         if not collection:
