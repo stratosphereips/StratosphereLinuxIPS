@@ -380,6 +380,46 @@ class ConfigParser(object):
             workers = 2
         return max(1, workers)
 
+    def taxii_direct_export_max_workers(self):
+        workers = self.read_configuration(
+            "exporting_alerts", "direct_export_max_workers", 8
+        )
+        try:
+            workers = int(workers)
+        except ValueError:
+            workers = 8
+        return max(1, workers)
+
+    def taxii_direct_export_retry_max(self):
+        retries = self.read_configuration(
+            "exporting_alerts", "direct_export_retry_max", 3
+        )
+        try:
+            retries = int(retries)
+        except ValueError:
+            retries = 3
+        return max(0, retries)
+
+    def taxii_direct_export_retry_backoff(self):
+        backoff = self.read_configuration(
+            "exporting_alerts", "direct_export_retry_backoff", 0.5
+        )
+        try:
+            backoff = float(backoff)
+        except ValueError:
+            backoff = 0.5
+        return max(0.0, backoff)
+
+    def taxii_direct_export_retry_max_delay(self):
+        delay = self.read_configuration(
+            "exporting_alerts", "direct_export_retry_max_delay", 5.0
+        )
+        try:
+            delay = float(delay)
+        except ValueError:
+            delay = 5.0
+        return max(0.0, delay)
+
     def long_connection_threshold(self):
         """
         returns threshold in seconds
