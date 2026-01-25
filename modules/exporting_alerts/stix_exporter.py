@@ -713,7 +713,7 @@ class StixExporter(IExporter):
           message_id="{message_id}">
           <taxii_11:Destination_Collection_Name>{escape(collection_name)}</taxii_11:Destination_Collection_Name>
           <taxii_11:Content_Block>
-            <taxii_11:Content_Binding>urn:stix.mitre.org:xml:1.2</taxii_11:Content_Binding>
+            <taxii_11:Content_Binding binding_id="urn:stix.mitre.org:xml:1.2" />
             <taxii_11:Content>
         {stix_xml}
             </taxii_11:Content>
