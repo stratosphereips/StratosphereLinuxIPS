@@ -5,16 +5,16 @@
   * [Experiment Details](#experiment-details)
   * [Defining Acceptable Performance Degradation](#defining-acceptable-performance-degradation)
   * [Detection speed (latency)](#detection-speed--latency-)
-    + [Definitions](#definitions)
-    + [Experiment](#experiment)
-    + [Identifying the bottlenecks](#identifying-the-bottlenecks)
-      - [Experiment 1](#experiment-1)
-      - [Experiment 2](#experiment-2)
-      - [Top 3 bottlenecks](#top-3-bottlenecks)
+    * [Definitions](#definitions)
+    * [Experiment](#experiment)
+    * [Identifying the bottlenecks](#identifying-the-bottlenecks)
+      * [Experiment 1](#experiment-1)
+      * [Experiment 2](#experiment-2)
+      * [Top 3 bottlenecks](#top-3-bottlenecks)
   * [Proposed Solutions](#proposed-solutions)
-      - [Make major parts of Slips async](#make-major-parts-of-slips-async)
-    + [Cooldown when under attack](#cooldown-when-under-attack)
-    + [Use bloom filters for the whitelists](#use-bloom-filters-for-the-whitelists)
+    * [Make major parts of Slips async](#make-major-parts-of-slips-async)
+    * [Cooldown when under attack](#cooldown-when-under-attack)
+    * [Use bloom filters for the whitelists](#use-bloom-filters-for-the-whitelists)
   * [Conclusion](#conclusion)
 
 
@@ -99,7 +99,7 @@ For more detailed info [check here](https://stratospherelinuxips.readthedocs.io/
 
 **Docker image**
 
-- Image: stratosphereips/slips:latest
+* Image: stratosphereips/slips:latest
 * Network mode: host
 * CPU shares: 700
 * Memory limit: 10 GB
