@@ -215,7 +215,7 @@ class ScanDetectionsHandler:
                 lookup=ip,
             )
 
-            if self.use_local_p2p:
+            if self.use_local_p2p and data_to_send:
                 # ask other peers their opinion about this IP
                 # the p2p module is expecting these 2 keys
                 data_to_send.update({"cache_age": 1000, "ip": str(ip)})
