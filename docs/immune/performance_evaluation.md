@@ -1,16 +1,18 @@
 # Table Of Contents
-* [Performance Evaluation](#performance-evaluation)
-* [How Slips works](#how-slips-works)
-* [Scope of Performance Bottlenecks](#scope-of-performance-bottlenecks)
-* [Detection speed (latency)](#detection-speed--latency-)
-  + [Definitions](#definitions)
-  + [Experiment](#experiment)
-* [Proposed Solutions](#proposed-solutions)
-    - [Make major parts of Slips async](#make-major-parts-of-slips-async)
-  + [Cooldown when under attack](#cooldown-when-under-attack)
-* [Conclusion](#conclusion)
+  * [Performance Evaluation](#performance-evaluation)
+  * [Defining high traffic](#defining-high-traffic)
+  * [How Slips works](#how-slips-works)
+  * [Experiment Details](#experiment-details)
+  * [Defining Acceptable Performance Degradation](#defining-acceptable-performance-degradation)
+  * [Detection speed (latency)](#detection-speed--latency-)
+    + [Definitions](#definitions)
+    + [Experiment](#experiment)
+  * [Proposed Solutions](#proposed-solutions)
+      - [Make major parts of Slips async](#make-major-parts-of-slips-async)
+    + [Cooldown when under attack](#cooldown-when-under-attack)
+  * [Conclusion](#conclusion)
 
-# Performance Evaluation
+## Performance Evaluation
 
 
 The following experiments are done by running Slips with an IP exposed to the internet (public-facing) with real-life traffic, and monitoring the performance under normal conditions and when under attack.
@@ -31,6 +33,38 @@ The major performance metrics we've monitored are:
 
 The following experiments are done using Slips in a docker container with RAM and CPU limits to be able to have artifacts to debug issues without the host getting killed.
 
+
+## Defining high traffic
+
+Here we answer the following question, how many flows are considered normal? how many flows roughly are considered a high traffic attack in slips.
+
+> **Important note:**
+The values below are approximate and highly host-dependent.
+They are derived from real traffic observed on a public-facing host.
+Different hosts (role, exposure, services, and network position) can have significantly different baselines.
+
+This experiment covers around 10 days (≈240 hours) of traffic.
+
+![](../images/immune/a9/flows_per_hours_for_defining_baseline.jpg)
+
+
+**Baseline (Normal amount of expected traffic)**
+
+- Most baseline points sit roughly between 800 and 2,000 flows/hour
+- Occasionally being up to ~3,000–4,000/hour, which is still normal.
+
+**Under attack**
+
+* Smaller attacks: ~50,000–60,000 flows/hour
+* Larger attacks: ~70,000–75,000 flows/hour
+* Peak attack: ~95,000–100,000 flows/hour
+
+
+**Summary:**
+
+* Baseline traffic: ~15–35 flows/min
+* Under attack: ~800–1,600 flows/min
+
 ## How Slips works
 
 In brief, when running on an interface or when analyzing a PCAP, Slips uses zeek for flow generation, and starts the input process which reads flows from zeek as fast as possible, and send the flows for processsing in the profiler process.
@@ -42,13 +76,39 @@ The profiler process puts the flows in a format that Slips can understand, and d
 
 For more detailed info [check here](https://stratospherelinuxips.readthedocs.io/en/develop/contributing.html#how-does-slips-work)
 
+## Experiment Details
 
-## Scope of Performance Bottlenecks
+**Slips**
+
+- Version: v1.1.16
+- Commit hash: 97c32c2
+
+**Redis**
+
+- Version: Redis v7.x
+
+**Zeek**
+
+- Version: Zeek v8.x
+
+**Docker image**
+
+- Image: stratosphereips/slips:latest
+* Network mode: host
+* CPU shares: 700
+* Memory limit: 10 GB
+* Memory + swap limit: 10 GB (swap effectively disabled)
+* Shared memory size: 512 MB
+
+
+
+## Defining Acceptable Performance Degradation
 
 Here we define what is acceptable and what is not in terms of latency.
 
 * Any issue including latency in earlier stages (zeek, input, profiler) affect the performance of all modules.
 * Issues in single modules only affect the module and can be tolerated.
+
 
 
 ## Detection speed (latency)
