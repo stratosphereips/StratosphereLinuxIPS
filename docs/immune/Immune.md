@@ -6,10 +6,12 @@ This is the main guide to the documentation related to the changes done to Slips
 
 - [Main Architecture of Slips Immune](https://stratospherelinuxips.readthedocs.io/en/develop/immune/immune_architecture.html)
 
-###  RPI performance 
+###  RPI performance
 - [Research RPI Limitations](https://stratospherelinuxips.readthedocs.io/en/develop/immune/research_rpi_limitations_and_define_acceptable_performance_benchmarks.html)
 - [Slips Compatibility In The RPI](https://stratospherelinuxips.readthedocs.io/en/develop/immune/reimplement_slips_features_incompatible_with_the_rpi.html)
 - [Installing Slips On the RPI](https://stratospherelinuxips.readthedocs.io/en/develop/immune/installing_slips_in_the_rpi.html)
+- [Performance Evaluation](https://stratospherelinuxips.readthedocs.io/en/develop/immune/performance_evaluation.html)
+- [Testing](https://stratospherelinuxips.readthedocs.io/en/develop/immune/testing.html)
 - [LLM Research and Selection](https://stratospherelinuxips.readthedocs.io/en/develop/immune/research_and_selection_of_llm_candidates.html)
 - [LLM RPI Performance](https://stratospherelinuxips.readthedocs.io/en/develop/immune/research_rpi_llm_performance.html)
 
@@ -35,7 +37,7 @@ This is the main guide to the documentation related to the changes done to Slips
 
 **Datasets Evaluation (LLM-as-a-judge):**
 - [LLM Evaluation Guide](https://stratospherelinuxips.readthedocs.io/en/develop/immune/LLM_EVALUATION_GUIDE.html) - How to evaluate and compare LLM models
-- [Summarization Evaluation Results](https://harpomaxx.github.io/gh-web-host/slips-immune-llm-results/summary_dashboard.html) - Performance metrics for summarization models. 
+- [Summarization Evaluation Results](https://harpomaxx.github.io/gh-web-host/slips-immune-llm-results/summary_dashboard.html) - Performance metrics for summarization models.
 - [Risk Analysis Evaluation Results](https://harpomaxx.github.io/gh-web-host/slips-immune-llm-results/risk_dashboard.html) - Performance metrics for risk assessment models
 
 **LLM finetuning**
