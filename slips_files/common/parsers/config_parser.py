@@ -365,6 +365,16 @@ class ConfigParser(object):
             "exporting_alerts", "taxii_password", False
         )
 
+    def taxii_timeout(self):
+        timeout = self.read_configuration(
+            "exporting_alerts", "taxii_timeout", 10
+        )
+        try:
+            timeout = float(timeout)
+        except ValueError:
+            timeout = 10
+        return max(1.0, timeout)
+
     def taxii_version(self):
         return self.read_configuration(
             "exporting_alerts", "taxii_version", 2
@@ -397,12 +407,12 @@ class ConfigParser(object):
 
     def taxii_direct_export_retry_max(self):
         retries = self.read_configuration(
-            "exporting_alerts", "direct_export_retry_max", 3
+            "exporting_alerts", "direct_export_retry_max", 0
         )
         try:
             retries = int(retries)
         except ValueError:
-            retries = 3
+            retries = 0
         return max(0, retries)
 
     def taxii_direct_export_retry_backoff(self):
