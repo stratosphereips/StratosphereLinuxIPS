@@ -65,10 +65,10 @@ class WhitelistMatcher:
             return True
 
         whitelist_src = (
-            "src" in dir_from_whitelist and ioc_direction == Direction.SRC
+            "src" in dir_from_whitelist and ioc_direction == Direction.SRC.name
         )
         whitelist_dst = (
-            "dst" in dir_from_whitelist and ioc_direction == Direction.DST
+            "dst" in dir_from_whitelist and ioc_direction == Direction.DST.name
         )
 
         return whitelist_src or whitelist_dst
