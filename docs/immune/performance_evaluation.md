@@ -61,7 +61,7 @@ This experiment covers around 10 days (≈240 hours) of traffic.
 
 **Under attack**
 
-* Smaller attacks: ~50,000–60,000 flows/hour
+* Smaller attacks: ~20,000–60,000 flows/hour
 * Larger attacks: ~70,000–75,000 flows/hour
 * Peak attack: ~95,000–100,000 flows/hour
 
