@@ -64,11 +64,13 @@ class WhitelistMatcher:
         if dir_from_whitelist == "both":
             return True
 
-        whitelist_src = (
-            "src" in dir_from_whitelist and ioc_direction == Direction.SRC.name
+        whitelist_src = "src" in dir_from_whitelist and ioc_direction in (
+            Direction.SRC.name,
+            Direction.SRC,
         )
-        whitelist_dst = (
-            "dst" in dir_from_whitelist and ioc_direction == Direction.DST.name
+        whitelist_dst = "dst" in dir_from_whitelist and ioc_direction in (
+            Direction.DST.name,
+            Direction.DST,
         )
 
         return whitelist_src or whitelist_dst
