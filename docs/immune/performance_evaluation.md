@@ -1,4 +1,4 @@
-# Table Of Contents
+## Table Of Contents
   * [Performance Evaluation](#performance-evaluation)
   * [Defining high traffic](#defining-high-traffic)
   * [How Slips works](#how-slips-works)
@@ -7,10 +7,16 @@
   * [Detection speed (latency)](#detection-speed--latency-)
     + [Definitions](#definitions)
     + [Experiment](#experiment)
+    + [Identifying the bottlenecks](#identifying-the-bottlenecks)
+      - [Experiment 1](#experiment-1)
+      - [Experiment 2](#experiment-2)
+      - [Top 3 bottlenecks](#top-3-bottlenecks)
   * [Proposed Solutions](#proposed-solutions)
       - [Make major parts of Slips async](#make-major-parts-of-slips-async)
     + [Cooldown when under attack](#cooldown-when-under-attack)
+    + [Use bloom filters for the whitelists](#use-bloom-filters-for-the-whitelists)
   * [Conclusion](#conclusion)
+
 
 ## Performance Evaluation
 
@@ -168,12 +174,32 @@ Experiments show ~1h latency when under high-traffic attacks. This means
 2. Slips is late by 1h to detect the last flow of the attack.
 3. Slips gets slower over time when under attack because it's overwhelmed with the huge amount of flows.
 
+### Identifying the bottlenecks
+
+We ran slips a few times with HTTP lifecycle timing. The goal of these experiments is to answer the following questions "Which part of Slips is causing this latency? Is it the HTTP module? the input? the profiler? etc."
+
+The following graph times every operation an HTTP goes through starting from the zeek log file until a detection is made and logged to slips log files.
+
+Experiments show the following timing consumption
+
+#### Experiment 1
+![](../images/immune/a9/http_lifecycle.jpg)
+
+#### Experiment 2
+![](../images/immune/a9/http_lifecycle2.jpg)
+
+#### Top 3 bottlenecks
+
+1. Input Process: responsible for reading flows from zeek log files
+2. Profiler Process: responsible for converting flows to a format Slips modules can deal with.
+3. Evidence Handler: The whitelist in the evidence handler responsible for checking if an evidence is whitelisted or not before logging it to slips log files is slow.
+
+
 
 
 ## Proposed Solutions
 
-
-Our goal is for slips to process the given flows faster.
+Our goal is for Slips to process the given flows faster.
 
 #### Make major parts of Slips async
 
@@ -192,6 +218,9 @@ The tradeoff here is: Slips will miss the detection of flows that happen in the 
 
 So instead of users getting 1000 evidence when under a portscan attack, they may get 10 evidence instead. This way the user still knows about the portscan, and would know when it started, and when it ended without having slips analyzing every single flow of the attack.
 
+### Use bloom filters for the whitelists
+
+This speedup will affect both the profiler and the evidence process. Using bloom filters will greatly impact the speedup of whitelist lookups and the speed of flow and evidence processing.
 
 ## Conclusion
 
