@@ -400,13 +400,16 @@ exporting_alerts:
   # Upper bound for auto-scaling direct export workers
   direct_export_max_workers: 12
   # Retry settings for direct TAXII export
-  direct_export_retry_max: 3
+  # 0 = retry forever (no drops)
+  direct_export_retry_max: 0
   direct_export_retry_backoff: 0.5
   direct_export_retry_max_delay: 5.0
 
   # TAXII server credentials
   taxii_username: admin
   taxii_password: changeme_before_installing_a_medallion_server #  pragma: allowlist secret
+  # Timeout for TAXII HTTP requests (seconds)
+  taxii_timeout: 10
 
 #############################
 CESNET:
