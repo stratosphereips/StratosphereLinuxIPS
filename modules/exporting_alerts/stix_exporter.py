@@ -12,6 +12,7 @@ from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
 import requests
+from requests.auth import HTTPBasicAuth
 from stix2 import Bundle, Indicator, parse
 from taxii2client.v21 import Server
 from xml.sax.saxutils import escape
@@ -32,6 +33,7 @@ class StixExporter(IExporter):
         )
         self.direct_export = False
         self.collection_cache = threading.local()
+        self.objects_url_cache = threading.local()
         self.direct_export_attempts = 0
         self.direct_export_success = 0
         self.direct_export_fail = 0
@@ -40,6 +42,7 @@ class StixExporter(IExporter):
         self.direct_export_retry_max = 0
         self.direct_export_retry_backoff = 0.0
         self.direct_export_retry_max_delay = 0.0
+        self.taxii_timeout = 10.0
         self.exported_evidence_lock = threading.Lock()
         self.taxii_version = 2
         self.taxii1_inbox_path = "/services/inbox"
@@ -66,7 +69,8 @@ class StixExporter(IExporter):
                 f"direct_export_max_workers={self.direct_export_max_workers} "
                 f"direct_export_retry_max={self.direct_export_retry_max} "
                 f"direct_export_retry_backoff={self.direct_export_retry_backoff} "
-                f"direct_export_retry_max_delay={self.direct_export_retry_max_delay}"
+                f"direct_export_retry_max_delay={self.direct_export_retry_max_delay} "
+                f"taxii_timeout={self.taxii_timeout}"
             )
             self.exported_evidence_ids = set()
             self.last_exported_count = 0
@@ -291,6 +295,110 @@ class StixExporter(IExporter):
             self.collection_cache.collection = collection
         return collection
 
+    def _get_requests_auth(self):
+        if self.taxii_username and self.taxii_password:
+            return HTTPBasicAuth(self.taxii_username, self.taxii_password)
+        return None
+
+    def _resolve_objects_url(self) -> Optional[str]:
+        discovery_url = self._build_url(self.discovery_path)
+        headers = {"Accept": "application/taxii+json;version=2.1"}
+        auth = self._get_requests_auth()
+        try:
+            response = requests.get(
+                discovery_url,
+                headers=headers,
+                auth=auth,
+                timeout=self.taxii_timeout,
+            )
+        except Exception as err:
+            self._log_export(
+                f"Direct export failed: discovery error {err}"
+            )
+            return None
+        if not response.ok:
+            self._log_export(
+                f"Direct export failed: discovery HTTP {response.status_code} "
+                f"response={response.text[:2000]}"
+            )
+            return None
+        try:
+            payload = response.json()
+        except ValueError as err:
+            self._log_export(
+                f"Direct export failed: discovery JSON error {err}"
+            )
+            return None
+
+        api_roots = payload.get("api_roots") or []
+        if not api_roots:
+            self._log_export(
+                "Direct export failed: discovery returned no api_roots."
+            )
+            return None
+
+        for root in api_roots:
+            root_url = (
+                root if str(root).startswith("http") else self._build_url(root)
+            )
+            collections_url = urljoin(root_url.rstrip("/") + "/", "collections/")
+            try:
+                resp = requests.get(
+                    collections_url,
+                    headers=headers,
+                    auth=auth,
+                    timeout=self.taxii_timeout,
+                )
+            except Exception as err:
+                self._log_export(
+                    f"Direct export failed: collections error {err}"
+                )
+                continue
+            if not resp.ok:
+                self._log_export(
+                    f"Direct export failed: collections HTTP {resp.status_code} "
+                    f"response={resp.text[:2000]}"
+                )
+                continue
+            try:
+                collections_payload = resp.json()
+            except ValueError as err:
+                self._log_export(
+                    f"Direct export failed: collections JSON error {err}"
+                )
+                continue
+            collections = collections_payload.get("collections") or []
+            for collection in collections:
+                collection_id = collection.get("id")
+                title = collection.get("title")
+                if (
+                    collection_id == self.collection_name
+                    or title == self.collection_name
+                ):
+                    objects_url = urljoin(
+                        root_url.rstrip("/") + "/",
+                        f"collections/{collection_id}/objects/",
+                    )
+                    self._log_export(
+                        f"Direct export resolved objects_url={objects_url} "
+                        f"collection_id={collection_id} api_root={root_url}"
+                    )
+                    return objects_url
+
+        self._log_export(
+            f"Direct export failed: collection '{self.collection_name}' not found."
+        )
+        return None
+
+    def _get_objects_url_cached(self) -> Optional[str]:
+        cached = getattr(self.objects_url_cache, "objects_url", None)
+        if cached:
+            return cached
+        objects_url = self._resolve_objects_url()
+        if objects_url:
+            self.objects_url_cache.objects_url = objects_url
+        return objects_url
+
     def read_stix_file(self) -> str:
         if not os.path.exists(self.stix_filename):
             return ""
@@ -437,6 +545,7 @@ class StixExporter(IExporter):
         self.taxii_username = conf.taxii_username()
         self.taxii_password = conf.taxii_password()
         self.taxii_version = self._normalize_taxii_version(conf.taxii_version())
+        self.taxii_timeout = conf.taxii_timeout()
         self.direct_export = bool(conf.taxii_direct_export())
         self.direct_export_workers = conf.taxii_direct_export_workers()
         self.direct_export_max_workers = conf.taxii_direct_export_max_workers()
@@ -811,7 +920,7 @@ class StixExporter(IExporter):
                 data=inbox_xml.encode("utf-8"),
                 headers=headers,
                 auth=auth,
-                timeout=10,
+                timeout=self.taxii_timeout,
             )
         except Exception as err:
             self.direct_export_fail += 1
@@ -907,45 +1016,60 @@ class StixExporter(IExporter):
 
         indicator_payload = json.loads(indicator.serialize())
         envelope = {"objects": [indicator_payload]}
-
-        collection = self._get_collection_cached()
-        if not collection:
+        objects_url = self._get_objects_url_cached()
+        if not objects_url:
             self.direct_export_fail += 1
             return False
 
+        headers = {
+            "Accept": "application/taxii+json;version=2.1",
+            "Content-Type": "application/taxii+json;version=2.1",
+        }
+        auth = self._get_requests_auth()
+
         try:
-            status = collection.add_objects(envelope)
+            response = requests.post(
+                objects_url,
+                json=envelope,
+                headers=headers,
+                auth=auth,
+                timeout=self.taxii_timeout,
+            )
         except Exception as err:
             self.direct_export_fail += 1
-            self.print(
-                f"Failed to push indicator to TAXII collection: {err}", 0, 3
-            )
-            response = getattr(err, "response", None)
-            if response is not None:
-                self._log_export(
-                    f"Direct export failed: HTTP {response.status_code} "
-                    f"response={response.text[:2000]}"
-                )
-            else:
-                self._log_export(f"Direct export failed: push error {err}")
+            self._log_export(f"Direct export failed: request error {err}")
             duration = time.time() - start
             self._log_export(
                 f"Direct export duration_seconds={duration:.3f}"
             )
             return False
 
-        if getattr(status, "failure_count", 0):
+        if not response.ok:
             self.direct_export_fail += 1
             self._log_export(
-                f"Direct export failed: status failures="
-                f"{status.failure_count}"
+                f"Direct export failed: HTTP {response.status_code} "
+                f"response={response.text[:2000]}"
             )
-            for failure in status.failures[:5]:
-                obj_id = failure.get("id")
-                reason = failure.get("message")
-                self._log_export(
-                    f"Direct export failure for {obj_id}: {reason}"
-                )
+            duration = time.time() - start
+            self._log_export(
+                f"Direct export duration_seconds={duration:.3f}"
+            )
+            return False
+
+        success_count = None
+        failure_count = None
+        try:
+            status_payload = response.json()
+            success_count = status_payload.get("success_count")
+            failure_count = status_payload.get("failure_count")
+        except ValueError:
+            status_payload = None
+
+        if failure_count:
+            self.direct_export_fail += 1
+            self._log_export(
+                f"Direct export failed: status failures={failure_count}"
+            )
             duration = time.time() - start
             self._log_export(
                 f"Direct export duration_seconds={duration:.3f}"
@@ -959,7 +1083,7 @@ class StixExporter(IExporter):
         duration = time.time() - start
         self._log_export(
             f"Direct export success id={evidence_id} "
-            f"success={status.success_count} "
+            f"success={success_count} "
             f"collection={self.collection_name} "
             f"duration_seconds={duration:.3f}"
         )
