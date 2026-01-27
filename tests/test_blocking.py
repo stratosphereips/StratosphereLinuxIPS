@@ -72,7 +72,7 @@ def test_is_ip_already_blocked():
 
         # assert subprocess.run was called with the correct command
         mock_run.assert_called_once_with(
-            ["sudo", "iptables", "-L", "slipsBlocking", "-v", "-n"],
+            [blocking.sudo, "iptables", "-L", "slipsBlocking", "-v", "-n"],
             stdout=subprocess.PIPE,
         )
 
@@ -90,7 +90,7 @@ def test_is_ip_already_blocked():
 def test_block_ip(ip, flags, already_blocked, expected):
     blocking = ModuleFactory().create_blocking_obj()
     blocking.firewall = "iptables"
-    blocking.sudo = "sudo"
+    # blocking.sudo = "sudo"
 
     with patch.object(
         blocking, "_is_ip_already_blocked", return_value=already_blocked
