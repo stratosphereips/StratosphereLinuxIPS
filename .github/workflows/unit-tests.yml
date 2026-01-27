@@ -100,14 +100,6 @@ jobs:
         ref: ${{ github.ref }}
         fetch-depth: 0
 
-
-    - name: Install missing APT dependencies
-      uses: ./.github/actions/install-apt-deps
-
-
-    - name: Install missing Python packages
-      uses: ./.github/actions/install-pip-deps
-
     - name: Run Unit Tests for ${{ matrix.test_file }}
       run: |
         python3 -m pytest tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 5
