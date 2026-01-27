@@ -7,4 +7,4 @@ runs:
       shell: bash
       run: |
         python3 -m pip install --upgrade pip
-        python3 -m pip install --upgrade -r install/requirements.txt
+        python3 -m pip install -r install/requirements.txt
