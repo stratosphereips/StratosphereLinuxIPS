@@ -36,10 +36,13 @@ RUN apt-get update -o Acquire::Retries=5 -o Acquire::https::No-Cache=True \
     && rm -f /tmp/apt_dependencies.txt
 
 # donwload pip requirements from slips develop branch and install them
-RUN curl -fsSL \
-        https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/install/requirements.txt \
-        -o /tmp/requirements.txt \
+# set -e tells the shell to exit immediately if any command returns a non-zero status.
+RUN set -e; \
+    curl -fsSL https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/install/requirements.txt \
+    -o /tmp/requirements.txt \
+    && python3 -m pip install --upgrade pip \
     && python3 -m pip install --no-cache-dir -r /tmp/requirements.txt \
+    && python3 -m pip check \
     && rm -f /tmp/requirements.txt
 
 
