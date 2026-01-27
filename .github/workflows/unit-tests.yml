@@ -106,7 +106,7 @@ jobs:
 
 
     - name: Install missing Python packages
-      uses: ./.github/actions/install-missing-pip
+      uses: ./.github/actions/install-pip-deps
 
     - name: Run Unit Tests for ${{ matrix.test_file }}
       run: |
