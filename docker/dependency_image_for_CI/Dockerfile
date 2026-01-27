@@ -35,6 +35,13 @@ RUN apt-get update -o Acquire::Retries=5 -o Acquire::https::No-Cache=True \
         $(grep -vE '^\s*#|^\s*$' /tmp/apt_dependencies.txt) \
     && rm -f /tmp/apt_dependencies.txt
 
+# donwload pip requirements from slips develop branch and install them
+RUN curl -fsSL \
+        https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/install/requirements.txt \
+        -o /tmp/requirements.txt \
+    && python3 -m pip install --no-cache-dir -r /tmp/requirements.txt \
+    && rm -f /tmp/requirements.txt
+
 
 RUN curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key \
         | gpg --dearmor -o /usr/share/keyrings/zeek.gpg \
