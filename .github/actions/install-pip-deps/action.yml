@@ -6,17 +6,5 @@ runs:
     - name: Install missing pip packages
       shell: bash
       run: |
-        set -e
         python3 -m pip install --upgrade pip
-
-        # Read requirements, skip comments/empty lines
-        grep -vE '^\s*#|^\s*$' install/requirements.txt | while read line; do
-          # Strip version constraints (==, >=, <=, ~=)
-          pkg=$(echo "$line" | sed -E 's/[<>=!~].*//')
-          if ! python3 -m pip show "$pkg" &>/dev/null; then
-            echo "Installing missing package: $pkg"
-            python3 -m pip install --upgrade --ignore-installed "$pkg"
-          else
-            echo "Already installed: $pkg"
-          fi
-        done
+        python3 -m pip install --upgrade -r install/requirements.txt
