@@ -1,0 +1,14 @@
+name: 'Install missing APT dependencies'
+description: 'Installs missing packages listed in install/apt_dependencies.txt'
+runs:
+  using: "composite"
+  steps:
+    # no sudo here because this runs inside a docker container
+    - name: Update apt and install missing packages
+      shell: bash
+      run: |
+        set -e
+        apt update
+        xargs -a <(grep -v '^#' install/apt_dependencies.txt | xargs -n1 | while read pkg; do
+            dpkg -s "$pkg" &>/dev/null || echo "$pkg"
+        done) apt install -y

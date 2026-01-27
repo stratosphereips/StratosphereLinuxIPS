@@ -101,10 +101,8 @@ jobs:
         fetch-depth: 0
 
 
-    - name: Install missing apt dependencies of the current branch
-      run: |
-          sudo apt update
-          xargs -a <(grep -v '^#' install/apt_dependencies.txt | xargs -n1 | while read pkg; do dpkg -s "$pkg" &>/dev/null || echo "$pkg" done) sudo apt install -y
+    - name: Install APT dependencies
+      uses: ./.github/actions/install-apt-deps
 
     - name: Run Unit Tests for ${{ matrix.test_file }}
       run: |
