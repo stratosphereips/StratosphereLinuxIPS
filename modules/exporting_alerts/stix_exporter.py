@@ -781,6 +781,9 @@ class StixExporter(IExporter):
         title = escape(evidence.get("evidence_type", "Slips Alert"))
         description_text = evidence.get("description") or ""
         meta: Dict[str, object] = {}
+        threat_level = evidence.get("threat_level")
+        if threat_level:
+            meta["threat_level"] = threat_level
         victim_value = (evidence.get("victim") or {}).get("value")
         if victim_value:
             meta["victim"] = victim_value
