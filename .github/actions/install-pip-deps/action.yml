@@ -3,16 +3,16 @@ description: 'Installs missing Python packages listed in install/requirements.tx
 runs:
   using: "composite"
   steps:
-    # no sudo because this runs inside a container
     - name: Install missing pip packages
       shell: bash
       run: |
         set -e
-        # Make sure pip is up-to-date
         python3 -m pip install --upgrade pip
 
         # Read requirements, skip comments/empty lines
-        xargs -a <(grep -vE '^\s*#|^\s*$' install/requirements.txt) -n1 | while read pkg; do
+        grep -vE '^\s*#|^\s*$' install/requirements.txt | while read line; do
+          # Strip version constraints (==, >=, <=, ~=)
+          pkg=$(echo "$line" | sed -E 's/[<>=!~].*//')
           if ! python3 -m pip show "$pkg" &>/dev/null; then
             echo "Installing missing package: $pkg"
             python3 -m pip install --upgrade --ignore-installed "$pkg"
