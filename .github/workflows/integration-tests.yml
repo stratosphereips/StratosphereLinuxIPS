@@ -39,9 +39,12 @@ jobs:
         ref: ${{ github.ref }}
         fetch-depth: ''
 
-    - name: Install APT dependencies
+    - name: Install missing APT dependencies
       uses: ./.github/actions/install-apt-deps
 
+
+    - name: Install missing Python packages
+      uses: ./.github/actions/install-missing-pip
 
     - name: Run Integration Tests for ${{ matrix.test_file }}
       run: |
