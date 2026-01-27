@@ -7,16 +7,11 @@ on:
       - 'develop'
 
 jobs:
-#  # uses the common workflow that builds slips
-#  install-dependencies-using-reusable-workflow:
-#    uses: ./.github/workflows/install-slips-dependencies.yml
 
 
   integration-tests:
     runs-on: ubuntu-22.04
     timeout-minutes: 1800
-#    # make this job depend on the first job
-#    needs: install-dependencies-using-reusable-workflow
 
     # suppress tensorflow warnings
     env:

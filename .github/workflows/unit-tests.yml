@@ -7,14 +7,10 @@ on:
       - 'develop'
 
 jobs:
-#  # uses the common workflow that builds slips
-#  install-dependencies-using-reusable-workflow:
-#    uses: ./.github/workflows/install-slips-dependencies.yml
 
   unit-tests:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
-#    needs: install-dependencies-using-reusable-workflow
 
     env:
       TF_CPP_MIN_LOG_LEVEL: 3
