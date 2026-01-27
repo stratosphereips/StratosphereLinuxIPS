@@ -15,7 +15,7 @@ runs:
         xargs -a <(grep -vE '^\s*#|^\s*$' install/requirements.txt) -n1 | while read pkg; do
           if ! python3 -m pip show "$pkg" &>/dev/null; then
             echo "Installing missing package: $pkg"
-            python3 -m pip install "$pkg"
+            python3 -m pip install --upgrade --ignore-installed "$pkg"
           else
             echo "Already installed: $pkg"
           fi
