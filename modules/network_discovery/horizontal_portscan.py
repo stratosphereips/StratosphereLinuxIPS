@@ -78,6 +78,7 @@ class HorizontalPortscan:
             f"Confidence: {confidence}. by Slips"
         )
 
+        str_twid = evidence["twid"]
         evidence = Evidence(
             evidence_type=EvidenceType.HORIZONTAL_PORT_SCAN,
             attacker=attacker,
@@ -86,7 +87,7 @@ class HorizontalPortscan:
             description=description,
             profile=ProfileID(ip=srcip),
             timewindow=TimeWindow(
-                number=int(evidence["twid"].replace("timewindow", ""))
+                number=int(str_twid.replace("timewindow", ""))
             ),
             uid=evidence["uids"],
             timestamp=evidence["first_timestamp"],  # TODO use last_timestamp
@@ -95,6 +96,9 @@ class HorizontalPortscan:
         )
 
         self.db.set_evidence(evidence)
+        # to be able to avoid setting "unknown port" evidence for each
+        # scanned port from this attacker
+        self.db.mark_ip_as_port_scanner(srcip, str_twid)
 
     def should_set_evidence(
         self,

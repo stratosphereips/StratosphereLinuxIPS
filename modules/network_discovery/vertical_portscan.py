@@ -68,7 +68,9 @@ class VerticalPortscan:
             ioc_type=IoCType.IP,
             value=evidence["dstip"],
         )
-        twid = int(evidence["twid"].replace("timewindow", ""))
+        str_twid = evidence["twid"]
+        twid = int(str_twid.replace("timewindow", ""))
+
         evidence = Evidence(
             evidence_type=EvidenceType.VERTICAL_PORT_SCAN,
             attacker=attacker,
@@ -84,6 +86,9 @@ class VerticalPortscan:
         )
 
         self.db.set_evidence(evidence)
+        # to be able to avoid setting "unknown port" evidence for each
+        # scanned port from this attacker
+        self.db.mark_ip_as_port_scanner(saddr, str_twid)
 
     def check_if_enough_dports_to_trigger_an_evidence(
         self, profileid, twid, dstip, amount_of_dports: int
