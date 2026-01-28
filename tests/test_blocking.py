@@ -104,9 +104,9 @@ def test_block_ip(ip, flags, already_blocked, exec_iptables_command, expected):
             blocking, "_is_ip_already_blocked", return_value=already_blocked
         ),
         patch(
-            "modules.blocking.exec_iptables_cmd.exec_iptables_command",
+            "modules.blocking.blocking.exec_iptables_command",
             return_value=True,
-        ) as _,
+        ),
         patch.object(blocking, "print"),
         patch.object(blocking, "log"),
         patch.object(blocking.db, "set_blocked_ip"),
