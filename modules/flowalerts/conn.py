@@ -183,6 +183,11 @@ class Conn(IFlowalertsAnalyzer):
         if not flow.dport:
             return
 
+        if self.db.is_a_port_scanner(flow.saddr, twid):
+            # avoid setting unknown port evidence for each port
+            # scanned from this attacker
+            return False
+
         portproto = f"{flow.dport}/{flow.proto}"
         if self.db.get_port_info(portproto):
             # it's a known port
