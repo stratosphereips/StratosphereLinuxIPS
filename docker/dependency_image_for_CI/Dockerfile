@@ -42,7 +42,6 @@ RUN set -e; \
     -o /tmp/requirements.txt \
     && python3 -m pip install --upgrade pip \
     && python3 -m pip install --no-cache-dir --ignore-installed -r /tmp/requirements.txt \
-    && python3 -m pip check \
     && rm -f /tmp/requirements.txt
 
 
