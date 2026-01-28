@@ -54,6 +54,7 @@ jobs:
           - test_slips.py
           - test_profiler.py
           - test_profiler_worker.py
+          - test_profilers_manager.py
           - test_leak_detector.py
           - test_ip_info.py
           - test_evidence.py
@@ -85,7 +86,6 @@ jobs:
           - test_profile_handler.py
           - test_process_manager.py
           - test_metadata_manager.py
-          - test_host_ip_manager.py
           - test_host_ip_manager.py
           - test_rnn_cc_detection.py
           - test_idea_format.py
