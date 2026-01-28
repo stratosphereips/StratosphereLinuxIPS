@@ -107,24 +107,34 @@ def test_is_p2p(
 
 
 @pytest.mark.parametrize(
-    "dport, proto, expected_result, mock_port_info, "
-    "mock_is_ftp_port, mock_port_belongs_to_an_org",
-    [  # Testcase 1: Known port, info available in the database
-        ("23", "udp", False, "telnet", False, False),
-        # Testcase 2: Unknown port, belongs to an organization
-        ("1337", "udp", False, None, False, True),
+    (
+        "dport",
+        "proto",
+        "mock_port_info",
+        "mock_is_ftp_port",
+        "mock_port_belongs_to_an_org",
+        "mock_is_a_port_scanner",
+        "expected_result",
+    ),
+    [
+        # Case 1: attacker already classified as port scanner → False
+        ("1337", "udp", None, False, False, True, False),
+        # Case 2: unknown port, not scanner, not org-owned → True
+        ("1337", "udp", None, False, False, False, True),
     ],
 )
 def test_check_unknown_port(
     mocker,
     dport,
     proto,
-    expected_result,
     mock_port_info,
     mock_is_ftp_port,
     mock_port_belongs_to_an_org,
+    mock_is_a_port_scanner,
+    expected_result,
 ):
     conn = ModuleFactory().create_conn_analyzer_obj()
+
     flow = Conn(
         starttime="1726249372.312124",
         uid="123",
@@ -133,25 +143,31 @@ def test_check_unknown_port(
         dur=1,
         proto=proto,
         appproto="",
-        sport="0",
+        sport="12345",
         dport=str(dport),
-        spkts=0,
-        dpkts=0,
-        sbytes=0,
-        dbytes=0,
+        spkts=2,
+        dpkts=1,
+        sbytes=120,
+        dbytes=60,
         smac="",
         dmac="",
         state="Established",
-        history="",
+        history="S",
     )
+
     flow.interpreted_state = "Established"
+
+    conn.db.is_a_port_scanner = Mock(return_value=mock_is_a_port_scanner)
     conn.db.get_port_info.return_value = mock_port_info
     conn.db.is_ftp_port.return_value = mock_is_ftp_port
-    flowalerts_mock = mocker.patch(
+
+    port_belongs_mock = mocker.patch(
         "modules.flowalerts.conn.Conn.port_belongs_to_an_org"
     )
-    flowalerts_mock.return_value = mock_port_belongs_to_an_org
-    profileid = f"profile_{saddr}"
+    port_belongs_mock.return_value = mock_port_belongs_to_an_org
+
+    profileid = f"profile_{flow.saddr}"
+
     assert conn.check_unknown_port(profileid, twid, flow) is expected_result
 
 
@@ -176,6 +192,7 @@ def test_check_unknown_port_true_case(mocker):
         state="Established",
         history="",
     )
+    conn.db.is_a_port_scanner = Mock(return_value=False)
     flow.interpreted_state = "Established"
     conn.db.get_port_info.return_value = None
     conn.db.is_ftp_port.return_value = False

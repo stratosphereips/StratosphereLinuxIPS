@@ -20,11 +20,17 @@ class Notice(IFlowalertsAnalyzer):
         if "Port_Scan" not in flow.note:
             return
         self.set_evidence.vertical_portscan(twid, flow)
+        # to be able to avoid setting "unknown port" evidence for each
+        # scanned port from this attacker
+        self.db.mark_ip_as_port_scanner(flow.saddr, twid)
 
     def check_horizontal_portscan(self, flow, profileid, twid):
         if "Address_Scan" not in flow.note:
             return
         self.set_evidence.horizontal_portscan(profileid, twid, flow)
+        # to be able to avoid setting "unknown port" evidence for each
+        # scanned port from this attacker
+        self.db.mark_ip_as_port_scanner(flow.saddr, twid)
 
     def check_password_guessing(self, twid, flow):
         if "Password_Guessing" not in flow.note:

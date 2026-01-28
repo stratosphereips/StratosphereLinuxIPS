@@ -554,6 +554,21 @@ class ScanDetectionsHandler:
             and state == State.NOT_EST
         )
 
+    def mark_ip_as_port_scanner(self, attacker: str, timewindow: str):
+        """
+        Marks the given ip as the attacker doing a port scan. the purpose
+        of this is to avoid setting "unknown port" for every port scanned
+        by this host
+        """
+        self.r.hset(
+            f"profile_{attacker}_{timewindow}", "detected_doing_port_scan", 1
+        )
+
+    def is_a_port_scanner(self, ip: str, timewindow):
+        return self.r.hget(
+            f"profile_{ip}_{timewindow}", "detected_doing_port_scan"
+        )
+
     def get_final_state_from_flags(self, state, pkts):
         """
         Analyze the flags given and return a summary of the state. Should work
