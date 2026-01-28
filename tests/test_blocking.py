@@ -13,9 +13,10 @@ from unittest import mock
 
 def test_init_chains_in_firewall():
     blocking = ModuleFactory().create_blocking_obj()
-    with patch("os.system") as mock_system, patch.object(
-        blocking.__class__, "_get_cmd_output"
-    ) as mock_get_output:
+    with (
+        patch("os.system") as mock_system,
+        patch.object(blocking.__class__, "_get_cmd_output") as mock_get_output,
+    ):
 
         # simulate slipsBlocking not in any chain
         mock_get_output.side_effect = ["", "", ""]  # input, output, forward
@@ -69,40 +70,50 @@ def test_is_ip_already_blocked():
 
         # assert the result is True because the IP is in the fake output
         assert result is True
+        ip_tables_cmd = ["iptables", "-L", "slipsBlocking", "-v", "-n"]
+        if blocking.sudo:
+            expected_cmd = [blocking.sudo] + ip_tables_cmd
+        else:
+            expected_cmd = ip_tables_cmd
 
         # assert subprocess.run was called with the correct command
         mock_run.assert_called_once_with(
-            [blocking.sudo, "iptables", "-L", "slipsBlocking", "-v", "-n"],
+            expected_cmd,
             stdout=subprocess.PIPE,
         )
 
 
 @pytest.mark.parametrize(
-    "ip,flags,already_blocked,expected",
+    "ip,flags,already_blocked, exec_iptables_command, expected",
     [
-        ("192.168.1.10", {}, False, True),  # normal block
-        ("192.168.1.10", {"from_": True}, False, True),  # only from
-        ("192.168.1.10", {"to": True}, False, True),  # only to
-        ("192.168.1.10", {}, True, False),  # already blocked
-        (None, {}, False, False),  # invalid ip type
+        ("192.168.1.10", {}, False, True, True),  # normal block
+        ("192.168.1.10", {"from_": True}, False, True, True),  # only from
+        ("192.168.1.10", {"to": True}, False, True, True),  # only to
+        ("192.168.1.10", {}, True, True, False),  # already blocked
+        (None, {}, False, False, False),  # invalid ip type
     ],
 )
-def test_block_ip(ip, flags, already_blocked, expected):
+def test_block_ip(ip, flags, already_blocked, exec_iptables_command, expected):
     blocking = ModuleFactory().create_blocking_obj()
     blocking.firewall = "iptables"
+
     # blocking.sudo = "sudo"
 
-    with patch.object(
-        blocking, "_is_ip_already_blocked", return_value=already_blocked
-    ), patch(
-        "modules.blocking.exec_iptables_cmd.exec_iptables_command",
-        return_value=True,
-    ) as _, patch.object(
-        blocking, "print"
-    ), patch.object(
-        blocking, "log"
-    ), patch.object(
-        blocking.db, "set_blocked_ip"
+    with (
+        patch.object(
+            blocking, "_is_ip_already_blocked", return_value=already_blocked
+        ),
+        patch(
+            "modules.blocking.exec_iptables_cmd.exec_iptables_command",
+            return_value=True,
+        ) as _,
+        patch.object(blocking, "print"),
+        patch.object(blocking, "log"),
+        patch.object(blocking.db, "set_blocked_ip"),
+        patch(
+            "modules.blocking.exec_iptables_cmd.exec_iptables_command",
+            return_value=exec_iptables_command,
+        ),
     ):
 
         result = blocking._block_ip(ip, flags)
@@ -136,11 +147,13 @@ def test_main_blocking_logic(block, expected_block_called):
     with patch.object(
         blocking, "get_msg", side_effect=[msg_block, msg_tw_closed]
     ):
-        with patch.object(blocking, "_block_ip") as mock_block, patch.object(
-            blocking.unblocker, "unblock_request"
-        ) as mock_unblock_req, patch.object(
-            blocking.unblocker, "update_requests"
-        ) as mock_update:
+        with (
+            patch.object(blocking, "_block_ip") as mock_block,
+            patch.object(
+                blocking.unblocker, "unblock_request"
+            ) as mock_unblock_req,
+            patch.object(blocking.unblocker, "update_requests") as mock_update,
+        ):
 
             blocking.main()
 
