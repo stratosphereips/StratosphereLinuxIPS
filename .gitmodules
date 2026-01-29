@@ -24,6 +24,3 @@
 [submodule "modules/flowmldetection/models"]
 	path = modules/flowmldetection/models
 	url = https://github.com/stratosphereips/StratosphereSlipsModels
-[submodule "modules/flowmldetection/pipeline_ml_training"]
-	path = modules/flowmldetection/pipeline_ml_training
-	url = ./modules/flowmldetection/pipeline_ml_training
