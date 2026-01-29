@@ -7,10 +7,18 @@ import os
 import time
 import socket
 import subprocess
-from typing import Dict, Union, Tuple
+from typing import Dict, Union
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
+
+
+class AlreadyKilledErr(Exception):
+    pass
+
+
+class UserCancelledErr(Exception):
+    pass
 
 
 class RedisManager:
@@ -420,6 +428,19 @@ class RedisManager:
 
         return False
 
+    def confirm_killing(self, client: redis.Redis, port: int) -> bool:
+        """Asks the user to press y to confirm the he wants to kill a redis
+        server with slips running in it"""
+        if not self.is_redis_currently_receiving_new_commands(client):
+            return True
+
+        if self.ask_user_for_confirmation_to_close_a_currently_used_server(
+            port
+        ):
+            return True
+
+        return False
+
     def flush_redis_server(self, pid: int = None, port: int = None):
         """
         Flush the redis server on this pid, only 1 param should be
@@ -442,7 +463,7 @@ class RedisManager:
                 # try to get the port using a cmd
                 port: int = self.get_port_of_redis_server(pid)
                 if not port:
-                    return False
+                    raise AlreadyKilledErr
 
         # clear the server opened on this port
         try:
@@ -460,13 +481,8 @@ class RedisManager:
             # that's why we check for db.rdb
             if db.rdb:
                 client: redis.Redis = db.rdb.r
-                if self.is_redis_currently_receiving_new_commands(client):
-                    if not (
-                        self.ask_user_for_confirmation_to_close_a_currently_used_server(
-                            port
-                        )
-                    ):
-                        return False
+                if not self.confirm_killing(client, port):
+                    raise UserCancelledErr
 
                 client.flushall()
                 client.flushdb()
@@ -553,19 +569,12 @@ class RedisManager:
                 os.remove(tmpfile)
             raise e
 
-    def flush_and_kill(self, pid: int) -> Tuple[bool, str]:
+    def flush_and_kill(self, pid: int) -> bool:
         """
-        returns status, err_msg
-        status: True if the given redis server is flushed and killed
-        successfully, False otherwise
-        err_msg says what went wrong
-
+        raises UserCancelledErr or AlreadyKilledErr if redis isnt killed,
+        otherwise returns True
         """
-        flushed, err = self.flush_redis_server(pid=pid)
-        if flushed and self.kill_redis_server(pid):
-            return True, ""
-
-        return False, err
+        return self.flush_redis_server(pid=pid) and self.kill_redis_server(pid)
 
     def close_open_redis_servers(self):
         """
@@ -597,24 +606,20 @@ class RedisManager:
             try:
                 pid: int = open_servers[server_to_close][1]
                 port: int = open_servers[server_to_close][0]
-            except (KeyError, ValueError):
+            except KeyError:
                 print(f"Invalid input {server_to_close}")
 
-            flushed, err = self.flush_and_kill(pid)
-            if flushed:
-                print(f"Killed redis server on port {port}.")
-            else:
-                base_msg = f"Redis server running on port {port}"
+            base_msg = f"Redis server on port {port}"
+            try:
+                self.flush_and_kill(pid)
+                print(f"Killed {base_msg}.")
 
-                if err == "Permission Err":
-                    print(
-                        f"You don't have permission to kill the "
-                        f"{base_msg}."
-                    )
+            except AlreadyKilledErr:
+                print(
+                    f"{base_msg} is already killed or you don't have "
+                    f"permission to kill it."
+                )
+                self.remove_server_from_log(port)
 
-                elif err == "Already Killed":
-                    print(f"{base_msg} is already killed.")
-                    self.remove_server_from_log(port)
-
-                elif err == "User cancelled":
-                    print(f"Cancelled killing {base_msg}.")
+            except (UserCancelledErr, KeyboardInterrupt):
+                print(f"Cancelled killing {base_msg}.")
