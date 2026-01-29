@@ -381,6 +381,45 @@ class RedisManager:
             redis_port = 6379
         return redis_port
 
+    def is_redis_currently_receiving_new_commands(
+        self,
+        r: redis.Redis,
+        interval=1.0,
+    ) -> bool:
+        """
+        Returns True if Redis processed commands during the interval.
+        Uses INFO stats (low overhead) to see the number of command processed
+        :param interval: time to wait between checking the number of cmd
+        processed
+        """
+        stats1 = r.info(section="stats")
+        total1 = stats1.get("total_commands_processed", 0)
+
+        time.sleep(interval)
+
+        stats2 = r.info(section="stats")
+        total2 = stats2.get("total_commands_processed", 0)
+
+        return total2 > total1
+
+    def ask_user_for_confirmation_to_close_a_currently_used_server(
+        self, port: int
+    ):
+        """return True if the user confirmed to close the server"""
+        try:
+            msg = (
+                f"The redis server on port {port} is currently "
+                f"being used.\nAre you sure you want to kill it? ["
+                f"y/n]\n> "
+            )
+            answer = input(msg)
+            if answer.lower() == "y":
+                return True
+        except KeyboardInterrupt:
+            pass
+
+        return False
+
     def flush_redis_server(self, pid: int = None, port: int = None):
         """
         Flush the redis server on this pid, only 1 param should be
@@ -420,9 +459,18 @@ class RedisManager:
             # user, not by slips, slips won't be able to connect to it
             # that's why we check for db.rdb
             if db.rdb:
-                db.rdb.r.flushall()
-                db.rdb.r.flushdb()
-                db.rdb.r.script_flush()
+                client: redis.Redis = db.rdb.r
+                if self.is_redis_currently_receiving_new_commands(client):
+                    if not (
+                        self.ask_user_for_confirmation_to_close_a_currently_used_server(
+                            port
+                        )
+                    ):
+                        return False
+
+                client.flushall()
+                client.flushdb()
+                client.script_flush()
                 return True
         except (redis.exceptions.ConnectionError, RuntimeError):
             # server already killed!

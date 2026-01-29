@@ -191,7 +191,8 @@ class ArgumentParser(argparse.ArgumentParser):
         self.add_argument(
             "-p",
             "--blocking",
-            help="Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.",
+            help="Allow Slips to block malicious IPs. Requires root access. "
+            "Supported only on Linux.",
             required=False,
             default=False,
             action="store_true",
