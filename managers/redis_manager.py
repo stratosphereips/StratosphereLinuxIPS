@@ -7,7 +7,7 @@ import os
 import time
 import socket
 import subprocess
-from typing import Dict, Union
+from typing import Dict, Union, Tuple
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
@@ -83,8 +83,7 @@ class RedisManager:
         # make sure the db on 32850 is flushed and ready for the new db to be
         # loaded
         if pid := self.get_pid_of_redis_server(redis_port):
-            self.flush_redis_server(pid=pid)
-            self.kill_redis_server(pid)
+            self.flush_and_kill(pid)
 
         if not self.main.db.load(self.main.args.db):
             print(f"Error loading the database {self.main.args.db}")
@@ -190,17 +189,14 @@ class RedisManager:
         # close all ports in logfile
         for pid in self.open_servers_pids:
             pid: int
-            self.flush_redis_server(pid=pid)
-            self.kill_redis_server(pid)
+            self.flush_and_kill(pid)
 
         # closes all the ports in slips supported range of ports
         slips_supported_range = list(range(self.start_port, self.end_port + 1))
         slips_supported_range.append(6379)
         for port in slips_supported_range:
             if pid := self.get_pid_of_redis_server(port):
-                self.flush_redis_server(pid=pid)
-                self.kill_redis_server(pid)
-
+                self.flush_and_kill(pid)
         # print(f"Successfully closed all redis servers on ports
         # {self.start_port} to {self.end_port}")
         print("Successfully closed all open redis servers")
@@ -509,6 +505,20 @@ class RedisManager:
                 os.remove(tmpfile)
             raise e
 
+    def flush_and_kill(self, pid: int) -> Tuple[bool, str]:
+        """
+        returns status, err_msg
+        status: True if the given redis server is flushed and killed
+        successfully, False otherwise
+        err_msg says what went wrong
+
+        """
+        flushed, err = self.flush_redis_server(pid=pid)
+        if flushed and self.kill_redis_server(pid):
+            return True, ""
+
+        return False, err
+
     def close_open_redis_servers(self):
         """
         Function to close unused open redis-servers based on what the user chooses
@@ -539,19 +549,24 @@ class RedisManager:
             try:
                 pid: int = open_servers[server_to_close][1]
                 port: int = open_servers[server_to_close][0]
-
-                if self.flush_redis_server(pid=pid) and self.kill_redis_server(
-                    pid
-                ):
-                    print(f"Killed redis server on port {port}.")
-                else:
-                    # if you dont have permission, dont removei from logs
-                    print(
-                        f"Redis server running on port {port} "
-                        f"is either already killed or you don't have "
-                        f"permission to kill it."
-                    )
-
-                self.remove_server_from_log(port)
             except (KeyError, ValueError):
                 print(f"Invalid input {server_to_close}")
+
+            flushed, err = self.flush_and_kill(pid)
+            if flushed:
+                print(f"Killed redis server on port {port}.")
+            else:
+                base_msg = f"Redis server running on port {port}"
+
+                if err == "Permission Err":
+                    print(
+                        f"You don't have permission to kill the "
+                        f"{base_msg}."
+                    )
+
+                elif err == "Already Killed":
+                    print(f"{base_msg} is already killed.")
+                    self.remove_server_from_log(port)
+
+                elif err == "User cancelled":
+                    print(f"Cancelled killing {base_msg}.")
