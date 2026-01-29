@@ -29,7 +29,7 @@ class ExportingAlerts(IModule):
         self.stix = StixExporter(self.logger, self.db)
         self.c1 = self.db.subscribe("export_evidence")
         self.channels = {"export_evidence": self.c1}
-        self.print("Subscribed to export_evidence channel.", 1, 0)
+        self.print("Subscribed to export_evidence channel.", 2, 0)
         self.direct_export_stop = None
         self.direct_export_workers = []
         self.direct_export_start_lock = threading.Lock()
@@ -256,9 +256,7 @@ class ExportingAlerts(IModule):
             try:
                 claimed = self._claim_next_item()
             except Exception as err:
-                self.stix._log_export(
-                    f"Direct export worker error: {err}"
-                )
+                self.stix._log_export(f"Direct export worker error: {err}")
                 time.sleep(0.5)
                 continue
             try:
@@ -306,13 +304,17 @@ class ExportingAlerts(IModule):
                         SET status=?, next_retry_at=?, updated_at=?, last_error=?
                         WHERE id=?
                         """,
-                        (status, next_retry_at, time.time(), "export_failed", item_id),
+                        (
+                            status,
+                            next_retry_at,
+                            time.time(),
+                            "export_failed",
+                            item_id,
+                        ),
                     )
                     self.queue_db.commit()
             except Exception as err:
-                self.stix._log_export(
-                    f"Direct export worker error: {err}"
-                )
+                self.stix._log_export(f"Direct export worker error: {err}")
 
     def shutdown_gracefully(self):
         self.slack.shutdown_gracefully()
@@ -385,9 +387,7 @@ class ExportingAlerts(IModule):
                         )
                     self._enqueue_evidence(evidence)
                 else:
-                    added_to_stix: bool = self.stix.add_to_stix_file(
-                        evidence
-                    )
+                    added_to_stix: bool = self.stix.add_to_stix_file(evidence)
                     if added_to_stix:
                         # now export to taxii
                         self.stix.export()

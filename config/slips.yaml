@@ -363,10 +363,16 @@ exporting_alerts:
   slack_api_path: config/slack_bot_token_secret
 
   # Stix
-  # Server to use if you enable exporting STIX
+  # Server to use if you enable exporting STIX alerts
+
+  # If slips is running on the host, and docker compose of SlipsWeb is used
+  # TAXII_server should be localhost
+
+  # If slips is running in docker container, and docker compose of SlipsWeb is used, and all if them are running inside
+  # the same docker network, it should be TAXII_server: 'opentaxii', 'medallion'
   TAXII_server: localhost
 
-  # Ff your TAXII server is a remote server,
+  # If your TAXII server is a remote server,
   # you can set the port to 443 or 80.
   port: 1234
 
@@ -387,9 +393,9 @@ exporting_alerts:
   # This value is only used when Slips is running non-stop (e.g with -i )
   # push_delay is the time to wait before pushing STIX data to server
   # (in seconds)
-  # If running on a file not an interface
+  # If running on a file, not an interface
   # Slips will export to server after analysis is done.
-  # 3600 = 1h
+  # 3600s = 1 minute
   push_delay: 3600
 
   # If true, export each evidence directly to TAXII without writing STIX_data.json
