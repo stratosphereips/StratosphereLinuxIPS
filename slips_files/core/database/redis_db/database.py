@@ -145,7 +145,18 @@ class RedisDB(
         cls.conf = ConfigParser()
         cls.args = cls.conf.get_args()
 
-        if cls.redis_port not in cls._instances:
+        if cls.args.killall:
+            connected, err = cls.connect_to_redis_server()
+            if not connected:
+                raise RuntimeError(
+                    f"Failed to connect to the redis server "
+                    f"on port {cls.redis_port}: {err}"
+                )
+
+            cls._instances[cls.redis_port] = super().__new__(cls)
+            super().__init__(cls)
+
+        elif cls.redis_port not in cls._instances and not cls.args.killall:
             cls._set_redis_options()
             cls._read_configuration()
             initialized, err = cls.init_redis_server()
