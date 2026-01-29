@@ -195,22 +195,27 @@ class RedisManager:
             self.get_open_redis_servers()
 
         # close all ports in logfile
-        for pid in self.open_servers_pids:
+        for pid, details in self.open_servers_pids.items():
             pid: int
-            self.flush_and_kill(pid)
+            self.flush_and_kill(pid, details["port"])
+
+        print("")
 
         # closes all the ports in slips supported range of ports
         slips_supported_range = list(range(self.start_port, self.end_port + 1))
-        slips_supported_range.append(6379)
+        if 6379 not in self.open_servers_pids:
+            slips_supported_range.append(6379)
+
         for port in slips_supported_range:
             if pid := self.get_pid_of_redis_server(port):
-                self.flush_and_kill(pid)
-        # print(f"Successfully closed all redis servers on ports
-        # {self.start_port} to {self.end_port}")
-        print("Successfully closed all open redis servers")
+                self.flush_and_kill(pid, port)
 
-        with contextlib.suppress(FileNotFoundError):
-            os.remove(self.running_logfile)
+        print(
+            "Successfully closed all open redis .\n"
+            "Please Note that only redis servers are closed, you need to "
+            "manually close Slips processes that are still running."
+        )
+
         self.main.terminate_slips()
         return
 
@@ -408,7 +413,10 @@ class RedisManager:
         stats2 = r.info(section="stats")
         total2 = stats2.get("total_commands_processed", 0)
 
-        return total2 > total1
+        # why +2?
+        # if an opened server is just receving health checks, we shouldnt
+        # consider it "currently running"
+        return total2 > total1 + 2
 
     def ask_user_for_confirmation_to_close_a_currently_used_server(
         self, port: int
@@ -569,12 +577,26 @@ class RedisManager:
                 os.remove(tmpfile)
             raise e
 
-    def flush_and_kill(self, pid: int) -> bool:
+    def flush_and_kill(self, pid: int, port):
         """
         raises UserCancelledErr or AlreadyKilledErr if redis isnt killed,
         otherwise returns True
         """
-        return self.flush_redis_server(pid=pid) and self.kill_redis_server(pid)
+        base_msg = f"Redis server on port {port}"
+        try:
+            self.flush_redis_server(pid=pid)
+            self.kill_redis_server(pid)
+            print(f"Killed {base_msg}.")
+            self.remove_server_from_log(port)
+
+        except AlreadyKilledErr:
+            print(
+                f"{base_msg} is already killed or you don't have "
+                f"permission to kill it."
+            )
+
+        except (UserCancelledErr, KeyboardInterrupt):
+            print(f"Cancelled killing {base_msg}.")
 
     def close_open_redis_servers(self):
         """
@@ -609,17 +631,4 @@ class RedisManager:
             except KeyError:
                 print(f"Invalid input {server_to_close}")
 
-            base_msg = f"Redis server on port {port}"
-            try:
-                self.flush_and_kill(pid)
-                print(f"Killed {base_msg}.")
-
-            except AlreadyKilledErr:
-                print(
-                    f"{base_msg} is already killed or you don't have "
-                    f"permission to kill it."
-                )
-                self.remove_server_from_log(port)
-
-            except (UserCancelledErr, KeyboardInterrupt):
-                print(f"Cancelled killing {base_msg}.")
+            self.flush_and_kill(pid, port)
