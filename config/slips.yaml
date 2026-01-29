@@ -221,14 +221,13 @@ flowmldetection:
   # ouptput dir with performance metrics depending on the mode.
   create_performance_metrics_log_files: True
 
-  validate_on_train: False
+  validate_on_train: True
     # If set to True, the module will validate the model on the training data
   # Take off 10% of the batch and use it for validation,
   # store only the validation results in the log file
   batch_size: 500
   # The batch size is the number of flows that will be used for training at once.
   # training trigerred every batch_size new flows
-
 
 
 #############################
