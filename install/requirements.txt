@@ -3,7 +3,7 @@ setuptools<81
 numpy==1.26.4
 watchdog==5.0.0
 redis==5.2.1
-urllib3==2.6.0
+urllib3==2.6.3
 pandas==2.3.3
 tzlocal==5.3.1
 cabby==0.1.23
