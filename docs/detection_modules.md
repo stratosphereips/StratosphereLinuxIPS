@@ -154,7 +154,7 @@ The path of the file can be modified by changing the ```RiskIQ_credentials_path`
 
 This module is used to detect command and control channels in a network by analyzing the features of the network flows and representing them as Stratosphere Behavioral Letters(Stratoletters). This is achieved through the use of a recurrent neural network, which is trained on these letters to identify and classify potential C&C traffic.
 
-### Stratoletters
+### Strato letters
 
 Stratoletters is a method used to represent network flows in a concise and standardized manner.
 Stratoletters encodes information about the periodicity, duration, and size of network flows into a string of letter(s) and character(s).
@@ -798,33 +798,42 @@ This module is responsible for detecting scans such as:
 
 ### Vertical port scans
 
-Slips considers an IP performing a vertical port scan if it contacts 5 or more different destination ports to the same destination IP in at least one time window (usually 1hs). The flows can be both, Non-Established TCP or UDP flows. On each arriving flow this check is performed.
+Slips considers an IP performing a vertical port scan if it contacts 5 or more different destination ports to the
+same destination IP in at least one time window (usually 1hs). The flows can be both, Non-Established TCP or
+UDP flows. On each arriving flow this check is performed.
 
-The first portscan is detected as soon as it happens so the analysts knows.
+The first portscan is detected as soon as it happens so the analysts knows with minimum 5 ports.
 
-After detecting a vertical port scan for the first time, aka a scan to 6 different destination ports for the same host, the attacker needs to scan more than 6 destinations ports for the same host _again_ to trigger another evidence. This avoids generating one port scan alert per flow in a long scan.
+Slips reports evidence of a vertical portscan based on a log scale.
+meaning every 10, 100, 1000 ports scanned will generate an evidence.
+This avoids generating one port scan alert per flow in a long scan.
+
 
 The total number of _packets_ in all flows in the scan give us the confidence of the scan.
 
-To minimize false positives, Slips ignores the broadcast IP 255.255.255.255 and the multicast IP if it's the source of vertical port scan.
+To minimize false positives, Slips ignores the broadcast IP 255.255.255.255 and the multicast IP if it's the source
+of vertical port scan.
+
 
 
 ### Horizontal port scans
 
 Slips detects TCP and UDP horizontal port scans. It considers an IP performing a horizontal port scan if it contacted 6 or more destination IPs on the same port with not established connections.
 
-The first portscan is detected as soon as it happens so the analysts knows.
+Slips reports evidence of a horizontal portscan based on a log scale.
+meaning every 10, 100, 1000 ports scanned will generate an evidence.
+This avoids generating one port scan alert per flow in a long scan.
 
-So, If the first alert was generated with 6 IPs scanned, the attacker needs to scan more than 6 destinations IPs in the same port _again_ to trigger another evidence. This avoids generating one port scan alert per flow in a long scan.
-
-To minimize false positives, Slips ignores the broadcast IP 255.255.255.255 if it's the source or the destination of horizontal port scans, and ignores all resolved IPs if they're the destination of port scans.
+To minimize false positives, Slips ignores the broadcast IP 255.255.255.255 if it's the source or the
+destination of horizontal port scans, and ignores all resolved IPs if they're the destination of port scans.
 
 
 ### PING Sweeps
 
 ICMP messages can be used to find out which hosts are alive in a network.
 Slips relies on Zeek detections for this, but it is done with our own Zeek scripts located in
-zeek-scripts/icmps-scans.zeek. The scripts detects three types of ICMP scans: 'ICMP-Timestamp', 'ICMP-Address', 'ICMP-AddressMask'.
+zeek-scripts/icmps-scans.zeek. The scripts detect three types of
+ICMP scans: 'ICMP-Timestamp', 'ICMP-Address', 'ICMP-AddressMask'.
 
 We detect a scan every threshold. So we generate an evidence when there is
 5,10,15, .. etc. ICMP established connections to different IPs.

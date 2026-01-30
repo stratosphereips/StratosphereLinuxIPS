@@ -99,16 +99,21 @@ def get_ip_info_from_slips(ip_address: str, db) -> (float, float):
     """
 
     # poll new info from redis
-    ip_info = db.get_ip_info(ip_address)
-
-    # There is a bug in the database where sometimes False is returned when key is not found. Correctly, dictionary
-    # should be always returned, even if it is empty. This check cannot be simplified to `if not ip_info`, because I
-    # want the empty dictionary to be handled by the read data function.
-    # TODO: when database is fixed and doesn't return booleans, remove this IF statement
-    if ip_info is False:
+    # convert it to float
+    # the higher the score, the more malicious this ip
+    try:
+        if threat_level := db.get_ip_info(ip_address, "threat_level"):
+            slips_score: float = threat_levels[threat_level]
+        else:
+            slips_score = float(db.get_ip_info(ip_address, "score"))
+    except (KeyError, ValueError):
         return None, None
 
-    slips_score, slips_confidence = read_data_from_ip_info(ip_info)
+    try:
+        slips_confidence = float(db.get_ip_info(ip_address, "confidence"))
+    except ValueError:
+        pass
+
     # check that both values were provided
     # TODO by Martin: Dita does not handle scenario when only confidence is None, is it intentional?
     return (
@@ -116,36 +121,6 @@ def get_ip_info_from_slips(ip_address: str, db) -> (float, float):
         if slips_score is None
         else (slips_score, slips_confidence)
     )
-
-
-# parse data from redis
-def read_data_from_ip_info(ip_info: dict) -> (float, float):
-    """
-    Get score and confidence from the data that is saved in Redis.
-
-    :param ip_info: The redis data for one IP address
-    :return: Tuple with score and confidence. If data is not there,
-    (None, None) is returned instead.
-    """
-    # the higher the score, the more malicious this ip
-    try:
-        if "threat_level" in ip_info:
-            score = threat_levels[ip_info["threat_level"]]
-        else:
-            score = ip_info["score"]
-
-        confidence = ip_info["confidence"]
-        try:
-            confidence = float(confidence)
-        except ValueError:
-            # sometimes the confidence is stored as a float,
-            # and sometimes it's stored like this 'confidence: 0.6'
-            # #TODO see what stores it in the second format instead of this try except
-            confidence = float(confidence.split()[-1])
-
-        return float(score), confidence
-    except (KeyError, TypeError):
-        return None, None
 
 
 #

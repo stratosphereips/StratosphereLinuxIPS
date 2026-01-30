@@ -4,6 +4,8 @@ import base64
 import binascii
 import hashlib
 from datetime import datetime, timedelta
+from math import log10
+from multiprocessing import Process
 from re import findall
 from threading import Thread
 import netifaces
@@ -26,7 +28,9 @@ from enum import Enum
 
 from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
 
+
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
+BROADCAST_ADDR = "255.255.255.255"
 
 
 class Utils(object):
@@ -76,6 +80,7 @@ class Utils(object):
             "%Y/%m/%d-%H:%M:%S",
             "%Y-%m-%dT%H:%M:%S",
         )
+        self.time_format_cache = {}
         # this format will be used across all modules and logfiles of slips
         # its timezone aware
         self.alerts_format = "%Y/%m/%d %H:%M:%S.%f%z"
@@ -127,6 +132,20 @@ class Utils(object):
         for str_lvl, int_value in self.threat_levels.items():
             if threat_level <= int_value:
                 return str_lvl
+
+    @staticmethod
+    def log10(n: int) -> int:
+        if n <= 0:
+            return 0
+        return int(log10(n))
+
+    @staticmethod
+    def is_valid_ip(ip: str) -> bool:
+        try:
+            ipaddress.ip_address(ip)
+            return True
+        except ValueError:
+            return False
 
     def is_valid_threat_level(self, threat_level):
         return threat_level in self.threat_levels
@@ -284,6 +303,23 @@ class Utils(object):
             # invalid ip
             return
 
+    def are_detection_modules_interested_in_this_ip(self, ip) -> bool:
+        """
+        Check if any of the scan detection modules (horizontal portscan,
+        vertical portscan, icmp scan) are interested in this ip
+        """
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+        except (ipaddress.AddressValueError, ValueError):
+            return False
+
+        return not (
+            ip_obj.is_multicast
+            or ip_obj.is_link_local
+            or ip_obj.is_loopback
+            or ip_obj.is_reserved
+        )
+
     def calculate_confidence(self, pkts_sent):
         """
         calculates the evidence confidence based on the pkts sent
@@ -370,12 +406,22 @@ class Utils(object):
     def start_thread(self, thread: Thread, db):
         """
         A wrapper for threading.Thread().start()
-        starts the given thread and keeps track of its TID/PID in the db
+        starts the given thread and keeps track of its TID in the db
         :param thread: the thread to start
         :param db: a DBManager obj to store the thread PID
         """
         thread.start()
         db.store_pid(thread.name, int(thread._native_id))
+
+    def start_process(self, process: Process, db):
+        """
+        A wrapper for  multiprocessing.Process.start()
+        starts the given proc and keeps track of its PID in the db
+        :param process: the thread to start
+        :param db: a DBManager obj to store the thread PID
+        """
+        process.start()
+        db.store_pid(process.name, int(process.pid))
 
     def convert_ts_format(self, ts, required_format: str):
         """
@@ -430,23 +476,99 @@ class Utils(object):
         if self.is_datetime_obj(ts):
             return ts
 
-        given_format = self.get_time_format(ts)
-        return (
-            datetime.fromtimestamp(float(ts))
-            if given_format == "unixtimestamp"
-            else datetime.strptime(ts, given_format)
-        )
+        # 1. Unix Timestamp / Float check (Very Fast Path)
+        # Most Zeek logs use this.
+        try:
+            return datetime.fromtimestamp(float(ts))
+        except (ValueError, TypeError):
+            pass
+
+        # 2. String Parsing (Optimized)
+        if isinstance(ts, str):
+            return self._convert_str_to_datetime(ts)
+
+        return None
+
+        #
+        # given_format = self.get_time_format(ts)
+        # return datetime.strptime(ts, given_format)
+
+    def _convert_str_to_datetime(self, ts: str):
+        """
+        Uses a signature (Length + Separators) to find the cached format
+        without looping.
+        this is not clean code, but we're having a latency issue and we're
+        really need to optimize per flow operations, so don't refactor
+        this for a "cleaner" version.
+        """
+        # Create a lightweight signature to differentiate formats
+        # logic: almost all formats have a separator at index 4 and 10.
+        # e.g., "2023-01-01 12..." -> 4='-', 10=' '
+        # e.g., "2023/01/01-12..." -> 4='/', 10='-'
+        try:
+            # We use a tuple as dict key: (length, char_at_4, char_at_10)
+            # This distinguishes YYYY-MM-DD vs YYYY/MM/DD and ' ' vs 'T'
+            if len(ts) >= 11:
+                signature = (len(ts), ts[4], ts[10])
+            else:
+                # Fallback for very short strings
+                signature = len(ts)
+        except IndexError:
+            # String too short to have index 10
+            signature = len(ts)
+
+        # HIT: Use cached format
+        if signature in self.time_format_cache:
+            try:
+                return datetime.strptime(ts, self.time_format_cache[signature])
+            except ValueError:
+                # Edge case: Signature collision (rare) or malformed data
+                # Remove bad cache entry and fall through to slow loop
+                del self.time_format_cache[signature]
+
+        # MISS: Find format, Cache it, Return it (Very slow)
+        found_format = self.get_and_cache_format(ts, signature)
+        if found_format:
+            return datetime.strptime(ts, found_format)
+
+        return None
+
+    def get_and_cache_format(self, time_str, signature) -> Optional[str]:
+        """
+        Slow path: Loops through all formats, finds the matching one,
+        and saves it to the cache using the signature.
+        """
+        for time_format in self.time_formats:
+            try:
+                datetime.strptime(time_str, time_format)
+                # Success! Save to cache.
+                self.time_format_cache[signature] = time_format
+                return time_format
+            except ValueError:
+                continue
+
+        # Removed the print() statement as it ruins performance
+        return None
+
+    def is_unix_ts(self, time) -> bool:
+        if isinstance(time, (int, float)):
+            return True
+
+        if isinstance(time, str):
+            try:
+                float(time)
+                return True
+            except ValueError:
+                pass
+
+        return False
 
     def get_time_format(self, time) -> Optional[str]:
         if self.is_datetime_obj(time):
             return "datetimeobj"
 
-        try:
-            # Try unix timestamp in seconds.
-            datetime.fromtimestamp(float(time))
+        if self.is_unix_ts(time):
             return "unixtimestamp"
-        except ValueError:
-            pass
 
         for time_format in self.time_formats:
             try:
@@ -690,10 +812,15 @@ class Utils(object):
                 id += f"{domain}, "
             ip_identification.pop("DNS_resolution")
 
-        for piece_of_info in ip_identification.values():
+        for key, piece_of_info in ip_identification.items():
             if not piece_of_info:
                 continue
-            id += f"{piece_of_info}, "
+
+            id += f"{key}: "
+            if isinstance(piece_of_info, dict):
+                id += f"{self.get_ip_identification_as_str(piece_of_info)}, "
+            else:
+                id += f"{piece_of_info}, "
         return id
 
     def get_branch_info(self):
@@ -792,6 +919,18 @@ class Utils(object):
             ts = ts + "0" * (6 - len(ts.split(".")[-1]))
         return ts
 
+    def _convert_str_port_to_int(self, port) -> int:
+        if isinstance(port, str):
+            try:
+                return int(port)
+            except ValueError:
+                try:
+                    return int("0x008", 16)
+                except Exception:
+                    pass
+
+        return port
+
     def get_aid(self, flow):
         """
         calculates the  AID hash of the flow aka All-ID of the flow
@@ -809,12 +948,14 @@ class Utils(object):
             "icmp": aid_hash.FlowTuple.make_icmp,
         }
         try:
+            int_sport = self._convert_str_port_to_int(flow.sport)
+            int_dport = self._convert_str_port_to_int(flow.dport)
+
             tpl = cases[proto](
-                ts, flow.saddr, flow.daddr, flow.sport, flow.dport
+                ts, flow.saddr, flow.daddr, int_sport, int_dport
             )
             return self.aid.calc(tpl)
-        except KeyError:
-            # proto doesn't have an aid.FlowTuple  method
+        except Exception:
             return ""
 
     def to_json_serializable(self, obj: Any) -> Any:

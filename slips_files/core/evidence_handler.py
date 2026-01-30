@@ -29,7 +29,6 @@ from typing import (
     Optional,
 )
 from datetime import datetime
-from os import path
 import sys
 import os
 import time
@@ -91,16 +90,9 @@ class EvidenceHandler(ICore):
             "new_blame": self.c2,
         }
 
-        # clear output/alerts.log
-        self.logfile = self.clean_file(self.output_dir, "alerts.log")
-        utils.change_logfiles_ownership(self.logfile.name, self.UID, self.GID)
-
         self.is_running_non_stop = self.db.is_running_non_stop()
         self.blocking_modules_supported = self.is_blocking_modules_supported()
 
-        # clear output/alerts.json
-        self.jsonfile = self.clean_file(self.output_dir, "alerts.json")
-        utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
         # this list will have our local and public ips when using -i
         self.our_ips: List[str] = utils.get_own_ips(ret="List")
         self.formatter = EvidenceFormatter(self.db, self.args)
@@ -112,10 +104,9 @@ class EvidenceHandler(ICore):
         self.logger_stop_signal = threading.Event()
         self.evidence_logger_q = multiprocessing.Queue()
         self.evidence_logger = EvidenceLogger(
-            stop_signal=self.logger_stop_signal,
+            logger_stop_signal=self.logger_stop_signal,
             evidence_logger_q=self.evidence_logger_q,
-            logfile=self.logfile,
-            jsonfile=self.jsonfile,
+            output_dir=self.output_dir,
         )
         self.logger_thread = threading.Thread(
             target=self.evidence_logger.run_logger_thread,
@@ -126,7 +117,7 @@ class EvidenceHandler(ICore):
 
     def read_configuration(self):
         conf = ConfigParser()
-        self.width: float = conf.get_tw_width_as_float()
+        self.width: float = conf.get_tw_width_in_seconds()
         self.detection_threshold = conf.evidence_detection_threshold()
         self.print(
             f"Detection Threshold: {self.detection_threshold} "
@@ -143,15 +134,6 @@ class EvidenceHandler(ICore):
         # In docker, disable alerts no matter what slips.yaml says
         if IS_IN_A_DOCKER_CONTAINER:
             self.popup_alerts = False
-
-    def clean_file(self, output_dir, file_to_clean):
-        """
-        Clear the file if exists and return an open handle to it
-        """
-        logfile_path = os.path.join(output_dir, file_to_clean)
-        if path.exists(logfile_path):
-            open(logfile_path, "w").close()
-        return open(logfile_path, "a")
 
     def handle_unable_to_log(self, failed_log, error=None):
         self.print(f"Error logging evidence/alert: {error}. {failed_log}.")
@@ -256,8 +238,6 @@ class EvidenceHandler(ICore):
             self.logger_thread.join(timeout=5)
         except Exception:
             pass
-        self.logfile.close()
-        self.jsonfile.close()
 
     def get_evidence_that_were_part_of_a_past_alert(
         self, profileid: str, twid: str

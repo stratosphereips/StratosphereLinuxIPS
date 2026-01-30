@@ -39,7 +39,7 @@ class CCDetection(IModule):
 
     def init(self):
         self.subscribe_to_channels()
-        self.exporter = StratoLettersExporter(self.db)
+        self.letters_exporter = StratoLettersExporter(self.db)
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_letters")
@@ -249,7 +249,7 @@ class CCDetection(IModule):
         profileid_tw = msg["data"].split("_")
         profileid = f"{profileid_tw[0]}_{profileid_tw[1]}"
         twid = profileid_tw[-1]
-        self.exporter.export(profileid, twid)
+        self.letters_exporter.export(profileid, twid)
 
     def pre_main(self):
         utils.drop_root_privs_permanently()
@@ -261,7 +261,7 @@ class CCDetection(IModule):
             self.print(e)
             return 1
 
-        self.exporter.init()
+        self.letters_exporter.init()
 
     def main(self):
         if msg := self.get_msg("new_letters"):

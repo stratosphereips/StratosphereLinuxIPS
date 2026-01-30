@@ -7,6 +7,7 @@ import validators
 
 from slips_files.common.abstracts.iwhitelist_analyzer import IWhitelistAnalyzer
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Direction,
 )
@@ -45,7 +46,7 @@ class MACAnalyzer(IWhitelistAnalyzer):
         :param direction: is it a src ip or a dst ip
         :param what_to_ignore: can be flows or alerts
         """
-        if not self.ip_analyzer.is_valid_ip(profile_ip):
+        if not utils.is_valid_ip(profile_ip):
             return False
 
         mac: str = self.db.get_mac_addr_from_profile(f"profile_{profile_ip}")

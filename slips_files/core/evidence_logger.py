@@ -1,27 +1,49 @@
 import json
+import os
 import queue
 import threading
 import traceback
-from typing import TextIO
+
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
 
 
 class EvidenceLogger:
     def __init__(
         self,
-        stop_signal: threading.Event,
+        logger_stop_signal: threading.Event,
         evidence_logger_q: queue.Queue,
-        logfile: TextIO,
-        jsonfile: TextIO,
+        output_dir: str,
     ):
-        self.stop_signal = stop_signal
+        self.logger_stop_signal = logger_stop_signal
         self.evidence_logger_q = evidence_logger_q
-        self.logfile = logfile
-        self.jsonfile = jsonfile
+        self.output_dir = output_dir
+        self.read_configuration()
+
+        # clear output/alerts.log
+        self.logfile = self.clean_file(self.output_dir, "alerts.log")
+        utils.change_logfiles_ownership(self.logfile.name, self.UID, self.GID)
+        # clear output/alerts.json
+        self.jsonfile = self.clean_file(self.output_dir, "alerts.json")
+        utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.GID = conf.get_GID()
+        self.UID = conf.get_UID()
+
+    def clean_file(self, output_dir, file_to_clean):
+        """
+        Clear the file if exists and return an open handle to it
+        """
+        logfile_path = os.path.join(output_dir, file_to_clean)
+        if os.path.exists(logfile_path):
+            open(logfile_path, "w").close()
+        return open(logfile_path, "a")
 
     def print_to_alerts_logfile(self, data: str):
         """
-        Add a new evidence line to the alerts.log and other log files if
-        logging is enabled.
+        Add a new evidence line to the alerts.log
         """
         try:
             # write to alerts.log
@@ -39,6 +61,8 @@ class EvidenceLogger:
         try:
             json.dump(idmef_evidence, self.jsonfile)
             self.jsonfile.write("\n")
+            self.jsonfile.flush()  # flush Python buffer
+            os.fsync(self.jsonfile.fileno())  # flush OS buffer
         except KeyboardInterrupt:
             return
         except Exception:
@@ -52,7 +76,7 @@ class EvidenceLogger:
         happening, so slips can process evidence faster there while we log
         as fast as possible here
         """
-        while not self.stop_signal.is_set():
+        while not self.logger_stop_signal.is_set():
             try:
                 msg = self.evidence_logger_q.get(timeout=1)
             except queue.Empty:
@@ -67,3 +91,9 @@ class EvidenceLogger:
 
             elif destination == "alerts.json":
                 self.print_to_alerts_json(msg["to_log"])
+
+        self.shutdown_gracefully()
+
+    def shutdown_gracefully(self):
+        self.logfile.close()
+        self.jsonfile.close()

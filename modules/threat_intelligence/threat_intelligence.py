@@ -216,7 +216,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
-            timestamp=utils.convert_ts_format(timestamp, utils.alerts_format),
+            timestamp=timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -236,7 +236,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             profile=ProfileID(ip=daddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
-            timestamp=utils.convert_ts_format(timestamp, utils.alerts_format),
+            timestamp=timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -314,7 +314,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             profile=ProfileID(ip=ip),
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
-            timestamp=utils.convert_ts_format(timestamp, utils.alerts_format),
+            timestamp=timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -337,7 +337,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
-            timestamp=utils.convert_ts_format(timestamp, utils.alerts_format),
+            timestamp=timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -407,7 +407,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
-            timestamp=utils.convert_ts_format(timestamp, utils.alerts_format),
+            timestamp=timestamp,
         )
         self.db.set_evidence(evidence)
         # mark this ip as malicious in our database
@@ -457,7 +457,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             profile=ProfileID(ip=daddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
-            timestamp=utils.convert_ts_format(timestamp, utils.alerts_format),
+            timestamp=timestamp,
         )
         self.db.set_evidence(evidence)
 
@@ -477,7 +477,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             profile=ProfileID(ip=saddr),
             timewindow=TimeWindow(number=twid_int),
             uid=[uid],
-            timestamp=utils.convert_ts_format(timestamp, utils.alerts_format),
+            timestamp=timestamp,
         )
         self.db.set_evidence(evidence)
         # mark this ip as malicious in our database
@@ -571,7 +571,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             profile=ProfileID(ip=srcip),
             timewindow=TimeWindow(number=twid_number),
             uid=[uid],
-            timestamp=utils.convert_ts_format(timestamp, utils.alerts_format),
+            timestamp=timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -1253,15 +1253,12 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         This function queries the local database to determine if
         the IP's ASN is known to be malicious.
         """
-        ip_info = self.db.get_ip_info(ip)
+        ip_info = self.db.get_asn_info()
         if not ip_info:
             # we dont know the asn of this ip
             return
 
-        if "asn" not in ip_info:
-            return
-
-        asn = ip_info["asn"].get("number", "")
+        asn = ip_info.get("number", "")
         if not asn:
             return
 
@@ -1589,7 +1586,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             profile=ProfileID(ip=srcip),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
-            timestamp=utils.convert_ts_format(timestamp, utils.alerts_format),
+            timestamp=timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -1868,7 +1865,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             profile=ProfileID(ip=answer),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
-            timestamp=utils.convert_ts_format(timestamp, utils.alerts_format),
+            timestamp=timestamp,
         )
 
         self.db.set_evidence(evidence)
@@ -1884,7 +1881,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             profile=ProfileID(ip=srcip),
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[uid],
-            timestamp=utils.convert_ts_format(timestamp, utils.alerts_format),
+            timestamp=timestamp,
         )
         self.db.set_evidence(evidence)
 

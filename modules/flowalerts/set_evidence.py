@@ -990,9 +990,9 @@ class SetEvidenceHelper:
         twid: int = int(twid.replace("timewindow", ""))
 
         description = (
-            f"Multiple reconnection attempts to Destination IP: "
-            f"{flow.daddr} from IP: {flow.saddr} "
-            f"reconnections: {reconnections}"
+            f"Multiple reconnection attempts from IP: {flow.saddr} to "
+            f"destination IP: {flow.daddr} "
+            f"reconnections: {reconnections}."
         )
         evidence: Evidence = Evidence(
             evidence_type=EvidenceType.MULTIPLE_RECONNECTION_ATTEMPTS,
@@ -1033,7 +1033,8 @@ class SetEvidenceHelper:
         confidence: float = 0.5
         twid: int = int(twid.replace("timewindow", ""))
         description = (
-            f"Connection to multiple ports {dstports} of " f"IP: {attacker}. "
+            f"Connection to multiple ports {dstports} from {attacker} to "
+            f"{victim}. "
         )
 
         if attacker in profileid:

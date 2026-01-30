@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+from multiprocessing import Event
+
 import pytest
-import os
 from unittest.mock import Mock, MagicMock, patch
 
 from slips_files.core.structures.alerts import Alert
@@ -53,13 +54,13 @@ def test_decide_blocking(
 
 def test_shutdown_gracefully():
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
-    evidence_handler.logfile = Mock()
-    evidence_handler.jsonfile = Mock()
+    evidence_handler.logger_thread = Mock()
+    evidence_handler.logger_stop_signal = Event()
 
     evidence_handler.shutdown_gracefully()
 
-    evidence_handler.logfile.close.assert_called_once()
-    evidence_handler.jsonfile.close.assert_called_once()
+    assert evidence_handler.logger_stop_signal.is_set()
+    evidence_handler.logger_thread.join.assert_called_once_with(timeout=5)
 
 
 @pytest.mark.parametrize(
@@ -153,33 +154,6 @@ def test_handle_new_alert_not_blocked(popup_enabled, expect_popup):
 
     handler.db.mark_profile_and_timewindow_as_blocked.assert_not_called()
     handler.log_alert.assert_called_once_with(alert, blocked=False)
-
-
-@pytest.mark.parametrize(
-    "output_dir, file_to_clean, file_exists",
-    [
-        # testcase1: File doesn't exist
-        ("/tmp", "nonexistent.log", False),
-        # testcase2: File exists
-        ("/tmp", "existing.log", True),
-    ],
-)
-def test_clean_file(output_dir, file_to_clean, file_exists):
-    evidence_handler = ModuleFactory().create_evidence_handler_obj()
-    with patch("os.path.exists") as mock_exists, patch(
-        "builtins.open"
-    ) as mock_open:
-        mock_exists.return_value = file_exists
-        mock_file = Mock()
-        mock_open.return_value = mock_file
-
-        result = evidence_handler.clean_file(output_dir, file_to_clean)
-
-        expected_path = os.path.join(output_dir, file_to_clean)
-        mock_exists.assert_called_once_with(expected_path)
-        mock_open.assert_called_with(expected_path, "a")
-
-        assert result == mock_file
 
 
 @pytest.mark.parametrize(

@@ -49,6 +49,7 @@ class DBManager:
         self.rdb = RedisDB(
             self.logger, redis_port, start_redis_server, **kwargs
         )
+        self.constants = self.rdb.constants
 
         self.trust_db = None
         if self.conf.use_local_p2p():
@@ -71,6 +72,7 @@ class DBManager:
         if start_sqlite:
             self.sqlite = SQLiteDB(self.logger, output_dir, main_pid)
         self.all_interfaces = utils.get_all_interfaces(self.conf.get_args())
+        self.channels = self.rdb.channels
 
     def is_db_malformed(self, db_path: str) -> bool:
         try:
@@ -180,7 +182,7 @@ class DBManager:
     @classmethod
     def read_configuration(cls):
         conf = ConfigParser()
-        cls.width = conf.get_tw_width_as_float()
+        cls.width = conf.get_tw_width_in_seconds()
 
     def get_sqlite_db_path(self) -> str:
         return self.sqlite.get_db_path()
@@ -221,9 +223,6 @@ class DBManager:
     def is_known_fp_md5_hash(self, *args, **kwargs):
         return self.rdb.is_known_fp_md5_hash(*args, **kwargs)
 
-    def ask_for_ip_info(self, *args, **kwargs):
-        return self.rdb.ask_for_ip_info(*args, **kwargs)
-
     def set_ap_info(self, *args, **kwargs):
         return self.rdb.set_ap_info(*args, **kwargs)
 
@@ -240,12 +239,6 @@ class DBManager:
         that slips should connect to
         """
         cls._obj = None
-
-    def update_times_contacted(self, *args, **kwargs):
-        return self.rdb.update_times_contacted(*args, **kwargs)
-
-    def update_ip_info(self, *args, **kwargs):
-        return self.rdb.update_ip_info(*args, **kwargs)
 
     def get_slips_internal_time(self, *args, **kwargs):
         return self.rdb.get_slips_internal_time(*args, **kwargs)
@@ -297,6 +290,12 @@ class DBManager:
 
     def get_input_file(self, *args, **kwargs):
         return self.rdb.get_input_file(*args, **kwargs)
+
+    def store_module_flows_per_second(self, *args, **kwargs):
+        return self.rdb.store_module_flows_per_second(*args, **kwargs)
+
+    def get_module_flows_per_second(self, *args, **kwargs):
+        return self.rdb.get_module_flows_per_second(*args, **kwargs)
 
     def get_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.get_accumulated_threat_level(*args, **kwargs)
@@ -762,6 +761,12 @@ class DBManager:
     def is_profile_malicious(self, *args, **kwargs):
         return self.rdb.is_profile_malicious(*args, **kwargs)
 
+    def store_lines_processors(self, *args, **kwargs):
+        return self.rdb.store_lines_processors(*args, **kwargs)
+
+    def get_line_processors(self, *args, **kwargs):
+        return self.rdb.get_line_processors(*args, **kwargs)
+
     def set_ti_feed_info(self, *args, **kwargs):
         return self.rdb.set_ti_feed_info(*args, **kwargs)
 
@@ -786,14 +791,20 @@ class DBManager:
     def cache_url_info_by_virustotal(self, *args, **kwargs):
         return self.rdb.cache_url_info_by_virustotal(*args, **kwargs)
 
-    def get_data_from_profile_tw(self, *args, **kwargs):
-        return self.rdb.get_data_from_profile_tw(*args, **kwargs)
-
     def get_outtuples_from_profile_tw(self, *args, **kwargs):
-        return self.rdb.get_outtuples_from_profile_tw(*args, **kwargs)
+        yield from self.rdb.get_outtuples_from_profile_tw(*args, **kwargs)
 
     def get_intuples_from_profile_tw(self, *args, **kwargs):
-        return self.rdb.get_intuples_from_profile_tw(*args, **kwargs)
+        yield from self.rdb.get_intuples_from_profile_tw(*args, **kwargs)
+
+    def get_info_about_not_established_flows(self, *args, **kwargs):
+        return self.rdb.get_info_about_not_established_flows(*args, **kwargs)
+
+    def is_there_estab_tcp_flows(self, *args, **kwargs):
+        return self.rdb.is_there_estab_tcp_flows(*args, **kwargs)
+
+    def get_dstports_of_flows(self, *args, **kwargs):
+        yield from self.rdb.get_dstports_of_flows(*args, **kwargs)
 
     def incr_msgs_received_in_channel(self, *args, **kwargs):
         return self.rdb.incr_msgs_received_in_channel(*args, **kwargs)
@@ -813,17 +824,35 @@ class DBManager:
     def set_dhcp_flow(self, *args, **kwargs):
         return self.rdb.set_dhcp_flow(*args, **kwargs)
 
+    def get_dstips_with_not_established_flows(self, *args, **kwargs):
+        yield from self.rdb.get_dstips_with_not_established_flows(
+            *args, **kwargs
+        )
+
+    def get_dstports_of_not_established_flows(self, *args, **kwargs):
+        yield from self.rdb.get_dstports_of_not_established_flows(
+            *args, **kwargs
+        )
+
+    def get_total_dstips_for_not_estab_flows_on_port(self, *args, **kwargs):
+        return self.rdb.get_total_dstips_for_not_estab_flows_on_port(
+            *args, **kwargs
+        )
+
     def get_timewindow(self, *args, **kwargs):
         return self.rdb.get_timewindow(*args, **kwargs)
+
+    def get_current_timewindow(self, *args, **kwargs):
+        return self.rdb.get_current_timewindow(*args, **kwargs)
+
+    def set_current_timewindow(self, *args, **kwargs):
+        return self.rdb.set_current_timewindow(*args, **kwargs)
 
     def add_out_http(self, *args, **kwargs):
         return self.rdb.add_out_http(*args, **kwargs)
 
     def add_out_dns(self, *args, **kwargs):
         return self.rdb.add_out_dns(*args, **kwargs)
-
-    def add_port(self, *args, **kwargs):
-        return self.rdb.add_port(*args, **kwargs)
 
     def get_final_state_from_flags(self, *args, **kwargs):
         return self.rdb.get_final_state_from_flags(*args, **kwargs)
@@ -863,6 +892,9 @@ class DBManager:
     def get_used_redis_port(self):
         return self.rdb.get_used_port()
 
+    def get_attack_starttime(self, *args, **kwargs):
+        return self.rdb.get_attack_starttime(*args, **kwargs)
+
     def is_blocked_profile_and_tw(self, *args, **kwargs):
         return self.rdb.is_blocked_profile_and_tw(*args, **kwargs)
 
@@ -873,13 +905,18 @@ class DBManager:
         return self.rdb.add_software_to_profile(*args, **kwargs)
 
     def get_total_flows(self, *args, **kwargs):
-        return int(self.rdb.get_total_flows(*args, **kwargs))
+        return self.rdb.get_total_flows(*args, **kwargs)
+
+    def get_info_about_icmp_flows_using_sport(self, *args, **kwargs):
+        return self.rdb.get_info_about_icmp_flows_using_sport(*args, **kwargs)
 
     def increment_processed_flows(self, *args, **kwargs):
         return self.rdb.increment_processed_flows(*args, **kwargs)
 
-    def get_processed_flows_so_far(self, *args, **kwargs):
-        return self.rdb.get_processed_flows_so_far(*args, **kwargs)
+    def get_flow_analyzed_by_the_profiler_so_far(self, *args, **kwargs):
+        return self.rdb.get_flow_analyzed_by_the_profiler_so_far(
+            *args, **kwargs
+        )
 
     def add_out_ssh(self, *args, **kwargs):
         return self.rdb.add_out_ssh(*args, **kwargs)
@@ -908,17 +945,20 @@ class DBManager:
     def get_number_of_tws_in_profile(self, *args, **kwargs):
         return self.rdb.get_number_of_tws_in_profile(*args, **kwargs)
 
-    def get_srcips_from_profile_tw(self, *args, **kwargs):
-        return self.rdb.get_srcips_from_profile_tw(*args, **kwargs)
-
-    def get_dstips_from_profile_tw(self, *args, **kwargs):
-        return self.rdb.get_dstips_from_profile_tw(*args, **kwargs)
-
     def get_t2_for_profile_tw(self, *args, **kwargs):
         return self.rdb.get_t2_for_profile_tw(*args, **kwargs)
 
     def has_profile(self, *args, **kwargs):
         return self.rdb.has_profile(*args, **kwargs)
+
+    def publish_new_dhcp(self, *args, **kwargs):
+        return self.rdb.publish_new_dhcp(*args, **kwargs)
+
+    def publish_new_mac(self, *args, **kwargs):
+        return self.rdb.publish_new_mac(*args, **kwargs)
+
+    def publish_new_software(self, *args, **kwargs):
+        return self.rdb.publish_new_software(*args, **kwargs)
 
     def get_profiles_len(self, *args, **kwargs):
         return self.rdb.get_profiles_len(*args, **kwargs)
@@ -946,7 +986,7 @@ class DBManager:
         return self.rdb.get_number_of_tws(*args, **kwargs)
 
     def get_modified_tw_since_time(self, *args, **kwargs):
-        return self.rdb.get_modified_tw_since_time(*args, **kwargs)
+        return self.rdb._get_modified_tw_since_time(*args, **kwargs)
 
     def get_modified_profiles_since(self, *args, **kwargs):
         return self.rdb.get_modified_profiles_since(*args, **kwargs)
@@ -965,6 +1005,9 @@ class DBManager:
 
     def add_all_user_agent_to_profile(self, *args, **kwargs):
         return self.rdb.add_all_user_agent_to_profile(*args, **kwargs)
+
+    def get_ip_last_seen_ts(self, *args, **kwargs):
+        return self.rdb.get_ip_last_seen_ts(*args, **kwargs)
 
     def get_software_from_profile(self, *args, **kwargs):
         return self.rdb.get_software_from_profile(*args, **kwargs)
@@ -989,8 +1032,8 @@ class DBManager:
     def check_health(self):
         self.rdb.pubsub.check_health()
 
-    def mark_profile_tw_as_closed(self, *args, **kwargs):
-        return self.rdb.mark_profile_tw_as_closed(*args, **kwargs)
+    def client_setname(self, *args, **kwarg):
+        self.rdb.client_setname(*args, **kwarg)
 
     def mark_profile_tw_as_modified(self, *args, **kwargs):
         return self.rdb.mark_profile_tw_as_modified(*args, **kwargs)
@@ -1068,6 +1111,12 @@ class DBManager:
     def set_mac_vendor_to_profile(self, *args, **kwargs):
         return self.rdb.set_mac_vendor_to_profile(*args, **kwargs)
 
+    def mark_ip_as_port_scanner(self, *args, **kwargs):
+        return self.rdb.mark_ip_as_port_scanner(*args, **kwargs)
+
+    def is_a_port_scanner(self, *args, **kwargs):
+        return self.rdb.is_a_port_scanner(*args, **kwargs)
+
     def get_hostname_from_profile(self, *args, **kwargs):
         return self.rdb.get_hostname_from_profile(*args, **kwargs)
 
@@ -1085,6 +1134,12 @@ class DBManager:
 
     def get_separator(self):
         return self.rdb.separator
+
+    def get_icmp_attack_info_to_single_host(self, *args, **kwargs):
+        return self.rdb.get_icmp_attack_info_to_single_host(*args, **kwargs)
+
+    def get_icmp_attack_info_to_several_hosts(self, *args, **kwargs):
+        return self.rdb.get_icmp_attack_info_to_several_hosts(*args, **kwargs)
 
     def get_normal_label(self):
         return self.rdb.normal_label

@@ -84,7 +84,7 @@ class GoDirector:
 
     def read_configuration(self):
         conf = ConfigParser()
-        self.width = conf.get_tw_width_as_float()
+        self.width = conf.get_tw_width_in_seconds()
 
     def log(self, text: str):
         """

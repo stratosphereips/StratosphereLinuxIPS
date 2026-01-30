@@ -74,9 +74,9 @@ def test_is_total_flows_unknown(args, input_type, expected_result):
 )
 def test_update_stats(mode, time_diff, expected_calls):
     main = ModuleFactory().create_main_obj()
-    main.is_total_flows_unknown = Mock()
-    main.is_total_flows_unknown.return_value = False
+    main.is_total_flows_unknown = Mock(return_value=False)
     main.mode = mode
+    main.get_analyzed_flows_percentage = Mock(return_value="5%")
     main.last_updated_stats_time = datetime.now() - timedelta(
         seconds=time_diff
     )

@@ -7,23 +7,9 @@ from unittest.mock import (
 
 import redis
 import json
-import time
-import pytest
 
-from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import Conn
 from tests.module_factory import ModuleFactory
-from slips_files.core.structures.evidence import (
-    Evidence,
-    Direction,
-    IoCType,
-    EvidenceType,
-    Attacker,
-    Victim,
-    ThreatLevel,
-    ProfileID,
-    TimeWindow,
-)
 
 
 # random values for testing
@@ -50,86 +36,6 @@ flow = Conn(
     dmac="",
     interface="eth0",
 )
-
-
-def test_getProfileIdFromIP():
-    """unit test for add_profile and getProfileIdFromIP"""
-    db = ModuleFactory().create_db_manager_obj(6380, flush_db=True)
-
-    # add a profile
-    db.add_profile("profile_192.168.1.1", "00:00")
-    # try to retrieve it
-    assert db.get_profileid_from_ip(test_ip) is not False
-
-
-def test_timewindows():
-    """unit tests for addNewTW , getLastTWforProfile and
-    getFirstTWforProfile"""
-    db = ModuleFactory().create_db_manager_obj(6381, flush_db=True)
-    profileid = "profile_192.168.1.1"
-    # add a profile
-    db.add_profile(profileid, "00:00")
-    # add a tw to that profile (first tw)
-    db.add_new_tw(profileid, "timewindow1", 0.0)
-    # add  a new tw (last tw)
-    db.add_new_tw(profileid, "timewindow2", 3700)
-    assert db.get_first_twid_for_profile(profileid) == ("timewindow1", 0.0)
-    assert db.get_last_twid_of_profile(profileid) == ("timewindow2", 3700.0)
-
-
-def test_add_ips():
-    db = ModuleFactory().create_db_manager_obj(6382, flush_db=True)
-    # add a profile
-    db.add_profile(profileid, "00:00")
-    # add a tw to that profile
-    db.add_new_tw(profileid, "timewindow1", 0.0)
-    # make sure ip is added
-    assert db.add_ips(profileid, twid, flow, "Server") is True
-    stored_src_ips = db.r.hget(f"{profileid}_{twid}", "SrcIPs")
-    assert stored_src_ips == '{"192.168.1.1": 1}'
-
-
-def test_add_port():
-    db = ModuleFactory().create_db_manager_obj(6383, flush_db=True)
-    new_flow = flow
-    new_flow.state = "Not Established"
-    db.add_port(profileid, twid, flow, "Server", "Dst")
-    hash_key = f"{profileid}_{twid}"
-    added_ports = db.r.hgetall(hash_key)
-    assert "DstPortsServerTCPNot Established" in added_ports.keys()
-    assert flow.daddr in added_ports["DstPortsServerTCPNot Established"]
-
-
-def test_set_evidence():
-    db = ModuleFactory().create_db_manager_obj(6384, flush_db=True)
-    attacker: Attacker = Attacker(
-        direction=Direction.SRC, ioc_type=IoCType.IP, value=test_ip
-    )
-    threat_level: ThreatLevel = ThreatLevel.INFO
-    confidence = 0.8
-    description = f"SSH Successful to IP : 8.8.8.8 . From IP {test_ip}"
-    timestamp = time.time()
-    uid = ["123"]
-    victim: Victim = Victim(
-        direction=Direction.DST, ioc_type=IoCType.IP, value="8.8.8.8"
-    )
-    db._get_evidence_interface = Mock(return_value="eth0")
-    evidence: Evidence = Evidence(
-        evidence_type=EvidenceType.SSH_SUCCESSFUL,
-        attacker=attacker,
-        victim=victim,
-        threat_level=threat_level,
-        confidence=confidence,
-        description=description,
-        profile=ProfileID(ip=test_ip),
-        timewindow=TimeWindow(number=1),
-        uid=uid,
-        timestamp=timestamp,
-    )
-
-    db.set_evidence(evidence)
-    added = db.r.hget(f"{profileid}_{twid}_evidence", evidence.id)
-    assert added
 
 
 def test_setInfoForDomains():
@@ -244,47 +150,3 @@ def test_get_the_other_ip_version():
     # the other ip version is ipv6
     other_ip = json.loads(db.get_the_other_ip_version(profileid))
     assert other_ip == ipv6
-
-
-@pytest.mark.parametrize(
-    "tupleid, symbol, role, expected_direction",
-    [
-        # no prev_symbols will be found for this
-        (
-            "8.8.8.8-5-tcp",
-            ("1", (False, 1601998366.785668)),
-            "Client",
-            "OutTuples",
-        ),
-        (
-            "8.8.8.8-5-tcp",
-            ("8.888123..1", (1601998366.806331, 1601998366.958409)),
-            "Server",
-            "InTuples",
-        ),
-    ],
-)
-def test_add_tuple(tupleid: str, symbol, expected_direction, role, flow):
-    db = ModuleFactory().create_db_manager_obj(6392, flush_db=True)
-    db.add_tuple(profileid, twid, tupleid, symbol, role, flow)
-    assert symbol[0] in db.r.hget(
-        f"profile_{flow.saddr}_{twid}", expected_direction
-    )
-
-
-@pytest.mark.parametrize(
-    "max_threat_level, cur_threat_level, expected_max",
-    [
-        ("info", "info", utils.threat_levels["info"]),
-        ("critical", "info", utils.threat_levels["critical"]),
-        ("high", "critical", utils.threat_levels["critical"]),
-    ],
-)
-def test_update_max_threat_level(
-    max_threat_level, cur_threat_level, expected_max
-):
-    db = ModuleFactory().create_db_manager_obj(6393, flush_db=True)
-    db.set_max_threat_level(profileid, max_threat_level)
-    assert (
-        db.update_max_threat_level(profileid, cur_threat_level) == expected_max
-    )

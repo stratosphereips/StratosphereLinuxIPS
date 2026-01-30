@@ -49,6 +49,8 @@ jobs:
             dockerfile: ./docker/Dockerfile
           - name: slips_light
             dockerfile: ./docker/light/Dockerfile
+          - name: slips_dependencies
+            dockerfile: ./docker/dependency_image_for_CI/Dockerfile
 
     steps:
       - name: Use existing Buildx builder

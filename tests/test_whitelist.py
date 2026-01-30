@@ -77,9 +77,7 @@ def test_is_ignored_flow_type(
 
 def test_get_src_domains_of_flow():
     whitelist = ModuleFactory().create_whitelist_obj()
-    whitelist.db.get_ip_info.return_value = {
-        "SNI": [{"server_name": "sni.com"}]
-    }
+    whitelist.db.get_ip_info.return_value = [{"server_name": "sni.com"}]
     whitelist.db.get_dns_resolution.return_value = {
         "domains": ["dns_resolution.com"]
     }
@@ -319,7 +317,7 @@ def test_profile_has_whitelisted_mac(
 )
 def test_matching_direction(direction, whitelist_direction, expected_result):
     whitelist = ModuleFactory().create_whitelist_obj()
-    result = whitelist.match.direction(direction, whitelist_direction)
+    result = whitelist.match.direction(direction.name, whitelist_direction)
     assert result == expected_result
 
 

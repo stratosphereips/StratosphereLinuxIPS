@@ -9,6 +9,11 @@ from slips_files.core.database.redis_db.constants import (
     Constants,
     Channels,
 )
+from slips_files.core.database.redis_db.publisher import Publisher
+from slips_files.core.database.redis_db.scan_detections_db import (
+    ScanDetectionsHandler,
+)
+from slips_files.core.database.redis_db.flow_tracker_db import FlowTracker
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
@@ -27,13 +32,23 @@ from typing import (
     Dict,
     Optional,
     Tuple,
+    Any,
 )
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 LOCALHOST = "127.0.0.1"
 
 
-class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
+class RedisDB(
+    # these are all Mixin classes
+    IoCHandler,
+    AlertHandler,
+    ProfileHandler,
+    P2PHandler,
+    FlowTracker,
+    ScanDetectionsHandler,
+    Publisher,
+):
     # this db is a singelton per port. meaning no 2 instances
     # should be created for the same port at the same time
     _obj = None
@@ -54,7 +69,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         "give_threat_intelligence",
         "new_letters",
         "ip_info_change",
-        "dns_info_change",
         "tw_closed",
         "core_messages",
         "new_blocking",
@@ -71,42 +85,25 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         "new_dhcp",
         "new_weird",
         "new_software",
+        "new_tunnel",
         "p2p_data_request",
         "remove_old_files",
         "export_evidence",
-        "p2p_data_request",
         "p2p_gopy",
         "report_to_peers",
-        "new_tunnel",
         "check_jarm_hash",
         "control_channel",
-        "new_module_flow" "cpu_profile",
+        "new_module_flow",
+        "cpu_profile",
         "memory_profile",
         "fides2network",
         "network2fides",
         "fides2slips",
         "slips2fides",
         "iris_internal",
+        "new_zeek_fields_line",
     }
-    # channels that recv actual flows, not msgs that we need to pass between
-    # modules.
-    subscribers_of_channels_that_recv_flows = {
-        "new_flow": 0,
-        "new_dns": 0,
-        "new_http": 0,
-        "new_ssl": 0,
-        "new_ssh": 0,
-        "new_notice": 0,
-        "new_url": 0,
-        "new_downloaded_file": 0,
-        "new_service": 0,
-        "new_arp": 0,
-        "new_smtp": 0,
-        "new_dhcp": 0,
-        "new_weird": 0,
-        "new_software": 0,
-        "new_tunnel": 0,
-    }
+
     separator = "_"
     normal_label = "benign"
     malicious_label = "malicious"
@@ -129,8 +126,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     # to keep track of connection retries. once it reaches max_retries,
     # slips will terminate
     connection_retry = 0
-    # used to cleanup flow trackers
-    last_cleanup_time = time.time()
+
+    starttime_of_first_tw = None
 
     def __new__(
         cls, logger, redis_port, start_redis_server=True, flush_db=True
@@ -145,6 +142,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # start the redis server using cli if it's not started?
         cls.start_server = start_redis_server
         cls.printer = Printer(logger, cls.name)
+        cls.conf = ConfigParser()
+        cls.args = cls.conf.get_args()
 
         if cls.redis_port not in cls._instances:
             cls._set_redis_options()
@@ -165,13 +164,18 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
             if not cls.get_slips_start_time():
                 cls._set_slips_start_time()
 
-            # useful for debugging using 'CLIENT LIST' redis cmd
-            cls.r.client_setname("Slips-DB")
-
         return cls._instances[cls.redis_port]
 
     def __init__(self, *args, **kwargs):
+        self.call_mixins_setup()
         self.set_new_incoming_flows(True)
+
+    def call_mixins_setup(self):
+        # call setup() on all mixins
+        for cls in type(self).__mro__:
+            setup = getattr(cls, "setup", None)
+            if callable(setup):
+                setup(self)
 
     @classmethod
     def _set_redis_options(cls):
@@ -221,7 +225,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         # By default False. Meaning we don't DELETE the DB by default.
         cls.deletePrevdb: bool = conf.delete_prev_db()
         cls.disabled_detections: List[str] = conf.disabled_detections()
-        cls.width = conf.get_tw_width_as_float()
+        cls.width = conf.get_tw_width_in_seconds()
         cls.client_ips: List[str] = conf.client_ips()
 
     @classmethod
@@ -424,11 +428,23 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         now = time.time()
         cls.r.set(cls.constants.SLIPS_START_TIME, now)
 
-    def publish(self, channel, msg):
-        """Publish a msg in the given channel"""
+    def publish(self, channel, msg, pipeline=None):
+        """Publish a msg in the given channel.
+        adds the instructions to the given pipeline if given and returns
+        the pipeline"""
+
         # keeps track of how many msgs were published in the given channel
-        self.r.hincrby(self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel, 1)
-        self.r.publish(channel, msg)
+        if pipeline is not None:
+            pipeline.hincrby(
+                self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel, 1
+            )
+            pipeline.publish(channel, msg)
+            return pipeline
+        else:
+            self.r.hincrby(
+                self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel, 1
+            )
+            self.r.publish(channel, msg)
 
     def get_msgs_published_in_channel(self, channel: str) -> int | None:
         """returns the number of msgs published in a channel"""
@@ -454,146 +470,6 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         self.print("Sending the stop signal to all listeners", 0, 3)
         self.r.publish("control_channel", "stop_slips")
 
-    def _should_track_msg(self, msg: dict) -> bool:
-        """
-        Check if the msg is a flow msg that we should track. used for
-        tracking flow processing rate
-        """
-        if not msg or msg["type"] != "message":
-            # ignore subscribe msgs
-            return False
-
-        try:
-            channel_name = msg["channel"]
-        except KeyError:
-            return False
-
-        if channel_name not in self.subscribers_of_channels_that_recv_flows:
-            # the msg doesnt contain a flow, we're not interested in it
-            return False
-
-        return True
-
-    def _cleanup_old_keys_from_flow_tracker(self):
-        """
-        Deletes flows older than 1 hour from the
-        self.constants.SUBS_WHO_PROCESSED_MSG hash.
-        Does this cleanup every 1h
-        """
-        one_hr = 3600
-        now = time.time()
-
-        if now - self.last_cleanup_time < one_hr:
-            # Cleanup was done less than an hour ago
-            return
-
-        one_hour_ago = int(now) - one_hr
-        keys_to_delete = []
-
-        cursor = 0
-        while True:
-            cursor, key_values = self.r.hscan(
-                self.constants.SUBS_WHO_PROCESSED_MSG, cursor
-            )
-            for msg_id in key_values.keys():
-                try:
-                    # Extract timestamp from msg_id
-                    ts = int(msg_id.rsplit("_", 1)[-1])
-
-                    if ts < one_hour_ago:
-                        keys_to_delete.append(msg_id)
-                except ValueError:
-                    continue  # Skip keys that don't match expected format
-
-            if cursor == 0:
-                break  # Exit when full scan is done
-
-        if keys_to_delete:
-            self.r.hdel(self.constants.SUBS_WHO_PROCESSED_MSG, *keys_to_delete)
-        self.last_cleanup_time = now
-
-    def _get_current_minute(self) -> str:
-        return time.strftime("%Y%m%d%H%M", time.gmtime(time.time()))
-
-    def _keep_track_of_flows_analyzed_per_min(self, pipe):
-        """
-        Adds the logic of tracking flows per min to the given pipe for
-        excution
-        """
-        current_minute = self._get_current_minute()
-        key = (
-            f"{self.constants.FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN}:"
-            f"{current_minute}"
-        )
-        pipe.incr(key)
-        # set expiration for 1 hour to avoid long-term storage
-        pipe.expire(key, 3600)
-
-    def get_flows_analyzed_per_minute(self):
-        current_minute = self._get_current_minute()
-        key = (
-            f"{self.constants.FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN}:"
-            f"{current_minute}"
-        )
-        return self.r.get(key) or 0
-
-    def _track_flow_processing_rate(self, msg: dict):
-        """
-        Every time 1 flow is processed by all the subscribers of the given
-        channel, this function increases the
-        FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN
-        constant in the db. the goal of this is to keep track of the flow
-        processing rate.
-        - Only keep track of flows sent in specific channels(
-        self.channels_that_recv_flows)
-        - Works by keeping track of all uids and counting th eumber of
-        channel subscribers that access it. once the number of msg accessed
-        reaches the number of channel subscribers, we count that as 1 flow
-        analyzed.
-        - if a flow is kept in memory for 1h without being accessed by all
-        of its subscribers, its removed, to avoid dead entries.
-        """
-        if not self._should_track_msg(msg):
-            return
-
-        self._cleanup_old_keys_from_flow_tracker()
-
-        # we only say that a flow is done being analyzed if it was accessed
-        # X times where x is the number of the channel subscribers
-        # this way we make sure that all intended receivers did receive the
-        # flow
-        channel_name = msg["channel"]
-        try:
-            flow = json.loads(msg["data"])["flow"]
-            flow_identifier = flow["uid"]
-            if not flow_identifier:
-                # some flows have no uid, like weird.log
-                flow_identifier = utils.get_md5_hash(flow)
-        except KeyError:
-            flow_identifier = utils.get_md5_hash(flow)
-
-        # channel name is used here because some flow may be present in
-        # conn.log and ssl.log with the same uid, so uid only is not enough
-        # as an identifier.
-        # we're storing the ts here to be able to delete the 1h old msgs
-        # from redis.
-        timestamp = int(time.time())
-        msg_id = f"{channel_name}_{flow_identifier}_{timestamp}"
-
-        expected_subscribers: int = self.r.pubsub_numsub(channel_name)[0][1]
-
-        subscribers_who_processed_this_msg = self.r.hincrby(
-            self.constants.SUBS_WHO_PROCESSED_MSG, msg_id, 1
-        )
-
-        if subscribers_who_processed_this_msg == expected_subscribers:
-
-            pipe = self.r.pipeline()
-            pipe.hdel(self.constants.SUBS_WHO_PROCESSED_MSG, msg_id)
-            self._keep_track_of_flows_analyzed_per_min(pipe)
-            pipe.execute()
-            return
-
     def get_message(self, channel_obj: redis.client.PubSub, timeout=0.0000001):
         """
         Wrapper for redis' get_message() to be able to handle
@@ -604,7 +480,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """
         try:
             msg = channel_obj.get_message(timeout=timeout)
-            self._track_flow_processing_rate(msg)
+            if msg:
+                self._track_flow_processing_rate(msg)
             return msg
         except redis.exceptions.ConnectionError as ex:
             # make sure we log the error only once
@@ -638,82 +515,30 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
 
-    def get_ip_info(self, ip: str) -> Optional[dict]:
+    def get_ip_info(self, ip: str, info_type: str) -> Optional[dict | list]:
         """
         Return information about this IP from IPsInfo key
-        :return: a dictionary or False if there is no IP in the database
+        :param info_type: can be "DNS_resolution", "geocountry", "SNI",
+        "asn", "reverse_dns", "threat_level", "score", "confidence",
+        "VirusTotal",  "threatintelligence", "is_doh_server"
         """
-        data = self.rcache.hget(self.constants.IPS_INFO, ip)
-        return json.loads(data) if data else None
-
-    def _get_from_ip_info(self, ip: str, info_to_get: str):
-        """
-        :param ip: the key to get from the ip info hash
-        :param info_to_get: the value to get from the ip info hash
-        """
-        if utils.is_ignored_ip(ip):
+        key = f"{self.constants.IPS_INFO}:{info_type}"
+        data = self.rcache.hget(key, ip)
+        if not data:
             return
 
-        ip_info = self.get_ip_info(ip)
-        if not ip_info:
-            return
-
-        info = ip_info.get(info_to_get)
-        if not info:
-            return
-        return info
+        try:
+            data = json.loads(data)
+        except (json.decoder.JSONDecodeError, TypeError):
+            pass
+        return data
 
     def set_new_ip(self, ip: str):
-        """
-        1- Stores this new IP in the IPs hash
-        2- Publishes in the channels that there is a new IP, and that we want
-            data from the Threat Intelligence modules
-        Sometimes it can happend that the ip comes as an IP object, but when
-        accessed as str, it is automatically
-        converted to str
-        """
-        data = self.get_ip_info(ip)
-        if data is False:
-            # If there is no data about this IP
-            # Set this IP for the first time in the IPsInfo
-            # Its VERY important that the data of the first time we see an IP
-            # must be '{}', an empty dictionary! if not the logic breaks.
-            # We use the empty dictionary to find if an IP exists or not
-            self.rcache.hset(self.constants.IPS_INFO, ip, "{}")
-            # Publish that there is a new IP ready in the channel
-            self.publish("new_ip", ip)
-
-    def ask_for_ip_info(
-        self, ip, profileid, twid, flow, ip_state, daddr=False
-    ):
-        """
-        is the ip param src or dst
-        """
-        # if the daddr key arg is not given, we know for sure that the ip
-        # given is the daddr
-        daddr = daddr or ip
-        data_to_send = self.give_threat_intelligence(
-            profileid,
-            twid,
-            ip_state,
-            flow.starttime,
-            flow.uid,
-            daddr,
-            proto=flow.proto.upper(),
-            lookup=ip,
-        )
-
-        if ip in self.our_ips:
-            # dont ask p2p about your own ip
-            return
-
-        # ask other peers their opinion about this IP
-        cache_age = 1000
-        # the p2p module is expecting these 2 keys
-        data_to_send.update({"cache_age": cache_age, "ip": str(ip)})
-        self.publish("p2p_data_request", json.dumps(data_to_send))
+        self.publish("new_ip", ip)
 
     def get_slips_internal_time(self):
+        #  SLIPS_INTERNAL_TIME is the ts of the last tw
+        #  modification detected by slips
         return self.r.get(self.constants.SLIPS_INTERNAL_TIME) or 0
 
     def set_ap_info(self, interfaces: Dict[str, str]):
@@ -809,6 +634,11 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """
         return self.r.hget(self.constants.ANALYSIS, "commit")
 
+    def client_setname(self, name: str):
+        name = utils.sanitize(name)
+        name = name.replace(" ", "_")
+        return self.r.client_setname(name)
+
     def get_zeek_version(self):
         """
         gets the currently used zeek_version from the db
@@ -847,35 +677,23 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         """
         return self.r.hget(self.constants.ANALYSIS, "output_dir")
 
-    def set_ip_info(self, ip: str, to_store: dict):
+    def set_ip_info(self, ip: str, to_store: Dict[str, Any]):
         """
         Store information for this IP
-        We receive a dictionary, such as {
-        'geocountry': 'rumania'} to
+        We receive a dictionary, such as {'geocountry': 'rumania'} to
         store for this IP.
         If it was not there before we store it. If it was there before, we
         overwrite it
         """
-        # Get the previous info already stored
-        cached_ip_info = self.get_ip_info(ip)
-        if not cached_ip_info:
-            # This IP is not in the dictionary, add it first:
-            self.set_new_ip(ip)
-            cached_ip_info = {}
-
-        # make sure we don't already have the same info about this IP in our db
-        is_new_info = False
         for info_type, info_val in to_store.items():
-            if info_type not in cached_ip_info and not is_new_info:
-                is_new_info = True
+            # info_type can be "DNS_resolution", "geocountry", "SNI",
+            # "asn", "reverse_dns", "threat_level", "score", "confidence",
+            # "VirusTotal", "threatintelligence"
+            if isinstance(info_val, dict) or isinstance(info_val, list):
+                info_val = json.dumps(info_val)
 
-            cached_ip_info[info_type] = info_val
-
-        self.rcache.hset(
-            self.constants.IPS_INFO, ip, json.dumps(cached_ip_info)
-        )
-        if is_new_info:
-            self.r.publish("ip_info_change", ip)
+            key = f"{self.constants.IPS_INFO}:{info_type}"
+            self.rcache.hset(key, ip, info_val)
 
     def get_redis_pid(self):
         """returns the pid of the current redis server"""
@@ -1201,21 +1019,21 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         returns asn info about the given IP
         returns a dict with "number" and "org" keys
         """
-        return self._get_from_ip_info(ip, "asn")
+        return self.get_ip_info(ip, "asn")
 
     def get_rdns_info(self, ip: str) -> Optional[str]:
         """
         returns rdns info about the given IP
         returns a str with the rdns or none
         """
-        return self._get_from_ip_info(ip, "reverse_dns")
+        return self.get_ip_info(ip, "reverse_dns")
 
     def get_sni_info(self, ip: str) -> Optional[str]:
         """
         returns sni info about the given IP
         returns the server name or none
         """
-        sni = self._get_from_ip_info(ip, "SNI")
+        sni = self.get_ip_info(ip, "SNI")
         if not sni:
             return
         sni = sni[0] if isinstance(sni, list) else sni
@@ -1233,28 +1051,20 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
         TI lists?
         :return: string containing AS, rDNS, and SNI of the IP.
         """
-        cached_info: Optional[Dict[str, str]] = self.get_ip_info(ip)
-        id = {}
-        if not cached_info:
-            return id
-
-        sni = cached_info.get("SNI")
-        if sni:
-            sni = sni[0] if isinstance(sni, list) else sni
-            sni = sni.get("server_name")
-
         id = {
-            "AS": cached_info.get("asn"),
-            "rDNS": cached_info.get("reverse_dns"),
-            "SNI": sni,
+            "AS": self.get_asn_info(ip),
+            "rDNS": self.get_rdns_info(ip),
+            "SNI": self.get_sni_info(ip),
         }
 
         if get_ti_data:
-            id.update(
-                {"TI": cached_info.get("threatintelligence", {}).get("source")}
-            )
+            ti = self.get_ip_info(ip, "threatintelligence")
+            if ti:
+                src = ti.get("source")
+                if src:
+                    id.update({"TI": src})
 
-        if domains := cached_info.get("DNS_resolution", []):
+        if domains := self.get_ip_info(ip, "DNS_resolution"):
             domains: List[str]
             id.update({"queries": domains})
 
@@ -1544,6 +1354,12 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
     def get_pid_of(self, module_name: str):
         pid = self.r.hget(self.constants.PIDS, module_name)
         return int(pid) if pid else None
+
+    def store_module_flows_per_second(self, module, fps):
+        self.r.hset(self.constants.MODULES_FLOWS_PER_SECOND, module, fps)
+
+    def get_module_flows_per_second(self, module):
+        return self.r.hget(self.constants.MODULES_FLOWS_PER_SECOND, module)
 
     def get_name_of_module_at(self, given_pid):
         """returns the name of the module that has the given pid"""
@@ -1849,11 +1665,13 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler, P2PHandler):
 
     def increment_processed_flows(self):
         """processed by the profiler only"""
-        return self.r.incr(self.constants.PROCESSED_FLOWS, 1)
+        return self.r.incr(self.constants.PROCESSED_FLOWS_BY_PROFILER, 1)
 
-    def get_processed_flows_so_far(self) -> int:
+    def get_flow_analyzed_by_the_profiler_so_far(self) -> int:
         """processed by the profiler only"""
-        processed_flows = self.r.get(self.constants.PROCESSED_FLOWS)
+        processed_flows = self.r.get(
+            self.constants.PROCESSED_FLOWS_BY_PROFILER
+        )
         if not processed_flows:
             return 0
         return int(processed_flows)

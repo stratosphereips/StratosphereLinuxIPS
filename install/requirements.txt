@@ -3,7 +3,7 @@ setuptools<81
 numpy==1.26.4
 watchdog==5.0.0
 redis==5.2.1
-urllib3==2.5.0
+urllib3==2.6.0
 pandas==2.3.3
 tzlocal==5.3.1
 cabby==0.1.23
@@ -35,6 +35,7 @@ termcolor==3.2.0
 yappi==1.7.3
 pytest-sugar==1.1.1
 aid_hash
+cachetools
 black==25.9.0
 ruff==0.14.3
 pre-commit==4.3.0
@@ -45,4 +46,5 @@ pybloom_live
 pyyaml
 pytest-asyncio
 vulture
+detect-secrets
 git+https://github.com/SECEF/python-idmefv2.git
