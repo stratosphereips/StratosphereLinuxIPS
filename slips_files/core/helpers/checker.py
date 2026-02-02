@@ -196,15 +196,6 @@ class Checker:
             self.main.terminate_slips()
             return
 
-        # Check if redis server running
-        if (
-            not self.main.args.killall
-            and self.main.redis_man.check_redis_database() is False
-        ):
-            print("Redis database is not running. Stopping Slips")
-            self.main.terminate_slips()
-            return
-
         if self.main.args.config and not os.path.exists(self.main.args.config):
             print(f"{self.main.args.config} doesn't exist. Stopping Slips")
             self.main.terminate_slips()
