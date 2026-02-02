@@ -130,7 +130,12 @@ class RedisDB(
     starttime_of_first_tw = None
 
     def __new__(
-        cls, logger, redis_port, start_redis_server=True, flush_db=True
+        cls,
+        logger,
+        redis_port,
+        output_dir,
+        start_redis_server=True,
+        flush_db=True,
     ):
         """
         treat the db as a singleton per port
@@ -138,6 +143,7 @@ class RedisDB(
         at any given time
         """
         cls.redis_port = redis_port
+        cls.output_dir = output_dir
         cls.flush_db = flush_db
         # start the redis server using cli if it's not started?
         cls.start_server = start_redis_server
@@ -146,8 +152,9 @@ class RedisDB(
         cls.args = cls.conf.get_args()
 
         if cls.redis_port not in cls._instances:
-            cls._set_redis_options()
             cls._read_configuration()
+
+            cls._setup_config_file()
             initialized, err = cls.init_redis_server()
             if not initialized:
                 raise RuntimeError(
@@ -178,11 +185,16 @@ class RedisDB(
                 setup(self)
 
     @classmethod
-    def _set_redis_options(cls):
+    def _setup_config_file(cls):
         """
-        Updates the default slips options based on the -s param,
-        writes the new configs to cls._conf_file
+        Update cls._conf_file (config/redis.conf) based on the params given
+        to slips (e.g -s)
         """
+        # because slips may use different redis ports at the same time,
+        # logs should be port specific
+        logfile = os.path.join(
+            cls.output_dir, f"redis-server-port-{cls.redis_port}.log"
+        )
         # to fix redis.exceptions.ResponseError MISCONF Redis is
         # configured to save RDB snapshots
         # configure redis to stop writing to dump.rdb when an error
@@ -190,29 +202,26 @@ class RedisDB(
         cls._options = {
             "daemonize": "yes",
             "stop-writes-on-bgsave-error": "no",
+            # disables persistence (.rdb) files.
             "save": '""',
             "appendonly": "no",
+            "logfile": logfile,
         }
-        # -s for saving the db
-        if "-s" not in sys.argv:
-            return
 
-        # Will save the DB if both the given number of seconds
-        # and the given number of write operations against the DB
-        # occurred.
-        # In the example below the behaviour will be to save:
-        # after 30 sec if at least 500 keys changed
-        # AOF persistence logs every write operation received by
-        # the server, that will be played again at server startup
-        # save the db to <Slips-dir>/dump.rdb
-        cls._options.update(
-            {
-                "save": "30 500",
-                "appendonly": "yes",
-                "dir": os.getcwd(),
-                "dbfilename": "dump.rdb",
-            }
-        )
+        # -s for saving the db
+        if cls.args.save:
+            cls._options.update(
+                {
+                    # save the db after 30 sec if at least 500 keys changed
+                    "save": "30 500",
+                    # AOF is now enabled. Redis will write each operation to the
+                    # AOF file.
+                    "appendonly": "yes",
+                    # saves the .rdb file to <output_dir>
+                    "dir": cls.output_dir,
+                    "dbfilename": "dump.rdb",
+                }
+            )
 
         with open(cls._conf_file, "w") as f:
             for option, val in cls._options.items():
@@ -223,7 +232,7 @@ class RedisDB(
         conf = ConfigParser()
         # Should we delete the previously stored data in the DB when we start?
         # By default False. Meaning we don't DELETE the DB by default.
-        cls.deletePrevdb: bool = conf.delete_prev_db()
+        cls.config_flush_db: bool = conf.delete_prev_db()
         cls.disabled_detections: List[str] = conf.disabled_detections()
         cls.width = conf.get_tw_width_in_seconds()
         cls.client_ips: List[str] = conf.client_ips()
@@ -246,7 +255,7 @@ class RedisDB(
         return cls.r.get(cls.constants.SLIPS_START_TIME)
 
     @classmethod
-    def should_flush_db(cls) -> bool:
+    def _should_flush_db(cls) -> bool:
         """
         these are the cases that we DO NOT flush the db when we
             connect to it, because we need to use it
@@ -257,12 +266,15 @@ class RedisDB(
         will_need_the_db_later = (
             "-S" in sys.argv or "-cb" in sys.argv or "-d" in sys.argv
         )
-        return cls.deletePrevdb and cls.flush_db and not will_need_the_db_later
+        if will_need_the_db_later:
+            return False
+
+        return cls.config_flush_db and cls.flush_db
 
     @classmethod
     def init_redis_server(cls) -> Tuple[bool, str]:
         """
-        starts the redis server, connects to the it, and andjusts redis
+        starts the redis server, connects to it, and adjusts redis
         options.
         Returns a tuple of (connection status, error message).
         """
@@ -270,7 +282,7 @@ class RedisDB(
             if cls.start_server:
                 # starts the redis server using cli.
                 # we don't need that when using -k
-                cls._start_a_redis_server()
+                cls._start_redis_server()
                 all_good, err = cls._confirm_redis_is_listening()
                 if not all_good:
                     return False, err
@@ -279,7 +291,7 @@ class RedisDB(
             if not connected:
                 return False, err
 
-            if cls.should_flush_db():
+            if cls._should_flush_db():
                 # when stopping the daemon, don't flush bc we need to get
                 # the PIDS to close slips files
                 cls.r.flushdb()
@@ -310,9 +322,9 @@ class RedisDB(
         # a round trip PING/PONG will be attempted before next redis cmd.
         # If the PING/PONG fails, the connection will re-established
 
-        # retry_on_timeout=True after the command times out, it will be retried once,
-        # if the retry is successful, it will return normally; if it fails,
-        # an exception will be thrown
+        # retry_on_timeout=True after the command times out, it will be
+        # retried once, if the retry is successful, it will return
+        # normally; if it fails, an exception will be thrown
 
         return redis.StrictRedis(
             host="localhost",
@@ -348,7 +360,7 @@ class RedisDB(
         )
 
     @classmethod
-    def _start_a_redis_server(cls) -> bool:
+    def _start_redis_server(cls) -> bool:
         cmd = (
             f"redis-server {cls._conf_file} "
             f"--port {cls.redis_port} "
@@ -372,7 +384,7 @@ class RedisDB(
         # the DBManager()
         if process.returncode != 0:
             raise RuntimeError(
-                f"database._start_a_redis_server: "
+                f"database._start_redis_server: "
                 f"Redis did not start properly.\n{stderr}\n{stdout}"
             )
 

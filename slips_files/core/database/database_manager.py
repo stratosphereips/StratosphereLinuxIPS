@@ -47,7 +47,7 @@ class DBManager:
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
         self.rdb = RedisDB(
-            self.logger, redis_port, start_redis_server, **kwargs
+            self.logger, redis_port, output_dir, start_redis_server, **kwargs
         )
         self.constants = self.rdb.constants
 
