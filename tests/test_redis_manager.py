@@ -194,7 +194,7 @@ def test_check_redis_database(
         patch("os.system") as mock_system,
         patch("time.sleep") as mock_sleep,
     ):
-        result = redis_manager.check_redis_database()
+        result = redis_manager.start_redis_cache_if_not_running()
 
         assert result == expected_result
         assert mock_redis.ping.call_count == len(ping_side_effect)
@@ -214,7 +214,7 @@ def test_check_redis_database_failure(mock_db):
         patch("time.sleep") as mock_sleep,
         patch.object(redis_manager.main, "terminate_slips") as mock_terminate,
     ):
-        result = redis_manager.check_redis_database()
+        result = redis_manager.start_redis_cache_if_not_running()
 
         expected_result = False
         assert result == expected_result

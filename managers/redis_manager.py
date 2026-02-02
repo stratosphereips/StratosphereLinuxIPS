@@ -4,13 +4,16 @@ import contextlib
 import shutil
 import redis
 import os
-import time
 import socket
 import subprocess
 from typing import Dict, Union
+
+from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
+
+LOCALHOST = "127.0.0.1"
 
 
 class AlreadyKilledErr(Exception):
@@ -106,44 +109,27 @@ class RedisManager:
     def get_end_port(self):
         return self.end_port
 
-    def check_redis_database(
-        self, redis_host="localhost", redis_port=DEFAULT_REDIS_PORT
-    ) -> bool:
+    def start_redis_cache_if_not_running(
+        self, redis_port=DEFAULT_REDIS_PORT) -> bool:
         """
         Check if we have redis-server running (this is the cache db it should
-        always be running)
+        always be running) adn start it if not running.
         """
-        tries = 0
-        while True:
-            try:
-                # first try connecting to the cache db normally
-                r = redis.StrictRedis(
-                    host=redis_host,
-                    port=redis_port,
-                    db=1,
-                    charset="utf-8",
-                    decode_responses=True,
-                )
-                r.ping()
-                return True
-            except Exception as ex:
-                # only try to open redis-server twice.
-                if tries == 2:
-                    print(
-                        f"[Main] Problem starting redis cache database."
-                        f" \n{ex}\nStopping"
-                    )
-                    self.main.terminate_slips()
-                    return False
-
-                print("[Main] Starting redis cache database..")
-                os.system(
-                    "redis-server config/redis.conf --daemonize yes "
-                    " > /dev/null 2>&1"
-                )
-                # give the server time to start
-                time.sleep(1)
-                tries += 1
+        start_redis_server = True
+        # we dont care about the logger here we're just making sure the
+        # server is up, this r isnt gonna be used later
+        logger = ""
+        redis = RedisDB(
+            logger,
+            redis_port,
+            self.main.args.output,
+            start_redis_server,
+            flush_db=False,
+        )
+        # rcache is db 1
+        redis.rcache.ping()
+        redis.rcache.close()
+        return True
 
     def get_random_redis_port(self) -> int:
         """

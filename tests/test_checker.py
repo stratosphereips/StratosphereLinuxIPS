@@ -69,7 +69,9 @@ def test_check_given_flags(args, expected_calls, monkeypatch):
     monkeypatch.setattr(os, "geteuid", lambda: 1000)
     monkeypatch.setattr(os.path, "exists", lambda x: False)
     monkeypatch.setattr(psutil, "net_if_addrs", lambda: {"eth0": None})
-    checker.main.redis_man.check_redis_database.return_value = False
+    checker.main.redis_man.start_redis_cache_if_not_running.return_value = (
+        False
+    )
     checker.input_module_exists = mock.MagicMock(return_value=False)
 
     checker.verify_given_flags()
@@ -108,7 +110,7 @@ def test_check_given_flags_root_user(monkeypatch):
     monkeypatch.setattr(os, "getuid", lambda: 0)  # also used in the function
 
     # patch return values of methods that can early-return
-    checker.main.redis_man.check_redis_database = lambda: True
+    checker.main.redis_man.start_redis_cache_if_not_running = lambda: True
     checker.main.conf.use_local_p2p = lambda: False
     checker.main.conf.use_global_p2p = lambda: False
     checker.input_module_exists = lambda _: True
