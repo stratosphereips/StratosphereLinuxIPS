@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import shutil
 import socket
 
 from slips_files.common.printer import Printer
@@ -112,6 +113,7 @@ class RedisDB(
         sudo = ""
     # flag to know if we found the gateway MAC using the most seen MAC method
     _gateway_MAC_found = False
+    _conf_file_template = "config/redis.conf.template"
     _conf_file = "config/redis.conf"
     our_ips: List[str] = utils.get_own_ips(ret="List")
     # to make sure we only detect and store the user's localnet once
@@ -190,23 +192,24 @@ class RedisDB(
         Update cls._conf_file (config/redis.conf) based on the params given
         to slips (e.g -s)
         """
+        shutil.copy(cls._conf_file_template, cls._conf_file)
+
+        cls._options = {}
+        with open(cls._conf_file, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if " " in line:
+                    key, value = line.split(None, 1)
+                    cls._options[key] = value.strip('"')
+
         # because slips may use different redis ports at the same time,
         # logs should be port specific
         logfile = os.path.join(
             cls.output_dir, f"redis-server-port-{cls.redis_port}.log"
         )
-        # to fix redis.exceptions.ResponseError MISCONF Redis is
-        # configured to save RDB snapshots
-        # configure redis to stop writing to dump.rdb when an error
-        # occurs without throwing errors in slips
-        cls._options = {
-            "daemonize": "yes",
-            "stop-writes-on-bgsave-error": "no",
-            # disables persistence (.rdb) files.
-            "save": '""',
-            "appendonly": "no",
-            "logfile": logfile,
-        }
+        cls._options.update({"logfile": logfile})
 
         # -s for saving the db
         if cls.args.save:

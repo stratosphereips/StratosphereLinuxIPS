@@ -163,7 +163,6 @@ trustdb.db
 # ignore running redis servers logs
 running_slips_info.txt
 
-# ignore changes to redis.conf
 config/redis.conf
 modules/flowmldetection/scaler.bin
 modules/flowmldetection/model.bin
@@ -177,4 +176,3 @@ appendonly.aof
 /slipsOut/metadata/slips.yaml
 /slipsOut/metadata/whitelist.conf
 /p2p_db.sqlite
-
