@@ -133,7 +133,7 @@ The goal of suppressing errors by default is the most errors should be handled b
 - If you run slips without any special arguments, Slips starts redis cache db ( redis server port 6379 db 1) and Redis main db (redis port 6379 db 1)
 - You can start Slips with -m, which starts redis on a random available redis port in the range (32768 to 10000), or -P if you want to start redis on a specific port.
 - Slips starts the redis server if it's not started by default.
-- Slips uses its own redis.conf, it doesn't use the default one. you can find it in config/redis.conf.
+- Slips uses its own redis.conf, it doesn't use the default one. you can find it in config/redis.conf.template.
 - The cache db is shared among all running slips instances, and is persistent, meaning it is not deleted on each run unlike the main redis db (redis port 6379 db 1), which is overwritten every run.
 - If you're gonna add a new redis channel to slips, remember to add it to the list of supported_channels in slips_files/core/database/redis_db/database.py
 
