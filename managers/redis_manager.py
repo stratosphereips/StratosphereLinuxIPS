@@ -21,6 +21,9 @@ class UserCancelledErr(Exception):
     pass
 
 
+DEFAULT_REDIS_PORT = 6379
+
+
 class RedisManager:
     open_servers_pids: Dict[int, dict]
 
@@ -37,7 +40,7 @@ class RedisManager:
     def log_redis_server_pid(self, redis_port: int, redis_pid: int):
         now = utils.get_human_readable_datetime()
         try:
-            # used in case we need to remove the line using 6379 from running
+            # used in case we need to remove the line using DEFAULT_REDIS_PORT from running
             # logfile
             with open(self.running_logfile, "a") as f:
                 # add the header lines if the file is newly created
@@ -63,9 +66,9 @@ class RedisManager:
             open(self.running_logfile, "w").close()
             self.log_redis_server_pid(redis_port, redis_pid)
 
-        if redis_port == 6379:
+        if redis_port == DEFAULT_REDIS_PORT:
             # remove the old logline using this port
-            self.remove_old_logline(6379)
+            self.remove_old_logline(DEFAULT_REDIS_PORT)
 
     def load_redis_db(self, redis_port):
         # to be able to use running_slips_info later as a non-root user,
@@ -104,7 +107,7 @@ class RedisManager:
         return self.end_port
 
     def check_redis_database(
-        self, redis_host="localhost", redis_port=6379
+        self, redis_host="localhost", redis_port=DEFAULT_REDIS_PORT
     ) -> bool:
         """
         Check if we have redis-server running (this is the cache db it should
@@ -171,7 +174,7 @@ class RedisManager:
         return False
 
     def clear_redis_cache_database(
-        self, redis_host="localhost", redis_port=6379
+        self, redis_host="localhost", redis_port=DEFAULT_REDIS_PORT
     ) -> bool:
         """
         Clear cache database
@@ -203,8 +206,8 @@ class RedisManager:
 
         # closes all the ports in slips supported range of ports
         slips_supported_range = list(range(self.start_port, self.end_port + 1))
-        if 6379 not in self.open_servers_pids:
-            slips_supported_range.append(6379)
+        if DEFAULT_REDIS_PORT not in self.open_servers_pids:
+            slips_supported_range.append(DEFAULT_REDIS_PORT)
 
         for port in slips_supported_range:
             if pid := self.get_pid_of_redis_server(port):
@@ -418,10 +421,14 @@ class RedisManager:
         # consider it "currently running"
         return total2 > total1 + 2
 
-    def ask_user_for_confirmation_to_close_a_currently_used_server(
-        self, port: int
+    def ask_user_to_confirm_altering_a_currently_used_server(
+        self, port: int, alter="kill"
     ):
-        """return True if the user confirmed to close the server"""
+        """
+        return True if the user confirmed to close the server
+        :param alter: the type of operation the user is trying to do on the
+        given sercer. can be "overwrite" or "kill"
+        """
         try:
             msg = (
                 f"The redis server on port {port} is currently "
@@ -436,18 +443,34 @@ class RedisManager:
 
         return False
 
-    def confirm_killing(self, client: redis.Redis, port: int) -> bool:
-        """Asks the user to press y to confirm the he wants to kill a redis
-        server with slips running in it"""
+    def confirm_server_altering(
+        self, client: redis.Redis, port: int, operation="kill"
+    ) -> bool:
+        """Asks the user to press y to confirm that he wants to
+        kill/overwrite a redis server with slips running in it
+        :param operation: can be 'kill' or 'overwrite'
+        """
         if not self.is_redis_currently_receiving_new_commands(client):
             return True
 
-        if self.ask_user_for_confirmation_to_close_a_currently_used_server(
-            port
+        if self.ask_user_to_confirm_altering_a_currently_used_server(
+            port, operation
         ):
             return True
 
         return False
+
+    def _get_dbmanager_without_starting_a_new_server(self, port):
+        return DBManager(
+            Output(),
+            self.main.args.output,
+            port,
+            self.main.conf,
+            self.main.pid,
+            start_sqlite=False,
+            start_redis_server=False,
+            flush_db=False,
+        )
 
     def flush_redis_server(self, pid: int = None, port: int = None):
         """
@@ -475,21 +498,13 @@ class RedisManager:
 
         # clear the server opened on this port
         try:
-            db = DBManager(
-                Output(),
-                self.main.args.output,
-                port,
-                self.main.conf,
-                self.main.pid,
-                start_sqlite=False,
-                start_redis_server=False,
-            )
+            db = self._get_dbmanager_without_starting_a_new_server(port)
             # if the redis server opened by slips is closed manually by the
             # user, not by slips, slips won't be able to connect to it
             # that's why we check for db.rdb
             if db.rdb:
                 client: redis.Redis = db.rdb.r
-                if not self.confirm_killing(client, port):
+                if not self.confirm_server_altering(client, port, "kill"):
                     raise UserCancelledErr
 
                 client.flushall()
@@ -594,13 +609,15 @@ class RedisManager:
                 f"{base_msg} is already killed or you don't have "
                 f"permission to kill it."
             )
+            self.remove_server_from_log(port)
 
         except (UserCancelledErr, KeyboardInterrupt):
             print(f"Cancelled killing {base_msg}.")
 
     def close_open_redis_servers(self):
         """
-        Function to close unused open redis-servers based on what the user chooses
+        Function to close unused open redis-servers based on what the user
+        chooses
         """
         if not hasattr(self, "open_servers_PIDs"):
             # fill the dict
