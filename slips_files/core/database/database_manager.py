@@ -211,6 +211,9 @@ class DBManager:
     def get_flows_analyzed_per_minute(self, *args, **kwargs):
         return self.rdb.get_flows_analyzed_per_minute(*args, **kwargs)
 
+    def ping(self, *args, **kwargs):
+        return self.rdb.ping(*args, **kwargs)
+
     def get_ip_info(self, *args, **kwargs):
         return self.rdb.get_ip_info(*args, **kwargs)
 
