@@ -106,6 +106,7 @@ def test_load_redis_db(redis_port, redis_pid, db_path, mock_db):
 def test_load_db_success(mock_db):
     redis_manager = ModuleFactory().create_redis_manager_obj()
     redis_manager.main.args.db = "/path/to/db.rdb"
+
     redis_manager.main.db.init_redis_server = Mock()
     redis_manager.main.db.load = Mock(return_value=True)
     redis_manager.main.terminate_slips = Mock()
@@ -114,19 +115,20 @@ def test_load_db_success(mock_db):
         patch.object(
             redis_manager, "get_pid_of_redis_server", return_value=1234
         ) as mock_get_pid,
-        patch.object(redis_manager, "flush_redis_server") as mock_flush,
-        patch.object(redis_manager, "kill_redis_server") as mock_kill,
+        patch.object(redis_manager, "flush_and_kill") as mock_flush_and_kill,
         patch.object(redis_manager, "load_redis_db") as mock_load_redis_db,
     ):
         redis_manager.load_db()
 
         assert redis_manager.input_type == "database"
+
         redis_manager.main.db.init_redis_server.assert_called_once()
         mock_get_pid.assert_called_once_with(32850)
-        mock_flush.assert_called_once_with(pid=1234)
-        mock_kill.assert_called_once_with(1234)
+        mock_flush_and_kill.assert_called_once_with(1234)
+
         redis_manager.main.db.load.assert_called_once_with("/path/to/db.rdb")
         mock_load_redis_db.assert_called_once_with(32850)
+
         redis_manager.main.terminate_slips.assert_called_once()
 
 
@@ -142,8 +144,7 @@ def test_load_db_failure(mock_db):
         patch.object(
             redis_manager, "get_pid_of_redis_server", return_value=1234
         ) as mock_get_pid,
-        patch.object(redis_manager, "flush_redis_server") as mock_flush,
-        patch.object(redis_manager, "kill_redis_server") as mock_kill,
+        patch.object(redis_manager, "flush_and_kill") as mock_flush_and_kill,
         patch.object(redis_manager, "load_redis_db") as mock_load_redis_db,
         patch("builtins.print") as mock_print,
     ):
@@ -152,8 +153,7 @@ def test_load_db_failure(mock_db):
         assert redis_manager.input_type == "database"
         redis_manager.main.db.init_redis_server.assert_called_once()
         mock_get_pid.assert_called_once_with(32850)
-        mock_flush.assert_called_once_with(pid=1234)
-        mock_kill.assert_called_once_with(1234)
+        mock_flush_and_kill.assert_called_once_with(1234)
         redis_manager.main.db.load.assert_called_once_with(rdb_path)
         mock_print.assert_called_once_with(
             f"Error loading the database {rdb_path}"
