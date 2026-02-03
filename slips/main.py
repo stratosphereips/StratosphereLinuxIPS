@@ -695,6 +695,8 @@ class Main:
                 self.update_stats()
                 self.db.check_tw_to_close()
                 self.db.ping()
+                # @@@@@@@@@@@@@@@@@@@@@
+                self.db.log_stats()
 
                 modified_profiles: Set[str] = (
                     self.metadata_man.update_slips_stats_in_the_db()[1]
