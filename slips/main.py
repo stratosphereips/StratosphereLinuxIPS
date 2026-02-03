@@ -694,6 +694,7 @@ class Main:
                 self.ui_man.check_if_webinterface_started()
                 self.update_stats()
                 self.db.check_tw_to_close()
+                self.db.ping()
 
                 modified_profiles: Set[str] = (
                     self.metadata_man.update_slips_stats_in_the_db()[1]

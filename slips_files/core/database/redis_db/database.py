@@ -421,7 +421,9 @@ class RedisDB(
     def change_redis_limits(cls, client: redis.StrictRedis):
         """
         changes redis soft and hard limits to fix redis closing/resetting
-        the pub/sub connection,
+        the connections
+        When a client cannot receive data fast enough, its output buffer grows
+        , Redis disconnects clients with oversized buffers.
         """
         # maximum buffer size for pub/sub clients:  = 4294967296 Bytes = 4GBs,
         # when msgs in queue reach this limit, Redis will
@@ -443,6 +445,10 @@ class RedisDB(
         """store the time slips started (datetime obj)"""
         now = time.time()
         cls.r.set(cls.constants.SLIPS_START_TIME, now)
+
+    def ping(self):
+        self.r.ping()
+        self.rcache.ping()
 
     def publish(self, channel, msg, pipeline=None):
         """Publish a msg in the given channel.
