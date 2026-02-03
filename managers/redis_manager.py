@@ -194,13 +194,18 @@ class RedisManager:
         Closes all the redis ports in running_slips_info.txt and
          in slips supported range of ports
         """
-        if not hasattr(self, "open_servers_PIDs"):
+        if not hasattr(self, "open_servers_pids"):
             self.get_open_redis_servers()
 
+        closed_ports = set()
         # close all ports in logfile
         for pid, details in self.open_servers_pids.items():
             pid: int
+            port = details["port"]
+            if port in closed_ports:
+                continue
             self.flush_and_kill(pid, details["port"])
+            closed_ports.add(port)
 
         print("")
 
@@ -214,7 +219,7 @@ class RedisManager:
                 self.flush_and_kill(pid, port)
 
         print(
-            "Successfully closed all open redis .\n"
+            "Successfully closed all open redis servers.\n"
             "Please Note that only redis servers are closed, you need to "
             "manually close Slips processes that are still running."
         )
@@ -256,7 +261,7 @@ class RedisManager:
 
     def get_open_redis_servers(self) -> Dict[int, dict]:
         """
-        fills and returns self.open_servers_PIDs
+        fills and returns self.open_servers_pids
         with PIDs and ports of the redis servers started by slips
         read from running_slips.info.txt
         """
@@ -392,17 +397,6 @@ class RedisManager:
                         ):
                             self.main.terminate_slips()
                             return
-                        # reaching here means slips did run on that port
-                        # and the redis server is still up, but is
-                        # not currently used by a running slips, and th euser
-                        # wants to overwrite it
-                        pass
-                        ## @@@@@@@@@@@@@@@@ TODO test this
-                    #
-                    # else:
-                    #     self.print_port_in_use(port)
-                    #     self.main.terminate_slips()
-                    #
 
         elif self.main.args.multiinstance:
             redis_port = self.get_random_redis_port()
@@ -521,7 +515,7 @@ class RedisManager:
 
         # sometimes the redis port is given, get it manually
         if pid:
-            if not hasattr(self, "open_servers_PIDs"):
+            if not hasattr(self, "open_servers_pids"):
                 self.get_open_redis_servers()
 
             pid_info: Dict[str, str] = self.open_servers_pids.get(pid, {})
@@ -655,7 +649,7 @@ class RedisManager:
         Function to close unused open redis-servers based on what the user
         chooses
         """
-        if not hasattr(self, "open_servers_PIDs"):
+        if not hasattr(self, "open_servers_pids"):
             # fill the dict
             self.get_open_redis_servers()
 
