@@ -365,6 +365,76 @@ class ConfigParser(object):
             "exporting_alerts", "taxii_password", False
         )
 
+    def taxii_timeout(self):
+        timeout = self.read_configuration(
+            "exporting_alerts", "taxii_timeout", 10
+        )
+        try:
+            timeout = float(timeout)
+        except ValueError:
+            timeout = 10
+        return max(1.0, timeout)
+
+    def taxii_version(self):
+        return self.read_configuration(
+            "exporting_alerts", "taxii_version", 2
+        )
+
+    def taxii_direct_export(self):
+        return self.read_configuration(
+            "exporting_alerts", "direct_export", False
+        )
+
+    def taxii_direct_export_workers(self):
+        workers = self.read_configuration(
+            "exporting_alerts", "direct_export_workers", 2
+        )
+        try:
+            workers = int(workers)
+        except ValueError:
+            workers = 2
+        return max(1, workers)
+
+    def taxii_direct_export_max_workers(self):
+        workers = self.read_configuration(
+            "exporting_alerts", "direct_export_max_workers", 8
+        )
+        try:
+            workers = int(workers)
+        except ValueError:
+            workers = 8
+        return max(1, workers)
+
+    def taxii_direct_export_retry_max(self):
+        retries = self.read_configuration(
+            "exporting_alerts", "direct_export_retry_max", 0
+        )
+        try:
+            retries = int(retries)
+        except ValueError:
+            retries = 0
+        return max(0, retries)
+
+    def taxii_direct_export_retry_backoff(self):
+        backoff = self.read_configuration(
+            "exporting_alerts", "direct_export_retry_backoff", 0.5
+        )
+        try:
+            backoff = float(backoff)
+        except ValueError:
+            backoff = 0.5
+        return max(0.0, backoff)
+
+    def taxii_direct_export_retry_max_delay(self):
+        delay = self.read_configuration(
+            "exporting_alerts", "direct_export_retry_max_delay", 5.0
+        )
+        try:
+            delay = float(delay)
+        except ValueError:
+            delay = 5.0
+        return max(0.0, delay)
+
     def long_connection_threshold(self):
         """
         returns threshold in seconds
