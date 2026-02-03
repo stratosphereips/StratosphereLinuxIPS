@@ -374,7 +374,7 @@ def test_set_evidence(evidence_exists, whitelisted, expected):
 def test_update_max_threat_level(
     max_threat_level, cur_threat_level, expected_max
 ):
-    db = ModuleFactory().create_db_manager_obj(6393, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     profileid = "profile_192.168.1.1"
     db.set_max_threat_level(profileid, max_threat_level)
     assert (
