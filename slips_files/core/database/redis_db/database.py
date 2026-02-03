@@ -346,10 +346,11 @@ class RedisDB(
             port=port,
             db=db,
             charset="utf-8",
-            socket_keepalive=True,
             decode_responses=True,
+            health_check_interval=10,
+            socket_connect_timeout=5,
+            socket_keepalive=True,
             retry_on_timeout=True,
-            health_check_interval=20,
         )
 
     @classmethod
