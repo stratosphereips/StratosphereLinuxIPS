@@ -229,11 +229,6 @@ class RedisManager:
             f"\nOr kill your open redis ports using: ./slips.py -k "
         )
 
-    def close_slips_if_port_in_use(self, port: int):
-        if utils.is_port_in_use(port):
-            self.print_port_in_use(port)
-            self.main.terminate_slips()
-
     def get_pid_of_redis_server(self, port: int) -> int:
         """
         Gets the pid of the redis server running on this port
@@ -381,9 +376,34 @@ class RedisManager:
         if self.main.args.port:
             redis_port = int(self.main.args.port)
             # if the default port is already in use, slips should override it
-            if redis_port != 6379:
-                # close slips if port is in use
-                self.close_slips_if_port_in_use(redis_port)
+            if redis_port != DEFAULT_REDIS_PORT:
+                if utils.is_port_in_use(redis_port):
+                    # server is/was used, is another slips instance currently
+                    # using it?
+                    db = self._get_dbmanager_without_starting_a_new_server(
+                        redis_port
+                    )
+                    if db.rdb:
+                        client: redis.Redis = db.rdb.r
+                        # ask the user to confirm IF the server is currently
+                        # being used
+                        if not self.confirm_server_altering(
+                            client, redis_port, "overwrite"
+                        ):
+                            self.main.terminate_slips()
+                            return
+                        # reaching here means slips did run on that port
+                        # and the redis server is still up, but is
+                        # not currently used by a running slips, and th euser
+                        # wants to overwrite it
+                        pass
+                        ## @@@@@@@@@@@@@@@@ TODO test this
+                    #
+                    # else:
+                    #     self.print_port_in_use(port)
+                    #     self.main.terminate_slips()
+                    #
+
         elif self.main.args.multiinstance:
             redis_port = self.get_random_redis_port()
             if not redis_port:
@@ -392,9 +412,25 @@ class RedisManager:
                 if inp == "":
                     self.close_all_ports()
                 self.main.terminate_slips()
+                return
         else:
-            # even if this port is in use, it will be overwritten by slips
-            redis_port = 6379
+            redis_port = DEFAULT_REDIS_PORT
+            db = self._get_dbmanager_without_starting_a_new_server(redis_port)
+            # if the redis server opened by slips is closed manually by the
+            # user, not by slips, slips won't be able to connect to it
+            # that's why we check for db.rdb
+            if db.rdb:
+                client: redis.Redis = db.rdb.r
+                # are we overwriting a currently running slips?
+                if not self.confirm_server_altering(
+                    client, DEFAULT_REDIS_PORT, "overwrite"
+                ):
+                    print(
+                        f"Stopping. User cancelled overwriting of port "
+                        f"{redis_port}."
+                    )
+                    self.main.terminate_slips()
+
         return redis_port
 
     def is_redis_currently_receiving_new_commands(
@@ -432,7 +468,7 @@ class RedisManager:
         try:
             msg = (
                 f"The redis server on port {port} is currently "
-                f"being used.\nAre you sure you want to kill it? ["
+                f"being used.\nAre you sure you want to {alter} it? ["
                 f"y/n]\n> "
             )
             answer = input(msg)
