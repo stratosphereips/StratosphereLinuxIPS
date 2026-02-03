@@ -1,3 +1,17 @@
+1.1.17 (Jan 30th, 2025)
+
+* Improve horizontal, vertical, and ICMP portscan detection logic and speed.
+* Reduce the number of duplicate port scan evidence by using a log scale.
+* Suppress duplicate “unknown port” evidence for every scanned port when a portscan is detected.
+* Reduce false positives "public IPs outside of localnet" evidence.
+* Speedup Slips processing and reduce RAM usage.
+* Improved handling of high-throughput traffic.
+* Optimize profiler architecture: backpressure, dynamic worker scaling, true multiprocessing.
+* Speedup Github CI testing.
+* Expanded Immune dataset documentation with performance evaluations and bottleneck analysis.
+* Web UI fixes.
+
+
 1.1.16 (Dec 1st, 2025)
 - Fix problem reporting evidence when Slips is monitoring one interface
 - Change the usage of -g option, now Slips requires the interface name to monitor when using -g.
@@ -7,6 +21,7 @@
 - Drop support for the dynamic reloading of whitelists
 - Add an alerts visualiser web interface for TAXII servers.
 - Handle Slips and iptables failovers when running Slips as an access point in the Raspberry Pi.
+- Reduce the number of times a single IP is queried by the P2P module.
 
 
 1.1.15 (Oct 31st, 2025)

@@ -12,7 +12,6 @@ def exec_iptables_command(sudo: str, action, ip_to_block, flag, options):
       insert : to insert a new rule at the top of slipsBlocking list
       delete : to delete an existing rule
     """
-
     command = (
         f"{sudo} iptables --{action} slipsBlocking {flag} {ip_to_block} "
         f'-m comment --comment "Slips rule" >/dev/null 2>&1'

@@ -1111,6 +1111,12 @@ class DBManager:
     def set_mac_vendor_to_profile(self, *args, **kwargs):
         return self.rdb.set_mac_vendor_to_profile(*args, **kwargs)
 
+    def mark_ip_as_port_scanner(self, *args, **kwargs):
+        return self.rdb.mark_ip_as_port_scanner(*args, **kwargs)
+
+    def is_a_port_scanner(self, *args, **kwargs):
+        return self.rdb.is_a_port_scanner(*args, **kwargs)
+
     def get_hostname_from_profile(self, *args, **kwargs):
         return self.rdb.get_hostname_from_profile(*args, **kwargs)
 

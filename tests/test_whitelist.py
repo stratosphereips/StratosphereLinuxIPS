@@ -317,7 +317,7 @@ def test_profile_has_whitelisted_mac(
 )
 def test_matching_direction(direction, whitelist_direction, expected_result):
     whitelist = ModuleFactory().create_whitelist_obj()
-    result = whitelist.match.direction(direction, whitelist_direction)
+    result = whitelist.match.direction(direction.name, whitelist_direction)
     assert result == expected_result
 
 

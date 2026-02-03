@@ -43,12 +43,16 @@ jobs:
     needs: setup
     runs-on: ubuntu-22.04
     strategy:
+      # prevents the whole job from being canceled if one entry fails
+      fail-fast: false
       matrix:
         image_type:
           - name: slips
             dockerfile: ./docker/Dockerfile
           - name: slips_light
             dockerfile: ./docker/light/Dockerfile
+          - name: slips_dependencies
+            dockerfile: ./docker/dependency_image_for_CI/Dockerfile
 
     steps:
       - name: Use existing Buildx builder

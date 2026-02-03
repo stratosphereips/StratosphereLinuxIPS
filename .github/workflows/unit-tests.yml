@@ -7,14 +7,16 @@ on:
       - 'develop'
 
 jobs:
-#  # uses the common workflow that builds slips
-#  install-dependencies-using-reusable-workflow:
-#    uses: ./.github/workflows/install-slips-dependencies.yml
 
   unit-tests:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
-#    needs: install-dependencies-using-reusable-workflow
+
+    container:
+      image: stratosphereips/slips_dependencies
+      # TensorFlow + multiprocessing + pytest -n can hit /dev/shm limits.
+      options: --shm-size=2g
+
 
     env:
       TF_CPP_MIN_LOG_LEVEL: 3
@@ -52,6 +54,7 @@ jobs:
           - test_slips.py
           - test_profiler.py
           - test_profiler_worker.py
+          - test_profilers_manager.py
           - test_leak_detector.py
           - test_ip_info.py
           - test_evidence.py
@@ -84,7 +87,6 @@ jobs:
           - test_process_manager.py
           - test_metadata_manager.py
           - test_host_ip_manager.py
-          - test_host_ip_manager.py
           - test_rnn_cc_detection.py
           - test_idea_format.py
           - test_fides_sqlite_db.py
@@ -98,62 +100,8 @@ jobs:
         ref: ${{ github.ref }}
         fetch-depth: 0
 
-    - name: Install Redis v8.4.0
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y lsb-release curl gnupg
-
-        curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
-        sudo chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg
-        echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
-
-        sudo apt-get update
-        sudo apt-get install -y redis-server=6:8.4.0-1*
-        # to double check that its running
-        sudo systemctl start redis
-        sudo systemctl status redis
-        redis-cli ping
-
-    - name: Set up Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: 3.10.12
-
-    - name: Restore APT cache
-      id: apt-cache
-      uses: actions/cache@v4
-      with:
-        path: |
-          /var/cache/apt/archives
-          /var/lib/apt/lists
-        key: apt-cache
-
-    - if: ${{ steps.apt-cache.outputs.cache-hit == 'true' }}
-      name: Echo restored APT cache
-      continue-on-error: true
-      run: echo "Restored APT dependencies from cache successfully"
-
-    - name: Install apt dependencies
-      run: |
-        sudo apt-get update --fix-missing && \
-        sudo apt-get -y --no-install-recommends install \
-        $(grep -Ev '^(redis|redis-server)$' install/apt_dependencies.txt)
-
-    - name: Restore Python dependencies
-      id: python-cache
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('install/requirements.txt') }}
-
-    - if: ${{ steps.python-cache.outputs.cache-hit == 'true' }}
-      name: Echo restored Python cache
-      continue-on-error: true
-      run: echo "Restored Python dependencies from cache successfully"
-
-    - name: Install Python dependencies
-      run: python3 -m pip install -r install/requirements.txt
-
+    - name: Start Redis
+      uses: ./.github/actions/start-redis
 
     - name: Run Unit Tests for ${{ matrix.test_file }}
       run: |

@@ -57,8 +57,7 @@ RUN apt-get update -o Acquire::Retries=5 -o Acquire::https::No-Cache=True \
     && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash - \
     && export NVM_DIR="$HOME/.nvm" \
     && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  \
-    && nvm install 22 \
-    && apt purge -y  redis-server redis # we'll be compiling it manually
+    && nvm install 22
 
 
 
