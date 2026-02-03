@@ -38,9 +38,9 @@ flow = Conn(
 )
 
 
-def test_setInfoForDomains():
-    """tests setInfoForDomains, setNewDomain and getDomainData"""
-    db = ModuleFactory().create_db_manager_obj(6385, flush_db=True)
+def test_set_info_for_domains():
+    """tests set_info_for_domains, setNewDomain and get_domain_data"""
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     domain = "www.google.com"
     domain_data = {"threatintelligence": "sample data"}
     db.set_info_for_domains(domain, domain_data)
@@ -51,7 +51,7 @@ def test_setInfoForDomains():
 
 
 def test_subscribe():
-    db = ModuleFactory().create_db_manager_obj(6386, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     # invalid channel
     assert db.subscribe("invalid_channel") is False
     # valid channel, shoud return a pubsub object
@@ -60,7 +60,7 @@ def test_subscribe():
 
 def test_profile_moddule_labels():
     """tests set and get_profile_module_label"""
-    db = ModuleFactory().create_db_manager_obj(6387, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     module_label = "malicious"
     module_name = "test"
     db.set_module_label_for_profile(profileid, module_name, module_label)
@@ -73,7 +73,7 @@ def test_add_mac_addr_with_new_ipv4():
     """
     adding an ipv4 to no cached ip
     """
-    db = ModuleFactory().create_db_manager_obj(6388, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     ipv4 = "192.168.1.5"
     profileid_ipv4 = f"profile_{ipv4}"
     mac_addr = "00:00:5e:00:53:af"
@@ -96,7 +96,7 @@ def test_add_mac_addr_with_existing_ipv4():
     """
     adding an ipv4 to a cached ipv4
     """
-    db = ModuleFactory().create_db_manager_obj(6389, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     ipv4 = "192.168.1.5"
     mac_addr = "00:00:5e:00:53:af"
     db.rdb.is_gw_mac = Mock(return_value=False)
@@ -115,7 +115,7 @@ def test_add_mac_addr_with_ipv6_association():
     """
     adding an ipv6 to a cached ipv4
     """
-    db = ModuleFactory().create_db_manager_obj(6390, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     ipv4 = "192.168.1.5"
     profile_ipv4 = "profile_192.168.1.5"
     mac_addr = "00:00:5e:00:53:af"
@@ -143,7 +143,7 @@ def test_add_mac_addr_with_ipv6_association():
 
 
 def test_get_the_other_ip_version():
-    db = ModuleFactory().create_db_manager_obj(6391, flush_db=True)
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
     # profileid is ipv4
     ipv6 = "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
     db.set_ipv6_of_profile(profileid, ipv6)

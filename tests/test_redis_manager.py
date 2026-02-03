@@ -8,6 +8,7 @@ import pytest
 
 import slips_files
 from tests.module_factory import ModuleFactory
+from managers.redis_manager import UserCancelledErr
 
 
 @pytest.mark.parametrize(
@@ -106,6 +107,7 @@ def test_load_redis_db(redis_port, redis_pid, db_path, mock_db):
 def test_load_db_success(mock_db):
     redis_manager = ModuleFactory().create_redis_manager_obj()
     redis_manager.main.args.db = "/path/to/db.rdb"
+
     redis_manager.main.db.init_redis_server = Mock()
     redis_manager.main.db.load = Mock(return_value=True)
     redis_manager.main.terminate_slips = Mock()
@@ -114,19 +116,20 @@ def test_load_db_success(mock_db):
         patch.object(
             redis_manager, "get_pid_of_redis_server", return_value=1234
         ) as mock_get_pid,
-        patch.object(redis_manager, "flush_redis_server") as mock_flush,
-        patch.object(redis_manager, "kill_redis_server") as mock_kill,
+        patch.object(redis_manager, "flush_and_kill") as mock_flush_and_kill,
         patch.object(redis_manager, "load_redis_db") as mock_load_redis_db,
     ):
         redis_manager.load_db()
 
         assert redis_manager.input_type == "database"
+
         redis_manager.main.db.init_redis_server.assert_called_once()
         mock_get_pid.assert_called_once_with(32850)
-        mock_flush.assert_called_once_with(pid=1234)
-        mock_kill.assert_called_once_with(1234)
+        mock_flush_and_kill.assert_called_once_with(1234)
+
         redis_manager.main.db.load.assert_called_once_with("/path/to/db.rdb")
         mock_load_redis_db.assert_called_once_with(32850)
+
         redis_manager.main.terminate_slips.assert_called_once()
 
 
@@ -142,8 +145,7 @@ def test_load_db_failure(mock_db):
         patch.object(
             redis_manager, "get_pid_of_redis_server", return_value=1234
         ) as mock_get_pid,
-        patch.object(redis_manager, "flush_redis_server") as mock_flush,
-        patch.object(redis_manager, "kill_redis_server") as mock_kill,
+        patch.object(redis_manager, "flush_and_kill") as mock_flush_and_kill,
         patch.object(redis_manager, "load_redis_db") as mock_load_redis_db,
         patch("builtins.print") as mock_print,
     ):
@@ -152,8 +154,7 @@ def test_load_db_failure(mock_db):
         assert redis_manager.input_type == "database"
         redis_manager.main.db.init_redis_server.assert_called_once()
         mock_get_pid.assert_called_once_with(32850)
-        mock_flush.assert_called_once_with(pid=1234)
-        mock_kill.assert_called_once_with(1234)
+        mock_flush_and_kill.assert_called_once_with(1234)
         redis_manager.main.db.load.assert_called_once_with(rdb_path)
         mock_print.assert_called_once_with(
             f"Error loading the database {rdb_path}"
@@ -530,3 +531,158 @@ def test_kill_redis_server(
 
         assert result == expected_result
         mock_kill.assert_has_calls(expected_calls)
+
+
+@pytest.mark.parametrize(
+    "args_port, multiinstance, default_port_used, confirm_val, expected_port",
+    [
+        # Testcase 1: Specific port provided and available
+        ("7000", False, False, True, 7000),
+        # Testcase 2: Multi-instance enabled, gets random port
+        (None, True, False, True, 32768),
+        # Testcase 3: Default port (6379) and user confirms overwrite
+        (None, False, True, True, 6379),
+        # Testcase 4: Default port used but user cancels
+        (None, False, True, False, None),
+    ],
+)
+def test_get_redis_port(
+    args_port,
+    multiinstance,
+    default_port_used,
+    confirm_val,
+    expected_port,
+    mock_db,
+):
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    redis_manager.main.args.port = args_port
+    redis_manager.main.args.multiinstance = multiinstance
+
+    with (
+        patch.object(
+            redis_manager, "_get_dbmanager_without_starting_a_new_server"
+        ) as mock_db_mgr,
+        patch.object(
+            redis_manager, "confirm_server_altering", return_value=confirm_val
+        ),
+        patch.object(
+            redis_manager, "get_random_redis_port", return_value=32768
+        ),
+        patch.object(redis_manager.main, "terminate_slips") as mock_terminate,
+    ):
+
+        # Mock the DB manager return
+        mock_instance = Mock()
+        mock_instance.rdb = Mock() if default_port_used else None
+        mock_db_mgr.return_value = mock_instance
+
+        result = redis_manager.get_redis_port()
+
+        if expected_port:
+            assert result == expected_port
+        else:
+            mock_terminate.assert_called()
+
+
+@pytest.mark.parametrize(
+    "total1, total2, expected",
+    [
+        (100, 101, False),  # Only 1 cmd processed (likely a health check)
+        (100, 105, True),  # More than 2 cmds processed (actual activity)
+        (100, 100, False),  # No activity
+    ],
+)
+def test_is_redis_currently_receiving_new_commands(
+    total1, total2, expected, mock_db
+):
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    mock_redis = Mock()
+    mock_redis.info.side_effect = [
+        {"total_commands_processed": total1},
+        {"total_commands_processed": total2},
+    ]
+
+    with patch("time.sleep"):  # Don't actually wait
+        result = redis_manager.is_redis_currently_receiving_new_commands(
+            mock_redis
+        )
+        assert result == expected
+
+
+def test_flush_redis_server_success(mock_db):
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    mock_client = Mock()
+
+    with (
+        patch.object(
+            redis_manager, "_get_dbmanager_without_starting_a_new_server"
+        ) as mock_get_db,
+        patch.object(
+            redis_manager, "confirm_server_altering", return_value=True
+        ),
+    ):
+
+        mock_db_inst = Mock()
+        mock_db_inst.rdb.r = mock_client
+        mock_get_db.return_value = mock_db_inst
+
+        result = redis_manager.flush_redis_server(port=32768)
+
+        assert result is True
+        mock_client.flushall.assert_called_once()
+        mock_client.script_flush.assert_called_once()
+
+
+def test_flush_redis_server_user_cancelled(mock_db):
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+
+    with (
+        patch.object(
+            redis_manager, "_get_dbmanager_without_starting_a_new_server"
+        ) as mock_get_db,
+        patch.object(
+            redis_manager, "confirm_server_altering", return_value=False
+        ),
+    ):
+
+        mock_db_inst = Mock()
+        mock_db_inst.rdb.r = Mock()
+        mock_get_db.return_value = mock_db_inst
+
+        with pytest.raises(UserCancelledErr):
+            redis_manager.flush_redis_server(port=32768)
+
+
+def test_close_all_ports(mock_db):
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    redis_manager.open_servers_pids = {123: {"port": 32768}}
+
+    with (
+        patch.object(redis_manager, "flush_and_kill") as mock_fk,
+        patch.object(
+            redis_manager, "get_pid_of_redis_server", return_value=None
+        ),
+        patch.object(redis_manager.main, "terminate_slips"),
+    ):
+
+        redis_manager.close_all_ports()
+
+        # Should call flush_and_kill for the logged port
+        mock_fk.assert_any_call(123, 32768)
+
+
+def test_close_open_redis_servers_interactive(mock_db):
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    # Mocking user choosing server #1
+    with (
+        patch("builtins.input", return_value="1"),
+        patch.object(
+            redis_manager,
+            "print_open_redis_servers",
+            return_value={1: (32768, 1234)},
+        ),
+        patch.object(redis_manager, "flush_and_kill") as mock_fk,
+    ):
+
+        redis_manager.close_open_redis_servers()
+        mock_fk.assert_called_once_with(1234, 32768)
