@@ -2,7 +2,7 @@
 
 ## Scope and sources
 
-This document describes, at the model level, how Slips Immune uses immunology as an architectural reference. The main source is the draft paper "Rethinking the Principles of Immunity For a Cybersecurity Immune System" (`Rethinking_the_Principles_of_Immunity_For_a_Cybersecurity_Immune_System. Draftv1.pdf`). The paper emphasizes coordinated detection, communication, and regulation, rather than isolated detector mechanisms.
+This document describes, at the model level, how Slips Immune uses immunology as an architectural reference. The main source is the draft paper "Rethinking the Principles of Immunity For a Cybersecurity Immune System" (`Rethinking_the_Principles_of_Immunity_For_a_Cybersecurity_Immune_System. Draftv1.pdf`, also available online: https://static1.squarespace.com/static/5a01100f692ebe0459a1859f/t/698317ed0939ce18ad8f62d6/1770199021280/Rethinking_the_Principles_of_Immunity_For_a_Cybersecurity_Immune_System.+Draftv1.pdf). The paper emphasizes coordinated detection, communication, and regulation, rather than isolated detector mechanisms.
 
 The text below stays generic and avoids binding the model to specific Slips modules. For an implementation-oriented description, see [Architecture Design of Slips Immune](immune_architecture.md).
 
