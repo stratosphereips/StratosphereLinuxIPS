@@ -1,6 +1,29 @@
+# For reference: https://raw.githubusercontent.com/redis/redis/7.0/redis.conf
 daemonize yes
 stop-writes-on-bgsave-error no
 save ""
 appendonly no
 io-threads-do-reads yes
 io-threads 4
+# Set a memory usage limit to the specified amount of bytes.
+# When the memory limit is reached Redis will try to remove keys
+# according to the eviction policy selected (see maxmemory-policy).
+#
+# If Redis can't remove keys according to the policy, or if the policy is
+# set to 'noeviction', Redis will start to reply with errors to commands
+# that would use more memory, like SET, LPUSH, and so on, and will continue
+# to reply to read-only commands like GET.
+#
+# This option is usually useful when using Redis as an LRU or LFU cache, or to
+# set a hard memory limit for an instance (using the 'noeviction' policy).
+maxmemory 3gb
+# MAXMEMORY POLICY: how Redis will select what to remove when maxmemory
+# is reached. You can select one from the following behaviors:
+#
+# volatile-lru -> Evict using approximated LRU, only keys with an expire set.
+# allkeys-lru -> Evict any key using approximated LRU.
+# LRU means Least Recently Used
+#
+# Both LRU, LFU and volatile-ttl are implemented using approximated
+# randomized algorithms.
+maxmemory-policy allkeys-lru
