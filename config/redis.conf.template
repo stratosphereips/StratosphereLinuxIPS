@@ -2,3 +2,5 @@ daemonize yes
 stop-writes-on-bgsave-error no
 save ""
 appendonly no
+io-threads-do-reads yes
+io-threads 4
