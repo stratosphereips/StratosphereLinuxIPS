@@ -178,14 +178,14 @@ Before building the docker locally from the Dockerfile, first you should clone S
 If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker image with:
 
 	cd ~/StratosphereLinuxIPS
-	docker build --no-cache -t slips -f docker/Dockerfile .
+	docker build --target amd --no-cache -t slips -f docker/Dockerfile .
 	docker run -it --rm --net=host slips
 	./slips.py -c config/slips.yaml -f dataset/test3-mixed.binetflow
 
 If you don't have Internet connection from inside your Docker image while building, you may have another set of networks
 defined in your Docker. For that try:
 
-	docker build --network=host --no-cache -t slips -f docker/Dockerfile .
+	docker build --target amd --network=host --no-cache -t slips -f docker/Dockerfile .
 
 You can also put your own files in the /dataset/ folder and analyze them with Slips:
 
@@ -207,7 +207,7 @@ Slips depends on three major elements:
 
 - Python 3.10.12
 - Zeek 8.0.0
-- Redis database v8 
+- Redis database v8
 
 
 To install these elements, the script will use the APT package manager. After that, it will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node JS and several npm packages.
