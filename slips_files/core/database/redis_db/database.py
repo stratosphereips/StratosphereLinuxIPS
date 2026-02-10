@@ -329,7 +329,7 @@ class RedisDB(
             host=LOCALHOST,
             port=port,
             db=db,
-            charset="utf-8",
+            encoding="utf-8",
             socket_keepalive=True,
             decode_responses=True,
             retry_on_timeout=True,
