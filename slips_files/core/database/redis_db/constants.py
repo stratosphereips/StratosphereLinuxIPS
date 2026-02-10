@@ -109,6 +109,7 @@ class Constants:
     FIDES_CACHE_CREATED_SECONDS = "created_seconds"
     #     # @@@@@@@@@@@@@@@@@@@@@@@@
     FLOWS_PER_MINUTE = "flows_per_minute"
+    FLOWS_PER_MINUTE_MODULES = "flows_per_minute_modules"
     FLOWS_PER_MINUTE_LAST_LOGGED = "flows_per_minute_last_logged"
     FLOWS_PER_MINUTE_LOG_LOCK = "flows_per_minute_log_lock"
 
