@@ -969,6 +969,8 @@ class Input(ICore):
         # when the queue is full, it blocks forever until a free slot is
         # available
         self.profiler_queue.put(to_send, block=True, timeout=None)
+        # @@@@@@@@@@@@@@@@@@@@@@@@@@@
+        self.db.record_flow_per_minute("input")
 
     def main(self):
         if self.is_running_non_stop:

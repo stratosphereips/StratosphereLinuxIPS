@@ -1,13 +1,16 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import csv
 import json
 import os
 import shutil
 import sqlite3
+import time
 from pathlib import Path
 from typing import (
-    List,
     Dict,
+    List,
+    Optional,
 )
 
 
@@ -296,6 +299,61 @@ class DBManager:
 
     def get_module_flows_per_second(self, *args, **kwargs):
         return self.rdb.get_module_flows_per_second(*args, **kwargs)
+
+    # @@@@@@@@@@@@@@@@@@@@@@@@
+    def record_flow_per_minute(self, module: str, now: Optional[float] = None):
+        now = time.time() if now is None else now
+        minute_ts = int(now // 60) * 60
+        self.rdb.increment_flows_per_minute(module, minute_ts)
+        if (
+            not hasattr(self, "_last_flows_per_minute_bucket")
+            or self._last_flows_per_minute_bucket != minute_ts
+        ):
+            self._last_flows_per_minute_bucket = minute_ts
+            self._maybe_log_flows_per_minute(minute_ts)
+
+    def _maybe_log_flows_per_minute(self, minute_ts: int):
+        if not self.rdb.try_acquire_flows_per_minute_log_lock():
+            return
+
+        try:
+            last_logged = self.rdb.get_last_logged_flows_per_minute()
+            if last_logged is None:
+                # Start tracking from the minute before the first flow.
+                self.rdb.set_last_logged_flows_per_minute(minute_ts - 60)
+                return
+
+            last_complete_minute = minute_ts - 60
+            if last_complete_minute <= last_logged:
+                return
+
+            for ts in range(last_logged + 60, last_complete_minute + 1, 60):
+                input_count = self.rdb.get_flows_per_minute("input", ts)
+                profiler_count = self.rdb.get_flows_per_minute("profiler", ts)
+                self._append_flows_per_minute_row(
+                    ts, input_count, profiler_count
+                )
+                self.rdb.set_last_logged_flows_per_minute(ts)
+        finally:
+            self.rdb.release_flows_per_minute_log_lock()
+
+    def _append_flows_per_minute_row(
+        self, ts: int, input_count: int, profiler_count: int
+    ):
+        output_dir = self.get_output_dir() or self.output_dir
+        os.makedirs(output_dir, exist_ok=True)
+        csv_path = os.path.join(output_dir, "flows_per_minute.csv")
+        write_header = (
+            not os.path.exists(csv_path) or os.path.getsize(csv_path) == 0
+        )
+
+        with open(csv_path, "a", newline="") as handle:
+            writer = csv.writer(handle)
+            if write_header:
+                writer.writerow(
+                    ["ts", "input_flows_per_min", "profiler_flows_per_min"]
+                )
+            writer.writerow([ts, input_count, profiler_count])
 
     def get_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.get_accumulated_threat_level(*args, **kwargs)

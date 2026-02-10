@@ -50,13 +50,15 @@ class ICore(IModule, Process):
         if not self.did_five_mins_pass_since_last_fps_check():
             return
 
-        now = time.time()
-        flows_now = self.lines
-
         # delta since last check
+        flows_now = self.lines
         flows_delta = flows_now - self.last_flows_count
+
+        # time in seconds since last check
+        now = time.time()
         time_delta = now - self.last_fps_check_time
 
+        # flows_per_min = int(flows_delta / (time_delta / 60))
         flows_per_sec = int(flows_delta / time_delta)
 
         self.db.store_module_flows_per_second(self.name, flows_per_sec)
