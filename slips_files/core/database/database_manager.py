@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from typing import (
     Dict,
+    Iterable,
     List,
     Optional,
 )
@@ -305,6 +306,7 @@ class DBManager:
         now = time.time() if now is None else now
         minute_ts = int(now // 60) * 60
         self.rdb.increment_flows_per_minute(module, minute_ts)
+        self.rdb.record_flows_per_minute_module(module)
         if (
             not hasattr(self, "_last_flows_per_minute_bucket")
             or self._last_flows_per_minute_bucket != minute_ts
@@ -327,33 +329,171 @@ class DBManager:
             if last_complete_minute <= last_logged:
                 return
 
+            modules = self.rdb.get_flows_per_minute_modules()
+            profiler_modules = sorted(
+                module
+                for module in modules
+                if self._is_profiler_module(module)
+            )
             for ts in range(last_logged + 60, last_complete_minute + 1, 60):
                 input_count = self.rdb.get_flows_per_minute("input", ts)
-                profiler_count = self.rdb.get_flows_per_minute("profiler", ts)
+                profiler_counts = {
+                    module: self.rdb.get_flows_per_minute(module, ts)
+                    for module in profiler_modules
+                }
                 self._append_flows_per_minute_row(
-                    ts, input_count, profiler_count
+                    ts, input_count, profiler_counts
                 )
                 self.rdb.set_last_logged_flows_per_minute(ts)
         finally:
             self.rdb.release_flows_per_minute_log_lock()
 
     def _append_flows_per_minute_row(
-        self, ts: int, input_count: int, profiler_count: int
+        self, ts: int, input_count: int, profiler_counts: Dict[str, int]
     ):
         output_dir = self.get_output_dir() or self.output_dir
         os.makedirs(output_dir, exist_ok=True)
         csv_path = os.path.join(output_dir, "flows_per_minute.csv")
-        write_header = (
-            not os.path.exists(csv_path) or os.path.getsize(csv_path) == 0
-        )
+        profiler_columns = self._get_profiler_columns(profiler_counts.keys())
+        desired_header = ["ts", "input_flows_per_min"] + profiler_columns
+        header = self._ensure_flows_per_minute_header(csv_path, desired_header)
 
         with open(csv_path, "a", newline="") as handle:
             writer = csv.writer(handle)
-            if write_header:
+            if os.path.getsize(csv_path) == 0:
+                writer.writerow(header)
+            row = self._build_flows_per_minute_row(
+                ts, input_count, profiler_counts, header
+            )
+            writer.writerow(row)
+
+    def _is_profiler_module(self, module: str) -> bool:
+        module_lower = module.lower()
+        return module_lower.startswith("profiler")
+
+    def _get_profiler_columns(self, modules: Iterable[str]) -> List[str]:
+        columns = []
+        for module in modules:
+            column = self._profiler_column_for_module(module)
+            if column:
+                columns.append(column)
+        return self._sort_profiler_columns(columns)
+
+    def _profiler_column_for_module(self, module: str) -> Optional[str]:
+        module_lower = module.lower()
+        if module_lower == "profiler":
+            return "profiler_flows_per_min"
+        prefix_map = (
+            "profilerworker_process_",
+            "profilerworker_",
+            "profiler_worker_",
+            "profiler_",
+        )
+        for prefix in prefix_map:
+            if module_lower.startswith(prefix):
+                suffix = module_lower.split(prefix, 1)[1]
+                if not suffix:
+                    return "profiler_flows_per_min"
+                return f"profiler_flows_per_min_worker{suffix}"
+        return None
+
+    def _sort_profiler_columns(self, columns: List[str]) -> List[str]:
+        unique_columns = list(dict.fromkeys(columns))
+        worker_prefix = "profiler_flows_per_min_worker"
+
+        def sort_key(name: str):
+            if name == "profiler_flows_per_min":
+                return (0, -1, "")
+            if name.startswith(worker_prefix):
+                suffix = name[len(worker_prefix) :]
+                if suffix.isdigit():
+                    return (0, int(suffix), "")
+                return (1, 0, suffix)
+            return (2, 0, name)
+
+        return sorted(unique_columns, key=sort_key)
+
+    def _ensure_flows_per_minute_header(
+        self, csv_path: str, desired_header: List[str]
+    ) -> List[str]:
+        if not os.path.exists(csv_path) or os.path.getsize(csv_path) == 0:
+            return desired_header
+
+        with open(csv_path, newline="") as handle:
+            reader = csv.reader(handle)
+            existing_header = next(reader, [])
+
+        if not existing_header:
+            return desired_header
+
+        if existing_header == desired_header:
+            return existing_header
+
+        merged_header = self._merge_flows_per_minute_headers(
+            existing_header, desired_header
+        )
+        if merged_header != existing_header:
+            self._rewrite_flows_per_minute_csv(
+                csv_path, existing_header, merged_header
+            )
+        return merged_header
+
+    def _merge_flows_per_minute_headers(
+        self, existing_header: List[str], desired_header: List[str]
+    ) -> List[str]:
+        base_columns = ["ts", "input_flows_per_min"]
+        profiler_columns = self._sort_profiler_columns(
+            [
+                column
+                for column in existing_header + desired_header
+                if column.startswith("profiler_flows_per_min")
+            ]
+        )
+        other_columns = [
+            column
+            for column in existing_header + desired_header
+            if column not in base_columns and column not in profiler_columns
+        ]
+        other_columns = list(dict.fromkeys(other_columns))
+        return base_columns + profiler_columns + other_columns
+
+    def _rewrite_flows_per_minute_csv(
+        self, csv_path: str, old_header: List[str], new_header: List[str]
+    ):
+        tmp_path = f"{csv_path}.tmp"
+        with open(csv_path, newline="") as handle, open(
+            tmp_path, "w", newline=""
+        ) as out_handle:
+            reader = csv.reader(handle)
+            writer = csv.writer(out_handle)
+            next(reader, None)
+            writer.writerow(new_header)
+            for row in reader:
+                row_map = {
+                    old_header[idx]: row[idx]
+                    for idx in range(min(len(old_header), len(row)))
+                }
                 writer.writerow(
-                    ["ts", "input_flows_per_min", "profiler_flows_per_min"]
+                    [row_map.get(column, "0") for column in new_header]
                 )
-            writer.writerow([ts, input_count, profiler_count])
+        os.replace(tmp_path, csv_path)
+
+    def _build_flows_per_minute_row(
+        self,
+        ts: int,
+        input_count: int,
+        profiler_counts: Dict[str, int],
+        header: List[str],
+    ) -> List[int]:
+        row_map: Dict[str, int] = {
+            "ts": ts,
+            "input_flows_per_min": input_count,
+        }
+        for module, count in profiler_counts.items():
+            column = self._profiler_column_for_module(module)
+            if column:
+                row_map[column] = count
+        return [row_map.get(column, 0) for column in header]
 
     def get_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.get_accumulated_threat_level(*args, **kwargs)

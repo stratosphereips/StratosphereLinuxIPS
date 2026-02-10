@@ -1384,6 +1384,14 @@ class RedisDB(
         return int(value) if value else 0
 
     # @@@@@@@@@@@@@@@@@@@@@@@@
+    def record_flows_per_minute_module(self, module: str):
+        self.r.sadd(self.constants.FLOWS_PER_MINUTE_MODULES, module)
+
+    # @@@@@@@@@@@@@@@@@@@@@@@@
+    def get_flows_per_minute_modules(self) -> List[str]:
+        return list(self.r.smembers(self.constants.FLOWS_PER_MINUTE_MODULES))
+
+    # @@@@@@@@@@@@@@@@@@@@@@@@
     def get_last_logged_flows_per_minute(self) -> Optional[int]:
         value = self.r.get(self.constants.FLOWS_PER_MINUTE_LAST_LOGGED)
         return int(value) if value is not None else None
