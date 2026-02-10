@@ -80,7 +80,6 @@ ENV PATH="$PATH:/StratosphereLinuxIPS/p2p4slips/"
 
 WORKDIR ${SLIPS_DIR}
 
-
 CMD /bin/bash
 
 # ARM image: build redis with libc malloc
@@ -93,6 +92,7 @@ RUN curl -O https://download.redis.io/redis-stable.tar.gz \
     && make MALLOC=libc
 
 ENV PATH="$PATH:/redis-stable/src"
+WORKDIR ${SLIPS_DIR}
 
 
 # AMD image: build redis with jemalloc
@@ -106,3 +106,4 @@ RUN curl -O https://download.redis.io/redis-stable.tar.gz \
 
 
 ENV PATH="$PATH:/redis-stable/src"
+WORKDIR ${SLIPS_DIR}
