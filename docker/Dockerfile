@@ -102,7 +102,7 @@ RUN curl -O https://download.redis.io/redis-stable.tar.gz \
     && tar xzf redis-stable.tar.gz \
     && cd redis-stable \
     && make distclean \
-    && make MALLOC=jemalloc \
+    && make MALLOC=jemalloc
 
 
 ENV PATH="$PATH:/redis-stable/src"
