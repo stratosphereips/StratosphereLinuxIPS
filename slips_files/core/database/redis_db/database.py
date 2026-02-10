@@ -370,7 +370,7 @@ class RedisDB(
         # normally; if it fails, an exception will be thrown
 
         return redis.StrictRedis(
-            host="localhost",
+            host=LOCALHOST,
             port=port,
             db=db,
             charset="utf-8",
