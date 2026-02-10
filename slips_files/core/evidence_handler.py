@@ -183,6 +183,7 @@ class EvidenceHandler(ICore):
                     )
                 }
             )
+            self.add_latency_to_csv(idmef_evidence)
 
             to_log = {
                 "to_log": idmef_evidence,
@@ -195,6 +196,30 @@ class EvidenceHandler(ICore):
             return True
         except Exception as e:
             self.handle_unable_to_log(evidence, e)
+
+    def add_latency_to_csv(self, idmef_evidence: dict):
+        start_time = idmef_evidence.get("StartTime")
+        create_time = idmef_evidence.get("CreateTime")
+        evidence_id = idmef_evidence.get("ID")
+        if not (start_time and create_time and evidence_id):
+            return
+
+        try:
+            start_unix = utils.convert_ts_format(start_time, "unixtimestamp")
+            create_unix = utils.convert_ts_format(create_time, "unixtimestamp")
+            latency = create_unix - start_unix
+        except Exception:
+            return
+
+        to_log = {
+            "to_log": {
+                "ts": create_unix,
+                "evidence_id": evidence_id,
+                "latency": latency,
+            },
+            "where": "latency.csv",
+        }
+        self.evidence_logger_q.put(to_log)
 
     def add_to_log_file(self, data: str):
         """
@@ -566,7 +591,7 @@ class EvidenceHandler(ICore):
                         f"{self.whitelist.get_bloom_filters_stats()}", 2, 0
                     )
                     continue
-
+                # here @@@@@@@@@@@@@@@@@@@@@
                 # convert time to local timezone
                 if self.is_running_non_stop:
                     timestamp: datetime = utils.convert_to_local_timezone(

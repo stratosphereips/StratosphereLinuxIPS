@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 import queue
@@ -26,6 +27,14 @@ class EvidenceLogger:
         # clear output/alerts.json
         self.jsonfile = self.clean_file(self.output_dir, "alerts.json")
         utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
+        # clear output/latency.csv
+        self.latencyfile = self.clean_file(self.output_dir, "latency.csv")
+        utils.change_logfiles_ownership(
+            self.latencyfile.name, self.UID, self.GID
+        )
+        self.latency_writer = csv.writer(self.latencyfile)
+        self.latency_writer.writerow(["ts", "evidence_id", "latency"])
+        self.latencyfile.flush()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -68,6 +77,18 @@ class EvidenceLogger:
         except Exception:
             return
 
+    def print_to_latency_csv(self, row: dict):
+        try:
+            self.latency_writer.writerow(
+                [row["ts"], row["evidence_id"], row["latency"]]
+            )
+            self.latencyfile.flush()  # flush Python buffer
+            os.fsync(self.latencyfile.fileno())  # flush OS buffer
+        except KeyboardInterrupt:
+            return True
+        except Exception:
+            return
+
     def run_logger_thread(self):
         """
         runs forever in a loop reveiving msgs from evidence_handler and
@@ -91,9 +112,12 @@ class EvidenceLogger:
 
             elif destination == "alerts.json":
                 self.print_to_alerts_json(msg["to_log"])
+            elif destination == "latency.csv":
+                self.print_to_latency_csv(msg["to_log"])
 
         self.shutdown_gracefully()
 
     def shutdown_gracefully(self):
         self.logfile.close()
         self.jsonfile.close()
+        self.latencyfile.close()
