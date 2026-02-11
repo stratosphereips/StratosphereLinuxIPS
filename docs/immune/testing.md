@@ -135,6 +135,8 @@ The number we're interested in here is:
 **oom_kill 5**.
 (5 processes were killed by the kernel’s OOM killer in this cgroup)
 
+More about the redis RAM issues [here](https://github.com/stratosphereips/StratosphereLinuxIPS/issues/1782)
+
 And this is how we discovered that Slips has RAM-related issues and discovered the two offending children of slips, the input process and the profiler process.
 
 
