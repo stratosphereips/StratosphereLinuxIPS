@@ -95,10 +95,18 @@ class AlertHandler:
         return str(evidence_type) in self.disabled_detections
 
     def set_flow_causing_evidence(self, uids: list, evidence_id):
+        """
+        Used to be able to add the "malicious" tag to the flows that caused
+        an evidence in the sqlite db once an alert is generated
+        """
         self.r.hset(
             self.constants.FLOWS_CAUSING_EVIDENCE,
             evidence_id,
             json.dumps(uids),
+        )
+        # expire if no TTL
+        self.r.expire(
+            self.constants.FLOWS_CAUSING_EVIDENCE, self.default_ttl, nx=True
         )
 
     def get_flows_causing_evidence(self, evidence_id) -> list:
