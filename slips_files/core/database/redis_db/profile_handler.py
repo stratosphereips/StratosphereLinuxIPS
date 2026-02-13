@@ -1053,8 +1053,6 @@ class ProfileHandler:
 
         sit = float(self.get_slips_internal_time())
 
-        # early exit to avoid re-checking when nothing changed. Remember
-        # this func is called per flow, so it needs to be as fast as possible
         if (
             not close_all
             and hasattr(self, "_last_sit")
@@ -1090,7 +1088,7 @@ class ProfileHandler:
             )
             if not close_all:
                 # if slips isn't stopping, then do regular
-                # cleanup of the past
+                # cleanup/expiring of the past
                 pipe = self._delete_past_timewindows(profile_tw_to_close, pipe)
         pipe.execute()
 
@@ -1107,11 +1105,14 @@ class ProfileHandler:
 
     def _delete_past_timewindows(self, closed_profile_tw: str, pipe):
         """
-        Deletes the past timewindows data from redis, starting from the
-        given tw-1, so that redis only has info about the current
-        timewindow and the one before it
+        Does cleanup of old timewindows data in redis.
+        This is called when there's a tw that needs to be closed.
 
-        Deleted keys are the ones following the format
+        Deletes the past timewindows data from redis, starting from the
+        given tw-2 inclusive, so that redis only has info about the current
+        timewindow and the one before it and deletes the rest.
+
+        Deleted keys follow the format:
         profileid_timewindowX (aka keys needed for the portscan module only)
 
         why do we keep 2 tws instead of the current one in redis? see PR
@@ -1130,35 +1131,13 @@ class ProfileHandler:
             return pipe
 
         if closed_tw < 2:
-            # slips needs to always remember 2 tws, now tws to delete now
+            # slips needs to always remember 2 tws, so no tws to delete now.
             return pipe
 
-        current_timewindow: Optional[str] = self.get_current_timewindow()
-        if current_timewindow:
-            current_timewindow = int(
-                current_timewindow.replace("timewindow", "")
-            )
-            # Zeek flows don't arrive in chronological order. this is to
-            # make sure that we never close incorrect tws when a zeek flow
-            # too far in the past or too far in the future is found.
-            tws_to_close = current_timewindow - 2
-        else:
-            tws_to_close = closed_tw - 2
-
         profileid = f"{profile}_{ip}"
-        # to avoid deleting so many keys at once which causes mem spikes
-        BATCH = 500
-        for tw_to_close in range(tws_to_close, -1, -1):
-            for i, key in enumerate(
-                self.r.scan_iter(
-                    match=f"{profileid}_timewindow{tw_to_close}", count=1000
-                )
-            ):
-                pipe.unlink(key)
-
-                if i % BATCH == 0:
-                    pipe.execute()
-                    pipe = self.r.pipeline()
+        # if tw 3 is closed, we want to keep tw 2 and tw 1, and del tw 0
+        tw_to_del = closed_tw - 2
+        pipe.unlink(f"{profileid}_timewindow{tw_to_del}")
 
         return pipe
 
