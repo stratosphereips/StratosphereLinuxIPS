@@ -250,9 +250,6 @@ class DBManager:
     def get_slips_internal_time(self, *args, **kwargs):
         return self.rdb.get_slips_internal_time(*args, **kwargs)
 
-    def mark_profile_as_malicious(self, *args, **kwargs):
-        return self.rdb.mark_profile_as_malicious(*args, **kwargs)
-
     def get_malicious_profiles(self, *args, **kwargs):
         return self.sqlite.get_malicious_profiles(*args, **kwargs)
 

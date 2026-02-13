@@ -18,7 +18,6 @@ from slips_files.core.structures.evidence import (
     Evidence,
     EvidenceType,
     Victim,
-    ProfileID,
     IoCType,
     Attacker,
 )
@@ -31,10 +30,6 @@ class AlertHandler:
     """
 
     name = "DB"
-
-    def mark_profile_as_malicious(self, profileid: ProfileID):
-        """keeps track of profiles that generated an alert"""
-        self.r.sadd(self.constants.MALICIOUS_PROFILES, str(profileid))
 
     def set_evidence_causing_alert(self, alert: Alert):
         """
@@ -263,7 +258,6 @@ class AlertHandler:
         self.set_evidence_causing_alert(alert)
         # reset the accumulated threat level now that an alert is generated
         self._set_accumulated_threat_level(alert, 0)
-        self.mark_profile_as_malicious(alert.profile)
         self.publish(self.channels.NEW_ALERT, json.dumps(alert_to_dict(alert)))
 
     def init_evidence_number(self):

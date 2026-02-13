@@ -73,18 +73,6 @@ def test_remove_whitelisted_evidence(
     assert result == expected_result
 
 
-def test_mark_profile_as_malicious():
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-
-    profile_id = "profile123"
-    alert_handler.mark_profile_as_malicious(profile_id)
-
-    alert_handler.r.sadd.assert_called_once_with(
-        "malicious_profiles", profile_id
-    )
-
-
 @pytest.mark.parametrize(
     "profile_ip, twid, alert_id, evidence_ids, "
     "expected_old_alerts, expected_new_alerts",
