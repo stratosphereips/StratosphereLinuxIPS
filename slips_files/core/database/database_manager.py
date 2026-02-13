@@ -254,7 +254,7 @@ class DBManager:
         return self.rdb.mark_profile_as_malicious(*args, **kwargs)
 
     def get_malicious_profiles(self, *args, **kwargs):
-        return self.rdb.get_malicious_profiles(*args, **kwargs)
+        return self.sqlite.get_malicious_profiles(*args, **kwargs)
 
     def get_asn_info(self, *args, **kwargs):
         return self.rdb.get_asn_info(*args, **kwargs)
