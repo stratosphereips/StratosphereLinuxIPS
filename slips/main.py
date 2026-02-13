@@ -696,7 +696,7 @@ class Main:
                 self.db.check_tw_to_close()
                 self.db.ping()
                 # @@@@@@@@@@@@@@@@@@@@@
-                self.db.log_stats()
+                # self.db.monitor_connections()
 
                 modified_profiles: Set[str] = (
                     self.metadata_man.update_slips_stats_in_the_db()[1]

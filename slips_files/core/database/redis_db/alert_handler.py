@@ -32,21 +32,6 @@ class AlertHandler:
 
     name = "DB"
 
-    def increment_attack_counter(
-        self, attacker: str, victim: Optional[Victim], evidence_type: str
-    ):
-        """
-        increments the value of the hash profile_attacker_evidence_summary
-        of the given victim
-        :param attacker: is a profileid
-        :param victim: IP of a victim
-        :param evidence_type: e.g. MaliciousJA3, DataExfiltration, etc.
-        """
-        victim = "" if not victim else victim
-        self.r.hincrby(
-            f"{attacker}_evidence_summary", f"{victim}_{evidence_type}", 1
-        )
-
     def mark_profile_as_malicious(self, profileid: ProfileID):
         """keeps track of profiles that generated an alert"""
         self.r.sadd(self.constants.MALICIOUS_PROFILES, str(profileid))

@@ -227,7 +227,7 @@ class DBManager:
         return self.rdb.is_known_fp_md5_hash(*args, **kwargs)
 
     # @@@@@@@@@@@@@@@@@@@@
-    def log_stats(self, *args, **kwargs):
+    def monitor_connections(self, *args, **kwargs):
         return self.rdb.monitor_connections(*args, **kwargs)
 
     def set_ap_info(self, *args, **kwargs):
@@ -1216,9 +1216,6 @@ class DBManager:
 
     def get_redis_pid(self, *args, **kwargs):
         return self.rdb.get_redis_pid(*args, **kwargs)
-
-    def increment_attack_counter(self, *args, **kwargs):
-        return self.rdb.increment_attack_counter(*args, **kwargs)
 
     def export_labeled_flows(self, *args, **kwargs):
         """

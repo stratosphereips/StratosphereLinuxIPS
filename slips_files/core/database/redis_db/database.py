@@ -166,7 +166,6 @@ class RedisDB(
             super().__init__(cls)
 
         elif cls.redis_port not in cls._instances and not cls.args.killall:
-            cls._set_redis_options()
             cls._read_configuration()
             # @@@@@@@@@@@@@@@@@@@@@@@@@@
             file = os.path.join(cls.output_dir, "r_conn_stats.log")
@@ -196,9 +195,12 @@ class RedisDB(
     def __init__(self, *args, **kwargs):
         self.call_mixins_setup()
         self.set_new_incoming_flows(True)
+        # default ttl is 2 tws. anything before that should be deleted from
+        # the db to save memory
+        self.default_ttl = 2 * self.conf.get_tw_width_in_seconds()
 
     def call_mixins_setup(self):
-        # call setup() on all mixins
+        """calls setup() on all mixins"""
         for cls in type(self).__mro__:
             setup = getattr(cls, "setup", None)
             if callable(setup):

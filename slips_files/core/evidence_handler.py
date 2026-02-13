@@ -46,8 +46,6 @@ from slips_files.common.abstracts.icore import ICore
 from slips_files.core.structures.evidence import (
     dict_to_evidence,
     Evidence,
-    Victim,
-    EvidenceType,
     TimeWindow,
 )
 from slips_files.core.structures.alerts import (
@@ -472,22 +470,6 @@ class EvidenceHandler(ICore):
         self.db.publish("new_blocking", blocking_data)
         return True
 
-    def increment_attack_counter(
-        self,
-        attacker: str,
-        victim: Optional[Victim],
-        evidence_type: EvidenceType,
-    ):
-        """
-        increments the number of attacks of this type from the given
-        attacker-> the given victim
-        used for displaying alert summary
-        """
-        # this method is here instead of the db bc here we check
-        # if the evidence is whitelisted, alerted before, etc. before we
-        # consider it as  valid evidence. this filtering is not done in the db
-        self.db.increment_attack_counter(attacker, victim, evidence_type.name)
-
     def update_accumulated_threat_level(self, evidence: Evidence) -> float:
         """
         update the accumulated threat level of the profileid and twid of
@@ -544,7 +526,6 @@ class EvidenceHandler(ICore):
                     continue
                 profileid: str = str(evidence.profile)
                 twid: str = str(evidence.timewindow)
-                evidence_type: EvidenceType = evidence.evidence_type
                 timestamp: str = evidence.timestamp
 
                 # the database naturally has evidence before they reach
@@ -586,10 +567,6 @@ class EvidenceHandler(ICore):
                 )
                 # Add the evidence to alerts.log
                 self.add_to_log_file(evidence_to_log)
-
-                self.increment_attack_counter(
-                    evidence.profile.ip, evidence.victim, evidence_type
-                )
 
                 past_evidence_ids: List[str] = (
                     self.get_evidence_that_were_part_of_a_past_alert(

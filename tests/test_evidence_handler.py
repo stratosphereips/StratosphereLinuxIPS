@@ -10,7 +10,6 @@ from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
     EvidenceType,
-    Victim,
     TimeWindow,
     Attacker,
     IoCType,
@@ -249,40 +248,6 @@ def test_show_popup():
     evidence_handler.notify.show_popup.assert_called_once_with(
         "alert_time_desc"
     )
-
-
-@pytest.mark.parametrize(
-    "attacker, victim, evidence_type",
-    [
-        # testcase1: Basic case
-        (
-            "192.168.1.100",
-            Victim(direction="DST", ioc_type=IoCType.IP, value="10.0.0.1"),
-            EvidenceType.ARP_SCAN,
-        ),
-        # testcase2: Different IP and evidence type
-        (
-            "10.0.0.100",
-            Victim(
-                direction="DST",
-                ioc_type=IoCType.DOMAIN,
-                value="example.com",
-            ),
-            EvidenceType.DNS_WITHOUT_CONNECTION,
-        ),
-    ],
-)
-def test_increment_attack_counter(attacker, victim, evidence_type):
-    evidence_handler = ModuleFactory().create_evidence_handler_obj()
-    with patch.object(
-        evidence_handler.db, "increment_attack_counter"
-    ) as mock_increment:
-        evidence_handler.increment_attack_counter(
-            attacker, victim, evidence_type
-        )
-        mock_increment.assert_called_once_with(
-            attacker, victim, evidence_type.name
-        )
 
 
 def test_send_to_exporting_module():
