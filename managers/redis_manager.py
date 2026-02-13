@@ -5,6 +5,7 @@ import shutil
 import redis
 import os
 import socket
+import time
 import subprocess
 from typing import Dict, Union
 
@@ -110,7 +111,8 @@ class RedisManager:
         return self.end_port
 
     def start_redis_cache_if_not_running(
-        self, redis_port=DEFAULT_REDIS_PORT) -> bool:
+        self, redis_port=DEFAULT_REDIS_PORT
+    ) -> bool:
         """
         Check if we have redis-server running (this is the cache db it should
         always be running) adn start it if not running.
