@@ -6,7 +6,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, Optional, Set
+from typing import Dict, Optional, Set, List
 
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.flow_classifier import FlowClassifier
@@ -58,6 +58,7 @@ class HostState:
     trained_hours: int = 0
     hourly_models: Dict[str, EWMAStats] = field(default_factory=dict)
     server_bytes_models: Dict[str, EWMAStats] = field(default_factory=dict)
+    anomaly_history_ts: List[float] = field(default_factory=list)
 
 
 class AnomalyDetectionHTTPS(IModule):
@@ -70,8 +71,7 @@ class AnomalyDetectionHTTPS(IModule):
 
     def init(self):
         self.c1 = self.db.subscribe("new_ssl")
-        self.c2 = self.db.subscribe("new_flow")
-        self.channels = {"new_ssl": self.c1, "new_flow": self.c2}
+        self.channels = {"new_ssl": self.c1}
         self.classifier = FlowClassifier()
         self.read_configuration()
         self.operational_log_path = os.path.join(
@@ -79,9 +79,6 @@ class AnomalyDetectionHTTPS(IModule):
         )
 
         self.host_states: Dict[str, HostState] = {}
-        self.conn_cache: Dict[str, dict] = {}
-        self.pending_ssl_by_uid: Dict[str, dict] = {}
-        self.last_cache_cleanup_ts = time.time()
         self.log_event(
             1,
             "module_start",
@@ -251,12 +248,75 @@ class AnomalyDetectionHTTPS(IModule):
     def should_detect(self, state: HostState) -> bool:
         return state.trained_hours >= self.training_hours
 
-    def get_detection_confidence(self) -> str:
-        # If the user disables warmup (training_hours=0), detections are
-        # unsupervised from the beginning and should be treated with caution.
-        if self.training_hours == 0:
-            return "low"
-        return "high"
+    def prune_anomaly_history(self, state: HostState, now_ts: float):
+        one_day = 24 * 3600
+        state.anomaly_history_ts = [
+            ts for ts in state.anomaly_history_ts if now_ts - ts <= one_day
+        ]
+
+    def get_persistence(self, state: HostState, now_ts: float) -> float:
+        self.prune_anomaly_history(state, now_ts)
+        window = 3 * 3600
+        recent = [
+            ts for ts in state.anomaly_history_ts if now_ts - ts <= window
+        ]
+        return min(1.0, len(recent) / 3.0)
+
+    def get_baseline_quality(self, baseline_count: int) -> float:
+        stable_points = max(10, self.min_baseline_points * 3)
+        return min(1.0, max(0, baseline_count) / float(stable_points))
+
+    @staticmethod
+    def get_confidence_level(score: float) -> str:
+        if score >= 0.80:
+            return "high"
+        if score >= 0.55:
+            return "medium"
+        return "low"
+
+    def get_host_baseline_count(self, state: HostState) -> int:
+        counts = [model.count for model in state.hourly_models.values()]
+        if not counts:
+            return 0
+        return min(counts)
+
+    def score_confidence(
+        self,
+        state: HostState,
+        ts: float,
+        reasons: List[dict],
+        baseline_count: int,
+    ) -> Dict[str, float | str]:
+        zscores = []
+        for reason in reasons:
+            if "zscore" in reason:
+                zscores.append(self.to_float(reason["zscore"], 0.0))
+            else:
+                # novelty-style anomalies still carry anomaly weight
+                zscores.append(2.0)
+
+        max_z = max(zscores) if zscores else 0.0
+        severity = 1.0 - math.exp(-max_z / 3.0)
+        persistence = self.get_persistence(state, ts)
+        baseline_quality = self.get_baseline_quality(baseline_count)
+        multi_signal = min(1.0, len(reasons) / 3.0)
+
+        score = (
+            0.45 * severity
+            + 0.25 * persistence
+            + 0.20 * baseline_quality
+            + 0.10 * multi_signal
+        )
+        score = min(1.0, max(0.0, score))
+        return {
+            "score": round(score, 4),
+            "level": self.get_confidence_level(score),
+            "severity": round(severity, 4),
+            "persistence": round(persistence, 4),
+            "baseline_quality": round(baseline_quality, 4),
+            "multi_signal": round(multi_signal, 4),
+            "max_z": round(max_z, 4),
+        }
 
     def score_feature(self, model: EWMAStats, value: float) -> float:
         if model.count < self.min_baseline_points:
@@ -320,6 +380,16 @@ class AnomalyDetectionHTTPS(IModule):
                     hourly_score += z
 
             if hourly_anomalies:
+                state.anomaly_history_ts.append(bucket.start_ts)
+                confidence = self.score_confidence(
+                    state=state,
+                    ts=bucket.start_ts,
+                    reasons=hourly_anomalies,
+                    baseline_count=min(
+                        self.get_or_create_hourly_model(state, fname).count
+                        for fname in features
+                    ),
+                )
                 self.log_event(
                     1,
                     "hourly_detection",
@@ -327,7 +397,15 @@ class AnomalyDetectionHTTPS(IModule):
                     traffic_ts=bucket.start_ts,
                     metrics={
                         "profileid": profileid,
-                        "confidence": self.get_detection_confidence(),
+                        "confidence": confidence["level"],
+                        "confidence_score": confidence["score"],
+                        "confidence_factors": {
+                            "severity": confidence["severity"],
+                            "persistence": confidence["persistence"],
+                            "baseline_quality": confidence["baseline_quality"],
+                            "multi_signal": confidence["multi_signal"],
+                            "max_z": confidence["max_z"],
+                        },
                         "hour_start": bucket.start_ts,
                         "anomaly_score": round(hourly_score, 3),
                         "flow_anomaly_count": bucket.flow_anomaly_count,
@@ -407,24 +485,6 @@ class AnomalyDetectionHTTPS(IModule):
             )
 
         state.bucket = None
-
-    def clean_old_conn_cache(self):
-        now = time.time()
-        if now - self.last_cache_cleanup_ts < 30:
-            return
-        self.last_cache_cleanup_ts = now
-
-        max_age = 300
-        self.conn_cache = {
-            uid: data
-            for uid, data in self.conn_cache.items()
-            if now - data["cache_ts"] <= max_age
-        }
-        self.pending_ssl_by_uid = {
-            uid: data
-            for uid, data in self.pending_ssl_by_uid.items()
-            if now - data["cache_ts"] <= max_age
-        }
 
     def process_ssl_event(self, profileid: str, ssl_flow, conn_info: dict):
         ts = self.get_traffic_ts(
@@ -510,6 +570,19 @@ class AnomalyDetectionHTTPS(IModule):
 
         if flow_anomalies:
             bucket.flow_anomaly_count += 1
+            state.anomaly_history_ts.append(ts)
+            baseline_count = self.get_host_baseline_count(state)
+            if bytes_total is not None:
+                baseline_count = max(
+                    baseline_count,
+                    self.get_or_create_server_model(state, server).count,
+                )
+            confidence = self.score_confidence(
+                state=state,
+                ts=ts,
+                reasons=flow_anomalies,
+                baseline_count=baseline_count,
+            )
             self.log_event(
                 1,
                 "flow_detection",
@@ -517,7 +590,15 @@ class AnomalyDetectionHTTPS(IModule):
                 traffic_ts=ts,
                 metrics={
                     "profileid": profileid,
-                    "confidence": self.get_detection_confidence(),
+                    "confidence": confidence["level"],
+                    "confidence_score": confidence["score"],
+                    "confidence_factors": {
+                        "severity": confidence["severity"],
+                        "persistence": confidence["persistence"],
+                        "baseline_quality": confidence["baseline_quality"],
+                        "multi_signal": confidence["multi_signal"],
+                        "max_z": confidence["max_z"],
+                    },
                     "uid": uid,
                     "server": server,
                     "flow_anomalies": flow_anomalies,
@@ -560,66 +641,33 @@ class AnomalyDetectionHTTPS(IModule):
         profileid = payload.get("profileid", "")
         ssl_flow = self.classifier.convert_to_flow_obj(payload["flow"])
 
+        conn_flow = None
         uid = getattr(ssl_flow, "uid", "")
-        if not uid:
-            self.process_ssl_event(profileid, ssl_flow, {})
-            return
+        if uid:
+            try:
+                conn_flow = utils.get_original_conn_flow(ssl_flow, self.db)
+            except (StopIteration, TypeError, KeyError, json.JSONDecodeError):
+                conn_flow = None
+            if conn_flow:
+                self.log_event(
+                    3,
+                    "flow_arrival",
+                    "SSL flow matched with conn flow from DB.",
+                    traffic_ts=self.get_traffic_ts(ssl_flow),
+                    metrics={"profileid": profileid, "uid": uid},
+                )
 
-        conn_info = self.conn_cache.get(uid)
-        if conn_info is not None:
-            self.process_ssl_event(profileid, ssl_flow, conn_info)
-            return
-
-        self.pending_ssl_by_uid[uid] = {
-            "profileid": profileid,
-            "ssl_flow": ssl_flow,
-            "cache_ts": time.time(),
-        }
-
-    def handle_new_flow(self, msg: dict):
-        payload = json.loads(msg["data"])
-        flow = self.classifier.convert_to_flow_obj(payload["flow"])
-        if getattr(flow, "type_", "") != "conn":
-            return
-
-        uid = getattr(flow, "uid", "")
-        if not uid:
-            return
-
-        conn_info = {
-            "uid": uid,
-            "daddr": getattr(flow, "daddr", ""),
-            "total_bytes": self.to_float(getattr(flow, "sbytes", 0))
-            + self.to_float(getattr(flow, "dbytes", 0)),
-            "starttime": self.get_traffic_ts(flow),
-            "cache_ts": time.time(),
-        }
-        self.conn_cache[uid] = conn_info
-        self.log_event(
-            3,
-            "flow_arrival",
-            "Conn flow received and cached for SSL correlation.",
-            traffic_ts=conn_info["starttime"],
-            metrics={
+        conn_info = {}
+        if conn_flow:
+            conn_info = {
                 "uid": uid,
-                "daddr": conn_info["daddr"],
-                "total_bytes": conn_info["total_bytes"],
-            },
-        )
-
-        pending_ssl = self.pending_ssl_by_uid.pop(uid, None)
-        if not pending_ssl:
-            return
-
-        self.process_ssl_event(
-            pending_ssl["profileid"], pending_ssl["ssl_flow"], conn_info
-        )
+                "daddr": conn_flow.get("daddr", ""),
+                "total_bytes": self.to_float(conn_flow.get("sbytes", 0))
+                + self.to_float(conn_flow.get("dbytes", 0)),
+                "starttime": self.to_float(conn_flow.get("starttime"), 0.0),
+            }
+        self.process_ssl_event(profileid, ssl_flow, conn_info)
 
     def main(self):
-        self.clean_old_conn_cache()
-
-        if msg := self.get_msg("new_flow"):
-            self.handle_new_flow(msg)
-
         if msg := self.get_msg("new_ssl"):
             self.handle_new_ssl(msg)
