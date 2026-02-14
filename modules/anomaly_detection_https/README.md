@@ -42,18 +42,18 @@ In this module, this means:
 In practical terms: it is cheap enough to run continuously on live traffic.
 
 
-## Data sources and channels
+## Data source and lookup model
 
-The module subscribes to:
+The module subscribes to exactly one channel:
 
 - `new_ssl` for TLS features (`server_name`, `ja3`, `ja3s`, timestamps, uid)
-- `new_flow` for conn-level byte totals linked by `uid`
+- conn-level bytes are **not** consumed from a channel; they are fetched on demand from DB using SSL `uid`
 
 Rationale:
 
 - `new_ssl` carries protocol-level metadata required for malware-like HTTPS behavior.
-- `new_flow` adds traffic volume (`sbytes + dbytes`) to detect "more/less data to known servers".
-- `uid` correlation provides combined SSL+flow context per event.
+- DB lookup by `uid` adds traffic volume (`sbytes + dbytes`) to detect "more/less data to known servers".
+- this is the only correlation path used by this module (no `new_flow` subscription).
 
 
 ## Processing pipeline
@@ -63,19 +63,17 @@ Rationale:
 For each SSL event:
 
 - parse SSL flow from `new_ssl`,
-- correlate with conn bytes by `uid` from `new_flow`,
-- if conn is not available yet, keep pending SSL entry for short-term reconciliation.
+- query DB for the matching conn flow using the SSL `uid`,
+- if conn exists, extract `daddr` and `sbytes + dbytes` for per-server byte modeling,
+- if conn is not available yet, process SSL-only features and keep detection running.
 
-For each conn event:
+Important:
 
-- cache conn bytes by `uid`,
-- if pending SSL exists for the same `uid`, process both together.
-
-Short TTL cleanup is used to bound memory for unmatched events.
+- the module does **not** subscribe to all conn flows.
+- correlation is always SSL `uid` -> DB conn lookup.
 
 Note:
 
-- wall-clock time is only used for temporary cache expiration of unmatched `uid`s.
 - all detection windows and training-hour progression use traffic time.
 
 
@@ -111,7 +109,7 @@ Important:
 
 - "hours" here are based on **traffic timestamps** (`flow.starttime`), not computer wall-clock time.
 - this keeps behavior consistent across interfaces, live Zeek folders, pcaps, and historical Zeek logs.
-- if `training_hours` is set to `0`, detection starts immediately and anomalies are marked with **low confidence**.
+- if `training_hours` is set to `0`, detection starts immediately and baseline is learned online.
 
 
 ### 4) Flow-level anomaly checks
@@ -232,7 +230,7 @@ Parameter meaning:
 
 - `training_hours`:
   number of per-host hours used for benign-only baseline.
-  If set to `0`, anomaly confidence is marked as `low`.
+  If set to `0`, baseline learning starts online from the first seen traffic.
 - `hourly_zscore_threshold`:
   trigger threshold for aggregated hourly features.
 - `flow_zscore_threshold`:
@@ -295,7 +293,7 @@ Use `log_verbosity: 3` for full operational visibility.
 The module explicitly logs:
 
 - **flow arrivals** (`flow_arrival`):
-  SSL and conn flow ingestion/correlation events.
+  SSL ingestion and SSL->conn DB match events.
 - **hour close** (`hour_close`):
   computed hourly features and counters before scoring.
 - **model fitting during training** (`training_fit`):
@@ -308,6 +306,33 @@ The module explicitly logs:
   EWMA update details (feature/server, value, mean, variance, alpha, count).
 - **detections**:
   `flow_detection` and `hourly_detection` with exact reasons, triggering metrics, and confidence level.
+
+### Confidence scaling logic
+
+Confidence is numeric and score-based (not a binary warmup flag).
+
+For each detection, the module computes:
+
+```text
+confidence_score =
+  0.45 * severity +
+  0.25 * persistence +
+  0.20 * baseline_quality +
+  0.10 * multi_signal
+```
+
+Where:
+
+- `severity`: from strongest anomaly z-score (`1 - exp(-max_z/3)`).
+- `persistence`: anomaly recurrence in recent 3 traffic-hours.
+- `baseline_quality`: amount of baseline history available (`count` normalized).
+- `multi_signal`: how many independent signals fired in the same detection.
+
+Final confidence level:
+
+- `high` if score >= 0.80
+- `medium` if score >= 0.55 and < 0.80
+- `low` otherwise
 
 ### Metrics included in log events
 
@@ -376,3 +401,26 @@ If detector misses changes:
 2. Persist model state to disk to survive restarts.
 3. Emit Slips Evidence records for high-confidence anomalies.
 4. Add explainability fields (top contributors and expected ranges) per anomaly.
+
+
+## Visual report tool (local webpage)
+
+Use the included script to generate a local HTML analysis dashboard from the module log:
+
+```bash
+python3 modules/anomaly_detection_https/analyze_ad_log.py \
+  --log output/<run>/anomaly_detection_https.log \
+  --out output/<run>/anomaly_detection_https_report.html
+```
+
+What it generates:
+
+- timeline plots (traffic time) for event volume and detections,
+- move mouse over the plot area to see exact time-bin values for all plotted series,
+- confidence breakdown (`high` / `medium` / `low`) over time,
+- top anomaly reasons and affected profiles,
+- score summaries,
+- auto-generated "What Happened" explanation,
+- recent events table with parsed metrics.
+
+Open the generated `anomaly_detection_https_report.html` in your browser.
