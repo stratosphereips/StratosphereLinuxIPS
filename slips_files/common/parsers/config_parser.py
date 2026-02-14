@@ -480,6 +480,122 @@ class ConfigParser(object):
     def get_ml_mode(self):
         return self.read_configuration("flowmldetection", "mode", "test")
 
+    def https_anomaly_training_hours(self) -> int:
+        training_hours = self.read_configuration(
+            "anomaly_detection_https", "training_hours", 24
+        )
+        try:
+            training_hours = int(training_hours)
+        except (TypeError, ValueError):
+            training_hours = 24
+        return max(0, training_hours)
+
+    def https_anomaly_hourly_zscore_thr(self) -> float:
+        threshold = self.read_configuration(
+            "anomaly_detection_https", "hourly_zscore_threshold", 3.0
+        )
+        try:
+            threshold = float(threshold)
+        except (TypeError, ValueError):
+            threshold = 3.0
+        return max(0.5, threshold)
+
+    def https_anomaly_flow_zscore_thr(self) -> float:
+        threshold = self.read_configuration(
+            "anomaly_detection_https", "flow_zscore_threshold", 3.5
+        )
+        try:
+            threshold = float(threshold)
+        except (TypeError, ValueError):
+            threshold = 3.5
+        return max(0.5, threshold)
+
+    def https_anomaly_adapt_score_thr(self) -> float:
+        threshold = self.read_configuration(
+            "anomaly_detection_https", "adaptation_score_threshold", 2.0
+        )
+        try:
+            threshold = float(threshold)
+        except (TypeError, ValueError):
+            threshold = 2.0
+        return max(0.0, threshold)
+
+    def https_anomaly_baseline_alpha(self) -> float:
+        alpha = self.read_configuration(
+            "anomaly_detection_https", "baseline_alpha", 0.1
+        )
+        try:
+            alpha = float(alpha)
+        except (TypeError, ValueError):
+            alpha = 0.1
+        return min(max(alpha, 0.001), 1.0)
+
+    def https_anomaly_drift_alpha(self) -> float:
+        alpha = self.read_configuration(
+            "anomaly_detection_https", "drift_alpha", 0.05
+        )
+        try:
+            alpha = float(alpha)
+        except (TypeError, ValueError):
+            alpha = 0.05
+        return min(max(alpha, 0.001), 1.0)
+
+    def https_anomaly_suspicious_alpha(self) -> float:
+        alpha = self.read_configuration(
+            "anomaly_detection_https", "suspicious_alpha", 0.005
+        )
+        try:
+            alpha = float(alpha)
+        except (TypeError, ValueError):
+            alpha = 0.005
+        return min(max(alpha, 0.0), 1.0)
+
+    def https_anomaly_min_baseline_points(self) -> int:
+        points = self.read_configuration(
+            "anomaly_detection_https", "min_baseline_points", 6
+        )
+        try:
+            points = int(points)
+        except (TypeError, ValueError):
+            points = 6
+        return max(1, points)
+
+    def https_anomaly_max_small_flow_anomalies(self) -> int:
+        threshold = self.read_configuration(
+            "anomaly_detection_https", "max_small_flow_anomalies", 1
+        )
+        try:
+            threshold = int(threshold)
+        except (TypeError, ValueError):
+            threshold = 1
+        return max(0, threshold)
+
+    def https_anomaly_log_verbosity(self) -> int:
+        verbosity = self.read_configuration(
+            "anomaly_detection_https", "log_verbosity", 3
+        )
+        try:
+            verbosity = int(verbosity)
+        except (TypeError, ValueError):
+            verbosity = 3
+        return min(max(verbosity, 0), 3)
+
+    def https_anomaly_log_emojis(self) -> bool:
+        value = self.read_configuration(
+            "anomaly_detection_https", "log_emojis", True
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def https_anomaly_log_colors(self) -> bool:
+        value = self.read_configuration(
+            "anomaly_detection_https", "log_colors", True
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
     def RiskIQ_credentials_path(self):
         return self.read_configuration(
             "threatintelligence", "RiskIQ_credentials_path", ""
