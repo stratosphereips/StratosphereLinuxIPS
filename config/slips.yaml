@@ -246,12 +246,6 @@ anomaly_detection_https:
   # 3: + per-flow arrivals and model update details
   log_verbosity: 3
 
-  # Enable emojis in module operational log.
-  log_emojis: true
-
-  # Enable ANSI colors in module operational log.
-  log_colors: true
-
 #############################
 virustotal:
   # This is the path to the API key. The file should contain the key at the
