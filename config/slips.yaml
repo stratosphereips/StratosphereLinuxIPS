@@ -218,8 +218,8 @@ flowmldetection:
 #############################
 anomaly_detection_https:
   # Number of initial hours used to train the baseline model assuming benign traffic.
-  # If set to 0, detection starts immediately and anomaly confidence is marked as low.
-  training_hours: 0
+  # If set to 0, detection starts immediately and baseline is learned online.
+  training_hours: 1
 
   # Thresholds for anomaly detection in hourly and per-flow checks.
   hourly_zscore_threshold: 3.0
