@@ -103,7 +103,7 @@ For the first `training_hours` per host, hourly data is treated as benign baseli
 - no anomaly alerts are emitted,
 - hourly and server models are updated with `baseline_alpha`.
 
-This matches your requirement: "train model for X time as if all traffic is benign".
+This implements configurable "assume-benign" training for the first `training_hours`.
 
 Important:
 
@@ -144,7 +144,7 @@ On hour rollover, the module computes hourly features:
 Each feature is scored against its EWMA baseline:
 
 - z-score = `abs(value - mean) / std`
-- with a standard deviation floor to avoid division-by-zero instability.
+- with an adaptive robust standard-deviation floor learned from recent residuals.
 
 If z-score >= `hourly_zscore_threshold`, that feature is anomalous.
 
@@ -158,18 +158,53 @@ Hourly anomalies are logged as JSON lines with:
 
 ## Adaptive retraining strategy
 
-After each hour, model update speed is selected by anomaly severity:
+Model updates are always online. The selected `alpha` changes update speed, not whether updates happen.
+
+After each hour, one update state is selected:
 
 1. **Training period**:
-   - use `baseline_alpha`.
+   - condition: `trained_hours < training_hours`
+   - hourly models update with `baseline_alpha`
+   - host `trained_hours` increments by one on each closed traffic hour.
 
 2. **Post-training, small anomaly / drift**:
-   - if `hourly_score <= adaptation_score_threshold` and
-   - `flow_anomaly_count <= max_small_flow_anomalies`
-   - use `drift_alpha`.
+   - condition: `hourly_score <= adaptation_score_threshold` and
+     `flow_anomaly_count <= max_small_flow_anomalies`
+   - hourly models update with `drift_alpha`.
 
 3. **Post-training, suspicious behavior**:
-   - otherwise use `suspicious_alpha` (very low).
+   - condition: all other post-training hours
+   - hourly models still update, but with `suspicious_alpha` (very low).
+   - this is intentionally conservative adaptation, not a full freeze.
+
+Current default values:
+
+- `baseline_alpha = 0.1`
+- `drift_alpha = 0.05`
+- `suspicious_alpha = 0.005`
+
+Flow-level per-server byte models use the same alpha policy per event:
+
+- no flow anomaly -> `baseline_alpha`
+- small flow anomaly -> `drift_alpha`
+- suspicious flow anomaly -> `suspicious_alpha`
+
+### Exact definitions: "small" vs "suspicious"
+
+At **hour level** (used for `drift_update` vs `suspicious_update`):
+
+- `hourly_score` is the sum of z-scores of hourly features that crossed `hourly_zscore_threshold`.
+- `flow_anomaly_count` is the number of anomalous flows seen in that hour.
+- a closed hour is **small/drift-like** iff:
+  - `hourly_score <= adaptation_score_threshold` and
+  - `flow_anomaly_count <= max_small_flow_anomalies`.
+- otherwise the closed hour is **suspicious**.
+
+At **flow level** (used for per-server-bytes model update speed):
+
+- `flow_anomalies` is the list of reasons triggered for that flow (`new_server`, `new_ja3`, `new_ja3s`, `bytes_to_known_server`).
+- a flow is **small** iff `0 < len(flow_anomalies) <= max_small_flow_anomalies`.
+- a flow is **suspicious** iff `len(flow_anomalies) > max_small_flow_anomalies`.
 
 Why:
 
@@ -188,7 +223,22 @@ Each baseline uses online EWMA moments:
 
 Scoring:
 
-- `z = |x - mean| / sqrt(max(var, min_std^2))`
+- residual stream per model:
+  - `r_t = |x_t - mean_{t-1}|`
+- robust floor candidates from the recent residual window:
+  - `Q10(r)` (10th percentile of residuals)
+  - `sigma_MAD = 1.4826 * MAD(r)` where `MAD(r) = median(|r - median(r)|)`
+- floor update (smoothed):
+  - `min_std_floor_t = (1 - beta) * min_std_floor_{t-1} + beta * clip(max(Q10, sigma_MAD))`
+- z-score:
+  - `z = |x - mean| / sqrt(max(var, min_std_floor^2))`
+
+Current floor defaults in code:
+
+- initial `min_std_floor = 0.1`
+- residual window size `64`
+- floor smoothing `beta = 0.05`
+- floor clamp `[0.01, 1e6]`
 
 Operationally:
 
@@ -203,6 +253,10 @@ Operationally:
   - https://www.itl.nist.gov/div898/handbook/pmc/section4/pmc431.htm
 - Z-score:
   - https://en.wikipedia.org/wiki/Standard_score
+- Quantile:
+  - https://en.wikipedia.org/wiki/Quantile
+- Median absolute deviation:
+  - https://en.wikipedia.org/wiki/Median_absolute_deviation
 - Concept drift:
   - https://en.wikipedia.org/wiki/Concept_drift
 - ADWIN drift detector (for a future upgrade path):
@@ -236,17 +290,19 @@ Parameter meaning:
 - `flow_zscore_threshold`:
   trigger threshold for bytes-to-known-server deviations.
 - `adaptation_score_threshold`:
-  max hourly anomaly score still considered drift.
+  upper bound on `hourly_score` for classifying a closed hour as small/drift-like.
 - `baseline_alpha`:
   update speed during initial training.
 - `drift_alpha`:
-  update speed for small anomalies considered benign drift.
+  update speed when an anomaly is classified as small/drift-like.
 - `suspicious_alpha`:
-  update speed for suspicious hours; keeps model conservative.
+  update speed when an anomaly is classified as suspicious; keeps adaptation conservative.
 - `min_baseline_points`:
   minimum history count before z-score checks are trusted.
 - `max_small_flow_anomalies`:
-  max flow anomalies per hour still treated as drift.
+  threshold used in both paths:
+  max anomalous flows per hour still considered drift-like, and
+  max anomaly reasons per flow still considered small.
 
 
 ## Operational log
@@ -260,15 +316,13 @@ The module writes one operational log file in the current Slips output directory
 
 The log is now production-oriented (the SNI test log was removed).
 
-### Verbosity and style controls
+### Verbosity control
 
 Use these config keys:
 
 ```yaml
 anomaly_detection_https:
   log_verbosity: 3
-  log_emojis: true
-  log_colors: true
 ```
 
 Use `log_verbosity: 3` for full operational visibility.
@@ -280,13 +334,10 @@ Use `log_verbosity: 3` for full operational visibility.
 - `2`: level 1 + hourly summaries.
 - `3`: level 2 + per-flow arrivals and detailed model updates.
 
-`log_emojis`:
+Log style is fixed:
 
-- if `true`, adds event icons like `🚨`, `🧠`, `🌊`.
-
-`log_colors`:
-
-- if `true`, adds ANSI terminal colors to log lines.
+- emojis are always enabled (for example `🚨`, `🧠`, `🌊`),
+- ANSI colors are always enabled.
 
 ### What is logged
 
@@ -306,6 +357,8 @@ The module explicitly logs:
   EWMA update details (feature/server, value, mean, variance, alpha, count).
 - **detections**:
   `flow_detection` and `hourly_detection` with exact reasons, triggering metrics, and confidence level.
+- **evidence emission** (`evidence_emit`):
+  confirmation that each detection was stored as Slips Evidence (including confidence/threat mapping context).
 
 ### Confidence scaling logic
 
@@ -344,12 +397,12 @@ Depending on event type, metrics include:
 - hourly features (`ssl_flows`, `unique_servers`, `new_servers`, `known_server_avg_bytes`),
 - anomaly details (feature names, values, means, z-scores),
 - adaptation details (`hourly_score`, `flow_anomaly_count`, selected `alpha`),
-- model state (`mean`, `var`, `count`).
+- model state (`mean`, `var`, `count`, `min_std_floor`).
 
 
 ## What requirements are covered
 
-From your requested behavior:
+Implemented behavior:
 
 - "train for X time as benign": implemented with `training_hours`.
 - "then detect anomalies": automatic after training hours.
@@ -360,6 +413,38 @@ From your requested behavior:
   captured by flow-level `new_server` and hourly `new_servers`.
 - "more or less data to known servers":
   captured by flow-level per-server bytes anomaly and hourly known-server average bytes.
+- "report every anomaly as evidence":
+  implemented for both flow-level and hourly detections with confidence, reasons, and rich context.
+
+
+## Slips Evidence emitted
+
+Every detection (`flow_detection` and `hourly_detection`) is emitted as Slips Evidence.
+
+Evidence design:
+
+- `evidence_type`: `MALICIOUS_FLOW`
+- `method`: `STATISTICAL`
+- `attacker`: source host (`profileid` IP, direction `SRC`)
+- `victim`: best available destination context (`SNI` domain first, otherwise destination IP/domain)
+- `proto`: `TCP`
+- `timewindow`: from incoming `twid` (parsed to numeric form)
+- `timestamp`: traffic/packet time converted to Slips alerts timestamp format
+- `confidence`: confidence score in `[0,1]` (same score used by detector)
+- `threat_level`: derived from confidence level using module policy
+  - confidence `low` -> threat level `low`
+  - confidence `medium` -> threat level `low`
+  - confidence `high` -> threat level `medium`
+- `uid`: triggering flow UID for flow anomalies; aggregated hour UIDs for hourly anomalies
+
+Description includes:
+
+- anomaly kind (`flow` or `hourly`),
+- confidence level and score,
+- confidence factors (severity, persistence, baseline quality, multi-signal, max_z),
+- server/SNI/destination context,
+- detection reasons (feature/value/mean/zscore when available),
+- extra metrics (for example `bytes_total`, `anomaly_score`, `flow_anomaly_count`).
 
 
 ## Current scope and limitations
@@ -368,13 +453,10 @@ From your requested behavior:
    - current Slips channel set does not expose `new_x509` for modules in the same way as `new_ssl`.
    - certificate-related information currently comes from SSL flow fields.
 
-2. **No direct evidence creation yet**
-   - anomalies are logged to files; they are not turned into Slips Evidence objects in this version.
-
-3. **No persistence of model state across restarts**
+2. **No persistence of model state across restarts**
    - baselines are in-memory for now.
 
-4. **Host identity is `profileid`**
+3. **Host identity is `profileid`**
    - expected behavior if profiles map to monitored hosts.
 
 
@@ -399,8 +481,7 @@ If detector misses changes:
 
 1. Add `new_x509` end-to-end and include certificate-specific features.
 2. Persist model state to disk to survive restarts.
-3. Emit Slips Evidence records for high-confidence anomalies.
-4. Add explainability fields (top contributors and expected ranges) per anomaly.
+3. Add explainability fields (top contributors and expected ranges) per anomaly.
 
 
 ## Visual report tool (local webpage)
@@ -427,4 +508,4 @@ What it generates:
 - auto-generated "What Happened" explanation,
 - recent events table with parsed metrics.
 
-Open the generated `anomaly_detection_https_report.html` in your browser.
+Open the generated `anomaly_detection_https_report.html` in a web browser.
