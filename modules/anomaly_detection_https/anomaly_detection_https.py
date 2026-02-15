@@ -12,6 +12,19 @@ from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.core.structures.evidence import (
+    Attacker,
+    Direction,
+    Evidence,
+    EvidenceType,
+    IoCType,
+    Method,
+    ProfileID,
+    Proto,
+    ThreatLevel,
+    TimeWindow,
+    Victim,
+)
 
 
 @dataclass
@@ -19,9 +32,23 @@ class EWMAStats:
     mean: float = 0.0
     var: float = 0.0
     count: int = 0
+    min_std_floor: float = 0.1
+    residuals: List[float] = field(default_factory=list)
+    residual_window_size: int = 64
+    floor_update_beta: float = 0.05
+    floor_scale: float = 1.0
+    floor_min: float = 0.01
+    floor_max: float = 1000000.0
 
     def update(self, value: float, alpha: float):
         value = float(value)
+        if self.count > 0:
+            residual = abs(value - self.mean)
+            self.residuals.append(float(residual))
+            if len(self.residuals) > self.residual_window_size:
+                self.residuals.pop(0)
+            self.update_min_std_floor()
+
         if self.count == 0:
             self.mean = value
             self.var = 0.0
@@ -33,8 +60,37 @@ class EWMAStats:
         self.var = (1 - alpha) * (self.var + alpha * delta * delta)
         self.count += 1
 
-    def zscore(self, value: float, min_std: float = 0.1) -> float:
-        std = math.sqrt(max(self.var, min_std * min_std))
+    @staticmethod
+    def _quantile(values: List[float], q: float) -> float:
+        if not values:
+            return 0.0
+        q = min(1.0, max(0.0, float(q)))
+        xs = sorted(values)
+        if len(xs) == 1:
+            return xs[0]
+        pos = q * (len(xs) - 1)
+        lo = int(math.floor(pos))
+        hi = int(math.ceil(pos))
+        if lo == hi:
+            return xs[lo]
+        frac = pos - lo
+        return xs[lo] * (1.0 - frac) + xs[hi] * frac
+
+    def update_min_std_floor(self):
+        if len(self.residuals) < 5:
+            return
+        q10 = self._quantile(self.residuals, 0.10)
+        med = self._quantile(self.residuals, 0.50)
+        abs_dev = [abs(x - med) for x in self.residuals]
+        mad = self._quantile(abs_dev, 0.50)
+        sigma_mad = 1.4826 * mad
+        candidate = self.floor_scale * max(q10, sigma_mad, self.floor_min)
+        candidate = min(self.floor_max, max(self.floor_min, candidate))
+        beta = min(1.0, max(0.0, self.floor_update_beta))
+        self.min_std_floor = (1.0 - beta) * self.min_std_floor + beta * candidate
+
+    def zscore(self, value: float) -> float:
+        std = math.sqrt(max(self.var, self.min_std_floor * self.min_std_floor))
         return abs(float(value) - self.mean) / std
 
 
@@ -44,6 +100,7 @@ class HourBucket:
     ssl_flows: int = 0
     servers: Set[str] = field(default_factory=set)
     new_servers: Set[str] = field(default_factory=set)
+    uids: Set[str] = field(default_factory=set)
     known_servers_total_bytes: float = 0.0
     known_servers_flow_count: int = 0
     flow_anomaly_count: int = 0
@@ -59,6 +116,7 @@ class HostState:
     hourly_models: Dict[str, EWMAStats] = field(default_factory=dict)
     server_bytes_models: Dict[str, EWMAStats] = field(default_factory=dict)
     anomaly_history_ts: List[float] = field(default_factory=list)
+    last_twid: int = 0
 
 
 class AnomalyDetectionHTTPS(IModule):
@@ -113,8 +171,9 @@ class AnomalyDetectionHTTPS(IModule):
             conf.https_anomaly_max_small_flow_anomalies()
         )
         self.log_verbosity = conf.https_anomaly_log_verbosity()
-        self.log_emojis = conf.https_anomaly_log_emojis()
-        self.log_colors = conf.https_anomaly_log_colors()
+        # Operational logs always use emojis and colors.
+        self.log_emojis = True
+        self.log_colors = True
 
     def pre_main(self):
         utils.drop_root_privs_permanently()
@@ -144,8 +203,6 @@ class AnomalyDetectionHTTPS(IModule):
         return self.log_verbosity >= level
 
     def get_color(self, event_type: str) -> str:
-        if not self.log_colors:
-            return ""
         colors = {
             "flow_arrival": "\033[36m",
             "hour_close": "\033[36m",
@@ -155,14 +212,13 @@ class AnomalyDetectionHTTPS(IModule):
             "model_update": "\033[34m",
             "flow_detection": "\033[31m",
             "hourly_detection": "\033[31m",
+            "evidence_emit": "\033[33m",
             "module_start": "\033[32m",
             "module_stop": "\033[32m",
         }
         return colors.get(event_type, "")
 
     def get_emoji(self, event_type: str) -> str:
-        if not self.log_emojis:
-            return ""
         emojis = {
             "flow_arrival": "📥",
             "hour_close": "🕐",
@@ -172,6 +228,7 @@ class AnomalyDetectionHTTPS(IModule):
             "model_update": "🧠",
             "flow_detection": "🚨",
             "hourly_detection": "🚨",
+            "evidence_emit": "🧾",
             "module_start": "✅",
             "module_stop": "🛑",
         }
@@ -273,6 +330,178 @@ class AnomalyDetectionHTTPS(IModule):
         if score >= 0.55:
             return "medium"
         return "low"
+
+    @staticmethod
+    def profile_ip(profileid: str) -> str:
+        if profileid.startswith("profile_"):
+            return profileid.split("profile_", 1)[1]
+        return profileid
+
+    @staticmethod
+    def parse_twid_number(twid_raw) -> int:
+        if twid_raw is None:
+            return 0
+        try:
+            return int(twid_raw)
+        except (TypeError, ValueError):
+            pass
+        twid_str = str(twid_raw)
+        if twid_str.startswith("timewindow"):
+            twid_str = twid_str.replace("timewindow", "", 1)
+        try:
+            return int(twid_str)
+        except ValueError:
+            return 0
+
+    @staticmethod
+    def evidence_ts_from_traffic_ts(ts: float) -> str:
+        return datetime.fromtimestamp(float(ts), tz=timezone.utc).strftime(
+            utils.alerts_format
+        )
+
+    @staticmethod
+    def threat_level_from_confidence_level(confidence_level: str) -> ThreatLevel:
+        # Requested policy:
+        # - confidence low/medium -> threat level low
+        # - confidence high -> threat level medium
+        if str(confidence_level).lower() == "high":
+            return ThreatLevel.MEDIUM
+        return ThreatLevel.LOW
+
+    def build_victim(
+        self, server: str, sni: str, daddr: str
+    ) -> Optional[Victim]:
+        if sni:
+            return Victim(
+                direction=Direction.DST,
+                ioc_type=IoCType.DOMAIN,
+                value=sni,
+                SNI=sni,
+            )
+        if daddr and utils.is_valid_ip(daddr):
+            return Victim(
+                direction=Direction.DST,
+                ioc_type=IoCType.IP,
+                value=daddr,
+                SNI=sni or None,
+            )
+        if server and server != "<unknown_server>":
+            return Victim(
+                direction=Direction.DST,
+                ioc_type=IoCType.DOMAIN,
+                value=server,
+                SNI=sni or None,
+            )
+        return None
+
+    def emit_anomaly_evidence(
+        self,
+        profileid: str,
+        twid_number: int,
+        traffic_ts: float,
+        uid: Optional[str],
+        confidence: dict,
+        reasons: List[dict],
+        kind: str,
+        ssl_flow=None,
+        server: str = "",
+        sni: str = "",
+        daddr: str = "",
+        extra: Optional[dict] = None,
+    ):
+        srcip = self.profile_ip(profileid)
+        if not srcip or not utils.is_valid_ip(srcip):
+            self.log_event(
+                1,
+                "evidence_emit",
+                "Skipped evidence emission due to invalid profile source IP.",
+                traffic_ts=traffic_ts,
+                metrics={"profileid": profileid, "srcip": srcip},
+            )
+            return
+
+        confidence_score = self.to_float(confidence.get("score"), 0.0)
+        threat_level = self.threat_level_from_confidence_level(
+            str(confidence.get("level", "low"))
+        )
+        details = {
+            "kind": kind,
+            "confidence_level": confidence.get("level", "low"),
+            "confidence_score": round(confidence_score, 4),
+            "confidence_factors": {
+                "severity": confidence.get("severity"),
+                "persistence": confidence.get("persistence"),
+                "baseline_quality": confidence.get("baseline_quality"),
+                "multi_signal": confidence.get("multi_signal"),
+                "max_z": confidence.get("max_z"),
+            },
+            "server": server,
+            "sni": sni,
+            "daddr": daddr,
+        }
+        if extra:
+            details.update(extra)
+        description = (
+            "HTTPS anomaly detected. "
+            f"kind={kind}, confidence={confidence.get('level')} "
+            f"({confidence_score:.3f}), details={json.dumps(details, sort_keys=True)}, "
+            f"reasons={json.dumps(reasons, sort_keys=True)}."
+        )
+
+        uid_list = [uid] if uid else []
+        if kind == "hourly" and extra and "uids" in extra:
+            uid_list = [u for u in extra["uids"] if isinstance(u, str)]
+        if not uid_list:
+            uid_list = [f"https_ad_{kind}_{int(traffic_ts)}"]
+
+        dst_port = None
+        src_port = None
+        if ssl_flow is not None:
+            try:
+                dst_port = int(getattr(ssl_flow, "dport", 0))
+            except (TypeError, ValueError):
+                dst_port = None
+            try:
+                src_port = int(getattr(ssl_flow, "sport", 0))
+            except (TypeError, ValueError):
+                src_port = None
+
+        evidence = Evidence(
+            evidence_type=EvidenceType.MALICIOUS_FLOW,
+            description=description,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                ioc_type=IoCType.IP,
+                value=srcip,
+            ),
+            victim=self.build_victim(server=server, sni=sni, daddr=daddr),
+            threat_level=threat_level,
+            profile=ProfileID(ip=srcip),
+            timewindow=TimeWindow(number=twid_number),
+            uid=uid_list,
+            timestamp=self.evidence_ts_from_traffic_ts(traffic_ts),
+            proto=Proto.TCP,
+            dst_port=dst_port,
+            src_port=src_port,
+            method=Method.STATISTICAL,
+            confidence=confidence_score,
+        )
+        self.db.set_evidence(evidence)
+        self.log_event(
+            1,
+            "evidence_emit",
+            "Anomaly emitted as Slips evidence.",
+            traffic_ts=traffic_ts,
+            metrics={
+                "profileid": profileid,
+                "kind": kind,
+                "evidence_type": str(evidence.evidence_type),
+                "threat_level": str(evidence.threat_level),
+                "confidence_score": confidence_score,
+                "confidence_level": confidence.get("level"),
+                "uid_count": len(uid_list),
+            },
+        )
 
     def get_host_baseline_count(self, state: HostState) -> int:
         counts = [model.count for model in state.hourly_models.values()]
@@ -412,6 +641,21 @@ class AnomalyDetectionHTTPS(IModule):
                         "anomalies": hourly_anomalies,
                     },
                 )
+                self.emit_anomaly_evidence(
+                    profileid=profileid,
+                    twid_number=state.last_twid,
+                    traffic_ts=bucket.start_ts,
+                    uid=None,
+                    confidence=confidence,
+                    reasons=hourly_anomalies,
+                    kind="hourly",
+                    extra={
+                        "hour_start": bucket.start_ts,
+                        "anomaly_score": round(hourly_score, 3),
+                        "flow_anomaly_count": bucket.flow_anomaly_count,
+                        "uids": list(bucket.uids),
+                    },
+                )
 
         update_mode = "training_fit"
         if not self.should_detect(state):
@@ -480,17 +724,25 @@ class AnomalyDetectionHTTPS(IModule):
                     "mean": round(model.mean, 6),
                     "var": round(model.var, 6),
                     "count": model.count,
+                    "min_std_floor": round(model.min_std_floor, 6),
                     "alpha": update_alpha,
                 },
             )
 
         state.bucket = None
 
-    def process_ssl_event(self, profileid: str, ssl_flow, conn_info: dict):
+    def process_ssl_event(
+        self,
+        profileid: str,
+        ssl_flow,
+        conn_info: dict,
+        twid_number: int,
+    ):
         ts = self.get_traffic_ts(
             ssl_flow, fallback_ts=self.to_float(conn_info.get("starttime"), 0.0)
         )
         state = self.ensure_hour_bucket(profileid, ts)
+        state.last_twid = twid_number
         bucket = state.bucket
         if bucket is None:
             return
@@ -522,6 +774,8 @@ class AnomalyDetectionHTTPS(IModule):
 
         bucket.ssl_flows += 1
         bucket.servers.add(server)
+        if uid:
+            bucket.uids.add(uid)
 
         bytes_total = conn_info.get("total_bytes")
         flow_anomalies = []
@@ -604,6 +858,20 @@ class AnomalyDetectionHTTPS(IModule):
                     "flow_anomalies": flow_anomalies,
                 },
             )
+            self.emit_anomaly_evidence(
+                profileid=profileid,
+                twid_number=twid_number,
+                traffic_ts=ts,
+                uid=uid,
+                confidence=confidence,
+                reasons=flow_anomalies,
+                kind="flow",
+                ssl_flow=ssl_flow,
+                server=server,
+                sni=sni,
+                daddr=conn_info.get("daddr", ""),
+                extra={"bytes_total": bytes_total},
+            )
 
         if bytes_total is not None:
             server_model = self.get_or_create_server_model(state, server)
@@ -626,6 +894,7 @@ class AnomalyDetectionHTTPS(IModule):
                     "mean": round(server_model.mean, 6),
                     "var": round(server_model.var, 6),
                     "count": server_model.count,
+                    "min_std_floor": round(server_model.min_std_floor, 6),
                     "alpha": alpha,
                 },
             )
@@ -639,6 +908,7 @@ class AnomalyDetectionHTTPS(IModule):
     def handle_new_ssl(self, msg: dict):
         payload = json.loads(msg["data"])
         profileid = payload.get("profileid", "")
+        twid_number = self.parse_twid_number(payload.get("twid"))
         ssl_flow = self.classifier.convert_to_flow_obj(payload["flow"])
 
         conn_flow = None
@@ -666,7 +936,12 @@ class AnomalyDetectionHTTPS(IModule):
                 + self.to_float(conn_flow.get("dbytes", 0)),
                 "starttime": self.to_float(conn_flow.get("starttime"), 0.0),
             }
-        self.process_ssl_event(profileid, ssl_flow, conn_info)
+        self.process_ssl_event(
+            profileid=profileid,
+            ssl_flow=ssl_flow,
+            conn_info=conn_info,
+            twid_number=twid_number,
+        )
 
     def main(self):
         if msg := self.get_msg("new_ssl"):
