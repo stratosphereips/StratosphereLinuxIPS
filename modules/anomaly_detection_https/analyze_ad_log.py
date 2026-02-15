@@ -38,7 +38,7 @@ class Event:
     event_type: str
     message: str
     metrics: Dict[str, Any]
-    event_ts: float
+    event_ts: Optional[float]
 
 
 def parse_args() -> argparse.Namespace:
@@ -86,16 +86,15 @@ def parse_log(log_path: Path) -> List[Event]:
                 traffic_ts = None
             else:
                 try:
-                    traffic_ts = float(traffic_raw.replace("Z", ""))
-                except ValueError:
-                    traffic_ts = None
+                    # traffic_ts in module logs is expected as ISO timestamp.
+                    traffic_ts = parse_iso_to_ts(traffic_raw)
+                except Exception:
+                    try:
+                        traffic_ts = float(traffic_raw)
+                    except Exception:
+                        traffic_ts = None
 
-            try:
-                wall_ts = parse_iso_to_ts(wall_iso)
-            except Exception:
-                wall_ts = float(line_no)
-
-            event_ts = traffic_ts if traffic_ts is not None else wall_ts
+            event_ts = traffic_ts
             events.append(
                 Event(
                     wall_iso=wall_iso,
@@ -106,7 +105,10 @@ def parse_log(log_path: Path) -> List[Event]:
                     event_ts=event_ts,
                 )
             )
-    return sorted(events, key=lambda e: e.event_ts)
+    return sorted(
+        events,
+        key=lambda e: (e.event_ts is None, e.event_ts if e.event_ts is not None else 0.0),
+    )
 
 
 def to_human_ts(ts: float) -> str:
@@ -118,10 +120,11 @@ def to_human_ts(ts: float) -> str:
 
 
 def bin_events(events: List[Event], n_bins: int = 40) -> Dict[str, Any]:
-    if not events:
+    timed_events = [e for e in events if e.event_ts is not None]
+    if not timed_events:
         return {"bins": [], "series": {}}
-    min_ts = events[0].event_ts
-    max_ts = events[-1].event_ts
+    min_ts = float(timed_events[0].event_ts)
+    max_ts = float(timed_events[-1].event_ts)
     if max_ts <= min_ts:
         max_ts = min_ts + 1
     n_bins = max(8, min(n_bins, 120))
@@ -135,8 +138,9 @@ def bin_events(events: List[Event], n_bins: int = 40) -> Dict[str, Any]:
         labels.append(to_human_ts(center))
 
     series: Dict[str, List[int]] = defaultdict(lambda: [0] * n_bins)
-    for e in events:
-        idx = int((e.event_ts - min_ts) / width)
+    for e in timed_events:
+        event_ts = float(e.event_ts)
+        idx = int((event_ts - min_ts) / width)
         idx = max(0, min(idx, n_bins - 1))
         series["all_events"][idx] += 1
         series[e.event_type][idx] += 1
@@ -144,14 +148,73 @@ def bin_events(events: List[Event], n_bins: int = 40) -> Dict[str, Any]:
             conf = str(e.metrics.get("confidence", "unknown"))
             series[f"detection_{conf}"][idx] += 1
             series["detections_total"][idx] += 1
-    return {"bins": labels, "series": dict(series)}
+    return {
+        "bins": labels,
+        "series": dict(series),
+        "min_ts": min_ts,
+        "max_ts": max_ts,
+        "width": width,
+        "n_bins": n_bins,
+    }
+
+
+def _format_num(v: float) -> str:
+    if abs(v - round(v)) < 1e-9:
+        return str(int(round(v)))
+    return f"{v:.3f}"
+
+
+def _marker_bins_from_series(values: List[int]) -> List[int]:
+    return [i for i, c in enumerate(values) if c > 0]
+
+
+def build_hourly_feature_series(
+    events: List[Event], bins: Dict[str, Any]
+) -> Dict[str, List[float]]:
+    n_bins = int(bins.get("n_bins", 0))
+    if n_bins <= 0:
+        return {}
+    min_ts = float(bins["min_ts"])
+    width = float(bins["width"])
+    feature_sums: Dict[str, List[float]] = defaultdict(lambda: [0.0] * n_bins)
+    feature_counts: Dict[str, List[int]] = defaultdict(lambda: [0] * n_bins)
+
+    for e in events:
+        if e.event_type != "hour_close":
+            continue
+        if e.event_ts is None:
+            continue
+        features = e.metrics.get("features")
+        if not isinstance(features, dict):
+            continue
+        idx = int((float(e.event_ts) - min_ts) / width)
+        idx = max(0, min(idx, n_bins - 1))
+        for name, raw_val in features.items():
+            try:
+                val = float(raw_val)
+            except (TypeError, ValueError):
+                continue
+            feature_sums[str(name)][idx] += val
+            feature_counts[str(name)][idx] += 1
+
+    out: Dict[str, List[float]] = {}
+    for name, sums in feature_sums.items():
+        counts = feature_counts[name]
+        vals = []
+        for i, total in enumerate(sums):
+            c = counts[i]
+            vals.append(total / c if c > 0 else 0.0)
+        out[name] = vals
+    return out
 
 
 def svg_polyline_chart(
     title: str,
     x_labels: List[str],
-    series_map: Dict[str, List[int]],
+    series_map: Dict[str, List[float]],
     colors: Dict[str, str],
+    drift_marker_bins: Optional[List[int]] = None,
+    suspicious_marker_bins: Optional[List[int]] = None,
     width: int = 1100,
     height: int = 320,
 ) -> str:
@@ -191,7 +254,7 @@ def svg_polyline_chart(
         )
         lines.append(
             f'<text x="{margin_left-8}" y="{yy+4:.1f}" text-anchor="end" '
-            f'font-size="11" fill="#6b7280">{int(yv)}</text>'
+            f'font-size="11" fill="#6b7280">{escape(_format_num(yv))}</text>'
         )
     lines.append(
         f'<line x1="{margin_left}" y1="{margin_top+plot_h}" x2="{margin_left+plot_w}" '
@@ -217,6 +280,27 @@ def svg_polyline_chart(
             f'font-size="11" fill="#6b7280">{escape(lbl)}</text>'
         )
 
+    drift_marker_bins = drift_marker_bins or []
+    suspicious_marker_bins = suspicious_marker_bins or []
+    for idx in drift_marker_bins:
+        if 0 <= idx < len(x_labels):
+            xx = x_at(idx)
+            lines.append(
+                f'<line x1="{xx:.1f}" y1="{margin_top}" x2="{xx:.1f}" y2="{margin_top+plot_h}" '
+                f'stroke="#16a34a" stroke-width="1.6" stroke-dasharray="5,3">'
+                f"<title>drift_update at {escape(x_labels[idx])}</title>"
+                f"</line>"
+            )
+    for idx in suspicious_marker_bins:
+        if 0 <= idx < len(x_labels):
+            xx = x_at(idx)
+            lines.append(
+                f'<line x1="{xx:.1f}" y1="{margin_top}" x2="{xx:.1f}" y2="{margin_top+plot_h}" '
+                f'stroke="#dc2626" stroke-width="1.6" stroke-dasharray="2,3">'
+                f"<title>suspicious_update (conservative/near-denied update) at {escape(x_labels[idx])}</title>"
+                f"</line>"
+            )
+
     # Hover bands: moving the mouse over the plot shows values for the
     # nearest time-bin (all plotted series).
     for idx in range(len(x_labels)):
@@ -236,7 +320,7 @@ def svg_polyline_chart(
         tooltip_lines = [f"time={x_labels[idx]}"]
         for name, vals in series_map.items():
             value = vals[idx] if idx < len(vals) else 0
-            tooltip_lines.append(f"{name}={value}")
+            tooltip_lines.append(f"{name}={_format_num(float(value))}")
         tooltip = "\n".join(tooltip_lines)
 
         lines.append(
@@ -272,9 +356,25 @@ def svg_polyline_chart(
             lines.append(
                 f'<circle cx="{xx:.1f}" cy="{yy:.1f}" r="3.2" '
                 f'fill="{color}" fill-opacity="0.35" stroke="{color}" stroke-width="1">'
-                f"<title>{escape(name)} | time={escape(ts_label)} | value={int(v)}</title>"
+                f"<title>{escape(name)} | time={escape(ts_label)} | value={escape(_format_num(float(v)))}</title>"
                 f"</circle>"
             )
+
+    marker_legend_x = legend_x + max(1, len(series_map)) * 220
+    lines.append(
+        f'<line x1="{marker_legend_x}" y1="{legend_y-8}" x2="{marker_legend_x+14}" y2="{legend_y-8}" '
+        f'stroke="#16a34a" stroke-width="1.6" stroke-dasharray="5,3" />'
+    )
+    lines.append(
+        f'<text x="{marker_legend_x+20}" y="{legend_y-5}" font-size="12" fill="#374151">drift_update</text>'
+    )
+    lines.append(
+        f'<line x1="{marker_legend_x+150}" y1="{legend_y-8}" x2="{marker_legend_x+164}" y2="{legend_y-8}" '
+        f'stroke="#dc2626" stroke-width="1.6" stroke-dasharray="2,3" />'
+    )
+    lines.append(
+        f'<text x="{marker_legend_x+170}" y="{legend_y-5}" font-size="12" fill="#374151">suspicious_update</text>'
+    )
 
     svg = (
         f'<h3>{escape(title)}</h3>'
@@ -329,9 +429,10 @@ def summarize(events: List[Event]) -> Dict[str, Any]:
         sum(hourly_scores) / len(hourly_scores) if hourly_scores else 0.0
     )
 
-    if events:
-        summary["start"] = to_human_ts(events[0].event_ts)
-        summary["end"] = to_human_ts(events[-1].event_ts)
+    timed_events = [e for e in events if e.event_ts is not None]
+    if timed_events:
+        summary["start"] = to_human_ts(float(timed_events[0].event_ts))
+        summary["end"] = to_human_ts(float(timed_events[-1].event_ts))
     else:
         summary["start"] = "n/a"
         summary["end"] = "n/a"
@@ -380,6 +481,13 @@ def build_html(
 ) -> str:
     labels = bins["bins"]
     series = bins["series"]
+    drift_marker_bins = _marker_bins_from_series(
+        series.get("drift_update", [0] * len(labels))
+    )
+    suspicious_marker_bins = _marker_bins_from_series(
+        series.get("suspicious_update", [0] * len(labels))
+    )
+    feature_series = build_hourly_feature_series(events, bins)
 
     chart_events = svg_polyline_chart(
         "Event Volume Over Time (traffic time)",
@@ -389,6 +497,8 @@ def build_html(
             "flow_arrival": series.get("flow_arrival", [0] * len(labels)),
         },
         colors={"all_events": "#2563eb", "flow_arrival": "#0ea5e9"},
+        drift_marker_bins=drift_marker_bins,
+        suspicious_marker_bins=suspicious_marker_bins,
     )
     chart_detections = svg_polyline_chart(
         "Detections Over Time (by confidence)",
@@ -405,6 +515,8 @@ def build_html(
             "detection_medium": "#d97706",
             "detection_low": "#f59e0b",
         },
+        drift_marker_bins=drift_marker_bins,
+        suspicious_marker_bins=suspicious_marker_bins,
     )
     chart_hourly = svg_polyline_chart(
         "Hourly Detection Events Over Time",
@@ -414,15 +526,45 @@ def build_html(
             "flow_detection": series.get("flow_detection", [0] * len(labels)),
         },
         colors={"hourly_detection": "#7c3aed", "flow_detection": "#ef4444"},
+        drift_marker_bins=drift_marker_bins,
+        suspicious_marker_bins=suspicious_marker_bins,
+    )
+    feature_colors = {
+        "ssl_flows": "#2563eb",
+        "unique_servers": "#16a34a",
+        "new_servers": "#dc2626",
+        "known_server_avg_bytes": "#7c3aed",
+    }
+    chart_features = svg_polyline_chart(
+        "Hourly Feature Values (individual feature numbers)",
+        labels,
+        {
+            k: v
+            for k, v in feature_series.items()
+            if k in (
+                "ssl_flows",
+                "unique_servers",
+                "new_servers",
+                "known_server_avg_bytes",
+            )
+        },
+        colors=feature_colors,
+        drift_marker_bins=drift_marker_bins,
+        suspicious_marker_bins=suspicious_marker_bins,
     )
 
     top_events = summary["event_counts"].most_common(15)
     recent = events[-20:]
     recent_rows = []
     for e in recent:
+        event_ts_str = (
+            to_human_ts(float(e.event_ts))
+            if e.event_ts is not None
+            else "n/a"
+        )
         recent_rows.append(
             (
-                f"{to_human_ts(e.event_ts)} [{e.event_type}]",
+                f"{event_ts_str} [{e.event_type}]",
                 f"{e.message} | metrics={json.dumps(e.metrics)}",
             )
         )
@@ -467,8 +609,12 @@ def build_html(
   <div class="card">{chart_events}</div>
   <div class="card">{chart_detections}</div>
   <div class="card">{chart_hourly}</div>
+  <div class="card">{chart_features}</div>
   <div class="card">
-    <p class="small">Tip: move your mouse anywhere inside the plot area to see exact values for that time-bin.</p>
+    <p class="small">
+      Tip: move your mouse anywhere inside the plot area to see exact values for that time-bin.
+      Vertical lines: green dashed = drift update, red dashed = suspicious update (very conservative / near-denied update).
+    </p>
   </div>
 
   <div class="grid">
