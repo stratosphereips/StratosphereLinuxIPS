@@ -417,6 +417,10 @@ What it generates:
 
 - timeline plots (traffic time) for event volume and detections,
 - move mouse over the plot area to see exact time-bin values for all plotted series,
+- hourly feature plot with individual values (`ssl_flows`, `unique_servers`, `new_servers`, `known_server_avg_bytes`),
+- vertical markers for model-adaptation decisions:
+  green dashed = `drift_update`, red dashed = `suspicious_update` (very conservative / near-denied update),
+- all timestamps shown in charts/tables are traffic (packet) time; only the "Generated" line at top is wall time,
 - confidence breakdown (`high` / `medium` / `low`) over time,
 - top anomaly reasons and affected profiles,
 - score summaries,
