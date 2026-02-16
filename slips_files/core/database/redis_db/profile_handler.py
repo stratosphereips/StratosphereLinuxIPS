@@ -842,6 +842,9 @@ class ProfileHandler:
             # no mac info stored for profileid
             ip = json.dumps([incoming_ip])
             self.r.hset(self.constants.MAC, mac_addr, ip)
+            self.r.hexpire(
+                self.constants.MAC, self.default_ttl, mac_addr, nx=True
+            )
 
             # now that it's decided that this mac belongs to this profileid
             # stoe the mac in the profileid's key in the db
@@ -859,19 +862,20 @@ class ProfileHandler:
                 # seen with the given mac. nothing to do here.
                 return False
 
+            profile_of_found_ip = f"profile_{found_ip}"
             # make sure 1 profile is ipv4 and the other is ipv6
             # (so we don't mess with MITM ARP detections)
             if validators.ipv6(incoming_ip) and validators.ipv4(found_ip):
                 # associate the ipv4 we found with the incoming ipv6
                 # and vice versa
                 self.set_ipv4_of_profile(profileid, found_ip)
-                self.set_ipv6_of_profile(f"profile_{found_ip}", [incoming_ip])
+                self.set_ipv6_of_profile(profile_of_found_ip, [incoming_ip])
 
             elif validators.ipv6(found_ip) and validators.ipv4(incoming_ip):
                 # associate the ipv6 we found with the incoming ipv4
                 # and vice versa
                 self.set_ipv6_of_profile(profileid, [found_ip])
-                self.set_ipv4_of_profile(f"profile_{found_ip}", incoming_ip)
+                self.set_ipv4_of_profile(profile_of_found_ip, incoming_ip)
             elif validators.ipv6(found_ip) and validators.ipv6(incoming_ip):
                 # If 2 IPv6 are claiming to have the same MAC it's fine
                 # a computer is allowed to have many ipv6
@@ -887,10 +891,10 @@ class ProfileHandler:
                 # add this incoming ipv6(profileid) to the list of
                 # ipv6 of the found ip
                 # get the list of cached ipv6
-                ipv6: str = self.get_ipv6_from_profile(f"profile_{found_ip}")
+                ipv6: str = self.get_ipv6_from_profile(profile_of_found_ip)
                 # get the list of cached ipv6+the new one
                 ipv6: list = self.add_to_the_list_of_ipv6(incoming_ip, ipv6)
-                self.set_ipv6_of_profile(f"profile_{found_ip}", ipv6)
+                self.set_ipv6_of_profile(profile_of_found_ip, ipv6)
 
             else:
                 # both are ipv4 and are claiming to have the same mac address
@@ -902,9 +906,11 @@ class ProfileHandler:
             cached_ips.add(incoming_ip)
             cached_ips = json.dumps(list(cached_ips))
             self.r.hset(self.constants.MAC, mac_addr, cached_ips)
-
+            self.r.hexpire(
+                self.constants.MAC, self.default_ttl, mac_addr, nx=True
+            )
             self.update_mac_of_profile(profileid, mac_addr)
-            self.update_mac_of_profile(f"profile_{found_ip}", mac_addr)
+            self.update_mac_of_profile(profile_of_found_ip, mac_addr)
 
         return True
 
