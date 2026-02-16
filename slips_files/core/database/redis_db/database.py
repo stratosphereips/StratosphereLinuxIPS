@@ -20,6 +20,7 @@ from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
 from slips_files.core.database.redis_db.p2p_handler import P2PHandler
+from slips_files.core.database.redis_db.cleanup_mixin import CleanupMixin
 
 import os
 import redis
@@ -47,6 +48,7 @@ class RedisDB(
     AlertHandler,
     ProfileHandler,
     P2PHandler,
+    CleanupMixin,
     FlowTracker,
     ScanDetectionsHandler,
     Publisher,
