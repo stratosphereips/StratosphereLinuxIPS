@@ -289,14 +289,20 @@ class AlertHandler:
     def get_evidence_number(self):
         return self.r.get(self.constants.NUMBER_OF_EVIDENCE)
 
-    def mark_evidence_as_processed(self, evidence_id: str):
+    def mark_evidence_as_processed(
+        self, evidence_id: str, profileid: str, twid: str
+    ):
         """
         If an evidence was processed by the evidenceprocess, mark it in the db
         """
-        self.r.sadd(self.constants.PROCESSED_EVIDENCE, evidence_id)
+        key = f"{self.constants.PROCESSED_EVIDENCE}_{profileid}_{twid}"
+        self.r.sadd(key, evidence_id)
 
-    def is_evidence_processed(self, evidence_id: str) -> bool:
-        return self.r.sismember(self.constants.PROCESSED_EVIDENCE, evidence_id)
+    def is_evidence_processed(
+        self, evidence_id: str, profileid: str, twid: str
+    ) -> bool:
+        key = f"{self.constants.PROCESSED_EVIDENCE}_{profileid}_{twid}"
+        return self.r.sismember(key, evidence_id)
 
     def delete_evidence(self, profileid, twid, evidence_id: str):
         """

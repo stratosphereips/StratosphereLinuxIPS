@@ -298,7 +298,8 @@ class EvidenceHandler(ICore):
             # to fix this, we keep track of processed evidence
             # that came to new_evidence channel and were processed by it.
             # so they are ready to be a part of an alert
-            if not self.db.is_evidence_processed(id):
+            profileid: str = str(evidence.profile)
+            if not self.db.is_evidence_processed(id, profileid, twid):
                 continue
 
             filtered_evidence[evidence.id] = evidence
@@ -535,7 +536,9 @@ class EvidenceHandler(ICore):
                 # this marking of ev. as processed is to avoid that.
                 # so that get_evidence_for_tw() call below won't return
                 # unprocessed evidence.
-                self.db.mark_evidence_as_processed(evidence.id)
+                self.db.mark_evidence_as_processed(
+                    evidence.id, profileid, twid
+                )
 
                 if self.whitelist.is_whitelisted_evidence(evidence):
                     self.db.cache_whitelisted_evidence_id(evidence.id)
