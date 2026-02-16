@@ -956,6 +956,12 @@ class RedisDB(
             # we store ALL dns resolutions seen since starting slips
             # store with the IP as the key
             self.r.hset(self.constants.DNS_RESOLUTION, answer, ip_info)
+            self.r.hexpire(
+                self.constants.DNS_RESOLUTION,
+                self.default_ttl,
+                answer,
+                nx=True,
+            )
             self.set_ip_info(answer, {"DNS_resolution": domains})
             # these ips will be associated with the query in our db
             if not utils.is_ignored_ip(answer):
