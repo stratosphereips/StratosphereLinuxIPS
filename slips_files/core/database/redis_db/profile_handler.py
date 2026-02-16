@@ -538,7 +538,7 @@ class ProfileHandler:
         """
         try:
             profileid = f"profile_{ip}"
-            if self.r.sismember(self.constants.PROFILES, profileid):
+            if self.r.zscore(self.constants.PROFILES, profileid) is not None:
                 return profileid
             return False
         except redis.exceptions.ResponseError as inst:
@@ -548,8 +548,8 @@ class ProfileHandler:
 
     def get_profiles(self):
         """Get a list of all the profiles"""
-        profiles = self.r.smembers(self.constants.PROFILES)
-        return profiles if profiles != set() else {}
+        profiles = self.r.zrange(self.constants.PROFILES, 0, -1)
+        return set(profiles) if profiles else {}
 
     def get_tws_from_profile(self, profileid):
         """
@@ -605,7 +605,7 @@ class ProfileHandler:
     def has_profile(self, profileid):
         """Check if we have the given profile"""
         return (
-            self.r.sismember(self.constants.PROFILES, profileid)
+            self.r.zscore(self.constants.PROFILES, profileid) is not None
             if profileid
             else False
         )
@@ -613,7 +613,7 @@ class ProfileHandler:
     def get_profiles_len(self) -> int:
         """Return the amount of profiles. Redis should be faster than python
         to do this count"""
-        profiles_n = self.r.scard(self.constants.PROFILES)
+        profiles_n = self.r.zcard(self.constants.PROFILES)
         return 0 if not profiles_n else int(profiles_n)
 
     def get_last_twid_of_profile(self, profileid: str) -> Tuple[str, float]:
@@ -1016,12 +1016,17 @@ class ProfileHandler:
          and individual hashmaps for each profile (like a table)
         """
         try:
-            if self.r.sismember(self.constants.PROFILES, profileid):
+            if self.r.zscore(self.constants.PROFILES, profileid) is not None:
                 # we already have this profile
                 return False
 
+            self.zadd_but_keep_n_entries(
+                self.constants.PROFILES,
+                {str(profileid): float(starttime)},
+                5000,
+            )
+
             with self.r.pipeline() as pipe:
-                pipe.sadd(self.constants.PROFILES, str(profileid))
                 # Create the hashmap with the profileid.
                 # The hasmap of each profile is named with the profileid
                 # Add the start time of profile
