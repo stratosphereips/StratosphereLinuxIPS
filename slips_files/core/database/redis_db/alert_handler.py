@@ -323,8 +323,11 @@ class AlertHandler:
         # before deleteEvidence is called, so we need to keep track of
         # whitelisted evidence ids
         self.r.sadd(self.constants.WHITELISTED_EVIDENCE, evidence_id)
+        self.r.expire(
+            self.constants.WHITELISTED_EVIDENCE, self.default_ttl, nx=True
+        )
 
-    def is_whitelisted_evidence(self, evidence_id):
+    def is_whitelisted_evidence(self, evidence_id: str):
         """
         Check if we have the evidence ID as whitelisted in the db to
         avoid showing it in alerts
@@ -395,7 +398,6 @@ class AlertHandler:
         :param update_val: can be +ve to increase the threat level or -ve
         to decrease
         """
-
         return self.r.zincrby(
             self.constants.ACCUMULATED_THREAT_LEVELS,
             update_val,
