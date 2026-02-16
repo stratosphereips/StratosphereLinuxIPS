@@ -869,7 +869,7 @@ def test_check_tw_to_close(
     handler.publish = MagicMock(
         side_effect=lambda *a, pipeline=None, **k: pipeline
     )
-    handler._delete_past_timewindows = MagicMock(
+    handler.delete_past_timewindows = MagicMock(
         side_effect=lambda tw, pipe: pipe
     )
 
@@ -890,9 +890,9 @@ def test_check_tw_to_close(
 
     # cleanup only when close_all is False
     if close_all:
-        handler._delete_past_timewindows.assert_not_called()
+        handler.delete_past_timewindows.assert_not_called()
     else:
-        assert handler._delete_past_timewindows.call_count == len(
+        assert handler.delete_past_timewindows.call_count == len(
             expected_profiles
         )
 

@@ -10,7 +10,22 @@ class CleanupMixin:
 
     name = "DB"
 
-    def _delete_past_timewindows(self, closed_profile_tw: str, pipe):
+    def _del_all_profile_tw_keys(self, profileid: str, twid: str, pipe):
+        """
+        Deletes all keys that have the profileid and twid in them.
+        This is called when the given tw is closed.
+        """
+        pattern = f"*{profileid}*{twid}*"
+        cursor = 0
+        while True:
+            cursor, keys = pipe.r.scan(cursor=cursor, match=pattern, count=100)
+            if keys:
+                pipe.unlink(*keys)
+            if cursor == 0:
+                break
+        return pipe
+
+    def delete_past_timewindows(self, closed_profile_tw: str, pipe):
         """
         Does cleanup of old timewindows data in redis.
         This is called when there's a tw that needs to be closed.
@@ -37,13 +52,15 @@ class CleanupMixin:
             )
             return pipe
 
-        if closed_tw < 2:
+        tws_to_keep = 2
+
+        if closed_tw < tws_to_keep:
             # slips needs to always remember 2 tws, so no tws to delete now.
             return pipe
 
         profileid = f"{profile}_{ip}"
         # if tw 3 is closed, we want to keep tw 2 and tw 1, and del tw 0
-        tw_to_del = closed_tw - 2
+        tw_to_del = closed_tw - tws_to_keep
         tw_to_del = f"timewindow{tw_to_del}"
 
         pipe.zrem(
@@ -52,12 +69,5 @@ class CleanupMixin:
         )
 
         # delete ALL keys that have the profileid and twid in them.
-        pattern = f"*{profileid}*{tw_to_del}*"
-        cursor = 0
-        while True:
-            cursor, keys = pipe.r.scan(cursor=cursor, match=pattern, count=100)
-            if keys:
-                pipe.unlink(*keys)
-            if cursor == 0:
-                break
+        pipe = self._del_all_profile_tw_keys(profileid, tw_to_del, pipe)
         return pipe
