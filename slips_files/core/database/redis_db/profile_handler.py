@@ -63,34 +63,24 @@ class ProfileHandler:
         symbols_key = f"{profileid}_{twid}:InTuples:symbols"
         yield from self._hscan(symbols_key)
 
-    def get_dhcp_flows(self, profileid, twid) -> list:
+    def get_dhcp_requested_addrs(self, profileid, twid) -> Optional[Set[str]]:
         """
-        returns a dict of dhcp flows that happened in this profileid and twid
+        returns a set of requested_addr of dhcp flows in this
+        profileid and twid
         """
-        if flows := self.r.hget(
-            self.constants.DHCP_FLOWS, f"{profileid}_{twid}"
-        ):
-            return json.loads(flows)
+        key = f"{self.constants.REQUESTED_DHCP_ADDRS}:{profileid}_{twid}"
+        return self.r.zrange(key, 0, -1)
 
-    def set_dhcp_flow(self, profileid, twid, requested_addr, uid):
+    def add_dhcp_requested_addr(self, profileid, twid, requested_addr, uid):
         """
-        Stores all dhcp flows sorted by profileid_twid
+        Stores dhcp requested_addr values in a zset sorted by timestamp
         """
-        flow = {requested_addr: uid}
-        if cached_flows := self.get_dhcp_flows(profileid, twid):
-            # we already have flows in this twid, update them
-            cached_flows.update(flow)
-            self.r.hset(
-                self.constants.DHCP_FLOWS,
-                f"{profileid}_{twid}",
-                json.dumps(cached_flows),
-            )
-        else:
-            self.r.hset(
-                self.constants.DHCP_FLOWS,
-                f"{profileid}_{twid}",
-                json.dumps(flow),
-            )
+        key = f"{self.constants.REQUESTED_DHCP_ADDRS}:{profileid}_{twid}"
+        self.zadd_but_keep_n_entries(
+            key,
+            {requested_addr: time.time()},
+            n=50,
+        )
 
     def get_tw_start_time(self, profileid, twid):
         """Return the time when this TW in this profile was created"""
