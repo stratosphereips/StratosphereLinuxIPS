@@ -823,10 +823,10 @@ class DBManager:
         return self.rdb.get_msgs_published_in_channel(*args, **kwargs)
 
     def get_dhcp_flows(self, *args, **kwargs):
-        return self.rdb.get_dhcp_flows(*args, **kwargs)
+        return self.rdb.get_dhcp_requested_addrs(*args, **kwargs)
 
     def set_dhcp_flow(self, *args, **kwargs):
-        return self.rdb.set_dhcp_flow(*args, **kwargs)
+        return self.rdb.add_dhcp_requested_addr(*args, **kwargs)
 
     def get_dstips_with_not_established_flows(self, *args, **kwargs):
         yield from self.rdb.get_dstips_with_not_established_flows(

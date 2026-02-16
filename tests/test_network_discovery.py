@@ -70,9 +70,11 @@ def test_check_dhcp_scan_no_evidence(
     network_discovery = ModuleFactory().create_network_discovery_obj()
     network_discovery.minimum_requested_addrs = 4
 
-    network_discovery.db.get_dhcp_flows = Mock()
-    network_discovery.db.get_dhcp_flows.return_value = existing_dhcp_flows
-    network_discovery.db.set_dhcp_flow = Mock()
+    network_discovery.db.get_dhcp_requested_addrs = Mock()
+    network_discovery.db.get_dhcp_requested_addrs.return_value = (
+        existing_dhcp_flows
+    )
+    network_discovery.db.add_dhcp_requested_addr = Mock()
     network_discovery.db.set_evidence = Mock()
     profileid = flow_info["flow"].saddr
     network_discovery.check_dhcp_scan(
@@ -80,16 +82,16 @@ def test_check_dhcp_scan_no_evidence(
     )
 
     assert (
-        network_discovery.db.get_dhcp_flows.call_count
+        network_discovery.db.get_dhcp_requested_addrs.call_count
         == expected_get_dhcp_flows_calls
     )
     assert (
-        network_discovery.db.set_dhcp_flow.call_count
+        network_discovery.db.add_dhcp_requested_addr.call_count
         == expected_set_dhcp_flow_calls
     )
     assert network_discovery.db.set_evidence.call_count == 0
 
-    network_discovery.db.set_dhcp_flow.assert_called_with(
+    network_discovery.db.add_dhcp_requested_addr.assert_called_with(
         profileid,
         flow_info["twid"],
         flow_info["flow"].requested_addr,
@@ -119,17 +121,19 @@ def test_check_dhcp_scan_with_evidence():
     network_discovery = ModuleFactory().create_network_discovery_obj()
     network_discovery.minimum_requested_addrs = 4
 
-    network_discovery.db.get_dhcp_flows = Mock()
-    network_discovery.db.get_dhcp_flows.return_value = existing_dhcp_flows
-    network_discovery.db.set_dhcp_flow = Mock()
+    network_discovery.db.get_dhcp_requested_addrs = Mock()
+    network_discovery.db.get_dhcp_requested_addrs.return_value = (
+        existing_dhcp_flows
+    )
+    network_discovery.db.add_dhcp_requested_addr = Mock()
     network_discovery.db.set_evidence = Mock()
     profileid = f"profile_{flow.saddr}"
     network_discovery.check_dhcp_scan(profileid, twid, flow)
 
-    assert network_discovery.db.get_dhcp_flows.call_count == 2
-    assert network_discovery.db.set_dhcp_flow.call_count == 1
+    assert network_discovery.db.get_dhcp_requested_addrs.call_count == 2
+    assert network_discovery.db.add_dhcp_requested_addr.call_count == 1
     assert network_discovery.db.set_evidence.call_count == 1
-    network_discovery.db.set_dhcp_flow.assert_called_with(
+    network_discovery.db.add_dhcp_requested_addr.assert_called_with(
         profileid,
         twid,
         flow.requested_addr,

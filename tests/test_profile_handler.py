@@ -82,65 +82,46 @@ def test_get_intuples_from_profile_tw(hscan_return_value, expected_in_tuples):
 
 
 @pytest.mark.parametrize(
-    "hget_return_value, expected_dhcp_flows",
+    "zrange_return_value, expected_dhcp_flows",
     [  # Testcase 1: Existing DHCP flows
         (
-            b'{"192.168.1.100": "abc123"}',
-            {"192.168.1.100": "abc123"},
+            [b"192.168.1.100"],
+            {"192.168.1.100"},
         ),
         # Testcase 2: No DHCP flows found
-        (None, None),
-        # Testcase 3: Empty DHCP flows dictionary
-        (b"{}", {}),
+        ([], None),
     ],
 )
-def test_get_dhcp_flows(hget_return_value, expected_dhcp_flows):
+def test_get_dhcp_flows(zrange_return_value, expected_dhcp_flows):
     handler = ModuleFactory().create_profile_handler_obj()
 
     profileid = "profile_1"
     twid = "timewindow1"
 
-    handler.r.hget.return_value = hget_return_value
-    dhcp_flows = handler.get_dhcp_flows(profileid, twid)
-    handler.r.hget.assert_called_once_with("DHCP_flows", f"{profileid}_{twid}")
+    handler.r.zrange.return_value = zrange_return_value
+    dhcp_flows = handler.get_dhcp_requested_addrs(profileid, twid)
+    handler.r.zrange.assert_called_once_with(
+        f"DHCP_flows:{profileid}_{twid}", 0, -1
+    )
     assert dhcp_flows == expected_dhcp_flows
 
 
-@pytest.mark.parametrize(
-    "cached_flows, expected_hset_call",
-    [
-        # Testcase 1: No cached flows
-        (
-            {},
-            (
-                "DHCP_flows",
-                "profile_1_timewindow1",
-                '{"192.168.1.100": "abc123"}',
-            ),
-        ),
-        # Testcase 2: Existing cached flows
-        (
-            {"192.168.1.101": "def456"},
-            (
-                "DHCP_flows",
-                "profile_1_timewindow1",
-                '{"192.168.1.101": "def456", ' '"192.168.1.100": "abc123"}',
-            ),
-        ),
-    ],
-)
-def test_set_dhcp_flow(cached_flows, expected_hset_call):
+def test_set_dhcp_flow():
     handler = ModuleFactory().create_profile_handler_obj()
 
-    handler.get_dhcp_flows = MagicMock(return_value=cached_flows)
+    handler.zadd_but_keep_n_entries = Mock()
 
     profileid = "profile_1"
     twid = "timewindow1"
     requested_addr = "192.168.1.100"
     uid = "abc123"
-    handler.set_dhcp_flow(profileid, twid, requested_addr, uid)
+    handler.add_dhcp_requested_addr(profileid, twid, requested_addr, uid)
 
-    handler.r.hset.assert_called_once_with(*expected_hset_call)
+    handler.zadd_but_keep_n_entries.assert_called_once_with(
+        f"DHCP_flows:{profileid}_{twid}",
+        {requested_addr: ANY},
+        n=50,
+    )
 
 
 @pytest.mark.parametrize(

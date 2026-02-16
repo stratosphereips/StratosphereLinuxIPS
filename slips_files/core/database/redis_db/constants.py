@@ -58,7 +58,7 @@ class Constants:
     P2P_RECEIVED_BLAME_REPORTS = "p2p-received-blame-reports"
     MULTICAST_ADDRESS = "multiAddress"
     PORT_INFO = "portinfo"
-    DHCP_FLOWS = "DHCP_flows"
+    REQUESTED_DHCP_ADDRS = "requested_DHCP_addrs"
     REDIS_USED_PORT = "port"
     # used in the web interface
     BLOCKED_PROFILES_AND_TWS = "BlockedProfTW"

@@ -130,11 +130,9 @@ class NetworkDiscovery(IModule):
             # we are only interested in DHCPREQUEST flows,
             # where a client is requesting an IP
             return
-        # dhcp_flows format is
-        #       { requested_addr: uid,
-        #         requested_addr2: uid2... }
+        # dhcp_flows format is a set of requested_addr
 
-        dhcp_flows: dict = self.db.get_dhcp_flows(profileid, twid)
+        dhcp_flows = self.db.get_dhcp_requested_addrs(profileid, twid)
 
         if dhcp_flows:
             # client was seen requesting an addr before in this tw
@@ -144,29 +142,24 @@ class NetworkDiscovery(IModule):
                 return
 
             # it was requesting a different addr, keep track of it and its uid
-            self.db.set_dhcp_flow(
+            self.db.add_dhcp_requested_addr(
                 profileid, twid, flow.requested_addr, flow.uids
             )
         else:
             # first time for this client to make a dhcp request in this tw
-            self.db.set_dhcp_flow(
+            self.db.add_dhcp_requested_addr(
                 profileid, twid, flow.requested_addr, flow.uids
             )
             return
 
         # TODO if we are not going to use the requested addr, no need to store it
         # TODO just store the uids
-        dhcp_flows: dict = self.db.get_dhcp_flows(profileid, twid)
+        dhcp_flows = self.db.get_dhcp_requested_addrs(profileid, twid)
 
         # we alert every 4,8,12, etc. requested IPs
         number_of_requested_addrs = len(dhcp_flows)
         if number_of_requested_addrs % self.minimum_requested_addrs == 0:
-            # get the uids of all the flows where this client
-            # was requesting an addr in this tw
-
-            for uids_list in dhcp_flows.values():
-                flow.uids.append(uids_list[0])
-
+            flow.uids = []
             self.set_evidence_dhcp_scan(
                 profileid, twid, flow, number_of_requested_addrs
             )
