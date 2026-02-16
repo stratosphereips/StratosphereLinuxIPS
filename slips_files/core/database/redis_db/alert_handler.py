@@ -124,7 +124,20 @@ class AlertHandler:
         return ""
 
     def set_blocked_ip(self, ip: str):
-        self.r.zadd(self.constants.BLOCKED_IPS, {ip: time.time()})
+        """
+        Adds the given IP to the blocked IPs sorted set with the current timestamp as score.
+         Also ensures that only the 100 most recent IPs are kept in the
+         set. and deleted the rest,
+         :param ip: The IP address to block
+        """
+        limit = 100
+        with self.r.pipeline() as pipe:
+            # Add the new IP with current timestamp
+            pipe.zadd(self.constants.BLOCKED_IPS, {ip: time.time()})
+            # Remove elements outside the range [0, -limit-1]
+            # This keeps only the 'limit' newest members
+            pipe.zremrangebyrank(self.constants.BLOCKED_IPS, 0, -(limit + 1))
+            pipe.execute()
 
     def is_ip_blocked(self, ip: str) -> Optional[float]:
         ts = self.r.zscore(self.constants.BLOCKED_IPS, ip)
