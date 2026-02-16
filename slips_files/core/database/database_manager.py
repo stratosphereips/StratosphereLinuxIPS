@@ -1024,8 +1024,9 @@ class DBManager:
 
     def add_profile(self, profileid, starttime):
         confidence = 0.05
-        self.update_threat_level(profileid, "info", confidence)
-        return self.rdb.add_profile(profileid, starttime, confidence)
+        if self.rdb.add_profile(profileid, starttime, confidence):
+            self.update_threat_level(profileid, "info", confidence)
+        return
 
     def set_module_label_for_profile(self, *args, **kwargs):
         return self.rdb.set_module_label_for_profile(*args, **kwargs)

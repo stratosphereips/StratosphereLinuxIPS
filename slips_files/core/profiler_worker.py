@@ -254,11 +254,9 @@ class ProfilerWorker(IModule):
             # some flows don't have a daddr like software.log flows
             return False, False
 
-        rev_profileid: str = self.db.get_profileid_from_ip(flow.daddr)
-        if not rev_profileid:
-            # the profileid is not present in the db, create it
-            rev_profileid = f"profile_{flow.daddr}"
-            self.db.add_profile(rev_profileid, flow.starttime)
+        # add it to the db id its not there
+        rev_profileid = f"profile_{flow.daddr}"
+        self.db.add_profile(rev_profileid, flow.starttime)
 
         # in the database, Find and register the id of the tw where the flow
         # belongs.
