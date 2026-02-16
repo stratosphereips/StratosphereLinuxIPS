@@ -108,7 +108,7 @@ class ProfileHandler:
             return self.starttime_of_first_tw
 
         starttime_of_first_tw: str = self.r.hget(
-            self.constants.ANALYSIS, "file_start"
+            self.constants.ANALYSIS, self.constants.ANALYSIS_FILE_START
         )
         if starttime_of_first_tw:
             return float(starttime_of_first_tw)
@@ -396,16 +396,24 @@ class ProfileHandler:
                 return
             # add this new sw to the list of softwares this profile is using
             cached_sw.update(sw_dict)
-            self.r.hset(profileid, "used_software", json.dumps(cached_sw))
+            self.r.hset(
+                profileid,
+                self.constants.USED_SOFTWARE,
+                json.dumps(cached_sw),
+            )
         else:
             # first time for this profile to use a software
-            self.r.hset(profileid, "used_software", json.dumps(sw_dict))
+            self.r.hset(
+                profileid, self.constants.USED_SOFTWARE, json.dumps(sw_dict)
+            )
 
     def get_total_flows(self):
         """
         gets total flows to process from the db
         """
-        total_flows = self.r.hget(self.constants.ANALYSIS, "total_flows")
+        total_flows = self.r.hget(
+            self.constants.ANALYSIS, self.constants.ANALYSIS_TOTAL_FLOWS
+        )
         if total_flows:
             return int(total_flows)
         return 0
@@ -511,7 +519,7 @@ class ProfileHandler:
             # only add this SNI to our db if it has a DNS resolution
             # Verify that the SNI is equal to any of the domains in the DNS
             # resolution
-            resolution = self.r.hget("DNSresolution", flow.daddr)
+            resolution = self.r.hget(self.constants.DNS_RESOLUTION, flow.daddr)
             if not resolution:
                 return
 
@@ -777,7 +785,7 @@ class ProfileHandler:
             if cached_mac_addr == mac_addr:
                 # now we're sure that the vendor of the given mac addr,
                 # is the vendor of this profileid
-                self.r.hset(profileid, "MAC_vendor", mac_vendor)
+                self.r.hset(profileid, self.constants.MAC_VENDOR, mac_vendor)
                 return True
 
         return False
@@ -914,41 +922,47 @@ class ProfileHandler:
         :param user_agent: dict containing user_agent, os_type ,
         os_name and agent_name
         """
-        self.r.hset(profileid, "first user-agent", user_agent)
+        self.r.hset(profileid, self.constants.FIRST_USER_AGENT, user_agent)
 
     def get_user_agents_count(self, profileid) -> int:
         """
         returns the number of unique UAs seen for the given profileid
         """
-        return int(self.r.hget(profileid, "user_agents_count"))
+        return int(self.r.hget(profileid, self.constants.USER_AGENTS_COUNT))
 
     def add_all_user_agent_to_profile(self, profileid, user_agent: str):
         """
         Used to keep history of past user agents of profile
         :param user_agent: str of user_agent
         """
-        if not self.r.hexists(profileid, "past_user_agents"):
+        if not self.r.hexists(profileid, self.constants.PAST_USER_AGENTS):
             # add the first user agent seen to the db
             self.r.hset(
-                profileid, "past_user_agents", json.dumps([user_agent])
+                profileid,
+                self.constants.PAST_USER_AGENTS,
+                json.dumps([user_agent]),
             )
-            self.r.hset(profileid, "user_agents_count", 1)
+            self.r.hset(profileid, self.constants.USER_AGENTS_COUNT, 1)
         else:
             # we have previous UAs
             user_agents = json.loads(
-                self.r.hget(profileid, "past_user_agents")
+                self.r.hget(profileid, self.constants.PAST_USER_AGENTS)
             )
             if user_agent not in user_agents:
                 # the given ua is not cached. cache it as a str
                 user_agents.append(user_agent)
                 self.r.hset(
-                    profileid, "past_user_agents", json.dumps(user_agents)
+                    profileid,
+                    self.constants.PAST_USER_AGENTS,
+                    json.dumps(user_agents),
                 )
 
                 # incr the number of user agents seen for this profile
                 user_agents_count: int = self.get_user_agents_count(profileid)
                 self.r.hset(
-                    profileid, "user_agents_count", user_agents_count + 1
+                    profileid,
+                    self.constants.USER_AGENTS_COUNT,
+                    user_agents_count + 1,
                 )
 
     def get_software_from_profile(self, profileid):
@@ -958,13 +972,15 @@ class ProfileHandler:
         if not profileid:
             return False
 
-        if used_software := self.r.hmget(profileid, "used_software")[0]:
+        if used_software := self.r.hmget(
+            profileid, self.constants.USED_SOFTWARE
+        )[0]:
             used_software = json.loads(used_software)
             return used_software
 
     def get_first_user_agent(self, profileid) -> str:
         """returns the first user agent used by the given profile"""
-        return self.r.hmget(profileid, "first user-agent")[0]
+        return self.r.hmget(profileid, self.constants.FIRST_USER_AGENT)[0]
 
     def get_user_agent_from_profile(self, profileid) -> str:
         """
@@ -984,13 +1000,13 @@ class ProfileHandler:
         """
 
         # returns a list of dhcp if the profile is in the db
-        profile_in_db = self.r.hmget(profileid, "dhcp")
+        profile_in_db = self.r.hmget(profileid, self.constants.DHCP)
         if not profile_in_db:
             return False
         is_dhcp_set = profile_in_db[0]
         # check if it's already marked as dhcp
         if not is_dhcp_set:
-            self.r.hset(profileid, "dhcp", "true")
+            self.r.hset(profileid, self.constants.DHCP, "true")
 
     def add_profile(self, profileid, starttime, confidence=0.05) -> bool:
         """
@@ -1009,11 +1025,11 @@ class ProfileHandler:
                 # Create the hashmap with the profileid.
                 # The hasmap of each profile is named with the profileid
                 # Add the start time of profile
-                pipe.hset(profileid, "starttime", starttime)
-                pipe.hset(profileid, "duration", self.width)
+                pipe.hset(profileid, self.constants.STARTTIME, starttime)
+                pipe.hset(profileid, self.constants.DURATION, self.width)
                 # When a new profiled is created assign threat level = 0
                 # and confidence = 0.05
-                pipe.hset(profileid, "confidence", confidence)
+                pipe.hset(profileid, self.constants.CONFIDENCE, confidence)
                 pipe.execute()
 
             # The IP of the profile should also be added as a new IP
@@ -1040,7 +1056,7 @@ class ProfileHandler:
         data = self.get_modules_labels_of_a_profile(profileid)
         data[module] = label
         data = json.dumps(data)
-        self.r.hset(profileid, "modules_labels", data)
+        self.r.hset(profileid, self.constants.MODULES_LABELS, data)
 
     def check_tw_to_close(self, close_all=False):
         """
@@ -1279,7 +1295,7 @@ class ProfileHandler:
         """
         Get labels set by modules in the profile.
         """
-        data = self.r.hget(profileid, "modules_labels")
+        data = self.r.hget(profileid, self.constants.MODULES_LABELS)
         data = json.loads(data) if data else {}
         return data
 
@@ -1316,45 +1332,53 @@ class ProfileHandler:
         Used to mark this profile as dhcp server
         """
 
-        self.r.hset(profileid, "gateway", "true")
+        self.r.hset(profileid, self.constants.GATEWAY, "true")
 
     def set_ipv6_of_profile(self, profileid, ip: list):
-        self.r.hset(profileid, "IPv6", json.dumps(ip))
+        self.r.hset(profileid, self.constants.IPV6, json.dumps(ip))
 
     def set_ipv4_of_profile(self, profileid, ip):
-        self.r.hset(profileid, "IPv4", json.dumps([ip]))
+        self.r.hset(profileid, self.constants.IPV4, json.dumps([ip]))
 
     def get_mac_vendor_from_profile(self, profileid: str) -> Union[str, None]:
         """
         Returns a str MAC vendor of  the given profile or None
         """
 
-        return self.r.hget(profileid, "MAC_vendor")
+        return self.r.hget(profileid, self.constants.MAC_VENDOR)
 
     def get_hostname_from_profile(self, profileid: str) -> Optional[str]:
         """
         Returns hostname about a certain profile or None
         """
-        return self.r.hget(profileid, "host_name")
+        return self.r.hget(profileid, self.constants.HOST_NAME)
 
     def add_host_name_to_profile(self, hostname, profileid):
         """
         Adds the given hostname to the given profile
         """
         if not self.get_hostname_from_profile(profileid):
-            self.r.hset(profileid, "host_name", hostname)
+            self.r.hset(profileid, self.constants.HOST_NAME, hostname)
 
     def get_ipv4_from_profile(self, profileid) -> str:
         """
         Returns ipv4 about a certain profile or None
         """
-        return self.r.hmget(profileid, "IPv4")[0] if profileid else False
+        return (
+            self.r.hmget(profileid, self.constants.IPV4)[0]
+            if profileid
+            else False
+        )
 
     def get_ipv6_from_profile(self, profileid) -> str:
         """
         Returns ipv6 about a certain profile or None
         """
-        return self.r.hmget(profileid, "IPv6")[0] if profileid else False
+        return (
+            self.r.hmget(profileid, self.constants.IPV6)[0]
+            if profileid
+            else False
+        )
 
     def get_the_other_ip_version(self, profileid):
         """

@@ -55,7 +55,7 @@ class AlertHandler:
 
         self.r.hset(
             f"{alert.profile}_{alert.timewindow}",
-            "alerts",
+            self.constants.ALERTS,
             profileid_twid_alerts,
         )
         self.r.incr(self.constants.NUMBER_OF_ALERTS, 1)
@@ -71,7 +71,7 @@ class AlertHandler:
         :param alert_ID: ID of alert to export to warden server
         for example profile_10.0.2.15_timewindow1_4e4e4774-cdd7-4e10-93a3-e764f73af621
         """
-        if alerts := self.r.hget(f"{profileid}_{twid}", "alerts"):
+        if alerts := self.r.hget(f"{profileid}_{twid}", self.constants.ALERTS):
             alerts = json.loads(alerts)
             return alerts.get(alert_id, False)
         return False
@@ -124,17 +124,17 @@ class AlertHandler:
         return ""
 
     def set_blocked_ip(self, ip: str):
-        self.r.zadd("blocked_ips", {ip: time.time()})
+        self.r.zadd(self.constants.BLOCKED_IPS, {ip: time.time()})
 
     def is_ip_blocked(self, ip: str) -> Optional[float]:
-        ts = self.r.zscore("blocked_ips", ip)
+        ts = self.r.zscore(self.constants.BLOCKED_IPS, ip)
         if ts is not None:
             return ts
         return None
 
     def del_blocked_ip(self, ip: str):
         # remove ip from the blocked_ips sorted set
-        self.r.zrem("blocked_ips", ip)
+        self.r.zrem(self.constants.BLOCKED_IPS, ip)
 
     def get_tw_limits(self, profileid, twid: str) -> Tuple[float, float]:
         """
@@ -335,7 +335,7 @@ class AlertHandler:
         The format for the returned dict is
             {<alert_uuid>: [ev_uuid1, ev_uuid2, ev_uuid3]}
         """
-        alerts: str = self.r.hget(f"{profileid}_{twid}", "alerts")
+        alerts: str = self.r.hget(f"{profileid}_{twid}", self.constants.ALERTS)
         if not alerts:
             return {}
         alerts: dict = json.loads(alerts)
@@ -355,7 +355,7 @@ class AlertHandler:
         return {}
 
     def set_max_threat_level(self, profileid: str, threat_level: str):
-        self.r.hset(profileid, "max_threat_level", threat_level)
+        self.r.hset(profileid, self.constants.MAX_THREAT_LEVEL, threat_level)
 
     def get_accumulated_threat_level(self, profileid: str, twid: str) -> float:
         """
@@ -405,7 +405,9 @@ class AlertHandler:
         """
         threat_level_float = utils.threat_levels[threat_level]
 
-        old_max_threat_level: str = self.r.hget(profileid, "max_threat_level")
+        old_max_threat_level: str = self.r.hget(
+            profileid, self.constants.MAX_THREAT_LEVEL
+        )
 
         if not old_max_threat_level:
             # first time setting max tl
@@ -434,7 +436,7 @@ class AlertHandler:
         Do not call this function directy from this class, always call it
         from dbmanager.update_threat_level() to update the trustdb too:D
         """
-        self.r.hset(profileid, "threat_level", threat_level)
+        self.r.hset(profileid, self.constants.THREAT_LEVEL, threat_level)
 
         max_threat_lvl: float = self.update_max_threat_level(
             profileid, threat_level

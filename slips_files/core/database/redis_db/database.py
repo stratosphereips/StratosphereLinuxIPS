@@ -558,7 +558,7 @@ class RedisDB(
         to shutdown slips gracefully, this function should only be used by slips.py
         """
         self.print("Sending the stop signal to all listeners", 0, 3)
-        self.r.publish("control_channel", "stop_slips")
+        self.r.publish(self.channels.CONTROL_CHANNEL, "stop_slips")
 
     def get_message(self, channel_obj: redis.client.PubSub, timeout=0.0000001):
         """
@@ -710,19 +710,25 @@ class RedisDB(
         """
         gets zeek output dir from the db
         """
-        return self.r.hget(self.constants.ANALYSIS, "zeek_dir")
+        return self.r.hget(
+            self.constants.ANALYSIS, self.constants.ANALYSIS_ZEEK_DIR
+        )
 
     def get_input_file(self):
         """
         gets zeek output dir from the db
         """
-        return self.r.hget(self.constants.ANALYSIS, "name")
+        return self.r.hget(
+            self.constants.ANALYSIS, self.constants.ANALYSIS_NAME
+        )
 
     def get_commit(self):
         """
         gets the currently used commit from the db
         """
-        return self.r.hget(self.constants.ANALYSIS, "commit")
+        return self.r.hget(
+            self.constants.ANALYSIS, self.constants.ANALYSIS_COMMIT
+        )
 
     def client_setname(self, name: str):
         name = utils.sanitize(name)
@@ -733,13 +739,17 @@ class RedisDB(
         """
         gets the currently used zeek_version from the db
         """
-        return self.r.hget(self.constants.ANALYSIS, "zeek_version")
+        return self.r.hget(
+            self.constants.ANALYSIS, self.constants.ANALYSIS_ZEEK_VERSION
+        )
 
     def get_branch(self):
         """
         gets the currently used branch from the db
         """
-        return self.r.hget(self.constants.ANALYSIS, "branch")
+        return self.r.hget(
+            self.constants.ANALYSIS, self.constants.ANALYSIS_BRANCH
+        )
 
     def get_evidence_detection_threshold(self):
         """
@@ -756,16 +766,22 @@ class RedisDB(
         "zeek_log_file", "zeek_folder", "stdin", "nfdump", "binetflow",
         "suricata"
         """
-        return self.r.hget(self.constants.ANALYSIS, "input_type")
+        return self.r.hget(
+            self.constants.ANALYSIS, self.constants.ANALYSIS_INPUT_TYPE
+        )
 
     def get_interface(self) -> str:
-        return self.r.hget(self.constants.ANALYSIS, "interface")
+        return self.r.hget(
+            self.constants.ANALYSIS, self.constants.ANALYSIS_INTERFACE
+        )
 
     def get_output_dir(self):
         """
         returns the currently used output dir
         """
-        return self.r.hget(self.constants.ANALYSIS, "output_dir")
+        return self.r.hget(
+            self.constants.ANALYSIS, self.constants.ANALYSIS_OUTPUT_DIR
+        )
 
     def set_ip_info(self, ip: str, to_store: Dict[str, Any]):
         """
@@ -1328,14 +1344,16 @@ class RedisDB(
 
     def get_reconnections_for_tw(self, profileid, twid):
         """Get the reconnections for this TW for this Profile"""
-        data = self.r.hget(f"{profileid}_{twid}", "Reconnections")
+        data = self.r.hget(f"{profileid}_{twid}", self.constants.RECONNECTIONS)
         data = json.loads(data) if data else {}
         return data
 
     def set_reconnections(self, profileid, twid, data):
         """Set the reconnections for this TW for this Profile"""
         data = json.dumps(data)
-        self.r.hset(f"{profileid}_{twid}", "Reconnections", str(data))
+        self.r.hset(
+            f"{profileid}_{twid}", self.constants.RECONNECTIONS, str(data)
+        )
 
     def get_host_ip(self, interface) -> Optional[str]:
         """returns the latest added host ip
@@ -1357,7 +1375,7 @@ class RedisDB(
 
     def get_all_host_ips(self) -> List[str]:
         """returns the latest added host ip of all interfaces"""
-        ip_keys = self.r.scan_iter(match="host_ip_*")
+        ip_keys = self.r.scan_iter(match=self.constants.HOST_IP_SCAN_PATTERN)
 
         all_ips: List[str] = []
         for key in ip_keys:
@@ -1702,13 +1720,17 @@ class RedisDB(
         """
         :param time: epoch
         """
-        self.r.hset(self.constants.WARDEN_INFO, "poll", time)
+        self.r.hset(
+            self.constants.WARDEN_INFO, self.constants.WARDEN_POLL, time
+        )
 
     def get_last_warden_poll_time(self):
         """
         returns epoch time of last poll
         """
-        time = self.r.hget(self.constants.WARDEN_INFO, "poll")
+        time = self.r.hget(
+            self.constants.WARDEN_INFO, self.constants.WARDEN_POLL
+        )
         time = float(time) if time else float("-inf")
         return time
 
