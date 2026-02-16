@@ -946,9 +946,6 @@ class DBManager:
     def get_tws_from_profile(self, *args, **kwargs):
         return self.rdb.get_tws_from_profile(*args, **kwargs)
 
-    def get_number_of_tws_in_profile(self, *args, **kwargs):
-        return self.rdb.get_number_of_tws_in_profile(*args, **kwargs)
-
     def get_t2_for_profile_tw(self, *args, **kwargs):
         return self.rdb.get_t2_for_profile_tw(*args, **kwargs)
 

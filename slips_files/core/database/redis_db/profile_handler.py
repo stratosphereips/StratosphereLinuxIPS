@@ -562,13 +562,6 @@ class ProfileHandler:
             else False
         )
 
-    def get_number_of_tws_in_profile(self, profileid) -> int:
-        """
-        Receives a profile id and returns the number of all the
-        TWs in that profile
-        """
-        return len(self.get_tws_from_profile(profileid)) if profileid else 0
-
     def get_t2_for_profile_tw(
         self, profileid, twid, tupleid, direction: str
     ) -> Tuple[Optional[float], Optional[float]]:
@@ -686,7 +679,9 @@ class ProfileHandler:
         try:
             if not self.r.zscore(f"tws{profileid}", timewindow):
                 # Add the new TW to the index of TW
-                self.r.zadd(f"tws{profileid}", {timewindow: float(startoftw)})
+                self.zadd_but_keep_n_entries(
+                    f"tws{profileid}", {timewindow: float(startoftw)}, 50
+                )
                 self.print(
                     f"Created and added to DB for "
                     f"{profileid}: a new tw: {timewindow}. "
