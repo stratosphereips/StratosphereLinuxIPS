@@ -71,3 +71,18 @@ class CleanupMixin:
         # delete ALL keys that have the profileid and twid in them.
         pipe = self._del_all_profile_tw_keys(profileid, tw_to_del, pipe)
         return pipe
+
+    def zadd_but_keep_n_entries(self, key: str, mapping: dict, n: int):
+        """
+        Adds the given mapping to the sorted set at the given key,
+        but keeps only the n entries with the highest scores.
+        :param key: The key of the sorted set
+        :param mapping: A dict of {member: score} to add to the sorted set
+        :param n: The number of entries to keep in the sorted set
+        """
+        with self.r.pipeline() as pipe:
+            pipe.zadd(key, mapping)
+            # Remove elements outside the range [0, -limit-1]
+            # This keeps only the 'limit' newest members
+            pipe.zremrangebyrank(key, 0, -(n + 1))
+            pipe.execute()
