@@ -116,7 +116,7 @@ class FlowTracker:
         with self.r.pipeline() as pipe:
             pipe.hincrby(key, field, 1)
             # 30 mins TTL for each key
-            pipe.hexpire(key, 1800, field)
+            pipe.hexpire(key, 1800, field, nx=True)
             result = pipe.execute()
 
         subscribers_who_processed_this_msg, _ = result

@@ -315,6 +315,15 @@ class ProfileHandler:
         self.r.hset(
             self.constants.BLOCKED_PROFILES_AND_TWS, profileid, json.dumps(tws)
         )
+        # as long as new entries for this profile are added, keep renewing
+        # the 2d expiration.
+        # aka max time that this profile can be blocked without activity is 2 days
+        two_days_in_seconds = 60 * 60 * 24 * 2
+        self.r.hexpire(
+            self.constants.BLOCKED_PROFILES_AND_TWS,
+            two_days_in_seconds,
+            profileid,
+        )
 
     def get_blocked_timewindows_of_profile(self, profileid):
         """Return all the list of blocked tws"""
