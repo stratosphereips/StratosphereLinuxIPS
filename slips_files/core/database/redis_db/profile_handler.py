@@ -1153,8 +1153,16 @@ class ProfileHandler:
         profileid = f"{profile}_{ip}"
         # if tw 3 is closed, we want to keep tw 2 and tw 1, and del tw 0
         tw_to_del = closed_tw - 2
-        pipe.unlink(f"{profileid}_timewindow{tw_to_del}")
 
+        # delete ALL keys that have the profileid and twid in them.
+        pattern = f"*{profileid}*timewindow{tw_to_del}*"
+        cursor = 0
+        while True:
+            cursor, keys = pipe.r.scan(cursor=cursor, match=pattern, count=100)
+            if keys:
+                pipe.unlink(*keys)
+            if cursor == 0:
+                break
         return pipe
 
     def mark_profile_tw_as_modified(
