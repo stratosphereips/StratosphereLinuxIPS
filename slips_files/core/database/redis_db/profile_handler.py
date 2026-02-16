@@ -325,7 +325,7 @@ class ProfileHandler:
             profileid,
         )
 
-    def get_blocked_timewindows_of_profile(self, profileid):
+    def get_blocked_timewindows_of_profile(self, profileid) -> List[str]:
         """Return all the list of blocked tws"""
         if tws := self.r.hget(
             self.constants.BLOCKED_PROFILES_AND_TWS, profileid

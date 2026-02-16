@@ -1,5 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import json
+from typing import List
 
 
 class CleanupMixin:
@@ -24,6 +26,22 @@ class CleanupMixin:
             if cursor == 0:
                 break
         return pipe
+
+    def delete_old_tws_from_blocked_profiles(self, profileid: str, twid: str):
+        """
+        deletes the given twid from the list of blocked timewindows for the
+        given profileid.
+        """
+        timewindows: List[str] = self.get_blocked_timewindows_of_profile(
+            profileid
+        )
+        if twid in timewindows:
+            timewindows.remove(twid)
+        self.r.hset(
+            self.constants.BLOCKED_PROFILES_AND_TWS,
+            profileid,
+            json.dumps(timewindows),
+        )
 
     def delete_past_timewindows(self, closed_profile_tw: str, pipe):
         """
@@ -63,6 +81,7 @@ class CleanupMixin:
         tw_to_del = closed_tw - tws_to_keep
         tw_to_del = f"timewindow{tw_to_del}"
 
+        self.delete_old_tws_from_blocked_profiles(profileid, tw_to_del)
         pipe.zrem(
             self.constants.ACCUMULATED_THREAT_LEVELS,
             f"{profileid}_{tw_to_del}",
