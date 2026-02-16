@@ -682,6 +682,12 @@ class ProfileHandler:
                 self.zadd_but_keep_n_entries(
                     f"tws{profileid}", {timewindow: float(startoftw)}, 50
                 )
+
+                # expire in 2 days, to make sure old profiles that are not
+                # active anymore get deleted.
+                two_days_in_seconds = 60 * 60 * 24 * 2
+                self.expire(f"tws{profileid}", two_days_in_seconds)
+
                 self.print(
                     f"Created and added to DB for "
                     f"{profileid}: a new tw: {timewindow}. "
