@@ -308,10 +308,10 @@ class ProfileHandler:
         # as long as new entries for this profile are added, keep renewing
         # the 2d expiration.
         # aka max time that this profile can be blocked without activity is 2 days
-        two_days_in_seconds = 60 * 60 * 24 * 2
+
         self.r.hexpire(
             self.constants.BLOCKED_PROFILES_AND_TWS,
-            two_days_in_seconds,
+            self.extended_ttl,
             profileid,
         )
 
@@ -684,8 +684,7 @@ class ProfileHandler:
 
                 # expire in 2 days, to make sure old profiles that are not
                 # active anymore get deleted.
-                two_days_in_seconds = 60 * 60 * 24 * 2
-                self.expire(f"tws{profileid}", two_days_in_seconds)
+                self.expire(f"tws{profileid}", self.extended_ttl)
 
                 self.print(
                     f"Created and added to DB for "

@@ -40,6 +40,7 @@ from typing import (
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 LOCALHOST = "127.0.0.1"
+TWO_DAYS_IN_SECONDS = 60 * 60 * 24 * 2
 
 
 class RedisDB(
@@ -200,6 +201,7 @@ class RedisDB(
         # default ttl is 2 tws. anything before that should be deleted from
         # the db to save memory
         self.default_ttl = 2 * self.conf.get_tw_width_in_seconds()
+        self.extended_ttl = TWO_DAYS_IN_SECONDS
 
     def call_mixins_setup(self):
         """calls setup() on all mixins"""

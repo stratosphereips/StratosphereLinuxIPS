@@ -45,6 +45,12 @@ class P2PHandler:
             n=50,
         )
         self.r.hset(self.constants.P2P_PEER_INFO_HASH, peer_id, td)
+        self.r.hexpire(
+            self.constants.P2P_PEER_INFO_HASH,
+            self.extended_ttl,
+            peer_id,
+            nx=True,
+        )
 
     def get_peer_td(self, peer_id: str):
         """
@@ -58,6 +64,12 @@ class P2PHandler:
         """
         if self.r.zscore(self.constants.P2P_TRUST_SET, peer_id) is not None:
             self.r.hset(self.constants.P2P_PEER_INFO_HASH, peer_id, updated_td)
+            self.r.hexpire(
+                self.constants.P2P_PEER_INFO_HASH,
+                self.extended_ttl,
+                peer_id,
+                nx=True,
+            )
         else:
             self.store_peer_td(peer_id, updated_td)
 
