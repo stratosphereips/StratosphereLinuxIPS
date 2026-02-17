@@ -1402,6 +1402,15 @@ class RedisDB(
         host_ip: List[str] = self.r.zrevrange(key, 0, 0, withscores=False)
         return host_ip[0] if host_ip else None
 
+    def set_host_ip(self, ip, interface: str):
+        """Store the IP address of the host in a db.
+        There can be more than one"""
+        # stored them in a sorted set to be able to retrieve the latest one
+        # of them as the host ip
+        key = f"host_ip_{interface}"
+        host_ips_added = self.r.zcard(key)
+        self.zadd_but_keep_n_entries(key, {ip: host_ips_added + 1}, n=10)
+
     def get_wifi_interface(self):
         """
         return sthe wifi interface if running as an AP, and the user
@@ -1426,15 +1435,6 @@ class RedisDB(
                 latest_ip: str = host_ip_list[0]
                 all_ips.append(latest_ip)
         return all_ips
-
-    def set_host_ip(self, ip, interface: str):
-        """Store the IP address of the host in a db.
-        There can be more than one"""
-        # stored them in a sorted set to be able to retrieve the latest one
-        # of them as the host ip
-        key = f"host_ip_{interface}"
-        host_ips_added = self.r.zcard(key)
-        self.r.zadd(key, {ip: host_ips_added + 1})
 
     def set_asn_cache(self, org: str, asn_range: str, asn_number: str) -> None:
         """
