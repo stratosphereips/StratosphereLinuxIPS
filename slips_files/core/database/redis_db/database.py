@@ -1230,6 +1230,7 @@ class RedisDB(
         Stores the used ftp port in our main db (not the cache like set_port_info)
         """
         self.r.lpush(self.constants.USED_FTP_PORTS, str(port))
+        self.r.expire(self.constants.USED_FTP_PORTS, self.default_ttl)
 
     def is_ftp_port(self, port):
         # get all used ftp ports
@@ -1353,6 +1354,9 @@ class RedisDB(
         if data:
             data = json.dumps(data)
             self.rcache.hset(self.constants.PASSIVE_DNS, ip, data)
+            self.rcache.hexpire(
+                self.constants.PASSIVE_DNS, self.default_ttl, ip
+            )
 
     def get_passive_dns(self, ip):
         """
@@ -1457,6 +1461,9 @@ class RedisDB(
             self.rcache.hset(
                 self.constants.CACHED_ASN, first_octet, json.dumps(range_info)
             )
+        self.rcache.hexpire(
+            self.constants.CACHED_ASN, self.default_ttl, first_octet, nx=True
+        )
 
     def get_asn_cache(self, first_octet=False):
         """
