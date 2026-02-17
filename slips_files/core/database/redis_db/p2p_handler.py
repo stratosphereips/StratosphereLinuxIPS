@@ -1,4 +1,5 @@
 import json
+import time
 from typing import (
     List,
 )
@@ -38,7 +39,11 @@ class P2PHandler:
             return json_peers
 
     def store_peer_td(self, peer_id, td: str):
-        self.r.sadd(self.constants.P2P_TRUST_SET, peer_id)
+        self.zadd_but_keep_n_entries(
+            self.constants.P2P_TRUST_SET,
+            {peer_id: time.time()},
+            n=50,
+        )
         self.r.hset(self.constants.P2P_PEER_INFO_HASH, peer_id, td)
 
     def get_peer_td(self, peer_id: str):
@@ -51,7 +56,7 @@ class P2PHandler:
         """
         Update peer information.
         """
-        if self.r.sismember(self.constants.P2P_TRUST_SET, peer_id):
+        if self.r.zscore(self.constants.P2P_TRUST_SET, peer_id) is not None:
             self.r.hset(self.constants.P2P_PEER_INFO_HASH, peer_id, updated_td)
         else:
             self.store_peer_td(peer_id, updated_td)
@@ -60,7 +65,7 @@ class P2PHandler:
         """
         Get all connected peers trust data.
         """
-        peer_ids = self.r.smembers(self.constants.P2P_TRUST_SET)
+        peer_ids = self.r.zrange(self.constants.P2P_TRUST_SET, 0, -1)
         peers = {
             peer_id: self.r.hget(self.constants.P2P_PEER_INFO_HASH, peer_id)
             for peer_id in peer_ids
@@ -71,7 +76,7 @@ class P2PHandler:
         """
         Remove a peer trust data from the set and hash.
         """
-        self.r.srem(self.constants.P2P_TRUST_SET, peer_id)
+        self.r.zrem(self.constants.P2P_TRUST_SET, peer_id)
         self.r.hdel(self.constants.P2P_PEER_INFO_HASH, peer_id)
 
     def cache_network_opinion(self, target: str, opinion: dict, time: float):
