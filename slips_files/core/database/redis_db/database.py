@@ -804,6 +804,7 @@ class RedisDB(
 
             key = f"{self.constants.IPS_INFO}:{info_type}"
             self.rcache.hset(key, ip, info_val)
+            self.rcache.hexpire(key, self.default_ttl, ip, nx=True)
 
     def get_redis_pid(self):
         """returns the pid of the current redis server"""
@@ -991,6 +992,9 @@ class RedisDB(
         stored as {Domain: [IP, IP, IP]} in the db
         """
         self.r.hset(self.constants.DOMAINS_RESOLVED, domain, json.dumps(ips))
+        self.r.hexpire(
+            self.constants.DOMAINS_RESOLVED, self.default_ttl, domain, nx=True
+        )
 
     def set_slips_mode(self, slips_mode):
         """
@@ -1039,7 +1043,10 @@ class RedisDB(
 
         # if the ip's not in the following key, then its the first flow
         # seen of this ip
-        return self.r.sismember(self.constants.SRCIPS_SEEN_IN_CONN_LOG, ip)
+        return (
+            self.r.zscore(self.constants.SRCIPS_SEEN_IN_CONN_LOG, ip)
+            is not None
+        )
 
     def mark_srcip_as_seen_in_connlog(self, ip):
         """
@@ -1048,7 +1055,11 @@ class RedisDB(
         if an ip is not present in this set, it means we may
          have seen it but not in conn.log
         """
-        self.r.sadd(self.constants.SRCIPS_SEEN_IN_CONN_LOG, ip)
+        self.zadd_but_keep_n_entries(
+            self.constants.SRCIPS_SEEN_IN_CONN_LOG,
+            {ip: time.time()},
+            n=30,
+        )
 
     def _is_gw_mac(self, mac_addr: str, interface: str) -> bool:
         """
