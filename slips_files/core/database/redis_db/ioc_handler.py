@@ -446,6 +446,9 @@ class IoCHandler:
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if a domain exists or not
             self.rcache.hset(self.constants.DOMAINS_INFO, domain, "{}")
+            self.rcache.hexpire(
+                self.constants.DOMAINS_INFO, self.default_ttl, domain, nx=True
+            )
 
     def set_info_for_domains(
         self, domain: str, info_to_set: dict, mode="leave"
@@ -522,6 +525,9 @@ class IoCHandler:
             # Store
             domain_data = json.dumps(domain_data)
             self.rcache.hset(self.constants.DOMAINS_INFO, domain, domain_data)
+            self.rcache.hexpire(
+                self.constants.DOMAINS_INFO, self.default_ttl, domain, nx=True
+            )
 
     def get_url_info(self, url, info_type):
         key = f"{self.constants.VT_CACHED_URL_INFO}:{info_type}"
