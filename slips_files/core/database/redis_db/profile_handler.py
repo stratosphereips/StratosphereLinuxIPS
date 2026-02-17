@@ -1122,7 +1122,7 @@ class ProfileHandler:
             if not close_all:
                 # if slips isn't stopping, then do regular
                 # cleanup/expiring of the past
-                pipe = self._delete_past_timewindows(profile_tw_to_close, pipe)
+                pipe = self.delete_past_timewindows(profile_tw_to_close, pipe)
         pipe.execute()
 
     def get_current_timewindow(self) -> Optional[str]:

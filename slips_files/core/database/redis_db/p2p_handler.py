@@ -99,7 +99,7 @@ class P2PHandler:
             **opinion,
         }
         self.r.hmset(cache_key, cache_data)
-        self.r.hexpire(cache_key, self.default_ttl, cache_data, nx=True)
+        self.r.expire(cache_key, self.default_ttl, nx=True)
 
     def get_cached_network_opinion(
         self, target: str, cache_valid_seconds: int, current_time: float
