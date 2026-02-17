@@ -1806,11 +1806,15 @@ class RedisDB(
     def store_blame_report(self, ip, network_evaluation):
         """
         :param network_evaluation: a dict with {'score': ..,
-        'confidence':
-        .., 'ts': ..} taken from a blame report
+        'confidence': .., 'ts': ..} taken from a blame report
         """
         self.rcache.hset(
             self.constants.P2P_RECEIVED_BLAME_REPORTS, ip, network_evaluation
+        )
+        self.rcache.expire(
+            self.constants.P2P_RECEIVED_BLAME_REPORTS,
+            self.default_ttl,
+            nx=True,
         )
 
     def store_zeek_path(self, path):
