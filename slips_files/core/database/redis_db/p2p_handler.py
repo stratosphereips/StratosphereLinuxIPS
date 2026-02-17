@@ -147,8 +147,13 @@ class P2PHandler:
         trust model
         For now, this is only for local peers
         """
-
         self.r.hset(self.constants.PEER_TRUST, peer_ip, peer_trust)
+        self.r.hexpire(
+            self.constants.PEER_TRUST,
+            self.extended_ttl,
+            peer_ip,
+            nx=True,
+        )
 
     def get_peer_trust(self, peer_ip):
         trust = self.r.hget(self.constants.PEER_TRUST, peer_ip)
