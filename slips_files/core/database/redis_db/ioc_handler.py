@@ -412,6 +412,12 @@ class IoCHandler:
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if an URL exists or not
             self.rcache.hset(self.constants.VT_CACHED_URL_INFO, url, "{}")
+            self.rcache.hexpire(
+                self.constants.VT_CACHED_URL_INFO,
+                self.default_ttl,
+                url,
+                nx=True,
+            )
 
     def get_domain_data(self, domain):
         """
@@ -541,3 +547,4 @@ class IoCHandler:
                     f"{key}"
                 )
                 self.rcache.hset(key, url, val)
+                self.rcache.hexpire(key, self.default_ttl, url, nx=True)
