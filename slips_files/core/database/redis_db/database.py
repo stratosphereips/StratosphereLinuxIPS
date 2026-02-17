@@ -1113,7 +1113,9 @@ class RedisDB(
         """Return the field separator"""
         return self.separator
 
-    def store_tranco_whitelisted_domains(self, domains: List[str]):
+    def store_tranco_whitelisted_domains(
+        self, domains: List[str], ttl: Optional[int] = None
+    ):
         """
         store whitelisted domains from tranco whitelist in the db
         """
@@ -1121,6 +1123,18 @@ class RedisDB(
         # instead of the main db is, we don't want them cleared on every new
         # instance of slips
         self.rcache.sadd(self.constants.TRANCO_WHITELISTED_DOMAINS, *domains)
+        if ttl and ttl > 0:
+            self.rcache.expire(
+                self.constants.TRANCO_WHITELISTED_DOMAINS, int(ttl)
+            )
+
+    def is_tranco_whitelist_expired(self) -> bool:
+        """
+        checks if tranco whitelist is expired based on Redis TTL
+        """
+        ttl = self.rcache.ttl(self.constants.TRANCO_WHITELISTED_DOMAINS)
+        # -2: key does not exist, -1: no expire
+        return ttl <= 0
 
     def is_whitelisted_tranco_domain(self, domain):
         return self.rcache.sismember(

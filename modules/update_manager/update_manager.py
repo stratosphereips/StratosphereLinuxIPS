@@ -321,10 +321,8 @@ class UpdateManager(IModule):
         if not self.enable_online_whitelist:
             return False
 
-        if not self.did_update_period_pass(
-            self.online_whitelist_update_period, "tranco_whitelist"
-        ):
-            # update period hasnt passed yet
+        if not self.db.is_tranco_whitelist_expired():
+            # tranco whitelist not expired yet
             return False
 
         # update period passed
@@ -1586,7 +1584,9 @@ class UpdateManager(IModule):
         for line in response.text.splitlines():
             domain = line.split(",")[1].strip()
             domains.append(domain)
-        self.db.store_tranco_whitelisted_domains(domains)
+        self.db.store_tranco_whitelisted_domains(
+            domains, ttl=self.online_whitelist_update_period
+        )
 
         self.mark_feed_as_updated("tranco_whitelist")
 

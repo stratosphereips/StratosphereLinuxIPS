@@ -379,6 +379,9 @@ class DBManager:
     def delete_tranco_whitelist(self, *args, **kwargs):
         return self.rdb.delete_tranco_whitelist(*args, **kwargs)
 
+    def is_tranco_whitelist_expired(self, *args, **kwargs):
+        return self.rdb.is_tranco_whitelist_expired(*args, **kwargs)
+
     def set_growing_zeek_dir(self, *args, **kwargs):
         return self.rdb.set_growing_zeek_dir(*args, **kwargs)
 
