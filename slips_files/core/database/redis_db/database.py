@@ -1680,6 +1680,9 @@ class RedisDB(
             return
 
         self.r.lpush(self.constants.DHCP_SERVERS, server_addr)
+        max = 20
+        # delete anything older than the most recent 20 servers
+        self.r.ltrim(self.constants.DHCP_SERVERS, 0, max - 1)
 
     def save(self, backup_file):
         """
