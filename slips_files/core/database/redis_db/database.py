@@ -40,7 +40,6 @@ from typing import (
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 LOCALHOST = "127.0.0.1"
-TWO_DAYS_IN_SECONDS = 60 * 60 * 24 * 2
 
 
 class RedisDB(
@@ -200,8 +199,9 @@ class RedisDB(
         self.set_new_incoming_flows(True)
         # default ttl is 2 tws. anything before that should be deleted from
         # the db to save memory
-        self.default_ttl = 2 * self.conf.get_tw_width_in_seconds()
-        self.extended_ttl = TWO_DAYS_IN_SECONDS
+        self.default_ttl = int(2 * self.conf.get_tw_width_in_seconds())
+        # 2 days byd efault if the tw is 1h
+        self.extended_ttl = int(48 * self.conf.get_tw_width_in_seconds())
 
     def call_mixins_setup(self):
         """calls setup() on all mixins"""
@@ -1058,7 +1058,7 @@ class RedisDB(
         self.zadd_but_keep_n_entries(
             self.constants.SRCIPS_SEEN_IN_CONN_LOG,
             {ip: time.time()},
-            n=30,
+            max_entries=30,
         )
 
     def _is_gw_mac(self, mac_addr: str, interface: str) -> bool:
@@ -1409,7 +1409,9 @@ class RedisDB(
         # of them as the host ip
         key = f"host_ip_{interface}"
         host_ips_added = self.r.zcard(key)
-        self.zadd_but_keep_n_entries(key, {ip: host_ips_added + 1}, n=10)
+        self.zadd_but_keep_n_entries(
+            key, {ip: host_ips_added + 1}, max_entries=10
+        )
 
     def get_wifi_interface(self):
         """

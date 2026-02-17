@@ -678,7 +678,7 @@ class ProfileHandler:
 
                 # expire in 2 days, to make sure old profiles that are not
                 # active anymore get deleted.
-                self.expire(f"tws{profileid}", self.extended_ttl)
+                self.r.expire(f"tws{profileid}", self.extended_ttl)
 
                 self.print(
                     f"Created and added to DB for "
@@ -690,7 +690,7 @@ class ProfileHandler:
             # The creation of a TW now does not imply that it was modified.
             # You need to put data to mark is at modified.
         except redis.exceptions.ResponseError:
-            self.print("Error in addNewTW", 0, 1)
+            self.print("Error in add_new_tw", 0, 1)
             self.print(traceback.format_exc(), 0, 1)
 
     def get_number_of_tws(self, profileid):

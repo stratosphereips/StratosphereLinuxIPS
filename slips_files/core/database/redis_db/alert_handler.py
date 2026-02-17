@@ -373,7 +373,7 @@ class AlertHandler:
         return {}
 
     def set_max_threat_level(self, profileid: str, threat_level: str):
-        self.set_profile_field(
+        self.set_profileid_field(
             profileid, self.constants.MAX_THREAT_LEVEL, threat_level
         )
 
@@ -455,7 +455,7 @@ class AlertHandler:
         Do not call this function directy from this class, always call it
         from dbmanager.update_threat_level() to update the trustdb too:D
         """
-        self.set_profile_field(
+        self.set_profileid_field(
             profileid, self.constants.THREAT_LEVEL, threat_level
         )
 

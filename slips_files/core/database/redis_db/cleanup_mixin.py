@@ -7,7 +7,7 @@ from typing import List
 class CleanupMixin:
     """
     Helper class for the Redis class in database.py
-    Contains all the logic related to cleanup operations
+    Contains all the logic related to cleanup operations and memory eviction
     """
 
     name = "DB"
@@ -91,17 +91,22 @@ class CleanupMixin:
         pipe = self._del_all_profile_tw_keys(profileid, tw_to_del, pipe)
         return pipe
 
-    def zadd_but_keep_n_entries(self, key: str, mapping: dict, n: int):
+    def zadd_but_keep_n_entries(
+        self, key: str, mapping: dict, max_entries: int
+    ):
         """
         Adds the given mapping to the sorted set at the given key,
         but keeps only the n entries with the highest scores.
         :param key: The key of the sorted set
         :param mapping: A dict of {member: score} to add to the sorted set
-        :param n: The number of entries to keep in the sorted set
+        :param max_entries: The number of entries to keep in the sorted set
         """
+        if max_entries <= 0:
+            raise ValueError("n must be a positive integer")
+
         with self.r.pipeline() as pipe:
             pipe.zadd(key, mapping)
             # Remove elements outside the range [0, -limit-1]
             # This keeps only the 'limit' newest members
-            pipe.zremrangebyrank(key, 0, -(n + 1))
+            pipe.zremrangebyrank(key, 0, -(max_entries + 1))
             pipe.execute()

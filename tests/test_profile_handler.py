@@ -120,7 +120,7 @@ def test_set_dhcp_flow():
     handler.zadd_but_keep_n_entries.assert_called_once_with(
         f"DHCP_flows:{profileid}_{twid}",
         {requested_addr: ANY},
-        n=50,
+        max_entries=50,
     )
 
 
