@@ -28,6 +28,13 @@ class ProfileHandler:
 
     name = "DB"
 
+    def set_profileid_field(self, profileid, field, value, pipe=None):
+        """Set a single field in the profileid hash."""
+        client = pipe if pipe else self.r
+        client.hset(profileid, field, value)
+        client.expire(profileid, self.extended_ttl, nx=True)
+        return client
+
     def is_doh_server(self, ip: str) -> bool:
         """returns whether the given ip is a DoH server"""
         return self.get_ip_info(ip, "is_doh_server") or False
@@ -395,15 +402,17 @@ class ProfileHandler:
                 return
             # add this new sw to the list of softwares this profile is using
             cached_sw.update(sw_dict)
-            self.r.hset(
+            self.set_profileid_field(
                 profileid,
                 self.constants.USED_SOFTWARE,
                 json.dumps(cached_sw),
             )
         else:
             # first time for this profile to use a software
-            self.r.hset(
-                profileid, self.constants.USED_SOFTWARE, json.dumps(sw_dict)
+            self.set_profileid_field(
+                profileid,
+                self.constants.USED_SOFTWARE,
+                json.dumps(sw_dict),
             )
 
     def get_total_flows(self):
@@ -769,14 +778,16 @@ class ProfileHandler:
             if cached_mac_addr == mac_addr:
                 # now we're sure that the vendor of the given mac addr,
                 # is the vendor of this profileid
-                self.r.hset(profileid, self.constants.MAC_VENDOR, mac_vendor)
+                self.set_profileid_field(
+                    profileid, self.constants.MAC_VENDOR, mac_vendor
+                )
                 return True
 
         return False
 
     def update_mac_of_profile(self, profileid: str, mac: str):
         """Add the MAC addr to the given profileid key"""
-        self.r.hset(profileid, self.constants.MAC, mac)
+        self.set_profileid_field(profileid, self.constants.MAC, mac)
 
     def _should_associate_this_mac_with_this_ip(
         self, ip, mac, interface
@@ -912,7 +923,9 @@ class ProfileHandler:
         :param user_agent: dict containing user_agent, os_type ,
         os_name and agent_name
         """
-        self.r.hset(profileid, self.constants.FIRST_USER_AGENT, user_agent)
+        self.set_profileid_field(
+            profileid, self.constants.FIRST_USER_AGENT, user_agent
+        )
 
     def get_user_agents_count(self, profileid) -> int:
         """
@@ -927,12 +940,14 @@ class ProfileHandler:
         """
         if not self.r.hexists(profileid, self.constants.PAST_USER_AGENTS):
             # add the first user agent seen to the db
-            self.r.hset(
+            self.set_profileid_field(
                 profileid,
                 self.constants.PAST_USER_AGENTS,
                 json.dumps([user_agent]),
             )
-            self.r.hset(profileid, self.constants.USER_AGENTS_COUNT, 1)
+            self.set_profileid_field(
+                profileid, self.constants.USER_AGENTS_COUNT, 1
+            )
         else:
             # we have previous UAs
             user_agents = json.loads(
@@ -941,7 +956,7 @@ class ProfileHandler:
             if user_agent not in user_agents:
                 # the given ua is not cached. cache it as a str
                 user_agents.append(user_agent)
-                self.r.hset(
+                self.set_profileid_field(
                     profileid,
                     self.constants.PAST_USER_AGENTS,
                     json.dumps(user_agents),
@@ -949,7 +964,7 @@ class ProfileHandler:
 
                 # incr the number of user agents seen for this profile
                 user_agents_count: int = self.get_user_agents_count(profileid)
-                self.r.hset(
+                self.set_profileid_field(
                     profileid,
                     self.constants.USER_AGENTS_COUNT,
                     user_agents_count + 1,
@@ -996,7 +1011,7 @@ class ProfileHandler:
         is_dhcp_set = profile_in_db[0]
         # check if it's already marked as dhcp
         if not is_dhcp_set:
-            self.r.hset(profileid, self.constants.DHCP, "true")
+            self.set_profileid_field(profileid, self.constants.DHCP, "true")
 
     def add_profile(self, profileid, starttime, confidence=0.05) -> bool:
         """
@@ -1004,6 +1019,8 @@ class ProfileHandler:
          hashmap of profile data
         Profiles are stored in two structures. A list of profiles (index)
          and individual hashmaps for each profile (like a table)
+         :kwarg confidence: confidence score of this profile, between 0 and 1.
+          default to 0.05 when a new profile is created.
         """
         try:
             if self.r.zscore(self.constants.PROFILES, profileid) is not None:
@@ -1013,18 +1030,21 @@ class ProfileHandler:
             self.zadd_but_keep_n_entries(
                 self.constants.PROFILES,
                 {str(profileid): float(starttime)},
-                5000,
+                2000,
             )
 
+            fields = {
+                self.constants.STARTTIME: starttime,
+                self.constants.DURATION: self.width,
+                self.constants.CONFIDENCE: confidence,
+            }
+
             with self.r.pipeline() as pipe:
-                # Create the hashmap with the profileid.
-                # The hasmap of each profile is named with the profileid
-                # Add the start time of profile
-                pipe.hset(profileid, self.constants.STARTTIME, starttime)
-                pipe.hset(profileid, self.constants.DURATION, self.width)
-                # When a new profiled is created assign threat level = 0
-                # and confidence = 0.05
-                pipe.hset(profileid, self.constants.CONFIDENCE, confidence)
+                for field, value in fields.items():
+                    pipe = self.set_profileid_field(
+                        profileid, field, value, pipe=pipe
+                    )
+
                 pipe.execute()
 
             # The IP of the profile should also be added as a new IP
@@ -1034,8 +1054,8 @@ class ProfileHandler:
             self.set_new_ip(ip)
             # Publish that we have a new profile
             self.publish("new_profile", ip)
-
             return True
+
         except redis.exceptions.ResponseError as inst:
             self.print("Error in add_profile in database.py", 0, 1)
             self.print(type(inst), 0, 1)
@@ -1051,7 +1071,9 @@ class ProfileHandler:
         data = self.get_modules_labels_of_a_profile(profileid)
         data[module] = label
         data = json.dumps(data)
-        self.r.hset(profileid, self.constants.MODULES_LABELS, data)
+        self.set_profileid_field(
+            profileid, self.constants.MODULES_LABELS, data
+        )
 
     def check_tw_to_close(self, close_all=False):
         """
@@ -1289,13 +1311,17 @@ class ProfileHandler:
         Used to mark this profile as dhcp server
         """
 
-        self.r.hset(profileid, self.constants.GATEWAY, "true")
+        self.set_profileid_field(profileid, self.constants.GATEWAY, "true")
 
     def set_ipv6_of_profile(self, profileid, ip: list):
-        self.r.hset(profileid, self.constants.IPV6, json.dumps(ip))
+        self.set_profileid_field(
+            profileid, self.constants.IPV6, json.dumps(ip)
+        )
 
     def set_ipv4_of_profile(self, profileid, ip):
-        self.r.hset(profileid, self.constants.IPV4, json.dumps([ip]))
+        self.set_profileid_field(
+            profileid, self.constants.IPV4, json.dumps([ip])
+        )
 
     def get_mac_vendor_from_profile(self, profileid: str) -> Union[str, None]:
         """
@@ -1315,7 +1341,9 @@ class ProfileHandler:
         Adds the given hostname to the given profile
         """
         if not self.get_hostname_from_profile(profileid):
-            self.r.hset(profileid, self.constants.HOST_NAME, hostname)
+            self.set_profileid_field(
+                profileid, self.constants.HOST_NAME, hostname
+            )
 
     def get_ipv4_from_profile(self, profileid) -> str:
         """
