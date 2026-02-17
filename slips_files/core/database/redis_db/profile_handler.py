@@ -530,21 +530,6 @@ class ProfileHandler:
             cached_sni.append(new_sni)
             self.set_ip_info(flow.daddr, {"SNI": cached_sni})
 
-    def get_profileid_from_ip(self, ip: str) -> Optional[str]:
-        """
-        returns the profile of the given IP only if it was registered in
-        slips before
-        """
-        try:
-            profileid = f"profile_{ip}"
-            if self.r.zscore(self.constants.PROFILES, profileid) is not None:
-                return profileid
-            return False
-        except redis.exceptions.ResponseError as inst:
-            self.print("error in get_profileid_from_ip in database.py", 0, 1)
-            self.print(type(inst), 0, 1)
-            self.print(inst, 0, 1)
-
     def get_profiles(self):
         """Get a list of all the profiles"""
         profiles = self.r.zrange(self.constants.PROFILES, 0, -1)

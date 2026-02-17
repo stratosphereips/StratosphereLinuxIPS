@@ -269,26 +269,6 @@ def test_get_total_flows(hget_return_value, expected_total_flows):
 
 
 @pytest.mark.parametrize(
-    "ip, sismember_return_value, expected_profileid",
-    [
-        # Testcase 1: IP exists in profiles set
-        ("1.2.3.4", True, "profile_1.2.3.4"),
-        # Testcase 2: IP does not exist in profiles set
-        ("5.6.7.8", False, False),
-    ],
-)
-def test_get_profileid_from_ip(ip, sismember_return_value, expected_profileid):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    handler.r.sismember.return_value = sismember_return_value
-
-    profileid = handler.get_profileid_from_ip(ip)
-
-    handler.r.sismember.assert_called_once_with("profiles", f"profile_{ip}")
-    assert profileid == expected_profileid
-
-
-@pytest.mark.parametrize(
     "smembers_return_value, expected_profiles",
     [
         # Test Case 1: No profiles exist
