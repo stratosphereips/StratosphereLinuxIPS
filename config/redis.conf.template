@@ -26,6 +26,6 @@ maxmemory 3gb
 #
 # Both LRU, LFU and volatile-ttl are implemented using approximated
 # randomized algorithms.
-maxmemory-policy allkeys-lru
+maxmemory-policy volatile-lru
 # supported only in amd arch
 activedefrag yes
