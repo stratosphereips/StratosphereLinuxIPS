@@ -28,4 +28,4 @@ maxmemory 3gb
 # randomized algorithms.
 maxmemory-policy volatile-lru
 # supported only in amd arch
-activedefrag yes
+activedefrag no
