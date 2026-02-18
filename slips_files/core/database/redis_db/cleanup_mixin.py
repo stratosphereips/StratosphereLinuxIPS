@@ -102,7 +102,8 @@ class CleanupMixin:
     ):
         """
         Adds the given mapping to the sorted set at the given key,
-        but keeps only the n entries with the highest scores.
+        but keeps only the latest
+         max_entries.
         :param key: The key of the sorted set
         :param mapping: A dict of {member: score} to add to the sorted set
         :param max_entries: The number of entries to keep in the sorted set

@@ -106,7 +106,7 @@ class ProfileHandler:
         key = f"{self.constants.REQUESTED_DHCP_ADDRS}:{profileid}_{twid}"
         return self.r.zrange(key, 0, -1)
 
-    def add_dhcp_requested_addr(self, profileid, twid, requested_addr, uid):
+    def add_dhcp_requested_addr(self, profileid, twid, requested_addr):
         """
         Stores dhcp requested_addr values in a zset sorted by timestamp
         """
@@ -114,7 +114,7 @@ class ProfileHandler:
         self.zadd_but_keep_n_entries(
             key,
             {requested_addr: time.time()},
-            n=50,
+            max_entries=50,
         )
 
     def get_tw_start_time(self, profileid, twid):

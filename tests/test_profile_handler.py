@@ -111,8 +111,7 @@ def test_set_dhcp_flow():
     profileid = "profile_1"
     twid = "timewindow1"
     requested_addr = "192.168.1.100"
-    uid = "abc123"
-    handler.add_dhcp_requested_addr(profileid, twid, requested_addr, uid)
+    handler.add_dhcp_requested_addr(profileid, twid, requested_addr)
 
     handler.zadd_but_keep_n_entries.assert_called_once_with(
         f"{handler.constants.REQUESTED_DHCP_ADDRS}:{profileid}_{twid}",

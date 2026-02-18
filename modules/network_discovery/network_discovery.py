@@ -143,12 +143,12 @@ class NetworkDiscovery(IModule):
 
             # it was requesting a different addr, keep track of it and its uid
             self.db.add_dhcp_requested_addr(
-                profileid, twid, flow.requested_addr, flow.uids
+                profileid, twid, flow.requested_addr
             )
         else:
             # first time for this client to make a dhcp request in this tw
             self.db.add_dhcp_requested_addr(
-                profileid, twid, flow.requested_addr, flow.uids
+                profileid, twid, flow.requested_addr
             )
             return
 
