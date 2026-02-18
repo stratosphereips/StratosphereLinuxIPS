@@ -95,7 +95,6 @@ def test_check_dhcp_scan_no_evidence(
         profileid,
         flow_info["twid"],
         flow_info["flow"].requested_addr,
-        flow_info["flow"].uids,
     )
 
 
@@ -128,7 +127,6 @@ def test_check_dhcp_scan_with_evidence():
     network_discovery.db.add_dhcp_requested_addr = Mock()
     network_discovery.db.set_evidence = Mock()
     profileid = f"profile_{flow.saddr}"
-    expected_uids = list(flow.uids)
     network_discovery.check_dhcp_scan(profileid, twid, flow)
 
     assert network_discovery.db.get_dhcp_requested_addrs.call_count == 2
@@ -138,7 +136,6 @@ def test_check_dhcp_scan_with_evidence():
         profileid,
         twid,
         flow.requested_addr,
-        expected_uids,
     )
 
     called_evidence = network_discovery.db.set_evidence.call_args[0][0]
