@@ -148,6 +148,7 @@ class ModuleFactory:
         conf.delete_prev_db = Mock(return_value=False)
         conf.disabled_detections = Mock(return_value=[])
         conf.get_tw_width_as_float = Mock(return_value=3600.0)
+        conf.get_tw_width_in_seconds = Mock(return_value=3600)
         conf.client_ips = Mock(return_value=[])
         conf.use_local_p2p = Mock(return_value=False)
         conf.width = Mock(return_value=3600)
@@ -156,7 +157,7 @@ class ModuleFactory:
             # to prevent config/redis.conf from being overwritten
             patch(
                 "slips_files.core.database.redis_db.database."
-                "RedisDB._set_redis_options",
+                "RedisDB._setup_config_file",
                 return_value=Mock(),
             ),
             patch(
@@ -347,6 +348,8 @@ class ModuleFactory:
         handler.rcache = Mock()
         handler.constants = Constants()
         handler.channels = Channels()
+        handler.default_ttl = 3600
+        handler.extended_ttl = 3600
         return handler
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
@@ -856,6 +859,9 @@ class ModuleFactory:
     def create_alert_handler_obj(self):
         alert_handler = AlertHandler()
         alert_handler.constants = Constants()
+        alert_handler.default_ttl = 3600
+        alert_handler.extended_ttl = 3600
+        alert_handler.set_profileid_field = Mock()
         return alert_handler
 
     def create_profile_handler_obj(self):
@@ -865,6 +871,9 @@ class ModuleFactory:
         handler.rcache = Mock()
         handler.separator = "_"
         handler.width = 3600
+        handler.default_ttl = 3600
+        handler.extended_ttl = 3600
+        handler.zadd_but_keep_n_entries = Mock()
         handler.print = Mock()
         handler.starttime_of_first_tw = None
         handler.publish = Mock()

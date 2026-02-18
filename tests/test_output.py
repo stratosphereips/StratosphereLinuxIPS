@@ -26,11 +26,11 @@ from pathlib import Path
         ),
     ],
 )
-@patch("slips_files.common.slips_utils.Utils.convert_ts_format")
-def test_log_line(mock_convert_ts_format, msg, expected_log_content):
+@patch("slips_files.common.slips_utils.utils.get_human_readable_datetime")
+def test_log_line(mock_get_human_readable_datetime, msg, expected_log_content):
     """Test that the log_line method logs the correct message
     to the slips.log file."""
-    mock_convert_ts_format.return_value = "formatted_datetime"
+    mock_get_human_readable_datetime.return_value = "formatted_datetime"
 
     output = ModuleFactory().create_output_obj()
     output.slips_logfile = "path/to/slips.log"

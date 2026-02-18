@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Unit test for modules/flowalerts/conn.py"""
 
-from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import Conn
 from tests.module_factory import ModuleFactory
 import json
 from unittest.mock import (
     Mock,
+    patch,
 )
 import pytest
 from ipaddress import ip_address
@@ -466,8 +466,11 @@ def test_is_interface_timeout_reached(mock_time_diff, expected_result):
     conn = ModuleFactory().create_conn_analyzer_obj()
     conn.is_running_non_stop = True
     conn.conn_without_dns_interface_wait_time = 30
-    utils.get_time_diff = Mock(return_value=mock_time_diff)
-    assert conn.is_interface_timeout_reached() == expected_result
+    with patch(
+        "slips_files.common.slips_utils.utils.get_time_diff",
+        return_value=mock_time_diff,
+    ):
+        assert conn.is_interface_timeout_reached() == expected_result
 
 
 @pytest.mark.parametrize(

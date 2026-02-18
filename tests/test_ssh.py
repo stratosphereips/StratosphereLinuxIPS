@@ -96,7 +96,7 @@ async def test_check_successful_ssh(
 def test_check_ssh_password_guessing(auth_success, expected_call_count):
     ssh = ModuleFactory().create_ssh_analyzer_obj()
     mock_set_evidence = MagicMock()
-    ssh.set_evidence.pw_guessing = mock_set_evidence
+    ssh.set_evidence.ssh_pw_guessing = mock_set_evidence
     for i in range(ssh.pw_guessing_threshold):
         flow = SSH(
             starttime="1726655400.0",

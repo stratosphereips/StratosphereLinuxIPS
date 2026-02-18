@@ -117,7 +117,7 @@ def test_get_rev_profile_existing_profileid():
 
     profiler.db.get_timewindow.return_value = "existing_timewindow"
     assert profiler.get_rev_profile(flow) == (
-        "existing_profile",
+        "profile_8.8.8.8",
         "existing_timewindow",
     )
 

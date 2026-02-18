@@ -260,6 +260,11 @@ def test_cache_whitelisted_evidence_id(evidence_id, expected_calls):
 
     assert alert_handler.r.sadd.call_count == len(expected_calls)
     alert_handler.r.sadd.assert_has_calls(expected_calls)
+    alert_handler.r.expire.assert_called_once_with(
+        alert_handler.constants.WHITELISTED_EVIDENCE,
+        alert_handler.default_ttl,
+        nx=True,
+    )
 
 
 @pytest.mark.parametrize(
@@ -405,7 +410,7 @@ def test_set_max_threat_level(profileid, threat_level, expected_call):
 
     alert_handler.set_max_threat_level(profileid, threat_level)
 
-    alert_handler.r.hset.assert_called_once_with(*expected_call)
+    alert_handler.set_profileid_field.assert_called_once_with(*expected_call)
 
 
 @pytest.mark.parametrize(
@@ -489,23 +494,25 @@ def test_get_profileid_twid_alerts(
 
 
 @pytest.mark.parametrize(
-    "evidence_id, sismember_return, expected_result",
+    "evidence_id, profileid, twid, sismember_return, expected_result",
     [
         # Testcase 1: Evidence is marked as processed
-        ("evidence1", True, True),
+        ("evidence1", "profile1", "tw1", True, True),
         # Testcase 2: Evidence is not marked as processed
-        ("evidence2", False, False),
+        ("evidence2", "profile2", "tw2", False, False),
     ],
 )
-def test_is_evidence_processed(evidence_id, sismember_return, expected_result):
+def test_is_evidence_processed(
+    evidence_id, profileid, twid, sismember_return, expected_result
+):
     alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
     alert_handler.r.sismember.return_value = sismember_return
 
-    result = alert_handler.is_evidence_processed(evidence_id)
+    result = alert_handler.is_evidence_processed(evidence_id, profileid, twid)
 
     alert_handler.r.sismember.assert_called_once_with(
-        "processed_evidence", evidence_id
+        f"processed_evidence_{profileid}_{twid}", evidence_id
     )
     assert result == expected_result
 

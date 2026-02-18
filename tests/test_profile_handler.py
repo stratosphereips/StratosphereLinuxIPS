@@ -84,12 +84,9 @@ def test_get_intuples_from_profile_tw(hscan_return_value, expected_in_tuples):
 @pytest.mark.parametrize(
     "zrange_return_value, expected_dhcp_flows",
     [  # Testcase 1: Existing DHCP flows
-        (
-            [b"192.168.1.100"],
-            {"192.168.1.100"},
-        ),
+        ([b"192.168.1.100"], [b"192.168.1.100"]),
         # Testcase 2: No DHCP flows found
-        ([], None),
+        ([], []),
     ],
 )
 def test_get_dhcp_flows(zrange_return_value, expected_dhcp_flows):
@@ -101,7 +98,7 @@ def test_get_dhcp_flows(zrange_return_value, expected_dhcp_flows):
     handler.r.zrange.return_value = zrange_return_value
     dhcp_flows = handler.get_dhcp_requested_addrs(profileid, twid)
     handler.r.zrange.assert_called_once_with(
-        f"DHCP_flows:{profileid}_{twid}", 0, -1
+        f"{handler.constants.REQUESTED_DHCP_ADDRS}:{profileid}_{twid}", 0, -1
     )
     assert dhcp_flows == expected_dhcp_flows
 
@@ -118,9 +115,9 @@ def test_set_dhcp_flow():
     handler.add_dhcp_requested_addr(profileid, twid, requested_addr, uid)
 
     handler.zadd_but_keep_n_entries.assert_called_once_with(
-        f"DHCP_flows:{profileid}_{twid}",
+        f"{handler.constants.REQUESTED_DHCP_ADDRS}:{profileid}_{twid}",
         {requested_addr: ANY},
-        max_entries=50,
+        n=50,
     )
 
 
@@ -285,40 +282,33 @@ def test_get_total_flows(hget_return_value, expected_total_flows):
 def test_get_profiles(smembers_return_value, expected_profiles):
     handler = ModuleFactory().create_profile_handler_obj()
 
-    handler.r.smembers.return_value = smembers_return_value
+    handler.r.zrange.return_value = smembers_return_value
 
     profiles = handler.get_profiles()
-    handler.r.smembers.assert_called_once_with("profiles")
+    handler.r.zrange.assert_called_once_with("profiles", 0, -1)
     assert profiles == expected_profiles
 
 
 @pytest.mark.parametrize(
-    "profileid, expected_num_tws, "
-    "expected_get_tws_from_profile_return_value",
+    "profileid, expected_num_tws",
     [  # Testcase 1: Profile with multiple timewindows
         (
             "profile_1",
             2,
-            [("timewindow1", 1600000000.0), ("timewindow2", 1600000100.0)],
         ),
         # Testcase 2: Profile with no timewindows
         (
             "profile_2",
             0,
-            [],
         ),
     ],
 )
-def test_get_number_of_tws_in_profile(
-    profileid, expected_num_tws, expected_get_tws_from_profile_return_value
-):
+def test_get_number_of_tws_in_profile(profileid, expected_num_tws):
     handler = ModuleFactory().create_profile_handler_obj()
-    handler.get_tws_from_profile = MagicMock(
-        return_value=expected_get_tws_from_profile_return_value
-    )
+    handler.r.zcard.return_value = expected_num_tws
 
-    num_tws = handler.get_number_of_tws_in_profile(profileid)
-    handler.get_tws_from_profile.assert_called_once_with(profileid)
+    num_tws = handler.get_number_of_tws(profileid)
+    handler.r.zcard.assert_called_once_with(f"tws{profileid}")
     assert num_tws == expected_num_tws
 
 
@@ -352,26 +342,26 @@ def test_get_tws_from_profile(profileid, zrange_return_value, expected_tws):
 
 
 @pytest.mark.parametrize(
-    "sismember_return_value, expected_has_profile",
+    "zscore_return_value, expected_has_profile",
     [  # Testcase 1: Profile exists
-        (True, True),
+        (1.0, True),
         # Testcase 2: Profile does not exist
-        (False, False),
+        (None, False),
     ],
 )
-def test_has_profile(sismember_return_value, expected_has_profile):
+def test_has_profile(zscore_return_value, expected_has_profile):
     handler = ModuleFactory().create_profile_handler_obj()
 
     profileid = "profile_1"
 
-    handler.r.sismember.return_value = sismember_return_value
+    handler.r.zscore.return_value = zscore_return_value
     has_profile = handler.has_profile(profileid)
-    handler.r.sismember.assert_called_once_with("profiles", profileid)
+    handler.r.zscore.assert_called_once_with("profiles", profileid)
     assert has_profile == expected_has_profile
 
 
 @pytest.mark.parametrize(
-    "scard_return_value, expected_profiles_len",
+    "zcard_return_value, expected_profiles_len",
     [  # Test Case 1: No profiles exist
         (0, 0),
         # Test Case 2: One profile exists
@@ -380,13 +370,13 @@ def test_has_profile(sismember_return_value, expected_has_profile):
         (3, 3),
     ],
 )
-def test_get_profiles_len(scard_return_value, expected_profiles_len):
+def test_get_profiles_len(zcard_return_value, expected_profiles_len):
     handler = ModuleFactory().create_profile_handler_obj()
 
-    handler.r.scard.return_value = scard_return_value
+    handler.r.zcard.return_value = zcard_return_value
 
     profiles_len = handler.get_profiles_len()
-    handler.r.scard.assert_called_once_with("profiles")
+    handler.r.zcard.assert_called_once_with("profiles")
     assert profiles_len == expected_profiles_len
 
 
@@ -454,15 +444,13 @@ def test_get_first_twid_for_profile(
 
 
 @pytest.mark.parametrize(
-    "profileid, timewindow, startoftw, expected_zadd_call, "
-    "expected_update_threat_level_call",
+    "profileid, timewindow, startoftw, expected_zadd_call",
     [  # Testcase 1: Normal case
         (
             "profile_1",
             "timewindow2",
             1100.0,
             call("tws" + "profile_1", {"timewindow2": 1100.0}),
-            call("profile_1", "info", 0.5),
         ),
         # Testcase 2: Negative timewindow ID
         (
@@ -470,7 +458,6 @@ def test_get_first_twid_for_profile(
             "timewindow-1",
             900.0,
             call("tws" + "profile_2", {"timewindow-1": 900.0}),
-            call("profile_2", "info", 0.5),
         ),
         # Testcase 3: Large timewindow ID
         (
@@ -478,7 +465,6 @@ def test_get_first_twid_for_profile(
             "timewindow100",
             10000.0,
             call("tws" + "profile_3", {"timewindow100": 10000.0}),
-            call("profile_3", "info", 0.5),
         ),
     ],
 )
@@ -487,14 +473,18 @@ def test_add_new_tw(
     timewindow,
     startoftw,
     expected_zadd_call,
-    expected_update_threat_level_call,
 ):
     handler = ModuleFactory().create_profile_handler_obj()
     # Mock zscore to return None so the TW is considered new
     handler.r.zscore.return_value = None
     handler.add_new_tw(profileid, timewindow, startoftw)
 
-    handler.r.zadd.assert_called_once_with(*expected_zadd_call.args)
+    handler.zadd_but_keep_n_entries.assert_called_once_with(
+        *expected_zadd_call.args, 50
+    )
+    handler.r.expire.assert_called_once_with(
+        f"tws{profileid}", handler.extended_ttl
+    )
 
 
 @pytest.mark.parametrize(
@@ -1994,9 +1984,8 @@ def test_add_profile_new_profile():
 
     profileid = f"profile{handler.separator}1"
     starttime = 1678886400.0
-    duration = handler.width
 
-    handler.r.sismember.return_value = False
+    handler.r.zscore.return_value = None
 
     pipe = MagicMock()
     handler.r.pipeline = MagicMock(return_value=pipe)
@@ -2007,21 +1996,16 @@ def test_add_profile_new_profile():
 
     assert result is True
 
-    handler.r.sismember.assert_called_once_with(
+    handler.r.zscore.assert_called_once_with(
         handler.constants.PROFILES, profileid
     )
-    handler.r.pipeline.assert_called_once()
-
-    pipe.sadd.assert_called_once_with(handler.constants.PROFILES, profileid)
-    pipe.hset.assert_has_calls(
-        [
-            call(profileid, "starttime", starttime),
-            call(profileid, "duration", duration),
-            call(profileid, "confidence", 0.05),
-        ],
-        any_order=False,
+    handler.zadd_but_keep_n_entries.assert_called_once_with(
+        handler.constants.PROFILES,
+        {profileid: float(starttime)},
+        2000,
     )
-    pipe.execute.assert_called_once()
+    handler.r.pipeline.assert_called_once()
+    assert pipe.execute.called
 
     ip = profileid.split(handler.separator)[1]
     handler.set_new_ip.assert_called_once_with(ip)
@@ -2037,12 +2021,12 @@ def test_add_profile_existing_profile():
 
     profileid = "profile_1"
     starttime = 1678886400.0
-    handler.r.sismember.return_value = True
+    handler.r.zscore.return_value = 1.0
 
     result = handler.add_profile(profileid, starttime)
     assert result is False
 
-    handler.r.sadd.assert_not_called()
+    handler.zadd_but_keep_n_entries.assert_not_called()
     handler.r.hset.assert_not_called()
     handler.set_new_ip.assert_not_called()
     handler.publish.assert_not_called()
