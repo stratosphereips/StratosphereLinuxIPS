@@ -1,6 +1,7 @@
 import json
 
 from slips_files.common.slips_utils import utils
+from typing import Any
 
 
 class FlowTracker:
@@ -8,6 +9,9 @@ class FlowTracker:
     Helper class for the Redis class in database.py
     Contains all the logic related to tracking flow processing rate
     """
+
+    r: Any
+    constants: Any
 
     name = "FlowTrackerDB"
     # channels that recv actual flows, not msgs that we need to pass between
@@ -116,7 +120,7 @@ class FlowTracker:
         with self.r.pipeline() as pipe:
             pipe.hincrby(key, field, 1)
             # 30 mins TTL for each key
-            pipe.hexpire(key, 1800, field)
+            pipe.hexpire(key, 1800, field, nx=True)
             result = pipe.execute()
 
         subscribers_who_processed_this_msg, _ = result

@@ -81,7 +81,6 @@ def test_get_rev_profile():
         history="",
     )
 
-    profiler.db.get_profileid_from_ip.return_value = None
     profiler.db.get_timewindow.return_value = "timewindow1"
     assert profiler.get_rev_profile(flow) == ("profile_8.8.8.8", "timewindow1")
 
@@ -116,10 +115,9 @@ def test_get_rev_profile_existing_profileid():
         history="",
     )
 
-    profiler.db.get_profileid_from_ip.return_value = "existing_profile"
     profiler.db.get_timewindow.return_value = "existing_timewindow"
     assert profiler.get_rev_profile(flow) == (
-        "existing_profile",
+        "profile_8.8.8.8",
         "existing_timewindow",
     )
 
@@ -146,7 +144,6 @@ def test_get_rev_profile_no_timewindow():
         history="",
     )
 
-    profiler.db.get_profileid_from_ip.return_value = "profile_8.8.8.8"
     profiler.db.get_timewindow.return_value = None
 
     profile_id, tw_id = profiler.get_rev_profile(flow)

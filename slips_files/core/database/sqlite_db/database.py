@@ -301,3 +301,12 @@ class SQLiteDB(ISQLite):
                 now,
             ),
         )
+
+    def get_malicious_profiles(self) -> List[str]:
+        """
+        returns a list with unique ip_alerted values from alerts table
+        """
+        results = self.select("alerts", columns="DISTINCT ip_alerted")
+        if not results:
+            return []
+        return [row[0] for row in results if row and row[0] is not None]

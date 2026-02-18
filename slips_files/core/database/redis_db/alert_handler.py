@@ -8,6 +8,8 @@ from typing import (
     Optional,
     Dict,
     Union,
+    Any,
+    Callable,
 )
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.alerts import (
@@ -18,7 +20,6 @@ from slips_files.core.structures.evidence import (
     Evidence,
     EvidenceType,
     Victim,
-    ProfileID,
     IoCType,
     Attacker,
 )
@@ -30,30 +31,26 @@ class AlertHandler:
     Contains all the logic related to setting and retrieving evidence and alerts in the db
     """
 
+    r: Any
+    constants: Any
+    channels: Any
+    default_ttl: int
+    width: float
+    disabled_detections: Any
+    publish: Callable[..., Any]
+    zadd_but_keep_n_entries: Callable[..., Any]
+    get_tw_start_time: Callable[..., Any]
+    get_first_flow_time: Callable[..., Any]
+    get_domain_data: Callable[..., Any]
+    get_asn_info: Callable[..., Any]
+    get_ip_identification: Callable[..., Any]
+    is_blacklisted_domain: Callable[..., Any]
+    is_blacklisted_ip: Callable[..., Any]
+    set_ip_info: Callable[..., Any]
+    set_profileid_field: Callable[..., Any]
+    add_profile: Callable[..., Any]
+
     name = "DB"
-
-    def increment_attack_counter(
-        self, attacker: str, victim: Optional[Victim], evidence_type: str
-    ):
-        """
-        increments the value of the hash profile_attacker_evidence_summary
-        of the given victim
-        :param attacker: is a profileid
-        :param victim: IP of a victim
-        :param evidence_type: e.g. MaliciousJA3, DataExfiltration, etc.
-        """
-        victim = "" if not victim else victim
-        self.r.hincrby(
-            f"{attacker}_evidence_summary", f"{victim}_{evidence_type}", 1
-        )
-
-    def mark_profile_as_malicious(self, profileid: ProfileID):
-        """keeps track of profiles that generated an alert"""
-        self.r.sadd(self.constants.MALICIOUS_PROFILES, str(profileid))
-
-    def get_malicious_profiles(self):
-        """returns profiles that generated an alert"""
-        return self.r.smembers(self.constants.MALICIOUS_PROFILES)
 
     def set_evidence_causing_alert(self, alert: Alert):
         """
@@ -79,7 +76,7 @@ class AlertHandler:
 
         self.r.hset(
             f"{alert.profile}_{alert.timewindow}",
-            "alerts",
+            self.constants.ALERTS,
             profileid_twid_alerts,
         )
         self.r.incr(self.constants.NUMBER_OF_ALERTS, 1)
@@ -95,7 +92,7 @@ class AlertHandler:
         :param alert_ID: ID of alert to export to warden server
         for example profile_10.0.2.15_timewindow1_4e4e4774-cdd7-4e10-93a3-e764f73af621
         """
-        if alerts := self.r.hget(f"{profileid}_{twid}", "alerts"):
+        if alerts := self.r.hget(f"{profileid}_{twid}", self.constants.ALERTS):
             alerts = json.loads(alerts)
             return alerts.get(alert_id, False)
         return False
@@ -119,10 +116,18 @@ class AlertHandler:
         return str(evidence_type) in self.disabled_detections
 
     def set_flow_causing_evidence(self, uids: list, evidence_id):
+        """
+        Used to be able to add the "malicious" tag to the flows that caused
+        an evidence in the sqlite db once an alert is generated
+        """
         self.r.hset(
             self.constants.FLOWS_CAUSING_EVIDENCE,
             evidence_id,
             json.dumps(uids),
+        )
+        # expire if no TTL
+        self.r.expire(
+            self.constants.FLOWS_CAUSING_EVIDENCE, self.default_ttl, nx=True
         )
 
     def get_flows_causing_evidence(self, evidence_id) -> list:
@@ -140,17 +145,26 @@ class AlertHandler:
         return ""
 
     def set_blocked_ip(self, ip: str):
-        self.r.zadd("blocked_ips", {ip: time.time()})
+        """
+        Adds the given IP to the blocked IPs sorted set with the current timestamp as score.
+         Also ensures that only the 100 most recent IPs are kept in the
+         set. and deleted the rest,
+         :param ip: The IP address to block
+        """
+        limit = 100
+        self.zadd_but_keep_n_entries(
+            self.constants.BLOCKED_IPS, {ip: time.time()}, limit
+        )
 
     def is_ip_blocked(self, ip: str) -> Optional[float]:
-        ts = self.r.zscore("blocked_ips", ip)
+        ts = self.r.zscore(self.constants.BLOCKED_IPS, ip)
         if ts is not None:
             return ts
         return None
 
     def del_blocked_ip(self, ip: str):
         # remove ip from the blocked_ips sorted set
-        self.r.zrem("blocked_ips", ip)
+        self.r.zrem(self.constants.BLOCKED_IPS, ip)
 
     def get_tw_limits(self, profileid, twid: str) -> Tuple[float, float]:
         """
@@ -282,7 +296,6 @@ class AlertHandler:
         self.set_evidence_causing_alert(alert)
         # reset the accumulated threat level now that an alert is generated
         self._set_accumulated_threat_level(alert, 0)
-        self.mark_profile_as_malicious(alert.profile)
         self.publish(self.channels.NEW_ALERT, json.dumps(alert_to_dict(alert)))
 
     def init_evidence_number(self):
@@ -293,14 +306,20 @@ class AlertHandler:
     def get_evidence_number(self):
         return self.r.get(self.constants.NUMBER_OF_EVIDENCE)
 
-    def mark_evidence_as_processed(self, evidence_id: str):
+    def mark_evidence_as_processed(
+        self, evidence_id: str, profileid: str, twid: str
+    ):
         """
         If an evidence was processed by the evidenceprocess, mark it in the db
         """
-        self.r.sadd(self.constants.PROCESSED_EVIDENCE, evidence_id)
+        key = f"{self.constants.PROCESSED_EVIDENCE}_{profileid}_{twid}"
+        self.r.sadd(key, evidence_id)
 
-    def is_evidence_processed(self, evidence_id: str) -> bool:
-        return self.r.sismember(self.constants.PROCESSED_EVIDENCE, evidence_id)
+    def is_evidence_processed(
+        self, evidence_id: str, profileid: str, twid: str
+    ) -> bool:
+        key = f"{self.constants.PROCESSED_EVIDENCE}_{profileid}_{twid}"
+        return self.r.sismember(key, evidence_id)
 
     def delete_evidence(self, profileid, twid, evidence_id: str):
         """
@@ -321,8 +340,11 @@ class AlertHandler:
         # before deleteEvidence is called, so we need to keep track of
         # whitelisted evidence ids
         self.r.sadd(self.constants.WHITELISTED_EVIDENCE, evidence_id)
+        self.r.expire(
+            self.constants.WHITELISTED_EVIDENCE, self.default_ttl, nx=True
+        )
 
-    def is_whitelisted_evidence(self, evidence_id):
+    def is_whitelisted_evidence(self, evidence_id: str):
         """
         Check if we have the evidence ID as whitelisted in the db to
         avoid showing it in alerts
@@ -352,7 +374,7 @@ class AlertHandler:
         The format for the returned dict is
             {<alert_uuid>: [ev_uuid1, ev_uuid2, ev_uuid3]}
         """
-        alerts: str = self.r.hget(f"{profileid}_{twid}", "alerts")
+        alerts: str = self.r.hget(f"{profileid}_{twid}", self.constants.ALERTS)
         if not alerts:
             return {}
         alerts: dict = json.loads(alerts)
@@ -372,7 +394,9 @@ class AlertHandler:
         return {}
 
     def set_max_threat_level(self, profileid: str, threat_level: str):
-        self.r.hset(profileid, "max_threat_level", threat_level)
+        self.set_profileid_field(
+            profileid, self.constants.MAX_THREAT_LEVEL, threat_level
+        )
 
     def get_accumulated_threat_level(self, profileid: str, twid: str) -> float:
         """
@@ -393,7 +417,6 @@ class AlertHandler:
         :param update_val: can be +ve to increase the threat level or -ve
         to decrease
         """
-
         return self.r.zincrby(
             self.constants.ACCUMULATED_THREAT_LEVELS,
             update_val,
@@ -422,7 +445,9 @@ class AlertHandler:
         """
         threat_level_float = utils.threat_levels[threat_level]
 
-        old_max_threat_level: str = self.r.hget(profileid, "max_threat_level")
+        old_max_threat_level: str = self.r.hget(
+            profileid, self.constants.MAX_THREAT_LEVEL
+        )
 
         if not old_max_threat_level:
             # first time setting max tl
@@ -451,7 +476,9 @@ class AlertHandler:
         Do not call this function directy from this class, always call it
         from dbmanager.update_threat_level() to update the trustdb too:D
         """
-        self.r.hset(profileid, "threat_level", threat_level)
+        self.set_profileid_field(
+            profileid, self.constants.THREAT_LEVEL, threat_level
+        )
 
         max_threat_lvl: float = self.update_max_threat_level(
             profileid, threat_level

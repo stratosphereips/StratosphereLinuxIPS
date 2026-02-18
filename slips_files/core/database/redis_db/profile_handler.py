@@ -12,6 +12,8 @@ from typing import (
     Optional,
     List,
     Set,
+    Any,
+    Callable,
 )
 import redis
 import validators
@@ -26,7 +28,40 @@ class ProfileHandler:
     Contains all the logic related to flows, profiles and timewindows
     """
 
+    r: Any
+    constants: Any
+    args: Any
+    separator: str
+    default_ttl: int
+    extended_ttl: int
+    width: float
+    starttime_of_first_tw: Any
+    print: Callable[..., Any]
+    publish: Callable[..., Any]
+    zadd_but_keep_n_entries: Callable[..., Any]
+    delete_past_timewindows: Callable[..., Any]
+    give_threat_intelligence: Callable[..., Any]
+    get_all_flows_in_profileid_twid: Callable[..., Any]
+    get_final_state_from_flags: Callable[..., Any]
+    get_gateway_ip: Callable[..., Any]
+    get_ip_info: Callable[..., Any]
+    get_slips_internal_time: Callable[..., Any]
+    set_dns_resolution: Callable[..., Any]
+    set_ip_info: Callable[..., Any]
+    set_new_ip: Callable[..., Any]
+    _determine_gw_mac: Callable[..., Any]
+    _hscan: Callable[..., Any]
+    _is_gw_mac: Callable[..., Any]
+    _last_sit: Callable[..., Any]
+
     name = "DB"
+
+    def set_profileid_field(self, profileid, field, value, pipe=None):
+        """Set a single field in the profileid hash."""
+        client = pipe if pipe else self.r
+        client.hset(profileid, field, value)
+        client.expire(profileid, self.extended_ttl, nx=True)
+        return client
 
     def is_doh_server(self, ip: str) -> bool:
         """returns whether the given ip is a DoH server"""
@@ -63,34 +98,24 @@ class ProfileHandler:
         symbols_key = f"{profileid}_{twid}:InTuples:symbols"
         yield from self._hscan(symbols_key)
 
-    def get_dhcp_flows(self, profileid, twid) -> list:
+    def get_dhcp_requested_addrs(self, profileid, twid) -> Optional[Set[str]]:
         """
-        returns a dict of dhcp flows that happened in this profileid and twid
+        returns a set of requested_addr of dhcp flows in this
+        profileid and twid
         """
-        if flows := self.r.hget(
-            self.constants.DHCP_FLOWS, f"{profileid}_{twid}"
-        ):
-            return json.loads(flows)
+        key = f"{self.constants.REQUESTED_DHCP_ADDRS}:{profileid}_{twid}"
+        return self.r.zrange(key, 0, -1)
 
-    def set_dhcp_flow(self, profileid, twid, requested_addr, uid):
+    def add_dhcp_requested_addr(self, profileid, twid, requested_addr):
         """
-        Stores all dhcp flows sorted by profileid_twid
+        Stores dhcp requested_addr values in a zset sorted by timestamp
         """
-        flow = {requested_addr: uid}
-        if cached_flows := self.get_dhcp_flows(profileid, twid):
-            # we already have flows in this twid, update them
-            cached_flows.update(flow)
-            self.r.hset(
-                self.constants.DHCP_FLOWS,
-                f"{profileid}_{twid}",
-                json.dumps(cached_flows),
-            )
-        else:
-            self.r.hset(
-                self.constants.DHCP_FLOWS,
-                f"{profileid}_{twid}",
-                json.dumps(flow),
-            )
+        key = f"{self.constants.REQUESTED_DHCP_ADDRS}:{profileid}_{twid}"
+        self.zadd_but_keep_n_entries(
+            key,
+            {requested_addr: time.time()},
+            max_entries=50,
+        )
 
     def get_tw_start_time(self, profileid, twid):
         """Return the time when this TW in this profile was created"""
@@ -108,7 +133,7 @@ class ProfileHandler:
             return self.starttime_of_first_tw
 
         starttime_of_first_tw: str = self.r.hget(
-            self.constants.ANALYSIS, "file_start"
+            self.constants.ANALYSIS, self.constants.ANALYSIS_FILE_START
         )
         if starttime_of_first_tw:
             return float(starttime_of_first_tw)
@@ -315,8 +340,17 @@ class ProfileHandler:
         self.r.hset(
             self.constants.BLOCKED_PROFILES_AND_TWS, profileid, json.dumps(tws)
         )
+        # as long as new entries for this profile are added, keep renewing
+        # the 2d expiration.
+        # aka max time that this profile can be blocked without activity is 2 days
 
-    def get_blocked_timewindows_of_profile(self, profileid):
+        self.r.hexpire(
+            self.constants.BLOCKED_PROFILES_AND_TWS,
+            self.extended_ttl,
+            profileid,
+        )
+
+    def get_blocked_timewindows_of_profile(self, profileid) -> List[str]:
         """Return all the list of blocked tws"""
         if tws := self.r.hget(
             self.constants.BLOCKED_PROFILES_AND_TWS, profileid
@@ -396,16 +430,26 @@ class ProfileHandler:
                 return
             # add this new sw to the list of softwares this profile is using
             cached_sw.update(sw_dict)
-            self.r.hset(profileid, "used_software", json.dumps(cached_sw))
+            self.set_profileid_field(
+                profileid,
+                self.constants.USED_SOFTWARE,
+                json.dumps(cached_sw),
+            )
         else:
             # first time for this profile to use a software
-            self.r.hset(profileid, "used_software", json.dumps(sw_dict))
+            self.set_profileid_field(
+                profileid,
+                self.constants.USED_SOFTWARE,
+                json.dumps(sw_dict),
+            )
 
     def get_total_flows(self):
         """
         gets total flows to process from the db
         """
-        total_flows = self.r.hget(self.constants.ANALYSIS, "total_flows")
+        total_flows = self.r.hget(
+            self.constants.ANALYSIS, self.constants.ANALYSIS_TOTAL_FLOWS
+        )
         if total_flows:
             return int(total_flows)
         return 0
@@ -511,7 +555,7 @@ class ProfileHandler:
             # only add this SNI to our db if it has a DNS resolution
             # Verify that the SNI is equal to any of the domains in the DNS
             # resolution
-            resolution = self.r.hget("DNSresolution", flow.daddr)
+            resolution = self.r.hget(self.constants.DNS_RESOLUTION, flow.daddr)
             if not resolution:
                 return
 
@@ -523,25 +567,10 @@ class ProfileHandler:
             cached_sni.append(new_sni)
             self.set_ip_info(flow.daddr, {"SNI": cached_sni})
 
-    def get_profileid_from_ip(self, ip: str) -> Optional[str]:
-        """
-        returns the profile of the given IP only if it was registered in
-        slips before
-        """
-        try:
-            profileid = f"profile_{ip}"
-            if self.r.sismember(self.constants.PROFILES, profileid):
-                return profileid
-            return False
-        except redis.exceptions.ResponseError as inst:
-            self.print("error in get_profileid_from_ip in database.py", 0, 1)
-            self.print(type(inst), 0, 1)
-            self.print(inst, 0, 1)
-
     def get_profiles(self):
         """Get a list of all the profiles"""
-        profiles = self.r.smembers(self.constants.PROFILES)
-        return profiles if profiles != set() else {}
+        profiles = self.r.zrange(self.constants.PROFILES, 0, -1)
+        return set(profiles) if profiles else {}
 
     def get_tws_from_profile(self, profileid):
         """
@@ -553,13 +582,6 @@ class ProfileHandler:
             if profileid
             else False
         )
-
-    def get_number_of_tws_in_profile(self, profileid) -> int:
-        """
-        Receives a profile id and returns the number of all the
-        TWs in that profile
-        """
-        return len(self.get_tws_from_profile(profileid)) if profileid else 0
 
     def get_t2_for_profile_tw(
         self, profileid, twid, tupleid, direction: str
@@ -597,7 +619,7 @@ class ProfileHandler:
     def has_profile(self, profileid):
         """Check if we have the given profile"""
         return (
-            self.r.sismember(self.constants.PROFILES, profileid)
+            self.r.zscore(self.constants.PROFILES, profileid) is not None
             if profileid
             else False
         )
@@ -605,7 +627,7 @@ class ProfileHandler:
     def get_profiles_len(self) -> int:
         """Return the amount of profiles. Redis should be faster than python
         to do this count"""
-        profiles_n = self.r.scard(self.constants.PROFILES)
+        profiles_n = self.r.zcard(self.constants.PROFILES)
         return 0 if not profiles_n else int(profiles_n)
 
     def get_last_twid_of_profile(self, profileid: str) -> Tuple[str, float]:
@@ -678,7 +700,14 @@ class ProfileHandler:
         try:
             if not self.r.zscore(f"tws{profileid}", timewindow):
                 # Add the new TW to the index of TW
-                self.r.zadd(f"tws{profileid}", {timewindow: float(startoftw)})
+                self.zadd_but_keep_n_entries(
+                    f"tws{profileid}", {timewindow: float(startoftw)}, 50
+                )
+
+                # expire in 2 days, to make sure old profiles that are not
+                # active anymore get deleted.
+                self.r.expire(f"tws{profileid}", self.extended_ttl)
+
                 self.print(
                     f"Created and added to DB for "
                     f"{profileid}: a new tw: {timewindow}. "
@@ -689,7 +718,7 @@ class ProfileHandler:
             # The creation of a TW now does not imply that it was modified.
             # You need to put data to mark is at modified.
         except redis.exceptions.ResponseError:
-            self.print("Error in addNewTW", 0, 1)
+            self.print("Error in add_new_tw", 0, 1)
             self.print(traceback.format_exc(), 0, 1)
 
     def get_number_of_tws(self, profileid):
@@ -777,14 +806,16 @@ class ProfileHandler:
             if cached_mac_addr == mac_addr:
                 # now we're sure that the vendor of the given mac addr,
                 # is the vendor of this profileid
-                self.r.hset(profileid, "MAC_vendor", mac_vendor)
+                self.set_profileid_field(
+                    profileid, self.constants.MAC_VENDOR, mac_vendor
+                )
                 return True
 
         return False
 
     def update_mac_of_profile(self, profileid: str, mac: str):
         """Add the MAC addr to the given profileid key"""
-        self.r.hset(profileid, self.constants.MAC, mac)
+        self.set_profileid_field(profileid, self.constants.MAC, mac)
 
     def _should_associate_this_mac_with_this_ip(
         self, ip, mac, interface
@@ -834,6 +865,9 @@ class ProfileHandler:
             # no mac info stored for profileid
             ip = json.dumps([incoming_ip])
             self.r.hset(self.constants.MAC, mac_addr, ip)
+            self.r.hexpire(
+                self.constants.MAC, self.default_ttl, mac_addr, nx=True
+            )
 
             # now that it's decided that this mac belongs to this profileid
             # stoe the mac in the profileid's key in the db
@@ -851,19 +885,20 @@ class ProfileHandler:
                 # seen with the given mac. nothing to do here.
                 return False
 
+            profile_of_found_ip = f"profile_{found_ip}"
             # make sure 1 profile is ipv4 and the other is ipv6
             # (so we don't mess with MITM ARP detections)
             if validators.ipv6(incoming_ip) and validators.ipv4(found_ip):
                 # associate the ipv4 we found with the incoming ipv6
                 # and vice versa
                 self.set_ipv4_of_profile(profileid, found_ip)
-                self.set_ipv6_of_profile(f"profile_{found_ip}", [incoming_ip])
+                self.set_ipv6_of_profile(profile_of_found_ip, [incoming_ip])
 
             elif validators.ipv6(found_ip) and validators.ipv4(incoming_ip):
                 # associate the ipv6 we found with the incoming ipv4
                 # and vice versa
                 self.set_ipv6_of_profile(profileid, [found_ip])
-                self.set_ipv4_of_profile(f"profile_{found_ip}", incoming_ip)
+                self.set_ipv4_of_profile(profile_of_found_ip, incoming_ip)
             elif validators.ipv6(found_ip) and validators.ipv6(incoming_ip):
                 # If 2 IPv6 are claiming to have the same MAC it's fine
                 # a computer is allowed to have many ipv6
@@ -879,10 +914,10 @@ class ProfileHandler:
                 # add this incoming ipv6(profileid) to the list of
                 # ipv6 of the found ip
                 # get the list of cached ipv6
-                ipv6: str = self.get_ipv6_from_profile(f"profile_{found_ip}")
+                ipv6: str = self.get_ipv6_from_profile(profile_of_found_ip)
                 # get the list of cached ipv6+the new one
                 ipv6: list = self.add_to_the_list_of_ipv6(incoming_ip, ipv6)
-                self.set_ipv6_of_profile(f"profile_{found_ip}", ipv6)
+                self.set_ipv6_of_profile(profile_of_found_ip, ipv6)
 
             else:
                 # both are ipv4 and are claiming to have the same mac address
@@ -894,9 +929,11 @@ class ProfileHandler:
             cached_ips.add(incoming_ip)
             cached_ips = json.dumps(list(cached_ips))
             self.r.hset(self.constants.MAC, mac_addr, cached_ips)
-
+            self.r.hexpire(
+                self.constants.MAC, self.default_ttl, mac_addr, nx=True
+            )
             self.update_mac_of_profile(profileid, mac_addr)
-            self.update_mac_of_profile(f"profile_{found_ip}", mac_addr)
+            self.update_mac_of_profile(profile_of_found_ip, mac_addr)
 
         return True
 
@@ -914,41 +951,51 @@ class ProfileHandler:
         :param user_agent: dict containing user_agent, os_type ,
         os_name and agent_name
         """
-        self.r.hset(profileid, "first user-agent", user_agent)
+        self.set_profileid_field(
+            profileid, self.constants.FIRST_USER_AGENT, user_agent
+        )
 
     def get_user_agents_count(self, profileid) -> int:
         """
         returns the number of unique UAs seen for the given profileid
         """
-        return int(self.r.hget(profileid, "user_agents_count"))
+        return int(self.r.hget(profileid, self.constants.USER_AGENTS_COUNT))
 
     def add_all_user_agent_to_profile(self, profileid, user_agent: str):
         """
         Used to keep history of past user agents of profile
         :param user_agent: str of user_agent
         """
-        if not self.r.hexists(profileid, "past_user_agents"):
+        if not self.r.hexists(profileid, self.constants.PAST_USER_AGENTS):
             # add the first user agent seen to the db
-            self.r.hset(
-                profileid, "past_user_agents", json.dumps([user_agent])
+            self.set_profileid_field(
+                profileid,
+                self.constants.PAST_USER_AGENTS,
+                json.dumps([user_agent]),
             )
-            self.r.hset(profileid, "user_agents_count", 1)
+            self.set_profileid_field(
+                profileid, self.constants.USER_AGENTS_COUNT, 1
+            )
         else:
             # we have previous UAs
             user_agents = json.loads(
-                self.r.hget(profileid, "past_user_agents")
+                self.r.hget(profileid, self.constants.PAST_USER_AGENTS)
             )
             if user_agent not in user_agents:
                 # the given ua is not cached. cache it as a str
                 user_agents.append(user_agent)
-                self.r.hset(
-                    profileid, "past_user_agents", json.dumps(user_agents)
+                self.set_profileid_field(
+                    profileid,
+                    self.constants.PAST_USER_AGENTS,
+                    json.dumps(user_agents),
                 )
 
                 # incr the number of user agents seen for this profile
                 user_agents_count: int = self.get_user_agents_count(profileid)
-                self.r.hset(
-                    profileid, "user_agents_count", user_agents_count + 1
+                self.set_profileid_field(
+                    profileid,
+                    self.constants.USER_AGENTS_COUNT,
+                    user_agents_count + 1,
                 )
 
     def get_software_from_profile(self, profileid):
@@ -958,13 +1005,15 @@ class ProfileHandler:
         if not profileid:
             return False
 
-        if used_software := self.r.hmget(profileid, "used_software")[0]:
+        if used_software := self.r.hmget(
+            profileid, self.constants.USED_SOFTWARE
+        )[0]:
             used_software = json.loads(used_software)
             return used_software
 
     def get_first_user_agent(self, profileid) -> str:
         """returns the first user agent used by the given profile"""
-        return self.r.hmget(profileid, "first user-agent")[0]
+        return self.r.hmget(profileid, self.constants.FIRST_USER_AGENT)[0]
 
     def get_user_agent_from_profile(self, profileid) -> str:
         """
@@ -984,13 +1033,13 @@ class ProfileHandler:
         """
 
         # returns a list of dhcp if the profile is in the db
-        profile_in_db = self.r.hmget(profileid, "dhcp")
+        profile_in_db = self.r.hmget(profileid, self.constants.DHCP)
         if not profile_in_db:
             return False
         is_dhcp_set = profile_in_db[0]
         # check if it's already marked as dhcp
         if not is_dhcp_set:
-            self.r.hset(profileid, "dhcp", "true")
+            self.set_profileid_field(profileid, self.constants.DHCP, "true")
 
     def add_profile(self, profileid, starttime, confidence=0.05) -> bool:
         """
@@ -998,22 +1047,32 @@ class ProfileHandler:
          hashmap of profile data
         Profiles are stored in two structures. A list of profiles (index)
          and individual hashmaps for each profile (like a table)
+         :kwarg confidence: confidence score of this profile, between 0 and 1.
+          default to 0.05 when a new profile is created.
         """
         try:
-            if self.r.sismember(self.constants.PROFILES, profileid):
+            if self.r.zscore(self.constants.PROFILES, profileid) is not None:
                 # we already have this profile
                 return False
 
+            self.zadd_but_keep_n_entries(
+                self.constants.PROFILES,
+                {str(profileid): float(starttime)},
+                2000,
+            )
+
+            fields = {
+                self.constants.STARTTIME: starttime,
+                self.constants.DURATION: self.width,
+                self.constants.CONFIDENCE: confidence,
+            }
+
             with self.r.pipeline() as pipe:
-                pipe.sadd(self.constants.PROFILES, str(profileid))
-                # Create the hashmap with the profileid.
-                # The hasmap of each profile is named with the profileid
-                # Add the start time of profile
-                pipe.hset(profileid, "starttime", starttime)
-                pipe.hset(profileid, "duration", self.width)
-                # When a new profiled is created assign threat level = 0
-                # and confidence = 0.05
-                pipe.hset(profileid, "confidence", confidence)
+                for field, value in fields.items():
+                    pipe = self.set_profileid_field(
+                        profileid, field, value, pipe=pipe
+                    )
+
                 pipe.execute()
 
             # The IP of the profile should also be added as a new IP
@@ -1023,8 +1082,8 @@ class ProfileHandler:
             self.set_new_ip(ip)
             # Publish that we have a new profile
             self.publish("new_profile", ip)
-
             return True
+
         except redis.exceptions.ResponseError as inst:
             self.print("Error in add_profile in database.py", 0, 1)
             self.print(type(inst), 0, 1)
@@ -1040,7 +1099,9 @@ class ProfileHandler:
         data = self.get_modules_labels_of_a_profile(profileid)
         data[module] = label
         data = json.dumps(data)
-        self.r.hset(profileid, "modules_labels", data)
+        self.set_profileid_field(
+            profileid, self.constants.MODULES_LABELS, data
+        )
 
     def check_tw_to_close(self, close_all=False):
         """
@@ -1053,8 +1114,6 @@ class ProfileHandler:
 
         sit = float(self.get_slips_internal_time())
 
-        # early exit to avoid re-checking when nothing changed. Remember
-        # this func is called per flow, so it needs to be as fast as possible
         if (
             not close_all
             and hasattr(self, "_last_sit")
@@ -1090,8 +1149,8 @@ class ProfileHandler:
             )
             if not close_all:
                 # if slips isn't stopping, then do regular
-                # cleanup of the past
-                pipe = self._delete_past_timewindows(profile_tw_to_close, pipe)
+                # cleanup/expiring of the past
+                pipe = self.delete_past_timewindows(profile_tw_to_close, pipe)
         pipe.execute()
 
     def get_current_timewindow(self) -> Optional[str]:
@@ -1104,63 +1163,6 @@ class ProfileHandler:
 
     def set_current_timewindow(self, timewindow: str) -> Optional[str]:
         self.r.set(self.constants.CURRENT_TIMEWINDOW, timewindow)
-
-    def _delete_past_timewindows(self, closed_profile_tw: str, pipe):
-        """
-        Deletes the past timewindows data from redis, starting from the
-        given tw-1, so that redis only has info about the current
-        timewindow and the one before it
-
-        Deleted keys are the ones following the format
-        profileid_timewindowX (aka keys needed for the portscan module only)
-
-        why do we keep 2 tws instead of the current one in redis? see PR
-        #1765 in slips repo
-
-        :param closed_profile_tw: a str like profile_8.8.8.8_timewindow7
-        """
-        try:
-            profile, ip, tw = closed_profile_tw.split("_")
-            closed_tw = int(tw.replace("timewindow", ""))
-        except ValueError:
-            self.print(
-                f"Unable to delete old timewindows info from"
-                f" {closed_profile_tw}"
-            )
-            return pipe
-
-        if closed_tw < 2:
-            # slips needs to always remember 2 tws, now tws to delete now
-            return pipe
-
-        current_timewindow: Optional[str] = self.get_current_timewindow()
-        if current_timewindow:
-            current_timewindow = int(
-                current_timewindow.replace("timewindow", "")
-            )
-            # Zeek flows don't arrive in chronological order. this is to
-            # make sure that we never close incorrect tws when a zeek flow
-            # too far in the past or too far in the future is found.
-            tws_to_close = current_timewindow - 2
-        else:
-            tws_to_close = closed_tw - 2
-
-        profileid = f"{profile}_{ip}"
-        # to avoid deleting so many keys at once which causes mem spikes
-        BATCH = 500
-        for tw_to_close in range(tws_to_close, -1, -1):
-            for i, key in enumerate(
-                self.r.scan_iter(
-                    match=f"{profileid}_timewindow{tw_to_close}", count=1000
-                )
-            ):
-                pipe.unlink(key)
-
-                if i % BATCH == 0:
-                    pipe.execute()
-                    pipe = self.r.pipeline()
-
-        return pipe
 
     def mark_profile_tw_as_modified(
         self, profileid, twid, timestamp, pipe: Pipeline = None
@@ -1300,7 +1302,7 @@ class ProfileHandler:
         """
         Get labels set by modules in the profile.
         """
-        data = self.r.hget(profileid, "modules_labels")
+        data = self.r.hget(profileid, self.constants.MODULES_LABELS)
         data = json.loads(data) if data else {}
         return data
 
@@ -1337,45 +1339,59 @@ class ProfileHandler:
         Used to mark this profile as dhcp server
         """
 
-        self.r.hset(profileid, "gateway", "true")
+        self.set_profileid_field(profileid, self.constants.GATEWAY, "true")
 
     def set_ipv6_of_profile(self, profileid, ip: list):
-        self.r.hset(profileid, "IPv6", json.dumps(ip))
+        self.set_profileid_field(
+            profileid, self.constants.IPV6, json.dumps(ip)
+        )
 
     def set_ipv4_of_profile(self, profileid, ip):
-        self.r.hset(profileid, "IPv4", json.dumps([ip]))
+        self.set_profileid_field(
+            profileid, self.constants.IPV4, json.dumps([ip])
+        )
 
     def get_mac_vendor_from_profile(self, profileid: str) -> Union[str, None]:
         """
         Returns a str MAC vendor of  the given profile or None
         """
 
-        return self.r.hget(profileid, "MAC_vendor")
+        return self.r.hget(profileid, self.constants.MAC_VENDOR)
 
     def get_hostname_from_profile(self, profileid: str) -> Optional[str]:
         """
         Returns hostname about a certain profile or None
         """
-        return self.r.hget(profileid, "host_name")
+        return self.r.hget(profileid, self.constants.HOST_NAME)
 
     def add_host_name_to_profile(self, hostname, profileid):
         """
         Adds the given hostname to the given profile
         """
         if not self.get_hostname_from_profile(profileid):
-            self.r.hset(profileid, "host_name", hostname)
+            self.set_profileid_field(
+                profileid, self.constants.HOST_NAME, hostname
+            )
 
     def get_ipv4_from_profile(self, profileid) -> str:
         """
         Returns ipv4 about a certain profile or None
         """
-        return self.r.hmget(profileid, "IPv4")[0] if profileid else False
+        return (
+            self.r.hmget(profileid, self.constants.IPV4)[0]
+            if profileid
+            else False
+        )
 
     def get_ipv6_from_profile(self, profileid) -> str:
         """
         Returns ipv6 about a certain profile or None
         """
-        return self.r.hmget(profileid, "IPv6")[0] if profileid else False
+        return (
+            self.r.hmget(profileid, self.constants.IPV6)[0]
+            if profileid
+            else False
+        )
 
     def get_the_other_ip_version(self, profileid):
         """

@@ -15,7 +15,7 @@ COPY iris/pkg ./pkg
 
 RUN go build -o /iris/iris cmd/peercli.go
 
-FROM ubuntu:22.04
+FROM ubuntu:22.04 AS base
 # To avoid user interaction when installing libraries
 ENV DEBIAN_FRONTEND=noninteractive
 # Blocking module requirement to avoid using sudo
@@ -60,30 +60,13 @@ RUN apt-get update -o Acquire::Retries=5 -o Acquire::https::No-Cache=True \
     && nvm install 22
 
 
-
-# why are we compiling redis instead of just using apt?
-# to support running slips on the rpi (arm64). the rpi uses jemmalloc by default, which expects a different page size
-# than the default on x86_64
-# also even when not in the RPI, slips need redis v8 to work, and its not available via the official redis repo
-WORKDIR /
-RUN pip3 install --no-cache-dir --upgrade pip \
-    && curl -O https://download.redis.io/redis-stable.tar.gz \
-    && tar xzf redis-stable.tar.gz \
-    && cd redis-stable \
-    && make distclean \
-    && make MALLOC=libc
-
-ENV PATH="$PATH:/redis-stable/src"
-
-
-
-
 WORKDIR ${SLIPS_DIR}
 # Retrieve Iris
 COPY --from=build /iris/iris ./modules/irisModule
 
 
-RUN  pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
+RUN  pip3 install --no-cache-dir --upgrade pip \
+    && pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
     && chmod 774 slips.py \
     && git init \
     && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
@@ -97,5 +80,30 @@ ENV PATH="$PATH:/StratosphereLinuxIPS/p2p4slips/"
 
 WORKDIR ${SLIPS_DIR}
 
-
 CMD /bin/bash
+
+# ARM image: build redis with libc malloc
+FROM base AS arm
+WORKDIR /
+RUN curl -O https://download.redis.io/redis-stable.tar.gz \
+    && tar xzf redis-stable.tar.gz \
+    && cd redis-stable \
+    && make distclean \
+    && make MALLOC=libc
+
+ENV PATH="$PATH:/redis-stable/src"
+WORKDIR ${SLIPS_DIR}
+
+
+# AMD image: build redis with jemalloc
+FROM base AS amd
+WORKDIR /
+RUN curl -O https://download.redis.io/redis-stable.tar.gz \
+    && tar xzf redis-stable.tar.gz \
+    && cd redis-stable \
+    && make distclean \
+    && make MALLOC=jemalloc
+
+
+ENV PATH="$PATH:/redis-stable/src"
+WORKDIR ${SLIPS_DIR}

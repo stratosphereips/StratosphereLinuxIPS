@@ -9,7 +9,7 @@ from pathlib import PosixPath
 import redis
 
 from modules.fidesModule.model.peer import PeerInfo
-from modules.fidesModule.persistence.sqlite_db import SQLiteDB
+from modules.fidesModule.persistence.fides_sqlite_db import FidesSQLiteDB
 from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
@@ -133,6 +133,16 @@ def message_receive(port):
         break  # exit after processing one message
 
 
+def get_main_interface():
+    try:
+        out = subprocess.check_output(
+            ["ip", "-o", "route", "show", "default"], text=True
+        )
+        return out.split(" dev ")[1].split()[0]
+    except Exception:
+        return None
+
+
 @pytest.mark.parametrize(
     "path, output_dir, redis_port",
     [
@@ -156,7 +166,7 @@ def test_conf_file2(path, output_dir, redis_port):
         str(path),
         # dummy interface required by -g
         "-i",
-        "eth0",
+        str(get_main_interface()),
         "-e",
         "1",
         "-o",
@@ -247,7 +257,7 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         str(path),
         # dummy interface required by -g
         "-i",
-        "eth0",
+        str(get_main_interface()),
         "-e",
         "1",
         "-o",
@@ -275,7 +285,7 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         mock_logger.print_line = Mock()
         mock_logger.error = Mock()
         print("Manipulating database")
-        fdb = SQLiteDB(mock_logger, test_db)
+        fdb = FidesSQLiteDB(mock_logger, test_db)
         fdb.store_peer_trust_data(
             ptd.trust_data_prototype(
                 peer=PeerInfo(
@@ -291,25 +301,31 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
                 peer=PeerInfo(
                     id="peer2", organisations=["org2"], ip="192.168.1.2"
                 ),
-                has_fixed_trust=True,
+                has_fixed_trust=False,
             )
         )
 
         # Open the log file in write mode
         with open(output_file, "w") as log_file:
-            # Start the subprocess, redirecting stdout and stderr to the same file
             process = subprocess.Popen(
-                command,  # Replace with your command
+                command,
                 stdout=log_file,
                 stderr=log_file,
             )
 
             print(f"Output and errors are logged in {output_file}")
-            # these 12s are the time we wait for slips to start all the modules
+
+            # these seconds are the time we wait for slips to start all the
+            # modules
             countdown(60, "test message")
+
+            # this msg simulates a msg sent by peers to the started
+            # slips instance
             message_send(redis_port)
-            # these 18s are the time we give slips to process the msg
+
+            # these 30s are the time we give slips to process the msg
             countdown(30, "sigterm")
+
             # send a SIGTERM to the process
             os.kill(process.pid, 15)
             print("SIGTERM sent. killing slips")
@@ -319,8 +335,8 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
 
         print("Slip is done, checking for errors in the output dir.")
         assert_no_errors(output_dir)
-        print("Checking database")
 
+        print("Checking database")
         db = ModuleFactory().create_db_manager_obj(
             redis_port, output_dir=output_dir, start_redis_server=False
         )

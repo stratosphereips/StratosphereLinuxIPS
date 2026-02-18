@@ -109,7 +109,7 @@ class UpdateManager(IModule):
 
         self.path_to_remote_ti_files = conf.remote_ti_data_path()
         if not os.path.exists(self.path_to_remote_ti_files):
-            os.mkdir(self.path_to_remote_ti_files)
+            os.makedirs(self.path_to_remote_ti_files, exist_ok=True)
             # make it accessible to root and non-root users, because when
             # slips is started using sudo, it drops privs from modules that
             # don't need them, and without this line, these modules wont be
@@ -321,10 +321,8 @@ class UpdateManager(IModule):
         if not self.enable_online_whitelist:
             return False
 
-        if not self.did_update_period_pass(
-            self.online_whitelist_update_period, "tranco_whitelist"
-        ):
-            # update period hasnt passed yet
+        if not self.db.is_tranco_whitelist_expired():
+            # tranco whitelist not expired yet
             return False
 
         # update period passed
@@ -1586,7 +1584,9 @@ class UpdateManager(IModule):
         for line in response.text.splitlines():
             domain = line.split(",")[1].strip()
             domains.append(domain)
-        self.db.store_tranco_whitelisted_domains(domains)
+        self.db.store_tranco_whitelisted_domains(
+            domains, ttl=self.online_whitelist_update_period
+        )
 
         self.mark_feed_as_updated("tranco_whitelist")
 

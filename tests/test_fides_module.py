@@ -25,7 +25,7 @@ def cleanup_database():
 
 
 def test_pre_main(mocker, cleanup_database):
-    fides_module = ModuleFactory().create_fidesModule_obj()
+    fides_module = ModuleFactory().create_fides_module_obj()
     mocker.patch(
         "slips_files.common.slips_utils.Utils.drop_root_privs_permanently"
     )

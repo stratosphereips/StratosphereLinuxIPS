@@ -4,7 +4,6 @@
 
 from dataclasses import asdict
 
-from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import DNS
 from tests.common_test_utils import get_mock_coro
 from tests.module_factory import ModuleFactory
@@ -924,20 +923,19 @@ def test_check_pending_flows_timeout():
         answers="",
         TTLs="",
     )
-    # Simulate 10 minutes difference
-    utils.get_time_diff = Mock(return_value=10)
-
     dns = ModuleFactory().create_dns_analyzer_obj()
     dns.check_dns_without_connection = Mock()
     dns.pending_dns_without_conn.put(
         ("profile5678", "twid_123", dns_flow_to_check)
     )
 
-    back_to_queue = dns.check_pending_flows_timeout(reference_flow)
-
-    utils.get_time_diff.assert_called_once_with(
-        dns_flow_to_check.starttime, reference_flow.starttime, "minutes"
-    )
+    with patch(
+        "slips_files.common.slips_utils.utils.get_time_diff", return_value=10
+    ) as mock_time_diff:
+        back_to_queue = dns.check_pending_flows_timeout(reference_flow)
+        mock_time_diff.assert_called_once_with(
+            dns_flow_to_check.starttime, reference_flow.starttime, "minutes"
+        )
 
     dns.check_dns_without_connection.assert_called_once_with(
         "profile5678", "twid_123", dns_flow_to_check, waited_for_the_conn=False

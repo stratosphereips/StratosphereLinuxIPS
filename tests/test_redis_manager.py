@@ -6,7 +6,6 @@ import os
 import redis
 import pytest
 
-import slips_files
 from tests.module_factory import ModuleFactory
 from managers.redis_manager import UserCancelledErr
 
@@ -53,13 +52,14 @@ def test_log_redis_server_pid_normal_ports(
     redis_manager.main.args.daemon = is_daemon
     redis_manager.main.args.save = save_db
     redis_manager.remove_old_logline = Mock()
-    slips_files.common.slips_utils.utils.convert_ts_format = Mock(
-        return_value="Date"
-    )
 
     with (
         patch("builtins.open", mock_open()) as mock_file,
         patch("os.getpid", return_value="os_pid"),
+        patch(
+            "slips_files.common.slips_utils.utils.get_human_readable_datetime",
+            return_value="Date",
+        ),
     ):
         redis_manager.log_redis_server_pid(redis_port, redis_pid)
         mock_file().write.assert_called_with(expected_output)
@@ -163,65 +163,30 @@ def test_load_db_failure(mock_db):
         mock_load_redis_db.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "ping_side_effect, expected_system_calls, expected_result",
-    [
-        # Testcase1: Redis server is already running
-        ([None], 0, True),
-        # Testcase2: Redis server needs to be started once
-        ([redis.exceptions.ConnectionError, None], 1, True),
-        # Testcase3: Redis server needs to be started twice
-        (
-            [
-                redis.exceptions.ConnectionError,
-                redis.exceptions.ConnectionError,
-                None,
-            ],
-            2,
-            True,
-        ),
-    ],
-)
-def test_check_redis_database(
-    ping_side_effect, expected_system_calls, expected_result, mock_db
-):
+def test_check_redis_database(mock_db):
     redis_manager = ModuleFactory().create_redis_manager_obj()
-    mock_redis = Mock()
-    mock_redis.ping.side_effect = ping_side_effect
+    mock_db = Mock()
+    mock_db.rcache.ping.return_value = True
 
-    with (
-        patch("redis.StrictRedis", return_value=mock_redis),
-        patch("os.system") as mock_system,
-        patch("time.sleep") as mock_sleep,
-    ):
-        result = redis_manager.check_redis_database()
+    with patch("managers.redis_manager.RedisDB", return_value=mock_db):
+        result = redis_manager.start_redis_cache_if_not_running()
 
-        assert result == expected_result
-        assert mock_redis.ping.call_count == len(ping_side_effect)
-        assert mock_system.call_count == expected_system_calls
-        assert mock_sleep.call_count == expected_system_calls
+    assert result is True
+    mock_db.rcache.ping.assert_called_once_with()
+    mock_db.rcache.close.assert_called_once_with()
 
 
 def test_check_redis_database_failure(mock_db):
     redis_manager = ModuleFactory().create_redis_manager_obj()
-
-    mock_redis = Mock()
-    mock_redis.ping.side_effect = redis.exceptions.ConnectionError
+    mock_db = Mock()
+    mock_db.rcache.ping.side_effect = redis.exceptions.ConnectionError
 
     with (
-        patch("redis.StrictRedis", return_value=mock_redis),
-        patch("os.system") as mock_system,
-        patch("time.sleep") as mock_sleep,
-        patch.object(redis_manager.main, "terminate_slips") as mock_terminate,
+        patch("managers.redis_manager.RedisDB", return_value=mock_db),
+        pytest.raises(redis.exceptions.ConnectionError),
     ):
-        result = redis_manager.check_redis_database()
-
-        expected_result = False
-        assert result == expected_result
-        assert mock_redis.ping.call_count == 3
-        assert mock_system.call_count == 2
-        assert mock_sleep.call_count == 2
-        mock_terminate.assert_called_once()
+        redis_manager.start_redis_cache_if_not_running()
+        assert mock_db.ping.call_count == 3
 
 
 def test_get_random_redis_port_first_available(mock_db):

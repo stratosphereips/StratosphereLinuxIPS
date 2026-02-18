@@ -46,6 +46,9 @@ async def test_check_successful_ssh(
     mocker, auth_success, expected_zeek_evidence, expected_called_slips
 ):
     ssh = ModuleFactory().create_ssh_analyzer_obj()
+    # Mock sleep to do nothing and return immediately
+    mocker.patch("asyncio.sleep", return_value=get_mock_coro(None))
+
     mock_set_evidence_ssh_successful_by_zeek = mocker.patch(
         "modules.flowalerts.ssh.SSH.set_evidence_ssh_successful_by_zeek"
     )
@@ -96,7 +99,7 @@ async def test_check_successful_ssh(
 def test_check_ssh_password_guessing(auth_success, expected_call_count):
     ssh = ModuleFactory().create_ssh_analyzer_obj()
     mock_set_evidence = MagicMock()
-    ssh.set_evidence.pw_guessing = mock_set_evidence
+    ssh.set_evidence.ssh_pw_guessing = mock_set_evidence
     for i in range(ssh.pw_guessing_threshold):
         flow = SSH(
             starttime="1726655400.0",
@@ -120,14 +123,13 @@ def test_check_ssh_password_guessing(auth_success, expected_call_count):
     ssh.password_guessing_cache = {}
 
 
-@patch("slips_files.common.parsers.config_parser.ConfigParser")
+@patch("modules.flowalerts.ssh.ConfigParser")
 def test_read_configuration(mock_config_parser):
-    """Test the read_configuration method."""
     mock_parser = mock_config_parser.return_value
     mock_parser.ssh_succesful_detection_threshold.return_value = 12345
     ssh = ModuleFactory().create_ssh_analyzer_obj()
     ssh.read_configuration()
-    assert ssh.ssh_succesful_detection_threshold == 4290
+    assert ssh.ssh_succesful_detection_threshold == 12345
 
 
 def test_detect_successful_ssh_by_slips():

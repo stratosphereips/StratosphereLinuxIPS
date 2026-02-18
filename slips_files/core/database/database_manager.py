@@ -47,7 +47,7 @@ class DBManager:
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
         self.rdb = RedisDB(
-            self.logger, redis_port, start_redis_server, **kwargs
+            self.logger, redis_port, output_dir, start_redis_server, **kwargs
         )
         self.constants = self.rdb.constants
 
@@ -184,9 +184,6 @@ class DBManager:
         conf = ConfigParser()
         cls.width = conf.get_tw_width_in_seconds()
 
-    def get_sqlite_db_path(self) -> str:
-        return self.sqlite.get_db_path()
-
     def iterate_flows(self, *args, **kwargs):
         return self.sqlite.iterate_flows(*args, **kwargs)
 
@@ -211,6 +208,9 @@ class DBManager:
     def get_flows_analyzed_per_minute(self, *args, **kwargs):
         return self.rdb.get_flows_analyzed_per_minute(*args, **kwargs)
 
+    def ping(self, *args, **kwargs):
+        return self.rdb.ping(*args, **kwargs)
+
     def get_ip_info(self, *args, **kwargs):
         return self.rdb.get_ip_info(*args, **kwargs)
 
@@ -229,25 +229,11 @@ class DBManager:
     def get_ap_info(self, *args, **kwargs):
         return self.rdb.get_ap_info(*args, **kwargs)
 
-    @classmethod
-    def discard_obj(cls):
-        """
-        when connecting on multiple ports, this dbmanager since it's a
-        singelton
-        returns the same instance of the already used db
-        to fix this, we call this function every time we find a used db
-        that slips should connect to
-        """
-        cls._obj = None
-
     def get_slips_internal_time(self, *args, **kwargs):
         return self.rdb.get_slips_internal_time(*args, **kwargs)
 
-    def mark_profile_as_malicious(self, *args, **kwargs):
-        return self.rdb.mark_profile_as_malicious(*args, **kwargs)
-
     def get_malicious_profiles(self, *args, **kwargs):
-        return self.rdb.get_malicious_profiles(*args, **kwargs)
+        return self.sqlite.get_malicious_profiles(*args, **kwargs)
 
     def get_asn_info(self, *args, **kwargs):
         return self.rdb.get_asn_info(*args, **kwargs)
@@ -374,6 +360,9 @@ class DBManager:
 
     def delete_tranco_whitelist(self, *args, **kwargs):
         return self.rdb.delete_tranco_whitelist(*args, **kwargs)
+
+    def is_tranco_whitelist_expired(self, *args, **kwargs):
+        return self.rdb.is_tranco_whitelist_expired(*args, **kwargs)
 
     def set_growing_zeek_dir(self, *args, **kwargs):
         return self.rdb.set_growing_zeek_dir(*args, **kwargs)
@@ -818,11 +807,11 @@ class DBManager:
     def get_msgs_published_in_channel(self, *args, **kwargs):
         return self.rdb.get_msgs_published_in_channel(*args, **kwargs)
 
-    def get_dhcp_flows(self, *args, **kwargs):
-        return self.rdb.get_dhcp_flows(*args, **kwargs)
+    def get_dhcp_requested_addrs(self, *args, **kwargs):
+        return self.rdb.get_dhcp_requested_addrs(*args, **kwargs)
 
-    def set_dhcp_flow(self, *args, **kwargs):
-        return self.rdb.set_dhcp_flow(*args, **kwargs)
+    def add_dhcp_requested_addr(self, *args, **kwargs):
+        return self.rdb.add_dhcp_requested_addr(*args, **kwargs)
 
     def get_dstips_with_not_established_flows(self, *args, **kwargs):
         yield from self.rdb.get_dstips_with_not_established_flows(
@@ -927,9 +916,6 @@ class DBManager:
     def add_out_ssl(self, *args, **kwargs):
         return self.rdb.add_out_ssl(*args, **kwargs)
 
-    def get_profileid_from_ip(self, *args, **kwargs):
-        return self.rdb.get_profileid_from_ip(*args, **kwargs)
-
     def get_first_flow_time(self, *args, **kwargs):
         return self.rdb.get_first_flow_time(*args, **kwargs)
 
@@ -941,9 +927,6 @@ class DBManager:
 
     def get_tws_from_profile(self, *args, **kwargs):
         return self.rdb.get_tws_from_profile(*args, **kwargs)
-
-    def get_number_of_tws_in_profile(self, *args, **kwargs):
-        return self.rdb.get_number_of_tws_in_profile(*args, **kwargs)
 
     def get_t2_for_profile_tw(self, *args, **kwargs):
         return self.rdb.get_t2_for_profile_tw(*args, **kwargs)
@@ -985,9 +968,6 @@ class DBManager:
     def get_number_of_tws(self, *args, **kwargs):
         return self.rdb.get_number_of_tws(*args, **kwargs)
 
-    def get_modified_tw_since_time(self, *args, **kwargs):
-        return self.rdb._get_modified_tw_since_time(*args, **kwargs)
-
     def get_modified_profiles_since(self, *args, **kwargs):
         return self.rdb.get_modified_profiles_since(*args, **kwargs)
 
@@ -1020,8 +1000,9 @@ class DBManager:
 
     def add_profile(self, profileid, starttime):
         confidence = 0.05
-        self.update_threat_level(profileid, "info", confidence)
-        return self.rdb.add_profile(profileid, starttime, confidence)
+        if self.rdb.add_profile(profileid, starttime, confidence):
+            self.update_threat_level(profileid, "info", confidence)
+        return
 
     def set_module_label_for_profile(self, *args, **kwargs):
         return self.rdb.set_module_label_for_profile(*args, **kwargs)
@@ -1040,34 +1021,6 @@ class DBManager:
 
     def add_tuple(self, *args, **kwargs):
         return self.rdb.add_tuple(*args, **kwargs)
-
-    def search_tws_for_flow(self, twid, uid, go_back=False):
-        """
-        Search for the given uid in the given twid, or the tws before
-        :param go_back: how many hours back to search?
-        """
-
-        # TODO test this
-        # how many tws so search back in?
-        tws_to_search = float("inf")
-        if go_back:
-            hrs_to_search = float(go_back)
-            tws_to_search = self.rdb.get_equivalent_tws(hrs_to_search)
-
-        twid_number: int = int(twid.split("timewindow")[-1])
-        while twid_number > -1 and tws_to_search > 0:
-            flow = self.sqlite.get_flow(uid, twid=f"timewindow{twid_number}")
-
-            uid = next(iter(flow))
-            if flow[uid]:
-                return flow
-
-            twid_number -= 1
-            # this reaches 0 when go_back is set to a number
-            tws_to_search -= 1
-
-        # uid isn't in this twid or any of the previous ones
-        return {uid: None}
 
     def get_modules_labels_of_a_profile(self, *args, **kwargs):
         return self.rdb.get_modules_labels_of_a_profile(*args, **kwargs)
@@ -1102,12 +1055,6 @@ class DBManager:
     def get_mac_vendor_from_profile(self, *args, **kwargs):
         return self.rdb.get_mac_vendor_from_profile(*args, **kwargs)
 
-    def label_flows_causing_alert(self, evidence_ids: List[str]):
-        """
-        Uses sqlite and rdb
-        :param evidence_ids: list of ids of evidence causing an alert
-        """
-
     def set_mac_vendor_to_profile(self, *args, **kwargs):
         return self.rdb.set_mac_vendor_to_profile(*args, **kwargs)
 
@@ -1140,12 +1087,6 @@ class DBManager:
 
     def get_icmp_attack_info_to_several_hosts(self, *args, **kwargs):
         return self.rdb.get_icmp_attack_info_to_several_hosts(*args, **kwargs)
-
-    def get_normal_label(self):
-        return self.rdb.normal_label
-
-    def get_malicious_label(self):
-        return self.rdb.malicious_label
 
     def init_tables(self, *args, **kwargs):
         return self.sqlite.init_tables(*args, **kwargs)
@@ -1210,9 +1151,6 @@ class DBManager:
     def get_redis_pid(self, *args, **kwargs):
         return self.rdb.get_redis_pid(*args, **kwargs)
 
-    def increment_attack_counter(self, *args, **kwargs):
-        return self.rdb.increment_attack_counter(*args, **kwargs)
-
     def export_labeled_flows(self, *args, **kwargs):
         """
         exports the labeled flows and altflows stored in sqlite
@@ -1239,7 +1177,7 @@ class DBManager:
         if self.sqlite:
             self.sqlite.close(*args, **kwargs)
 
-    def close_all_dbs(self, *args, **kwargs):
+    def close_all_dbs(self):
         self.rdb.r.close()
         self.rdb.rcache.close()
         self.close_sqlite()
@@ -1249,8 +1187,8 @@ class DBManager:
     def get_fides_ti(self, target: str):
         return self.rdb.get_fides_ti(target)
 
-    def save_fides_ti(self, target: str, STI: str):
-        self.rdb.save_fides_ti(target, STI)
+    def save_fides_ti(self, target: str, sti: str):
+        self.rdb.save_fides_ti(target, sti)
 
     def store_connected_peers(self, peers: List[str]):
         self.rdb.store_connected_peers(peers)
@@ -1258,14 +1196,11 @@ class DBManager:
     def get_connected_peers(self):
         return self.rdb.get_connected_peers()  # no data -> []
 
-    def store_peer_trust_data(self, id: str, td: str):
-        self.rdb.update_peer_td(id, td)
+    def store_peer_trust_data(self, peer_id: str, td: str):
+        self.rdb.store_peer_trust_data(peer_id, td)
 
     def get_peer_trust_data(self, id: str):
         return self.rdb.get_peer_td(id)
-
-    def get_all_peers_trust_data(self):
-        return self.rdb.get_all_peers_td()
 
     def cache_network_opinion(self, target: str, opinion: dict, time: float):
         self.rdb.cache_network_opinion(target, opinion, time)

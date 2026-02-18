@@ -31,9 +31,9 @@ def test_set_analysis_end_date(
         enable_metadata
     )
 
-    utils.convert_ts_format = Mock(return_value=expected_end_date)
-
-    with patch("builtins.open", create=True) as mock_open:
+    with patch.object(
+        utils, "convert_ts_format", return_value=expected_end_date
+    ), patch("builtins.open", create=True) as mock_open:
         result = metadata_manager.set_analysis_end_date("dummy_end_date")
 
         assert result == expected_end_date

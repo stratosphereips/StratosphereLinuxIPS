@@ -115,8 +115,7 @@ def set_profile_tws():
         profiles_dict[profile_ip] = False
 
     if blocked_profiles := db.get_malicious_profiles():
-        for profile in blocked_profiles:
-            blocked_ip = profile.split("_")[-1]
+        for blocked_ip in blocked_profiles:
             profiles_dict[blocked_ip] = True
 
     data = [

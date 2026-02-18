@@ -82,7 +82,6 @@ class Profiler(ICore, IObservable):
         self.timeformat = None
         self.input_type = ""
         self.rec_lines = 0
-        self.localnet_cache = {}
         self.read_configuration()
         self.symbol = SymbolHandler(self.logger, self.db)
         # there has to be a timeout or it will wait forever and never
