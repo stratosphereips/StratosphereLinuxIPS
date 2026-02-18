@@ -9,7 +9,7 @@ from pathlib import PosixPath
 import redis
 
 from modules.fidesModule.model.peer import PeerInfo
-from modules.fidesModule.persistence.sqlite_db import SQLiteDB
+from modules.fidesModule.persistence.fides_sqlite_db import FidesSQLiteDB
 from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
@@ -275,7 +275,7 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         mock_logger.print_line = Mock()
         mock_logger.error = Mock()
         print("Manipulating database")
-        fdb = SQLiteDB(mock_logger, test_db)
+        fdb = FidesSQLiteDB(mock_logger, test_db)
         fdb.store_peer_trust_data(
             ptd.trust_data_prototype(
                 peer=PeerInfo(

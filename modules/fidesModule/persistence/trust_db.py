@@ -6,7 +6,7 @@ from ..model.configuration import TrustModelConfiguration
 from ..model.peer_trust_data import PeerTrustData, TrustMatrix
 from ..model.threat_intelligence import SlipsThreatIntelligence
 from modules.fidesModule.persistence.trust import TrustDatabase
-from .sqlite_db import SQLiteDB
+from .fides_sqlite_db import FidesSQLiteDB
 
 from slips_files.core.database.database_manager import DBManager
 import json
@@ -23,7 +23,7 @@ class SlipsTrustDatabase(TrustDatabase):
         self,
         configuration: TrustModelConfiguration,
         db: DBManager,
-        sqldb: SQLiteDB,
+        sqldb: FidesSQLiteDB,
     ):
         super().__init__(configuration)
         self.db = db

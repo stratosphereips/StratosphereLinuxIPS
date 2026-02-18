@@ -10,7 +10,7 @@ from modules.fidesModule.persistence.threat_intelligence import (
 
 from slips_files.core.database.database_manager import DBManager
 import json
-from .sqlite_db import SQLiteDB
+from .fides_sqlite_db import FidesSQLiteDB
 
 
 class SlipsThreatIntelligenceDatabase(ThreatIntelligenceDatabase):
@@ -21,7 +21,7 @@ class SlipsThreatIntelligenceDatabase(ThreatIntelligenceDatabase):
         self,
         configuration: TrustModelConfiguration,
         db: DBManager,
-        sqldb: SQLiteDB,
+        sqldb: FidesSQLiteDB,
     ):
         self.__configuration = configuration
         self.db = db

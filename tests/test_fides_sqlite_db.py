@@ -6,7 +6,7 @@ from modules.fidesModule.model.peer_trust_data import PeerTrustData
 from modules.fidesModule.model.threat_intelligence import (
     SlipsThreatIntelligence,
 )
-from modules.fidesModule.persistence.sqlite_db import SQLiteDB
+from modules.fidesModule.persistence.fides_sqlite_db import FidesSQLiteDB
 
 from modules.fidesModule.model.recommendation_history import (
     RecommendationHistoryRecord,
@@ -18,7 +18,7 @@ from modules.fidesModule.model.service_history import ServiceHistoryRecord
 def db():
     # Create an in-memory SQLite database for testing
     logger = MagicMock()  # Mock the logger for testing purposes
-    db_instance = SQLiteDB(logger, ":memory:")  # Using in-memory DB
+    db_instance = FidesSQLiteDB(logger, ":memory:")  # Using in-memory DB
     return db_instance
 
 
@@ -26,7 +26,7 @@ def test_db_connection_and_creation(db):
     # Check if connection is established
     assert db.connection is not None
     # Check if tables exist
-    tables = db._SQLiteDB__execute_query(
+    tables = db._FidesSQLiteDB__execute_query(
         "SELECT name FROM sqlite_master WHERE type='table';"
     )
     assert len(tables) > 0  # Ensure tables are created
@@ -214,7 +214,7 @@ def test_insert_organisation_if_not_exists(db):
     db.insert_organisation_if_not_exists(organisation_id)
 
     # Query the Organisation table to check if the organisation was inserted
-    result = db._SQLiteDB__execute_query(
+    result = db._FidesSQLiteDB__execute_query(
         "SELECT organisationID FROM Organisation WHERE organisationID = ?",
         [organisation_id],
     )
@@ -233,7 +233,7 @@ def test_insert_peer_organisation_connection(db):
     db.insert_peer_organisation_connection(peer_id, organisation_id)
 
     # Query the PeerOrganisation table to verify the connection
-    result = db._SQLiteDB__execute_query(
+    result = db._FidesSQLiteDB__execute_query(
         "SELECT peerID, organisationID FROM PeerOrganisation WHERE peerID = ? AND organisationID = ?",
         [peer_id, organisation_id],
     )
@@ -254,7 +254,7 @@ def test_store_connected_peers_list(db):
     db.store_connected_peers_list(peers)
 
     # Verify the PeerInfo table
-    peer_results = db._SQLiteDB__execute_query(
+    peer_results = db._FidesSQLiteDB__execute_query(
         "SELECT peerID, ip FROM PeerInfo"
     )
     assert len(peer_results) == 2
@@ -262,7 +262,7 @@ def test_store_connected_peers_list(db):
     assert peer_results[1] == ("peer2", "192.168.1.2")
 
     # Verify the PeerOrganisation table
-    org_results_peer1 = db._SQLiteDB__execute_query(
+    org_results_peer1 = db._FidesSQLiteDB__execute_query(
         "SELECT organisationID FROM PeerOrganisation WHERE peerID = ?",
         ["peer1"],
     )
@@ -272,7 +272,7 @@ def test_store_connected_peers_list(db):
     assert org_results_peer1[0][0] == "org1"
     assert org_results_peer1[1][0] == "org2"
 
-    org_results_peer2 = db._SQLiteDB__execute_query(
+    org_results_peer2 = db._FidesSQLiteDB__execute_query(
         "SELECT organisationID FROM PeerOrganisation WHERE peerID = ?",
         ["peer2"],
     )
@@ -284,25 +284,25 @@ def test_store_connected_peers_list(db):
 
 def test_get_connected_peers_2(db):
     # Manually insert peer data into PeerInfo table
-    db._SQLiteDB__execute_query(
+    db._FidesSQLiteDB__execute_query(
         "INSERT INTO PeerInfo (peerID, ip) VALUES (?, ?)",
         ["peer1", "192.168.1.1"],
     )
-    db._SQLiteDB__execute_query(
+    db._FidesSQLiteDB__execute_query(
         "INSERT INTO PeerInfo (peerID, ip) VALUES (?, ?)",
         ["peer2", "192.168.1.2"],
     )
 
     # Manually insert associated organisations into PeerOrganisation table
-    db._SQLiteDB__execute_query(
+    db._FidesSQLiteDB__execute_query(
         "INSERT INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?)",
         ["peer1", "org1"],
     )
-    db._SQLiteDB__execute_query(
+    db._FidesSQLiteDB__execute_query(
         "INSERT INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?)",
         ["peer1", "org2"],
     )
-    db._SQLiteDB__execute_query(
+    db._FidesSQLiteDB__execute_query(
         "INSERT INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?)",
         ["peer2", "org3"],
     )
@@ -325,7 +325,7 @@ def test_get_peer_organisations(db):
     peer_id = "peer123"
     organisations = ["org1", "org2", "org3"]
     for org_id in organisations:
-        db._SQLiteDB__execute_query(
+        db._FidesSQLiteDB__execute_query(
             "INSERT INTO PeerOrganisation (peerID, organisationID) VALUES (?, ?)",
             [peer_id, org_id],
         )

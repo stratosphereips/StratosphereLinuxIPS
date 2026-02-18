@@ -18,7 +18,7 @@ from ..model.aliases import *
 import threading
 
 
-class SQLiteDB:
+class FidesSQLiteDB:
     _lock = threading.RLock()
     name = "Fides SQLiteDB"
 
@@ -103,7 +103,7 @@ class SQLiteDB:
         self.__execute_query(query, params)
 
     def store_peer_trust_data(self, peer_trust_data: PeerTrustData) -> None:
-        with SQLiteDB._lock:
+        with FidesSQLiteDB._lock:
             # Insert PeerInfo first to ensure the peer exists
             self.__execute_query(
                 """
@@ -406,7 +406,7 @@ class SQLiteDB:
         """
         peer_info_list = []
 
-        with SQLiteDB._lock:
+        with FidesSQLiteDB._lock:
             # Step 1: Query the PeerInfo table to get all peer information
             peer_info_query = "SELECT peerID, ip FROM PeerInfo"
             peer_info_results = self.__execute_query(peer_info_query)
@@ -487,7 +487,7 @@ class SQLiteDB:
         :param params: Optional list of parameters for parameterized queries.
         :return: List of results returned from the executed query.
         """
-        with SQLiteDB._lock:
+        with FidesSQLiteDB._lock:
             self.__slips_log(f"Executing query: {query}")
             cursor = self.connection.cursor()
 
