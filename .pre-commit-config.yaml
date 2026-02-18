@@ -55,4 +55,6 @@ repos:
   rev: v3.0.3
   hooks:
     - id: pylint
-      additional_dependencies: [.] # Install your package to help resolution
+      additional_dependencies: [.]
+      args:
+        - --disable=missing-function-docstring
