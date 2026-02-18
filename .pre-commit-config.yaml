@@ -22,7 +22,6 @@ repos:
 -     repo: https://github.com/astral-sh/ruff-pre-commit
       rev: v0.9.6
       hooks:
-        # Run the linter.
         - id: ruff
           args: [ --fix ]
           # excludes formatting slips_files/common/imports.py
@@ -51,3 +50,9 @@ repos:
       entry: bash -c 'files=$(git diff --cached --name-only --diff-filter=ACM | grep -E "\.py$" | grep -vE "^(tests/|migrations/)"); [ -n "$files" ] && vulture --exclude "tests/*,venv/*" $files || true'
       language: system
       types: [python]
+
+- repo: https://github.com/pycqa/pylint
+  rev: v3.0.3
+  hooks:
+    - id: pylint
+      additional_dependencies: [.] # Install your package to help resolution
