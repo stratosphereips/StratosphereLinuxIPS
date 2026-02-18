@@ -103,9 +103,8 @@ def test_get_dhcp_flows(zrange_return_value, expected_dhcp_flows):
     assert dhcp_flows == expected_dhcp_flows
 
 
-def test_set_dhcp_flow():
+def test_add_dhcp_requested_addr():
     handler = ModuleFactory().create_profile_handler_obj()
-
     handler.zadd_but_keep_n_entries = Mock()
 
     profileid = "profile_1"
@@ -116,7 +115,7 @@ def test_set_dhcp_flow():
     handler.zadd_but_keep_n_entries.assert_called_once_with(
         f"{handler.constants.REQUESTED_DHCP_ADDRS}:{profileid}_{twid}",
         {requested_addr: ANY},
-        n=50,
+        max_entries=50,
     )
 
 
