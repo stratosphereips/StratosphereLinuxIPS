@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import shutil
 import socket
-from datetime import datetime
 
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
@@ -169,12 +168,6 @@ class RedisDB(
 
         elif cls.redis_port not in cls._instances and not cls.args.killall:
             cls._read_configuration()
-            # @@@@@@@@@@@@@@@@@@@@@@@@@@
-            file = os.path.join(cls.output_dir, "r_conn_stats.log")
-            cls.r_handle = open(file, "a")
-            file = os.path.join(cls.output_dir, "rcache_conn_stats.log")
-            cls.rcache_handle = open(file, "a")
-
             cls._setup_config_file()
             initialized, err = cls.init_redis_server()
             if not initialized:
@@ -469,54 +462,6 @@ class RedisDB(
         """store the time slips started (datetime obj)"""
         now = time.time()
         cls.r.set(cls.constants.SLIPS_START_TIME, now)
-
-    def monitor_connections(self, interval=10):
-        """Continuously monitor Redis connection health."""
-        # @@@@@@@@@@@@@@@@@@@@@@@@@@@
-        map = {
-            self.r: self.r_handle,
-            self.rcache: self.rcache_handle,
-        }
-
-        while True:
-            # current time
-            now = datetime.now()
-
-            # human-readable string
-            human_readable = now.strftime("%Y-%m-%d %H:%M:%S")
-            for redis_client, file in map.items():
-                try:
-                    file.write(human_readable + "\n")
-                    info = redis_client.info("clients")
-                    stats = redis_client.info("stats")
-
-                    file.write(
-                        f"Connected clients:" f" {info['connected_clients']}\n"
-                    )
-                    file.write(
-                        f"Blocked clients" f": {info['blocked_clients']}\n"
-                    )
-                    file.write(
-                        f"Rejected connections: "
-                        f"{stats['rejected_connections']}\n"
-                    )
-                    file.write(
-                        f"Total connections received:"
-                        f" {stats['total_connections_received']}\n"
-                    )
-
-                    # Alert on concerning metrics
-                    if info["connected_clients"] > 1000:
-                        file.write("WARNING: High connection count\n")
-
-                    if stats["rejected_connections"] > 0:
-                        file.write("WARNING: Connections being rejected\n")
-
-                except redis.ConnectionError as e:
-                    file.write(f"Connection error: {e}\n")
-                file.flush()
-
-            time.sleep(interval)
 
     def ping(self):
         self.r.ping()

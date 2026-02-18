@@ -223,10 +223,6 @@ class DBManager:
     def is_known_fp_md5_hash(self, *args, **kwargs):
         return self.rdb.is_known_fp_md5_hash(*args, **kwargs)
 
-    # @@@@@@@@@@@@@@@@@@@@
-    def monitor_connections(self, *args, **kwargs):
-        return self.rdb.monitor_connections(*args, **kwargs)
-
     def set_ap_info(self, *args, **kwargs):
         return self.rdb.set_ap_info(*args, **kwargs)
 
