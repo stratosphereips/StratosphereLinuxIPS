@@ -3,7 +3,7 @@
 import json
 import sys
 import traceback
-from typing import Iterator, Tuple
+from typing import Iterator, Tuple, Any, Callable
 
 from cachetools import TTLCache
 from redis.client import Pipeline
@@ -55,6 +55,19 @@ class ScanDetectionsHandler:
     hash profile_tw:tcp:estab:<ip>:dstports <port> <uid>
 
     """
+
+    r: Any
+    conf: Any
+    our_ips: Any
+    twid_width: int
+    tw_width: int
+    use_local_p2p: bool
+    ask_ip_cache: Any
+    print: Callable[..., Any]
+    publish: Callable[..., Any]
+    give_threat_intelligence: Callable[..., Any]
+    get_port_info: Callable[..., Any]
+    mark_profile_tw_as_modified: Callable[..., Any]
 
     name = "DB"
 

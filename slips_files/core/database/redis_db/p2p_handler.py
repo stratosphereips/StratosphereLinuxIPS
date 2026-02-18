@@ -2,6 +2,8 @@ import json
 import time
 from typing import (
     List,
+    Any,
+    Callable,
 )
 
 
@@ -10,6 +12,13 @@ class P2PHandler:
     Helper class for the Redis class in database.py
     Contains all the logic related Fides module
     """
+
+    r: Any
+    rcache: Any
+    constants: Any
+    default_ttl: int
+    extended_ttl: int
+    zadd_but_keep_n_entries: Callable[..., Any]
 
     name = "P2PHandlerDB"
 
@@ -58,7 +67,7 @@ class P2PHandler:
         """
         return self.r.hget(self.constants.P2P_PEER_INFO_HASH, peer_id)
 
-    def update_peer_td(self, peer_id: str, updated_td: str):
+    def store_peer_trust_data(self, peer_id: str, updated_td: str):
         """
         Update peer information.
         """
@@ -72,17 +81,6 @@ class P2PHandler:
             )
         else:
             self.store_peer_td(peer_id, updated_td)
-
-    def get_all_peers_td(self):
-        """
-        Get all connected peers trust data.
-        """
-        peer_ids = self.r.zrange(self.constants.P2P_TRUST_SET, 0, -1)
-        peers = {
-            peer_id: self.r.hget(self.constants.P2P_PEER_INFO_HASH, peer_id)
-            for peer_id in peer_ids
-        }
-        return peers
 
     def remove_peer_td(self, peer_id: str):
         """

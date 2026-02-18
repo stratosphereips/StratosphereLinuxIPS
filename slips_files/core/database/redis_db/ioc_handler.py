@@ -7,6 +7,8 @@ from typing import (
     Tuple,
     Union,
     Optional,
+    Any,
+    Callable,
 )
 
 from slips_files.common.data_structures.trie import Trie
@@ -23,6 +25,19 @@ class IoCHandler:
     Contains all the logic related to setting and retrieving evidence and
     alerts in the db
     """
+
+    r: Any
+    rcache: Any
+    constants: Any
+    channels: Any
+    conf: Any
+    default_ttl: int
+    publish: Callable[..., Any]
+    _hscan: Callable[..., Any]
+    _should_ask_modules_about_ip: Callable[..., Any]
+    trie: Any
+    is_trie_cached: bool
+    twid_width: int
 
     name = "DB"
 

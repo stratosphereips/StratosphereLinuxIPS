@@ -1,6 +1,7 @@
 import json
 
 from slips_files.common.slips_utils import utils
+from typing import Any
 
 
 class FlowTracker:
@@ -8,6 +9,9 @@ class FlowTracker:
     Helper class for the Redis class in database.py
     Contains all the logic related to tracking flow processing rate
     """
+
+    r: Any
+    constants: Any
 
     name = "FlowTrackerDB"
     # channels that recv actual flows, not msgs that we need to pass between

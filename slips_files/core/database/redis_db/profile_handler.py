@@ -12,6 +12,8 @@ from typing import (
     Optional,
     List,
     Set,
+    Any,
+    Callable,
 )
 import redis
 import validators
@@ -25,6 +27,32 @@ class ProfileHandler:
     Helper class for the Redis class in database.py
     Contains all the logic related to flows, profiles and timewindows
     """
+
+    r: Any
+    constants: Any
+    args: Any
+    separator: str
+    default_ttl: int
+    extended_ttl: int
+    width: float
+    starttime_of_first_tw: Any
+    print: Callable[..., Any]
+    publish: Callable[..., Any]
+    zadd_but_keep_n_entries: Callable[..., Any]
+    delete_past_timewindows: Callable[..., Any]
+    give_threat_intelligence: Callable[..., Any]
+    get_all_flows_in_profileid_twid: Callable[..., Any]
+    get_final_state_from_flags: Callable[..., Any]
+    get_gateway_ip: Callable[..., Any]
+    get_ip_info: Callable[..., Any]
+    get_slips_internal_time: Callable[..., Any]
+    set_dns_resolution: Callable[..., Any]
+    set_ip_info: Callable[..., Any]
+    set_new_ip: Callable[..., Any]
+    _determine_gw_mac: Callable[..., Any]
+    _hscan: Callable[..., Any]
+    _is_gw_mac: Callable[..., Any]
+    _last_sit: Callable[..., Any]
 
     name = "DB"
 

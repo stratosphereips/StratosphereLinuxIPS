@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import json
 from typing import List
+from typing import Any, Callable
 
 
 class CleanupMixin:
@@ -9,6 +10,11 @@ class CleanupMixin:
     Helper class for the Redis class in database.py
     Contains all the logic related to cleanup operations and memory eviction
     """
+
+    r: Any
+    constants: Any
+    get_blocked_timewindows_of_profile: Callable[..., Any]
+    print: Callable[..., Any]
 
     name = "DB"
 
@@ -20,7 +26,7 @@ class CleanupMixin:
         pattern = f"*{profileid}*{twid}*"
         cursor = 0
         while True:
-            cursor, keys = pipe.r.scan(cursor=cursor, match=pattern, count=100)
+            cursor, keys = pipe.scan(cursor=cursor, match=pattern, count=100)
             if keys:
                 pipe.unlink(*keys)
             if cursor == 0:

@@ -8,6 +8,8 @@ from typing import (
     Optional,
     Dict,
     Union,
+    Any,
+    Callable,
 )
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.alerts import (
@@ -28,6 +30,25 @@ class AlertHandler:
     Helper class for the Redis class in database.py
     Contains all the logic related to setting and retrieving evidence and alerts in the db
     """
+
+    r: Any
+    constants: Any
+    channels: Any
+    default_ttl: int
+    width: float
+    disabled_detections: Any
+    publish: Callable[..., Any]
+    zadd_but_keep_n_entries: Callable[..., Any]
+    get_tw_start_time: Callable[..., Any]
+    get_first_flow_time: Callable[..., Any]
+    get_domain_data: Callable[..., Any]
+    get_asn_info: Callable[..., Any]
+    get_ip_identification: Callable[..., Any]
+    is_blacklisted_domain: Callable[..., Any]
+    is_blacklisted_ip: Callable[..., Any]
+    set_ip_info: Callable[..., Any]
+    set_profileid_field: Callable[..., Any]
+    add_profile: Callable[..., Any]
 
     name = "DB"
 
