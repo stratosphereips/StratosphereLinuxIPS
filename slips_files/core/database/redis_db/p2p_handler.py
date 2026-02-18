@@ -47,11 +47,11 @@ class P2PHandler:
             json_peers = json.loads(json_list)
             return json_peers
 
-    def store_peer_td(self, peer_id, td: str):
+    def _store_peer_td(self, peer_id, td: str):
         self.zadd_but_keep_n_entries(
             self.constants.P2P_TRUST_SET,
             {peer_id: time.time()},
-            n=50,
+            max_entries=50,
         )
         self.r.hset(self.constants.P2P_PEER_INFO_HASH, peer_id, td)
         self.r.hexpire(
@@ -80,7 +80,7 @@ class P2PHandler:
                 nx=True,
             )
         else:
-            self.store_peer_td(peer_id, updated_td)
+            self._store_peer_td(peer_id, updated_td)
 
     def remove_peer_td(self, peer_id: str):
         """
