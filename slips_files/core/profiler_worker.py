@@ -328,11 +328,13 @@ class ProfilerWorker(IModule):
                 return
 
             if self.db.is_running_non_stop():
-                self.localnet_cache = self.get_localnet_of_given_interface()
+                self._set_localnet_cache(
+                    self.get_localnet_of_given_interface()
+                )
             else:
-                self.localnet_cache = self.get_local_net_of_flow(flow)
+                self._set_localnet_cache(self.get_local_net_of_flow(flow))
 
-            for interface, local_net in self.localnet_cache.items():
+            for interface, local_net in self._iter_localnet_cache_items():
                 self.db.set_local_network(local_net, interface)
 
     def is_gw_info_detected(self, info_type: str, interface: str) -> bool:
@@ -466,9 +468,9 @@ class ProfilerWorker(IModule):
         and we don't have the local_net set already
         """
         if self.db.is_running_non_stop():
-            if flow.interface in self.localnet_cache:
+            if self._localnet_cache_contains(flow.interface):
                 return False
-        elif "default" in self.localnet_cache:
+        elif self._localnet_cache_contains("default"):
             # running on a file, impossible to get the interface
             return False
 
@@ -491,6 +493,32 @@ class ProfilerWorker(IModule):
             return False
 
         return True
+
+    def _localnet_cache_contains(self, interface: str) -> bool:
+        """checks"""
+        try:
+            return interface in self.localnet_cache
+        except (FileNotFoundError, AttributeError, ConnectionError, OSError):
+            # manager-backed dict is gone; fall back to local dict
+            self.localnet_cache = {}
+            return False
+
+    def _iter_localnet_cache_items(self):
+        try:
+            return list(self.localnet_cache.items())
+        except (FileNotFoundError, AttributeError, ConnectionError, OSError):
+            self.localnet_cache = {}
+            return []
+
+    def _set_localnet_cache(self, new_cache: Dict[str, str]) -> None:
+        # keep manager-backed dicts shared when possible
+        try:
+            self.localnet_cache.clear()
+            self.localnet_cache.update(new_cache)
+            return
+        except (FileNotFoundError, AttributeError, ConnectionError, OSError):
+            pass
+        self.localnet_cache = new_cache
 
     def _is_supported_flow_type(self, flow) -> bool:
         supported_types = (

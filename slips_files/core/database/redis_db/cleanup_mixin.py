@@ -26,7 +26,7 @@ class CleanupMixin:
         pattern = f"*{profileid}*{twid}*"
         cursor = 0
         while True:
-            cursor, keys = pipe.scan(cursor=cursor, match=pattern, count=100)
+            cursor, keys = self.r.scan(cursor=cursor, match=pattern, count=100)
             if keys:
                 pipe.unlink(*keys)
             if cursor == 0:
