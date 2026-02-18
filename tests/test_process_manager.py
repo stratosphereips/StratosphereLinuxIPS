@@ -246,10 +246,10 @@ def test_get_analysis_time(
     end_date_str, start_time_str, expected_analysis_time
 ):
     process_manager = ModuleFactory().create_process_manager_obj()
-    utils.convert_ts_format = Mock(return_value=end_date_str)
     process_manager.main.db.get_slips_start_time.return_value = start_time_str
 
-    analysis_time = process_manager.get_analysis_time()
+    with patch.object(utils, "convert_ts_format", return_value=end_date_str):
+        analysis_time = process_manager.get_analysis_time()
 
     assert analysis_time == (expected_analysis_time, end_date_str)
 
