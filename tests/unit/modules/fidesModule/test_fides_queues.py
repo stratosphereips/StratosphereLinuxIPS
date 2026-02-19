@@ -1,41 +1,58 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from threading import Thread
-from modules.fidesModule.messaging.redis_simplex_queue import RedisSimplexQueue, RedisDuplexQueue
+from modules.fidesModule.messaging.redis_simplex_queue import (
+    RedisSimplexQueue,
+    RedisDuplexQueue,
+)
+
 
 @pytest.fixture
 def mock_db():
     return MagicMock()
 
+
 @pytest.fixture
 def mock_channels():
     return {"send_channel": MagicMock(), "receive_channel": MagicMock()}
 
+
 @pytest.fixture
 def simplex_queue(mock_db, mock_channels):
-    return RedisSimplexQueue(mock_db, "send_channel", "receive_channel", mock_channels)
+    return RedisSimplexQueue(
+        mock_db, "send_channel", "receive_channel", mock_channels
+    )
+
 
 def test_initialization(simplex_queue, mock_db, mock_channels):
     assert simplex_queue.db == mock_db
     assert simplex_queue._RedisSimplexQueue__send == "send_channel"
     assert simplex_queue._RedisSimplexQueue__receive == "receive_channel"
-    assert simplex_queue._RedisSimplexQueue__pub == mock_channels["receive_channel"]
+    assert (
+        simplex_queue._RedisSimplexQueue__pub
+        == mock_channels["receive_channel"]
+    )
+
 
 def test_send(simplex_queue, mock_db):
     simplex_queue.send("test_message")
     mock_db.publish.assert_called_once_with("send_channel", "test_message")
 
+
 def test_listen_blocking(simplex_queue, mock_channels):
-    mock_channels["receive_channel"].listen = MagicMock(return_value=[
-        {"data": "message_1"},
-        {"data": "stop_process"},
-    ])
+    mock_channels["receive_channel"].listen = MagicMock(
+        return_value=[
+            {"data": "message_1"},
+            {"data": "stop_process"},
+        ]
+    )
     on_message = MagicMock()
 
     simplex_queue.listen(on_message, block=True)
 
     on_message.assert_any_call("message_1")
     assert mock_channels["receive_channel"].unsubscribe.called
+
 
 def test_listen_non_blocking(simplex_queue, mock_channels):
     on_message = MagicMock()
@@ -54,6 +71,7 @@ def test_listen_non_blocking(simplex_queue, mock_channels):
     if thread.is_alive():
         thread.join()
 
+
 def test_exec_message(simplex_queue):
     on_message = MagicMock()
 
@@ -65,6 +83,7 @@ def test_exec_message(simplex_queue):
     simplex_queue._RedisSimplexQueue__exec_message(stop_message, on_message)
     # Ensure the stop logic is triggered
 
+
 def test_stop_all_threads(simplex_queue):
     mock_thread = MagicMock()
     simplex_queue._threads.append(mock_thread)
@@ -73,11 +92,10 @@ def test_stop_all_threads(simplex_queue):
     mock_thread.stop.assert_called_once()
     assert len(simplex_queue._threads) == 0
 
+
 def test_duplex_queue(mock_db):
     # Update mock_channels to include the "common_channel"
-    mock_channels = {
-        "common_channel": MagicMock()
-    }
+    mock_channels = {"common_channel": MagicMock()}
 
     # Instantiate the duplex queue
     duplex_queue = RedisDuplexQueue(mock_db, "common_channel", mock_channels)
@@ -85,5 +103,6 @@ def test_duplex_queue(mock_db):
     # Assertions to verify proper initialization
     assert duplex_queue._RedisSimplexQueue__send == "common_channel"
     assert duplex_queue._RedisSimplexQueue__receive == "common_channel"
-    assert duplex_queue._RedisSimplexQueue__pub == mock_channels["common_channel"]
-
+    assert (
+        duplex_queue._RedisSimplexQueue__pub == mock_channels["common_channel"]
+    )

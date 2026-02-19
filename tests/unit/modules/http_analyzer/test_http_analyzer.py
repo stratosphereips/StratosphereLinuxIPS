@@ -17,7 +17,7 @@ from slips_files.core.flows.zeek import (
     Weird,
     Conn,
 )
-from tests.common_test_utils import get_mock_coro
+from tests.unit.common_test_utils import get_mock_coro
 from tests.module_factory import ModuleFactory
 from modules.http_analyzer.http_analyzer import utils
 

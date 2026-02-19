@@ -12,7 +12,7 @@ from unittest.mock import (
 )
 from unittest.mock import MagicMock
 import pytest
-from tests.common_test_utils import get_mock_coro
+from tests.unit.common_test_utils import get_mock_coro
 
 # dummy params used for testing
 profileid = "profile_192.168.1.1"

@@ -313,16 +313,29 @@ class ModuleFactory:
     def create_blocking_obj(self, mock_db):
         from modules.blocking.blocking import Blocking
 
-        blocking = Blocking(
-            logger=self.logger,
-            output_dir="dummy_output_dir",
-            redis_port=6379,
-            termination_event=Mock(),
-            slips_args=Mock(),
-            conf=Mock(),
-            ppid=Mock(),
-            bloom_filters_manager=Mock(),
-        )
+        with (
+            patch(
+                "modules.blocking.blocking.utils.get_sudo_according_to_env",
+                return_value="",
+            ),
+            patch(
+                "modules.blocking.blocking.shutil.which",
+                return_value="/sbin/iptables",
+            ),
+            patch.object(
+                Blocking, "_init_chains_in_firewall", return_value=None
+            ),
+        ):
+            blocking = Blocking(
+                logger=self.logger,
+                output_dir="dummy_output_dir",
+                redis_port=6379,
+                termination_event=Mock(),
+                slips_args=Mock(),
+                conf=Mock(),
+                ppid=Mock(),
+                bloom_filters_manager=Mock(),
+            )
         # override the print function to avoid broken pipes
         blocking.print = Mock()
         blocking.blocking_log_path = Mock()
@@ -333,13 +346,16 @@ class ModuleFactory:
     def create_unblocker_obj(self, mock_db):
         from modules.blocking.unblocker import Unblocker
 
-        unblocker = Unblocker(
-            mock_db,
-            "",  # sudo
-            Mock(return_value=False),
-            self.logger,
-            Mock(),  # mocking log()
-        )
+        with patch.object(
+            Unblocker, "_start_checker_thread", return_value=None
+        ):
+            unblocker = Unblocker(
+                mock_db,
+                "",  # sudo
+                Mock(return_value=False),
+                self.logger,
+                Mock(),  # mocking log()
+            )
         unblocker.print = Mock()
         return unblocker
 
@@ -526,7 +542,7 @@ class ModuleFactory:
             is_profiler_done_event=Mock(),
         )
         profiler.print = Mock()
-        profiler.local_whitelist_path = "tests/test_whitelist.conf"
+        profiler.local_whitelist_path = "tests/unit/test_whitelist.conf"
         profiler.db = mock_db
         return profiler
 
@@ -640,7 +656,7 @@ class ModuleFactory:
         )
         # override the self.print function to avoid broken pipes
         whitelist.print = Mock()
-        whitelist.whitelist_path = "tests/test_whitelist.conf"
+        whitelist.whitelist_path = "tests/unit/test_whitelist.conf"
         return whitelist
 
     @patch(MODULE_DB_MANAGER, name="mock_db")

@@ -25,13 +25,13 @@ jobs:
     strategy:
       matrix:
         test_file:
-          - test_config_files.py
-          - test_portscans.py
-          - test_dataset.py
-          - test_pcap_dataset.py
-          - test_zeek_dataset.py
-          - test_fides.py
-          - test_iris.py
+          - integration/test_config_files.py
+          - integration/test_portscans.py
+          - integration/test_dataset.py
+          - integration/test_pcap_dataset.py
+          - integration/test_zeek_dataset.py
+          - integration/test_fides.py
+          - integration/test_iris.py
 
     steps:
     - uses: actions/checkout@v5
@@ -44,7 +44,7 @@ jobs:
 
     - name: Run Integration Tests for ${{ matrix.test_file }}
       run: |
-        python3 -m pytest tests/integration_tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 3
+        python3 -m pytest tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 3
 
     - name: Upload Artifacts
       if: always()
@@ -52,4 +52,4 @@ jobs:
       with:
         name: ${{ matrix.test_file }}-integration-tests-output
         path: |
-          output/integration_tests
+          output/integration

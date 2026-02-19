@@ -5,7 +5,7 @@ import queue
 from unittest.mock import Mock, MagicMock
 
 from tests.module_factory import ModuleFactory
-from tests.common_test_utils import do_nothing
+from tests.unit.common_test_utils import do_nothing
 import pytest
 import json
 from slips_files.core.profiler import SUPPORTED_INPUT_TYPES, SEPARATORS

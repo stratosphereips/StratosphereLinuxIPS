@@ -608,7 +608,7 @@ the channel, make sure that:
 
 Slips has 2 kinds of tests, unit tests and integration tests.
 
-integration tests are in ```tests/integration_tests/```, In there we test all files in our ```dataset/``` dir.
+integration tests are in ```tests/integration/```, In there we test all files in our ```dataset/``` dir.
 
 Before pushing, run the unit tests and integration tests by:
 

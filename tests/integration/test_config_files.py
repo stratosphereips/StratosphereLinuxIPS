@@ -45,7 +45,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     """
     In this test we're using tests/test.conf
     """
-    config_file = "tests/integration_tests/test.yaml"
+    config_file = "tests/integration/test.yaml"
     modify_yaml_config(
         output_filename=config_file,
         output_dir=os.getcwd(),
@@ -147,7 +147,7 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
     """
     In this test we're using tests/test2.conf
     """
-    config_file = "tests/integration_tests/test2.yaml"
+    config_file = "tests/integration/test2.yaml"
     modify_yaml_config(
         output_filename=config_file,
         output_dir=os.getcwd(),

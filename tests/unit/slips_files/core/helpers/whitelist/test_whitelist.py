@@ -15,7 +15,7 @@ from slips_files.core.structures.evidence import (
 def test_read_whitelist():
     """
     make sure the content of whitelists is read and stored properly
-    uses tests/test_whitelist.conf for testing
+    uses tests/unit/test_whitelist.conf for testing
     """
     whitelist = ModuleFactory().create_whitelist_obj()
     whitelist.db.get_whitelist.return_value = {}

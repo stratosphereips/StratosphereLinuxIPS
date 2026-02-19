@@ -25,75 +25,87 @@ jobs:
     strategy:
       matrix:
         test_file:
-          - test_input.py
-          - test_main.py
-          - test_conn.py
-          - test_downloaded_file.py
-          - test_ssl.py
-          - test_tunnel.py
-          - test_ssh.py
-          - test_dns.py
-          - test_notice.py
-          - test_software.py
-          - test_smtp.py
-          - test_whitelist.py
-          - test_arp.py
-          - test_arp_poisoner.py
-          - test_arp_filter.py
-          - test_blocking.py
-          - test_unblocker.py
-          - test_flow_handler.py
-          - test_horizontal_portscans.py
-          - test_http_analyzer.py
-          - test_vertical_portscans.py
-          - test_network_discovery.py
-          - test_virustotal.py
-          - test_update_file_manager.py
-          - test_threat_intelligence.py
-          - test_slips_utils.py
-          - test_slips.py
-          - test_profiler.py
-          - test_profiler_worker.py
-          - test_profilers_manager.py
-          - test_leak_detector.py
-          - test_ip_info.py
-          - test_evidence.py
-          - test_asn_info.py
-          - test_urlhaus.py
-          - test_markov_chain.py
-          - test_daemon.py
-          - test_go_director.py
-          - test_notify.py
-          - test_checker.py
-          - test_base_model.py
-          - test_set_evidence.py
-          - test_trustdb.py
-          - test_cesnet.py
-          - test_output.py
-          - test_riskiq.py
-          - test_spamhaus.py
-          - test_scan_detections_db.py
-          - test_circllu.py
-          - test_evidence_handler.py
-          - test_evidence_logger.py
-          - test_evidence_formatter.py
-          - test_alert_handler.py
-          - test_redis_manager.py
-          - test_ioc_handler.py
-          - test_timeline.py
-          - test_database.py
-          - test_symbols_handler.py
-          - test_profile_handler.py
-          - test_process_manager.py
-          - test_metadata_manager.py
-          - test_host_ip_manager.py
-          - test_rnn_cc_detection.py
-          - test_idea_format.py
-          - test_fides_sqlite_db.py
-          - test_fides_module.py
-          - test_fides_queues.py
-          - test_fides_bridge.py
-
+          - managers/test_host_ip_manager.py
+          - managers/test_metadata_manager.py
+          - managers/test_process_manager.py
+          - managers/test_profilers_manager.py
+          - managers/test_redis_manager.py
+          - managers/test_slips.py
+          - modules/arp/test_arp.py
+          - modules/arp/test_arp_filter.py
+          - modules/arp_poisoner/test_arp_poisoner.py
+          - modules/blocking/test_blocking.py
+          - modules/blocking/test_unblocker.py
+          - modules/cesnet/test_cesnet.py
+          - modules/fidesModule/test_fides_bridge.py
+          - modules/fidesModule/test_fides_module.py
+          - modules/fidesModule/test_fides_queues.py
+          - modules/fidesModule/test_fides_sqlite_db.py
+          - modules/flowalerts/test_conn.py
+          - modules/flowalerts/test_dns.py
+          - modules/flowalerts/test_downloaded_file.py
+          - modules/flowalerts/test_notice.py
+          - modules/flowalerts/test_set_evidence.py
+          - modules/flowalerts/test_smtp.py
+          - modules/flowalerts/test_software.py
+          - modules/flowalerts/test_ssh.py
+          - modules/flowalerts/test_ssl.py
+          - modules/flowalerts/test_tunnel.py
+          - modules/http_analyzer/test_http_analyzer.py
+          - modules/ip_info/test_asn_info.py
+          - modules/ip_info/test_ip_info.py
+          - modules/leak_detector/test_leak_detector.py
+          - modules/network_discovery/test_horizontal_portscans.py
+          - modules/network_discovery/test_network_discovery.py
+          - modules/network_discovery/test_vertical_portscans.py
+          - modules/p2ptrust/trust/test_base_model.py
+          - modules/p2ptrust/trust/test_go_director.py
+          - modules/p2ptrust/trust/test_trustdb.py
+          - modules/riskiq/test_riskiq.py
+          - modules/rnn_cc_detection/test_rnn_cc_detection.py
+          - modules/threat_intelligence/test_circllu.py
+          - modules/threat_intelligence/test_spamhaus.py
+          - modules/threat_intelligence/test_threat_intelligence.py
+          - modules/threat_intelligence/test_urlhaus.py
+          - modules/timeline/test_timeline.py
+          - modules/update_manager/test_update_file_manager.py
+          - modules/virustotal/test_virustotal.py
+          - slips/test_daemon.py
+          - slips/test_main.py
+          - slips_files/common/test_markov_chain.py
+          - slips_files/common/test_slips_utils.py
+          - slips_files/core/database/redis_db/test_alert_handler.py
+          - slips_files/core/database/redis_db/test_ioc_handler.py
+          - slips_files/core/database/redis_db/test_profile_handler.py
+          - slips_files/core/database/redis_db/test_scan_detections_db.py
+          - slips_files/core/database/test_database.py
+          - slips_files/core/helpers/test_checker.py
+          - slips_files/core/helpers/test_flow_handler.py
+          - slips_files/core/helpers/test_notify.py
+          - slips_files/core/helpers/test_symbols_handler.py
+          - slips_files/core/helpers/whitelist/test_whitelist.py
+          - slips_files/core/input/test_binetflow_input.py
+          - slips_files/core/input/test_binetflow_tabs_input.py
+          - slips_files/core/input/test_cyst_input.py
+          - slips_files/core/input/test_input.py
+          - slips_files/core/input/test_interface_input.py
+          - slips_files/core/input/test_nfdump_input.py
+          - slips_files/core/input/test_observer_manager.py
+          - slips_files/core/input/test_pcap_input.py
+          - slips_files/core/input/test_stdin_input.py
+          - slips_files/core/input/test_suricata_input.py
+          - slips_files/core/input/test_zeek_dir_input.py
+          - slips_files/core/input/test_zeek_file_remover.py
+          - slips_files/core/input/test_zeek_input_utils.py
+          - slips_files/core/input/test_zeek_log_file_input.py
+          - slips_files/core/structures/test_evidence.py
+          - slips_files/core/structures/test_idea_format.py
+          - slips_files/core/test_evidence_handler.py
+          - slips_files/core/test_evidence_logger.py
+          - slips_files/core/test_output.py
+          - slips_files/core/test_profiler.py
+          - slips_files/core/test_profiler_worker.py
+          - slips_files/core/text_formatters/test_evidence_formatter.py
     steps:
     - uses: actions/checkout@v5
       with:
@@ -105,7 +117,7 @@ jobs:
 
     - name: Run Unit Tests for ${{ matrix.test_file }}
       run: |
-        python3 -m pytest tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 5
+        python3 -m pytest tests/unit/${{ matrix.test_file }} -p no:warnings -vv -s -n 5
 
     - name: Upload Artifacts
       if: always()
