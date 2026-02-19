@@ -121,8 +121,13 @@ When in detection mode (post-training), each SSL flow can trigger:
 1. **New server anomaly**
    - server (SNI or fallback IP) not in host known server set.
 
-2. **New JA3 / JA3S anomaly**
-   - JA3 or JA3S not seen before for this host.
+2. **JA3 change / JA3S novelty anomaly**
+   - `ja3_change` is evaluated per server (not globally):
+     - empty -> first non-empty JA3 is **not** anomalous,
+     - each server has a JA3 variant limit learned from training,
+     - post-training, a new JA3 for that server is anomalous only when
+       current unique JA3 count for that server already reached the limit.
+   - `new_ja3s` remains host-level novelty.
 
 3. **Bytes-to-known-server anomaly**
    - only for known servers with enough baseline points,
@@ -205,7 +210,7 @@ At **hour level** (used for `drift_update` vs `suspicious_update`):
 
 At **flow level** (used for per-server-bytes model update speed):
 
-- `flow_anomalies` is the list of reasons triggered for that flow (`new_server`, `new_ja3`, `new_ja3s`, `bytes_to_known_server`).
+- `flow_anomalies` is the list of reasons triggered for that flow (`new_server`, `ja3_change`, `new_ja3s`, `bytes_to_known_server`).
 - a flow is **small** iff `0 < len(flow_anomalies) <= max_small_flow_anomalies`.
 - a flow is **suspicious** iff `len(flow_anomalies) > max_small_flow_anomalies`.
 
@@ -296,6 +301,7 @@ anomaly_detection_https:
   suspicious_alpha: 0.005
   min_baseline_points: 6
   max_small_flow_anomalies: 1
+  ja3_min_variants_per_server: 3
 ```
 
 Parameter meaning:
@@ -321,6 +327,11 @@ Parameter meaning:
   threshold used in both paths:
   max anomalous flows per hour still considered drift-like, and
   max anomaly reasons per flow still considered small.
+- `ja3_min_variants_per_server`:
+  lower bound for server-specific JA3 variant allowance.
+  During training, each server learns its own JA3 variant limit from benign
+  traffic. Post-training JA3 changes are evaluated against
+  `max(ja3_min_variants_per_server, learned_server_limit)`.
 
 
 ## Operational log
