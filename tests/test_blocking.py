@@ -1,20 +1,18 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 """Unit test for modules/blocking/blocking.py"""
-from tests.module_factory import ModuleFactory
-import subprocess
-from unittest.mock import patch
 import pytest
 import json
+import subprocess
+from unittest.mock import call, patch
 
-from unittest.mock import call
-from unittest import mock
+from tests.module_factory import ModuleFactory
 
 
 def test_init_chains_in_firewall():
     blocking = ModuleFactory().create_blocking_obj()
     with (
-        patch("os.system") as mock_system,
+        patch("modules.blocking.blocking.os.system") as mock_system,
         patch.object(blocking.__class__, "_get_cmd_output") as mock_get_output,
     ):
 
@@ -61,7 +59,7 @@ def test_is_ip_already_blocked():
     fake_output = "Chain slipsBlocking (1 references)\n  target     prot opt source               destination\n  REJECT     all  --  192.168.1.100        anywhere"
 
     # mock subprocess.run to return the fake output
-    with mock.patch("subprocess.run") as mock_run:
+    with patch("subprocess.run") as mock_run:
         mock_run.return_value.stdout = fake_output.encode("utf-8")
 
         ip = "192.168.1.100"
@@ -84,20 +82,27 @@ def test_is_ip_already_blocked():
 
 
 @pytest.mark.parametrize(
-    "ip,flags,already_blocked, exec_iptables_command, expected",
+    "ip,flags,already_blocked,exec_result,expected,expected_call_flags",
     [
-        ("192.168.1.10", {}, False, True, True),  # normal block
-        ("192.168.1.10", {"from_": True}, False, True, True),  # only from
-        ("192.168.1.10", {"to": True}, False, True, True),  # only to
-        ("192.168.1.10", {}, True, True, False),  # already blocked
-        (None, {}, False, False, False),  # invalid ip type
+        ("192.168.1.10", {}, False, True, True, ["-s", "-d"]),  # normal
+        ("192.168.1.10", {"from_": True}, False, True, True, ["-s"]),
+        ("192.168.1.10", {"to": True}, False, True, True, ["-d"]),
+        ("192.168.1.10", {}, True, True, False, []),  # already blocked
+        (None, {}, False, True, False, []),  # invalid ip type
     ],
 )
-def test_block_ip(ip, flags, already_blocked, exec_iptables_command, expected):
+def test_block_ip(
+    ip,
+    flags,
+    already_blocked,
+    exec_result,
+    expected,
+    expected_call_flags,
+):
     blocking = ModuleFactory().create_blocking_obj()
     blocking.firewall = "iptables"
 
-    # blocking.sudo = "sudo"
+    options = {"protocol": "", "dport": "", "sport": ""}
 
     with (
         patch.object(
@@ -105,19 +110,30 @@ def test_block_ip(ip, flags, already_blocked, exec_iptables_command, expected):
         ),
         patch(
             "modules.blocking.blocking.exec_iptables_command",
-            return_value=True,
-        ),
+            return_value=exec_result,
+        ) as mock_exec,
         patch.object(blocking, "print"),
         patch.object(blocking, "log"),
         patch.object(blocking.db, "set_blocked_ip"),
-        patch(
-            "modules.blocking.exec_iptables_cmd.exec_iptables_command",
-            return_value=exec_iptables_command,
-        ),
     ):
 
         result = blocking._block_ip(ip, flags)
         assert result is expected
+        if expected_call_flags:
+            expected_calls = [
+                call(
+                    blocking.sudo,
+                    action="insert",
+                    ip_to_block=ip,
+                    flag=flag,
+                    options=options,
+                )
+                for flag in expected_call_flags
+            ]
+            mock_exec.assert_has_calls(expected_calls)
+            assert mock_exec.call_count == len(expected_call_flags)
+        else:
+            mock_exec.assert_not_called()
 
 
 @pytest.mark.parametrize(
