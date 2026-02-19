@@ -31,6 +31,7 @@ from slips_files.core.structures.evidence import (
 class EWMAStats:
     mean: float = 0.0
     var: float = 0.0
+    m2: float = 0.0
     count: int = 0
     min_std_floor: float = 0.1
     residuals: List[float] = field(default_factory=list)
@@ -40,24 +41,48 @@ class EWMAStats:
     floor_min: float = 0.01
     floor_max: float = 1000000.0
 
+    def _update_floor_from_residual(self, residual: float):
+        self.residuals.append(float(abs(residual)))
+        if len(self.residuals) > self.residual_window_size:
+            self.residuals.pop(0)
+        self.update_min_std_floor()
+
+    def update_training(self, value: float):
+        value = float(value)
+        if self.count > 0:
+            self._update_floor_from_residual(value - self.mean)
+
+        # Welford online moments: fit all benign samples uniformly.
+        if self.count == 0:
+            self.count = 1
+            self.mean = value
+            self.m2 = 0.0
+            self.var = 0.0
+            return
+
+        self.count += 1
+        delta = value - self.mean
+        self.mean += delta / self.count
+        delta2 = value - self.mean
+        self.m2 += delta * delta2
+        self.var = self.m2 / max(1, self.count - 1)
+
     def update(self, value: float, alpha: float):
         value = float(value)
         if self.count > 0:
-            residual = abs(value - self.mean)
-            self.residuals.append(float(residual))
-            if len(self.residuals) > self.residual_window_size:
-                self.residuals.pop(0)
-            self.update_min_std_floor()
+            self._update_floor_from_residual(value - self.mean)
 
         if self.count == 0:
             self.mean = value
             self.var = 0.0
+            self.m2 = 0.0
             self.count = 1
             return
 
         delta = value - self.mean
         self.mean += alpha * delta
         self.var = (1 - alpha) * (self.var + alpha * delta * delta)
+        self.m2 = self.var * max(0, self.count - 1)
         self.count += 1
 
     @staticmethod
@@ -557,6 +582,9 @@ class AnomalyDetectionHTTPS(IModule):
             return
         model.update(value, alpha)
 
+    def fit_benign_model(self, model: EWMAStats, value: float):
+        model.update_training(value)
+
     def finalize_hour_bucket(self, profileid: str, state: HostState):
         bucket = state.bucket
         if not bucket:
@@ -657,22 +685,23 @@ class AnomalyDetectionHTTPS(IModule):
                     },
                 )
 
+        is_training_hour = not self.should_detect(state)
         update_mode = "training_fit"
-        if not self.should_detect(state):
-            update_alpha = self.baseline_alpha
+        if is_training_hour:
             state.trained_hours += 1
             self.log_event(
                 1,
                 "training_fit",
-                "Baseline training hour fitted.",
+                "Baseline training hour fitted (Welford benign fit).",
                 traffic_ts=bucket.start_ts,
                 metrics={
                     "profileid": profileid,
                     "trained_hours": state.trained_hours,
                     "target_training_hours": self.training_hours,
-                    "alpha": update_alpha,
+                    "fit_method": "welford_online_moments",
                 },
             )
+            update_alpha = None
         elif (
             hourly_score <= self.adaptation_score_threshold
             and bucket.flow_anomaly_count <= self.max_small_flow_anomalies
@@ -710,7 +739,10 @@ class AnomalyDetectionHTTPS(IModule):
 
         for feature_name, value in features.items():
             model = self.get_or_create_hourly_model(state, feature_name)
-            self.update_model(model, value, update_alpha)
+            if is_training_hour:
+                self.fit_benign_model(model, value)
+            else:
+                self.update_model(model, value, update_alpha)
             self.log_event(
                 3,
                 "model_update",
@@ -726,6 +758,11 @@ class AnomalyDetectionHTTPS(IModule):
                     "count": model.count,
                     "min_std_floor": round(model.min_std_floor, 6),
                     "alpha": update_alpha,
+                    "fit_method": (
+                        "welford_online_moments"
+                        if update_mode == "training_fit"
+                        else "ewma"
+                    ),
                 },
             )
 
@@ -875,13 +912,18 @@ class AnomalyDetectionHTTPS(IModule):
 
         if bytes_total is not None:
             server_model = self.get_or_create_server_model(state, server)
-            if not self.should_detect(state) or not flow_anomalies:
+            if not self.should_detect(state):
+                alpha = None
+                self.fit_benign_model(server_model, bytes_total)
+            elif not flow_anomalies:
                 alpha = self.baseline_alpha
+                self.update_model(server_model, bytes_total, alpha)
             elif len(flow_anomalies) <= self.max_small_flow_anomalies:
                 alpha = self.drift_alpha
+                self.update_model(server_model, bytes_total, alpha)
             else:
                 alpha = self.suspicious_alpha
-            self.update_model(server_model, bytes_total, alpha)
+                self.update_model(server_model, bytes_total, alpha)
             self.log_event(
                 3,
                 "model_update",
@@ -896,6 +938,11 @@ class AnomalyDetectionHTTPS(IModule):
                     "count": server_model.count,
                     "min_std_floor": round(server_model.min_std_floor, 6),
                     "alpha": alpha,
+                    "fit_method": (
+                        "welford_online_moments"
+                        if alpha is None
+                        else "ewma"
+                    ),
                 },
             )
 
