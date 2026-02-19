@@ -680,9 +680,7 @@ class Main:
                 "of traffic by querying TI sites."
             )
 
-            # Don't try to stop slips if it's capturing from
-            # an interface or a growing zeek dir
-            while (not self.proc_man.stop_slips()) and (
+            while (not self.proc_man.should_stop_slips()) and (
                 not self.sigterm_received
             ):
                 # Sleep some time to do routine checks and give time for

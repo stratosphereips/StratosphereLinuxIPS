@@ -620,7 +620,7 @@ class ProcessManager:
             end_time,
         )
 
-    def stop_slips(self) -> bool:
+    def should_stop_slips(self) -> bool:
         """
         determines whether slips should stop
         based on the following:
@@ -628,6 +628,9 @@ class ProcessManager:
         profiler.py)
         2. did slips the control channel recv the stop_slips
         3. is a debugger present?
+
+        This function NEVER returns True if the input and profiler are
+        still processing.
         """
         if self.should_run_non_stop():
             return False
