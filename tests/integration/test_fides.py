@@ -32,6 +32,17 @@ import modules.fidesModule.model.peer_trust_data as ptd
 alerts_file = "alerts.log"
 
 
+def ensure_redis_is_running(port):
+    redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
+    try:
+        redis_client.ping()
+        return
+    except redis.exceptions.ConnectionError:
+        subprocess.check_call(
+            ["redis-server", "--port", str(port), "--daemonize", "yes"]
+        )
+
+
 def delete_file_if_exists(file_path):
     if os.path.exists(file_path):
         os.remove(file_path)
@@ -155,8 +166,10 @@ def get_main_interface():
 )
 def test_conf_file2(path, output_dir, redis_port):
     """
-    In this test we're using tests/test2.conf
+    In this test we're using tests/integration/fides_config.yaml as fides
+    config file
     """
+    ensure_redis_is_running(redis_port)
     output_dir: PosixPath = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
     command = [
@@ -248,6 +261,7 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
          modules to start
 
     """
+    ensure_redis_is_running(redis_port)
     output_dir: PosixPath = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
     command = [
@@ -305,7 +319,6 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
             )
         )
 
-        # Open the log file in write mode
         with open(output_file, "w") as log_file:
             process = subprocess.Popen(
                 command,
