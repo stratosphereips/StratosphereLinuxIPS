@@ -778,8 +778,8 @@ class ProcessManager:
 
     def shutdown_gracefully(self):
         """
-        Wait for all modules to confirm that they're done processing
-        or kill them after 15 mins
+        Waits for all modules to confirm that they're done processing
+        or kills them after 15 mins
         """
         try:
             print = self.get_print_function()

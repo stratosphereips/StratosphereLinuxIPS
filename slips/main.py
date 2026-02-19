@@ -41,6 +41,7 @@ class Main:
         self.name = "Main"
         self.alerts_default_path = "output/"
         self.mode = "interactive"
+        self.sigterm_received = False
         # objects to manage various functionality
         self.checker = Checker(self)
         self.redis_man = RedisManager(self)
@@ -643,7 +644,8 @@ class Main:
 
             # call shutdown_gracefully on sigterm
             def sig_handler(sig, frame):
-                self.proc_man.shutdown_gracefully()
+                self.sigterm_received = True
+                self.print("SIGTERM received, shutting down slips gracefully.")
 
             # The signals SIGKILL and SIGSTOP cannot be caught,
             # blocked, or ignored.
@@ -680,7 +682,9 @@ class Main:
 
             # Don't try to stop slips if it's capturing from
             # an interface or a growing zeek dir
-            while not self.proc_man.stop_slips():
+            while (not self.proc_man.stop_slips()) and (
+                not self.sigterm_received
+            ):
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
