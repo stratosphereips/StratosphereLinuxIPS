@@ -22,6 +22,7 @@ from typing import (
     List,
     Tuple,
     Dict,
+    Iterable,
 )
 
 from exclusiveprocess import (
@@ -52,6 +53,8 @@ from slips_files.core.profiler import Profiler
 class ProcessManager:
     def __init__(self, main):
         self.main = main
+        # Can be used by signal handlers before startup finishes.
+        self.processes: List[Process] = []
 
         # this is the queue that will be used by the input proces
         # to pass flows to the profiler
@@ -82,10 +85,10 @@ class ProcessManager:
         self.is_profiler_done_event = Event()
         self.read_config()
 
-    def set_slips_processes(self, children: Dict[str, Process]):
+    def set_slips_processes(self, children: Iterable[Process]):
         # this will be set by main.py if slips is not daemonized,
         # it'll be set to the children of main.py
-        self.processes = children
+        self.processes = list(children) if children else []
 
     def read_config(self):
         self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
