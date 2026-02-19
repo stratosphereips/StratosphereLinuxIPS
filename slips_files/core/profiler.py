@@ -264,8 +264,8 @@ class Profiler(ICore, IObservable):
         termination event (via process_manager) then it doesnt make sense
         to check for it. it will never be set before this module stops.
         The "stop" msg from input.py is responsible for setting the
-        stop_profiler_event by one of the workers. once that worker sets
-        the event, it stops, and profiler takes care of stopping the rest
+        stop_profiler_event by one of the profiler workers. once that worker
+        sets the event, it stops, and profiler takes care of stopping the rest
         of the workers, then this profiler stops.
         """
         return self.stop_profiler_event.is_set()
