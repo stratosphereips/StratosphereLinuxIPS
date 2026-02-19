@@ -136,6 +136,8 @@ class HostState:
     bucket: Optional[HourBucket] = None
     known_servers: Set[str] = field(default_factory=set)
     known_ja3: Set[str] = field(default_factory=set)
+    server_ja3_seen: Dict[str, Set[str]] = field(default_factory=dict)
+    server_ja3_limit: Dict[str, int] = field(default_factory=dict)
     known_ja3s: Set[str] = field(default_factory=set)
     trained_hours: int = 0
     hourly_models: Dict[str, EWMAStats] = field(default_factory=dict)
@@ -176,6 +178,7 @@ class AnomalyDetectionHTTPS(IModule):
                 "suspicious_alpha": self.suspicious_alpha,
                 "min_baseline_points": self.min_baseline_points,
                 "max_small_flow_anomalies": self.max_small_flow_anomalies,
+                "ja3_min_variants_per_server": self.ja3_min_variants_per_server,
                 "log_verbosity": self.log_verbosity,
                 "log_emojis": self.log_emojis,
                 "log_colors": self.log_colors,
@@ -194,6 +197,9 @@ class AnomalyDetectionHTTPS(IModule):
         self.min_baseline_points = conf.https_anomaly_min_baseline_points()
         self.max_small_flow_anomalies = (
             conf.https_anomaly_max_small_flow_anomalies()
+        )
+        self.ja3_min_variants_per_server = (
+            conf.https_anomaly_ja3_min_variants_per_server()
         )
         self.log_verbosity = conf.https_anomaly_log_verbosity()
         # Operational logs always use emojis and colors.
@@ -534,6 +540,10 @@ class AnomalyDetectionHTTPS(IModule):
             return 0
         return min(counts)
 
+    def get_server_ja3_limit(self, state: HostState, server: str) -> int:
+        learned_limit = state.server_ja3_limit.get(server, 0)
+        return max(self.ja3_min_variants_per_server, learned_limit)
+
     def score_confidence(
         self,
         state: HostState,
@@ -688,6 +698,10 @@ class AnomalyDetectionHTTPS(IModule):
         is_training_hour = not self.should_detect(state)
         update_mode = "training_fit"
         if is_training_hour:
+            for server, ja3_values in state.server_ja3_seen.items():
+                state.server_ja3_limit[server] = max(
+                    state.server_ja3_limit.get(server, 0), len(ja3_values)
+                )
             state.trained_hours += 1
             self.log_event(
                 1,
@@ -699,6 +713,7 @@ class AnomalyDetectionHTTPS(IModule):
                     "trained_hours": state.trained_hours,
                     "target_training_hours": self.training_hours,
                     "fit_method": "welford_online_moments",
+                    "ja3_servers_with_limits": len(state.server_ja3_limit),
                 },
             )
             update_alpha = None
@@ -802,7 +817,10 @@ class AnomalyDetectionHTTPS(IModule):
 
         ja3 = (getattr(ssl_flow, "ja3", "") or "").strip()
         ja3s = (getattr(ssl_flow, "ja3s", "") or "").strip()
-        is_new_ja3 = bool(ja3) and ja3 not in state.known_ja3
+        server_ja3_set = state.server_ja3_seen.setdefault(server, set())
+        ja3_known_for_server = bool(ja3) and ja3 in server_ja3_set
+        server_known_ja3_count = len(server_ja3_set)
+        server_ja3_limit = self.get_server_ja3_limit(state, server)
         is_new_ja3s = bool(ja3s) and ja3s not in state.known_ja3s
 
         is_new_server = server not in state.known_servers
@@ -844,13 +862,19 @@ class AnomalyDetectionHTTPS(IModule):
                         "value": server,
                     }
                 )
-            if is_new_ja3:
-                flow_anomalies.append(
-                    {
-                        "feature": "new_ja3",
-                        "value": ja3,
-                    }
-                )
+            if bool(ja3) and not ja3_known_for_server:
+                # Rule: first JA3 after empty history is not anomalous.
+                # JA3 change becomes anomalous only after the server-specific
+                # learned/default limit is exceeded.
+                if server_known_ja3_count >= server_ja3_limit:
+                    flow_anomalies.append(
+                        {
+                            "feature": "ja3_change",
+                            "value": ja3,
+                            "known_ja3_variants_for_server": server_known_ja3_count,
+                            "ja3_variant_limit_for_server": server_ja3_limit,
+                        }
+                    )
             if is_new_ja3s:
                 flow_anomalies.append(
                     {
@@ -949,6 +973,7 @@ class AnomalyDetectionHTTPS(IModule):
         state.known_servers.add(server)
         if ja3:
             state.known_ja3.add(ja3)
+            server_ja3_set.add(ja3)
         if ja3s:
             state.known_ja3s.add(ja3s)
 
