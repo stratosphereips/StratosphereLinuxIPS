@@ -149,7 +149,7 @@ def test_get_hitlist_in_order(
     expected_kill_last,
 ):
     process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.processes = [
+    process_manager.children = [
         Mock(pid=1, name="Process1"),
         Mock(pid=2, name="Process2"),
         Mock(pid=3, name="EvidenceHandler"),
@@ -376,7 +376,7 @@ def test_get_print_function(mode, expected_print_function):
 
 def test_print_stopped_module():
     process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.processes = [Mock(), Mock()]
+    process_manager.children = [Mock(), Mock()]
     process_manager.stopped_modules = []
 
     with patch(
