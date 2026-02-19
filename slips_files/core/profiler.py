@@ -103,7 +103,7 @@ class Profiler(ICore, IObservable):
         # so without this, only 1 of the 3 workers receives the stop msg
         # and exits, and the rest of the 2 workers AND the main() keep
         # waiting for new msgs
-        self.flows_to_process_q = multiprocessing.Queue(maxsize=50000)
+        self.flows_to_process_queue = multiprocessing.Queue(maxsize=50000)
         self.handle_setting_local_net_lock = multiprocessing.Lock()
         # runs a separate server process behind the scenes.
         self.manager = multiprocessing.Manager()
@@ -261,18 +261,23 @@ class Profiler(ICore, IObservable):
         for worker in self.workers:
             self.rec_lines += worker.received_lines
 
+        used_queues = [
+            self.flows_to_process_queue,
+            self.profiler_queue,
+            self.aid_queue,
+        ]
+
         # wait for all flows to be processed by the profiler processes.
         self.stop_profiler_workers()
-        # close the queues to avoid deadlocks.
-        # this step SHOULD NEVER be done before closing the workers
-        self.flows_to_process_q.close()
-        # By default if a process is not the creator of the queue then on
-        # exit it will attempt to join the queue’s background thread. The
-        # process can call cancel_join_thread() to make join_thread()
-        # do nothing.
-        self.flows_to_process_q.cancel_join_thread()
-        self.profiler_queue.close()
-        self.aid_queue.close()
+        for q in used_queues:
+            # close the queues to avoid deadlocks.
+            # this step SHOULD NEVER be done before closing the workers
+            q.close()
+            # By default if a process is not the creator of the queue then on
+            # exit it will attempt to join the queue’s background thread. The
+            # process can call cancel_join_thread() to make join_thread()
+            # do nothing.
+            q.cancel_join_thread()
 
         self.manager.shutdown()
         self.db.set_new_incoming_flows(False)
