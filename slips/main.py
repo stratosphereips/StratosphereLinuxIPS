@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import contextlib
 import json
-import multiprocessing
 import os
 import re
 import shutil
@@ -659,9 +658,6 @@ class Main:
             self.metadata_man.add_metadata_if_enabled()
             self.proc_man.start_timewindow_updater()
             self.input_process = self.proc_man.start_input_process()
-            # obtain the list of active processes
-            children = multiprocessing.active_children()
-            self.proc_man.set_slips_processes(children)
 
             self.db.store_pid("main", int(self.pid))
             self.metadata_man.set_input_metadata()

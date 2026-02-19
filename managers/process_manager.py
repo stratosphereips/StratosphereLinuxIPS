@@ -18,10 +18,10 @@ from multiprocessing import (
     Process,
     Semaphore,
 )
+from multiprocessing.process import BaseProcess
 from typing import (
     List,
     Tuple,
-    Dict,
 )
 
 from exclusiveprocess import (
@@ -81,11 +81,6 @@ class ProcessManager:
         # cant get more lines anymore!
         self.is_profiler_done_event = Event()
         self.read_config()
-
-    def set_slips_processes(self, children: Dict[str, Process]):
-        # this will be set by main.py if slips is not daemonized,
-        # it'll be set to the children of main.py
-        self.processes = children
 
     def read_config(self):
         self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
@@ -206,7 +201,7 @@ class ProcessManager:
         kills all processes that are not done
         in self.processes and prints the name of stopped ones
         """
-        for process in self.processes:
+        for process in self.children:
             process: Process
             module_name: str = self.main.db.get_name_of_module_at(process.pid)
             if not module_name:
@@ -433,7 +428,7 @@ class ProcessManager:
     def print_stopped_module(self, module):
         self.stopped_modules.append(module)
 
-        modules_left = len(self.processes) - len(self.stopped_modules)
+        modules_left = len(self.children) - len(self.stopped_modules)
 
         # to vertically align them when printing
         module += " " * (20 - len(module))
@@ -578,7 +573,7 @@ class ProcessManager:
         # now get the process obj of each pid
         to_kill_first: List[Process] = []
         to_kill_last: List[Process] = []
-        for process in self.processes:
+        for process in self.children:
             if process.pid in pids_to_kill_last:
                 to_kill_last.append(process)
             else:
@@ -786,6 +781,9 @@ class ProcessManager:
                 print("\n" + "-" * 27)
             print("Stopping Slips")
 
+            self.children: List[BaseProcess] = (
+                multiprocessing.active_children()
+            )
             # by default, max 15 mins (taken from wait_for_modules_to_finish)
             # from this time, all modules should be killed
             method_start_time = time.time()
