@@ -570,6 +570,16 @@ class ConfigParser(object):
             threshold = 1
         return max(0, threshold)
 
+    def https_anomaly_ja3_min_variants_per_server(self) -> int:
+        threshold = self.read_configuration(
+            "anomaly_detection_https", "ja3_min_variants_per_server", 3
+        )
+        try:
+            threshold = int(threshold)
+        except (TypeError, ValueError):
+            threshold = 3
+        return max(1, threshold)
+
     def https_anomaly_log_verbosity(self) -> int:
         verbosity = self.read_configuration(
             "anomaly_detection_https", "log_verbosity", 3
