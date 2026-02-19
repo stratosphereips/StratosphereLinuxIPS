@@ -166,7 +166,7 @@ def get_main_interface():
 )
 def test_conf_file2(path, output_dir, redis_port):
     """
-    In this test we're using tests/integration/fides_config.yaml as fides
+    In this test we're using tests/integration/config/fides_config.yaml as fides
     config file
     """
     ensure_redis_is_running(redis_port)
@@ -185,7 +185,7 @@ def test_conf_file2(path, output_dir, redis_port):
         "-o",
         str(output_dir),
         "-c",
-        "tests/integration/fides_config.yaml",
+        "tests/integration/config/fides_config.yaml",
         "-P",
         str(redis_port),
     ]
@@ -277,7 +277,7 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         "-o",
         str(output_dir),
         "-c",
-        "tests/integration/fides_config.yaml",
+        "tests/integration/config/fides_config.yaml",
         "-P",
         str(redis_port),
     ]
