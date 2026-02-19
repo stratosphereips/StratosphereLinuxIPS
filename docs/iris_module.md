@@ -98,7 +98,7 @@ will be left upon the future developers.
 * ```go test ./...```
 
 ### Integration Testing
-Integration tests are located in ```tests/integration_tests/test_iris.py```.
+Integration tests are located in ```tests/integration/test_iris.py```.
 
 ### Test Messaging
 The scenario that was modeled in this test refers to a common use case.

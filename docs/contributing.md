@@ -155,7 +155,7 @@ It all begins when input.py realizes there's no more flows arriving from the zee
 
 It's a good idea to read the code before checking this graph
 
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/how_slips_stops.jpg"
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/how_slips_stops.jpg">
 
 Evidence Handler is the only process that stops but keeps waiting in memory for new msgs to arrive until all other modules are done. because if any of the modules added an evidence, EvidenceHandler should be up to report and handle it or else it will be discarded.
 Once all modules are done processing, EvidenceHandler is killed by the Process manager.

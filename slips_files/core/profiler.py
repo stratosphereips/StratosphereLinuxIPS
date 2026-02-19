@@ -103,7 +103,7 @@ class Profiler(ICore, IObservable):
         # so without this, only 1 of the 3 workers receives the stop msg
         # and exits, and the rest of the 2 workers AND the main() keep
         # waiting for new msgs
-        self.flows_to_process_q = multiprocessing.Queue(maxsize=50000)
+        self.flows_to_process_queue = multiprocessing.Queue(maxsize=50000)
         self.handle_setting_local_net_lock = multiprocessing.Lock()
         # runs a separate server process behind the scenes.
         self.manager = multiprocessing.Manager()
@@ -255,39 +255,29 @@ class Profiler(ICore, IObservable):
         input_handler_cls = SUPPORTED_INPUT_TYPES[input_type](self.db)
         return input_handler_cls
 
-    def should_stop(self):
-        """
-        overrides Imodule's should_stop()
-        the common Imodule's should_stop() return True when there's no msg in
-        each channel and the termination event is set
-        since this module is the one responsible for signaling the
-        termination event (via process_manager) then it doesnt make sense
-        to check for it. it will never be set before this module stops.
-        The "stop" msg from input.py is responsible for setting the
-        stop_profiler_event by one of the workers. once that worker sets
-        the event, it stops, and profiler takes care of stopping the rest
-        of the workers, then this profiler stops.
-        """
-        return self.stop_profiler_event.is_set()
-
     def shutdown_gracefully(self):
         self.aid_manager.shutdown()
 
         for worker in self.workers:
             self.rec_lines += worker.received_lines
 
+        used_queues = [
+            self.flows_to_process_queue,
+            self.profiler_queue,
+            self.aid_queue,
+        ]
+
         # wait for all flows to be processed by the profiler processes.
         self.stop_profiler_workers()
-        # close the queues to avoid deadlocks.
-        # this step SHOULD NEVER be done before closing the workers
-        self.flows_to_process_q.close()
-        # By default if a process is not the creator of the queue then on
-        # exit it will attempt to join the queue’s background thread. The
-        # process can call cancel_join_thread() to make join_thread()
-        # do nothing.
-        self.flows_to_process_q.cancel_join_thread()
-        self.profiler_queue.close()
-        self.aid_queue.close()
+        for q in used_queues:
+            # close the queues to avoid deadlocks.
+            # this step SHOULD NEVER be done before closing the workers
+            q.close()
+            # By default if a process is not the creator of the queue then on
+            # exit it will attempt to join the queue’s background thread. The
+            # process can call cancel_join_thread() to make join_thread()
+            # do nothing.
+            q.cancel_join_thread()
 
         self.manager.shutdown()
         self.db.set_new_incoming_flows(False)
@@ -363,6 +353,24 @@ class Profiler(ICore, IObservable):
         # needed by store_flows_read_per_second()
         self.lines = sum([worker.received_lines for worker in self.workers])
 
+    def should_stop(self):
+        """
+        overrides IModule.should_stop() which returns True when all channels
+        are empty and the termination event is set.
+
+        why? because this module is the one that triggers the termination
+        event (through process_manager), so checking that event here is
+        meaningless, it will never be set before this module stops.
+
+        instead, the "stop" message coming from input.py causes one of the
+        profiler workers to set stop_profiler_event, this func then
+        return True, that worker then exits, and then profiler shuts down
+        the remaining workers and stops.
+        docs on how slips stops:
+        https://stratospherelinuxips.readthedocs.io/en/develop/contributing.html#how-does-slips-stop
+        """
+        return self.stop_profiler_event.wait(timeout=5 * 60)
+
     def main(self):
         # process the first msg only here, to determine what kind of input
         # slips is given, then the workers will use the determined type.
@@ -388,10 +396,7 @@ class Profiler(ICore, IObservable):
             self.last_worker_id = worker_id
             self.start_profiler_worker(worker_id)
 
-        # the only thing that stops this loop is the 'stop' msg sent by the
-        # input and recvd by one of the workers
         while not self.should_stop():
-            time.sleep(5 * 60)
             self._update_lines_read_by_all_workers()
             # implemented in icore.py
             self.store_flows_read_per_second()

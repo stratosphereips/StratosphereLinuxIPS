@@ -7,110 +7,57 @@ on:
       - 'develop'
 
 jobs:
+  # This job finds all test files and creates a JSON array for the matrix
+  list-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      test_files: ${{ steps.list.outputs.test_files }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: list
+        uses: ./.github/actions/list-tests-dir
+        with:
+          test_dir: tests/unit
 
   unit-tests:
+    needs: list-tests
     runs-on: ubuntu-22.04
     timeout-minutes: 120
+
+    # Do not stop other tests if one file fails
+    strategy:
+      fail-fast: false
+      matrix:
+        test_file: ${{ fromJson(needs.list-tests.outputs.test_files) }}
 
     container:
       image: stratosphereips/slips_dependencies
       # TensorFlow + multiprocessing + pytest -n can hit /dev/shm limits.
       options: --shm-size=2g
 
-
     env:
       TF_CPP_MIN_LOG_LEVEL: 3
       TF_ENABLE_ONEDNN_OPTS: 0
 
-    strategy:
-      matrix:
-        test_file:
-          - test_input.py
-          - test_main.py
-          - test_conn.py
-          - test_downloaded_file.py
-          - test_ssl.py
-          - test_tunnel.py
-          - test_ssh.py
-          - test_dns.py
-          - test_notice.py
-          - test_software.py
-          - test_smtp.py
-          - test_whitelist.py
-          - test_arp.py
-          - test_arp_poisoner.py
-          - test_arp_filter.py
-          - test_blocking.py
-          - test_unblocker.py
-          - test_flow_handler.py
-          - test_horizontal_portscans.py
-          - test_http_analyzer.py
-          - test_vertical_portscans.py
-          - test_network_discovery.py
-          - test_virustotal.py
-          - test_update_file_manager.py
-          - test_threat_intelligence.py
-          - test_slips_utils.py
-          - test_slips.py
-          - test_profiler.py
-          - test_profiler_worker.py
-          - test_profilers_manager.py
-          - test_leak_detector.py
-          - test_ip_info.py
-          - test_evidence.py
-          - test_asn_info.py
-          - test_urlhaus.py
-          - test_markov_chain.py
-          - test_daemon.py
-          - test_go_director.py
-          - test_notify.py
-          - test_checker.py
-          - test_base_model.py
-          - test_set_evidence.py
-          - test_trustdb.py
-          - test_cesnet.py
-          - test_output.py
-          - test_riskiq.py
-          - test_spamhaus.py
-          - test_scan_detections_db.py
-          - test_circllu.py
-          - test_evidence_handler.py
-          - test_evidence_logger.py
-          - test_evidence_formatter.py
-          - test_alert_handler.py
-          - test_redis_manager.py
-          - test_ioc_handler.py
-          - test_timeline.py
-          - test_database.py
-          - test_symbols_handler.py
-          - test_profile_handler.py
-          - test_process_manager.py
-          - test_metadata_manager.py
-          - test_host_ip_manager.py
-          - test_rnn_cc_detection.py
-          - test_idea_format.py
-          - test_fides_sqlite_db.py
-          - test_fides_module.py
-          - test_fides_queues.py
-          - test_fides_bridge.py
-
     steps:
-    - uses: actions/checkout@v5
-      with:
-        ref: ${{ github.ref }}
-        fetch-depth: 0
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
 
-    - name: Start Redis
-      uses: ./.github/actions/start-redis
+      - name: Start Redis
+        uses: ./.github/actions/start-redis
 
-    - name: Run Unit Tests for ${{ matrix.test_file }}
-      run: |
-        python3 -m pytest tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 5
+      - name: Run Unit Tests for ${{ matrix.test_file }}
+        run: |
+          # The path is reconstructed here using the matrix variable
+          python3 -m pytest tests/unit/${{ matrix.test_file }} -p no:warnings -vv -s -n 5
 
-    - name: Upload Artifacts
-      if: always()
-      uses: actions/upload-artifact@v5
-      with:
-        name: test_slips_locally-unit-tests-output
-        path: |
-          output/unit_tests
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: test_slips-output-${{ strategy.job-index }}
+          path: |
+            output/unit_tests
