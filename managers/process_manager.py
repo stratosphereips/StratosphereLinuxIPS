@@ -581,11 +581,6 @@ class ProcessManager:
         for process in self.processes:
             if process.pid in pids_to_kill_last:
                 to_kill_last.append(process)
-            elif isinstance(process, multiprocessing.context.ForkProcess):
-                # skips the context manager of output.py, will close
-                # it manually later
-                # once all processes are closed
-                continue
             else:
                 to_kill_first.append(process)
 
