@@ -24,7 +24,8 @@ Malware infections often show up as **behavior change over time**, not only as o
 - keep adapting to benign drift,
 - avoid quickly learning malicious behavior as normal.
 
-This module uses per-host EWMA baselines and z-score style anomaly scoring because that gives:
+This module uses a two-stage baseline (Welford during known-benign training,
+then EWMA adaptation) with z-score style anomaly scoring because that gives:
 
 - fast processing with low CPU and memory usage,
 - interpretable scores,
@@ -84,8 +85,8 @@ The model state is per `profileid`:
 - current hour bucket,
 - known servers set,
 - known JA3 / JA3S sets,
-- EWMA models for hourly features,
-- EWMA models for per-server byte baselines.
+- per-feature moment models (Welford fit in training, EWMA adaptation post-training),
+- per-server byte models (same two-stage update policy).
 
 Each hour bucket aggregates:
 
@@ -101,7 +102,8 @@ Each hour bucket aggregates:
 For the first `training_hours` per host, hourly data is treated as benign baseline input:
 
 - no anomaly alerts are emitted,
-- hourly and server models are updated with `baseline_alpha`.
+- hourly and per-server models are fitted with **Welford online moments**
+  (uniform fit over all benign samples, not EWMA-weighted).
 
 This implements configurable "assume-benign" training for the first `training_hours`.
 
@@ -158,13 +160,13 @@ Hourly anomalies are logged as JSON lines with:
 
 ## Adaptive retraining strategy
 
-Model updates are always online. The selected `alpha` changes update speed, not whether updates happen.
+Model updates are always online, but the training stage uses a different fit method.
 
 After each hour, one update state is selected:
 
 1. **Training period**:
    - condition: `trained_hours < training_hours`
-   - hourly models update with `baseline_alpha`
+   - hourly models use Welford benign fit (equal weight to all training samples)
    - host `trained_hours` increments by one on each closed traffic hour.
 
 2. **Post-training, small anomaly / drift**:
@@ -183,9 +185,10 @@ Current default values:
 - `drift_alpha = 0.05`
 - `suspicious_alpha = 0.005`
 
-Flow-level per-server byte models use the same alpha policy per event:
+Flow-level per-server byte models:
 
-- no flow anomaly -> `baseline_alpha`
+- training period -> Welford benign fit
+- no flow anomaly (post-training) -> `baseline_alpha`
 - small flow anomaly -> `drift_alpha`
 - suspicious flow anomaly -> `suspicious_alpha`
 
@@ -214,12 +217,25 @@ Why:
 
 ## Mathematical model details
 
-Each baseline uses online EWMA moments:
+Training stage (known benign):
 
-- mean update:
+- Welford online mean/variance:
+  - `n_t = n_{t-1} + 1`
+  - `delta = x_t - mean_{t-1}`
+  - `mean_t = mean_{t-1} + delta / n_t`
+  - `M2_t = M2_{t-1} + delta * (x_t - mean_t)`
+  - `var_t = M2_t / (n_t - 1)` for `n_t > 1`
+
+Post-training adaptation stage:
+
+- EWMA mean/variance:
   - `mean_t = mean_{t-1} + alpha * (x_t - mean_{t-1})`
-- variance update:
   - `var_t = (1 - alpha) * (var_{t-1} + alpha * (x_t - mean_{t-1})^2)`
+
+Reason for this two-stage design:
+
+- training should strongly absorb all known-benign data (Welford, uniform weighting),
+- post-training should adapt to drift with controlled speed (EWMA via `alpha` policy).
 
 Scoring:
 
@@ -251,6 +267,8 @@ Operationally:
 - Exponential smoothing / EWMA:
   - https://en.wikipedia.org/wiki/Exponential_smoothing
   - https://www.itl.nist.gov/div898/handbook/pmc/section4/pmc431.htm
+- Welford online variance:
+  - https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
 - Z-score:
   - https://en.wikipedia.org/wiki/Standard_score
 - Quantile:
@@ -292,7 +310,7 @@ Parameter meaning:
 - `adaptation_score_threshold`:
   upper bound on `hourly_score` for classifying a closed hour as small/drift-like.
 - `baseline_alpha`:
-  update speed during initial training.
+  default EWMA update speed in post-training normal (non-anomalous) updates.
 - `drift_alpha`:
   update speed when an anomaly is classified as small/drift-like.
 - `suspicious_alpha`:
@@ -354,7 +372,7 @@ The module explicitly logs:
 - **suspicious adaptation** (`suspicious_update`):
   when strong anomalies lead to conservative (very slow) updates.
 - **model updates** (`model_update`):
-  EWMA update details (feature/server, value, mean, variance, alpha, count).
+  model update details (feature/server, value, mean, variance, alpha, count, fit method).
 - **detections**:
   `flow_detection` and `hourly_detection` with exact reasons, triggering metrics, and confidence level.
 - **evidence emission** (`evidence_emit`):
