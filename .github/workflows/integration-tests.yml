@@ -10,14 +10,14 @@ jobs:
   list-integration-tests:
     runs-on: ubuntu-latest
     outputs:
-      test_files: ${{ steps.set-matrix.outputs.files }}
+      test_files: ${{ steps.list.outputs.test_files }}
     steps:
       - uses: actions/checkout@v5
-      - id: set-matrix
-        run: |
-          # Find files in tests/integration/ and strip the prefix
-          FILES=$(find tests/integration -name "test_*.py" -printf "integration/%P\n" | jq -R -s -c 'split("\n")[:-1]')
-          echo "files=$FILES" >> $GITHUB_OUTPUT
+      - id: list
+        uses: ./.github/actions/list-tests-dir
+        with:
+          test_dir: tests/integration
+          output_prefix: integration/
 
   integration-tests:
     needs: list-integration-tests

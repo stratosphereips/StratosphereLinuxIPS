@@ -12,15 +12,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     outputs:
-      test_files: ${{ steps.set-matrix.outputs.files }}
+      test_files: ${{ steps.list.outputs.test_files }}
     steps:
       - uses: actions/checkout@v5
-      - id: set-matrix
-        run: |
-          # Find all .py files starting with test_ inside tests/unit
-          # %P removes the 'tests/unit/' prefix from the string
-          FILES=$(find tests/unit -name "test_*.py" -printf "%P\n" | jq -R -s -c 'split("\n")[:-1]')
-          echo "files=$FILES" >> $GITHUB_OUTPUT
+      - id: list
+        uses: ./.github/actions/list-tests-dir
+        with:
+          test_dir: tests/unit
 
   unit-tests:
     needs: list-tests

@@ -1,0 +1,25 @@
+name: "List Test Files"
+description: "Build JSON matrix of test files"
+inputs:
+  test_dir:
+    description: "Directory to search for test_*.py files"
+    required: true
+  output_prefix:
+    description: "Optional prefix to prepend to each file entry in the output array"
+    required: false
+    default: ""
+outputs:
+  test_files:
+    description: "JSON array of integration test files (relative to tests/)"
+    value: ${{ steps.set-matrix.outputs.files }}
+
+runs:
+  using: "composite"
+  steps:
+    - id: set-matrix
+      shell: bash
+      run: |
+        # Find files in test_dir/ and optionally prefix entries for consumers.
+        PREFIX="${{ inputs.output_prefix }}"
+        FILES=$(find "${{ inputs.test_dir }}" -name "test_*.py" -printf "%P\n" | sed "s|^|${PREFIX}|" | jq -R -s -c 'split(\"\\n\")[:-1]')
+        echo "files=$FILES" >> "$GITHUB_OUTPUT"
