@@ -7,7 +7,20 @@ on:
       - 'develop'
 
 jobs:
+  list-integration-tests:
+    runs-on: ubuntu-latest
+    outputs:
+      test_files: ${{ steps.set-matrix.outputs.files }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: set-matrix
+        run: |
+          # Find files in tests/integration/ and strip the prefix
+          FILES=$(find tests/integration -name "test_*.py" -printf "integration/%P\n" | jq -R -s -c 'split("\n")[:-1]')
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+
   integration-tests:
+    needs: list-integration-tests
     runs-on: ubuntu-22.04
     timeout-minutes: 1800
 
@@ -23,33 +36,28 @@ jobs:
       TF_ENABLE_ONEDNN_OPTS: 0
 
     strategy:
+      fail-fast: false
       matrix:
-        test_file:
-          - integration/test_config_files.py
-          - integration/test_portscans.py
-          - integration/test_dataset.py
-          - integration/test_pcap_dataset.py
-          - integration/test_zeek_dataset.py
-          - integration/test_fides.py
-          - integration/test_iris.py
+        test_file: ${{ fromJson(needs.list-integration-tests.outputs.test_files) }}
 
     steps:
-    - uses: actions/checkout@v5
-      with:
-        ref: ${{ github.ref }}
-        fetch-depth: ''
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
 
-    - name: Start Redis
-      uses: ./.github/actions/start-redis
+      - name: Start Redis
+        uses: ./.github/actions/start-redis
 
-    - name: Run Integration Tests for ${{ matrix.test_file }}
-      run: |
-        python3 -m pytest tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 3
+      - name: Run Integration Tests for ${{ matrix.test_file }}
+        run: |
+          python3 -m pytest tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 3
 
-    - name: Upload Artifacts
-      if: always()
-      uses: actions/upload-artifact@v5
-      with:
-        name: ${{ matrix.test_file }}-integration-tests-output
-        path: |
-          output/integration
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          # Replaces slashes with underscores for valid artifact naming
+          name: ${{ github.run_id }}-${{ strategy.job-index }}-integration-output
+          path: |
+            output/integration
