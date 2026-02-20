@@ -7,6 +7,7 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.iinput_handler import IInputHandler
 from slips_files.core.input.observer_manager import InputObserver
 from slips_files.core.input.zeek.utils.zeek_file_remover import ZeekFileRemover
+from slips_files.core.helpers.throughput_logger import ThroughputLogger
 
 
 class ZeekDirInput(IInputHandler):
@@ -15,6 +16,14 @@ class ZeekDirInput(IInputHandler):
         self.db = self.input.db
         self.observer = InputObserver(self.input)
         self.file_remover = ZeekFileRemover(self.input, self.input.zeek_utils)
+        self.throughput_logger = ThroughputLogger(
+            self.db,
+            self.input.output_dir,
+            "input",
+            interval_seconds=180,
+            is_writer=True,
+        )
+        self.input.throughput_logger = self.throughput_logger
 
     def run(self):
         """
@@ -88,5 +97,6 @@ class ZeekDirInput(IInputHandler):
         self.observer.stop()
         self.file_remover.shutdown_gracefully()
         self.input.zeek_utils.close_all_handles()
+        self.throughput_logger.shutdown()
         self.input.mark_self_as_done_processing()
         return True

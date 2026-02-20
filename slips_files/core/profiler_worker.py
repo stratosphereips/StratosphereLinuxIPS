@@ -29,6 +29,7 @@ from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 from slips_files.core.structures.flow_attributes import Role
+from slips_files.core.helpers.throughput_logger import ThroughputLogger
 
 
 class ProfilerWorker(IModule):
@@ -75,6 +76,13 @@ class ProfilerWorker(IModule):
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
+        worker_id = str(self.name).split("_")[-1]
+        self.throughput_logger = ThroughputLogger(
+            self.db,
+            self.output_dir,
+            f"profiler_{worker_id}",
+            interval_seconds=180,
+        )
 
     def read_configuration(self):
         self.client_ips: List[
@@ -641,6 +649,7 @@ class ProfilerWorker(IModule):
 
             if self.is_stop_msg(msg):
                 gc.collect()
+                self.throughput_logger.shutdown()
                 # this signal tells profiler.py to stop
                 self.stop_profiler_event.set()
                 return 1
@@ -661,6 +670,7 @@ class ProfilerWorker(IModule):
             self.add_flow_to_profile(flow)
             self.handle_setting_local_net(flow)
             self.db.increment_processed_flows()
+            self.throughput_logger.record_flow()
 
             # manually run garbage collection to avoid the latency
             # introduced by it when slips is given a huge number of flows
@@ -672,6 +682,7 @@ class ProfilerWorker(IModule):
             # so the modules receive no more flows.
             # modules should just finish the flows they have and slips will
             # exit gracefully
+            self.throughput_logger.shutdown()
             gc.enable()
             return 1
         except Exception:
@@ -680,3 +691,9 @@ class ProfilerWorker(IModule):
                 0,
                 1,
             )
+            self.throughput_logger.shutdown()
+        return
+
+    def shutdown_gracefully(self):
+        self.throughput_logger.shutdown()
+        return True

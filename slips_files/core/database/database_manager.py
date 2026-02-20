@@ -283,6 +283,12 @@ class DBManager:
     def get_module_flows_per_second(self, *args, **kwargs):
         return self.rdb.get_module_flows_per_second(*args, **kwargs)
 
+    def store_throughput_fps(self, component: str, fps: float):
+        return self.rdb.store_throughput_fps(component, fps)
+
+    def get_throughput_fps(self, component: str) -> float:
+        return self.rdb.get_throughput_fps(component)
+
     def get_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.get_accumulated_threat_level(*args, **kwargs)
 

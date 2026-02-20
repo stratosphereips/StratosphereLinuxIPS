@@ -70,6 +70,7 @@ class Constants:
     SUBS_WHO_PROCESSED_MSG = "number_of_subscribers_who_processed_this_msg"
     FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN = "flows_analyzed_per_minute"
     MODULES_FLOWS_PER_SECOND = "modules_processed_flows_per_second"
+    THROUGHPUT_FPS = "throughput_fps"
     LINE_PROCESSORS = "line_processors"
     ALERTS = "alerts"
     MAX_THREAT_LEVEL = "max_threat_level"

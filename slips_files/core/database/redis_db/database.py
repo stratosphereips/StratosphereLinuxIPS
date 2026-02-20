@@ -1458,6 +1458,18 @@ class RedisDB(
     def get_module_flows_per_second(self, module):
         return self.r.hget(self.constants.MODULES_FLOWS_PER_SECOND, module)
 
+    def store_throughput_fps(self, component: str, fps: float) -> None:
+        self.r.hset(self.constants.THROUGHPUT_FPS, component, fps)
+
+    def get_throughput_fps(self, component: str) -> float:
+        fps = self.r.hget(self.constants.THROUGHPUT_FPS, component)
+        if fps is None:
+            return 0.0
+        try:
+            return float(fps)
+        except (TypeError, ValueError):
+            return 0.0
+
     def get_name_of_module_at(self, given_pid):
         """returns the name of the module that has the given pid"""
         for name, pid in self.get_pids().items():

@@ -253,6 +253,8 @@ class ZeekInputUtils:
 
                 self.input.give_profiler(earliest_line)
                 self.input.lines += 1
+                if hasattr(self.input, "throughput_logger"):
+                    self.input.throughput_logger.record_flow()
                 # when testing, no need to read the whole file!
                 if self.input.lines == 10 and self.input.testing:
                     break
