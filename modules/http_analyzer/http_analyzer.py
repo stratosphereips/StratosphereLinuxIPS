@@ -66,6 +66,11 @@ class HTTPAnalyzer(AsyncModule):
         self.ts_of_last_cleanup_of_http_recognized_flows = time.time()
         self.http_recognized_flows_lock = Lock()
         self.condition = asyncio.Condition()
+        # Prevent unbounded task growth under heavy flow load.
+        self.max_concurrent_non_http_port_80_checks = 200
+        self.non_http_port_80_semaphore = asyncio.Semaphore(
+            self.max_concurrent_non_http_port_80_checks
+        )
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -545,6 +550,11 @@ class HTTPAnalyzer(AsyncModule):
         )
         return False
 
+    async def _run_non_http_port_80_conns(self, twid, flow):
+        """to limit non-http port 80 checks concurrent tasks."""
+        async with self.non_http_port_80_semaphore:
+            await self.check_non_http_port_80_conns(twid, flow)
+
     async def wait_for_new_flows_or_timeout(self, timeout: float):
         """
         waits for new incoming flows, but interrupts the wait if profiler
@@ -671,6 +681,6 @@ class HTTPAnalyzer(AsyncModule):
             msg = json.loads(msg["data"])
             twid = msg["twid"]
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
-            self.create_task(self.check_non_http_port_80_conns, twid, flow)
+            self.create_task(self._run_non_http_port_80_conns, twid, flow)
 
         self.remove_old_entries_from_http_recognized_flows()
