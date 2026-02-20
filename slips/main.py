@@ -644,8 +644,11 @@ class Main:
 
             # call shutdown_gracefully on sigterm
             def sig_handler(sig, frame):
-                self.sigterm_received = True
-                self.print("SIGTERM received, shutting down slips gracefully.")
+                if not self.sigterm_received:
+                    self.sigterm_received = True
+                    self.print(
+                        "SIGTERM received, shutting down slips gracefully."
+                    )
 
             # The signals SIGKILL and SIGSTOP cannot be caught,
             # blocked, or ignored.
