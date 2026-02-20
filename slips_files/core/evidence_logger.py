@@ -2,7 +2,10 @@ import json
 import os
 import queue
 import threading
+import time
 import traceback
+from datetime import datetime
+import csv
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -26,6 +29,12 @@ class EvidenceLogger:
         # clear output/alerts.json
         self.jsonfile = self.clean_file(self.output_dir, "alerts.json")
         utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
+        # clear output/latency.csv
+        self.latencyfile = self.clean_file(self.output_dir, "latency.csv")
+        utils.change_logfiles_ownership(
+            self.latencyfile.name, self.UID, self.GID
+        )
+        self._init_latency_csv()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -63,8 +72,42 @@ class EvidenceLogger:
             self.jsonfile.write("\n")
             self.jsonfile.flush()  # flush Python buffer
             os.fsync(self.jsonfile.fileno())  # flush OS buffer
+            self.log_latency_if_evidence(idmef_evidence)
         except KeyboardInterrupt:
             return
+        except Exception:
+            return
+
+    def _init_latency_csv(self):
+        try:
+            writer = csv.writer(self.latencyfile)
+            writer.writerow(
+                ["evidence_id", "current_timestamp", "latency_in_seconds"]
+            )
+            self.latencyfile.flush()
+        except Exception:
+            return
+
+    def log_latency_if_evidence(self, idmef_msg: dict):
+        try:
+            if idmef_msg.get("Status") != "Event":
+                return
+            start_time = idmef_msg.get("StartTime")
+            create_time = idmef_msg.get("CreateTime")
+            if not start_time or not create_time:
+                return
+            start_dt = datetime.fromisoformat(start_time)
+            create_dt = datetime.fromisoformat(create_time)
+            latency_seconds = (create_dt - start_dt).total_seconds()
+            writer = csv.writer(self.latencyfile)
+            writer.writerow(
+                [
+                    idmef_msg.get("ID"),
+                    time.time(),
+                    latency_seconds,
+                ]
+            )
+            self.latencyfile.flush()
         except Exception:
             return
 
@@ -97,3 +140,4 @@ class EvidenceLogger:
     def shutdown_gracefully(self):
         self.logfile.close()
         self.jsonfile.close()
+        self.latencyfile.close()
