@@ -35,6 +35,7 @@ class EvidenceLogger:
             self.latencyfile.name, self.UID, self.GID
         )
         self._init_latency_csv()
+        self.slips_starttime = time.time()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -98,12 +99,16 @@ class EvidenceLogger:
                 return
             start_dt = datetime.fromisoformat(start_time)
             create_dt = datetime.fromisoformat(create_time)
-            latency_seconds = (create_dt - start_dt).total_seconds()
+
+            # assuming we're given a pcap/dir with flows starting from ts 0
+            latency_seconds = (
+                create_dt - (start_dt + self.slips_starttime)
+            ).total_seconds()
             writer = csv.writer(self.latencyfile)
             writer.writerow(
                 [
                     idmef_msg.get("ID"),
-                    time.time(),
+                    time.time() - self.slips_starttime,  # to start from time 0
                     latency_seconds,
                 ]
             )
