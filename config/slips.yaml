@@ -239,9 +239,9 @@ anomaly_detection_https:
   # Max flow anomalies in an hour still considered "small drift".
   max_small_flow_anomalies: 1
 
-  # JA3 change sensitivity per server.
-  # During training, the module learns per-server JA3 variant limits.
-  # This value is the minimum allowed variants before flagging JA3 change.
+  # JA3 statistical fallback gate used only when training_hours = 0.
+  # If there is no benign training period, ja3_changes is not scored
+  # until this minimum hourly value is reached.
   ja3_min_variants_per_server: 3
 
   # Operational logging verbosity:
