@@ -140,7 +140,7 @@ class Main:
             thread.join(timeout=2)
 
     def _throughput_log_loop(self):
-        interval_seconds = 180
+        interval_seconds = 120
         next_deadline = time.time() + interval_seconds
         while not self._throughput_log_stop_event.wait(timeout=1):
             now = time.time()
@@ -158,7 +158,7 @@ class Main:
                 )
 
             line = f"{int(now)}," + ",".join(
-                f"{fps / interval_seconds}" for fps in fps_values
+                f"{int(fps / interval_seconds)}" for fps in fps_values
             )
             with open(output_path, "a") as handle:
                 if write_header:
