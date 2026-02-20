@@ -121,13 +121,11 @@ When in detection mode (post-training), each SSL flow can trigger:
 1. **New server anomaly**
    - server (SNI or fallback IP) not in host known server set.
 
-2. **JA3 change / JA3S novelty anomaly**
-   - `ja3_change` is evaluated per server (not globally):
-     - empty -> first non-empty JA3 is **not** anomalous,
-     - each server has a JA3 variant limit learned from training,
-     - post-training, a new JA3 for that server is anomalous only when
-       current unique JA3 count for that server already reached the limit.
-   - `new_ja3s` remains host-level novelty.
+2. **JA3S novelty anomaly**
+   - `new_ja3s` is host-level novelty.
+
+JA3 client fingerprints are handled as an hourly statistical feature
+(`ja3_changes`), not as direct per-flow novelty alerts.
 
 3. **Bytes-to-known-server anomaly**
    - only for known servers with enough baseline points,
@@ -146,6 +144,7 @@ On hour rollover, the module computes hourly features:
 - `ssl_flows`
 - `unique_servers` = `len(servers)`
 - `new_servers` = `len(new_servers)`
+- `ja3_changes` = number of first-seen JA3 values (per server) in the hour
 - `known_server_avg_bytes` = `known_servers_total_bytes / known_servers_flow_count`
 
 Each feature is scored against its EWMA baseline:
@@ -210,7 +209,7 @@ At **hour level** (used for `drift_update` vs `suspicious_update`):
 
 At **flow level** (used for per-server-bytes model update speed):
 
-- `flow_anomalies` is the list of reasons triggered for that flow (`new_server`, `ja3_change`, `new_ja3s`, `bytes_to_known_server`).
+- `flow_anomalies` is the list of reasons triggered for that flow (`new_server`, `new_ja3s`, `bytes_to_known_server`).
 - a flow is **small** iff `0 < len(flow_anomalies) <= max_small_flow_anomalies`.
 - a flow is **suspicious** iff `len(flow_anomalies) > max_small_flow_anomalies`.
 
@@ -328,10 +327,9 @@ Parameter meaning:
   max anomalous flows per hour still considered drift-like, and
   max anomaly reasons per flow still considered small.
 - `ja3_min_variants_per_server`:
-  lower bound for server-specific JA3 variant allowance.
-  During training, each server learns its own JA3 variant limit from benign
-  traffic. Post-training JA3 changes are evaluated against
-  `max(ja3_min_variants_per_server, learned_server_limit)`.
+  fallback gate used only when `training_hours = 0`:
+  `ja3_changes` is not scored as anomalous unless hourly value is at least
+  this threshold.
 
 
 ## Operational log
@@ -527,7 +525,9 @@ What it generates:
 
 - timeline plots (traffic time) for event volume and detections,
 - move mouse over the plot area to see exact time-bin values for all plotted series,
-- hourly feature plot with individual values (`ssl_flows`, `unique_servers`, `new_servers`, `known_server_avg_bytes`),
+- confidence plot with per-bin `confidence_avg` and `confidence_max` for anomalies,
+- hourly feature plot with individual values (`ssl_flows`, `unique_servers`, `new_servers`, `ja3_changes`, `known_server_avg_bytes`),
+- highlighted benign training window in all time plots (traffic time),
 - vertical markers for model-adaptation decisions:
   green dashed = `drift_update`, red dashed = `suspicious_update` (very conservative / near-denied update),
 - all timestamps shown in charts/tables are traffic (packet) time; only the "Generated" line at top is wall time,
