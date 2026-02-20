@@ -208,6 +208,70 @@ def build_hourly_feature_series(
     return out
 
 
+def build_confidence_score_series(
+    events: List[Event], bins: Dict[str, Any]
+) -> Dict[str, List[float]]:
+    n_bins = int(bins.get("n_bins", 0))
+    if n_bins <= 0:
+        return {}
+    min_ts = float(bins["min_ts"])
+    width = float(bins["width"])
+    score_sum = [0.0] * n_bins
+    score_max = [0.0] * n_bins
+    count = [0] * n_bins
+
+    for e in events:
+        if e.event_type not in ("flow_detection", "hourly_detection"):
+            continue
+        if e.event_ts is None:
+            continue
+        raw = e.metrics.get("confidence_score")
+        try:
+            score = float(raw)
+        except (TypeError, ValueError):
+            continue
+        idx = int((float(e.event_ts) - min_ts) / width)
+        idx = max(0, min(idx, n_bins - 1))
+        score_sum[idx] += score
+        score_max[idx] = max(score_max[idx], score)
+        count[idx] += 1
+
+    score_avg = [
+        (score_sum[i] / count[i]) if count[i] > 0 else 0.0
+        for i in range(n_bins)
+    ]
+    return {
+        "confidence_avg": score_avg,
+        "confidence_max": score_max,
+        "detections_in_bin": [float(v) for v in count],
+    }
+
+
+def detect_training_window(events: List[Event]) -> Dict[str, Any]:
+    training_ts = sorted(
+        float(e.event_ts)
+        for e in events
+        if e.event_type == "training_fit" and e.event_ts is not None
+    )
+    if not training_ts:
+        return {
+            "has_training": False,
+            "start_ts": None,
+            "end_ts": None,
+            "hours": 0,
+        }
+
+    # training_fit is logged on hour-close for hour buckets.
+    start_ts = training_ts[0]
+    end_ts = training_ts[-1] + 3600.0
+    return {
+        "has_training": True,
+        "start_ts": start_ts,
+        "end_ts": end_ts,
+        "hours": len(training_ts),
+    }
+
+
 def svg_polyline_chart(
     title: str,
     x_labels: List[str],
@@ -215,6 +279,8 @@ def svg_polyline_chart(
     colors: Dict[str, str],
     drift_marker_bins: Optional[List[int]] = None,
     suspicious_marker_bins: Optional[List[int]] = None,
+    training_start_bin: Optional[int] = None,
+    training_end_bin: Optional[int] = None,
     width: int = 1100,
     height: int = 320,
 ) -> str:
@@ -243,7 +309,32 @@ def svg_polyline_chart(
     def y_at(v: float) -> float:
         return margin_top + plot_h - (v / y_top) * plot_h
 
+    def x_bounds(i: int) -> tuple[float, float]:
+        if len(x_labels) == 1:
+            return margin_left, margin_left + plot_w
+        if i == 0:
+            return margin_left, (x_at(0) + x_at(1)) / 2.0
+        if i == len(x_labels) - 1:
+            return (x_at(i - 1) + x_at(i)) / 2.0, margin_left + plot_w
+        return (x_at(i - 1) + x_at(i)) / 2.0, (x_at(i) + x_at(i + 1)) / 2.0
+
     lines = []
+    if (
+        training_start_bin is not None
+        and training_end_bin is not None
+        and 0 <= training_start_bin < len(x_labels)
+        and 0 <= training_end_bin < len(x_labels)
+        and training_start_bin <= training_end_bin
+    ):
+        left, _ = x_bounds(training_start_bin)
+        _, right = x_bounds(training_end_bin)
+        lines.append(
+            f'<rect x="{left:.1f}" y="{margin_top}" width="{max(1.0, right-left):.1f}" '
+            f'height="{plot_h:.1f}" fill="#93c5fd" fill-opacity="0.16">'
+            f"<title>Benign training period</title>"
+            f"</rect>"
+        )
+
     # grid and axes
     for k in range(6):
         yv = y_top * (k / 5.0)
@@ -304,18 +395,7 @@ def svg_polyline_chart(
     # Hover bands: moving the mouse over the plot shows values for the
     # nearest time-bin (all plotted series).
     for idx in range(len(x_labels)):
-        if len(x_labels) == 1:
-            left = margin_left
-            right = margin_left + plot_w
-        elif idx == 0:
-            left = margin_left
-            right = (x_at(idx) + x_at(idx + 1)) / 2.0
-        elif idx == len(x_labels) - 1:
-            left = (x_at(idx - 1) + x_at(idx)) / 2.0
-            right = margin_left + plot_w
-        else:
-            left = (x_at(idx - 1) + x_at(idx)) / 2.0
-            right = (x_at(idx) + x_at(idx + 1)) / 2.0
+        left, right = x_bounds(idx)
 
         tooltip_lines = [f"time={x_labels[idx]}"]
         for name, vals in series_map.items():
@@ -375,6 +455,13 @@ def svg_polyline_chart(
     lines.append(
         f'<text x="{marker_legend_x+170}" y="{legend_y-5}" font-size="12" fill="#374151">suspicious_update</text>'
     )
+    lines.append(
+        f'<rect x="{marker_legend_x+350}" y="{legend_y-12}" width="14" height="8" '
+        f'fill="#93c5fd" fill-opacity="0.35" />'
+    )
+    lines.append(
+        f'<text x="{marker_legend_x+370}" y="{legend_y-5}" font-size="12" fill="#374151">training period</text>'
+    )
 
     svg = (
         f'<h3>{escape(title)}</h3>'
@@ -429,6 +516,9 @@ def summarize(events: List[Event]) -> Dict[str, Any]:
         sum(hourly_scores) / len(hourly_scores) if hourly_scores else 0.0
     )
 
+    training = detect_training_window(events)
+    summary["training"] = training
+
     timed_events = [e for e in events if e.event_ts is not None]
     if timed_events:
         summary["start"] = to_human_ts(float(timed_events[0].event_ts))
@@ -456,6 +546,13 @@ def narrative(summary: Dict[str, Any]) -> List[str]:
     if summary["top_reasons"]:
         r, n = summary["top_reasons"][0]
         bullets.append(f"Most frequent anomaly reason was '{r}' ({n} times).")
+    training = summary.get("training", {})
+    if training.get("has_training"):
+        bullets.append(
+            "Benign training window: "
+            f"{to_human_ts(training['start_ts'])} to {to_human_ts(training['end_ts'])} "
+            f"({training['hours']} closed traffic hours)."
+        )
     bullets.append(
         "Interpretation: spikes in detection lines indicate behavior shifts "
         "from learned baseline; confidence rises when deviation is strong, persistent, "
@@ -481,6 +578,22 @@ def build_html(
 ) -> str:
     labels = bins["bins"]
     series = bins["series"]
+    training = summary.get("training", {})
+    training_start_bin = None
+    training_end_bin = None
+    if labels and training.get("has_training"):
+        min_ts = float(bins.get("min_ts", 0.0))
+        width = float(bins.get("width", 1.0))
+        n_bins = int(bins.get("n_bins", len(labels)))
+        start_ts = float(training["start_ts"])
+        end_ts = float(training["end_ts"])
+        training_start_bin = max(0, min(n_bins - 1, int((start_ts - min_ts) / width)))
+        # Training end is exclusive: first post-training update at end_ts
+        # should not be rendered inside the blue training region.
+        training_end_bin = max(
+            0,
+            min(n_bins - 1, int(((end_ts - min_ts) - 1e-9) / width)),
+        )
     drift_marker_bins = _marker_bins_from_series(
         series.get("drift_update", [0] * len(labels))
     )
@@ -488,6 +601,7 @@ def build_html(
         series.get("suspicious_update", [0] * len(labels))
     )
     feature_series = build_hourly_feature_series(events, bins)
+    confidence_series = build_confidence_score_series(events, bins)
 
     chart_events = svg_polyline_chart(
         "Event Volume Over Time (traffic time)",
@@ -499,6 +613,8 @@ def build_html(
         colors={"all_events": "#2563eb", "flow_arrival": "#0ea5e9"},
         drift_marker_bins=drift_marker_bins,
         suspicious_marker_bins=suspicious_marker_bins,
+        training_start_bin=training_start_bin,
+        training_end_bin=training_end_bin,
     )
     chart_detections = svg_polyline_chart(
         "Detections Over Time (by confidence)",
@@ -517,6 +633,8 @@ def build_html(
         },
         drift_marker_bins=drift_marker_bins,
         suspicious_marker_bins=suspicious_marker_bins,
+        training_start_bin=training_start_bin,
+        training_end_bin=training_end_bin,
     )
     chart_hourly = svg_polyline_chart(
         "Hourly Detection Events Over Time",
@@ -528,11 +646,14 @@ def build_html(
         colors={"hourly_detection": "#7c3aed", "flow_detection": "#ef4444"},
         drift_marker_bins=drift_marker_bins,
         suspicious_marker_bins=suspicious_marker_bins,
+        training_start_bin=training_start_bin,
+        training_end_bin=training_end_bin,
     )
     feature_colors = {
         "ssl_flows": "#2563eb",
         "unique_servers": "#16a34a",
         "new_servers": "#dc2626",
+        "ja3_changes": "#0f766e",
         "known_server_avg_bytes": "#7c3aed",
     }
     chart_features = svg_polyline_chart(
@@ -545,12 +666,39 @@ def build_html(
                 "ssl_flows",
                 "unique_servers",
                 "new_servers",
+                "ja3_changes",
                 "known_server_avg_bytes",
             )
         },
         colors=feature_colors,
         drift_marker_bins=drift_marker_bins,
         suspicious_marker_bins=suspicious_marker_bins,
+        training_start_bin=training_start_bin,
+        training_end_bin=training_end_bin,
+    )
+    chart_confidence = svg_polyline_chart(
+        "Anomaly Confidence Score Over Time",
+        labels,
+        {
+            "confidence_avg": confidence_series.get(
+                "confidence_avg", [0.0] * len(labels)
+            ),
+            "confidence_max": confidence_series.get(
+                "confidence_max", [0.0] * len(labels)
+            ),
+            "detections_in_bin": confidence_series.get(
+                "detections_in_bin", [0.0] * len(labels)
+            ),
+        },
+        colors={
+            "confidence_avg": "#0f766e",
+            "confidence_max": "#b91c1c",
+            "detections_in_bin": "#2563eb",
+        },
+        drift_marker_bins=drift_marker_bins,
+        suspicious_marker_bins=suspicious_marker_bins,
+        training_start_bin=training_start_bin,
+        training_end_bin=training_end_bin,
     )
 
     top_events = summary["event_counts"].most_common(15)
@@ -595,6 +743,7 @@ def build_html(
     <h1>HTTPS AD Visual Analysis</h1>
     <p class="small">Source log: <code>{escape(str(log_path))}</code></p>
     <p class="small">Generated: {escape(to_human_ts(datetime.now(tz=timezone.utc).timestamp()))}</p>
+    <p class="small">Training window (traffic time): {escape(to_human_ts(training["start_ts"])) + " to " + escape(to_human_ts(training["end_ts"])) if training.get("has_training") else "n/a"}</p>
   </div>
 
     <div class="card">
@@ -608,6 +757,7 @@ def build_html(
 
   <div class="card">{chart_events}</div>
   <div class="card">{chart_detections}</div>
+  <div class="card">{chart_confidence}</div>
   <div class="card">{chart_hourly}</div>
   <div class="card">{chart_features}</div>
   <div class="card">
