@@ -79,7 +79,6 @@ class ProfilerWorker(IModule):
         worker_id = str(self.name).split("_")[-1]
         self.throughput_logger = ThroughputLogger(
             self.db,
-            self.output_dir,
             f"profiler_{worker_id}",
             interval_seconds=180,
         )

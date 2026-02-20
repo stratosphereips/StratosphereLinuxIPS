@@ -71,6 +71,7 @@ class Constants:
     FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN = "flows_analyzed_per_minute"
     MODULES_FLOWS_PER_SECOND = "modules_processed_flows_per_second"
     THROUGHPUT_FPS = "throughput_fps"
+    THROUGHPUT_COUNTER = "throughput_counter"
     LINE_PROCESSORS = "line_processors"
     ALERTS = "alerts"
     MAX_THREAT_LEVEL = "max_threat_level"

@@ -289,6 +289,17 @@ class DBManager:
     def get_throughput_fps(self, component: str) -> float:
         return self.rdb.get_throughput_fps(component)
 
+    def pop_throughput_fps(self, component: str) -> float:
+        return self.rdb.pop_throughput_fps(component)
+
+    def increment_throughput_counter(
+        self, component: str, count: int = 1
+    ) -> None:
+        return self.rdb.increment_throughput_counter(component, count)
+
+    def pop_throughput_counter(self, component: str) -> int:
+        return self.rdb.pop_throughput_counter(component)
+
     def get_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.get_accumulated_threat_level(*args, **kwargs)
 

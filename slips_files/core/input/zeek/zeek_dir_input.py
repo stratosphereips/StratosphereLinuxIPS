@@ -18,10 +18,8 @@ class ZeekDirInput(IInputHandler):
         self.file_remover = ZeekFileRemover(self.input, self.input.zeek_utils)
         self.throughput_logger = ThroughputLogger(
             self.db,
-            self.input.output_dir,
             "input",
             interval_seconds=180,
-            is_writer=True,
         )
         self.input.throughput_logger = self.throughput_logger
 

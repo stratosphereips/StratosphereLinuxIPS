@@ -1302,6 +1302,7 @@ class RedisDB(
         Slips runs non-stop in case of an interface or a growing zeek dir,
         in these 2 cases, it only stops on ctrl+c
         """
+
         return (
             self.get_input_type() == "interface" or self.is_growing_zeek_dir()
         )
@@ -1469,6 +1470,24 @@ class RedisDB(
             return float(fps)
         except (TypeError, ValueError):
             return 0.0
+
+    def increment_throughput_counter(
+        self, component: str, count: int = 1
+    ) -> None:
+        self.r.incr(f"{self.constants.THROUGHPUT_COUNTER}_{component}")
+
+    def pop_throughput_counter(self, component: str) -> int:
+        pipe = self.r.pipeline()
+        key = f"{self.constants.THROUGHPUT_COUNTER}_{component}"
+        pipe.get(key)
+        pipe.unlink(key)
+        value, _ = pipe.execute()
+        if value is None:
+            return 0
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
 
     def get_name_of_module_at(self, given_pid):
         """returns the name of the module that has the given pid"""

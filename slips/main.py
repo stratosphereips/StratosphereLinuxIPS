@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import time
+import threading
 from datetime import datetime
 from distutils.dir_util import copy_tree
 from typing import Set
@@ -119,6 +120,55 @@ class Main:
             self.daemon.stop()
         if not self.conf.get_cpu_profiler_enable():
             sys.exit(0)  # leaves any children started by slips as orphans
+
+    def start_throughput_log_thread(self):
+        self._throughput_log_stop_event = threading.Event()
+        self._throughput_log_thread = threading.Thread(
+            target=self._throughput_log_loop,
+            name="throughput_log_thread",
+            daemon=True,
+        )
+        self._throughput_log_thread.start()
+
+    def stop_throughput_log_thread(self):
+        stop_event = getattr(self, "_throughput_log_stop_event", None)
+        if stop_event is None:
+            return
+        stop_event.set()
+        thread = getattr(self, "_throughput_log_thread", None)
+        if thread and thread.is_alive():
+            thread.join(timeout=2)
+
+    def _throughput_log_loop(self):
+        interval_seconds = 180
+        next_deadline = time.time() + interval_seconds
+        while not self._throughput_log_stop_event.wait(timeout=1):
+            now = time.time()
+            if now < next_deadline:
+                continue
+            output_path = os.path.join(self.args.output, "throughput.csv")
+            write_header = (
+                not os.path.exists(output_path)
+                or os.path.getsize(output_path) == 0
+            )
+            fps_values = [self.db.pop_throughput_counter("input")]
+            for idx in range(10):
+                fps_values.append(
+                    self.db.pop_throughput_counter(f"profiler_{idx}")
+                )
+
+            line = f"{int(now)}," + ",".join(
+                f"{fps / interval_seconds}" for fps in fps_values
+            )
+            with open(output_path, "a") as handle:
+                if write_header:
+                    header = ["timestamp", "input_fps"]
+                    header.extend([f"profiler_{idx}_fps" for idx in range(10)])
+                    handle.write(",".join(header) + "\n")
+                handle.write(line + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            next_deadline = now + interval_seconds
 
     def save_the_db(self):
         # save the db to the output dir of this analysis
@@ -568,6 +618,11 @@ class Main:
             # to be able to use the host IP as analyzer IP in alerts.json
             # should be after setting the input metadata with "input_type"
             # TLDR; dont change the order of this line
+            if self.args.growing:
+                self.print(
+                    f"Running on a growing zeek dir: " f"{self.args.growing}"
+                )
+                self.db.set_growing_zeek_dir()
             host_ips = self.host_ip_man.store_host_ip()
 
             self.print(
@@ -584,12 +639,6 @@ class Main:
             )
             self.profilers_manager.cpu_profiler_init()
             self.profilers_manager.memory_profiler_init()
-
-            if self.args.growing:
-                self.print(
-                    f"Running on a growing zeek dir: " f"{self.args.growing}"
-                )
-                self.db.set_growing_zeek_dir()
 
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
@@ -613,6 +662,7 @@ class Main:
                 }
 
             self.db.store_std_file(**std_files)
+            self.start_throughput_log_thread()
 
             # if slips is given a .rdb file, don't load the
             # modules as we don't need them
@@ -706,4 +756,5 @@ class Main:
             # comes here if zeek terminates while slips is still working
             pass
 
+        self.stop_throughput_log_thread()
         self.proc_man.shutdown_gracefully()
