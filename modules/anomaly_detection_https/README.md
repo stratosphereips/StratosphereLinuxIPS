@@ -529,7 +529,7 @@ What it generates:
 - hourly feature plot with individual values (`ssl_flows`, `unique_servers`, `new_servers`, `ja3_changes`, `known_server_avg_bytes`),
 - highlighted benign training window in all time plots (traffic time),
 - vertical markers for model-adaptation decisions:
-  green dashed = `drift_update`, red dashed = `suspicious_update` (very conservative / near-denied update),
+  green dashed = `drift_update` transition, red dashed = `suspicious_update` transition,
 - all timestamps shown in charts/tables are traffic (packet) time; only the "Generated" line at top is wall time,
 - confidence breakdown (`high` / `medium` / `low`) over time,
 - top anomaly reasons and affected profiles,
