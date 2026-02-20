@@ -168,6 +168,33 @@ def _marker_bins_from_series(values: List[int]) -> List[int]:
     return [i for i, c in enumerate(values) if c > 0]
 
 
+def update_transition_timestamps(
+    events: List[Event], event_types: List[str]
+) -> Dict[str, List[float]]:
+    """
+    Return timestamps only when update mode transitions happen.
+    This avoids plotting a line for every hour-close update.
+    """
+    allowed = set(event_types)
+    out: Dict[str, List[float]] = {e: [] for e in event_types}
+    prev_mode: Optional[str] = None
+    seen_hour_mode = set()
+    for e in events:
+        if e.event_ts is None or e.event_type not in allowed:
+            continue
+        ts = int(float(e.event_ts))
+        hour_start = ts - (ts % 3600)
+        # dedupe per (hour, mode)
+        key = (hour_start, e.event_type)
+        if key in seen_hour_mode:
+            continue
+        seen_hour_mode.add(key)
+        if e.event_type != prev_mode:
+            out[e.event_type].append(float(hour_start))
+            prev_mode = e.event_type
+    return out
+
+
 def build_hourly_feature_series(
     events: List[Event], bins: Dict[str, Any]
 ) -> Dict[str, List[float]]:
@@ -277,10 +304,13 @@ def svg_polyline_chart(
     x_labels: List[str],
     series_map: Dict[str, List[float]],
     colors: Dict[str, str],
-    drift_marker_bins: Optional[List[int]] = None,
-    suspicious_marker_bins: Optional[List[int]] = None,
-    training_start_bin: Optional[int] = None,
-    training_end_bin: Optional[int] = None,
+    x_min_ts: Optional[float] = None,
+    x_max_ts: Optional[float] = None,
+    training_start_ts: Optional[float] = None,
+    training_end_ts: Optional[float] = None,
+    drift_marker_ts: Optional[List[float]] = None,
+    suspicious_marker_ts: Optional[List[float]] = None,
+    training_fit_marker_ts: Optional[List[float]] = None,
     width: int = 1100,
     height: int = 320,
 ) -> str:
@@ -309,6 +339,13 @@ def svg_polyline_chart(
     def y_at(v: float) -> float:
         return margin_top + plot_h - (v / y_top) * plot_h
 
+    def x_at_ts(ts: float) -> float:
+        if x_min_ts is None or x_max_ts is None or x_max_ts <= x_min_ts:
+            return margin_left
+        ratio = (float(ts) - x_min_ts) / (x_max_ts - x_min_ts)
+        ratio = max(0.0, min(1.0, ratio))
+        return margin_left + ratio * plot_w
+
     def x_bounds(i: int) -> tuple[float, float]:
         if len(x_labels) == 1:
             return margin_left, margin_left + plot_w
@@ -320,14 +357,14 @@ def svg_polyline_chart(
 
     lines = []
     if (
-        training_start_bin is not None
-        and training_end_bin is not None
-        and 0 <= training_start_bin < len(x_labels)
-        and 0 <= training_end_bin < len(x_labels)
-        and training_start_bin <= training_end_bin
+        training_start_ts is not None
+        and training_end_ts is not None
+        and x_min_ts is not None
+        and x_max_ts is not None
+        and training_start_ts < training_end_ts
     ):
-        left, _ = x_bounds(training_start_bin)
-        _, right = x_bounds(training_end_bin)
+        left = x_at_ts(training_start_ts)
+        right = x_at_ts(training_end_ts)
         lines.append(
             f'<rect x="{left:.1f}" y="{margin_top}" width="{max(1.0, right-left):.1f}" '
             f'height="{plot_h:.1f}" fill="#93c5fd" fill-opacity="0.16">'
@@ -371,26 +408,33 @@ def svg_polyline_chart(
             f'font-size="11" fill="#6b7280">{escape(lbl)}</text>'
         )
 
-    drift_marker_bins = drift_marker_bins or []
-    suspicious_marker_bins = suspicious_marker_bins or []
-    for idx in drift_marker_bins:
-        if 0 <= idx < len(x_labels):
-            xx = x_at(idx)
-            lines.append(
-                f'<line x1="{xx:.1f}" y1="{margin_top}" x2="{xx:.1f}" y2="{margin_top+plot_h}" '
-                f'stroke="#16a34a" stroke-width="1.6" stroke-dasharray="5,3">'
-                f"<title>drift_update at {escape(x_labels[idx])}</title>"
-                f"</line>"
-            )
-    for idx in suspicious_marker_bins:
-        if 0 <= idx < len(x_labels):
-            xx = x_at(idx)
-            lines.append(
-                f'<line x1="{xx:.1f}" y1="{margin_top}" x2="{xx:.1f}" y2="{margin_top+plot_h}" '
-                f'stroke="#dc2626" stroke-width="1.6" stroke-dasharray="2,3">'
-                f"<title>suspicious_update (conservative/near-denied update) at {escape(x_labels[idx])}</title>"
-                f"</line>"
-            )
+    drift_marker_ts = drift_marker_ts or []
+    suspicious_marker_ts = suspicious_marker_ts or []
+    training_fit_marker_ts = training_fit_marker_ts or []
+    for ts in training_fit_marker_ts:
+        xx = x_at_ts(ts)
+        lines.append(
+            f'<line x1="{xx:.1f}" y1="{margin_top}" x2="{xx:.1f}" y2="{margin_top+plot_h}" '
+            f'stroke="#2563eb" stroke-width="1.2" stroke-dasharray="4,4">'
+            f"<title>training_fit at {escape(to_human_ts(ts))}</title>"
+            f"</line>"
+        )
+    for ts in drift_marker_ts:
+        xx = x_at_ts(ts)
+        lines.append(
+            f'<line x1="{xx:.1f}" y1="{margin_top}" x2="{xx:.1f}" y2="{margin_top+plot_h}" '
+            f'stroke="#16a34a" stroke-width="1.6" stroke-dasharray="5,3">'
+            f"<title>drift_update at {escape(to_human_ts(ts))}</title>"
+            f"</line>"
+        )
+    for ts in suspicious_marker_ts:
+        xx = x_at_ts(ts)
+        lines.append(
+            f'<line x1="{xx:.1f}" y1="{margin_top}" x2="{xx:.1f}" y2="{margin_top+plot_h}" '
+            f'stroke="#dc2626" stroke-width="1.6" stroke-dasharray="2,3">'
+            f"<title>suspicious_update at {escape(to_human_ts(ts))}</title>"
+            f"</line>"
+        )
 
     # Hover bands: moving the mouse over the plot shows values for the
     # nearest time-bin (all plotted series).
@@ -449,18 +493,18 @@ def svg_polyline_chart(
         f'<text x="{marker_legend_x+20}" y="{legend_y-5}" font-size="12" fill="#374151">drift_update</text>'
     )
     lines.append(
-        f'<line x1="{marker_legend_x+150}" y1="{legend_y-8}" x2="{marker_legend_x+164}" y2="{legend_y-8}" '
+        f'<line x1="{marker_legend_x+120}" y1="{legend_y-8}" x2="{marker_legend_x+134}" y2="{legend_y-8}" '
         f'stroke="#dc2626" stroke-width="1.6" stroke-dasharray="2,3" />'
     )
     lines.append(
-        f'<text x="{marker_legend_x+170}" y="{legend_y-5}" font-size="12" fill="#374151">suspicious_update</text>'
+        f'<text x="{marker_legend_x+140}" y="{legend_y-5}" font-size="12" fill="#374151">suspicious_update</text>'
     )
     lines.append(
-        f'<rect x="{marker_legend_x+350}" y="{legend_y-12}" width="14" height="8" '
+        f'<rect x="{marker_legend_x+330}" y="{legend_y-12}" width="14" height="8" '
         f'fill="#93c5fd" fill-opacity="0.35" />'
     )
     lines.append(
-        f'<text x="{marker_legend_x+370}" y="{legend_y-5}" font-size="12" fill="#374151">training period</text>'
+        f'<text x="{marker_legend_x+350}" y="{legend_y-5}" font-size="12" fill="#374151">training period</text>'
     )
 
     svg = (
@@ -579,27 +623,20 @@ def build_html(
     labels = bins["bins"]
     series = bins["series"]
     training = summary.get("training", {})
-    training_start_bin = None
-    training_end_bin = None
-    if labels and training.get("has_training"):
-        min_ts = float(bins.get("min_ts", 0.0))
-        width = float(bins.get("width", 1.0))
-        n_bins = int(bins.get("n_bins", len(labels)))
-        start_ts = float(training["start_ts"])
-        end_ts = float(training["end_ts"])
-        training_start_bin = max(0, min(n_bins - 1, int((start_ts - min_ts) / width)))
-        # Training end is exclusive: first post-training update at end_ts
-        # should not be rendered inside the blue training region.
-        training_end_bin = max(
-            0,
-            min(n_bins - 1, int(((end_ts - min_ts) - 1e-9) / width)),
-        )
-    drift_marker_bins = _marker_bins_from_series(
-        series.get("drift_update", [0] * len(labels))
+    min_ts = float(bins.get("min_ts", 0.0)) if labels else None
+    max_ts = float(bins.get("max_ts", 0.0)) if labels else None
+    training_start_ts = (
+        float(training["start_ts"]) if training.get("has_training") else None
     )
-    suspicious_marker_bins = _marker_bins_from_series(
-        series.get("suspicious_update", [0] * len(labels))
+    training_end_ts = (
+        float(training["end_ts"]) if training.get("has_training") else None
     )
+    transitions = update_transition_timestamps(
+        events, ["drift_update", "suspicious_update"]
+    )
+    drift_marker_ts = transitions["drift_update"]
+    suspicious_marker_ts = transitions["suspicious_update"]
+    training_fit_marker_ts: List[float] = []
     feature_series = build_hourly_feature_series(events, bins)
     confidence_series = build_confidence_score_series(events, bins)
 
@@ -611,10 +648,13 @@ def build_html(
             "flow_arrival": series.get("flow_arrival", [0] * len(labels)),
         },
         colors={"all_events": "#2563eb", "flow_arrival": "#0ea5e9"},
-        drift_marker_bins=drift_marker_bins,
-        suspicious_marker_bins=suspicious_marker_bins,
-        training_start_bin=training_start_bin,
-        training_end_bin=training_end_bin,
+        x_min_ts=min_ts,
+        x_max_ts=max_ts,
+        training_start_ts=training_start_ts,
+        training_end_ts=training_end_ts,
+        drift_marker_ts=drift_marker_ts,
+        suspicious_marker_ts=suspicious_marker_ts,
+        training_fit_marker_ts=training_fit_marker_ts,
     )
     chart_detections = svg_polyline_chart(
         "Detections Over Time (by confidence)",
@@ -631,10 +671,13 @@ def build_html(
             "detection_medium": "#d97706",
             "detection_low": "#f59e0b",
         },
-        drift_marker_bins=drift_marker_bins,
-        suspicious_marker_bins=suspicious_marker_bins,
-        training_start_bin=training_start_bin,
-        training_end_bin=training_end_bin,
+        x_min_ts=min_ts,
+        x_max_ts=max_ts,
+        training_start_ts=training_start_ts,
+        training_end_ts=training_end_ts,
+        drift_marker_ts=drift_marker_ts,
+        suspicious_marker_ts=suspicious_marker_ts,
+        training_fit_marker_ts=training_fit_marker_ts,
     )
     chart_hourly = svg_polyline_chart(
         "Hourly Detection Events Over Time",
@@ -644,10 +687,13 @@ def build_html(
             "flow_detection": series.get("flow_detection", [0] * len(labels)),
         },
         colors={"hourly_detection": "#7c3aed", "flow_detection": "#ef4444"},
-        drift_marker_bins=drift_marker_bins,
-        suspicious_marker_bins=suspicious_marker_bins,
-        training_start_bin=training_start_bin,
-        training_end_bin=training_end_bin,
+        x_min_ts=min_ts,
+        x_max_ts=max_ts,
+        training_start_ts=training_start_ts,
+        training_end_ts=training_end_ts,
+        drift_marker_ts=drift_marker_ts,
+        suspicious_marker_ts=suspicious_marker_ts,
+        training_fit_marker_ts=training_fit_marker_ts,
     )
     feature_colors = {
         "ssl_flows": "#2563eb",
@@ -671,10 +717,13 @@ def build_html(
             )
         },
         colors=feature_colors,
-        drift_marker_bins=drift_marker_bins,
-        suspicious_marker_bins=suspicious_marker_bins,
-        training_start_bin=training_start_bin,
-        training_end_bin=training_end_bin,
+        x_min_ts=min_ts,
+        x_max_ts=max_ts,
+        training_start_ts=training_start_ts,
+        training_end_ts=training_end_ts,
+        drift_marker_ts=drift_marker_ts,
+        suspicious_marker_ts=suspicious_marker_ts,
+        training_fit_marker_ts=training_fit_marker_ts,
     )
     chart_confidence = svg_polyline_chart(
         "Anomaly Confidence Score Over Time",
@@ -695,10 +744,13 @@ def build_html(
             "confidence_max": "#b91c1c",
             "detections_in_bin": "#2563eb",
         },
-        drift_marker_bins=drift_marker_bins,
-        suspicious_marker_bins=suspicious_marker_bins,
-        training_start_bin=training_start_bin,
-        training_end_bin=training_end_bin,
+        x_min_ts=min_ts,
+        x_max_ts=max_ts,
+        training_start_ts=training_start_ts,
+        training_end_ts=training_end_ts,
+        drift_marker_ts=drift_marker_ts,
+        suspicious_marker_ts=suspicious_marker_ts,
+        training_fit_marker_ts=training_fit_marker_ts,
     )
 
     top_events = summary["event_counts"].most_common(15)
@@ -763,7 +815,7 @@ def build_html(
   <div class="card">
     <p class="small">
       Tip: move your mouse anywhere inside the plot area to see exact values for that time-bin.
-      Vertical lines: green dashed = drift update, red dashed = suspicious update (very conservative / near-denied update).
+      Vertical lines: green dashed = drift update transition, red dashed = suspicious update transition.
     </p>
   </div>
 
