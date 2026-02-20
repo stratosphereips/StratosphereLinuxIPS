@@ -101,17 +101,7 @@ class EvidenceHandler(ICore):
         # A thread that handing I/O to disk (writing evidence to log files)
         self.logger_stop_signal = threading.Event()
         self.evidence_logger_q = multiprocessing.Queue()
-        self.evidence_logger = EvidenceLogger(
-            logger_stop_signal=self.logger_stop_signal,
-            evidence_logger_q=self.evidence_logger_q,
-            output_dir=self.output_dir,
-        )
-        self.logger_thread = threading.Thread(
-            target=self.evidence_logger.run_logger_thread,
-            daemon=True,
-            name="thread_that_handles_evidence_logging_to_disk",
-        )
-        utils.start_thread(self.logger_thread, self.db)
+        self.started = False
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -585,6 +575,22 @@ class EvidenceHandler(ICore):
                     accumulated_threat_level: float = (
                         self.db.get_accumulated_threat_level(profileid, twid)
                     )
+
+                if not self.started:
+                    self.evidence_logger = EvidenceLogger(
+                        logger_stop_signal=self.logger_stop_signal,
+                        evidence_logger_q=self.evidence_logger_q,
+                        output_dir=self.output_dir,
+                        slips_starttime=self.db.get_slips_start_time(),
+                        first_flow_time=self.db.get_first_flow_time(),
+                    )
+                    self.logger_thread = threading.Thread(
+                        target=self.evidence_logger.run_logger_thread,
+                        daemon=True,
+                        name="thread_that_handles_evidence_logging_to_disk",
+                    )
+                    utils.start_thread(self.logger_thread, self.db)
+                    self.started = True
 
                 # add to alerts.json
                 self.add_evidence_to_json_log_file(

@@ -2,7 +2,6 @@ import json
 import os
 import queue
 import threading
-import time
 import traceback
 from datetime import datetime
 import csv
@@ -17,6 +16,8 @@ class EvidenceLogger:
         logger_stop_signal: threading.Event,
         evidence_logger_q: queue.Queue,
         output_dir: str,
+        slips_starttime=None,
+        first_flow_time=None,
     ):
         self.logger_stop_signal = logger_stop_signal
         self.evidence_logger_q = evidence_logger_q
@@ -35,7 +36,8 @@ class EvidenceLogger:
             self.latencyfile.name, self.UID, self.GID
         )
         self._init_latency_csv()
-        self.slips_starttime = time.time()
+        self.slips_starttime = float(slips_starttime)
+        self.first_flow_time = float(first_flow_time)
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -67,7 +69,10 @@ class EvidenceLogger:
             self.print("Error in evidence_logger.print_to_alerts_logfile()")
             self.print(traceback.format_exc(), 0, 1)
 
-    def print_to_alerts_json(self, idmef_evidence: dict):
+    def print_to_alerts_json(
+        self,
+        idmef_evidence: dict,
+    ):
         try:
             json.dump(idmef_evidence, self.jsonfile)
             self.jsonfile.write("\n")
@@ -76,7 +81,8 @@ class EvidenceLogger:
             self.log_latency_if_evidence(idmef_evidence)
         except KeyboardInterrupt:
             return
-        except Exception:
+        except Exception as e:
+            print(f"@@@@@@@@@@@@@@@@ {e}!!!!!!!!!!!!!!!!!!!!!!!!!!!")
             return
 
     def _init_latency_csv(self):
@@ -89,32 +95,52 @@ class EvidenceLogger:
         except Exception:
             return
 
-    def log_latency_if_evidence(self, idmef_msg: dict):
-        try:
-            if idmef_msg.get("Status") != "Event":
-                return
-            start_time = idmef_msg.get("StartTime")
-            create_time = idmef_msg.get("CreateTime")
-            if not start_time or not create_time:
-                return
-            start_dt = datetime.fromisoformat(start_time)
-            create_dt = datetime.fromisoformat(create_time)
-
-            # assuming we're given a pcap/dir with flows starting from ts 0
-            latency_seconds = (
-                create_dt - (start_dt + self.slips_starttime)
-            ).total_seconds()
-            writer = csv.writer(self.latencyfile)
-            writer.writerow(
-                [
-                    idmef_msg.get("ID"),
-                    time.time() - self.slips_starttime,  # to start from time 0
-                    latency_seconds,
-                ]
-            )
-            self.latencyfile.flush()
-        except Exception:
+    def log_latency_if_evidence(
+        self,
+        idmef_msg: dict,
+    ):
+        """
+        Here the latency is "how much time passed between the flow start
+        (relative to the pcap start) and the detection time (relative to the script start)"
+        aka
+        "how much time did slips take to detect the given evidence since
+        the evidence flow"
+        we basically pretend that the slips start time is 0, and the first
+        pcap flow is also 0, and we measure how much time passed between
+        the flow start and slips detection
+        """
+        # try:
+        if idmef_msg.get("Status") != "Event":
             return
+        start_time = idmef_msg.get("StartTime")
+        create_time = idmef_msg.get("CreateTime")
+        if not start_time or not create_time:
+            return
+
+        # 1. Get the 'Age' of the flow relative to the PCAP start
+        flow_ts = datetime.fromisoformat(start_time).timestamp()
+        pcap_offset = flow_ts - self.first_flow_time
+
+        # 2. Get the 'Age' of the detection relative to the Script start
+        # CreateTime is usually 'now', but we parse it to be safe
+        detect_ts = datetime.fromisoformat(create_time).timestamp()
+        script_offset = detect_ts - self.slips_starttime
+
+        # 3. Latency is the difference between these two offsets
+        latency_seconds = script_offset - pcap_offset
+
+        # Ensure we don't have negative latency due to clock drift or async buffering
+        latency_seconds = max(0, latency_seconds)
+
+        writer = csv.writer(self.latencyfile)
+        writer.writerow(
+            [
+                idmef_msg.get("ID"),
+                script_offset,  # Log when it happened in 'script time'
+                latency_seconds,
+            ]
+        )
+        self.latencyfile.flush()
 
     def run_logger_thread(self):
         """
@@ -138,7 +164,9 @@ class EvidenceLogger:
                 self.print_to_alerts_logfile(msg["to_log"])
 
             elif destination == "alerts.json":
-                self.print_to_alerts_json(msg["to_log"])
+                self.print_to_alerts_json(
+                    msg["to_log"],
+                )
 
         self.shutdown_gracefully()
 
