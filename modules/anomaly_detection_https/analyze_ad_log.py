@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -316,10 +317,27 @@ def svg_polyline_chart(
 ) -> str:
     if not x_labels:
         return f"<h3>{escape(title)}</h3><p>No data.</p>"
+    chart_id = f"chart_{uuid4().hex[:8]}"
+
+    legend_items = []
+    for name in series_map.keys():
+        legend_items.append(("series", name))
+    legend_items.extend(
+        [
+            ("drift", "drift_update"),
+            ("suspicious", "suspicious_update"),
+            ("training", "training_period"),
+        ]
+    )
+    legend_item_w = 190
+    legend_row_h = 18
 
     margin_left = 60
     margin_right = 20
-    margin_top = 30
+    usable_w_for_legend = width - margin_left - margin_right
+    legend_cols = max(1, usable_w_for_legend // legend_item_w)
+    legend_rows = (len(legend_items) + legend_cols - 1) // legend_cols
+    margin_top = 30 + legend_rows * legend_row_h + 8
     margin_bottom = 70
     plot_w = width - margin_left - margin_right
     plot_h = height - margin_top - margin_bottom
@@ -456,21 +474,12 @@ def svg_polyline_chart(
         )
 
     # series polylines + hoverable points
-    legend_y = 14
-    legend_x = margin_left
-    for i, (name, vals) in enumerate(series_map.items()):
+    for name, vals in series_map.items():
         pts = " ".join(f"{x_at(j):.1f},{y_at(v):.1f}" for j, v in enumerate(vals))
         color = colors.get(name, "#2563eb")
         lines.append(
             f'<polyline points="{pts}" fill="none" stroke="{color}" '
             f'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />'
-        )
-        lx = legend_x + i * 220
-        lines.append(
-            f'<rect x="{lx}" y="{legend_y-9}" width="14" height="4" fill="{color}" />'
-        )
-        lines.append(
-            f'<text x="{lx+20}" y="{legend_y-5}" font-size="12" fill="#374151">{escape(name)}</text>'
         )
         # Add point markers so hovering shows exact bin/value.
         for j, v in enumerate(vals):
@@ -484,37 +493,105 @@ def svg_polyline_chart(
                 f"</circle>"
             )
 
-    marker_legend_x = legend_x + max(1, len(series_map)) * 220
-    lines.append(
-        f'<line x1="{marker_legend_x}" y1="{legend_y-8}" x2="{marker_legend_x+14}" y2="{legend_y-8}" '
-        f'stroke="#16a34a" stroke-width="1.6" stroke-dasharray="5,3" />'
-    )
-    lines.append(
-        f'<text x="{marker_legend_x+20}" y="{legend_y-5}" font-size="12" fill="#374151">drift_update</text>'
-    )
-    lines.append(
-        f'<line x1="{marker_legend_x+120}" y1="{legend_y-8}" x2="{marker_legend_x+134}" y2="{legend_y-8}" '
-        f'stroke="#dc2626" stroke-width="1.6" stroke-dasharray="2,3" />'
-    )
-    lines.append(
-        f'<text x="{marker_legend_x+140}" y="{legend_y-5}" font-size="12" fill="#374151">suspicious_update</text>'
-    )
-    lines.append(
-        f'<rect x="{marker_legend_x+330}" y="{legend_y-12}" width="14" height="8" '
-        f'fill="#93c5fd" fill-opacity="0.35" />'
-    )
-    lines.append(
-        f'<text x="{marker_legend_x+350}" y="{legend_y-5}" font-size="12" fill="#374151">training period</text>'
-    )
+    legend_start_x = margin_left
+    legend_start_y = 14
+
+    for i, (kind, name) in enumerate(legend_items):
+        row = i // legend_cols
+        col = i % legend_cols
+        lx = legend_start_x + col * legend_item_w
+        ly = legend_start_y + row * legend_row_h
+        if kind == "series":
+            color = colors.get(name, "#2563eb")
+            lines.append(
+                f'<rect x="{lx}" y="{ly-9}" width="14" height="4" fill="{color}" />'
+            )
+            label = name
+        elif kind == "drift":
+            lines.append(
+                f'<line x1="{lx}" y1="{ly-8}" x2="{lx+14}" y2="{ly-8}" '
+                f'stroke="#16a34a" stroke-width="1.6" stroke-dasharray="5,3" />'
+            )
+            label = name
+        elif kind == "suspicious":
+            lines.append(
+                f'<line x1="{lx}" y1="{ly-8}" x2="{lx+14}" y2="{ly-8}" '
+                f'stroke="#dc2626" stroke-width="1.6" stroke-dasharray="2,3" />'
+            )
+            label = name
+        else:
+            lines.append(
+                f'<rect x="{lx}" y="{ly-12}" width="14" height="8" '
+                f'fill="#93c5fd" fill-opacity="0.35" />'
+            )
+            label = "training_period"
+        lines.append(
+            f'<text x="{lx+20}" y="{ly-5}" font-size="12" fill="#374151">{escape(label)}</text>'
+        )
 
     svg = (
         f'<h3>{escape(title)}</h3>'
-        f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
+        f'<svg id="{chart_id}" class="ad-chart" width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
         f'xmlns="http://www.w3.org/2000/svg" role="img">'
         + "".join(lines)
         + "</svg>"
+        + f'<div class="small chart-controls">Use mouse wheel to zoom, drag to pan, Shift+drag to zoom X, double-click to reset.</div>'
     )
     return svg
+
+
+def host_anomaly_rows(events: List[Event]) -> List[tuple]:
+    host_stats: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {
+            "total": 0,
+            "flow": 0,
+            "hourly": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "top_reason": "",
+            "reason_count": 0,
+            "reason_ctr": Counter(),
+        }
+    )
+    for e in events:
+        if e.event_type not in ("flow_detection", "hourly_detection"):
+            continue
+        profile = str(e.metrics.get("profileid") or "unknown")
+        s = host_stats[profile]
+        s["total"] += 1
+        if e.event_type == "flow_detection":
+            s["flow"] += 1
+            reasons = e.metrics.get("flow_anomalies", [])
+        else:
+            s["hourly"] += 1
+            reasons = e.metrics.get("anomalies", [])
+        conf = str(e.metrics.get("confidence", "")).lower()
+        if conf in ("high", "medium", "low"):
+            s[conf] += 1
+        for r in reasons:
+            s["reason_ctr"][str(r.get("feature", "unknown"))] += 1
+
+    sortable_rows: List[tuple] = []
+    for profile, s in host_stats.items():
+        if s["reason_ctr"]:
+            top_reason, reason_count = s["reason_ctr"].most_common(1)[0]
+        else:
+            top_reason, reason_count = "n/a", 0
+        sortable_rows.append(
+            (
+                s["total"],
+                (
+                    profile,
+                    f"total={s['total']}, flow={s['flow']}, hourly={s['hourly']}, "
+                    f"high={s['high']}, medium={s['medium']}, low={s['low']}, "
+                    f"top_reason={top_reason} ({reason_count})",
+                ),
+            )
+        )
+    sortable_rows.sort(key=lambda item: item[0], reverse=True)
+    rows = [item[1] for item in sortable_rows]
+    return rows
 
 
 def summarize(events: List[Event]) -> Dict[str, Any]:
@@ -754,6 +831,7 @@ def build_html(
     )
 
     top_events = summary["event_counts"].most_common(15)
+    host_rows = host_anomaly_rows(events)
     recent = events[-20:]
     recent_rows = []
     for e in recent:
@@ -788,6 +866,7 @@ def build_html(
     th {{ background: #f3f4f6; }}
     code {{ background: #f3f4f6; padding: 2px 4px; border-radius: 4px; }}
     .small {{ color: #6b7280; font-size: 13px; }}
+    .chart-controls {{ margin-top: 4px; }}
   </style>
 </head>
 <body>
@@ -858,12 +937,111 @@ def build_html(
   </div>
 
   <div class="card">
+    <h3>Anomaly Summary by Host</h3>
+    <table>
+      <thead><tr><th>Profile</th><th>Summary</th></tr></thead>
+      <tbody>{table_rows(host_rows)}</tbody>
+    </table>
+  </div>
+
+  <div class="card">
     <h3>Recent Events (latest 20)</h3>
     <table>
       <thead><tr><th>Timestamp + Event</th><th>Details</th></tr></thead>
       <tbody>{table_rows(recent_rows)}</tbody>
     </table>
   </div>
+<script>
+(() => {{
+  const svgs = document.querySelectorAll('svg.ad-chart');
+  svgs.forEach((svg) => {{
+    const orig = svg.getAttribute('viewBox');
+    if (!orig) return;
+    let vb = orig.split(' ').map(Number);
+    let isPanning = false;
+    let panStart = null;
+    let dragRect = null;
+    let dragStart = null;
+
+    const setVB = () => svg.setAttribute('viewBox', vb.join(' '));
+    const resetVB = () => {{ vb = orig.split(' ').map(Number); setVB(); }};
+
+    svg.addEventListener('dblclick', resetVB);
+
+    svg.addEventListener('wheel', (e) => {{
+      e.preventDefault();
+      const rect = svg.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) / rect.width;
+      const my = (e.clientY - rect.top) / rect.height;
+      const scale = e.deltaY < 0 ? 0.9 : 1.1;
+      const [x,y,w,h] = vb;
+      const nw = Math.max(20, w * scale);
+      const nh = Math.max(20, h * scale);
+      vb[0] = x + (w - nw) * mx;
+      vb[1] = y + (h - nh) * my;
+      vb[2] = nw;
+      vb[3] = nh;
+      setVB();
+    }}, {{ passive:false }});
+
+    svg.addEventListener('mousedown', (e) => {{
+      if (e.shiftKey) {{
+        dragStart = {{ x: e.offsetX, y: e.offsetY }};
+        if (!dragRect) {{
+          dragRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          dragRect.setAttribute('fill', '#93c5fd');
+          dragRect.setAttribute('fill-opacity', '0.25');
+          dragRect.setAttribute('stroke', '#2563eb');
+          dragRect.setAttribute('stroke-width', '1');
+          svg.appendChild(dragRect);
+        }}
+      }} else {{
+        isPanning = true;
+        panStart = {{ x: e.clientX, y: e.clientY, vb: vb.slice() }};
+      }}
+    }});
+
+    svg.addEventListener('mousemove', (e) => {{
+      if (dragStart && dragRect) {{
+        const x = Math.min(dragStart.x, e.offsetX);
+        const w = Math.abs(e.offsetX - dragStart.x);
+        dragRect.setAttribute('x', x);
+        dragRect.setAttribute('y', 0);
+        dragRect.setAttribute('width', w);
+        dragRect.setAttribute('height', svg.clientHeight);
+      }} else if (isPanning && panStart) {{
+        const rect = svg.getBoundingClientRect();
+        const dx = (e.clientX - panStart.x) * (panStart.vb[2] / rect.width);
+        const dy = (e.clientY - panStart.y) * (panStart.vb[3] / rect.height);
+        vb[0] = panStart.vb[0] - dx;
+        vb[1] = panStart.vb[1] - dy;
+        setVB();
+      }}
+    }});
+
+    window.addEventListener('mouseup', (e) => {{
+      if (dragStart && dragRect) {{
+        const rect = svg.getBoundingClientRect();
+        const x1 = Math.min(dragStart.x, e.offsetX);
+        const x2 = Math.max(dragStart.x, e.offsetX);
+        if (x2 - x1 > 8) {{
+          const [vx,vy,vw,vh] = vb;
+          const nx1 = vx + (x1 / rect.width) * vw;
+          const nx2 = vx + (x2 / rect.width) * vw;
+          vb[0] = nx1;
+          vb[2] = Math.max(20, nx2 - nx1);
+          setVB();
+        }}
+        dragRect.remove();
+        dragRect = null;
+        dragStart = null;
+      }}
+      isPanning = false;
+      panStart = null;
+    }});
+  }});
+}})();
+</script>
 </body>
 </html>
 """
