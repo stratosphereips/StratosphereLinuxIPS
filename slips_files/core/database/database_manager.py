@@ -887,9 +887,6 @@ class DBManager:
     def is_blocked_profile_and_tw(self, *args, **kwargs):
         return self.rdb.is_blocked_profile_and_tw(*args, **kwargs)
 
-    def was_profile_and_tw_modified(self, *args, **kwargs):
-        return self.rdb.was_profile_and_tw_modified(*args, **kwargs)
-
     def add_software_to_profile(self, *args, **kwargs):
         return self.rdb.add_software_to_profile(*args, **kwargs)
 

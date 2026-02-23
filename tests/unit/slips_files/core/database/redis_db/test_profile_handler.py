@@ -219,32 +219,6 @@ def test_get_blocked_profiles_and_timewindows(hget_return_value, expected_tws):
 
 
 @pytest.mark.parametrize(
-    "zrank_return_value, expected_was_modified",
-    [
-        # Testcase 1: TW was modified
-        (1, True),
-        # Testcase 2: TW was not modified
-        (None, False),
-    ],
-)
-def test_was_profile_and_tw_modified(
-    zrank_return_value, expected_was_modified
-):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    profileid = "profile_1"
-    twid = "timewindow1"
-    handler.r.zrank.return_value = zrank_return_value
-
-    was_modified = handler.was_profile_and_tw_modified(profileid, twid)
-
-    handler.r.zrank.assert_called_with(
-        "ModifiedTW", f"{profileid}{handler.separator}{twid}"
-    )
-    assert was_modified == expected_was_modified
-
-
-@pytest.mark.parametrize(
     "hget_return_value, expected_total_flows",
     [  # Test case 1: Total flows exist
         (b"1000", 1000),
