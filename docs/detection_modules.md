@@ -126,6 +126,12 @@ tr:nth-child(even) {
 
 </table>
 
+## HTTPS Anomaly Detection Module
+
+For the full technical description of the HTTPS anomaly detector (features, training, adaptation, z-score logic, evidence format, and configuration), see:
+
+- [HTTPS Anomaly Detection](https_anomaly_detection.md)
+
 
 
 ### Virustotal Module
