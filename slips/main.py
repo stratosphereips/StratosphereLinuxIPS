@@ -564,6 +564,12 @@ class Main:
                     "input_type": self.input_type,
                 }
             )
+
+            if self.args.growing:
+                self.print(
+                    f"Running on a growing zeek dir: " f"{self.args.growing}"
+                )
+                self.db.set_growing_zeek_dir()
             # this line should happen as soon as we start the db
             # to be able to use the host IP as analyzer IP in alerts.json
             # should be after setting the input metadata with "input_type"
@@ -584,12 +590,6 @@ class Main:
             )
             self.profilers_manager.cpu_profiler_init()
             self.profilers_manager.memory_profiler_init()
-
-            if self.args.growing:
-                self.print(
-                    f"Running on a growing zeek dir: " f"{self.args.growing}"
-                )
-                self.db.set_growing_zeek_dir()
 
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
@@ -688,11 +688,12 @@ class Main:
                 self.print_gw_info()
                 self.print_localnet_info()
 
-                # if you remove the below logic anywhere before the
-                # above sleep() statement, it will try to get the return
-                # value very quickly before
-                # the webinterface thread sets it. so don't:D
+                # if you remove check_if_webinterface_started() call anywhere
+                # before the above sleep(), it will try to get the return
+                # value very quickly before  the webinterface thread sets
+                # it. so don't:D
                 self.ui_man.check_if_webinterface_started()
+
                 self.update_stats()
                 self.db.check_tw_to_close()
                 self.db.ping()
