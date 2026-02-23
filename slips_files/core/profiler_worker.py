@@ -165,7 +165,10 @@ class ProfilerWorker(IModule):
         self.db.add_ips(profileid, twid, flow, role)
         # Add the flow with all the fields interpreted to the sqlite db
         self.aid_manager.submit_aid_task(flow, profileid, twid, self.label)
-        self.db.mark_profile_tw_as_modified(profileid, twid, "")
+
+        # now that slips successfully parsed the flow,
+        # mark this profile as modified
+        self.db.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
 
     def get_aid_and_store_flow_in_the_db(
         self,
@@ -242,7 +245,7 @@ class ProfilerWorker(IModule):
 
         # now that slips successfully parsed the flow,
         # mark this profile as modified
-        self.db.mark_profile_tw_as_modified(profileid, twid, "")
+        self.db.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
         return True
 
     def get_rev_profile(self, flow):
