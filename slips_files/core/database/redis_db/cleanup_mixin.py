@@ -16,7 +16,7 @@ class CleanupMixin:
     get_blocked_timewindows_of_profile: Callable[..., Any]
     print: Callable[..., Any]
 
-    name = "DB"
+    name = "CleanupMixin"
 
     def _del_all_profile_tw_keys(self, profileid: str, twid: str, pipe):
         """

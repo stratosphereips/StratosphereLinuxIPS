@@ -1319,8 +1319,6 @@ class ProfileHandler:
         data = json.dumps(data)
         mapping = {data: timestamp}
         self.r.zadd(key, mapping)
-        # Mark the tw as modified since the timeline line is new data in the TW
-        self.mark_profile_tw_as_modified(profileid, twid, timestamp="")
 
     def get_timeline_last_lines(
         self, profileid, twid, first_index: int
