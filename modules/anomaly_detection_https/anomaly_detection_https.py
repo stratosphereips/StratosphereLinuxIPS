@@ -459,28 +459,51 @@ class AnomalyDetectionHTTPS(IModule):
         threat_level = self.threat_level_from_confidence_level(
             str(confidence.get("level", "low"))
         )
-        details = {
-            "kind": kind,
-            "confidence_level": confidence.get("level", "low"),
-            "confidence_score": round(confidence_score, 4),
-            "confidence_factors": {
-                "severity": confidence.get("severity"),
-                "persistence": confidence.get("persistence"),
-                "baseline_quality": confidence.get("baseline_quality"),
-                "multi_signal": confidence.get("multi_signal"),
-                "max_z": confidence.get("max_z"),
-            },
-            "server": server,
-            "sni": sni,
-            "daddr": daddr,
-        }
-        if extra:
-            details.update(extra)
+        reason_parts = []
+        for reason in reasons:
+            feature = str(reason.get("feature", "unknown"))
+            value = reason.get("value", "")
+            mean = reason.get("mean")
+            zscore = reason.get("zscore")
+            threshold = (
+                self.flow_zscore_threshold
+                if feature == "bytes_to_known_server"
+                else self.hourly_zscore_threshold
+            )
+
+            if feature == "new_server":
+                reason_name = "New Server"
+                why = "not seen before in this host baseline"
+            elif feature == "new_ja3s":
+                reason_name = "New JA3S"
+                why = "not seen before in this host baseline"
+            elif feature == "bytes_to_known_server":
+                reason_name = "Bytes to Known Server"
+                why = (
+                    f"bytes above normal (z-score={zscore}; threshold={threshold:.2f})"
+                    if zscore is not None
+                    else "bytes deviates from learned baseline"
+                )
+            else:
+                reason_name = feature.replace("_", " ").title()
+                if zscore is not None and mean is not None:
+                    why = (
+                        "value above baseline "
+                        f"(mean={mean}; z-score={zscore}; threshold={threshold:.2f})"
+                    )
+                elif zscore is not None:
+                    why = f"value above baseline (z-score={zscore}; threshold={threshold:.2f})"
+                else:
+                    why = "value deviates from learned baseline"
+
+            reason_parts.append(
+                f"reason={reason_name}; value={value}; why={why}"
+            )
+
+        reasons_text = " | ".join(reason_parts) if reason_parts else "reason=Unknown; value=; why=not provided"
         description = (
-            "HTTPS anomaly detected. "
-            f"kind={kind}, confidence={confidence.get('level')} "
-            f"({confidence_score:.3f}), details={json.dumps(details, sort_keys=True)}, "
-            f"reasons={json.dumps(reasons, sort_keys=True)}."
+            f"HTTPS anomaly: type={kind}; confidence={confidence.get('level')} "
+            f"({confidence_score:.3f}); {reasons_text}."
         )
 
         uid_list = [uid] if uid else []
