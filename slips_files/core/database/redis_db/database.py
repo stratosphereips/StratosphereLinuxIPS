@@ -713,16 +713,14 @@ class RedisDB(
             self.constants.ANALYSIS, "evidence_detection_threshold"
         )
 
-    def get_input_type(self) -> str:
+    def get_input_type(self) -> InputType | None:
         """
         gets input type from the db
-        returns one of the following "stdin", "pcap", "interface",
-        "zeek_log_file", "zeek_folder", "stdin", "nfdump", "binetflow",
-        "suricata"
         """
-        return self.r.hget(
+        input = self.r.hget(
             self.constants.ANALYSIS, self.constants.ANALYSIS_INPUT_TYPE
         )
+        return InputType.coerce(input)
 
     def get_interface(self) -> str:
         return self.r.hget(
@@ -1296,10 +1294,13 @@ class RedisDB(
         Slips runs non-stop in case of an interface or a growing zeek dir,
         in these 2 cases, it only stops on ctrl+c
         """
-        return (
-            self.get_input_type() in (InputType.STDIN, InputType.INTERFACE)
+        input: InputType | None = self.get_input_type()
+        if (
+            input in (InputType.STDIN, InputType.INTERFACE)
             or self.args.growing
-        )
+        ):
+            return True
+        return False
 
     def set_passive_dns(self, ip, data):
         """
