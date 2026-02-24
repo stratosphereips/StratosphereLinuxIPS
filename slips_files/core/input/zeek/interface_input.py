@@ -86,8 +86,6 @@ class InterfaceInput(IInputHandler):
             )
 
         self.input.lines = self.input.zeek_utils.read_zeek_files()
-        self.input.print_lines_read()
-        self.input.mark_self_as_done_processing()
         return True
 
     def shutdown_gracefully(self):

@@ -24,21 +24,22 @@ class ZeekDirInput(IInputHandler):
         This func does not run when slips is running on an interface with
         -i or -ap
         """
-        # wait max 10 seconds before stopping slips if no new flows are read
-        self.input.bro_timeout = 10
-        growing_zeek_dir: bool = self.db.is_growing_zeek_dir()
+        growing_zeek_dir: bool = self.input.args.growing
         if growing_zeek_dir:
-            # slips is given a dir that is growing i.e zeek dir running on an
-            # interface
-            # don't stop zeek or slips
+            # slips is given a dir that is growing i.e zeek dir
+            # currently analyzing an interface. don't stop zeek or slips
             self.input.bro_timeout = float("inf")
+            interface = self.input.args.interface
+        else:
+            # wait max 10 seconds before stopping slips if no new flows are read
+            self.input.bro_timeout = 10
+
+            # if slips is just reading a finite zeek dir, there's no way to
+            # know the interface, hence the "default"
+            interface = "default"
 
         self.input.zeek_dir = self.input.given_path
-        # if slips is just reading a finite zeek dir, there's no way to
-        # know the interface
-        interface = "default"
-        if self.input.args.growing:
-            interface = self.input.args.interface
+
         self.observer.start(self.input.zeek_dir, interface)
         if self.input.is_running_non_stop:
             self.file_remover.start()
@@ -74,14 +75,13 @@ class ZeekDirInput(IInputHandler):
 
         if total_flows == 0 and not growing_zeek_dir:
             # we're given an empty dir/ zeek logfile
-            self.input.mark_self_as_done_processing()
             return True
 
         self.input.total_flows = total_flows
         self.db.set_input_metadata({"total_flows": total_flows})
+        # needed in store_flows_read_per_second()
         self.input.lines = self.input.zeek_utils.read_zeek_files()
-        self.input.print_lines_read()
-        self.input.mark_self_as_done_processing()
+
         return True
 
     def shutdown_gracefully(self):
