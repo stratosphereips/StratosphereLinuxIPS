@@ -6,7 +6,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, Optional, Set, List
+from typing import Dict, Optional, Set, List, Any
 
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.flow_classifier import FlowClassifier
@@ -25,6 +25,11 @@ from slips_files.core.structures.evidence import (
     TimeWindow,
     Victim,
 )
+
+try:
+    from river.drift import ADWIN
+except ImportError:
+    ADWIN = None
 
 
 @dataclass
@@ -144,6 +149,7 @@ class HostState:
     server_bytes_models: Dict[str, EWMAStats] = field(default_factory=dict)
     anomaly_history_ts: List[float] = field(default_factory=list)
     last_twid: int = 0
+    adwin: Optional[Any] = None
 
 
 class AnomalyDetectionHTTPS(IModule):
@@ -179,11 +185,24 @@ class AnomalyDetectionHTTPS(IModule):
                 "min_baseline_points": self.min_baseline_points,
                 "max_small_flow_anomalies": self.max_small_flow_anomalies,
                 "ja3_min_variants_per_server": self.ja3_min_variants_per_server,
+                "requested_use_adwin_drift": self.requested_use_adwin_drift,
+                "use_adwin_drift": self.use_adwin_drift,
+                "adwin_available": self.adwin_available,
+                "adwin_delta": self.adwin_delta,
+                "adwin_clock": self.adwin_clock,
+                "adwin_grace_period": self.adwin_grace_period,
+                "adwin_min_window_length": self.adwin_min_window_length,
                 "log_verbosity": self.log_verbosity,
                 "log_emojis": self.log_emojis,
                 "log_colors": self.log_colors,
             },
         )
+        if self.requested_use_adwin_drift and not self.adwin_available:
+            self.log_event(
+                1,
+                "module_start",
+                "ADWIN requested but river is not installed; using pre-ADWIN drift logic.",
+            )
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -200,6 +219,19 @@ class AnomalyDetectionHTTPS(IModule):
         )
         self.ja3_min_variants_per_server = (
             conf.https_anomaly_ja3_min_variants_per_server()
+        )
+        self.requested_use_adwin_drift = (
+            conf.https_anomaly_use_adwin_drift()
+        )
+        self.adwin_delta = conf.https_anomaly_adwin_delta()
+        self.adwin_clock = conf.https_anomaly_adwin_clock()
+        self.adwin_grace_period = conf.https_anomaly_adwin_grace_period()
+        self.adwin_min_window_length = (
+            conf.https_anomaly_adwin_min_window_length()
+        )
+        self.adwin_available = ADWIN is not None
+        self.use_adwin_drift = (
+            self.requested_use_adwin_drift and self.adwin_available
         )
         self.log_verbosity = conf.https_anomaly_log_verbosity()
         # Operational logs always use emojis and colors.
@@ -238,6 +270,8 @@ class AnomalyDetectionHTTPS(IModule):
             "flow_arrival": "\033[36m",
             "hour_close": "\033[36m",
             "training_fit": "\033[34m",
+            "baseline_update": "\033[34m",
+            "adwin_drift_signal": "\033[35m",
             "drift_update": "\033[35m",
             "suspicious_update": "\033[35m",
             "model_update": "\033[34m",
@@ -254,6 +288,8 @@ class AnomalyDetectionHTTPS(IModule):
             "flow_arrival": "📥",
             "hour_close": "🕐",
             "training_fit": "🎓",
+            "baseline_update": "📈",
+            "adwin_drift_signal": "📉",
             "drift_update": "🌊",
             "suspicious_update": "🐢",
             "model_update": "🧠",
@@ -324,6 +360,16 @@ class AnomalyDetectionHTTPS(IModule):
         if server not in state.server_bytes_models:
             state.server_bytes_models[server] = EWMAStats()
         return state.server_bytes_models[server]
+
+    def get_or_create_adwin(self, state: HostState):
+        if state.adwin is None and self.adwin_available:
+            state.adwin = ADWIN(
+                delta=self.adwin_delta,
+                clock=self.adwin_clock,
+                grace_period=self.adwin_grace_period,
+                min_window_length=self.adwin_min_window_length,
+            )
+        return state.adwin
 
     def ensure_hour_bucket(self, profileid: str, ts: float) -> HostState:
         state = self.host_states.setdefault(profileid, HostState())
@@ -743,40 +789,115 @@ class AnomalyDetectionHTTPS(IModule):
                 },
             )
             update_alpha = None
-        elif (
-            hourly_score <= self.adaptation_score_threshold
-            and bucket.flow_anomaly_count <= self.max_small_flow_anomalies
-        ):
-            # Small anomalies are treated as benign drift and adapted.
-            update_alpha = self.drift_alpha
-            update_mode = "drift_update"
-            self.log_event(
-                1,
-                "drift_update",
-                "Small anomalies treated as drift; model adapted.",
-                traffic_ts=bucket.start_ts,
-                metrics={
-                    "profileid": profileid,
-                    "hourly_score": round(hourly_score, 3),
-                    "flow_anomaly_count": bucket.flow_anomaly_count,
-                    "alpha": update_alpha,
-                },
-            )
         else:
-            update_alpha = self.suspicious_alpha
-            update_mode = "suspicious_update"
-            self.log_event(
-                1,
-                "suspicious_update",
-                "Suspicious hour; model update reduced to avoid poisoning.",
-                traffic_ts=bucket.start_ts,
-                metrics={
-                    "profileid": profileid,
-                    "hourly_score": round(hourly_score, 3),
-                    "flow_anomaly_count": bucket.flow_anomaly_count,
-                    "alpha": update_alpha,
-                },
-            )
+            if self.use_adwin_drift:
+                adwin = self.get_or_create_adwin(state)
+                adwin_drift_detected = False
+                if adwin is not None:
+                    adwin.update(hourly_score)
+                    adwin_drift_detected = bool(
+                        getattr(adwin, "drift_detected", False)
+                    )
+                    if adwin_drift_detected:
+                        self.log_event(
+                            1,
+                            "adwin_drift_signal",
+                            "ADWIN signaled drift on hourly anomaly score.",
+                            traffic_ts=bucket.start_ts,
+                            metrics={
+                                "profileid": profileid,
+                                "hourly_score": round(hourly_score, 3),
+                                "flow_anomaly_count": bucket.flow_anomaly_count,
+                                "adwin_width": getattr(adwin, "width", None),
+                                "adwin_estimation": getattr(
+                                    adwin, "estimation", None
+                                ),
+                            },
+                        )
+
+                if not adwin_drift_detected:
+                    update_alpha = self.baseline_alpha
+                    update_mode = "baseline_update"
+                    self.log_event(
+                        1,
+                        "baseline_update",
+                        "No ADWIN drift signal; standard baseline adaptation.",
+                        traffic_ts=bucket.start_ts,
+                        metrics={
+                            "profileid": profileid,
+                            "hourly_score": round(hourly_score, 3),
+                            "flow_anomaly_count": bucket.flow_anomaly_count,
+                            "alpha": update_alpha,
+                        },
+                    )
+                elif (
+                    hourly_score <= self.adaptation_score_threshold
+                    and bucket.flow_anomaly_count
+                    <= self.max_small_flow_anomalies
+                ):
+                    update_alpha = self.drift_alpha
+                    update_mode = "drift_update"
+                    self.log_event(
+                        1,
+                        "drift_update",
+                        "Drift update applied after ADWIN signal.",
+                        traffic_ts=bucket.start_ts,
+                        metrics={
+                            "profileid": profileid,
+                            "hourly_score": round(hourly_score, 3),
+                            "flow_anomaly_count": bucket.flow_anomaly_count,
+                            "alpha": update_alpha,
+                        },
+                    )
+                else:
+                    update_alpha = self.suspicious_alpha
+                    update_mode = "suspicious_update"
+                    self.log_event(
+                        1,
+                        "suspicious_update",
+                        "Suspicious drift; model update reduced to avoid poisoning.",
+                        traffic_ts=bucket.start_ts,
+                        metrics={
+                            "profileid": profileid,
+                            "hourly_score": round(hourly_score, 3),
+                            "flow_anomaly_count": bucket.flow_anomaly_count,
+                            "alpha": update_alpha,
+                        },
+                    )
+            elif (
+                hourly_score <= self.adaptation_score_threshold
+                and bucket.flow_anomaly_count <= self.max_small_flow_anomalies
+            ):
+                # Pre-ADWIN logic (kept for rollback / comparison).
+                update_alpha = self.drift_alpha
+                update_mode = "drift_update"
+                self.log_event(
+                    1,
+                    "drift_update",
+                    "Small anomalies treated as drift; model adapted.",
+                    traffic_ts=bucket.start_ts,
+                    metrics={
+                        "profileid": profileid,
+                        "hourly_score": round(hourly_score, 3),
+                        "flow_anomaly_count": bucket.flow_anomaly_count,
+                        "alpha": update_alpha,
+                    },
+                )
+            else:
+                update_alpha = self.suspicious_alpha
+                update_mode = "suspicious_update"
+                self.log_event(
+                    1,
+                    "suspicious_update",
+                    "Suspicious hour; model update reduced to avoid poisoning.",
+                    traffic_ts=bucket.start_ts,
+                    metrics={
+                        "profileid": profileid,
+                        "hourly_score": round(hourly_score, 3),
+                        "flow_anomaly_count": bucket.flow_anomaly_count,
+                        "alpha": update_alpha,
+                    },
+                )
 
         for feature_name, value in features.items():
             model = self.get_or_create_hourly_model(state, feature_name)
