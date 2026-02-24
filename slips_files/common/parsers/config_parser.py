@@ -582,7 +582,7 @@ class ConfigParser(object):
 
     def https_anomaly_use_adwin_drift(self) -> bool:
         value = self.read_configuration(
-            "anomaly_detection_https", "use_adwin_drift", False
+            "anomaly_detection_https", "use_adwin_drift", True
         )
         if isinstance(value, bool):
             return value
