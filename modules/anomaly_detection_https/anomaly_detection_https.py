@@ -149,8 +149,8 @@ class HostState:
     server_bytes_models: Dict[str, EWMAStats] = field(default_factory=dict)
     anomaly_history_ts: List[float] = field(default_factory=list)
     last_twid: int = 0
-    hourly_adwin: Optional[Any] = None
-    flow_adwin: Optional[Any] = None
+    hourly_adwins: Dict[str, Any] = field(default_factory=dict)
+    flow_adwins: Dict[str, Any] = field(default_factory=dict)
 
 
 class AnomalyDetectionHTTPS(IModule):
@@ -362,25 +362,25 @@ class AnomalyDetectionHTTPS(IModule):
             state.server_bytes_models[server] = EWMAStats()
         return state.server_bytes_models[server]
 
-    def get_or_create_hourly_adwin(self, state: HostState):
-        if state.hourly_adwin is None and self.adwin_available:
-            state.hourly_adwin = ADWIN(
+    def get_or_create_hourly_adwin(self, state: HostState, signal_name: str):
+        if signal_name not in state.hourly_adwins and self.adwin_available:
+            state.hourly_adwins[signal_name] = ADWIN(
                 delta=self.adwin_delta,
                 clock=self.adwin_clock,
                 grace_period=self.adwin_grace_period,
                 min_window_length=self.adwin_min_window_length,
             )
-        return state.hourly_adwin
+        return state.hourly_adwins.get(signal_name)
 
-    def get_or_create_flow_adwin(self, state: HostState):
-        if state.flow_adwin is None and self.adwin_available:
-            state.flow_adwin = ADWIN(
+    def get_or_create_flow_adwin(self, state: HostState, signal_name: str):
+        if signal_name not in state.flow_adwins and self.adwin_available:
+            state.flow_adwins[signal_name] = ADWIN(
                 delta=self.adwin_delta,
                 clock=self.adwin_clock,
                 grace_period=self.adwin_grace_period,
                 min_window_length=self.adwin_min_window_length,
             )
-        return state.flow_adwin
+        return state.flow_adwins.get(signal_name)
 
     @staticmethod
     def compute_reason_score(reasons: List[dict]) -> float:
@@ -725,7 +725,6 @@ class AnomalyDetectionHTTPS(IModule):
         )
 
         z_by_feature: Dict[str, float] = {}
-        hourly_adwin_score = 0.0
         for feature_name, value in features.items():
             if (
                 feature_name == "ja3_changes"
@@ -737,7 +736,6 @@ class AnomalyDetectionHTTPS(IModule):
             model = self.get_or_create_hourly_model(state, feature_name)
             z = self.score_feature(model, value)
             z_by_feature[feature_name] = z
-            hourly_adwin_score += z
 
         hourly_anomalies = []
         hourly_score = 0.0
@@ -809,21 +807,29 @@ class AnomalyDetectionHTTPS(IModule):
         update_mode = "training_fit"
         if is_training_hour:
             if self.use_adwin_drift:
-                adwin = self.get_or_create_hourly_adwin(state)
-                if adwin is not None:
-                    adwin.update(hourly_adwin_score)
-                    self.log_event(
-                        3,
-                        "model_update",
-                        "ADWIN hourly baseline updated during training.",
-                        traffic_ts=bucket.start_ts,
-                        metrics={
-                            "profileid": profileid,
-                            "hourly_adwin_score": round(hourly_adwin_score, 3),
-                            "adwin_width": getattr(adwin, "width", None),
-                            "adwin_estimation": getattr(adwin, "estimation", None),
-                        },
+                adwin_metrics = {}
+                for feature_name, value in features.items():
+                    adwin = self.get_or_create_hourly_adwin(
+                        state, feature_name
                     )
+                    if adwin is None:
+                        continue
+                    adwin.update(float(value))
+                    adwin_metrics[feature_name] = {
+                        "value": value,
+                        "width": getattr(adwin, "width", None),
+                        "estimation": getattr(adwin, "estimation", None),
+                    }
+                self.log_event(
+                    3,
+                    "model_update",
+                    "ADWIN hourly raw-signal baseline updated during training.",
+                    traffic_ts=bucket.start_ts,
+                    metrics={
+                        "profileid": profileid,
+                        "signals": adwin_metrics,
+                    },
+                )
             state.trained_hours += 1
             self.log_event(
                 1,
@@ -840,30 +846,32 @@ class AnomalyDetectionHTTPS(IModule):
             update_alpha = None
         else:
             if self.use_adwin_drift:
-                adwin = self.get_or_create_hourly_adwin(state)
                 adwin_drift_detected = False
-                if adwin is not None:
-                    adwin.update(hourly_adwin_score)
-                    adwin_drift_detected = bool(
-                        getattr(adwin, "drift_detected", False)
+                drifted_hourly_features = []
+                for feature_name, value in features.items():
+                    adwin = self.get_or_create_hourly_adwin(
+                        state, feature_name
                     )
-                    if adwin_drift_detected:
-                        self.log_event(
-                            1,
-                            "adwin_drift_signal",
-                            "ADWIN signaled drift on hourly anomaly score.",
-                            traffic_ts=bucket.start_ts,
-                            metrics={
-                                "profileid": profileid,
-                                "hourly_score": round(hourly_score, 3),
-                                "hourly_adwin_score": round(hourly_adwin_score, 3),
-                                "flow_anomaly_count": bucket.flow_anomaly_count,
-                                "adwin_width": getattr(adwin, "width", None),
-                                "adwin_estimation": getattr(
-                                    adwin, "estimation", None
-                                ),
-                            },
-                        )
+                    if adwin is None:
+                        continue
+                    adwin.update(float(value))
+                    if bool(getattr(adwin, "drift_detected", False)):
+                        adwin_drift_detected = True
+                        drifted_hourly_features.append(feature_name)
+                if adwin_drift_detected:
+                    self.log_event(
+                        1,
+                        "adwin_drift_signal",
+                        "ADWIN signaled drift on hourly raw signals.",
+                        traffic_ts=bucket.start_ts,
+                        metrics={
+                            "profileid": profileid,
+                            "hourly_score": round(hourly_score, 3),
+                            "flow_anomaly_count": bucket.flow_anomaly_count,
+                            "drifted_hourly_features": drifted_hourly_features,
+                            "hourly_features": features,
+                        },
+                    )
 
                 if not adwin_drift_detected:
                     update_alpha = self.baseline_alpha
@@ -1123,63 +1131,74 @@ class AnomalyDetectionHTTPS(IModule):
             flow_score = self.compute_reason_score(flow_anomalies)
             flow_update_mode = "training_fit"
             flow_adwin_drift_detected = False
+            drifted_flow_signals: List[str] = []
+            flow_raw_signals = {
+                "new_server": 1.0 if is_new_server else 0.0,
+                "new_ja3s": 1.0 if is_new_ja3s else 0.0,
+            }
+            if not is_new_server:
+                flow_raw_signals["bytes_to_known_server"] = float(bytes_total)
             if not self.should_detect(state):
-                benign_flow_score = 0.0
-                if server_model.count >= self.min_baseline_points:
-                    benign_flow_score = server_model.zscore(bytes_total)
-                flow_score = benign_flow_score
                 if self.use_adwin_drift:
-                    flow_adwin = self.get_or_create_flow_adwin(state)
-                    if flow_adwin is not None:
-                        flow_adwin.update(benign_flow_score)
+                    flow_adwin_metrics = {}
+                    for signal_name, signal_value in flow_raw_signals.items():
+                        flow_adwin = self.get_or_create_flow_adwin(
+                            state, signal_name
+                        )
+                        if flow_adwin is None:
+                            continue
+                        flow_adwin.update(float(signal_value))
+                        flow_adwin_metrics[signal_name] = {
+                            "value": signal_value,
+                            "width": getattr(flow_adwin, "width", None),
+                            "estimation": getattr(
+                                flow_adwin, "estimation", None
+                            ),
+                        }
+                    self.log_event(
+                        3,
+                        "model_update",
+                        "ADWIN flow raw-signal baseline updated during training.",
+                        traffic_ts=ts,
+                        metrics={
+                            "profileid": profileid,
+                            "uid": uid,
+                            "server": server,
+                            "signals": flow_adwin_metrics,
+                        },
+                    )
+                alpha = None
+                self.fit_benign_model(server_model, bytes_total)
+            else:
+                if self.use_adwin_drift:
+                    for signal_name, signal_value in flow_raw_signals.items():
+                        flow_adwin = self.get_or_create_flow_adwin(
+                            state, signal_name
+                        )
+                        if flow_adwin is None:
+                            continue
+                        flow_adwin.update(float(signal_value))
+                        if bool(getattr(flow_adwin, "drift_detected", False)):
+                            flow_adwin_drift_detected = True
+                            drifted_flow_signals.append(signal_name)
+                    if flow_adwin_drift_detected:
                         self.log_event(
                             3,
-                            "model_update",
-                            "ADWIN flow baseline updated during training.",
+                            "adwin_drift_signal",
+                            "ADWIN signaled drift on flow raw signals.",
                             traffic_ts=ts,
                             metrics={
                                 "profileid": profileid,
                                 "uid": uid,
                                 "server": server,
-                                "flow_score": round(benign_flow_score, 3),
-                                "adwin_width": getattr(flow_adwin, "width", None),
-                                "adwin_estimation": getattr(
-                                    flow_adwin, "estimation", None
+                                "flow_score": round(flow_score, 3),
+                                "flow_anomaly_count_in_flow": len(
+                                    flow_anomalies
                                 ),
+                                "drifted_flow_signals": drifted_flow_signals,
+                                "flow_raw_signals": flow_raw_signals,
                             },
                         )
-                alpha = None
-                self.fit_benign_model(server_model, bytes_total)
-            else:
-                if self.use_adwin_drift:
-                    flow_adwin = self.get_or_create_flow_adwin(state)
-                    if flow_adwin is not None:
-                        flow_adwin.update(flow_score)
-                        flow_adwin_drift_detected = bool(
-                            getattr(flow_adwin, "drift_detected", False)
-                        )
-                        if flow_adwin_drift_detected:
-                            self.log_event(
-                                3,
-                                "adwin_drift_signal",
-                                "ADWIN signaled drift on flow anomaly score.",
-                                traffic_ts=ts,
-                                metrics={
-                                    "profileid": profileid,
-                                    "uid": uid,
-                                    "server": server,
-                                    "flow_score": round(flow_score, 3),
-                                    "flow_anomaly_count_in_flow": len(
-                                        flow_anomalies
-                                    ),
-                                    "adwin_width": getattr(
-                                        flow_adwin, "width", None
-                                    ),
-                                    "adwin_estimation": getattr(
-                                        flow_adwin, "estimation", None
-                                    ),
-                                },
-                            )
 
                     if not flow_adwin_drift_detected:
                         alpha = self.baseline_alpha
@@ -1221,6 +1240,8 @@ class AnomalyDetectionHTTPS(IModule):
                     "flow_score": round(flow_score, 3),
                     "flow_update_mode": flow_update_mode,
                     "flow_adwin_drift_detected": flow_adwin_drift_detected,
+                    "drifted_flow_signals": drifted_flow_signals,
+                    "flow_raw_signals": flow_raw_signals,
                     "alpha": alpha,
                     "fit_method": (
                         "welford_online_moments"
