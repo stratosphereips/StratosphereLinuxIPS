@@ -228,6 +228,12 @@ When enabled and `river` is available, ADWIN is used as a drift trigger:
 - If ADWIN does not signal drift, update path is `baseline_update` with `baseline_alpha`.
 - During benign training, ADWIN is still updated with benign scores to warm its windows and reduce post-training cold-start noise.
 
+Performance impact:
+
+- Hour close ADWIN updates are now `O(number_of_hourly_features)` per host-hour.
+- Per-flow ADWIN updates are now `O(number_of_flow_signals)` per SSL flow.
+- In practice this is small (a few scalar updates), but it is higher than a single aggregated-score detector.
+
 
 ## Mathematical model details
 
