@@ -6,6 +6,7 @@ import socket
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.input_type import InputType
 from slips_files.core.database.redis_db.constants import (
     Constants,
     Channels,
@@ -1296,7 +1297,7 @@ class RedisDB(
         in these 2 cases, it only stops on ctrl+c
         """
         return (
-            self.get_input_type() in ("stdin", "interface")
+            self.get_input_type() in (InputType.STDIN, InputType.INTERFACE)
             or self.args.growing
         )
 

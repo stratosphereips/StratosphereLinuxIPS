@@ -12,6 +12,7 @@ from typing import Dict, Union
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
+from slips_files.common.input_type import InputType
 from slips_files.core.database.database_manager import DBManager
 
 LOCALHOST = "127.0.0.1"
@@ -90,7 +91,7 @@ class RedisManager:
         )
 
     def load_db(self):
-        self.input_type = "database"
+        self.input_type = InputType.DATABASE
         self.main.db.init_redis_server()
 
         # this is where the db will be loaded

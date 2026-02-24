@@ -15,6 +15,7 @@ from slips_files.common.abstracts.iflowalerts_analyzer import (
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.flow_classifier import FlowClassifier
+from slips_files.common.input_type import InputType
 
 
 NOT_ESTAB = "Not Established"
@@ -468,7 +469,7 @@ class Conn(IFlowalertsAnalyzer):
             # so we shouldn't be doing this detection on this ip
             or utils.is_ip_in_client_ips(flow.daddr, self.client_ips)
             # because there's no dns.log to know if the dns was made
-            or self.input_type == "zeek_log_file"
+            or self.input_type == InputType.ZEEK_LOG_FILE
             or self.db.is_doh_server(flow.daddr)
             # connection without dns in case of an interface,
             # should only be detected from the srcip of this device,

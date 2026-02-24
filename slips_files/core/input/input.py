@@ -21,6 +21,7 @@
 
 
 from slips_files.common.abstracts.icore import ICore
+from slips_files.common.input_type import InputType
 
 # common imports for all modules
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -98,16 +99,16 @@ class Input(ICore):
 
     def _build_input_handlers(self):
         return {
-            "stdin": StdinInput(self),
-            "zeek_folder": ZeekDirInput(self),
-            "zeek_log_file": ZeekLogFileInput(self),
-            "nfdump": NfdumpInput(self),
-            "binetflow": BinetflowInput(self),
-            "binetflow-tabs": BinetflowTabsInput(self),
-            "pcap": PcapInput(self),
-            "interface": InterfaceInput(self),
-            "suricata": SuricataInput(self),
-            "CYST": CystInput(self),
+            InputType.STDIN: StdinInput(self),
+            InputType.ZEEK_FOLDER: ZeekDirInput(self),
+            InputType.ZEEK_LOG_FILE: ZeekLogFileInput(self),
+            InputType.NFDUMP: NfdumpInput(self),
+            InputType.BINETFLOW: BinetflowInput(self),
+            InputType.BINETFLOW_TABS: BinetflowTabsInput(self),
+            InputType.PCAP: PcapInput(self),
+            InputType.INTERFACE: InterfaceInput(self),
+            InputType.SURICATA: SuricataInput(self),
+            InputType.CYST: CystInput(self),
         }
 
     def mark_self_as_done_processing(self):

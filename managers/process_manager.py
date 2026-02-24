@@ -39,6 +39,7 @@ from slips_files.common.abstracts.imodule import (
 )
 
 from slips_files.common.style import green
+from slips_files.common.input_type import InputType
 from slips_files.core.database.redis_db.timewindow_updater_thread.tw_updater import (
     timewindow_updater,
 )
@@ -665,7 +666,7 @@ class ProcessManager:
         # this module should handle the stopping of slips
         return (
             self.is_debugger_active()
-            or self.main.input_type in ("stdin", "cyst")
+            or self.main.input_type in (InputType.STDIN, InputType.CYST)
             or self.main.db.is_running_non_stop()
         )
 
