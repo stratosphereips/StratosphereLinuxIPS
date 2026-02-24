@@ -6,6 +6,9 @@ from multiprocessing import Process
 
 from slips_files.common.abstracts.imodule import IModule
 
+# in seconds
+FIVE_MINS = 300
+
 
 class ICore(IModule, Process):
     """
@@ -26,31 +29,22 @@ class ICore(IModule, Process):
         """
         IModule.__init__(self, *args, **kwargs)
         self.last_flows_count = 0
+        # used to keep track of the FPs of this module
+        now = time.monotonic()
+        self.last_fps_check_time = now
+        # 300s = 5 mins
+        self.next_fps_check_time = now + FIVE_MINS
 
     def pre_main(self): ...
-
-    def did_five_mins_pass_since_last_fps_check(self) -> bool:
-        """
-        returns true if 5 mins passed since the last time we checked
-        the flows read per second
-        """
-        if not hasattr(self, "last_fps_check_time"):
-            # first time checking
-            self.last_fps_check_time = time.time()
-            return False
-
-        now = time.time()
-        diff = now - self.last_fps_check_time
-        return diff >= 300
 
     def store_flows_read_per_second(self):
         """
         updates the db about the flows read per second
         """
-        if not self.did_five_mins_pass_since_last_fps_check():
+        now = time.monotonic()
+        if now < self.next_fps_check_time:
             return
 
-        now = time.time()
         flows_now = self.lines
 
         # delta since last check
@@ -62,6 +56,7 @@ class ICore(IModule, Process):
         self.db.store_module_flows_per_second(self.name, flows_per_sec)
 
         self.last_fps_check_time = now
+        self.next_fps_check_time = now + FIVE_MINS
         self.last_flows_count = flows_now
 
     def run(self):
