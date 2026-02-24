@@ -281,7 +281,7 @@ Operationally:
   - https://en.wikipedia.org/wiki/Median_absolute_deviation
 - Concept drift:
   - https://en.wikipedia.org/wiki/Concept_drift
-- ADWIN drift detector (for a future upgrade path):
+- ADWIN drift detector (optional drift trigger):
   - https://riverml.xyz/0.7.0/api/drift/ADWIN/
 
 
@@ -300,6 +300,11 @@ anomaly_detection_https:
   suspicious_alpha: 0.005
   min_baseline_points: 6
   max_small_flow_anomalies: 1
+  use_adwin_drift: false
+  adwin_delta: 0.002
+  adwin_clock: 32
+  adwin_grace_period: 10
+  adwin_min_window_length: 5
   ja3_min_variants_per_server: 3
 ```
 
@@ -326,6 +331,11 @@ Parameter meaning:
   threshold used in both paths:
   max anomalous flows per hour still considered drift-like, and
   max anomaly reasons per flow still considered small.
+- `use_adwin_drift`:
+  if true and `river` is installed, ADWIN triggers drift transitions.
+  if false, pre-ADWIN threshold-only drift logic is used.
+- `adwin_delta`, `adwin_clock`, `adwin_grace_period`, `adwin_min_window_length`:
+  ADWIN hyperparameters used when `use_adwin_drift=true`.
 - `ja3_min_variants_per_server`:
   fallback gate used only when `training_hours = 0`:
   `ja3_changes` is not scored as anomalous unless hourly value is at least
