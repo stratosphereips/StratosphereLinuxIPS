@@ -310,11 +310,9 @@ class Timeline(IModule):
                 activity = {}
             #################################
             # Now process the alternative flows
-            # Sometimes we need to wait a little to give time to Zeek to find
-            # the related flow since they are read very fast together.
-            # This should be improved algorithmically probably
-            time.sleep(0.05)
-            alt_activity = self.process_altflow(profileid, twid, flow)
+            alt_activity = self.process_altflow_with_retry(
+                profileid, twid, flow
+            )
             # Combine the activity of normal flows and activity of alternative
             # flows and store in the DB for this profileid and twid
             activity.update(alt_activity)
@@ -332,6 +330,33 @@ class Timeline(IModule):
 
     def pre_main(self):
         utils.drop_root_privs_permanently()
+
+    def process_altflow_with_retry(self, profileid, twid, flow) -> dict:
+        """
+        Try to get the altflow without using a hard delay
+        for every flow.
+        Only retry for protocols that are known to create alt flows (
+        DNS/HTTP/SSL/SSH).
+        """
+        alt_activity = self.process_altflow(profileid, twid, flow)
+        if alt_activity.get("info"):
+            return alt_activity
+
+        appproto = getattr(flow, "appproto", None)
+        if not isinstance(appproto, str):
+            return alt_activity
+
+        if appproto.upper() not in {"DNS", "HTTP", "SSL", "SSH"}:
+            return alt_activity
+
+        # Short retry window to avoid backpressure and memory buildup.
+        for _ in range(2):
+            time.sleep(0.005)
+            alt_activity = self.process_altflow(profileid, twid, flow)
+            if alt_activity.get("info"):
+                break
+
+        return alt_activity
 
     def main(self):
         # Main loop function

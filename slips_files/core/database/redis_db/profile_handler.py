@@ -1135,7 +1135,6 @@ class ProfileHandler:
         # Mark the TWs as closed so modules can work on its data
         pipe = self.r.pipeline()
         for profile_tw_to_close in profiles_tws_to_close:
-            self.print(f"@@@@@@@@@@@@@@@@ CLOSING: {profile_tw_to_close}")
 
             pipe.zrem(self.constants.MODIFIED_TIMEWINDOWS, profile_tw_to_close)
             pipe = self.publish(
