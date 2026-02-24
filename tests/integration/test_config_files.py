@@ -6,6 +6,7 @@ test/test.yaml and tests/test2.yaml
 """
 
 from slips.main import Main
+from slips_files.common.input_type import InputType
 from tests.common_test_utils import (
     is_evidence_present,
     create_output_dir,
@@ -25,7 +26,7 @@ def create_main_instance(input_information):
     """returns an instance of Main() class in slips.py"""
     main = Main(testing=True)
     main.input_information = input_information
-    main.input_type = "pcap"
+    main.input_type = InputType.PCAP
     main.line_type = False
     return main
 

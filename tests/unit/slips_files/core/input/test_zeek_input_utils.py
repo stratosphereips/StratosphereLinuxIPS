@@ -3,6 +3,7 @@
 import json
 import pytest
 from tests.module_factory import ModuleFactory
+from slips_files.common.input_type import InputType
 
 
 @pytest.mark.parametrize(
@@ -14,7 +15,9 @@ from tests.module_factory import ModuleFactory
     ],
 )
 def test_is_zeek_tabs_file_detects_format(tmp_path, contents, expected):
-    input_process = ModuleFactory().create_input_obj("", "zeek_log_file")
+    input_process = ModuleFactory().create_input_obj(
+        "", InputType.ZEEK_LOG_FILE
+    )
     test_file = tmp_path / "conn.log"
     test_file.write_text(contents, encoding="utf-8")
 
@@ -24,7 +27,9 @@ def test_is_zeek_tabs_file_detects_format(tmp_path, contents, expected):
 
 
 def test_get_ts_from_line_returns_timestamp_for_tabs():
-    input_process = ModuleFactory().create_input_obj("", "zeek_log_file")
+    input_process = ModuleFactory().create_input_obj(
+        "", InputType.ZEEK_LOG_FILE
+    )
     input_process.is_zeek_tabs = True
 
     ts, line = input_process.zeek_utils.get_ts_from_line("1.5\tfield\n")

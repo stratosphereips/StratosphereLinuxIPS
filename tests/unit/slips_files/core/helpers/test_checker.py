@@ -6,6 +6,7 @@ import psutil
 import pytest
 from unittest.mock import patch
 from tests.module_factory import ModuleFactory
+from slips_files.common.input_type import InputType
 
 
 def test_clear_redis_cache():
@@ -134,7 +135,7 @@ def test_check_input_type_interface():
     checker.main.args.input_module = None
 
     result = checker.get_input_type()
-    assert result == ("interface", "eth0", False)
+    assert result == (InputType.INTERFACE, "eth0", False)
 
 
 def test_get_input_type_with_interface_and_growing():
@@ -154,13 +155,13 @@ def test_get_input_type_with_interface_and_growing():
 
     # Mock get_input_file_type to return a predictable result
     with patch.object(
-        checker.main, "get_input_file_type", return_value="zeek_folder"
+        checker.main, "get_input_file_type", return_value=InputType.ZEEK_FOLDER
     ) as mock_get_type:
         result = checker.get_input_type()
 
     # Assert
     mock_get_type.assert_called_once_with("/path/to/dir")
-    assert result == ("zeek_folder", "/path/to/dir", False)
+    assert result == (InputType.ZEEK_FOLDER, "/path/to/dir", False)
 
 
 def test_check_input_type_db():
@@ -187,7 +188,7 @@ def test_check_input_type_input_module():
     checker.main.args.input_module = "zeek"
 
     result = checker.get_input_type()
-    assert result == ("zeek", "input_module", "zeek")
+    assert result == (InputType.ZEEK, "input_module", InputType.ZEEK)
 
 
 @pytest.mark.parametrize(

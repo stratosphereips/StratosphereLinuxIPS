@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from unittest.mock import MagicMock, patch
 from tests.module_factory import ModuleFactory
+from slips_files.common.input_type import InputType
 
 
 def test_zeek_dir_input_reads_directory(tmp_path):
     input_process = ModuleFactory().create_input_obj(
-        str(tmp_path), "zeek_folder"
+        str(tmp_path), InputType.ZEEK_FOLDER
     )
     input_process.args.growing = False
     input_process.args.interface = "eth0"
@@ -22,7 +23,7 @@ def test_zeek_dir_input_reads_directory(tmp_path):
 
     (tmp_path / "conn.log").write_text("#fields\nline1\n", encoding="utf-8")
 
-    handler = input_process.input_handlers["zeek_folder"]
+    handler = input_process.input_handlers[InputType.ZEEK_FOLDER]
     handler.observer.start = MagicMock()
     handler.db.add_zeek_file = MagicMock()
     with patch(

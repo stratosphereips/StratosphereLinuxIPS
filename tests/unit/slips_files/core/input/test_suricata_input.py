@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from unittest.mock import MagicMock
 from tests.module_factory import ModuleFactory
+from slips_files.common.input_type import InputType
 
 
 def test_suricata_input_reads_lines(tmp_path):
     input_process = ModuleFactory().create_input_obj(
-        str(tmp_path / "test.json"), "suricata"
+        str(tmp_path / "test.json"), InputType.SURICATA
     )
     test_file = tmp_path / "test.json"
     test_file.write_text("line1\n\nline2\n", encoding="utf-8")
@@ -15,7 +16,7 @@ def test_suricata_input_reads_lines(tmp_path):
     input_process.testing = True
     input_process.mark_self_as_done_processing = MagicMock()
 
-    handler = input_process.input_handlers["suricata"]
+    handler = input_process.input_handlers[InputType.SURICATA]
     assert handler.run() is True
 
     line_sent = input_process.profiler_queue.get()

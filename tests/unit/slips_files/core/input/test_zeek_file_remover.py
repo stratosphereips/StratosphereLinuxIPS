@@ -4,10 +4,13 @@ import json
 from unittest.mock import MagicMock, patch
 from tests.module_factory import ModuleFactory
 from slips_files.core.input.zeek.utils.zeek_file_remover import ZeekFileRemover
+from slips_files.common.input_type import InputType
 
 
 def test_zeek_file_remover_start_subscribes_once():
-    input_process = ModuleFactory().create_input_obj("", "zeek_log_file")
+    input_process = ModuleFactory().create_input_obj(
+        "", InputType.ZEEK_LOG_FILE
+    )
     input_process.db.subscribe = MagicMock(return_value="chan")
     remover = ZeekFileRemover(input_process, input_process.zeek_utils)
     remover.thread.start = MagicMock()
@@ -21,7 +24,9 @@ def test_zeek_file_remover_start_subscribes_once():
 
 
 def test_remove_old_zeek_files_closes_and_marks():
-    input_process = ModuleFactory().create_input_obj("", "zeek_log_file")
+    input_process = ModuleFactory().create_input_obj(
+        "", InputType.ZEEK_LOG_FILE
+    )
     input_process.should_stop = MagicMock(side_effect=[False, True])
     remover = ZeekFileRemover(input_process, input_process.zeek_utils)
     input_process.channels["remove_old_files"] = "chan"

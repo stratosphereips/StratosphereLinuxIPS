@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from unittest.mock import MagicMock, patch
 from tests.module_factory import ModuleFactory
+from slips_files.common.input_type import InputType
 
 
 def test_zeek_log_file_input_reads_file(tmp_path):
@@ -9,7 +10,7 @@ def test_zeek_log_file_input_reads_file(tmp_path):
     test_file.write_text("#fields\nline1\n", encoding="utf-8")
 
     input_process = ModuleFactory().create_input_obj(
-        str(test_file), "zeek_log_file"
+        str(test_file), InputType.ZEEK_LOG_FILE
     )
     input_process.zeek_utils.is_zeek_tabs_file = MagicMock(return_value=True)
     input_process.get_flows_number = MagicMock(return_value=2)
@@ -17,7 +18,7 @@ def test_zeek_log_file_input_reads_file(tmp_path):
     input_process.zeek_utils.read_zeek_files = MagicMock(return_value=2)
     input_process.mark_self_as_done_processing = MagicMock()
 
-    handler = input_process.input_handlers["zeek_log_file"]
+    handler = input_process.input_handlers[InputType.ZEEK_LOG_FILE]
     handler.db.add_zeek_file = MagicMock()
     with patch(
         "slips_files.core.input.zeek.zeek_log_file_input.utils.is_ignored_zeek_log_file",

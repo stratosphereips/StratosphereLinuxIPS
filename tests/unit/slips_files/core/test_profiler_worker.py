@@ -12,6 +12,7 @@ from slips_files.core.profiler import SUPPORTED_INPUT_TYPES, SEPARATORS
 from slips_files.core.flows.zeek import Conn
 import ipaddress
 from unittest.mock import patch
+from slips_files.common.input_type import InputType
 
 
 # get zeek flow
@@ -45,7 +46,7 @@ def test_process_line_zeek_json(
     profiler.db.get_timewindow = Mock(return_value="timewindow1")
     # we're testing another functionality here
     profiler.whitelist.is_whitelisted_flow = do_nothing
-    profiler.input_type = "zeek"
+    profiler.input_type = InputType.ZEEK
     profiler.input_handler = SUPPORTED_INPUT_TYPES[profiler.input_type](
         profiler.db
     )
@@ -584,7 +585,7 @@ def test_main():
     ]  # Run once
     profiler.get_msg_from_queue.return_value = {
         "line": {"key": "value"},
-        "input_type": "zeek",
+        "input_type": InputType.ZEEK,
     }
     mock_flow = Mock()
     profiler.input_handler.process_line = Mock(return_value=(mock_flow, ""))
