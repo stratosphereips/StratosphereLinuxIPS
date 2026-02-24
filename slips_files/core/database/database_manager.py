@@ -46,6 +46,12 @@ class DBManager:
         self.redis_port = redis_port
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
+        # only the main process should ever flush the Redis DB. to avoid
+        # children overwriting values set at the very start of slips
+        if os.getpid() != main_pid:
+            kwargs = dict(kwargs)
+            kwargs.setdefault("flush_db", False)
+
         self.rdb = RedisDB(
             self.logger, redis_port, output_dir, start_redis_server, **kwargs
         )
@@ -363,12 +369,6 @@ class DBManager:
 
     def is_tranco_whitelist_expired(self, *args, **kwargs):
         return self.rdb.is_tranco_whitelist_expired(*args, **kwargs)
-
-    def set_growing_zeek_dir(self, *args, **kwargs):
-        return self.rdb.set_growing_zeek_dir(*args, **kwargs)
-
-    def is_growing_zeek_dir(self, *args, **kwargs):
-        return self.rdb.is_growing_zeek_dir(*args, **kwargs)
 
     def get_ip_identification(self, *args, **kwargs):
         return self.rdb.get_ip_identification(*args, **kwargs)

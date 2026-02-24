@@ -554,6 +554,11 @@ class Main:
                     self.print(yellow("Slips is running in AP mode."))
                     self.ap_manager.store_ap_interfaces(self.input_information)
 
+            if self.args.growing:
+                self.print(
+                    f"Running on a growing zeek dir: {self.args.growing}"
+                )
+
             self.db.set_input_metadata(
                 {
                     "output_dir": self.args.output,
@@ -565,15 +570,10 @@ class Main:
                 }
             )
 
-            if self.args.growing:
-                self.print(
-                    f"Running on a growing zeek dir: " f"{self.args.growing}"
-                )
-                self.db.set_growing_zeek_dir()
-            # this line should happen as soon as we start the db
+            # this  func should be called as soon as we start the db,
+            # before evdience proc starts.
             # to be able to use the host IP as analyzer IP in alerts.json
             # should be after setting the input metadata with "input_type"
-            # TLDR; dont change the order of this line
             host_ips = self.host_ip_man.store_host_ip()
 
             self.print(

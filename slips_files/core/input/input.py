@@ -184,12 +184,6 @@ class Input(ICore):
 
         return count
 
-    def print_lines_read(self):
-        self.print(
-            f"Done reading all flows. Stopping the input process. "
-            f"Sent {self.lines} lines for the profiler process."
-        )
-
     def shutdown_gracefully(self):
         self.print(f"Stopping. Total lines read: {self.lines}")
         self.stop_queues()
