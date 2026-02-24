@@ -300,7 +300,7 @@ anomaly_detection_https:
   suspicious_alpha: 0.005
   min_baseline_points: 6
   max_small_flow_anomalies: 1
-  use_adwin_drift: false
+  use_adwin_drift: true
   adwin_delta: 0.002
   adwin_clock: 32
   adwin_grace_period: 10
@@ -332,8 +332,8 @@ Parameter meaning:
   max anomalous flows per hour still considered drift-like, and
   max anomaly reasons per flow still considered small.
 - `use_adwin_drift`:
-  if true and `river` is installed, ADWIN triggers drift transitions.
-  if false, pre-ADWIN threshold-only drift logic is used.
+  default is `true`. if `river` is installed, ADWIN triggers drift transitions.
+  if disabled, pre-ADWIN threshold-only drift logic is used.
 - `adwin_delta`, `adwin_clock`, `adwin_grace_period`, `adwin_min_window_length`:
   ADWIN hyperparameters used when `use_adwin_drift=true`.
 - `ja3_min_variants_per_server`:
