@@ -149,7 +149,8 @@ class HostState:
     server_bytes_models: Dict[str, EWMAStats] = field(default_factory=dict)
     anomaly_history_ts: List[float] = field(default_factory=list)
     last_twid: int = 0
-    adwin: Optional[Any] = None
+    hourly_adwin: Optional[Any] = None
+    flow_adwin: Optional[Any] = None
 
 
 class AnomalyDetectionHTTPS(IModule):
@@ -361,15 +362,39 @@ class AnomalyDetectionHTTPS(IModule):
             state.server_bytes_models[server] = EWMAStats()
         return state.server_bytes_models[server]
 
-    def get_or_create_adwin(self, state: HostState):
-        if state.adwin is None and self.adwin_available:
-            state.adwin = ADWIN(
+    def get_or_create_hourly_adwin(self, state: HostState):
+        if state.hourly_adwin is None and self.adwin_available:
+            state.hourly_adwin = ADWIN(
                 delta=self.adwin_delta,
                 clock=self.adwin_clock,
                 grace_period=self.adwin_grace_period,
                 min_window_length=self.adwin_min_window_length,
             )
-        return state.adwin
+        return state.hourly_adwin
+
+    def get_or_create_flow_adwin(self, state: HostState):
+        if state.flow_adwin is None and self.adwin_available:
+            state.flow_adwin = ADWIN(
+                delta=self.adwin_delta,
+                clock=self.adwin_clock,
+                grace_period=self.adwin_grace_period,
+                min_window_length=self.adwin_min_window_length,
+            )
+        return state.flow_adwin
+
+    @staticmethod
+    def compute_reason_score(reasons: List[dict]) -> float:
+        score = 0.0
+        for reason in reasons:
+            z = reason.get("zscore")
+            if z is None:
+                score += 2.0
+                continue
+            try:
+                score += float(z)
+            except (TypeError, ValueError):
+                score += 2.0
+        return score
 
     def ensure_hour_bucket(self, profileid: str, ts: float) -> HostState:
         state = self.host_states.setdefault(profileid, HostState())
@@ -699,20 +724,28 @@ class AnomalyDetectionHTTPS(IModule):
             },
         )
 
+        z_by_feature: Dict[str, float] = {}
+        hourly_adwin_score = 0.0
+        for feature_name, value in features.items():
+            if (
+                feature_name == "ja3_changes"
+                and self.training_hours == 0
+                and value < float(self.ja3_min_variants_per_server)
+            ):
+                # Keep ADWIN/detection signal aligned with the no-training JA3 gate.
+                continue
+            model = self.get_or_create_hourly_model(state, feature_name)
+            z = self.score_feature(model, value)
+            z_by_feature[feature_name] = z
+            hourly_adwin_score += z
+
         hourly_anomalies = []
         hourly_score = 0.0
         if self.should_detect(state):
             for feature_name, value in features.items():
-                if (
-                    feature_name == "ja3_changes"
-                    and self.training_hours == 0
-                    and value < float(self.ja3_min_variants_per_server)
-                ):
-                    # Fallback-only gate when no benign training exists.
-                    continue
-                model = self.get_or_create_hourly_model(state, feature_name)
-                z = self.score_feature(model, value)
+                z = z_by_feature.get(feature_name, 0.0)
                 if z >= self.hourly_zscore_threshold:
+                    model = self.get_or_create_hourly_model(state, feature_name)
                     hourly_anomalies.append(
                         {
                             "feature": feature_name,
@@ -775,6 +808,22 @@ class AnomalyDetectionHTTPS(IModule):
         is_training_hour = not self.should_detect(state)
         update_mode = "training_fit"
         if is_training_hour:
+            if self.use_adwin_drift:
+                adwin = self.get_or_create_hourly_adwin(state)
+                if adwin is not None:
+                    adwin.update(hourly_adwin_score)
+                    self.log_event(
+                        3,
+                        "model_update",
+                        "ADWIN hourly baseline updated during training.",
+                        traffic_ts=bucket.start_ts,
+                        metrics={
+                            "profileid": profileid,
+                            "hourly_adwin_score": round(hourly_adwin_score, 3),
+                            "adwin_width": getattr(adwin, "width", None),
+                            "adwin_estimation": getattr(adwin, "estimation", None),
+                        },
+                    )
             state.trained_hours += 1
             self.log_event(
                 1,
@@ -791,10 +840,10 @@ class AnomalyDetectionHTTPS(IModule):
             update_alpha = None
         else:
             if self.use_adwin_drift:
-                adwin = self.get_or_create_adwin(state)
+                adwin = self.get_or_create_hourly_adwin(state)
                 adwin_drift_detected = False
                 if adwin is not None:
-                    adwin.update(hourly_score)
+                    adwin.update(hourly_adwin_score)
                     adwin_drift_detected = bool(
                         getattr(adwin, "drift_detected", False)
                     )
@@ -807,6 +856,7 @@ class AnomalyDetectionHTTPS(IModule):
                             metrics={
                                 "profileid": profileid,
                                 "hourly_score": round(hourly_score, 3),
+                                "hourly_adwin_score": round(hourly_adwin_score, 3),
                                 "flow_anomaly_count": bucket.flow_anomaly_count,
                                 "adwin_width": getattr(adwin, "width", None),
                                 "adwin_estimation": getattr(
@@ -1070,17 +1120,90 @@ class AnomalyDetectionHTTPS(IModule):
 
         if bytes_total is not None:
             server_model = self.get_or_create_server_model(state, server)
+            flow_score = self.compute_reason_score(flow_anomalies)
+            flow_update_mode = "training_fit"
+            flow_adwin_drift_detected = False
             if not self.should_detect(state):
+                benign_flow_score = 0.0
+                if server_model.count >= self.min_baseline_points:
+                    benign_flow_score = server_model.zscore(bytes_total)
+                flow_score = benign_flow_score
+                if self.use_adwin_drift:
+                    flow_adwin = self.get_or_create_flow_adwin(state)
+                    if flow_adwin is not None:
+                        flow_adwin.update(benign_flow_score)
+                        self.log_event(
+                            3,
+                            "model_update",
+                            "ADWIN flow baseline updated during training.",
+                            traffic_ts=ts,
+                            metrics={
+                                "profileid": profileid,
+                                "uid": uid,
+                                "server": server,
+                                "flow_score": round(benign_flow_score, 3),
+                                "adwin_width": getattr(flow_adwin, "width", None),
+                                "adwin_estimation": getattr(
+                                    flow_adwin, "estimation", None
+                                ),
+                            },
+                        )
                 alpha = None
                 self.fit_benign_model(server_model, bytes_total)
-            elif not flow_anomalies:
-                alpha = self.baseline_alpha
-                self.update_model(server_model, bytes_total, alpha)
-            elif len(flow_anomalies) <= self.max_small_flow_anomalies:
-                alpha = self.drift_alpha
-                self.update_model(server_model, bytes_total, alpha)
             else:
-                alpha = self.suspicious_alpha
+                if self.use_adwin_drift:
+                    flow_adwin = self.get_or_create_flow_adwin(state)
+                    if flow_adwin is not None:
+                        flow_adwin.update(flow_score)
+                        flow_adwin_drift_detected = bool(
+                            getattr(flow_adwin, "drift_detected", False)
+                        )
+                        if flow_adwin_drift_detected:
+                            self.log_event(
+                                3,
+                                "adwin_drift_signal",
+                                "ADWIN signaled drift on flow anomaly score.",
+                                traffic_ts=ts,
+                                metrics={
+                                    "profileid": profileid,
+                                    "uid": uid,
+                                    "server": server,
+                                    "flow_score": round(flow_score, 3),
+                                    "flow_anomaly_count_in_flow": len(
+                                        flow_anomalies
+                                    ),
+                                    "adwin_width": getattr(
+                                        flow_adwin, "width", None
+                                    ),
+                                    "adwin_estimation": getattr(
+                                        flow_adwin, "estimation", None
+                                    ),
+                                },
+                            )
+
+                    if not flow_adwin_drift_detected:
+                        alpha = self.baseline_alpha
+                        flow_update_mode = "baseline_update"
+                    elif (
+                        flow_score <= self.adaptation_score_threshold
+                        and len(flow_anomalies)
+                        <= self.max_small_flow_anomalies
+                    ):
+                        alpha = self.drift_alpha
+                        flow_update_mode = "drift_update"
+                    else:
+                        alpha = self.suspicious_alpha
+                        flow_update_mode = "suspicious_update"
+                elif not flow_anomalies:
+                    alpha = self.baseline_alpha
+                    flow_update_mode = "baseline_update"
+                elif len(flow_anomalies) <= self.max_small_flow_anomalies:
+                    alpha = self.drift_alpha
+                    flow_update_mode = "drift_update"
+                else:
+                    alpha = self.suspicious_alpha
+                    flow_update_mode = "suspicious_update"
+
                 self.update_model(server_model, bytes_total, alpha)
             self.log_event(
                 3,
@@ -1095,6 +1218,9 @@ class AnomalyDetectionHTTPS(IModule):
                     "var": round(server_model.var, 6),
                     "count": server_model.count,
                     "min_std_floor": round(server_model.min_std_floor, 6),
+                    "flow_score": round(flow_score, 3),
+                    "flow_update_mode": flow_update_mode,
+                    "flow_adwin_drift_detected": flow_adwin_drift_detected,
                     "alpha": alpha,
                     "fit_method": (
                         "welford_online_moments"
