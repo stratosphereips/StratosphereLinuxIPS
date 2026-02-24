@@ -580,6 +580,54 @@ class ConfigParser(object):
             threshold = 3
         return max(1, threshold)
 
+    def https_anomaly_use_adwin_drift(self) -> bool:
+        value = self.read_configuration(
+            "anomaly_detection_https", "use_adwin_drift", False
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def https_anomaly_adwin_delta(self) -> float:
+        delta = self.read_configuration(
+            "anomaly_detection_https", "adwin_delta", 0.002
+        )
+        try:
+            delta = float(delta)
+        except (TypeError, ValueError):
+            delta = 0.002
+        return min(max(delta, 0.000001), 1.0)
+
+    def https_anomaly_adwin_clock(self) -> int:
+        clock = self.read_configuration(
+            "anomaly_detection_https", "adwin_clock", 32
+        )
+        try:
+            clock = int(clock)
+        except (TypeError, ValueError):
+            clock = 32
+        return max(1, clock)
+
+    def https_anomaly_adwin_grace_period(self) -> int:
+        grace = self.read_configuration(
+            "anomaly_detection_https", "adwin_grace_period", 10
+        )
+        try:
+            grace = int(grace)
+        except (TypeError, ValueError):
+            grace = 10
+        return max(1, grace)
+
+    def https_anomaly_adwin_min_window_length(self) -> int:
+        min_win = self.read_configuration(
+            "anomaly_detection_https", "adwin_min_window_length", 5
+        )
+        try:
+            min_win = int(min_win)
+        except (TypeError, ValueError):
+            min_win = 5
+        return max(1, min_win)
+
     def https_anomaly_log_verbosity(self) -> int:
         verbosity = self.read_configuration(
             "anomaly_detection_https", "log_verbosity", 3
