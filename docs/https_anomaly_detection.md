@@ -94,11 +94,13 @@ For normal non-anomalous periods outside training, per-feature EWMA uses `baseli
 
 ### Optional ADWIN drift trigger
 
-If `use_adwin_drift=true` and `river` is installed, ADWIN is used as a drift trigger on `hourly_score`:
+If `use_adwin_drift=true` and `river` is installed, ADWIN is used as drift trigger in both paths:
 
-- ADWIN drift detected -> classify drift as `drift_update` or `suspicious_update` using the same thresholds.
+- **Hourly path**: ADWIN receives `hourly_adwin_score` (sum of hourly feature z-scores).
+- **Flow path**: ADWIN receives `flow_score` (sum of reason z-scores, novelty reasons mapped to a small fixed score).
+- ADWIN drift detected -> classify as `drift_update` or `suspicious_update` using existing thresholds.
 - No ADWIN drift -> use `baseline_update` (`baseline_alpha`).
-- During benign training, ADWIN is not used (fit-only).
+- During benign training, ADWIN is still warmed with benign scores to reduce cold-start noise after training.
 
 ## New server vs JA3 behavior
 
