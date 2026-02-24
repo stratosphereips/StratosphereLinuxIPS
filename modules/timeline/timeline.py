@@ -4,6 +4,7 @@ import traceback
 import sys
 import time
 import json
+from collections import OrderedDict
 from typing import (
     Any,
     List,
@@ -32,6 +33,16 @@ class Timeline(IModule):
         }
         self.classifier = FlowClassifier()
         self.host_ips: List[str] = self.db.get_all_host_ips()
+        # caches to avoid repetitive redis querying of the same val
+        self._dns_cache: OrderedDict[str, str] = OrderedDict()
+        self._port_cache: OrderedDict[str, str] = OrderedDict()
+        self._state_cache: OrderedDict[tuple, str] = OrderedDict()
+        self._dns_cache_size = 2048
+        self._port_cache_size = 4096
+        self._state_cache_size = 4096
+        # drains the new_flow channel to avoid msg buildup in RAM and
+        # getting OOM killed
+        self._new_flow_msgs_batch_size = 30
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -155,6 +166,9 @@ class Timeline(IModule):
         return altflow_info
 
     def get_dns_resolution(self, ip):
+        cached = self._cache_get(self._dns_cache, ip)
+        if cached is not None:
+            return cached
         dns_resolution: dict = self.db.get_dns_resolution(ip)
         dns_resolution: list = dns_resolution.get("domains", [])
 
@@ -166,6 +180,9 @@ class Timeline(IModule):
             dns_resolution = "????"
         else:
             dns_resolution = ", ".join(dns_resolution)
+        self._cache_set(
+            self._dns_cache, ip, dns_resolution, self._dns_cache_size
+        )
         return dns_resolution
 
     def process_tcp_udp_flow(self, flow):
@@ -183,7 +200,7 @@ class Timeline(IModule):
             "dns_resolution": self.get_dns_resolution(flow.daddr),
             "daddr": flow.daddr,
             "dport/proto": f"{str(flow.dport)}/{flow.proto.upper()}",
-            "state": self.db.get_final_state_from_flags(flow.state, flow.pkts),
+            "state": self._get_final_state_cached(flow.state, flow.pkts),
             "warning": (
                 "No data exchange!" if not (flow.sbytes + flow.dbytes) else ""
             ),
@@ -269,9 +286,14 @@ class Timeline(IModule):
         dport_name = flow.appproto
         # suricata does this
         if not dport_name or dport_name == "failed":
-            dport_name = self.db.get_port_info(
-                f"{flow.dport}/{flow.proto.lower()}"
-            )
+            port_key = f"{flow.dport}/{flow.proto.lower()}"
+            cached = self._cache_get(self._port_cache, port_key)
+            if cached is None:
+                cached = self.db.get_port_info(port_key)
+                self._cache_set(
+                    self._port_cache, port_key, cached, self._port_cache_size
+                )
+            dport_name = cached
         dport_name = "" if not dport_name else dport_name.upper()
         return dport_name
 
@@ -366,3 +388,24 @@ class Timeline(IModule):
             twid = msg["twid"]
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
             self.process_flow(profileid, twid, flow)
+
+    def _cache_get(self, cache: OrderedDict, key):
+        if key in cache:
+            cache.move_to_end(key)
+            return cache[key]
+        return None
+
+    def _cache_set(self, cache: OrderedDict, key, value, max_size: int):
+        cache[key] = value
+        cache.move_to_end(key)
+        if len(cache) > max_size:
+            cache.popitem(last=False)
+
+    def _get_final_state_cached(self, state, pkts):
+        key = (state, pkts)
+        cached = self._cache_get(self._state_cache, key)
+        if cached is not None:
+            return cached
+        cached = self.db.get_final_state_from_flags(state, pkts)
+        self._cache_set(self._state_cache, key, cached, self._state_cache_size)
+        return cached
