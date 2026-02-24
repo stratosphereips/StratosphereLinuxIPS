@@ -102,6 +102,17 @@ If `use_adwin_drift=true` and `river` is installed, ADWIN is used as drift trigg
 - No ADWIN drift -> use `baseline_update` (`baseline_alpha`).
 - During benign training, ADWIN is still warmed with benign scores to reduce cold-start noise after training.
 
+Why raw signals:
+
+- drift is a distribution change in the observed variables, so ADWIN tracks the raw feature streams directly,
+- z-scores are still used for anomaly magnitude and evidence reasons, but not as the primary drift input.
+
+Performance note:
+
+- hourly ADWIN cost scales with hourly feature count,
+- flow ADWIN cost scales with per-flow signal count,
+- both are constant-time scalar updates and usually lightweight.
+
 ## New server vs JA3 behavior
 
 - `new_servers` is modeled as an hourly statistical feature and adapted over time.
@@ -164,6 +175,10 @@ Main keys:
 - `log_verbosity`
 
 Default: `use_adwin_drift=true`.
+
+Reference:
+
+- River ADWIN: https://riverml.xyz/latest/api/drift/ADWIN/
 
 ## Operational logs
 
