@@ -1638,6 +1638,8 @@ def test_bad_smtp_login(saddr, daddr, stime, twid, uid):
         uid=uid,
         saddr=saddr,
         daddr=daddr,
+        sport="2525",
+        dport="25",
         last_reply="",
     )
     set_ev.bad_smtp_login(
@@ -1689,6 +1691,8 @@ def test_smtp_bruteforce(flow, twid, uid, smtp_bruteforce_threshold):
         uid=uid,
         saddr=flow["saddr"],
         daddr=flow["daddr"],
+        sport="2525",
+        dport="25",
         last_reply="",
     )
     set_ev.smtp_bruteforce(
