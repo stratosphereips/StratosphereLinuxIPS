@@ -242,7 +242,7 @@ anomaly_detection_https:
   # Optional ADWIN-based drift trigger (river).
   # If true, drift/suspicious update is decided only after ADWIN signals drift.
   # If false, Slips uses the previous threshold-only drift logic.
-  use_adwin_drift: false
+  use_adwin_drift: true
   adwin_delta: 0.002
   adwin_clock: 32
   adwin_grace_period: 10
