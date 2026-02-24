@@ -190,16 +190,34 @@ class RedisDB(
 
     def __init__(self, *args, **kwargs):
         self.call_mixins_setup()
+        self._init_ttls()
         self.set_new_incoming_flows(True)
-        print(
-            f"@@@@@@@@@@@@@@@@ is_running_non_stop "
-            f"{self.is_running_non_stop()}"
-        )
-        # default ttl is 2 tws. anything before that should be deleted from
-        # the db to save memory
-        self.default_ttl = int(2 * self.conf.get_tw_width_in_seconds())
-        # 2 days byd efault if the tw is 1h
-        self.extended_ttl = int(48 * self.conf.get_tw_width_in_seconds())
+
+    def _init_ttls(self):
+        """sets the default and extended ttls for redis keys based on
+        whether we're analysing files or interface"""
+
+        # ok why is the deafult ttl different in intrface and pcaps/files?
+        # because in files/pcaps slips parses hours of traffic in
+        # minutes, so maybe 10 hours worth of traffic are parsed in 10
+        # minutes. we don't wanna keep track of these 10hrs of traffic in
+        # RAM until the end of the tw width which is 1h by default! we want
+        # to delete them after a while to make  room for  more traffic.
+        # if delete more often in pcaps, redis runs out of RAM real quick.
+        if self.is_running_non_stop():
+            # default ttl is 2 tws. anything before that will be deleted from
+            # the db to save RAM
+            self.default_ttl = int(2 * self.conf.get_tw_width_in_seconds())
+            # 2 days by fefault if the tw is 1h
+            self.extended_ttl = int(48 * self.conf.get_tw_width_in_seconds())
+        else:
+            # remember that this TTL is wall-clock time and in seconds. so 10
+            # mins is enough for slips to completely get over a timewindow,
+            # do all the detections and forget about it.
+            # 10 mins
+            self.default_ttl = 10 * 60
+            # 20 mins
+            self.extended_ttl = 60 * 60
 
     def call_mixins_setup(self):
         """calls setup() on all mixins"""
