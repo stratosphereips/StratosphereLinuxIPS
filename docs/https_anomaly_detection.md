@@ -161,6 +161,8 @@ Main keys:
 - `adwin_min_window_length`
 - `log_verbosity`
 
+Default: `use_adwin_drift=true`.
+
 ## Operational logs
 
 The module logs key events such as:
