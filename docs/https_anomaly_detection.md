@@ -92,6 +92,14 @@ After each hour closes, the module chooses model update mode:
 
 For normal non-anomalous periods outside training, per-feature EWMA uses `baseline_alpha`.
 
+### Optional ADWIN drift trigger
+
+If `use_adwin_drift=true` and `river` is installed, ADWIN is used as a drift trigger on `hourly_score`:
+
+- ADWIN drift detected -> classify drift as `drift_update` or `suspicious_update` using the same thresholds.
+- No ADWIN drift -> use `baseline_update` (`baseline_alpha`).
+- During benign training, ADWIN is not used (fit-only).
+
 ## New server vs JA3 behavior
 
 - `new_servers` is modeled as an hourly statistical feature and adapted over time.
@@ -146,6 +154,11 @@ Main keys:
 - `min_baseline_points`
 - `max_small_flow_anomalies`
 - `ja3_min_variants_per_server`
+- `use_adwin_drift`
+- `adwin_delta`
+- `adwin_clock`
+- `adwin_grace_period`
+- `adwin_min_window_length`
 - `log_verbosity`
 
 ## Operational logs
@@ -158,4 +171,3 @@ The module logs key events such as:
 - drift updates,
 - suspicious updates,
 - detections and emitted evidence.
-

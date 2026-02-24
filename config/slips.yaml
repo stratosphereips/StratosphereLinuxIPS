@@ -239,6 +239,15 @@ anomaly_detection_https:
   # Max flow anomalies in an hour still considered "small drift".
   max_small_flow_anomalies: 1
 
+  # Optional ADWIN-based drift trigger (river).
+  # If true, drift/suspicious update is decided only after ADWIN signals drift.
+  # If false, Slips uses the previous threshold-only drift logic.
+  use_adwin_drift: false
+  adwin_delta: 0.002
+  adwin_clock: 32
+  adwin_grace_period: 10
+  adwin_min_window_length: 5
+
   # JA3 statistical fallback gate used only when training_hours = 0.
   # If there is no benign training period, ja3_changes is not scored
   # until this minimum hourly value is reached.
