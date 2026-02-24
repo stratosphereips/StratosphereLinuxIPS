@@ -218,6 +218,16 @@ Why:
 - benign behavior shifts should be learned,
 - strongly suspicious periods should not poison the baseline quickly.
 
+### ADWIN drift trigger (when `use_adwin_drift=true`)
+
+When enabled and `river` is available, ADWIN is used as a drift trigger:
+
+- **Hourly stream** receives `hourly_adwin_score` (sum of hourly feature z-scores).
+- **Per-flow stream** receives `flow_score` (sum of reason z-scores; novelty reasons map to a fixed small score).
+- If ADWIN signals drift, update path is classified as `drift_update` or `suspicious_update` using existing thresholds.
+- If ADWIN does not signal drift, update path is `baseline_update` with `baseline_alpha`.
+- During benign training, ADWIN is still updated with benign scores to warm its windows and reduce post-training cold-start noise.
+
 
 ## Mathematical model details
 
@@ -390,6 +400,10 @@ The module explicitly logs:
   when small anomalies are treated as drift and model update is allowed.
 - **suspicious adaptation** (`suspicious_update`):
   when strong anomalies lead to conservative (very slow) updates.
+- **ADWIN drift signal** (`adwin_drift_signal`):
+  emitted when ADWIN reports drift (hourly stream and per-flow stream).
+- **baseline adaptation** (`baseline_update`):
+  post-training update used when ADWIN is enabled but does not signal drift.
 - **model updates** (`model_update`):
   model update details (feature/server, value, mean, variance, alpha, count, fit method).
 - **detections**:
