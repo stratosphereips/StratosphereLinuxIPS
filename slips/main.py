@@ -647,8 +647,13 @@ class Main:
             def sig_handler(sig, frame):
                 if not self.sigterm_received:
                     self.sigterm_received = True
+                    self.print("SIGTERM received, shutting down slips.")
                     self.print(
-                        "SIGTERM received, shutting down slips gracefully."
+                        "SIGTERM received, likely due to "
+                        "out of memory errors. Slips is stopping "
+                        "without completing the analysis.",
+                        0,
+                        1,
                     )
 
             # The signals SIGKILL and SIGSTOP cannot be caught,
