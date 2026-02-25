@@ -123,6 +123,8 @@ class Profiler(ICore, IObservable):
         )
         # the event that the workers use to tell this process to stop
         self.stop_profiler_event = multiprocessing.Event()
+        now = time.monotonic()
+        self.next_throughput_check_time = now + 300
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -298,15 +300,13 @@ class Profiler(ICore, IObservable):
         returns true if 5 mins passed since the last time we checked
         the flows read per second
         """
-        now = time.time()
-        self.last_throughput_check_time = getattr(
-            self, "last_throughput_check_time", now
-        )
-        time_diff = now - self.last_throughput_check_time
-        if time_diff < 300:  # check every 5 minutes
+        now = time.monotonic()
+        if now < self.next_throughput_check_time:
             return False
 
-        self.last_throughput_check_time = now
+        # Advance in 5-min steps to reduce drift on long delays.
+        while self.next_throughput_check_time <= now:
+            self.next_throughput_check_time += 300
         return True
 
     def max_workers_started(self) -> bool:
