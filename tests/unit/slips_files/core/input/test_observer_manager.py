@@ -3,10 +3,13 @@
 from unittest.mock import MagicMock, patch
 from tests.module_factory import ModuleFactory
 from slips_files.core.input.observer_manager import InputObserver
+from slips_files.common.input_type import InputType
 
 
 def test_input_observer_start_schedules_dirs():
-    input_process = ModuleFactory().create_input_obj("", "zeek_log_file")
+    input_process = ModuleFactory().create_input_obj(
+        "", InputType.ZEEK_LOG_FILE
+    )
     observer = InputObserver(input_process)
 
     with (
@@ -29,7 +32,9 @@ def test_input_observer_start_schedules_dirs():
 
 
 def test_input_observer_stop_handles_missing_observer():
-    input_process = ModuleFactory().create_input_obj("", "zeek_log_file")
+    input_process = ModuleFactory().create_input_obj(
+        "", InputType.ZEEK_LOG_FILE
+    )
     observer = InputObserver(input_process)
     observer.observer = MagicMock()
 

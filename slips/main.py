@@ -25,6 +25,7 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green, yellow
+from slips_files.common.input_type import InputType
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.helpers.checker import Checker
@@ -52,7 +53,7 @@ class Main:
         self.commit = "None"
         self.branch = "None"
         self.last_updated_stats_time = datetime.now()
-        self.input_type = False
+        self.input_type = None
         self.proc_man = ProcessManager(self)
         self.gw_info_printed = False
         self.localnet_info_printed = False
@@ -87,7 +88,7 @@ class Main:
         Check if we have zeek or bro
         """
         self.zeek_bro = None
-        if self.input_type not in ("pcap", "interface"):
+        if self.input_type not in (InputType.PCAP, InputType.INTERFACE):
             return False
 
         if shutil.which("zeek"):
@@ -152,8 +153,8 @@ class Main:
     def was_running_zeek(self) -> bool:
         """returns true if zeek was used in this run"""
         return self.db.is_running_non_stop() or self.db.get_input_type() in (
-            "pcap",
-            "interface",
+            InputType.PCAP,
+            InputType.INTERFACE,
         )
 
     def store_zeek_dir_copy(self):
@@ -258,7 +259,7 @@ class Main:
             )
             sys.exit(-1)
         line_type = input_information
-        input_type = "stdin"
+        input_type = InputType.STDIN
         return input_type, line_type.lower()
 
     def is_binetflow_line(self, line: str) -> bool:
@@ -270,7 +271,7 @@ class Main:
         returns binetflow, pcap, nfdump, zeek_folder, suricata, etc.
         """
         # default value
-        input_type = "file"
+        input_type = InputType.FILE
         # Get the type of file
         cmd_result = subprocess.run(
             ["file", given_path], stdout=subprocess.PIPE
@@ -281,26 +282,26 @@ class Main:
             "pcap capture file" in cmd_result
             or "pcapng capture file" in cmd_result
         ) and os.path.isfile(given_path):
-            input_type = "pcap"
+            input_type = InputType.PCAP
         elif (
             "dBase" in cmd_result
             or "nfcap" in given_path
             or "nfdump" in given_path
         ) and os.path.isfile(given_path):
-            input_type = "nfdump"
+            input_type = InputType.NFDUMP
             if shutil.which("nfdump") is None:
                 # If we do not have nfdump, terminate Slips.
                 print("nfdump is not installed. terminating slips.")
                 self.terminate_slips()
         elif "CSV" in cmd_result and os.path.isfile(given_path):
-            input_type = "binetflow"
+            input_type = InputType.BINETFLOW
         elif "directory" in cmd_result and os.path.isdir(given_path):
             for log_file in os.listdir(given_path):
                 # if there is at least 1 supported log file inside the
                 # given directory, start slips normally
                 # otherwise, stop slips
                 if not utils.is_ignored_zeek_log_file(log_file):
-                    input_type = "zeek_folder"
+                    input_type = InputType.ZEEK_FOLDER
                     break
             else:
                 print(
@@ -320,13 +321,13 @@ class Main:
                     if not first_line.startswith("#"):
                         break
             if "flow_id" in first_line:
-                input_type = "suricata"
+                input_type = InputType.SURICATA
             else:
                 # this is a text file, it can be binetflow or zeek_log_file
                 try:
                     # is it a json log file
                     json.loads(first_line)
-                    input_type = "zeek_log_file"
+                    input_type = InputType.ZEEK_LOG_FILE
                 except json.decoder.JSONDecodeError:
                     # this is a tab separated file
                     # is it zeek log file or binetflow file?
@@ -340,14 +341,14 @@ class Main:
                     if sequential_spaces_found or tabs_found:
                         if self.is_binetflow_line(first_line):
                             # tab separated files are usually binetflow tab files
-                            input_type = "binetflow-tabs"
+                            input_type = InputType.BINETFLOW_TABS
                         else:
-                            input_type = "zeek_log_file"
+                            input_type = InputType.ZEEK_LOG_FILE
                     elif commas_found and self.is_binetflow_line(first_line):
                         # sometimes modified binetflow files aren't CSV,
                         # and the file command return ASCII text, this is
                         # probably the case
-                        return "binetflow"
+                        return InputType.BINETFLOW
         return input_type
 
     def setup_print_levels(self):
@@ -450,7 +451,8 @@ class Main:
         return (
             self.args.input_module
             or self.args.growing
-            or self.input_type in ("stdin", "pcap", "interface")
+            or self.input_type
+            in (InputType.STDIN, InputType.PCAP, InputType.INTERFACE)
         )
 
     def get_slips_logfile(self) -> str:
@@ -554,6 +556,11 @@ class Main:
                     self.print(yellow("Slips is running in AP mode."))
                     self.ap_manager.store_ap_interfaces(self.input_information)
 
+            if self.args.growing:
+                self.print(
+                    f"Running on a growing zeek dir: {self.args.growing}"
+                )
+
             self.db.set_input_metadata(
                 {
                     "output_dir": self.args.output,
@@ -564,10 +571,11 @@ class Main:
                     "input_type": self.input_type,
                 }
             )
-            # this line should happen as soon as we start the db
+
+            # this  func should be called as soon as we start the db,
+            # before evdience proc starts.
             # to be able to use the host IP as analyzer IP in alerts.json
             # should be after setting the input metadata with "input_type"
-            # TLDR; dont change the order of this line
             host_ips = self.host_ip_man.store_host_ip()
 
             self.print(
@@ -584,12 +592,6 @@ class Main:
             )
             self.profilers_manager.cpu_profiler_init()
             self.profilers_manager.memory_profiler_init()
-
-            if self.args.growing:
-                self.print(
-                    f"Running on a growing zeek dir: " f"{self.args.growing}"
-                )
-                self.db.set_growing_zeek_dir()
 
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
@@ -643,8 +645,16 @@ class Main:
 
             # call shutdown_gracefully on sigterm
             def sig_handler(sig, frame):
-                self.sigterm_received = True
-                self.print("SIGTERM received, shutting down slips gracefully.")
+                if not self.sigterm_received:
+                    self.sigterm_received = True
+                    self.print("SIGTERM received, shutting down slips.")
+                    self.print(
+                        "SIGTERM received, likely due to "
+                        "out of memory errors. Slips is stopping "
+                        "without completing the analysis.",
+                        0,
+                        1,
+                    )
 
             # The signals SIGKILL and SIGSTOP cannot be caught,
             # blocked, or ignored.
@@ -685,11 +695,12 @@ class Main:
                 self.print_gw_info()
                 self.print_localnet_info()
 
-                # if you remove the below logic anywhere before the
-                # above sleep() statement, it will try to get the return
-                # value very quickly before
-                # the webinterface thread sets it. so don't:D
+                # if you remove check_if_webinterface_started() call anywhere
+                # before the above sleep(), it will try to get the return
+                # value very quickly before  the webinterface thread sets
+                # it. so don't:D
                 self.ui_man.check_if_webinterface_started()
+
                 self.update_stats()
                 self.db.check_tw_to_close()
                 self.db.ping()

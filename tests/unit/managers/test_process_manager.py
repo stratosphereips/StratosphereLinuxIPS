@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 from managers.process_manager import ProcessManager
 from tests.module_factory import ModuleFactory
 from slips_files.common.slips_utils import utils
+from slips_files.common.input_type import InputType
 
 
 @pytest.mark.parametrize(
@@ -12,11 +13,18 @@ from slips_files.common.slips_utils import utils
     "zeek_or_bro, zeek_dir, line_type",
     [
         # Test case 1: pcap input
-        ("pcap", "test.pcap", "tcp port 80", "zeek", "/opt/zeek", "conn"),
+        (
+            InputType.PCAP,
+            "test.pcap",
+            "tcp port 80",
+            "zeek",
+            "/opt/zeek",
+            "conn",
+        ),
         # Test case 2: zeek input
-        ("zeek", "test.log", "", "bro", "/opt/bro", "dns"),
+        (InputType.ZEEK, "test.log", "", "bro", "/opt/bro", "dns"),
         # Test case 3: stdin input
-        ("stdin", "-", "", "zeek", "/opt/zeek", "http"),
+        (InputType.STDIN, "-", "", "zeek", "/opt/zeek", "http"),
     ],
 )
 def test_start_input_process(
@@ -302,15 +310,15 @@ def test_is_debugger_active(mock_return_value, expected_result):
     "debugger_active, input_type, is_interface, expected",
     [
         # Test case 1: Debugger active
-        (True, "pcap", False, True),
+        (True, InputType.PCAP, False, True),
         # Test case 2: Stdin input
-        (False, "stdin", False, True),
+        (False, InputType.STDIN, False, True),
         # Test case 3: Cyst input
-        (False, "cyst", False, True),
+        (False, InputType.CYST, False, True),
         # Test case 4: Interface input
-        (False, "pcap", True, True),
+        (False, InputType.PCAP, True, True),
         # Test case 5: Normal case (should stop)
-        (False, "pcap", False, False),
+        (False, InputType.PCAP, False, False),
     ],
 )
 def test_should_run_non_stop(

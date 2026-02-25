@@ -368,14 +368,6 @@ class ProfileHandler:
         profile_tws = self.get_blocked_timewindows_of_profile(profileid)
         return twid in profile_tws
 
-    def was_profile_and_tw_modified(self, profileid, twid):
-        """Retrieve from the db if this TW of this profile was modified"""
-        data = self.r.zrank(
-            self.constants.MODIFIED_TIMEWINDOWS,
-            profileid + self.separator + twid,
-        )
-        return bool(data)
-
     def add_flow(
         self,
         flow,
@@ -1106,12 +1098,13 @@ class ProfileHandler:
     def check_tw_to_close(self, close_all=False):
         """
         Check if we should close a TW
-        Closes the tws that were last modified more than an hour
-        ago (self.width)
+        Closes the tws that were last modified more than self.width (which
+        is 1h by default) ago
         :param close_all: close all tws no matter when they were last
-        modified, happens when slips is stopping
+        modified, this is passed when slips is stopping
         """
 
+        # sit is the ts of the last tw modification detected by slips
         sit = float(self.get_slips_internal_time())
 
         if (
@@ -1119,23 +1112,22 @@ class ProfileHandler:
             and hasattr(self, "_last_sit")
             and sit == self._last_sit
         ):
-            return  # nothing changed since last run
+            return  # nothing changed since last execution of this func
 
         self._last_sit = sit
 
-        # sit is the ts of the last tw modification detected by slips
         # so this line means if 1h(width) passed since the last
         # modification detected, then it's time to close the tw
-        modification_time = sit - self.width
+        time_since_last_modification = sit - self.width
         if close_all:
             # close all tws no matter when they were last modified
-            modification_time = float("inf")
+            time_since_last_modification = float("inf")
 
-        # these are the tws that havent been modified in the last 1h
+        # these are the tws that havent been modified in the last width time
         profiles_tws_to_close: List[str] = self.r.zrangebyscore(
             self.constants.MODIFIED_TIMEWINDOWS,
             0,
-            modification_time,
+            time_since_last_modification,
         )
         if not profiles_tws_to_close:
             return
@@ -1143,6 +1135,7 @@ class ProfileHandler:
         # Mark the TWs as closed so modules can work on its data
         pipe = self.r.pipeline()
         for profile_tw_to_close in profiles_tws_to_close:
+
             pipe.zrem(self.constants.MODIFIED_TIMEWINDOWS, profile_tw_to_close)
             pipe = self.publish(
                 "tw_closed", profile_tw_to_close, pipeline=pipe
@@ -1177,8 +1170,20 @@ class ProfileHandler:
         Modules wait for a TW modification to do some detections.
         check the "tw_modified" channel usages to know why this func is
         useful
+
         """
-        timestamp = timestamp or time.time()
+        if not timestamp:
+            # NEVER use time.time() as a default value for timestamp,
+            # using it when analyzing Pcaps/files leads to accumulation of tw
+            # data in RAM > redis getting OOM > slips crashing.
+            raise ValueError(
+                "timestamp is required to mark a TW as "
+                "modified. Received timestamp: None. This "
+                "leads to Slips running out of memory and crashing."
+                " Please make sure to provide a timestamp when "
+                "calling this function."
+            )
+
         data = {f"{profileid}{self.separator}{twid}": float(timestamp)}
         client = pipe if pipe else self.r
         client.zadd(self.constants.MODIFIED_TIMEWINDOWS, data)
@@ -1315,8 +1320,6 @@ class ProfileHandler:
         data = json.dumps(data)
         mapping = {data: timestamp}
         self.r.zadd(key, mapping)
-        # Mark the tw as modified since the timeline line is new data in the TW
-        self.mark_profile_tw_as_modified(profileid, twid, timestamp="")
 
     def get_timeline_last_lines(
         self, profileid, twid, first_index: int

@@ -7,16 +7,17 @@ from tests.module_factory import ModuleFactory
 from datetime import datetime, timedelta
 import sys
 import os
+from slips_files.common.input_type import InputType
 
 
 @pytest.mark.parametrize(
     "input_information, expected_input_type, expected_line_type",
     [  # Test Case 1: Valid Argus input
-        ("argus", "stdin", "argus"),
+        ("argus", InputType.STDIN, "argus"),
         # Test Case 2: Valid Suricata input
-        ("Suricata", "stdin", "suricata"),
+        ("Suricata", InputType.STDIN, "suricata"),
         # Test Case 3: Valid Zeek input
-        ("Zeek", "stdin", "zeek"),
+        ("Zeek", InputType.STDIN, "zeek"),
     ],
 )
 def test_handle_flows_from_stdin_valid_input(
@@ -41,17 +42,25 @@ def test_handle_flows_from_stdin_invalid_input():
 @pytest.mark.parametrize(
     "args, input_type, expected_result",
     [  # Testcase1: input module
-        ({"input_module": True, "growing": False}, "zeek_folder", True),
+        (
+            {"input_module": True, "growing": False},
+            InputType.ZEEK_FOLDER,
+            True,
+        ),
         # Testcase2: growing
-        ({"input_module": False, "growing": True}, "zeek_folder", True),
+        (
+            {"input_module": False, "growing": True},
+            InputType.ZEEK_FOLDER,
+            True,
+        ),
         # Testcase3: stdin
-        ({"input_module": False, "growing": False}, "stdin", True),
+        ({"input_module": False, "growing": False}, InputType.STDIN, True),
         # Testcase4: pcap
-        ({"input_module": False, "growing": False}, "pcap", True),
+        ({"input_module": False, "growing": False}, InputType.PCAP, True),
         # Testcase5: interface
-        ({"input_module": False, "growing": False}, "interface", True),
+        ({"input_module": False, "growing": False}, InputType.INTERFACE, True),
         # Testcase6: other type, false
-        ({"input_module": False, "growing": False}, "nfdump", False),
+        ({"input_module": False, "growing": False}, InputType.NFDUMP, False),
     ],
 )
 def test_is_total_flows_unknown(args, input_type, expected_result):
@@ -205,20 +214,24 @@ def test_print(
     "given_path, cmd_result, expected_input_type",
     [
         # Test Case 1: Valid PCAP file
-        ("/path/to/file.pcap", b"pcap capture file", "pcap"),
+        ("/path/to/file.pcap", b"pcap capture file", InputType.PCAP),
         # Test Case 2: Valid NFDUMP file
-        ("/path/to/file.nfcap", b"nfcap file", "nfdump"),
+        ("/path/to/file.nfcap", b"nfcap file", InputType.NFDUMP),
         # Test Case 3: Valid BINETFLOW (CSV) file
-        ("/path/to/file.csv", b"CSV text", "binetflow"),
+        ("/path/to/file.csv", b"CSV text", InputType.BINETFLOW),
         # Test Case 4: Valid SURICATA (JSON) file
-        ("/path/to/file.json", b'{"flow_id": "123"}', "suricata"),
+        ("/path/to/file.json", b'{"flow_id": "123"}', InputType.SURICATA),
         # Test Case 5: Valid ZEEK log file
-        ("/path/to/file.log", b"2021-01-01\tsome\tdata", "zeek_log_file"),
+        (
+            "/path/to/file.log",
+            b"2021-01-01\tsome\tdata",
+            InputType.ZEEK_LOG_FILE,
+        ),
         # Test Case 6: Valid BINETFLOW (tab-separated) file
         (
             "/path/to/file.binetflow",
             b"StartTime\tDur\tProto\tSrcAddr\tSport",
-            "binetflow-tabs",
+            InputType.BINETFLOW_TABS,
         ),
     ],
 )
@@ -229,7 +242,8 @@ def test_get_input_file_type(given_path, cmd_result, expected_input_type):
         patch("subprocess.run") as mock_run,
         patch("os.path.isfile", return_value=True),
         patch(
-            "os.path.isdir", return_value=expected_input_type == "zeek_folder"
+            "os.path.isdir",
+            return_value=expected_input_type == InputType.ZEEK_FOLDER,
         ),
         patch("builtins.open", mock_open(read_data=cmd_result.decode())),
     ):
@@ -265,13 +279,13 @@ def test_save_the_db(input_information, expected_filepath):
     "input_type, is_running_non_stop, expected_result",
     [
         # Test Case 1: PCAP input, not a growing Zeek directory
-        ("pcap", False, True),
+        (InputType.PCAP, False, True),
         # Test Case 2: Interface input, not a growing Zeek directory
-        ("interface", False, True),
+        (InputType.INTERFACE, False, True),
         # Test Case 3: Zeek folder input, is a growing Zeek directory
-        ("zeek_folder", True, True),
+        (InputType.ZEEK_FOLDER, True, True),
         # Test Case 4: Other input type, not a growing Zeek directory
-        ("binetflow", False, False),
+        (InputType.BINETFLOW, False, False),
     ],
 )
 def test_was_running_zeek(input_type, is_running_non_stop, expected_result):
@@ -321,7 +335,7 @@ def test_delete_zeek_files_disabled():
 
 def test_check_zeek_or_bro_zeek_found():
     main = ModuleFactory().create_main_obj()
-    main.input_type = "pcap"
+    main.input_type = InputType.PCAP
 
     with patch("shutil.which") as mock_which:
         mock_which.return_value = "zeek"
@@ -332,7 +346,7 @@ def test_check_zeek_or_bro_zeek_found():
 
 def test_check_zeek_or_bro_bro_found():
     main = ModuleFactory().create_main_obj()
-    main.input_type = "pcap"
+    main.input_type = InputType.PCAP
 
     with patch("shutil.which") as mock_which:
         mock_which.side_effect = [None, "bro"]
@@ -343,7 +357,7 @@ def test_check_zeek_or_bro_bro_found():
 
 def test_check_zeek_or_bro_not_needed():
     main = ModuleFactory().create_main_obj()
-    main.input_type = "file"
+    main.input_type = InputType.FILE
 
     result = main.check_zeek_or_bro()
     expected_result = False
@@ -352,7 +366,7 @@ def test_check_zeek_or_bro_not_needed():
 
 def test_check_zeek_or_bro_not_found():
     main = ModuleFactory().create_main_obj()
-    main.input_type = "pcap"
+    main.input_type = InputType.PCAP
 
     with (
         patch("shutil.which", return_value=None),

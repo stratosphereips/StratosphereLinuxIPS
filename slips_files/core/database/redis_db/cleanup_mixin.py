@@ -16,7 +16,7 @@ class CleanupMixin:
     get_blocked_timewindows_of_profile: Callable[..., Any]
     print: Callable[..., Any]
 
-    name = "DB"
+    name = "CleanupMixin"
 
     def _del_all_profile_tw_keys(self, profileid: str, twid: str, pipe):
         """
@@ -28,12 +28,18 @@ class CleanupMixin:
         while True:
             cursor, keys = self.r.scan(cursor=cursor, match=pattern, count=100)
             if keys:
-                pipe.unlink(*keys)
+                # it's ok to use delete here instead of non-blocking unlink
+                # because this func is called in its own thread. so it's
+                # not blocking any other operations in slips.
+                # ok why del instead of unlink? because del reclaims RAM
+                # faster than unlink, and we want to free up RAM asap
+                # or else redis might hit its memory limit :)
+                pipe.delete(*keys)
             if cursor == 0:
                 break
         return pipe
 
-    def delete_old_tws_from_blocked_profiles(self, profileid: str, twid: str):
+    def _delete_old_tws_from_blocked_profiles(self, profileid: str, twid: str):
         """
         deletes the given twid from the list of blocked timewindows for the
         given profileid.
@@ -64,6 +70,10 @@ class CleanupMixin:
         why do we keep 2 tws instead of the current one in redis? see PR
         #1765 in slips repo
 
+        PS: this func is blocking. it blocks until redis finishes deleting
+        the keys. dont use it in hot paths. it should be called is called in
+        its own thread.
+
         :param closed_profile_tw: a str like profile_8.8.8.8_timewindow7
         """
         try:
@@ -72,7 +82,9 @@ class CleanupMixin:
         except ValueError:
             self.print(
                 f"Unable to delete old timewindows info from"
-                f" {closed_profile_tw}"
+                f" {closed_profile_tw}",
+                0,
+                1,
             )
             return pipe
 
@@ -87,7 +99,7 @@ class CleanupMixin:
         tw_to_del = closed_tw - tws_to_keep
         tw_to_del = f"timewindow{tw_to_del}"
 
-        self.delete_old_tws_from_blocked_profiles(profileid, tw_to_del)
+        self._delete_old_tws_from_blocked_profiles(profileid, tw_to_del)
         pipe.zrem(
             self.constants.ACCUMULATED_THREAT_LEVELS,
             f"{profileid}_{tw_to_del}",

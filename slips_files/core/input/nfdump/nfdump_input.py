@@ -40,7 +40,6 @@ class NfdumpInput(IInputHandler):
         # Get command output
         self.nfdump_output = result.stdout.decode("utf-8")
         self.input.lines = self.read_nfdump_output()
-        self.input.print_lines_read()
         self.input.mark_self_as_done_processing()
         return True
 

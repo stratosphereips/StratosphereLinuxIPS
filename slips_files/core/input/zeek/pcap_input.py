@@ -30,8 +30,7 @@ class PcapInput(IInputHandler):
         )
 
         self.input.lines = self.input.zeek_utils.read_zeek_files()
-        self.input.print_lines_read()
-        self.input.mark_self_as_done_processing()
+
         return True
 
     def shutdown_gracefully(self):
@@ -39,5 +38,6 @@ class PcapInput(IInputHandler):
         self.file_remover.shutdown_gracefully()
         self.input.zeek_utils.shutdown_zeek_runtime()
         self.input.zeek_utils.close_all_handles()
+
         self.input.mark_self_as_done_processing()
         return True

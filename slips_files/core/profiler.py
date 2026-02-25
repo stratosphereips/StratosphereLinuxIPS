@@ -32,6 +32,7 @@ from slips_files.common.abstracts.iobserver import IObservable
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.abstracts.icore import ICore
 from slips_files.common.style import green
+from slips_files.common.input_type import InputType
 from slips_files.core.aid_manager import AIDManager
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.input_profilers.argus import Argus
@@ -41,20 +42,20 @@ from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 from slips_files.core.profiler_worker import ProfilerWorker
 
 SUPPORTED_INPUT_TYPES = {
-    "zeek": ZeekJSON,
-    "binetflow": Argus,
-    "binetflow-tabs": Argus,
-    "suricata": Suricata,
-    "zeek-tabs": ZeekTabs,
-    "nfdump": Nfdump,
+    InputType.ZEEK: ZeekJSON,
+    InputType.BINETFLOW: Argus,
+    InputType.BINETFLOW_TABS: Argus,
+    InputType.SURICATA: Suricata,
+    InputType.ZEEK_TABS: ZeekTabs,
+    InputType.NFDUMP: Nfdump,
 }
 SEPARATORS = {
-    "zeek": "",
-    "suricata": "",
-    "nfdump": ",",
-    "binetflow": ",",
-    "zeek-tabs": "\t",
-    "binetflow-tabs": "\t",
+    InputType.ZEEK: "",
+    InputType.SURICATA: "",
+    InputType.NFDUMP: ",",
+    InputType.BINETFLOW: ",",
+    InputType.ZEEK_TABS: "\t",
+    InputType.BINETFLOW_TABS: "\t",
 }
 
 
@@ -109,7 +110,7 @@ class Profiler(ICore, IObservable):
         self.manager = multiprocessing.Manager()
         self.localnet_cache = self.manager.dict()
         # max parallel profiler workers to start when high throughput is detected
-        self.max_workers = 10
+        self.max_workers = 6
         self.aid_queue = multiprocessing.Queue()
         # This starts a process that handles calculatng aid hash and stores
         # the conn fows in the db. why?
@@ -122,6 +123,8 @@ class Profiler(ICore, IObservable):
         )
         # the event that the workers use to tell this process to stop
         self.stop_profiler_event = multiprocessing.Event()
+        now = time.monotonic()
+        self.next_throughput_check_time = now + 300
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -142,13 +145,18 @@ class Profiler(ICore, IObservable):
 
         returns zeek, zeek-tabs, binetflow, binetflow tabs, nfdump, suricata
         """
-        if input_type in ("zeek_folder", "zeek_log_file", "pcap", "interface"):
+        if input_type in (
+            InputType.ZEEK_FOLDER,
+            InputType.ZEEK_LOG_FILE,
+            InputType.PCAP,
+            InputType.INTERFACE,
+        ):
             # is it tab separated or comma separated?
             actual_line = line["data"]
             if isinstance(actual_line, dict):
-                return "zeek"
-            return "zeek-tabs"
-        elif input_type == "stdin":
+                return InputType.ZEEK
+            return InputType.ZEEK_TABS
+        elif input_type == InputType.STDIN:
             # ok we're reading flows from stdin, but what type of flows?
             return line["line_type"]
         else:
@@ -292,15 +300,13 @@ class Profiler(ICore, IObservable):
         returns true if 5 mins passed since the last time we checked
         the flows read per second
         """
-        now = time.time()
-        self.last_throughput_check_time = getattr(
-            self, "last_throughput_check_time", now
-        )
-        time_diff = now - self.last_throughput_check_time
-        if time_diff < 300:  # check every 5 minutes
+        now = time.monotonic()
+        if now < self.next_throughput_check_time:
             return False
 
-        self.last_throughput_check_time = now
+        # Advance in 5-min steps to reduce drift on long delays.
+        while self.next_throughput_check_time <= now:
+            self.next_throughput_check_time += 300
         return True
 
     def max_workers_started(self) -> bool:
@@ -325,7 +331,7 @@ class Profiler(ICore, IObservable):
             return
 
         profiler_fps = self.db.get_module_flows_per_second(self.name)
-        input_fps = self.db.get_module_flows_per_second("Input")
+        input_fps = self.db.get_module_flows_per_second("Input") or 0
         if float(input_fps) > (
             float(profiler_fps) * 1.1
         ):  # 10% more input fps than profiler fps

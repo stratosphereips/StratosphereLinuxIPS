@@ -32,6 +32,7 @@ class AsyncModule(IModule):
         """
         task = asyncio.create_task(func(*args))
         task.add_done_callback(self.handle_task_exception)
+        task.add_done_callback(self._remove_completed_task)
 
         # Allow the event loop to run the scheduled task
         # await asyncio.sleep(0)
@@ -39,6 +40,14 @@ class AsyncModule(IModule):
         # to wait for these functions before this module shuts down
         self.tasks.append(task)
         return task
+
+    def _remove_completed_task(self, task: asyncio.Task):
+        """Remove completed tasks to avoid unbounded growth."""
+        try:
+            self.tasks.remove(task)
+        except ValueError:
+            # Task already removed or not tracked.
+            pass
 
     def handle_task_exception(self, task: asyncio.Task):
         try:

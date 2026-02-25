@@ -250,9 +250,6 @@ class ScanDetectionsHandler:
             pipe = self._store_flow_info_if_needed_by_detection_modules(
                 profileid, twid, flow, role, target_ip, pipe
             )
-            pipe = self.mark_profile_tw_as_modified(
-                str(profileid), str(twid), flow.starttime, pipe=pipe
-            )
             pipe.execute()
 
     def get_info_about_not_established_flows(

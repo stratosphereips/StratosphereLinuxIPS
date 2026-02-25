@@ -11,6 +11,7 @@ from unittest.mock import (
 )
 import pytest
 from ipaddress import ip_address
+from slips_files.common.input_type import InputType
 
 # dummy params used for testing
 profileid = "profile_192.168.1.1"
@@ -479,17 +480,47 @@ def test_is_interface_timeout_reached(mock_time_diff, expected_result):
     "client_ips, expected_result",
     [
         # Testcase 1: Not a 'conn' flow type
-        ("dns", "dns", "8.8.8.8", "pcap", False, False, False, [], True),
+        (
+            "dns",
+            "dns",
+            "8.8.8.8",
+            InputType.PCAP,
+            False,
+            False,
+            False,
+            [],
+            True,
+        ),
         # Testcase 2: DNS application protocol
-        ("conn", "dns", "8.8.8.8", "pcap", False, False, False, [], True),
+        (
+            "conn",
+            "dns",
+            "8.8.8.8",
+            InputType.PCAP,
+            False,
+            False,
+            False,
+            [],
+            True,
+        ),
         # Testcase 3: Ignored IP
-        ("conn", "http", "192.168.1.1", "pcap", False, False, False, [], True),
+        (
+            "conn",
+            "http",
+            "192.168.1.1",
+            InputType.PCAP,
+            False,
+            False,
+            False,
+            [],
+            True,
+        ),
         # Testcase 4: Client IP
         (
             "conn",
             "http",
             "10.0.0.1",
-            "pcap",
+            InputType.PCAP,
             False,
             False,
             False,
@@ -497,15 +528,35 @@ def test_is_interface_timeout_reached(mock_time_diff, expected_result):
             True,
         ),
         # Testcase 5: DoH server
-        ("conn", "http", "1.1.1.1", "pcap", True, False, False, [], True),
+        (
+            "conn",
+            "http",
+            "1.1.1.1",
+            InputType.PCAP,
+            True,
+            False,
+            False,
+            [],
+            True,
+        ),
         # Testcase 6: DHCP server
-        ("conn", "dhcp", "192.168.1.1", "pcap", True, False, True, [], True),
+        (
+            "conn",
+            "dhcp",
+            "192.168.1.1",
+            InputType.PCAP,
+            True,
+            False,
+            True,
+            [],
+            True,
+        ),
         # Testcase 7: Should not ignore
         (
             "conn",
             "http",
             "93.184.216.34",
-            "pcap",
+            InputType.PCAP,
             False,
             False,
             False,

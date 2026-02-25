@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from datetime import timedelta
 import sys
+from slips_files.common.input_type import InputType
 import ipaddress
 from typing import (
     List,
@@ -376,9 +377,7 @@ class ConfigParser(object):
         return max(1.0, timeout)
 
     def taxii_version(self):
-        return self.read_configuration(
-            "exporting_alerts", "taxii_version", 2
-        )
+        return self.read_configuration("exporting_alerts", "taxii_version", 2)
 
     def taxii_direct_export(self):
         return self.read_configuration(
@@ -724,7 +723,7 @@ class ConfigParser(object):
             to_ignore.append("arp_poisoner")
 
         # leak detector only works on pcap files
-        if input_type != "pcap":
+        if input_type != InputType.PCAP:
             to_ignore.append("leak_detector")
 
         if not self.reading_flows_from_cyst():

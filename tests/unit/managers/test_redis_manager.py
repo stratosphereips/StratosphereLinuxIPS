@@ -8,6 +8,7 @@ import pytest
 
 from tests.module_factory import ModuleFactory
 from managers.redis_manager import UserCancelledErr
+from slips_files.common.input_type import InputType
 
 
 @pytest.mark.parametrize(
@@ -121,7 +122,7 @@ def test_load_db_success(mock_db):
     ):
         redis_manager.load_db()
 
-        assert redis_manager.input_type == "database"
+        assert redis_manager.input_type == InputType.DATABASE
 
         redis_manager.main.db.init_redis_server.assert_called_once()
         mock_get_pid.assert_called_once_with(32850)
@@ -151,7 +152,7 @@ def test_load_db_failure(mock_db):
     ):
         redis_manager.load_db()
 
-        assert redis_manager.input_type == "database"
+        assert redis_manager.input_type == InputType.DATABASE
         redis_manager.main.db.init_redis_server.assert_called_once()
         mock_get_pid.assert_called_once_with(32850)
         mock_flush_and_kill.assert_called_once_with(1234)

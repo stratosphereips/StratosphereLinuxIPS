@@ -9,6 +9,7 @@ from unittest.mock import (
     mock_open,
 )
 import os
+from slips_files.common.input_type import InputType
 from multiprocessing import Queue
 
 import unittest.mock as mock
@@ -110,7 +111,7 @@ class ModuleFactory:
         """returns an instance of Main() class in slips.py"""
         main = Main(testing=True)
         main.input_information = ""
-        main.input_type = "pcap"
+        main.input_type = InputType.PCAP
         main.line_type = False
         main.args = Mock()
         return main
@@ -1007,7 +1008,7 @@ class ModuleFactory:
             "fidesModule",
             "irisModule",
         ]
-        main_mock.input_type = "pcap"
+        main_mock.input_type = InputType.PCAP
         main_mock.mode = "normal"
         main_mock.stdout = ""
         main_mock.args = Mock(growing=False, input_module=False, testing=False)
