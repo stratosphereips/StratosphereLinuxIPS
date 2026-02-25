@@ -277,20 +277,19 @@ class AlertHandler:
         evidence_exists: Optional[dict] = self.r.hget(
             evidence_hash, evidence.id
         )
+        if evidence_exists:
+            return False
+        if self.is_whitelisted_evidence(evidence.id):
+            return False
 
+        self.r.hset(evidence_hash, evidence.id, evidence_to_send)
+        self.r.incr(self.constants.NUMBER_OF_EVIDENCE)
         # note that publishing HAS TO be done after adding the evidence
         # to the db
         # whitelisted evidence are deleted from the db, so we need to check
         # that we're not re-adding a deleted evidence
-        if (not evidence_exists) and (
-            not self.is_whitelisted_evidence(evidence.id)
-        ):
-            self.r.hset(evidence_hash, evidence.id, evidence_to_send)
-            self.r.incr(self.constants.NUMBER_OF_EVIDENCE)
-            self.publish(self.channels.EVIDENCE_ADDED, evidence_to_send)
-            return True
-
-        return False
+        self.publish(self.channels.EVIDENCE_ADDED, evidence_to_send)
+        return True
 
     def set_alert(self, alert: Alert):
         self.set_evidence_causing_alert(alert)
