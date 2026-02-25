@@ -22,6 +22,8 @@ from multiprocessing.process import BaseProcess
 from typing import (
     List,
     Tuple,
+    Dict,
+    Iterable,
 )
 
 from exclusiveprocess import (
@@ -53,6 +55,8 @@ from slips_files.core.profiler import Profiler
 class ProcessManager:
     def __init__(self, main):
         self.main = main
+        # Can be used by signal handlers before startup finishes.
+        self.processes: List[Process] = []
 
         # this is the queue that will be used by the input proces
         # to pass flows to the profiler

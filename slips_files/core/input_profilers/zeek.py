@@ -147,6 +147,18 @@ class Zeek:
 
         return flow_values
 
+    @staticmethod
+    def drop_unknown_class_fields(flow_values: dict, slips_class) -> dict:
+        """
+        Keep only kwargs accepted by the target dataclass constructor.
+
+        Some zeek->slips maps include extra fields for specific logs
+        (e.g. sport/dport in smtp/ftp) that may not exist in the
+        current flow class definition.
+        """
+        allowed = {f.name for f in fields(slips_class)}
+        return {k: v for k, v in flow_values.items() if k in allowed}
+
 
 class ZeekJSON(IInputType, Zeek):
     """
@@ -212,6 +224,9 @@ class ZeekJSON(IInputType, Zeek):
                         self.reusable_flow_values_dict.get(field, 0) or 0
                     )
             self.reusable_flow_values_dict = self.fill_empty_class_fields(
+                self.reusable_flow_values_dict, slips_class
+            )
+            self.reusable_flow_values_dict = self.drop_unknown_class_fields(
                 self.reusable_flow_values_dict, slips_class
             )
 
@@ -376,6 +391,9 @@ class ZeekTabs(IInputType, Zeek):
             slips_class = LINE_TYPE_TO_SLIPS_CLASS[log_type]
 
             flow_values = self.fill_empty_class_fields(
+                flow_values, slips_class
+            )
+            flow_values = self.drop_unknown_class_fields(
                 flow_values, slips_class
             )
 

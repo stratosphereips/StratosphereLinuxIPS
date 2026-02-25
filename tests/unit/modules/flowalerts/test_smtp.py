@@ -49,6 +49,8 @@ def test_check_smtp_bruteforce(timestamps, expected_call_count):
             uid=f"uid_{i}",
             saddr=saddr,
             daddr=daddr,
+            sport="2525",
+            dport="25",
             last_reply="bad smtp-auth user",
         )
         smtp.check_smtp_bruteforce(profileid, twid, flow)
@@ -66,6 +68,8 @@ def test_analyze_with_valid_message():
         uid="1234",
         saddr=saddr,
         daddr=daddr,
+        sport="2525",
+        dport="25",
         last_reply="bad smtp-auth user",
     )
     msg = {
