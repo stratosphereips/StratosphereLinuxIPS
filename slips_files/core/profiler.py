@@ -110,7 +110,7 @@ class Profiler(ICore, IObservable):
         self.manager = multiprocessing.Manager()
         self.localnet_cache = self.manager.dict()
         # max parallel profiler workers to start when high throughput is detected
-        self.max_workers = 10
+        self.max_workers = 6
         self.aid_queue = multiprocessing.Queue()
         # This starts a process that handles calculatng aid hash and stores
         # the conn fows in the db. why?
