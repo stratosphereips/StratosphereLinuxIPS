@@ -643,8 +643,14 @@ class Main:
             if self.args.webinterface:
                 self.ui_man.start_webinterface()
 
-            # call shutdown_gracefully on sigterm
             def sig_handler(sig, frame):
+                """calls shutdown_gracefully on sig"""
+                if os.getpid() != self.pid:
+                    # to ensure that this SIGTERM handler is not inherited by
+                    # children created the signal.signal() call, because we
+                    # need this handler to be called only once when slips
+                    # is shutting down
+                    return
                 if not self.sigterm_received:
                     self.sigterm_received = True
                     self.print("SIGTERM received, shutting down slips.")
@@ -717,4 +723,6 @@ class Main:
             # comes here if zeek terminates while slips is still working
             pass
 
-        self.proc_man.shutdown_gracefully()
+        if not self.sigterm_received:
+            # to avoid calling this func twice when sigterm is received
+            self.proc_man.shutdown_gracefully()
