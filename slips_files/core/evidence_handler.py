@@ -100,7 +100,7 @@ class EvidenceHandler(ICore):
 
         # A thread that handing I/O to disk (writing evidence to log files)
         self.logger_stop_signal = threading.Event()
-        self.evidence_logger_q = multiprocessing.Queue()
+        self.evidence_logger_q = multiprocessing.Queue(maxsize=30000000)
         self.evidence_logger = EvidenceLogger(
             logger_stop_signal=self.logger_stop_signal,
             evidence_logger_q=self.evidence_logger_q,

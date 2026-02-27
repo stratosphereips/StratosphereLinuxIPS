@@ -50,7 +50,8 @@ class IPInfo(AsyncModule):
 
     def init(self):
         """This will be called when initializing this module"""
-        self.pending_mac_queries = multiprocessing.Queue()
+        # 30MBs max size of this queue to avoid growing forever in mem
+        self.pending_mac_queries = multiprocessing.Queue(maxsize=30000000)
         self.asn = ASN(self.db)
         self.JARM = JARM()
         self.classifier = FlowClassifier()
