@@ -202,6 +202,9 @@ class DBManager:
     def subscribe(self, *args, **kwargs):
         return self.rdb.subscribe(*args, **kwargs)
 
+    def unsubscribe(self, *args, **kwargs):
+        return self.rdb.unsubscribe(*args, **kwargs)
+
     def publish_stop(self, *args, **kwargs):
         return self.rdb.publish_stop(*args, **kwargs)
 

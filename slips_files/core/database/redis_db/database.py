@@ -524,6 +524,15 @@ class RedisDB(
         )
         return self.pubsub
 
+    def unsubscribe(self, channel_obj: Optional[redis.client.PubSub]):
+        if channel_obj is None:
+            return
+
+        try:
+            channel_obj.unsubscribe()
+        finally:
+            channel_obj.close()
+
     def publish_stop(self):
         """
         Publish stop command to terminate slips

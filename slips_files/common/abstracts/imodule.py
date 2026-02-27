@@ -128,12 +128,19 @@ class IModule(ABC, Process):
 
         return True
 
-    def shutdown_gracefully(self):
+    def _shutdown_gracefully(self):
         """
-        Tells slips.py that this module is
-        done processing and does necessary cleanup
+        necessary cleanup/shutdown logic goes here. e.g closing of opened
+        threads, queue,
+        log lines to indicate the module is done, etc.
         """
-        pass
+        # common cleanup
+        if self.channels:
+            for channel_obj in self.channels.values():
+                self.db.unsubscribe(channel_obj)
+
+        # specific cleanup. should be implemented in the module
+        self.shutdown_gracefully()
 
     @abstractmethod
     def main(self):
@@ -181,10 +188,10 @@ class IModule(ABC, Process):
         try:
             error: bool = self.pre_main()
             if error or self.should_stop():
-                self.shutdown_gracefully()
+                self._shutdown_gracefully()
                 return
         except KeyboardInterrupt:
-            self.shutdown_gracefully()
+            self._shutdown_gracefully()
             return
         except Exception:
             self.print_traceback()
@@ -193,12 +200,12 @@ class IModule(ABC, Process):
         while True:
             try:
                 if self.should_stop():
-                    self.shutdown_gracefully()
+                    self._shutdown_gracefully()
                     return
 
                 error: bool = self.main()
                 if error:
-                    self.shutdown_gracefully()
+                    self._shutdown_gracefully()
                     return
 
             except KeyboardInterrupt:
