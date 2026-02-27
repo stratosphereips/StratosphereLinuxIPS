@@ -98,13 +98,6 @@ class Profiler(ICore, IObservable):
         self.workers: List[ProfilerWorker] = []
 
         self.stop_profiler_workers_event = multiprocessing.Event()
-        # each msg received from inputprocess will be put here, and each one
-        # profiler worker will retrieve msgs from this queue.
-        # the goal of this q is to have main() handle the stop msg.
-        # so without this, only 1 of the 3 workers receives the stop msg
-        # and exits, and the rest of the 2 workers AND the main() keep
-        # waiting for new msgs
-        self.flows_to_process_queue = multiprocessing.Queue(maxsize=50000)
         self.handle_setting_local_net_lock = multiprocessing.Lock()
         # runs a separate server process behind the scenes.
         self.manager = multiprocessing.Manager()
@@ -113,9 +106,8 @@ class Profiler(ICore, IObservable):
         self.max_workers = 6
         self.aid_queue = multiprocessing.Queue()
         # This starts a process that handles calculatng aid hash and stores
-        # the conn fows in the db. why?
-        # because it's cpu intensive so we dont want it to
-        # block the profiler workers
+        # the conn fows in the db. why? because it's cpu intensive so we dont
+        # want it to block the profiler workers
         self.aid_manager = AIDManager(
             self.db,
             self.aid_queue,
@@ -273,7 +265,6 @@ class Profiler(ICore, IObservable):
         self.stop_profiler_workers()
 
         used_queues = [
-            self.flows_to_process_queue,
             self.profiler_queue,
             self.aid_queue,
         ]
