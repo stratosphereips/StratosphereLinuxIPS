@@ -94,6 +94,11 @@ class AsyncModule(IModule):
 
     async def gather_tasks_and_shutdown_gracefully(self):
         await asyncio.gather(*self.tasks, return_exceptions=True)
+
+        # common cleanup
+        if self.channels:
+            for channel_obj in self.channels.values():
+                self.db.unsubscribe(channel_obj)
         await self.shutdown_gracefully()
 
     def run_async_function(self, func: Callable):
