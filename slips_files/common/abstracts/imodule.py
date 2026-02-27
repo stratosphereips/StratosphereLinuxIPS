@@ -139,8 +139,9 @@ class IModule(ABC, Process):
             for channel_obj in self.channels.values():
                 self.db.unsubscribe(channel_obj)
 
-        # specific cleanup. should be implemented in the module
-        self.shutdown_gracefully()
+        if hasattr(self, "shutdown_gracefully"):
+            # specific cleanup. should be implemented in the module
+            self.shutdown_gracefully()
 
     @abstractmethod
     def main(self):

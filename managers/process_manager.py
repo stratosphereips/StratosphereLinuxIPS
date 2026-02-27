@@ -569,7 +569,8 @@ class ProcessManager:
                 self.main.db.get_pid_of("Exporting Alerts")
             )
         # remove all None PIDs. this happens when a module in that list
-        # isnt started in the current run.
+        # isnt started in the current run. e.g. virustotal module starts then
+        # stops immediately if no API is found. so its pid will be None.
         pids_to_kill_last: List[int] = [
             pid for pid in pids_to_kill_last if pid is not None
         ]

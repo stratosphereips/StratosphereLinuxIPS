@@ -272,6 +272,11 @@ class Profiler(ICore, IObservable):
         ]
 
         for q in used_queues:
+            # send a "stop" message for each worker to make sure they exit
+            # so many stops that we're sure all workers will receive one.
+            for _ in range(50):
+                q.put("stop")
+
             # By default if a process is not the creator of the queue then on
             # exit it will attempt to join the queue’s background thread. The
             # process can call cancel_join_thread() to make join_thread()
