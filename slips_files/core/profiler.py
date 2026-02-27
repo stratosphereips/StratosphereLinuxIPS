@@ -10,8 +10,6 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-from multiprocessing.managers import SyncManager
-
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -41,6 +39,7 @@ from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 from slips_files.core.profiler_worker import ProfilerWorker
+from slips_files.core.helpers.localnet_cache import LocalnetCacheShared
 
 SUPPORTED_INPUT_TYPES = {
     InputType.ZEEK: ZeekJSON,
@@ -100,9 +99,8 @@ class Profiler(ICore, IObservable):
 
         self.stop_profiler_workers_event = multiprocessing.Event()
         self.handle_setting_local_net_lock = multiprocessing.Lock()
-        # runs a separate server process behind the scenes.
-        self.manager: SyncManager = multiprocessing.Manager()
-        self.localnet_cache = self.manager.dict()
+        # small, shared JSON cache backed by shared memory (no Manager)
+        self.localnet_cache = LocalnetCacheShared()
         # max parallel profiler workers to start when high throughput is detected
         self.max_workers = 6
         # 30MBs max size of this queue to avoid growing forever in mem
@@ -292,9 +290,6 @@ class Profiler(ICore, IObservable):
             log_to_logfiles_only=True,
         )
         self.mark_process_as_done_processing()
-        # should always be done after all profiler workers are stopped to
-        # avoid hanging
-        self.manager.shutdown()
         self.db.set_new_incoming_flows(False)
 
     def did_5min_pass_since_last_throughput_check(self) -> bool:

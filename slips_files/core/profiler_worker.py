@@ -37,7 +37,7 @@ class ProfilerWorker(IModule):
     def init(
         self,
         name,
-        localnet_cache: Dict[str, str],
+        localnet_cache,
         profiler_queue: multiprocessing.Queue,
         handle_setting_local_net_lock: multiprocessing.Lock,
         input_handler: (
@@ -499,28 +499,36 @@ class ProfilerWorker(IModule):
 
     def _localnet_cache_contains(self, interface: str) -> bool:
         """checks"""
+        cache = self.localnet_cache
+        if hasattr(cache, "contains"):
+            return cache.contains(interface)
         try:
-            return interface in self.localnet_cache
-        except (FileNotFoundError, AttributeError, ConnectionError, OSError):
-            # manager-backed dict is gone; fall back to local dict
+            return interface in cache
+        except (AttributeError, TypeError):
             self.localnet_cache = {}
             return False
 
     def _iter_localnet_cache_items(self):
-        try:
-            return list(self.localnet_cache.items())
-        except (FileNotFoundError, AttributeError, ConnectionError, OSError):
-            self.localnet_cache = {}
-            return []
+        cache = self.localnet_cache
+        if hasattr(cache, "items"):
+            try:
+                return list(cache.items())
+            except TypeError:
+                pass
+        if isinstance(cache, dict):
+            return list(cache.items())
+        self.localnet_cache = {}
+        return []
 
     def _set_localnet_cache(self, new_cache: Dict[str, str]) -> None:
-        # keep manager-backed dicts shared when possible
-        try:
-            self.localnet_cache.clear()
-            self.localnet_cache.update(new_cache)
+        cache = self.localnet_cache
+        if hasattr(cache, "set"):
+            if cache.set(new_cache):
+                return
+        if isinstance(cache, dict):
+            cache.clear()
+            cache.update(new_cache)
             return
-        except (FileNotFoundError, AttributeError, ConnectionError, OSError):
-            pass
         self.localnet_cache = new_cache
 
     def _is_supported_flow_type(self, flow) -> bool:
