@@ -10,6 +10,7 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
+from multiprocessing.managers import SyncManager
 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -100,7 +101,7 @@ class Profiler(ICore, IObservable):
         self.stop_profiler_workers_event = multiprocessing.Event()
         self.handle_setting_local_net_lock = multiprocessing.Lock()
         # runs a separate server process behind the scenes.
-        self.manager = multiprocessing.Manager()
+        self.manager: SyncManager = multiprocessing.Manager()
         self.localnet_cache = self.manager.dict()
         # max parallel profiler workers to start when high throughput is detected
         self.max_workers = 6
@@ -281,12 +282,14 @@ class Profiler(ICore, IObservable):
             # this step SHOULD NEVER be done before closing the workers
             q.close()
 
-        self.manager.shutdown()
         self.print(
             f"Stopping. Total lines read: {self.rec_lines}",
             log_to_logfiles_only=True,
         )
         self.mark_process_as_done_processing()
+        # should always be done after all profiler workers are stopped to
+        # avoid hanging
+        self.manager.shutdown()
         self.db.set_new_incoming_flows(False)
 
     def did_5min_pass_since_last_throughput_check(self) -> bool:
