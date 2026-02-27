@@ -197,7 +197,7 @@ class Profiler(ICore, IObservable):
         self.print("Profiler is done processing.", log_to_logfiles_only=True)
         self.is_profiler_done_event.set()
         self.print(
-            "Profiler is done telling input.py " "that it's done processing.",
+            "Profiler is done telling input.py that it's done processing.",
             log_to_logfiles_only=True,
         )
 
@@ -269,31 +269,33 @@ class Profiler(ICore, IObservable):
         for worker in self.workers:
             self.rec_lines += worker.received_lines
 
+        # wait for all flows to be processed by the profiler processes.
+        self.stop_profiler_workers()
+
         used_queues = [
             self.flows_to_process_queue,
             self.profiler_queue,
             self.aid_queue,
         ]
 
-        # wait for all flows to be processed by the profiler processes.
-        self.stop_profiler_workers()
         for q in used_queues:
-            # close the queues to avoid deadlocks.
-            # this step SHOULD NEVER be done before closing the workers
-            q.close()
             # By default if a process is not the creator of the queue then on
             # exit it will attempt to join the queue’s background thread. The
             # process can call cancel_join_thread() to make join_thread()
             # do nothing.
             q.cancel_join_thread()
 
+            # close the queues to avoid deadlocks.
+            # this step SHOULD NEVER be done before closing the workers
+            q.close()
+
         self.manager.shutdown()
-        self.db.set_new_incoming_flows(False)
         self.print(
             f"Stopping. Total lines read: {self.rec_lines}",
             log_to_logfiles_only=True,
         )
         self.mark_process_as_done_processing()
+        self.db.set_new_incoming_flows(False)
 
     def did_5min_pass_since_last_throughput_check(self) -> bool:
         """
