@@ -627,6 +627,16 @@ class ConfigParser(object):
             min_win = 5
         return max(1, min_win)
 
+    def https_anomaly_empirical_threshold_quantile(self) -> float:
+        value = self.read_configuration(
+            "anomaly_detection_https", "empirical_threshold_quantile", 0.995
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 0.995
+        return min(max(value, 0.90), 0.9999)
+
     def https_anomaly_log_verbosity(self) -> int:
         verbosity = self.read_configuration(
             "anomaly_detection_https", "log_verbosity", 3
