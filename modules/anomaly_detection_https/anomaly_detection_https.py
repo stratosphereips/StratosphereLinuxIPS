@@ -45,6 +45,10 @@ class EWMAStats:
     floor_scale: float = 1.0
     floor_min: float = 0.01
     floor_max: float = 1000000.0
+    value_window: List[float] = field(default_factory=list)
+    value_window_size: int = 256
+    empirical_threshold: Optional[float] = None
+    training_values: List[float] = field(default_factory=list)
 
     def _update_floor_from_residual(self, residual: float):
         self.residuals.append(float(abs(residual)))
@@ -54,6 +58,8 @@ class EWMAStats:
 
     def update_training(self, value: float):
         value = float(value)
+        self._append_value(value)
+        self.training_values.append(value)
         if self.count > 0:
             self._update_floor_from_residual(value - self.mean)
 
@@ -74,6 +80,7 @@ class EWMAStats:
 
     def update(self, value: float, alpha: float):
         value = float(value)
+        self._append_value(value)
         if self.count > 0:
             self._update_floor_from_residual(value - self.mean)
 
@@ -123,6 +130,47 @@ class EWMAStats:
         std = math.sqrt(max(self.var, self.min_std_floor * self.min_std_floor))
         return abs(float(value) - self.mean) / std
 
+    def _append_value(self, value: float):
+        self.value_window.append(float(value))
+        if len(self.value_window) > self.value_window_size:
+            self.value_window.pop(0)
+
+    @staticmethod
+    def _median(values: List[float]) -> float:
+        return EWMAStats._quantile(values, 0.50)
+
+    def robust_zscore(self, value: float) -> float:
+        values = self.value_window
+        if len(values) < 7:
+            return self.zscore(value)
+        med = self._median(values)
+        abs_dev = [abs(x - med) for x in values]
+        mad = self._median(abs_dev)
+        robust_sigma = max(1.4826 * mad, self.min_std_floor)
+        return abs(float(value) - med) / robust_sigma
+
+    def calibrate_empirical_threshold(
+        self, default_threshold: float, quantile: float = 0.995
+    ):
+        if len(self.training_values) < 10:
+            self.empirical_threshold = float(default_threshold)
+            return
+
+        med = self._median(self.training_values)
+        abs_dev = [abs(x - med) for x in self.training_values]
+        mad = self._median(abs_dev)
+        robust_sigma = max(1.4826 * mad, self.min_std_floor)
+        if robust_sigma <= 0:
+            self.empirical_threshold = float(default_threshold)
+            return
+
+        train_robust_z = [
+            abs((x - med) / robust_sigma) for x in self.training_values
+        ]
+        q = self._quantile(train_robust_z, quantile)
+        # Keep empirical thresholds within sane bounds.
+        self.empirical_threshold = min(max(float(q), 1.5), 15.0)
+
 
 @dataclass
 class HourBucket:
@@ -149,6 +197,7 @@ class HostState:
     server_bytes_models: Dict[str, EWMAStats] = field(default_factory=dict)
     anomaly_history_ts: List[float] = field(default_factory=list)
     last_twid: int = 0
+    thresholds_calibrated: bool = False
     hourly_adwins: Dict[str, Any] = field(default_factory=dict)
     flow_adwins: Dict[str, Any] = field(default_factory=dict)
 
@@ -193,6 +242,7 @@ class AnomalyDetectionHTTPS(IModule):
                 "adwin_clock": self.adwin_clock,
                 "adwin_grace_period": self.adwin_grace_period,
                 "adwin_min_window_length": self.adwin_min_window_length,
+                "empirical_threshold_quantile": self.empirical_threshold_quantile,
                 "log_verbosity": self.log_verbosity,
                 "log_emojis": self.log_emojis,
                 "log_colors": self.log_colors,
@@ -229,6 +279,9 @@ class AnomalyDetectionHTTPS(IModule):
         self.adwin_grace_period = conf.https_anomaly_adwin_grace_period()
         self.adwin_min_window_length = (
             conf.https_anomaly_adwin_min_window_length()
+        )
+        self.empirical_threshold_quantile = (
+            conf.https_anomaly_empirical_threshold_quantile()
         )
         self.adwin_available = ADWIN is not None
         self.use_adwin_drift = (
@@ -430,6 +483,100 @@ class AnomalyDetectionHTTPS(IModule):
         return min(1.0, max(0, baseline_count) / float(stable_points))
 
     @staticmethod
+    def transform_value(feature_name: str, value: float) -> float:
+        """
+        Heavy-tail stabilization.
+        log1p is applied on non-negative count/volume signals.
+        """
+        heavy_tail_features = {
+            "ssl_flows",
+            "unique_servers",
+            "new_servers",
+            "ja3_changes",
+            "known_server_avg_bytes",
+            "bytes_to_known_server",
+        }
+        if feature_name in heavy_tail_features:
+            return math.log1p(max(0.0, float(value)))
+        return float(value)
+
+    @staticmethod
+    def inverse_transform_value(feature_name: str, value: float) -> float:
+        heavy_tail_features = {
+            "ssl_flows",
+            "unique_servers",
+            "new_servers",
+            "ja3_changes",
+            "known_server_avg_bytes",
+            "bytes_to_known_server",
+        }
+        if feature_name in heavy_tail_features:
+            return math.expm1(float(value))
+        return float(value)
+
+    @staticmethod
+    def feature_model_type(feature_name: str) -> str:
+        if feature_name in {
+            "ssl_flows",
+            "unique_servers",
+            "new_servers",
+            "ja3_changes",
+        }:
+            return "count"
+        if feature_name in {"known_server_avg_bytes", "bytes_to_known_server"}:
+            return "bytes"
+        return "generic"
+
+    def get_effective_threshold(
+        self, model: EWMAStats, default_threshold: float
+    ) -> float:
+        if model.empirical_threshold is not None:
+            return float(model.empirical_threshold)
+        return float(default_threshold)
+
+    def calibrate_host_thresholds(self, profileid: str, state: HostState):
+        for feature_name, model in state.hourly_models.items():
+            model.calibrate_empirical_threshold(
+                self.hourly_zscore_threshold,
+                quantile=self.empirical_threshold_quantile,
+            )
+            self.log_event(
+                2,
+                "model_update",
+                "Calibrated hourly empirical threshold from benign training.",
+                metrics={
+                    "profileid": profileid,
+                    "feature": feature_name,
+                    "model_type": self.feature_model_type(feature_name),
+                    "empirical_threshold": round(
+                        self.to_float(model.empirical_threshold, 0.0), 4
+                    ),
+                    "training_points": len(model.training_values),
+                },
+            )
+
+        for server, model in state.server_bytes_models.items():
+            model.calibrate_empirical_threshold(
+                self.flow_zscore_threshold,
+                quantile=self.empirical_threshold_quantile,
+            )
+            self.log_event(
+                2,
+                "model_update",
+                "Calibrated per-server bytes empirical threshold from benign training.",
+                metrics={
+                    "profileid": profileid,
+                    "server": server,
+                    "model_type": "bytes",
+                    "empirical_threshold": round(
+                        self.to_float(model.empirical_threshold, 0.0), 4
+                    ),
+                    "training_points": len(model.training_values),
+                },
+            )
+        state.thresholds_calibrated = True
+
+    @staticmethod
     def get_confidence_level(score: float) -> str:
         if score >= 0.80:
             return "high"
@@ -536,10 +683,13 @@ class AnomalyDetectionHTTPS(IModule):
             value = reason.get("value", "")
             mean = reason.get("mean")
             zscore = reason.get("zscore")
-            threshold = (
+            threshold = reason.get(
+                "threshold",
+                (
                 self.flow_zscore_threshold
                 if feature == "bytes_to_known_server"
                 else self.hourly_zscore_threshold
+                ),
             )
 
             if feature == "new_server":
@@ -676,18 +826,37 @@ class AnomalyDetectionHTTPS(IModule):
             "max_z": round(max_z, 4),
         }
 
-    def score_feature(self, model: EWMAStats, value: float) -> float:
+    def score_feature(
+        self,
+        model: EWMAStats,
+        feature_name: str,
+        value: float,
+    ) -> float:
         if model.count < self.min_baseline_points:
             return 0.0
-        return model.zscore(value)
+        transformed = self.transform_value(feature_name, value)
+        return model.robust_zscore(transformed)
 
-    def update_model(self, model: EWMAStats, value: float, alpha: float):
+    def update_model(
+        self,
+        model: EWMAStats,
+        feature_name: str,
+        value: float,
+        alpha: float,
+    ):
         if alpha <= 0:
             return
-        model.update(value, alpha)
+        transformed = self.transform_value(feature_name, value)
+        model.update(transformed, alpha)
 
-    def fit_benign_model(self, model: EWMAStats, value: float):
-        model.update_training(value)
+    def fit_benign_model(
+        self,
+        model: EWMAStats,
+        feature_name: str,
+        value: float,
+    ):
+        transformed = self.transform_value(feature_name, value)
+        model.update_training(transformed)
 
     def finalize_hour_bucket(self, profileid: str, state: HostState):
         bucket = state.bucket
@@ -734,7 +903,7 @@ class AnomalyDetectionHTTPS(IModule):
                 # Keep ADWIN/detection signal aligned with the no-training JA3 gate.
                 continue
             model = self.get_or_create_hourly_model(state, feature_name)
-            z = self.score_feature(model, value)
+            z = self.score_feature(model, feature_name, value)
             z_by_feature[feature_name] = z
 
         hourly_anomalies = []
@@ -742,14 +911,23 @@ class AnomalyDetectionHTTPS(IModule):
         if self.should_detect(state):
             for feature_name, value in features.items():
                 z = z_by_feature.get(feature_name, 0.0)
-                if z >= self.hourly_zscore_threshold:
-                    model = self.get_or_create_hourly_model(state, feature_name)
+                model = self.get_or_create_hourly_model(state, feature_name)
+                hourly_threshold = self.get_effective_threshold(
+                    model, self.hourly_zscore_threshold
+                )
+                if z >= hourly_threshold:
                     hourly_anomalies.append(
                         {
                             "feature": feature_name,
                             "value": value,
-                            "mean": model.mean,
+                            "mean": round(
+                                self.inverse_transform_value(
+                                    feature_name, model.mean
+                                ),
+                                6,
+                            ),
                             "zscore": round(z, 3),
+                            "threshold": round(hourly_threshold, 3),
                         }
                     )
                     hourly_score += z
@@ -831,6 +1009,12 @@ class AnomalyDetectionHTTPS(IModule):
                     },
                 )
             state.trained_hours += 1
+            if (
+                self.training_hours > 0
+                and state.trained_hours >= self.training_hours
+                and not state.thresholds_calibrated
+            ):
+                self.calibrate_host_thresholds(profileid, state)
             self.log_event(
                 1,
                 "training_fit",
@@ -960,9 +1144,9 @@ class AnomalyDetectionHTTPS(IModule):
         for feature_name, value in features.items():
             model = self.get_or_create_hourly_model(state, feature_name)
             if is_training_hour:
-                self.fit_benign_model(model, value)
+                self.fit_benign_model(model, feature_name, value)
             else:
-                self.update_model(model, value, update_alpha)
+                self.update_model(model, feature_name, value, update_alpha)
             self.log_event(
                 3,
                 "model_update",
@@ -1048,14 +1232,25 @@ class AnomalyDetectionHTTPS(IModule):
                 self.should_detect(state)
                 and server_model.count >= self.min_baseline_points
             ):
-                z = server_model.zscore(bytes_total)
-                if z >= self.flow_zscore_threshold:
+                z = self.score_feature(
+                    server_model, "bytes_to_known_server", bytes_total
+                )
+                flow_threshold = self.get_effective_threshold(
+                    server_model, self.flow_zscore_threshold
+                )
+                if z >= flow_threshold:
                     flow_anomalies.append(
                         {
                             "feature": "bytes_to_known_server",
                             "value": bytes_total,
-                            "mean": server_model.mean,
+                            "mean": round(
+                                self.inverse_transform_value(
+                                    "bytes_to_known_server", server_model.mean
+                                ),
+                                6,
+                            ),
                             "zscore": round(z, 3),
+                            "threshold": round(flow_threshold, 3),
                         }
                     )
 
@@ -1168,7 +1363,9 @@ class AnomalyDetectionHTTPS(IModule):
                         },
                     )
                 alpha = None
-                self.fit_benign_model(server_model, bytes_total)
+                self.fit_benign_model(
+                    server_model, "bytes_to_known_server", bytes_total
+                )
             else:
                 if self.use_adwin_drift:
                     for signal_name, signal_value in flow_raw_signals.items():
@@ -1223,7 +1420,9 @@ class AnomalyDetectionHTTPS(IModule):
                     alpha = self.suspicious_alpha
                     flow_update_mode = "suspicious_update"
 
-                self.update_model(server_model, bytes_total, alpha)
+                self.update_model(
+                    server_model, "bytes_to_known_server", bytes_total, alpha
+                )
             self.log_event(
                 3,
                 "model_update",
