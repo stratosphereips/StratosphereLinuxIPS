@@ -129,8 +129,9 @@ JA3 client fingerprints are handled as an hourly statistical feature
 
 3. **Bytes-to-known-server anomaly**
    - only for known servers with enough baseline points,
-   - compute z-score from per-server EWMA mean/variance,
-   - alert if z-score >= `flow_zscore_threshold`.
+   - transform bytes with `log1p`,
+   - compute robust z-score (median/MAD based),
+   - alert if robust z-score >= effective threshold (empirical from benign training if available, otherwise default `flow_zscore_threshold`).
 
 Flow anomalies are logged as JSON lines in:
 
@@ -147,12 +148,13 @@ On hour rollover, the module computes hourly features:
 - `ja3_changes` = number of first-seen JA3 values (per server) in the hour
 - `known_server_avg_bytes` = `known_servers_total_bytes / known_servers_flow_count`
 
-Each feature is scored against its EWMA baseline:
+Each feature is scored against its baseline:
 
-- z-score = `abs(value - mean) / std`
-- with an adaptive robust standard-deviation floor learned from recent residuals.
+- transform with `log1p` for heavy-tail features,
+- robust z-score using median/MAD from recent value window,
+- adaptive robust standard-deviation floor still applied.
 
-If z-score >= `hourly_zscore_threshold`, that feature is anomalous.
+If robust z-score >= effective threshold, that feature is anomalous.
 
 Hourly anomalies are logged as JSON lines with:
 
@@ -220,10 +222,10 @@ Why:
 
 ### ADWIN drift trigger (when `use_adwin_drift=true`)
 
-When enabled and `river` is available, ADWIN is used as a drift trigger:
+When enabled and `river` is available, ADWIN is used as a drift trigger on raw signals:
 
-- **Hourly stream** receives `hourly_adwin_score` (sum of hourly feature z-scores).
-- **Per-flow stream** receives `flow_score` (sum of reason z-scores; novelty reasons map to a fixed small score).
+- **Hourly stream** receives each raw hourly feature separately (`ssl_flows`, `unique_servers`, `new_servers`, `ja3_changes`, `known_server_avg_bytes`).
+- **Per-flow stream** receives each raw per-flow signal separately (`new_server`, `new_ja3s`, `bytes_to_known_server` when available).
 - If ADWIN signals drift, update path is classified as `drift_update` or `suspicious_update` using existing thresholds.
 - If ADWIN does not signal drift, update path is `baseline_update` with `baseline_alpha`.
 - During benign training, ADWIN is still updated with benign scores to warm its windows and reduce post-training cold-start noise.
@@ -236,6 +238,12 @@ Performance impact:
 
 
 ## Mathematical model details
+
+Feature-specific modeling:
+
+- count-like hourly features (`ssl_flows`, `unique_servers`, `new_servers`, `ja3_changes`) use `log1p` + robust z-score,
+- byte-like features (`known_server_avg_bytes`, `bytes_to_known_server`) use `log1p` + robust z-score,
+- novelty per-flow signals (`new_server`, `new_ja3s`) are modeled as binary raw streams for ADWIN drift triggering.
 
 Training stage (known benign):
 
@@ -321,6 +329,7 @@ anomaly_detection_https:
   adwin_clock: 32
   adwin_grace_period: 10
   adwin_min_window_length: 5
+  empirical_threshold_quantile: 0.995
   ja3_min_variants_per_server: 3
 ```
 
@@ -352,6 +361,9 @@ Parameter meaning:
   if disabled, pre-ADWIN threshold-only drift logic is used.
 - `adwin_delta`, `adwin_clock`, `adwin_grace_period`, `adwin_min_window_length`:
   ADWIN hyperparameters used when `use_adwin_drift=true`.
+- `empirical_threshold_quantile`:
+  percentile of benign-training robust z-scores used to calibrate per-feature thresholds.
+  active when `training_hours > 0`; fallback is default thresholds otherwise.
 - `ja3_min_variants_per_server`:
   fallback gate used only when `training_hours = 0`:
   `ja3_changes` is not scored as anomalous unless hourly value is at least
