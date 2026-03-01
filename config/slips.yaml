@@ -247,6 +247,7 @@ anomaly_detection_https:
   adwin_clock: 32
   adwin_grace_period: 10
   adwin_min_window_length: 5
+  empirical_threshold_quantile: 0.995
 
   # JA3 statistical fallback gate used only when training_hours = 0.
   # If there is no benign training period, ja3_changes is not scored
