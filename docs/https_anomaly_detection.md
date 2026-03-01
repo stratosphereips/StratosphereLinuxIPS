@@ -67,15 +67,16 @@ Special fallback only for `ja3_changes`:
 
 ## Scoring
 
-Each modeled feature uses z-score:
+Each modeled feature uses robust scoring:
 
-- `z = |x - mean| / std_effective`
-- `std_effective` uses variance with a robust minimum floor to avoid unstable near-zero std.
+- heavy-tail features are transformed with `log1p`,
+- anomaly magnitude uses robust z-score (median/MAD window),
+- `std_effective` floor is still enforced to avoid unstable near-zero variance.
 
 Thresholds:
 
-- `hourly_zscore_threshold` for hourly features
-- `flow_zscore_threshold` for flow bytes to known servers
+- empirical thresholds calibrated from benign training when `training_hours > 0`,
+- otherwise defaults (`hourly_zscore_threshold`, `flow_zscore_threshold`).
 
 ## Adaptation states
 
@@ -96,8 +97,8 @@ For normal non-anomalous periods outside training, per-feature EWMA uses `baseli
 
 If `use_adwin_drift=true` and `river` is installed, ADWIN is used as drift trigger in both paths:
 
-- **Hourly path**: ADWIN receives `hourly_adwin_score` (sum of hourly feature z-scores).
-- **Flow path**: ADWIN receives `flow_score` (sum of reason z-scores, novelty reasons mapped to a small fixed score).
+- **Hourly path**: ADWIN receives each raw hourly feature stream.
+- **Flow path**: ADWIN receives each raw per-flow signal stream.
 - ADWIN drift detected -> classify as `drift_update` or `suspicious_update` using existing thresholds.
 - No ADWIN drift -> use `baseline_update` (`baseline_alpha`).
 - During benign training, ADWIN is still warmed with benign scores to reduce cold-start noise after training.
@@ -172,6 +173,7 @@ Main keys:
 - `adwin_clock`
 - `adwin_grace_period`
 - `adwin_min_window_length`
+- `empirical_threshold_quantile`
 - `log_verbosity`
 
 Default: `use_adwin_drift=true`.
