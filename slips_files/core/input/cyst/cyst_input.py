@@ -50,7 +50,6 @@ class CystInput(IInputHandler):
                 self.input.lines += 1
                 self.input.print("Done reading 1 CYST flow.\n ", 0, 3)
 
-        self.input.mark_self_as_done_processing()
         return True
 
     def shutdown_gracefully(self):

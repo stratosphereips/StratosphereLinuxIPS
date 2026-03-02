@@ -26,7 +26,6 @@ class SuricataInput(IInputHandler):
                 self.input.lines += 1
                 if self.input.testing:
                     break
-        self.input.mark_self_as_done_processing()
         return True
 
     def shutdown_gracefully(self):

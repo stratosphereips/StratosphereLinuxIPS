@@ -71,7 +71,7 @@ class ICore(IModule, Process):
         must be called run because this is what multiprocessing runs
         """
         try:
-            self.pre_main()
+            self._pre_main()
             # this should be defined in every core file
             # this won't run in a loop because it's not a module
             self.main()
