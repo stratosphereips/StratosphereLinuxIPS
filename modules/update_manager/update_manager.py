@@ -85,6 +85,9 @@ class UpdateManager(IModule):
         # update period passed
         self.responses = {}
 
+    def subscribe_to_channels(self):
+        self.channels = {}
+
     def read_configuration(self):
         def read_riskiq_creds(risk_iq_credentials_path):
             self.riskiq_email = None

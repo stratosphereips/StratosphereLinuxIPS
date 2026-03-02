@@ -141,7 +141,7 @@ class AsyncModule(IModule):
         loop.set_exception_handler(self.handle_loop_exception)
 
         try:
-            error: bool = self.pre_main()
+            error: bool = self._pre_main()
             if error or self.should_stop():
                 await self.gather_tasks_and_shutdown_gracefully()
                 return

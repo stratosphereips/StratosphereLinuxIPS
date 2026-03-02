@@ -60,12 +60,6 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             querying URLhaus data.
         """
         self.separator = self.db.get_field_separator()
-        self.c1 = self.db.subscribe("give_threat_intelligence")
-        self.c2 = self.db.subscribe("new_downloaded_file")
-        self.channels = {
-            "give_threat_intelligence": self.c1,
-            "new_downloaded_file": self.c2,
-        }
         self.__read_configuration()
         self.get_all_blacklisted_ip_ranges()
         self.urlhaus = URLhaus(self.db)
@@ -77,6 +71,14 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             name="ti_pending_circllu_calls_thread",
         )
         self.circllu = Circllu(self.db, self.pending_queries)
+
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("give_threat_intelligence")
+        self.c2 = self.db.subscribe("new_downloaded_file")
+        self.channels = {
+            "give_threat_intelligence": self.c1,
+            "new_downloaded_file": self.c2,
+        }
 
     def get_all_blacklisted_ip_ranges(self):
         """Retrieves and caches the malicious IP ranges from the database,

@@ -164,8 +164,6 @@ class AnomalyDetectionHTTPS(IModule):
     authors = ["Sebastian Garcia"]
 
     def init(self):
-        self.c1 = self.db.subscribe("new_ssl")
-        self.channels = {"new_ssl": self.c1}
         self.classifier = FlowClassifier()
         self.read_configuration()
         self.operational_log_path = os.path.join(
@@ -206,6 +204,10 @@ class AnomalyDetectionHTTPS(IModule):
                 "module_start",
                 "ADWIN requested but river is not installed; using pre-ADWIN drift logic.",
             )
+
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("new_ssl")
+        self.channels = {"new_ssl": self.c1}
 
     def read_configuration(self):
         conf = ConfigParser()

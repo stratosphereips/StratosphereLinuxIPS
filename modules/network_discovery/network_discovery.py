@@ -33,6 +33,16 @@ class NetworkDiscovery(IModule):
     def init(self):
         self.horizontal_ps = HorizontalPortscan(self.db)
         self.vertical_ps = VerticalPortscan(self.db)
+        # To make sure each evidence has more pkts than the last one
+        self.cached_thresholds_per_tw = {}
+        self.separator = "_"
+        self.pingscan_minimum_scanned_ips = 5
+        # when a client is seen requesting this minimum addresses in 1 tw,
+        # slips sets dhcp scan evidence
+        self.minimum_requested_addrs = 4
+        self.classifier = FlowClassifier()
+
+    def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("tw_modified")
         self.c2 = self.db.subscribe("new_notice")
         self.c3 = self.db.subscribe("new_dhcp")
@@ -43,14 +53,6 @@ class NetworkDiscovery(IModule):
             "new_dhcp": self.c3,
             "tw_closed": self.c4,
         }
-        # To make sure each evidence has more pkts than the last one
-        self.cached_thresholds_per_tw = {}
-        self.separator = "_"
-        self.pingscan_minimum_scanned_ips = 5
-        # when a client is seen requesting this minimum addresses in 1 tw,
-        # slips sets dhcp scan evidence
-        self.minimum_requested_addrs = 4
-        self.classifier = FlowClassifier()
 
     def check_icmp_sweep(self, twid, flow):
         """

@@ -104,17 +104,6 @@ class Trust(IModule):
         self.storage_name = self.db.constants.IPS_INFO
         if self.rename_redis_ip_info:
             self.storage_name += str(self.port)
-        self.c1 = self.db.subscribe("report_to_peers")
-        # channel to send msgs to whenever slips needs
-        # info from other peers about an ip
-        self.c2 = self.db.subscribe(self.p2p_data_request_channel)
-        # this channel receives peers requests/updates
-        self.c3 = self.db.subscribe(self.gopy_channel)
-        self.channels = {
-            "report_to_peers": self.c1,
-            self.p2p_data_request_channel: self.c2,
-            self.gopy_channel: self.c3,
-        }
 
         # todo don't duplicate this dict, move it to slips_utils
         # all evidence slips detects has threat levels of strings
@@ -132,6 +121,19 @@ class Trust(IModule):
         self.mutliaddress_printed = False
         self.last_log_rotation_time = time.time()
         self.rotation_period = 86400  # 1 day in seconds
+
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("report_to_peers")
+        # channel to send msgs to whenever slips needs
+        # info from other peers about an ip
+        self.c2 = self.db.subscribe(self.p2p_data_request_channel)
+        # this channel receives peers requests/updates
+        self.c3 = self.db.subscribe(self.gopy_channel)
+        self.channels = {
+            "report_to_peers": self.c1,
+            self.p2p_data_request_channel: self.c2,
+            self.gopy_channel: self.c3,
+        }
 
     def _init_log_files(self):
         # should be called after reading configs

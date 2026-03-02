@@ -29,11 +29,13 @@ class CESNET(IModule):
 
     def init(self):
         self.read_configuration()
+        self.stop_module = False
+
+    def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("export_evidence")
         self.channels = {
             "export_evidence": self.c1,
         }
-        self.stop_module = False
 
     def read_configuration(self):
         """Read importing/exporting preferences from slips.yaml"""
