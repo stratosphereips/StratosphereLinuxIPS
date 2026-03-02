@@ -615,6 +615,7 @@ class ProfilerWorker(IModule):
         """
         this 'stop' msg is the last msg ever sent by the input process
         to indicate that no more flows are coming
+        the number of stop msgs sent is = the number of started workers
         """
         return msg == "stop"
 
@@ -701,7 +702,8 @@ class ProfilerWorker(IModule):
             return 1
         except Exception:
             self.print(
-                f"Unable to process flow: {msg}: " f"{self.print_traceback()}",
+                f"Unable to process flow: {msg if msg else None}: "
+                f"{self.print_traceback()}",
                 0,
                 1,
             )
