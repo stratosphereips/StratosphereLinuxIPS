@@ -60,7 +60,7 @@ class RedisDB(
     constants = Constants()
     channels = Channels()
     # Stores instances per port
-    _instances = {}
+    instances = {}
     supported_channels = {
         "tw_modified",
         "evidence_added",
@@ -164,10 +164,10 @@ class RedisDB(
                     f"on port {cls.redis_port}: {err}"
                 )
 
-            cls._instances[cls.redis_port] = super().__new__(cls)
+            cls.instances[cls.redis_port] = super().__new__(cls)
             super().__init__(cls)
 
-        elif cls.redis_port not in cls._instances and not cls.args.killall:
+        elif cls.redis_port not in cls.instances and not cls.args.killall:
             cls._read_configuration()
             cls._setup_config_file()
             initialized, err = cls.init_redis_server()
@@ -177,7 +177,7 @@ class RedisDB(
                     f"on port {cls.redis_port}: {err}"
                 )
 
-            cls._instances[cls.redis_port] = super().__new__(cls)
+            cls.instances[cls.redis_port] = super().__new__(cls)
             super().__init__(cls)
 
             # By default the slips internal time is
@@ -186,7 +186,7 @@ class RedisDB(
             if not cls.get_slips_start_time():
                 cls._set_slips_start_time()
 
-        return cls._instances[cls.redis_port]
+        return cls.instances[cls.redis_port]
 
     def __init__(self, *args, **kwargs):
         self.call_mixins_setup()
