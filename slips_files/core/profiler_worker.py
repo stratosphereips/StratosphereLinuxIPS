@@ -639,19 +639,10 @@ class ProfilerWorker(IModule):
 
     def should_stop(self):
         """
-        Override the default IModule should_stop().
-
-        Stops when no more msgs are in the profiler_queue, no new pub/sub
-        msgs are recvd, and the termination event is set
+        Overrides the default IModule should_stop().
+        This module will only stop when it recvs the sentinel stop msg
         """
-        if (
-            self.is_msg_received_in_any_channel()
-            or not self.termination_event.is_set()
-            or self.profiler_queue.qsize() > 0
-        ):
-            return False
-        print(f"@@@@@@@@@@@@@@@@ {self.name} is stopppinggg")
-        return True
+        return False
 
     def main(self):
         # Disable automatic GC, we'll trigger it manually
