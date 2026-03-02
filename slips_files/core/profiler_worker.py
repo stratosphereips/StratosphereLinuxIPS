@@ -45,14 +45,12 @@ class ProfilerWorker(IModule):
         ),
         aid_queue: multiprocessing.Queue,
         aid_manager: AIDManager,
-        stop_profiler_event: multiprocessing.Event,
     ):
         self.name = name
         self.profiler_queue = profiler_queue
         # used to pass aid tasks from workers to the the AIDManager()
         self.aid_queue = aid_queue
         self.aid_manager: AIDManager = aid_manager
-        self.stop_profiler_event = stop_profiler_event
         # this is an instance of
         # ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         self.input_handler = input_handler
@@ -638,6 +636,22 @@ class ProfilerWorker(IModule):
                     {file_type: json.loads(indices)}
                 )
 
+    def should_stop(self):
+        """
+        Override the default IModule should_stop().
+
+        Stops when no more msgs are in the profiler_queue, no new pub/sub
+        msgs are recvd, and the termination event is set
+        """
+        if (
+            self.is_msg_received_in_any_channel()
+            or not self.termination_event.is_set()
+            or self.profiler_queue.qsize() > 0
+        ):
+            return False
+        print(f"@@@@@@@@@@@@@@@@ {self.name} is stopppinggg")
+        return True
+
     def main(self):
         # Disable automatic GC, we'll trigger it manually
         gc.disable()
@@ -652,8 +666,8 @@ class ProfilerWorker(IModule):
 
             if self.is_stop_msg(msg):
                 gc.collect()
-                # this signal tells profiler.py to stop
-                self.stop_profiler_event.set()
+                # no need to wait for the should_stop(), this worker will
+                # never recv any new flows after the stop msg
                 return 1
 
             line: dict = msg["line"]
