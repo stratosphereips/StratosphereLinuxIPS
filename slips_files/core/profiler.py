@@ -18,6 +18,7 @@
 import queue
 import multiprocessing
 import time
+import threading
 from multiprocessing import Process
 from typing import (
     List,
@@ -32,6 +33,7 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.abstracts.icore import ICore
 from slips_files.common.style import green
 from slips_files.common.input_type import InputType
+from slips_files.common.slips_utils import utils
 from slips_files.core.aid_manager import AIDManager
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.input_profilers.argus import Argus
@@ -92,12 +94,14 @@ class Profiler(ICore, IObservable):
         # is set by this proc to tell input proc that we are done
         # processing and it can exit no issue
         self.is_profiler_done_event = is_profiler_done_event
+        self.input_handler_obj = None
         # to close them on shutdown
         self.profiler_child_processes: List[Process] = []
         # to access their internal attributes if needed
         self.workers: List[ProfilerWorker] = []
-
         self.stop_profiler_workers_event = multiprocessing.Event()
+        self.did_all_workers_stop = multiprocessing.Event()
+        self.last_worker_id = -1
         self.handle_setting_local_net_lock = multiprocessing.Lock()
         # small, shared JSON cache backed by shared memory (no Manager)
         self.localnet_cache = LocalnetCacheShared()
@@ -113,10 +117,14 @@ class Profiler(ICore, IObservable):
             self.aid_queue,
             self.stop_profiler_workers_event,
         )
-        # the event that the workers use to tell this process to stop
-        self.stop_profiler_event = multiprocessing.Event()
         now = time.monotonic()
         self.next_throughput_check_time = now + 300
+        self.profiler_monitor_thread = threading.Thread(
+            target=self._run_profiler_monitor_loop,
+            name="profiler_monitor_loop",
+            daemon=True,
+        )
+        utils.start_thread(self.profiler_monitor_thread, self.db)
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -175,6 +183,7 @@ class Profiler(ICore, IObservable):
                     process.join(timeout=0.1)
             except (OSError, ChildProcessError):
                 pass
+        self.did_all_workers_stop.set()
 
     def mark_process_as_done_processing(self):
         """
@@ -224,7 +233,6 @@ class Profiler(ICore, IObservable):
             input_handler=self.input_handler_obj,
             aid_queue=self.aid_queue,
             aid_manager=self.aid_manager,
-            stop_profiler_event=self.stop_profiler_event,
         )
         worker.start()
         self.profiler_child_processes.append(worker)
@@ -261,18 +269,15 @@ class Profiler(ICore, IObservable):
         for worker in self.workers:
             self.rec_lines += worker.received_lines
 
-        # wait for all flows to be processed by the profiler processes.
-        self.stop_profiler_workers()
-
         used_queues = [
             self.profiler_queue,
             self.aid_queue,
         ]
 
         for q in used_queues:
-            # send a "stop" message for each worker to make sure they exit
-            # so many stops that we're sure all workers will receive one.
-            for _ in range(50):
+            # send one stop per worker to guarantee each worker can exit
+            # without relying on a single worker draining the queue
+            for _ in range(len(self.profiler_child_processes) or 1):
                 q.put("stop")
 
             # By default if a process is not the creator of the queue then on
@@ -284,6 +289,11 @@ class Profiler(ICore, IObservable):
             # close the queues to avoid deadlocks.
             # this step SHOULD NEVER be done before closing the workers
             q.close()
+
+        # wait for all flows to be processed by the profiler processes.
+        self.stop_profiler_workers()
+        if self.profiler_monitor_thread.is_alive():
+            self.profiler_monitor_thread.join(timeout=5)
 
         self.print(
             f"Stopping. Total lines read: {self.rec_lines}",
@@ -358,21 +368,27 @@ class Profiler(ICore, IObservable):
 
     def should_stop(self):
         """
-        overrides IModule.should_stop() which returns True when all channels
-        are empty and the termination event is set.
+        overrides IModule.should_stop().
 
         why? because this module is the one that triggers the termination
         event (through process_manager), so checking that event here is
         meaningless, it will never be set before this module stops.
-
-        instead, the "stop" message coming from input.py causes one of the
-        profiler workers to set stop_profiler_event, this func then
-        return True, that worker then exits, and then profiler shuts down
-        the remaining workers and stops.
-        docs on how slips stops:
-        https://stratospherelinuxips.readthedocs.io/en/develop/contributing.html#how-does-slips-stop
         """
-        return self.stop_profiler_event.wait(timeout=5 * 60)
+        return self.stop_other_workers.is_set()
+
+    def _run_profiler_monitor_loop(self):
+        """
+        Does necessary monitoring for the profiler while the workers are
+        running.
+        """
+        while not self.did_all_workers_stop.is_set():
+            self._update_lines_read_by_all_workers()
+            # implemented in icore.py
+            self.store_flows_read_per_second()
+            self._check_if_high_throughput_and_add_workers()
+            # PS: do not exit when max workers is reached, we need this
+            # parent (profiler.py) up to handle the shutdown of its child
+            # workers
 
     def main(self):
         # process the first msg only here, to determine what kind of input
@@ -400,12 +416,7 @@ class Profiler(ICore, IObservable):
             self.start_profiler_worker(worker_id)
 
         while not self.should_stop():
-            self._update_lines_read_by_all_workers()
-            # implemented in icore.py
-            self.store_flows_read_per_second()
-            self._check_if_high_throughput_and_add_workers()
-            # PS: do not exit when max workers is reached, we need this
-            # parent up to handle the shutdown of its child workers
+            time.sleep(0.1)
 
         # ICore() will call shutdown_gracefully() on return
         return
