@@ -94,12 +94,12 @@ class AsyncModule(IModule):
 
     async def gather_tasks_and_shutdown_gracefully(self):
         await asyncio.gather(*self.tasks, return_exceptions=True)
+        await self.shutdown_gracefully()
 
         # common cleanup
         if self.channels:
             for channel_obj in self.channels.values():
                 self.db.unsubscribe(channel_obj)
-        await self.shutdown_gracefully()
 
     def run_async_function(self, func: Callable):
         """
@@ -161,12 +161,12 @@ class AsyncModule(IModule):
                 if self.should_stop():
                     await self.gather_tasks_and_shutdown_gracefully()
                     return
-
                 # if a module's main() returns 1, it means there's an
                 # error and it needs to stop immediately
                 error: bool | None = await self.main()
                 if error:
                     await self.gather_tasks_and_shutdown_gracefully()
+
                     return
 
             except (KeyboardInterrupt, asyncio.CancelledError):
