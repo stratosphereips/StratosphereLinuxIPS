@@ -100,6 +100,8 @@ class Profiler(ICore, IObservable):
         # to access their internal attributes if needed
         self.workers: List[ProfilerWorker] = []
         self.stop_profiler_workers_event = multiprocessing.Event()
+        # is set by this module to indicate to the monitor thread that
+        # workers stoppped.
         self.did_all_workers_stop = multiprocessing.Event()
         self.last_worker_id = -1
         self.handle_setting_local_net_lock = multiprocessing.Lock()
@@ -236,6 +238,7 @@ class Profiler(ICore, IObservable):
         )
         worker.start()
         self.profiler_child_processes.append(worker)
+        self.db.increment_profiler_workers_started()
 
     def get_handler_obj(
         self, first_msg: dict

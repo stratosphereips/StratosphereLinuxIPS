@@ -1807,6 +1807,17 @@ class RedisDB(
             return 0
         return int(processed_flows)
 
+    def increment_profiler_workers_started(self) -> int:
+        """increments the number of profiler workers started"""
+        return self.r.incr(self.constants.PROFILER_WORKERS_STARTED, 1)
+
+    def get_profiler_workers_started(self) -> int:
+        """returns number of profiler workers started so far"""
+        count = self.r.get(self.constants.PROFILER_WORKERS_STARTED)
+        if not count:
+            return 0
+        return int(count)
+
     def store_std_file(self, **kwargs):
         """
         available args are

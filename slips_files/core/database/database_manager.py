@@ -268,6 +268,12 @@ class DBManager:
     def get_disabled_modules(self, *args, **kwargs):
         return self.rdb.get_disabled_modules(*args, **kwargs)
 
+    def increment_profiler_workers_started(self, *args, **kwargs):
+        return self.rdb.increment_profiler_workers_started(*args, **kwargs)
+
+    def get_profiler_workers_started(self, *args, **kwargs):
+        return self.rdb.get_profiler_workers_started(*args, **kwargs)
+
     def set_input_metadata(self, *args, **kwargs):
         return self.rdb.set_input_metadata(*args, **kwargs)
 
