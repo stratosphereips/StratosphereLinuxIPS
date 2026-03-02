@@ -126,7 +126,12 @@ class Input(ICore):
             "Telling Profiler to stop because " "no more input is arriving.",
             log_to_logfiles_only=True,
         )
-        self.profiler_queue.put("stop")
+        number_of_profiler_workers: int = (
+            self.db.get_profiler_workers_started()
+        )
+        for _ in range(number_of_profiler_workers):
+            self.profiler_queue.put("stop")
+
         self.print("Waiting for Profiler to stop.", log_to_logfiles_only=True)
         self.is_profiler_done_event.wait()
         # reaching here means the wait() is over and profiler did stop.
