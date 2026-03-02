@@ -500,11 +500,10 @@ class EvidenceHandler(ICore):
             return False
 
         # no new msgs are received in any of the channels here
-        # wait an extra 1 minute for new evidence to arrive
+        # wait some extra time for new evidence to arrive
         # without this, slips has problems processing the last evidence
         # sent by some of the modules.
-        if time.time() - self.last_msg_received_time < 60:
-            # one minute didnt pass yet
+        if time.time() - self.last_msg_received_time < 30:
             return False
 
         # 1 min passed since the last evidence with no new msgs. stop.
