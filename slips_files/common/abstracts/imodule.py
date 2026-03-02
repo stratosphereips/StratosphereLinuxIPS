@@ -134,14 +134,15 @@ class IModule(ABC, Process):
         threads, queue,
         log lines to indicate the module is done, etc.
         """
+        if hasattr(self, "shutdown_gracefully"):
+            # module-specific cleanup.
+            # should be implemented in the module
+            self.shutdown_gracefully()
+
         # common cleanup
         if self.channels:
             for channel_obj in self.channels.values():
                 self.db.unsubscribe(channel_obj)
-
-        if hasattr(self, "shutdown_gracefully"):
-            # specific cleanup. should be implemented in the module
-            self.shutdown_gracefully()
 
     @abstractmethod
     def main(self):
