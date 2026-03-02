@@ -41,6 +41,13 @@ class ICore(IModule, Process):
         """
         updates the db about the flows read per second
         """
+        if not hasattr(self, "next_fps_check_time"):
+            # Defensive init for cases where ICore.__init__ wasn't invoked.
+            now = time.monotonic()
+            self.last_flows_count = getattr(self, "last_flows_count", 0)
+            self.last_fps_check_time = now
+            self.next_fps_check_time = now + FIVE_MINS
+
         now = time.monotonic()
         if now < self.next_fps_check_time:
             return
