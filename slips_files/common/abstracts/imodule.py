@@ -102,6 +102,12 @@ class IModule(ABC, Process):
         initializing the module
         """
 
+    @abstractmethod
+    def subscribe_to_channels(self):
+        """
+        Handles subscription to all needed channels and sets self.channels.
+        """
+
     def is_msg_received_in_any_channel(self) -> bool:
         """
         return True if a msg was received in any channel of the ones
@@ -157,6 +163,15 @@ class IModule(ABC, Process):
         executed once before the main loop
         """
 
+    def _pre_main(self):
+        """
+        Common pre-main logic: subscribe to channels, init tracker, then
+        run module-specific pre_main if defined.
+        """
+        self.subscribe_to_channels()
+        self.channel_tracker = self.init_channel_tracker()
+        return self.pre_main()
+
     def get_msg(self, channel: str) -> Optional[dict]:
         try:
             if channel not in self.channels:
@@ -188,7 +203,7 @@ class IModule(ABC, Process):
         shutdown_gracefully() functions run until completion
         """
         try:
-            error: bool = self.pre_main()
+            error: bool = self._pre_main()
             if error or self.should_stop():
                 self._shutdown_gracefully()
                 return
