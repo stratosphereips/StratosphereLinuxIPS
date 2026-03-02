@@ -1725,7 +1725,7 @@ class RedisDB(
 
             # Start the server again, but make sure it's flushed
             # and doesnt have any keys
-            os.system("redis-server redis.conf > /dev/null 2>&1")
+            os.system(f"redis-server {RedisDB._conf_file} > /dev/null 2>&1")
             return True
         except Exception:
             self.print(f"Error loading the database {backup_file}.")
