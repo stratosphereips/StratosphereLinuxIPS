@@ -56,12 +56,6 @@ class ProfilerWorker(IModule):
         self.input_handler = input_handler
         self.handle_setting_local_net_lock = handle_setting_local_net_lock
         self.read_configuration()
-
-        self.c1 = self.db.subscribe("new_zeek_fields_line")
-        self.channels = {
-            "new_zeek_fields_line": self.c1,
-        }
-
         self.received_lines = 0
         self.localnet_cache = localnet_cache
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
@@ -73,6 +67,12 @@ class ProfilerWorker(IModule):
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
+
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("new_zeek_fields_line")
+        self.channels = {
+            "new_zeek_fields_line": self.c1,
+        }
 
     def read_configuration(self):
         self.client_ips: List[
@@ -240,7 +240,6 @@ class ProfilerWorker(IModule):
         self.get_aid_and_store_flow_in_the_db(
             handler_func, flow_handler.handle_conn, flow, profileid, twid
         )
-
         # now that slips successfully parsed the flow,
         # mark this profile as modified
         self.db.mark_profile_tw_as_modified(profileid, twid, flow.starttime)

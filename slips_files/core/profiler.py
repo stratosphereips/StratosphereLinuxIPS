@@ -109,6 +109,8 @@ class Profiler(ICore, IObservable):
         self.localnet_cache = LocalnetCacheShared()
         # max parallel profiler workers to start when high throughput is detected
         self.max_workers = 6
+        # to avoid race conditions
+        self.flow_counter_lock = multiprocessing.Lock()
         # 30MBs max size of this queue to avoid growing forever in mem
         self.aid_queue = multiprocessing.Queue(maxsize=30000000)
         # This starts a process that handles calculatng aid hash and stores
@@ -230,6 +232,7 @@ class Profiler(ICore, IObservable):
             input_handler=self.input_handler_obj,
             aid_queue=self.aid_queue,
             aid_manager=self.aid_manager,
+            flow_counter_lock=self.flow_counter_lock,
         )
         worker.start()
         self.profiler_child_processes.append(worker)
