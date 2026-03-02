@@ -128,6 +128,9 @@ class Profiler(ICore, IObservable):
         )
         utils.start_thread(self.profiler_monitor_thread, self.db)
 
+    def subscribe_to_channels(self):
+        self.channels = {}
+
     def read_configuration(self):
         conf = ConfigParser()
         self.client_ips: List[

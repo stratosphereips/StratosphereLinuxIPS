@@ -81,13 +81,6 @@ class EvidenceHandler(ICore):
             else:
                 self.popup_alerts = False
 
-        self.c1 = self.db.subscribe("evidence_added")
-        self.c2 = self.db.subscribe("new_blame")
-        self.channels = {
-            "evidence_added": self.c1,
-            "new_blame": self.c2,
-        }
-
         self.is_running_non_stop = self.db.is_running_non_stop()
         self.blocking_modules_supported = self.is_blocking_modules_supported()
 
@@ -112,6 +105,14 @@ class EvidenceHandler(ICore):
             name="thread_that_handles_evidence_logging_to_disk",
         )
         utils.start_thread(self.logger_thread, self.db)
+
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("evidence_added")
+        self.c2 = self.db.subscribe("new_blame")
+        self.channels = {
+            "evidence_added": self.c1,
+            "new_blame": self.c2,
+        }
 
     def read_configuration(self):
         conf = ConfigParser()

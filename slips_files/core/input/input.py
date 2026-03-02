@@ -83,9 +83,6 @@ class Input(ICore):
         self.testing = False
         # number of lines read
         self.lines = 0
-        self.channels = {
-            "remove_old_files": self.db.subscribe("remove_old_files"),
-        }
         self.timeout = None
         self.zeek_utils = ZeekInputUtils(self)
         self._done_processing_marked = False
@@ -96,6 +93,11 @@ class Input(ICore):
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.input_handlers = self._build_input_handlers()
         self.active_handler = None
+
+    def subscribe_to_channels(self):
+        self.channels = {
+            "remove_old_files": self.db.subscribe("remove_old_files"),
+        }
 
     def _build_input_handlers(self):
         return {
