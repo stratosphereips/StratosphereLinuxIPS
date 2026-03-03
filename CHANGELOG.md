@@ -1,3 +1,12 @@
+1.1.18 (Mar 3rd, 2026)
+
+* Add the HTTPS anomaly detection module with adaptive baselines, confidence scoring, and detailed evidence reasons.
+* Enable ADWIN drift detection by default for HTTPS anomaly detection, with separate hourly and flow drift paths.
+* Add a local HTML report generator for HTTPS anomaly detection logs, with interactive charts and anomaly summaries.
+* Improve performance under high-throughput traffic and reduced OOM risk.
+* Improve Redis memory hygiene with tighter TTLs, capped zsets, periodic cleanups.
+* Cap non-HTTP port 80 checks in the HTTP analyzer to reduce resource spikes.
+
 1.1.17 (Jan 30th, 2025)
 
 * Improve horizontal, vertical, and ICMP portscan detection logic and speed.

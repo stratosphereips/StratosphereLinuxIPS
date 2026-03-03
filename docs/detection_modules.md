@@ -132,6 +132,8 @@ For the full technical description of the HTTPS anomaly detector (features, trai
 
 - [HTTPS Anomaly Detection](https_anomaly_detection.md)
 
+The module ships with a local HTML report generator that visualizes detections, confidence levels, and top anomaly reasons from `anomaly_detection_https.log`.
+
 
 
 ### Virustotal Module
