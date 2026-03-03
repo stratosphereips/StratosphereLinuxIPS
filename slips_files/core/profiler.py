@@ -129,7 +129,6 @@ class Profiler(ICore, IObservable):
             name="profiler_monitor_loop",
             daemon=True,
         )
-        utils.start_thread(self.profiler_monitor_thread, self.db)
 
     def subscribe_to_channels(self):
         self.channels = {}
@@ -406,7 +405,8 @@ class Profiler(ICore, IObservable):
         line: dict = msg["line"]
         # updates internal zeek to slips mapping if needed, just once
         self.input_handler_obj.process_line(line)
-
+        # start the thread now after we know the input type
+        utils.start_thread(self.profiler_monitor_thread, self.db)
         # slips starts with these workers by default until it detects
         # high throughput that these workers arent enough to handle
         num_of_profiler_workers = 5
