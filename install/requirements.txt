@@ -3,7 +3,7 @@ setuptools<81
 numpy==1.26.4
 watchdog==5.0.0
 redis==5.2.1
-urllib3==2.6.0
+urllib3==2.6.3
 pandas==2.3.3
 tzlocal==5.3.1
 cabby==0.1.23
@@ -25,7 +25,7 @@ pytest-xdist==3.8.0
 scipy==1.15.1
 scikit-learn==1.7.2
 GitPython==3.1.45
-protobuf==4.25.8
+protobuf==5.29.6
 exclusiveprocess==0.9.4
 pytest-dependency==0.6.0
 whois==1.20240129.2

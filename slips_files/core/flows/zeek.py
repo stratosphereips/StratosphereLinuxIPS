@@ -259,6 +259,9 @@ class SMTP(BaseFlow):
     saddr: str
     daddr: str
 
+    sport: str
+    dport: str
+
     last_reply: str
 
     ground_truth_label: str = ""

@@ -43,6 +43,8 @@ jobs:
     needs: setup
     runs-on: ubuntu-22.04
     strategy:
+      # prevents the whole job from being canceled if one entry fails
+      fail-fast: false
       matrix:
         image_type:
           - name: slips

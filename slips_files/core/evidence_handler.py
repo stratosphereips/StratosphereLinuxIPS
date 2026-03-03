@@ -46,8 +46,6 @@ from slips_files.common.abstracts.icore import ICore
 from slips_files.core.structures.evidence import (
     dict_to_evidence,
     Evidence,
-    Victim,
-    EvidenceType,
     TimeWindow,
 )
 from slips_files.core.structures.alerts import (
@@ -83,13 +81,6 @@ class EvidenceHandler(ICore):
             else:
                 self.popup_alerts = False
 
-        self.c1 = self.db.subscribe("evidence_added")
-        self.c2 = self.db.subscribe("new_blame")
-        self.channels = {
-            "evidence_added": self.c1,
-            "new_blame": self.c2,
-        }
-
         self.is_running_non_stop = self.db.is_running_non_stop()
         self.blocking_modules_supported = self.is_blocking_modules_supported()
 
@@ -102,7 +93,7 @@ class EvidenceHandler(ICore):
 
         # A thread that handing I/O to disk (writing evidence to log files)
         self.logger_stop_signal = threading.Event()
-        self.evidence_logger_q = multiprocessing.Queue()
+        self.evidence_logger_q = multiprocessing.Queue(maxsize=30000000)
         self.evidence_logger = EvidenceLogger(
             logger_stop_signal=self.logger_stop_signal,
             evidence_logger_q=self.evidence_logger_q,
@@ -114,6 +105,14 @@ class EvidenceHandler(ICore):
             name="thread_that_handles_evidence_logging_to_disk",
         )
         utils.start_thread(self.logger_thread, self.db)
+
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("evidence_added")
+        self.c2 = self.db.subscribe("new_blame")
+        self.channels = {
+            "evidence_added": self.c1,
+            "new_blame": self.c2,
+        }
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -300,7 +299,8 @@ class EvidenceHandler(ICore):
             # to fix this, we keep track of processed evidence
             # that came to new_evidence channel and were processed by it.
             # so they are ready to be a part of an alert
-            if not self.db.is_evidence_processed(id):
+            profileid: str = str(evidence.profile)
+            if not self.db.is_evidence_processed(id, profileid, twid):
                 continue
 
             filtered_evidence[evidence.id] = evidence
@@ -472,22 +472,6 @@ class EvidenceHandler(ICore):
         self.db.publish("new_blocking", blocking_data)
         return True
 
-    def increment_attack_counter(
-        self,
-        attacker: str,
-        victim: Optional[Victim],
-        evidence_type: EvidenceType,
-    ):
-        """
-        increments the number of attacks of this type from the given
-        attacker-> the given victim
-        used for displaying alert summary
-        """
-        # this method is here instead of the db bc here we check
-        # if the evidence is whitelisted, alerted before, etc. before we
-        # consider it as  valid evidence. this filtering is not done in the db
-        self.db.increment_attack_counter(attacker, victim, evidence_type.name)
-
     def update_accumulated_threat_level(self, evidence: Evidence) -> float:
         """
         update the accumulated threat level of the profileid and twid of
@@ -517,11 +501,10 @@ class EvidenceHandler(ICore):
             return False
 
         # no new msgs are received in any of the channels here
-        # wait an extra 1 minute for new evidence to arrive
+        # wait some extra time for new evidence to arrive
         # without this, slips has problems processing the last evidence
-        # set by some of the modules.
-        if time.time() - self.last_msg_received_time < 60:
-            # one minute didnt pass yet
+        # sent by some of the modules.
+        if time.time() - self.last_msg_received_time < 30:
             return False
 
         # 1 min passed since the last evidence with no new msgs. stop.
@@ -544,7 +527,6 @@ class EvidenceHandler(ICore):
                     continue
                 profileid: str = str(evidence.profile)
                 twid: str = str(evidence.timewindow)
-                evidence_type: EvidenceType = evidence.evidence_type
                 timestamp: str = evidence.timestamp
 
                 # the database naturally has evidence before they reach
@@ -554,7 +536,9 @@ class EvidenceHandler(ICore):
                 # this marking of ev. as processed is to avoid that.
                 # so that get_evidence_for_tw() call below won't return
                 # unprocessed evidence.
-                self.db.mark_evidence_as_processed(evidence.id)
+                self.db.mark_evidence_as_processed(
+                    evidence.id, profileid, twid
+                )
 
                 if self.whitelist.is_whitelisted_evidence(evidence):
                     self.db.cache_whitelisted_evidence_id(evidence.id)
@@ -586,10 +570,6 @@ class EvidenceHandler(ICore):
                 )
                 # Add the evidence to alerts.log
                 self.add_to_log_file(evidence_to_log)
-
-                self.increment_attack_counter(
-                    evidence.profile.ip, evidence.victim, evidence_type
-                )
 
                 past_evidence_ids: List[str] = (
                     self.get_evidence_that_were_part_of_a_past_alert(

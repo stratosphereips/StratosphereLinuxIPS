@@ -11,6 +11,7 @@ from slips_files.core.structures.alerts import (
     dict_to_alert,
     Alert,
 )
+from .persistence.fides_sqlite_db import FidesSQLiteDB
 from ..fidesModule.messaging.message_handler import MessageHandler
 from ..fidesModule.messaging.network_bridge import NetworkBridge
 from ..fidesModule.model.configuration import load_configuration
@@ -29,7 +30,6 @@ from ..fidesModule.persistence.threat_intelligence_db import (
     SlipsThreatIntelligenceDatabase,
 )
 from ..fidesModule.persistence.trust_db import SlipsTrustDatabase
-from ..fidesModule.persistence.sqlite_db import SQLiteDB
 
 
 class FidesModule(IModule):
@@ -57,6 +57,16 @@ class FidesModule(IModule):
         self.__bridge: NetworkBridge
         self.__intelligence: ThreatIntelligenceProtocol
         self.__alerts: AlertProtocol
+
+        # this sqlite is shared between all runs, like a cache,
+        # so it shouldnt be stored in the current output dir, it should be
+        # in the main slips dir
+        self.sqlite = FidesSQLiteDB(
+            self.logger,
+            os.path.join(os.getcwd(), self.__trust_model_config.database),
+        )
+
+    def subscribe_to_channels(self):
         self.f2n = self.db.subscribe("fides2network")
         self.n2f = self.db.subscribe("network2fides")
         self.s2f = self.db.subscribe("slips2fides")
@@ -71,14 +81,6 @@ class FidesModule(IModule):
             "new_alert": self.ch_alert,
             "new_ip": self.ch_ip,
         }
-
-        # this sqlite is shared between all runs, like a cache,
-        # so it shouldnt be stored in the current output dir, it should be
-        # in the main slips dir
-        self.sqlite = SQLiteDB(
-            self.logger,
-            os.path.join(os.getcwd(), self.__trust_model_config.database),
-        )
 
     def read_configuration(self):
         """reurns true if all necessary configs are present and read"""

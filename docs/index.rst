@@ -17,6 +17,8 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Detection modules**. Explanation of detection modules in Slips, types of input and output. See :doc:`Detection modules <detection_modules>`.
 
+- **HTTPS anomaly detection**. Detailed design and behavior of the HTTPS anomaly detector. See :doc:`HTTPS anomaly detection <https_anomaly_detection>`.
+
 - **Architecture**. Internal architecture of Slips (profiles, timewindows), the use of Zeek and connection to Redis. See :doc:`Architecture <architecture>`.
 
 - **Training with your own data**. Explanation on how to re-train the machine learning system of Slips with your own traffic (normal or malicious).See :doc:`Training <training>`.
@@ -49,6 +51,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    usage
    architecture
    detection_modules
+   https_anomaly_detection
    flowalerts
    features
    training

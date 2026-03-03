@@ -3,9 +3,13 @@
 import ipaddress
 import json
 from dataclasses import asdict
+from typing import Any, Callable
 
 
 class Publisher:
+    publish: Callable[..., Any]
+    get_timewindow: Callable[..., Any]
+
     def publish_new_dhcp(self, profileid, flow):
         """
         Publish the GW addr in the new_dhcp channel

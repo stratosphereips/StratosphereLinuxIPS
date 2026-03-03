@@ -112,7 +112,7 @@ class SSH(IFlowalertsAnalyzer):
         if conn_count >= self.pw_guessing_threshold:
 
             uids = self.password_guessing_cache[cache_key]
-            self.set_evidence.pw_guessing(flow, twid, uids)
+            self.set_evidence.ssh_pw_guessing(flow, twid, uids)
             # reset the counter
             del self.password_guessing_cache[cache_key]
 

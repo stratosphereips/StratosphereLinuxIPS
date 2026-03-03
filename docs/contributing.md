@@ -133,7 +133,7 @@ The goal of suppressing errors by default is the most errors should be handled b
 - If you run slips without any special arguments, Slips starts redis cache db ( redis server port 6379 db 1) and Redis main db (redis port 6379 db 1)
 - You can start Slips with -m, which starts redis on a random available redis port in the range (32768 to 10000), or -P if you want to start redis on a specific port.
 - Slips starts the redis server if it's not started by default.
-- Slips uses its own redis.conf, it doesn't use the default one. you can find it in config/redis.conf.
+- Slips uses its own redis.conf, it doesn't use the default one. you can find it in config/redis.conf.template.
 - The cache db is shared among all running slips instances, and is persistent, meaning it is not deleted on each run unlike the main redis db (redis port 6379 db 1), which is overwritten every run.
 - If you're gonna add a new redis channel to slips, remember to add it to the list of supported_channels in slips_files/core/database/redis_db/database.py
 
@@ -155,7 +155,7 @@ It all begins when input.py realizes there's no more flows arriving from the zee
 
 It's a good idea to read the code before checking this graph
 
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/how_slips_stops.jpg"
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/how_slips_stops.jpg">
 
 Evidence Handler is the only process that stops but keeps waiting in memory for new msgs to arrive until all other modules are done. because if any of the modules added an evidence, EvidenceHandler should be up to report and handle it or else it will be discarded.
 Once all modules are done processing, EvidenceHandler is killed by the Process manager.

@@ -7,6 +7,8 @@ from typing import (
     Tuple,
     Union,
     Optional,
+    Any,
+    Callable,
 )
 
 from slips_files.common.data_structures.trie import Trie
@@ -23,6 +25,19 @@ class IoCHandler:
     Contains all the logic related to setting and retrieving evidence and
     alerts in the db
     """
+
+    r: Any
+    rcache: Any
+    constants: Any
+    channels: Any
+    conf: Any
+    default_ttl: int
+    publish: Callable[..., Any]
+    _hscan: Callable[..., Any]
+    _should_ask_modules_about_ip: Callable[..., Any]
+    trie: Any
+    is_trie_cached: bool
+    twid_width: int
 
     name = "DB"
 
@@ -412,6 +427,12 @@ class IoCHandler:
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if an URL exists or not
             self.rcache.hset(self.constants.VT_CACHED_URL_INFO, url, "{}")
+            self.rcache.hexpire(
+                self.constants.VT_CACHED_URL_INFO,
+                self.default_ttl,
+                url,
+                nx=True,
+            )
 
     def get_domain_data(self, domain):
         """
@@ -440,6 +461,9 @@ class IoCHandler:
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if a domain exists or not
             self.rcache.hset(self.constants.DOMAINS_INFO, domain, "{}")
+            self.rcache.hexpire(
+                self.constants.DOMAINS_INFO, self.default_ttl, domain, nx=True
+            )
 
     def set_info_for_domains(
         self, domain: str, info_to_set: dict, mode="leave"
@@ -516,6 +540,9 @@ class IoCHandler:
             # Store
             domain_data = json.dumps(domain_data)
             self.rcache.hset(self.constants.DOMAINS_INFO, domain, domain_data)
+            self.rcache.hexpire(
+                self.constants.DOMAINS_INFO, self.default_ttl, domain, nx=True
+            )
 
     def get_url_info(self, url, info_type):
         key = f"{self.constants.VT_CACHED_URL_INFO}:{info_type}"
@@ -541,3 +568,4 @@ class IoCHandler:
                     f"{key}"
                 )
                 self.rcache.hset(key, url, val)
+                self.rcache.hexpire(key, self.default_ttl, url, nx=True)

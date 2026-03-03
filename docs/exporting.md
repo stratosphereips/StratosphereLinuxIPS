@@ -61,6 +61,10 @@ Configure the TAXII client by editing the following variables:
 ```discovery_path```: TAXII discovery endpoint path or full URL
  (for example ```/taxii2/```).
 
+```taxii_version```: set to ```2``` for TAXII 2.1 (Medallion) or ```1``` for
+TAXII 1.x (OpenTAXII). TAXII 1 export uses the inbox service and is sent via
+direct export.
+
 ```collection_name```: ID or title of the TAXII collection that should receive your indicators. Be default `Alerts`.
 
 ```push_delay```: time between automatic pushes (in seconds) when Slips is

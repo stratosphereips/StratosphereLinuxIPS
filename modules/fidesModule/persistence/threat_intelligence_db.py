@@ -4,11 +4,13 @@ from typing import Optional
 from ..model.aliases import Target
 from ..model.configuration import TrustModelConfiguration
 from ..model.threat_intelligence import SlipsThreatIntelligence
-from modules.fidesModule.persistence.threat_intelligence import ThreatIntelligenceDatabase
+from modules.fidesModule.persistence.threat_intelligence import (
+    ThreatIntelligenceDatabase,
+)
 
 from slips_files.core.database.database_manager import DBManager
 import json
-from .sqlite_db import SQLiteDB
+from .fides_sqlite_db import FidesSQLiteDB
 
 
 class SlipsThreatIntelligenceDatabase(ThreatIntelligenceDatabase):
@@ -19,7 +21,7 @@ class SlipsThreatIntelligenceDatabase(ThreatIntelligenceDatabase):
         self,
         configuration: TrustModelConfiguration,
         db: DBManager,
-        sqldb: SQLiteDB,
+        sqldb: FidesSQLiteDB,
     ):
         self.__configuration = configuration
         self.db = db
@@ -37,5 +39,8 @@ class SlipsThreatIntelligenceDatabase(ThreatIntelligenceDatabase):
         return out
 
     def save(self, ti: SlipsThreatIntelligence):
+        # todo this is not called anywhere
+        # todo if this is called in the future, we need to sanitice the
+        #  ti.target because it gets saved as it is in redis
         self.sqldb.store_slips_threat_intelligence(ti)
         self.db.save_fides_ti(ti.target, json.dumps(ti.to_dict()))

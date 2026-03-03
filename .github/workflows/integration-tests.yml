@@ -7,7 +7,20 @@ on:
       - 'develop'
 
 jobs:
+  list-integration-tests:
+    runs-on: ubuntu-latest
+    outputs:
+      test_files: ${{ steps.list.outputs.test_files }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: list
+        uses: ./.github/actions/list-tests-dir
+        with:
+          test_dir: tests/integration
+          output_prefix: integration/
+
   integration-tests:
+    needs: list-integration-tests
     runs-on: ubuntu-22.04
     timeout-minutes: 1800
 
@@ -23,33 +36,28 @@ jobs:
       TF_ENABLE_ONEDNN_OPTS: 0
 
     strategy:
+      fail-fast: false
       matrix:
-        test_file:
-          - test_config_files.py
-          - test_portscans.py
-          - test_dataset.py
-          - test_pcap_dataset.py
-          - test_zeek_dataset.py
-          - test_fides.py
-          - test_iris.py
+        test_file: ${{ fromJson(needs.list-integration-tests.outputs.test_files) }}
 
     steps:
-    - uses: actions/checkout@v5
-      with:
-        ref: ${{ github.ref }}
-        fetch-depth: ''
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
 
-    - name: Start Redis
-      uses: ./.github/actions/start-redis
+      - name: Start Redis
+        uses: ./.github/actions/start-redis
 
-    - name: Run Integration Tests for ${{ matrix.test_file }}
-      run: |
-        python3 -m pytest tests/integration_tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 3
+      - name: Run Integration Tests for ${{ matrix.test_file }}
+        run: |
+          python3 -m pytest tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 3
 
-    - name: Upload Artifacts
-      if: always()
-      uses: actions/upload-artifact@v5
-      with:
-        name: ${{ matrix.test_file }}-integration-tests-output
-        path: |
-          output/integration_tests
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          # Replaces slashes with underscores for valid artifact naming
+          name: ${{ github.run_id }}-${{ strategy.job-index }}-integration-output
+          path: |
+            output/integration

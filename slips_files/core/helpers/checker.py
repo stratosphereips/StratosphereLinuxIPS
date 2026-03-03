@@ -5,6 +5,8 @@ import sys
 
 import psutil
 
+from slips_files.common.input_type import InputType
+
 
 class Checker:
     def __init__(self, main):
@@ -32,7 +34,7 @@ class Checker:
             input_information = (
                 self.main.args.interface or self.main.args.access_point
             )
-            input_type = "interface"
+            input_type = InputType.INTERFACE
             # return input_type, self.main.input_information
             return input_type, input_information, line_type
 
@@ -42,10 +44,10 @@ class Checker:
 
         if self.main.args.input_module:
             input_information = "input_module"
-            input_type = self.main.args.input_module
+            input_type = InputType.coerce(self.main.args.input_module)
             # this is the default value of the type of flows slips reads from
             # a module
-            line_type = "zeek"
+            line_type = InputType.ZEEK
             return input_type, input_information, line_type
 
         if not self.main.args.filepath:
@@ -193,15 +195,6 @@ class Checker:
             self.main.args.debug and int(self.main.args.debug) > 3
         ):
             print("Debug and verbose values range from 0 to 3.")
-            self.main.terminate_slips()
-            return
-
-        # Check if redis server running
-        if (
-            not self.main.args.killall
-            and self.main.redis_man.check_redis_database() is False
-        ):
-            print("Redis database is not running. Stopping Slips")
             self.main.terminate_slips()
             return
 

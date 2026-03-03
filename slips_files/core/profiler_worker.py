@@ -37,7 +37,7 @@ class ProfilerWorker(IModule):
     def init(
         self,
         name,
-        localnet_cache: Dict[str, str],
+        localnet_cache,
         profiler_queue: multiprocessing.Queue,
         handle_setting_local_net_lock: multiprocessing.Lock,
         input_handler: (
@@ -45,25 +45,21 @@ class ProfilerWorker(IModule):
         ),
         aid_queue: multiprocessing.Queue,
         aid_manager: AIDManager,
-        stop_profiler_event: multiprocessing.Event,
+        is_input_done_event: multiprocessing.Event = None,
     ):
         self.name = name
         self.profiler_queue = profiler_queue
         # used to pass aid tasks from workers to the the AIDManager()
         self.aid_queue = aid_queue
         self.aid_manager: AIDManager = aid_manager
-        self.stop_profiler_event = stop_profiler_event
+        # lets workers stop when input is done even if the stop sentinel
+        # never reaches them
+        self.is_input_done_event = is_input_done_event
         # this is an instance of
         # ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         self.input_handler = input_handler
         self.handle_setting_local_net_lock = handle_setting_local_net_lock
         self.read_configuration()
-
-        self.c1 = self.db.subscribe("new_zeek_fields_line")
-        self.channels = {
-            "new_zeek_fields_line": self.c1,
-        }
-
         self.received_lines = 0
         self.localnet_cache = localnet_cache
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
@@ -75,6 +71,12 @@ class ProfilerWorker(IModule):
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
+
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("new_zeek_fields_line")
+        self.channels = {
+            "new_zeek_fields_line": self.c1,
+        }
 
     def read_configuration(self):
         self.client_ips: List[
@@ -165,7 +167,10 @@ class ProfilerWorker(IModule):
         self.db.add_ips(profileid, twid, flow, role)
         # Add the flow with all the fields interpreted to the sqlite db
         self.aid_manager.submit_aid_task(flow, profileid, twid, self.label)
-        self.db.mark_profile_tw_as_modified(profileid, twid, "")
+
+        # now that slips successfully parsed the flow,
+        # mark this profile as modified
+        self.db.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
 
     def get_aid_and_store_flow_in_the_db(
         self,
@@ -239,10 +244,9 @@ class ProfilerWorker(IModule):
         self.get_aid_and_store_flow_in_the_db(
             handler_func, flow_handler.handle_conn, flow, profileid, twid
         )
-
         # now that slips successfully parsed the flow,
         # mark this profile as modified
-        self.db.mark_profile_tw_as_modified(profileid, twid, "")
+        self.db.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
         return True
 
     def get_rev_profile(self, flow):
@@ -254,11 +258,9 @@ class ProfilerWorker(IModule):
             # some flows don't have a daddr like software.log flows
             return False, False
 
-        rev_profileid: str = self.db.get_profileid_from_ip(flow.daddr)
-        if not rev_profileid:
-            # the profileid is not present in the db, create it
-            rev_profileid = f"profile_{flow.daddr}"
-            self.db.add_profile(rev_profileid, flow.starttime)
+        # add it to the db id its not there
+        rev_profileid = f"profile_{flow.daddr}"
+        self.db.add_profile(rev_profileid, flow.starttime)
 
         # in the database, Find and register the id of the tw where the flow
         # belongs.
@@ -330,11 +332,13 @@ class ProfilerWorker(IModule):
                 return
 
             if self.db.is_running_non_stop():
-                self.localnet_cache = self.get_localnet_of_given_interface()
+                self._set_localnet_cache(
+                    self.get_localnet_of_given_interface()
+                )
             else:
-                self.localnet_cache = self.get_local_net_of_flow(flow)
+                self._set_localnet_cache(self.get_local_net_of_flow(flow))
 
-            for interface, local_net in self.localnet_cache.items():
+            for interface, local_net in self._iter_localnet_cache_items():
                 self.db.set_local_network(local_net, interface)
 
     def is_gw_info_detected(self, info_type: str, interface: str) -> bool:
@@ -468,9 +472,9 @@ class ProfilerWorker(IModule):
         and we don't have the local_net set already
         """
         if self.db.is_running_non_stop():
-            if flow.interface in self.localnet_cache:
+            if self._localnet_cache_contains(flow.interface):
                 return False
-        elif "default" in self.localnet_cache:
+        elif self._localnet_cache_contains("default"):
             # running on a file, impossible to get the interface
             return False
 
@@ -493,6 +497,40 @@ class ProfilerWorker(IModule):
             return False
 
         return True
+
+    def _localnet_cache_contains(self, interface: str) -> bool:
+        """checks"""
+        cache = self.localnet_cache
+        if hasattr(cache, "contains"):
+            return cache.contains(interface)
+        try:
+            return interface in cache
+        except (AttributeError, TypeError):
+            self.localnet_cache = {}
+            return False
+
+    def _iter_localnet_cache_items(self):
+        cache = self.localnet_cache
+        if hasattr(cache, "items"):
+            try:
+                return list(cache.items())
+            except TypeError:
+                pass
+        if isinstance(cache, dict):
+            return list(cache.items())
+        self.localnet_cache = {}
+        return []
+
+    def _set_localnet_cache(self, new_cache: Dict[str, str]) -> None:
+        cache = self.localnet_cache
+        if hasattr(cache, "set"):
+            if cache.set(new_cache):
+                return
+        if isinstance(cache, dict):
+            cache.clear()
+            cache.update(new_cache)
+            return
+        self.localnet_cache = new_cache
 
     def _is_supported_flow_type(self, flow) -> bool:
         supported_types = (
@@ -580,6 +618,7 @@ class ProfilerWorker(IModule):
         """
         this 'stop' msg is the last msg ever sent by the input process
         to indicate that no more flows are coming
+        the number of stop msgs sent is = the number of started workers
         """
         return msg == "stop"
 
@@ -601,6 +640,13 @@ class ProfilerWorker(IModule):
                     {file_type: json.loads(indices)}
                 )
 
+    def should_stop(self):
+        """
+        Overrides the default IModule should_stop().
+        This module will only stop when it recvs the sentinel stop msg
+        """
+        return False
+
     def main(self):
         # Disable automatic GC, we'll trigger it manually
         gc.disable()
@@ -611,12 +657,17 @@ class ProfilerWorker(IModule):
 
             msg = self.get_msg_from_queue(self.profiler_queue)
             if not msg:
+                if (
+                    self.is_input_done_event is not None
+                    and self.is_input_done_event.is_set()
+                ):
+                    return 1
                 return
 
             if self.is_stop_msg(msg):
                 gc.collect()
-                # this signal tells profiler.py to stop
-                self.stop_profiler_event.set()
+                # no need to wait for the should_stop(), this worker will
+                # never recv any new flows after the stop msg
                 return 1
 
             line: dict = msg["line"]
@@ -629,6 +680,11 @@ class ProfilerWorker(IModule):
                 # msg in new_zeek_fields_line about the unknown line_processor
                 # or another worker that knows how to process this line does it
                 if err == "unknown line_processor":
+                    if (
+                        self.is_input_done_event is not None
+                        and self.is_input_done_event.is_set()
+                    ):
+                        return
                     self.profiler_queue.put(msg)
                 return
 
@@ -650,7 +706,8 @@ class ProfilerWorker(IModule):
             return 1
         except Exception:
             self.print(
-                f"Unable to process flow: {msg}: " f"{self.print_traceback()}",
+                f"Unable to process flow: {msg if msg else None}: "
+                f"{self.print_traceback()}",
                 0,
                 1,
             )

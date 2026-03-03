@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from datetime import timedelta
 import sys
+from slips_files.common.input_type import InputType
 import ipaddress
 from typing import (
     List,
@@ -365,6 +366,74 @@ class ConfigParser(object):
             "exporting_alerts", "taxii_password", False
         )
 
+    def taxii_timeout(self):
+        timeout = self.read_configuration(
+            "exporting_alerts", "taxii_timeout", 10
+        )
+        try:
+            timeout = float(timeout)
+        except ValueError:
+            timeout = 10
+        return max(1.0, timeout)
+
+    def taxii_version(self):
+        return self.read_configuration("exporting_alerts", "taxii_version", 2)
+
+    def taxii_direct_export(self):
+        return self.read_configuration(
+            "exporting_alerts", "direct_export", False
+        )
+
+    def taxii_direct_export_workers(self):
+        workers = self.read_configuration(
+            "exporting_alerts", "direct_export_workers", 2
+        )
+        try:
+            workers = int(workers)
+        except ValueError:
+            workers = 2
+        return max(1, workers)
+
+    def taxii_direct_export_max_workers(self):
+        workers = self.read_configuration(
+            "exporting_alerts", "direct_export_max_workers", 8
+        )
+        try:
+            workers = int(workers)
+        except ValueError:
+            workers = 8
+        return max(1, workers)
+
+    def taxii_direct_export_retry_max(self):
+        retries = self.read_configuration(
+            "exporting_alerts", "direct_export_retry_max", 0
+        )
+        try:
+            retries = int(retries)
+        except ValueError:
+            retries = 0
+        return max(0, retries)
+
+    def taxii_direct_export_retry_backoff(self):
+        backoff = self.read_configuration(
+            "exporting_alerts", "direct_export_retry_backoff", 0.5
+        )
+        try:
+            backoff = float(backoff)
+        except ValueError:
+            backoff = 0.5
+        return max(0.0, backoff)
+
+    def taxii_direct_export_retry_max_delay(self):
+        delay = self.read_configuration(
+            "exporting_alerts", "direct_export_retry_max_delay", 5.0
+        )
+        try:
+            delay = float(delay)
+        except ValueError:
+            delay = 5.0
+        return max(0.0, delay)
+
     def long_connection_threshold(self):
         """
         returns threshold in seconds
@@ -409,6 +478,180 @@ class ConfigParser(object):
 
     def get_ml_mode(self):
         return self.read_configuration("flowmldetection", "mode", "test")
+
+    def https_anomaly_training_hours(self) -> int:
+        training_hours = self.read_configuration(
+            "anomaly_detection_https", "training_hours", 24
+        )
+        try:
+            training_hours = int(training_hours)
+        except (TypeError, ValueError):
+            training_hours = 24
+        return max(0, training_hours)
+
+    def https_anomaly_hourly_zscore_thr(self) -> float:
+        threshold = self.read_configuration(
+            "anomaly_detection_https", "hourly_zscore_threshold", 3.0
+        )
+        try:
+            threshold = float(threshold)
+        except (TypeError, ValueError):
+            threshold = 3.0
+        return max(0.5, threshold)
+
+    def https_anomaly_flow_zscore_thr(self) -> float:
+        threshold = self.read_configuration(
+            "anomaly_detection_https", "flow_zscore_threshold", 3.5
+        )
+        try:
+            threshold = float(threshold)
+        except (TypeError, ValueError):
+            threshold = 3.5
+        return max(0.5, threshold)
+
+    def https_anomaly_adapt_score_thr(self) -> float:
+        threshold = self.read_configuration(
+            "anomaly_detection_https", "adaptation_score_threshold", 2.0
+        )
+        try:
+            threshold = float(threshold)
+        except (TypeError, ValueError):
+            threshold = 2.0
+        return max(0.0, threshold)
+
+    def https_anomaly_baseline_alpha(self) -> float:
+        alpha = self.read_configuration(
+            "anomaly_detection_https", "baseline_alpha", 0.1
+        )
+        try:
+            alpha = float(alpha)
+        except (TypeError, ValueError):
+            alpha = 0.1
+        return min(max(alpha, 0.001), 1.0)
+
+    def https_anomaly_drift_alpha(self) -> float:
+        alpha = self.read_configuration(
+            "anomaly_detection_https", "drift_alpha", 0.05
+        )
+        try:
+            alpha = float(alpha)
+        except (TypeError, ValueError):
+            alpha = 0.05
+        return min(max(alpha, 0.001), 1.0)
+
+    def https_anomaly_suspicious_alpha(self) -> float:
+        alpha = self.read_configuration(
+            "anomaly_detection_https", "suspicious_alpha", 0.005
+        )
+        try:
+            alpha = float(alpha)
+        except (TypeError, ValueError):
+            alpha = 0.005
+        return min(max(alpha, 0.0), 1.0)
+
+    def https_anomaly_min_baseline_points(self) -> int:
+        points = self.read_configuration(
+            "anomaly_detection_https", "min_baseline_points", 6
+        )
+        try:
+            points = int(points)
+        except (TypeError, ValueError):
+            points = 6
+        return max(1, points)
+
+    def https_anomaly_max_small_flow_anomalies(self) -> int:
+        threshold = self.read_configuration(
+            "anomaly_detection_https", "max_small_flow_anomalies", 1
+        )
+        try:
+            threshold = int(threshold)
+        except (TypeError, ValueError):
+            threshold = 1
+        return max(0, threshold)
+
+    def https_anomaly_ja3_min_variants_per_server(self) -> int:
+        threshold = self.read_configuration(
+            "anomaly_detection_https", "ja3_min_variants_per_server", 3
+        )
+        try:
+            threshold = int(threshold)
+        except (TypeError, ValueError):
+            threshold = 3
+        return max(1, threshold)
+
+    def https_anomaly_use_adwin_drift(self) -> bool:
+        value = self.read_configuration(
+            "anomaly_detection_https", "use_adwin_drift", True
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def https_anomaly_adwin_delta(self) -> float:
+        delta = self.read_configuration(
+            "anomaly_detection_https", "adwin_delta", 0.002
+        )
+        try:
+            delta = float(delta)
+        except (TypeError, ValueError):
+            delta = 0.002
+        return min(max(delta, 0.000001), 1.0)
+
+    def https_anomaly_adwin_clock(self) -> int:
+        clock = self.read_configuration(
+            "anomaly_detection_https", "adwin_clock", 32
+        )
+        try:
+            clock = int(clock)
+        except (TypeError, ValueError):
+            clock = 32
+        return max(1, clock)
+
+    def https_anomaly_adwin_grace_period(self) -> int:
+        grace = self.read_configuration(
+            "anomaly_detection_https", "adwin_grace_period", 10
+        )
+        try:
+            grace = int(grace)
+        except (TypeError, ValueError):
+            grace = 10
+        return max(1, grace)
+
+    def https_anomaly_adwin_min_window_length(self) -> int:
+        min_win = self.read_configuration(
+            "anomaly_detection_https", "adwin_min_window_length", 5
+        )
+        try:
+            min_win = int(min_win)
+        except (TypeError, ValueError):
+            min_win = 5
+        return max(1, min_win)
+
+    def https_anomaly_log_verbosity(self) -> int:
+        verbosity = self.read_configuration(
+            "anomaly_detection_https", "log_verbosity", 3
+        )
+        try:
+            verbosity = int(verbosity)
+        except (TypeError, ValueError):
+            verbosity = 3
+        return min(max(verbosity, 0), 3)
+
+    def https_anomaly_log_emojis(self) -> bool:
+        value = self.read_configuration(
+            "anomaly_detection_https", "log_emojis", True
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def https_anomaly_log_colors(self) -> bool:
+        value = self.read_configuration(
+            "anomaly_detection_https", "log_colors", True
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
 
     def RiskIQ_credentials_path(self):
         return self.read_configuration(
@@ -654,7 +897,7 @@ class ConfigParser(object):
             to_ignore.append("arp_poisoner")
 
         # leak detector only works on pcap files
-        if input_type != "pcap":
+        if input_type != InputType.PCAP:
             to_ignore.append("leak_detector")
 
         if not self.reading_flows_from_cyst():

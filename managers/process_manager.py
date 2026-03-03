@@ -18,10 +18,10 @@ from multiprocessing import (
     Process,
     Semaphore,
 )
+from multiprocessing.process import BaseProcess
 from typing import (
     List,
     Tuple,
-    Dict,
 )
 
 from exclusiveprocess import (
@@ -39,6 +39,7 @@ from slips_files.common.abstracts.imodule import (
 )
 
 from slips_files.common.style import green
+from slips_files.common.input_type import InputType
 from slips_files.core.database.redis_db.timewindow_updater_thread.tw_updater import (
     timewindow_updater,
 )
@@ -52,19 +53,22 @@ from slips_files.core.profiler import Profiler
 class ProcessManager:
     def __init__(self, main):
         self.main = main
+        # Can be used by signal handlers before startup finishes.
+        self.processes: List[Process] = []
 
-        # this is the queue that will be used by the input proces
+        # this is the queue that will be used by the input process
         # to pass flows to the profiler
-        # this max size is decided based on the avg size of each flow and
-        # tha max memory (4g) that this queue is allowed to use
-        self.profiler_queue = Queue(maxsize=50000)
-        self.termination_event: Event = Event()
+        # this max size is decided based on the avg size of each flow (650
+        # bytes), and the max memory that this queue is allowed to
+        # use (1GB), so 1321528 bytes will be 2033 flows in queue at max
+        self.profiler_queue = Queue(maxsize=1321528)
+        self.termination_event = Event()
         # to make sure we only warn the user once about
         # the pending modules
         self.warning_printed_once = False
         # this one has its own termination event because we want it to
         # shutdown at the very end of all other slips modules.
-        self.evidence_handler_termination_event: Event = Event()
+        self.evidence_handler_termination_event = Event()
         self.stopped_modules = []
         # used to stop slips when these 2 are done
         # since the semaphore count is zero, slips.py will wait until another
@@ -80,12 +84,10 @@ class ProcessManager:
         # and inout stops and renders the profiler queue useless and profiler
         # cant get more lines anymore!
         self.is_profiler_done_event = Event()
+        # is set by the input process to indicate no more flows are coming
+        # so profiler can safely begin shutdown/joins.
+        self.is_input_done_event = Event()
         self.read_config()
-
-    def set_slips_processes(self, children: Dict[str, Process]):
-        # this will be set by main.py if slips is not daemonized,
-        # it'll be set to the children of main.py
-        self.processes = children
 
     def read_config(self):
         self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
@@ -122,6 +124,7 @@ class ProcessManager:
             is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
+            is_input_done_event=self.is_input_done_event,
         )
         profiler_process.start()
         self.main.print(
@@ -173,6 +176,7 @@ class ProcessManager:
             zeek_dir=self.main.zeek_dir,
             line_type=self.main.line_type,
             is_profiler_done_event=self.is_profiler_done_event,
+            is_input_done_event=self.is_input_done_event,
         )
         input_process.start()
         self.main.print(
@@ -206,7 +210,7 @@ class ProcessManager:
         kills all processes that are not done
         in self.processes and prints the name of stopped ones
         """
-        for process in self.processes:
+        for process in self.children:
             process: Process
             module_name: str = self.main.db.get_name_of_module_at(process.pid)
             if not module_name:
@@ -433,7 +437,7 @@ class ProcessManager:
     def print_stopped_module(self, module):
         self.stopped_modules.append(module)
 
-        modules_left = len(self.processes) - len(self.stopped_modules)
+        modules_left = len(self.children) - len(self.stopped_modules)
 
         # to vertically align them when printing
         module += " " * (20 - len(module))
@@ -570,7 +574,8 @@ class ProcessManager:
                 self.main.db.get_pid_of("Exporting Alerts")
             )
         # remove all None PIDs. this happens when a module in that list
-        # isnt started in the current run.
+        # isnt started in the current run. e.g. virustotal module starts then
+        # stops immediately if no API is found. so its pid will be None.
         pids_to_kill_last: List[int] = [
             pid for pid in pids_to_kill_last if pid is not None
         ]
@@ -578,14 +583,9 @@ class ProcessManager:
         # now get the process obj of each pid
         to_kill_first: List[Process] = []
         to_kill_last: List[Process] = []
-        for process in self.processes:
+        for process in self.children:
             if process.pid in pids_to_kill_last:
                 to_kill_last.append(process)
-            elif isinstance(process, multiprocessing.context.ForkProcess):
-                # skips the context manager of output.py, will close
-                # it manually later
-                # once all processes are closed
-                continue
             else:
                 to_kill_first.append(process)
 
@@ -625,7 +625,7 @@ class ProcessManager:
             end_time,
         )
 
-    def stop_slips(self) -> bool:
+    def should_stop_slips(self) -> bool:
         """
         determines whether slips should stop
         based on the following:
@@ -633,6 +633,9 @@ class ProcessManager:
         profiler.py)
         2. did slips the control channel recv the stop_slips
         3. is a debugger present?
+
+        This function NEVER returns True if the input and profiler are
+        still processing.
         """
         if self.should_run_non_stop():
             return False
@@ -672,7 +675,7 @@ class ProcessManager:
         # this module should handle the stopping of slips
         return (
             self.is_debugger_active()
-            or self.main.input_type in ("stdin", "cyst")
+            or self.main.input_type in (InputType.STDIN, InputType.CYST)
             or self.main.db.is_running_non_stop()
         )
 
@@ -778,8 +781,8 @@ class ProcessManager:
 
     def shutdown_gracefully(self):
         """
-        Wait for all modules to confirm that they're done processing
-        or kill them after 15 mins
+        Waits for all modules to confirm that they're done processing
+        or kills them after 15 mins
         """
         try:
             print = self.get_print_function()
@@ -788,6 +791,9 @@ class ProcessManager:
                 print("\n" + "-" * 27)
             print("Stopping Slips")
 
+            self.children: List[BaseProcess] = (
+                multiprocessing.active_children()
+            )
             # by default, max 15 mins (taken from wait_for_modules_to_finish)
             # from this time, all modules should be killed
             method_start_time = time.time()

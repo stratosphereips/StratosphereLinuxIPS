@@ -38,7 +38,6 @@ class CCDetection(IModule):
     authors = ["Sebastian Garcia", "Kamila Babayeva", "Ondrej Lukas"]
 
     def init(self):
-        self.subscribe_to_channels()
         self.letters_exporter = StratoLettersExporter(self.db)
 
     def subscribe_to_channels(self):

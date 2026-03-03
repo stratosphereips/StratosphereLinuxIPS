@@ -1,0 +1,109 @@
+CESNET:
+  configuration_file: config/warden.conf
+  receive_alerts: false
+  receive_delay: 86400
+  send_alerts: false
+DisabledAlerts:
+  disabled_detections: []
+Docker:
+  GID: 0
+  UID: 0
+Profiling:
+  cpu_profiler_dev_mode_entries: 500000
+  cpu_profiler_enable: false
+  cpu_profiler_mode: dev
+  cpu_profiler_multiprocess: false
+  cpu_profiler_output_limit: 20
+  cpu_profiler_sampling_interval: 20
+  memory_profiler_enable: false
+  memory_profiler_mode: live
+  memory_profiler_multiprocess: true
+detection:
+  evidence_detection_threshold: 0.25
+  popup_alerts: false
+exporting_alerts:
+  TAXII_server: localhost
+  collection_name: collection-a
+  discovery_path: /services/discovery-a
+  export_to: []
+  inbox_path: /services/inbox-a
+  jwt_auth_path: /management/auth
+  port: 1234
+  push_delay: 3600
+  sensor_name: sensor1
+  slack_api_path: config/slack_bot_token_secret
+  slack_channel_name: proj_slips_alerting_module
+  taxii_password: admin
+  taxii_username: admin
+  use_https: false
+flowalerts:
+  data_exfiltration_threshold: 500
+  entropy_threshold: 5
+  long_connection_threshold: 1500
+  pastebin_download_threshold: 700
+  ssh_succesful_detection_threshold: 4290
+flowmldetection:
+  mode: test
+global_p2p:
+  bootstrapping_modules:
+  - fidesModule
+  - irisModule
+  bootstrapping_node: false
+  iris_conf: config/iris_config.yaml
+  use_global_p2p: true
+local_p2p:
+  create_p2p_logfile: false
+  use_p2p: false
+modes:
+  logsfile: slips.log
+  stderr: errors.log
+  stdout: slips.log
+modules:
+  disable:
+  - template
+  - updatemanager
+  timeline_human_timestamp: true
+parameters:
+  analysis_direction: out
+  client_ips: []
+  debug: 0
+  deletePrevdb: true
+  delete_zeek_files: false
+  export_format: json
+  export_labeled_flows: false
+  export_strato_letters: false
+  keep_rotated_files_for: 1 day
+  label: normal
+  metadata_dir: true
+  pcapfilter: false
+  rotation: true
+  rotation_period: 1day
+  store_a_copy_of_zeek_files: false
+  store_zeek_files_in_the_output_dir: true
+  tcp_inactivity_timeout: 60
+  time_window_width: 3600
+  verbose: 1
+  wait_for_modules_to_finish: 10080 mins
+threatintelligence:
+  RiskIQ_credentials_path: config/RiskIQ_credentials
+  TI_files_update_period: 86400
+  download_path_for_remote_threat_intelligence: modules/threat_intelligence/remote_data_files/
+  ja3_feeds: config/JA3_feeds.csv
+  local_threat_intelligence_files: config/local_ti_files/
+  mac_db: https://maclookup.app/downloads/json-database/get-db
+  mac_db_update: 1209600
+  riskiq_update_period: 604800
+  ssl_feeds: config/SSL_feeds.csv
+  ti_files: config/TI_feeds.csv
+  wait_for_TI_to_finish: false
+virustotal:
+  api_key_file: config/vt_api_key
+  virustotal_update_period: 259200
+web_interface:
+  port: 55000
+whitelists:
+  enable_local_whitelist: true
+  enable_online_whitelist: true
+  local_whitelist_path: config/whitelist.conf
+  online_whitelist: https://tranco-list.eu/download/X5QNN/10000
+  online_whitelist_update_period: 86400

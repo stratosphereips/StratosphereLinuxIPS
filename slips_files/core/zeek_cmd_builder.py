@@ -1,6 +1,8 @@
 import os
 from typing import List, Optional
 
+from slips_files.common.input_type import InputType
+
 
 class ZeekCommandBuilder:
     """
@@ -10,7 +12,7 @@ class ZeekCommandBuilder:
     def __init__(
         self,
         zeek_or_bro: str,
-        input_type: str,
+        input_type: InputType,
         rotation_period: str,
         enable_rotation: bool,
         tcp_inactivity_timeout: int,
@@ -24,10 +26,10 @@ class ZeekCommandBuilder:
         self.packet_filter = packet_filter
 
     def _get_input_parameter(self, pcap_or_interface: str) -> List[str]:
-        if self.input_type == "interface":
+        if self.input_type == InputType.INTERFACE:
             return ["-i", pcap_or_interface]
 
-        elif self.input_type == "pcap":
+        elif self.input_type == InputType.PCAP:
             pcap = self._get_relative_pcap_path(pcap_or_interface)
             # using a list of params instead of a str for storing the cmd
             # becaus ethe given path may contain spaces
@@ -37,7 +39,7 @@ class ZeekCommandBuilder:
 
     def _get_rotation_args(self) -> List[str]:
         # rotation is disabled unless it's an interface
-        if self.input_type == "interface" and self.enable_rotation:
+        if self.input_type == InputType.INTERFACE and self.enable_rotation:
             # how often to rotate zeek files? taken from slips.yaml
             return [
                 "-e",

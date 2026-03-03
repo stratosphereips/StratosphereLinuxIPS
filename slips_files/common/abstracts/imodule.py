@@ -102,6 +102,12 @@ class IModule(ABC, Process):
         initializing the module
         """
 
+    @abstractmethod
+    def subscribe_to_channels(self):
+        """
+        Handles subscription to all needed channels and sets self.channels.
+        """
+
     def is_msg_received_in_any_channel(self) -> bool:
         """
         return True if a msg was received in any channel of the ones
@@ -128,12 +134,21 @@ class IModule(ABC, Process):
 
         return True
 
-    def shutdown_gracefully(self):
+    def _shutdown_gracefully(self):
         """
-        Tells slips.py that this module is
-        done processing and does necessary cleanup
+        necessary cleanup/shutdown logic goes here. e.g closing of opened
+        threads, queue,
+        log lines to indicate the module is done, etc.
         """
-        pass
+        if hasattr(self, "shutdown_gracefully"):
+            # module-specific cleanup.
+            # should be implemented in the module
+            self.shutdown_gracefully()
+
+        # common cleanup
+        if self.channels:
+            for channel_obj in self.channels.values():
+                self.db.unsubscribe(channel_obj)
 
     @abstractmethod
     def main(self):
@@ -147,6 +162,15 @@ class IModule(ABC, Process):
         This function is for initializations that are
         executed once before the main loop
         """
+
+    def _pre_main(self):
+        """
+        Common pre-main logic: subscribe to channels, init tracker, then
+        run module-specific pre_main if defined.
+        """
+        self.subscribe_to_channels()
+        self.channel_tracker = self.init_channel_tracker()
+        return self.pre_main()
 
     def get_msg(self, channel: str) -> Optional[dict]:
         try:
@@ -179,12 +203,12 @@ class IModule(ABC, Process):
         shutdown_gracefully() functions run until completion
         """
         try:
-            error: bool = self.pre_main()
+            error: bool = self._pre_main()
             if error or self.should_stop():
-                self.shutdown_gracefully()
+                self._shutdown_gracefully()
                 return
         except KeyboardInterrupt:
-            self.shutdown_gracefully()
+            self._shutdown_gracefully()
             return
         except Exception:
             self.print_traceback()
@@ -193,12 +217,12 @@ class IModule(ABC, Process):
         while True:
             try:
                 if self.should_stop():
-                    self.shutdown_gracefully()
+                    self._shutdown_gracefully()
                     return
 
                 error: bool = self.main()
                 if error:
-                    self.shutdown_gracefully()
+                    self._shutdown_gracefully()
                     return
 
             except KeyboardInterrupt:

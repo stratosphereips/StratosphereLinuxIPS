@@ -1,0 +1,15 @@
+Identity:
+  GenerateNewKey: true
+  KeyFile: second.priv
+PeerDiscovery:
+  DisableBootstrappingNodes: false
+  ListOfMultiAddresses:
+  - /ip4/127.0.0.1/udp/9010/quic 12D3KooWNKe9xFM85HkWsoGAy4pM3kXrZHGumJwQBBr9T4VzHtNR
+Redis:
+  Host: 127.0.0.1
+  Port: 6655
+  Tl2NlChannel: iris_internal
+Server:
+  DhtServerMode: 'true'
+  Host: null
+  Port: 9006

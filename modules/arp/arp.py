@@ -13,6 +13,7 @@ from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.input_type import InputType
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -33,12 +34,6 @@ class ARP(IModule):
     authors = ["Alya Gomaa"]
 
     def init(self):
-        self.c1 = self.db.subscribe("new_arp")
-        self.c2 = self.db.subscribe("tw_closed")
-        self.channels = {
-            "new_arp": self.c1,
-            "tw_closed": self.c2,
-        }
         self.read_configuration()
         self.classifier = FlowClassifier()
         # this dict will categorize arp requests by profileid_twid
@@ -67,6 +62,14 @@ class ARP(IModule):
         self.is_zeek_running: bool = self.is_running_zeek()
         self.evidence_filter = ARPEvidenceFilter(self.conf, self.args, self.db)
 
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("new_arp")
+        self.c2 = self.db.subscribe("tw_closed")
+        self.channels = {
+            "new_arp": self.c1,
+            "tw_closed": self.c2,
+        }
+
     def read_configuration(self):
         conf = ConfigParser()
         self.home_network = conf.home_network_ranges
@@ -82,7 +85,8 @@ class ARP(IModule):
 
     def is_running_zeek(self) -> bool:
         return (
-            self.db.get_input_type() == "pcap" or self.db.is_running_non_stop()
+            self.db.get_input_type() == InputType.PCAP
+            or self.db.is_running_non_stop()
         )
 
     def wait_for_arp_scans(self):

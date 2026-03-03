@@ -10,7 +10,6 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -19,6 +18,7 @@
 import queue
 import multiprocessing
 import time
+import threading
 from multiprocessing import Process
 from typing import (
     List,
@@ -32,6 +32,8 @@ from slips_files.common.abstracts.iobserver import IObservable
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.abstracts.icore import ICore
 from slips_files.common.style import green
+from slips_files.common.input_type import InputType
+from slips_files.common.slips_utils import utils
 from slips_files.core.aid_manager import AIDManager
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.input_profilers.argus import Argus
@@ -39,22 +41,23 @@ from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 from slips_files.core.profiler_worker import ProfilerWorker
+from slips_files.core.helpers.localnet_cache import LocalnetCacheShared
 
 SUPPORTED_INPUT_TYPES = {
-    "zeek": ZeekJSON,
-    "binetflow": Argus,
-    "binetflow-tabs": Argus,
-    "suricata": Suricata,
-    "zeek-tabs": ZeekTabs,
-    "nfdump": Nfdump,
+    InputType.ZEEK: ZeekJSON,
+    InputType.BINETFLOW: Argus,
+    InputType.BINETFLOW_TABS: Argus,
+    InputType.SURICATA: Suricata,
+    InputType.ZEEK_TABS: ZeekTabs,
+    InputType.NFDUMP: Nfdump,
 }
 SEPARATORS = {
-    "zeek": "",
-    "suricata": "",
-    "nfdump": ",",
-    "binetflow": ",",
-    "zeek-tabs": "\t",
-    "binetflow-tabs": "\t",
+    InputType.ZEEK: "",
+    InputType.SURICATA: "",
+    InputType.NFDUMP: ",",
+    InputType.BINETFLOW: ",",
+    InputType.ZEEK_TABS: "\t",
+    InputType.BINETFLOW_TABS: "\t",
 }
 
 
@@ -68,6 +71,7 @@ class Profiler(ICore, IObservable):
         is_profiler_done: multiprocessing.Semaphore = None,
         profiler_queue=None,
         is_profiler_done_event: multiprocessing.Event = None,
+        is_input_done_event: multiprocessing.Event = None,
     ):
         IObservable.__init__(self)
         self.add_observer(self.logger)
@@ -82,7 +86,6 @@ class Profiler(ICore, IObservable):
         self.timeformat = None
         self.input_type = ""
         self.rec_lines = 0
-        self.localnet_cache = {}
         self.read_configuration()
         self.symbol = SymbolHandler(self.logger, self.db)
         # there has to be a timeout or it will wait forever and never
@@ -92,37 +95,43 @@ class Profiler(ICore, IObservable):
         # is set by this proc to tell input proc that we are done
         # processing and it can exit no issue
         self.is_profiler_done_event = is_profiler_done_event
+        # is set by input to indicate no more flows are coming
+        self.is_input_done_event = is_input_done_event
+        self.input_handler_obj = None
         # to close them on shutdown
         self.profiler_child_processes: List[Process] = []
         # to access their internal attributes if needed
         self.workers: List[ProfilerWorker] = []
-
-        self.stop_profiler_workers_event = multiprocessing.Event()
-        # each msg received from inputprocess will be put here, and each one
-        # profiler worker will retrieve msgs from this queue.
-        # the goal of this q is to have main() handle the stop msg.
-        # so without this, only 1 of the 3 workers receives the stop msg
-        # and exits, and the rest of the 2 workers AND the main() keep
-        # waiting for new msgs
-        self.flows_to_process_q = multiprocessing.Queue(maxsize=50000)
+        self.stop_aid_manager_event = multiprocessing.Event()
+        # is set by this module to indicate to the monitor thread that
+        # workers stoppped.
+        self.did_all_workers_stop = multiprocessing.Event()
+        self.last_worker_id = -1
         self.handle_setting_local_net_lock = multiprocessing.Lock()
-        # runs a separate server process behind the scenes.
-        self.manager = multiprocessing.Manager()
-        self.localnet_cache = self.manager.dict()
+        # small, shared JSON cache backed by shared memory (no Manager)
+        self.localnet_cache = LocalnetCacheShared()
         # max parallel profiler workers to start when high throughput is detected
-        self.max_workers = 10
-        self.aid_queue = multiprocessing.Queue()
+        self.max_workers = 6
+        # 30MBs max size of this queue to avoid growing forever in mem
+        self.aid_queue = multiprocessing.Queue(maxsize=30000000)
         # This starts a process that handles calculatng aid hash and stores
-        # the conn fows in the db. why?
-        # because it's cpu intensive so we dont want it to
-        # block the profiler workers
+        # the conn fows in the db. why? because it's cpu intensive so we dont
+        # want it to block the profiler workers
         self.aid_manager = AIDManager(
             self.db,
             self.aid_queue,
-            self.stop_profiler_workers_event,
+            self.stop_aid_manager_event,
         )
-        # the event that the workers use to tell this process to stop
-        self.stop_profiler_event = multiprocessing.Event()
+        now = time.monotonic()
+        self.next_throughput_check_time = now + 300
+        self.profiler_monitor_thread = threading.Thread(
+            target=self._run_profiler_monitor_loop,
+            name="profiler_monitor_loop",
+            daemon=True,
+        )
+
+    def subscribe_to_channels(self):
+        self.channels = {}
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -143,13 +152,18 @@ class Profiler(ICore, IObservable):
 
         returns zeek, zeek-tabs, binetflow, binetflow tabs, nfdump, suricata
         """
-        if input_type in ("zeek_folder", "zeek_log_file", "pcap", "interface"):
+        if input_type in (
+            InputType.ZEEK_FOLDER,
+            InputType.ZEEK_LOG_FILE,
+            InputType.PCAP,
+            InputType.INTERFACE,
+        ):
             # is it tab separated or comma separated?
             actual_line = line["data"]
             if isinstance(actual_line, dict):
-                return "zeek"
-            return "zeek-tabs"
-        elif input_type == "stdin":
+                return InputType.ZEEK
+            return InputType.ZEEK_TABS
+        elif input_type == InputType.STDIN:
             # ok we're reading flows from stdin, but what type of flows?
             return line["line_type"]
         else:
@@ -159,25 +173,23 @@ class Profiler(ICore, IObservable):
             return input_type
 
     def stop_profiler_workers(self):
-        self.stop_profiler_workers_event.set()  # Signal workers to exit
-        time.sleep(2)
-        # Try to join gracefully first
+        """
+        wait as long as needed foreach worker to stop
+        """
+        # ensure we don't block forever waiting for workers that will never
+        # receive the stop sentinel
+        if self.is_input_done_event is not None:
+            self.is_input_done_event.wait()
+
         for process in self.profiler_child_processes:
             try:
-                process.join(timeout=3)
+                process.join()
             except (OSError, ChildProcessError):
                 pass
 
-        # Terminate any processes that are still alive after the join timeout
-        for process in self.profiler_child_processes:
-            try:
-                if process.is_alive():
-                    process.terminate()
-                    process.join(timeout=0.1)
-            except (OSError, ChildProcessError):
-                pass
+        self.did_all_workers_stop.set()
 
-    def mark_process_as_done_processing(self):
+    def mark_self_as_done_processing(self):
         """
         is called to mark this process as done processing so
         slips.py would know when to terminate
@@ -190,7 +202,7 @@ class Profiler(ICore, IObservable):
         self.print("Profiler is done processing.", log_to_logfiles_only=True)
         self.is_profiler_done_event.set()
         self.print(
-            "Profiler is done telling input.py " "that it's done processing.",
+            "Profiler is done telling input.py that it's done processing.",
             log_to_logfiles_only=True,
         )
 
@@ -212,7 +224,7 @@ class Profiler(ICore, IObservable):
             logger=self.logger,
             output_dir=self.output_dir,
             redis_port=self.redis_port,
-            termination_event=self.stop_profiler_workers_event,
+            termination_event=self.stop_aid_manager_event,
             conf=self.conf,
             ppid=self.ppid,
             slips_args=self.args,
@@ -225,10 +237,11 @@ class Profiler(ICore, IObservable):
             input_handler=self.input_handler_obj,
             aid_queue=self.aid_queue,
             aid_manager=self.aid_manager,
-            stop_profiler_event=self.stop_profiler_event,
+            is_input_done_event=self.is_input_done_event,
         )
         worker.start()
         self.profiler_child_processes.append(worker)
+        self.db.increment_profiler_workers_started()
 
     def get_handler_obj(
         self, first_msg: dict
@@ -256,62 +269,52 @@ class Profiler(ICore, IObservable):
         input_handler_cls = SUPPORTED_INPUT_TYPES[input_type](self.db)
         return input_handler_cls
 
-    def should_stop(self):
-        """
-        overrides Imodule's should_stop()
-        the common Imodule's should_stop() return True when there's no msg in
-        each channel and the termination event is set
-        since this module is the one responsible for signaling the
-        termination event (via process_manager) then it doesnt make sense
-        to check for it. it will never be set before this module stops.
-        The "stop" msg from input.py is responsible for setting the
-        stop_profiler_event by one of the workers. once that worker sets
-        the event, it stops, and profiler takes care of stopping the rest
-        of the workers, then this profiler stops.
-        """
-        return self.stop_profiler_event.is_set()
-
     def shutdown_gracefully(self):
-        self.aid_manager.shutdown()
-
-        for worker in self.workers:
-            self.rec_lines += worker.received_lines
-
         # wait for all flows to be processed by the profiler processes.
         self.stop_profiler_workers()
-        # close the queues to avoid deadlocks.
-        # this step SHOULD NEVER be done before closing the workers
-        self.flows_to_process_q.close()
-        # By default if a process is not the creator of the queue then on
-        # exit it will attempt to join the queue’s background thread. The
-        # process can call cancel_join_thread() to make join_thread()
-        # do nothing.
-        self.flows_to_process_q.cancel_join_thread()
-        self.profiler_queue.close()
-        self.aid_queue.close()
 
-        self.manager.shutdown()
-        self.db.set_new_incoming_flows(False)
+        self.aid_queue.put("stop")
+        self.stop_aid_manager_event.set()
+        self.aid_manager.shutdown()
+
+        used_queues = [
+            self.profiler_queue,
+            self.aid_queue,
+        ]
+
+        for q in used_queues:
+            # By default if a process is not the creator of the queue then on
+            # exit it will attempt to join the queue’s background thread. The
+            # process can call cancel_join_thread() to make join_thread()
+            # do nothing.
+            q.cancel_join_thread()
+
+            # close the queues to avoid deadlocks.
+            # this step SHOULD NEVER be done before closing the workers
+            q.close()
+
+        if self.profiler_monitor_thread.is_alive():
+            self.profiler_monitor_thread.join(timeout=5)
+
         self.print(
-            f"Stopping. Total lines read: {self.rec_lines}",
+            "Stopping.",
             log_to_logfiles_only=True,
         )
-        self.mark_process_as_done_processing()
+        self.mark_self_as_done_processing()
+        self.db.set_new_incoming_flows(False)
 
     def did_5min_pass_since_last_throughput_check(self) -> bool:
         """
         returns true if 5 mins passed since the last time we checked
         the flows read per second
         """
-        now = time.time()
-        self.last_throughput_check_time = getattr(
-            self, "last_throughput_check_time", now
-        )
-        time_diff = now - self.last_throughput_check_time
-        if time_diff < 300:  # check every 5 minutes
+        now = time.monotonic()
+        if now < self.next_throughput_check_time:
             return False
 
-        self.last_throughput_check_time = now
+        # Advance in 5-min steps to reduce drift on long delays.
+        while self.next_throughput_check_time <= now:
+            self.next_throughput_check_time += 300
         return True
 
     def max_workers_started(self) -> bool:
@@ -335,8 +338,8 @@ class Profiler(ICore, IObservable):
         if not self.did_5min_pass_since_last_throughput_check():
             return
 
-        profiler_fps = self.db.get_module_flows_per_second(self.name)
-        input_fps = self.db.get_module_flows_per_second("Input")
+        profiler_fps = self.db.get_module_flows_per_second(self.name) or 0
+        input_fps = self.db.get_module_flows_per_second("Input") or 0
         if float(input_fps) > (
             float(profiler_fps) * 1.1
         ):  # 10% more input fps than profiler fps
@@ -364,6 +367,27 @@ class Profiler(ICore, IObservable):
         # needed by store_flows_read_per_second()
         self.lines = sum([worker.received_lines for worker in self.workers])
 
+    def should_stop(self):
+        """
+        overrides IModule.should_stop().
+
+        why? because this module is the one that triggers the termination
+        event (through process_manager), so checking that event here is
+        meaningless, it will never be set before this module stops.
+        """
+        return self.stop_other_workers.is_set()
+
+    def _run_profiler_monitor_loop(self):
+        """
+        Does necessary monitoring for the profiler while the workers are
+        running.
+        """
+        while not self.did_all_workers_stop.is_set():
+            self._update_lines_read_by_all_workers()
+            # implemented in icore.py
+            self.store_flows_read_per_second()
+            self._check_if_high_throughput_and_add_workers()
+
     def main(self):
         # process the first msg only here, to determine what kind of input
         # slips is given, then the workers will use the determined type.
@@ -381,24 +405,14 @@ class Profiler(ICore, IObservable):
         line: dict = msg["line"]
         # updates internal zeek to slips mapping if needed, just once
         self.input_handler_obj.process_line(line)
-
+        # start the thread now after we know the input type
+        utils.start_thread(self.profiler_monitor_thread, self.db)
         # slips starts with these workers by default until it detects
         # high throughput that these workers arent enough to handle
         num_of_profiler_workers = 5
         for worker_id in range(num_of_profiler_workers):
             self.last_worker_id = worker_id
             self.start_profiler_worker(worker_id)
-
-        # the only thing that stops this loop is the 'stop' msg sent by the
-        # input and recvd by one of the workers
-        while not self.should_stop():
-            time.sleep(5 * 60)
-            self._update_lines_read_by_all_workers()
-            # implemented in icore.py
-            self.store_flows_read_per_second()
-            self._check_if_high_throughput_and_add_workers()
-            # PS: do not exit when max workers is reached, we need this
-            # parent up to handle the shutdown of its child workers
 
         # ICore() will call shutdown_gracefully() on return
         return

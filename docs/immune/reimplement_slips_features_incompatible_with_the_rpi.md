@@ -32,7 +32,7 @@ docker buildx use slips\_builder
 
 export BUILDKIT\_CONTAINERD=1
 
-docker buildx build --platform linux/amd64,linux/arm64 -t stratosphereips/slips:latest -f docker/Dockerfile --push .
+docker buildx build --target arm --platform linux/arm64 -t stratosphereips/slips:latest -f docker/Dockerfile --push .
 ```
 
 Our goal is to maintain one Dockerfile that is able to run on both ARM and AMD architectures.
