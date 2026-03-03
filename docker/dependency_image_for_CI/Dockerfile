@@ -35,6 +35,14 @@ RUN apt-get update -o Acquire::Retries=5 -o Acquire::https::No-Cache=True \
         $(grep -vE '^\s*#|^\s*$' /tmp/apt_dependencies.txt) \
     && rm -f /tmp/apt_dependencies.txt
 
+
+RUN curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg \
+    && chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb \
+    $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/redis.list \
+    && apt-get update && apt-get install -y redis-tools=6:8.4.0-1* redis-server=6:8.4.0-1*
+
+
 # donwload pip requirements from slips develop branch and install them
 # set -e tells the shell to exit immediately if any command returns a non-zero status.
 RUN set -e; \
@@ -57,12 +65,6 @@ RUN curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-
-RUN curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg \
-    && chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb \
-    $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/redis.list \
-    && apt-get update && apt-get install -y redis-server=6:8.4.0-1*
 
 
 
