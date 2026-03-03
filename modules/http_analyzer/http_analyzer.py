@@ -26,14 +26,6 @@ class HTTPAnalyzer(AsyncModule):
     authors = ["Alya Gomaa"]
 
     def init(self):
-        self.c1 = self.db.subscribe("new_http")
-        self.c2 = self.db.subscribe("new_weird")
-        self.c3 = self.db.subscribe("new_flow")
-        self.channels = {
-            "new_http": self.c1,
-            "new_weird": self.c2,
-            "new_flow": self.c3,
-        }
         self.set_evidence = SetEvidenceHelper(self.db)
         self.connections_counter = {}
         self.empty_connections_threshold = 4
@@ -71,6 +63,16 @@ class HTTPAnalyzer(AsyncModule):
         self.non_http_port_80_semaphore = asyncio.Semaphore(
             self.max_concurrent_non_http_port_80_checks
         )
+
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("new_http")
+        self.c2 = self.db.subscribe("new_weird")
+        self.c3 = self.db.subscribe("new_flow")
+        self.channels = {
+            "new_http": self.c1,
+            "new_weird": self.c2,
+            "new_flow": self.c3,
+        }
 
     def read_configuration(self):
         conf = ConfigParser()

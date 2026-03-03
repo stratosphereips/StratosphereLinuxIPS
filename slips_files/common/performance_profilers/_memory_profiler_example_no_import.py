@@ -498,7 +498,7 @@ if __name__ == "__main__":
     # start_tracker will block until lock is acquired and memray is connected, can change later
     # end_tracker works even if memray client quits
 
-    db = multiprocessing.Queue()
+    db = multiprocessing.Queue(maxsize=30000000)
     # profiler = LiveMultiprocessProfiler(db=db)
     # profiler.start()
 

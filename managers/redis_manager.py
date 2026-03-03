@@ -39,6 +39,13 @@ class RedisManager:
         self.end_port = 32850
         self.running_logfile = "running_slips_info.txt"
 
+    def _clear_cached_redis_instance(self, port: int) -> None:
+        """
+        Ensure RedisDB singleton cache doesn't block later startup flushes.
+        """
+        if port in RedisDB.instances:
+            del RedisDB.instances[port]
+
     def get_start_port(self):
         return self.start_port
 
@@ -386,6 +393,9 @@ class RedisManager:
                         ):
                             self.main.terminate_slips()
                             return
+                    # allow the DBManager obj created in main.py to reconnect
+                    # and flush if needed
+                    self._clear_cached_redis_instance(redis_port)
 
         elif self.main.args.multiinstance:
             redis_port = self.get_random_redis_port()
@@ -413,6 +423,8 @@ class RedisManager:
                         f"{redis_port}."
                     )
                     self.main.terminate_slips()
+            # allow main DBManager to reconnect and flush if needed
+            self._clear_cached_redis_instance(redis_port)
 
         return redis_port
 

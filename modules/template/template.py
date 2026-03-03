@@ -25,9 +25,11 @@ class Template(IModule):
     authors = ["Template Author"]
 
     def init(self):
+        pass
+
+    def subscribe_to_channels(self):
         # To which channels do you want to subscribe? When a message
         # arrives on the channel the module will receive a msg
-
         # You can find the full list of channels at
         # slips_files/core/database/redis_db/database.py
         self.c1 = self.db.subscribe("new_ip")

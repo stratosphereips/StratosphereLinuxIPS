@@ -47,7 +47,6 @@ class ZeekLogFileInput(IInputHandler):
         # as we're running on an interface
         self.input.bro_timeout = 30
         self.input.lines = self.input.zeek_utils.read_zeek_files()
-        self.input.mark_self_as_done_processing()
         return True
 
     def shutdown_gracefully(self):

@@ -31,12 +31,6 @@ class ARPPoisoner(IModule):
     authors = ["Alya Gomaa"]
 
     def init(self):
-        self.c1 = self.db.subscribe("new_blocking")
-        self.c2 = self.db.subscribe("tw_closed")
-        self.channels = {
-            "new_blocking": self.c1,
-            "tw_closed": self.c2,
-        }
         self._time_since_last_repoison = {}
         self._time_since_last_internet_cut = {}
         self.log_file_path = os.path.join(self.output_dir, "arp_poisoning.log")
@@ -59,6 +53,14 @@ class ARPPoisoner(IModule):
         self.gw_ip: Dict[str, str] = {}
         # keeps track of which interface were blocked ips attacking on
         self.ip_interface_map = {}
+
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("new_blocking")
+        self.c2 = self.db.subscribe("tw_closed")
+        self.channels = {
+            "new_blocking": self.c1,
+            "tw_closed": self.c2,
+        }
 
     def log(self, text):
         """Logs the given text to the blocking log file"""

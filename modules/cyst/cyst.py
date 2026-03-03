@@ -23,10 +23,12 @@ class Module(IModule):
 
     def init(self):
         self.port = None
-        self.c1 = self.db.subscribe("new_alert")
-        self.channels = {"new_alert": self.c1}
         self.cyst_UDS = "/run/slips.sock"
         self.conn_closed = False
+
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("new_alert")
+        self.channels = {"new_alert": self.c1}
 
     def initialize_unix_socket(self):
         """

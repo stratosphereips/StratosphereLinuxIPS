@@ -63,8 +63,8 @@ def test_read_zeek_folder(zeek_dir: str, is_tabs: bool):
         os.path.join(zeek_dir, "conn.log")
     ]
     input.db.is_growing_zeek_dir.return_value = False
-    input.mark_process_as_done_processing = Mock()
-    input.mark_process_as_done_processing.return_value = True
+    input.mark_self_as_done_processing = Mock()
+    input.mark_self_as_done_processing.return_value = True
     assert handler.run() is True
 
 
