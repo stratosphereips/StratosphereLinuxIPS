@@ -71,6 +71,7 @@ class Profiler(ICore, IObservable):
         is_profiler_done: multiprocessing.Semaphore = None,
         profiler_queue=None,
         is_profiler_done_event: multiprocessing.Event = None,
+        is_input_done_event: multiprocessing.Event = None,
     ):
         IObservable.__init__(self)
         self.add_observer(self.logger)
@@ -94,6 +95,8 @@ class Profiler(ICore, IObservable):
         # is set by this proc to tell input proc that we are done
         # processing and it can exit no issue
         self.is_profiler_done_event = is_profiler_done_event
+        # is set by input to indicate no more flows are coming
+        self.is_input_done_event = is_input_done_event
         self.input_handler_obj = None
         # to close them on shutdown
         self.profiler_child_processes: List[Process] = []
@@ -109,8 +112,6 @@ class Profiler(ICore, IObservable):
         self.localnet_cache = LocalnetCacheShared()
         # max parallel profiler workers to start when high throughput is detected
         self.max_workers = 6
-        # to avoid race conditions
-        self.flow_counter_lock = multiprocessing.Lock()
         # 30MBs max size of this queue to avoid growing forever in mem
         self.aid_queue = multiprocessing.Queue(maxsize=30000000)
         # This starts a process that handles calculatng aid hash and stores
@@ -176,6 +177,11 @@ class Profiler(ICore, IObservable):
         """
         wait as long as needed foreach worker to stop
         """
+        # ensure we don't block forever waiting for workers that will never
+        # receive the stop sentinel
+        if self.is_input_done_event is not None:
+            self.is_input_done_event.wait()
+
         for process in self.profiler_child_processes:
             try:
                 process.join()
@@ -232,7 +238,7 @@ class Profiler(ICore, IObservable):
             input_handler=self.input_handler_obj,
             aid_queue=self.aid_queue,
             aid_manager=self.aid_manager,
-            flow_counter_lock=self.flow_counter_lock,
+            is_input_done_event=self.is_input_done_event,
         )
         worker.start()
         self.profiler_child_processes.append(worker)
@@ -333,7 +339,7 @@ class Profiler(ICore, IObservable):
         if not self.did_5min_pass_since_last_throughput_check():
             return
 
-        profiler_fps = self.db.get_module_flows_per_second(self.name)
+        profiler_fps = self.db.get_module_flows_per_second(self.name) or 0
         input_fps = self.db.get_module_flows_per_second("Input") or 0
         if float(input_fps) > (
             float(profiler_fps) * 1.1

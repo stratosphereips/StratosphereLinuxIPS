@@ -45,12 +45,16 @@ class ProfilerWorker(IModule):
         ),
         aid_queue: multiprocessing.Queue,
         aid_manager: AIDManager,
+        is_input_done_event: multiprocessing.Event = None,
     ):
         self.name = name
         self.profiler_queue = profiler_queue
         # used to pass aid tasks from workers to the the AIDManager()
         self.aid_queue = aid_queue
         self.aid_manager: AIDManager = aid_manager
+        # lets workers stop when input is done even if the stop sentinel
+        # never reaches them
+        self.is_input_done_event = is_input_done_event
         # this is an instance of
         # ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         self.input_handler = input_handler
@@ -653,6 +657,11 @@ class ProfilerWorker(IModule):
 
             msg = self.get_msg_from_queue(self.profiler_queue)
             if not msg:
+                if (
+                    self.is_input_done_event is not None
+                    and self.is_input_done_event.is_set()
+                ):
+                    return 1
                 return
 
             if self.is_stop_msg(msg):
@@ -671,6 +680,11 @@ class ProfilerWorker(IModule):
                 # msg in new_zeek_fields_line about the unknown line_processor
                 # or another worker that knows how to process this line does it
                 if err == "unknown line_processor":
+                    if (
+                        self.is_input_done_event is not None
+                        and self.is_input_done_event.is_set()
+                    ):
+                        return
                     self.profiler_queue.put(msg)
                 return
 

@@ -84,6 +84,9 @@ class ProcessManager:
         # and inout stops and renders the profiler queue useless and profiler
         # cant get more lines anymore!
         self.is_profiler_done_event = Event()
+        # is set by the input process to indicate no more flows are coming
+        # so profiler can safely begin shutdown/joins.
+        self.is_input_done_event = Event()
         self.read_config()
 
     def read_config(self):
@@ -121,6 +124,7 @@ class ProcessManager:
             is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
+            is_input_done_event=self.is_input_done_event,
         )
         profiler_process.start()
         self.main.print(
@@ -172,6 +176,7 @@ class ProcessManager:
             zeek_dir=self.main.zeek_dir,
             line_type=self.main.line_type,
             is_profiler_done_event=self.is_profiler_done_event,
+            is_input_done_event=self.is_input_done_event,
         )
         input_process.start()
         self.main.print(

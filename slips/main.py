@@ -668,6 +668,8 @@ class Main:
 
             self.proc_man.start_evidence_process()
             self.proc_man.start_profiler_process()
+            # give the profiler process time to start and subscribe to the db before we start sending data to it
+            time.sleep(1)
 
             self.c1 = self.db.subscribe("control_channel")
 
