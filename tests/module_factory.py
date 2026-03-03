@@ -567,7 +567,7 @@ class ModuleFactory:
             input_handler=Mock(),
             aid_queue=Mock(),
             aid_manager=Mock(),
-            stop_profiler_event=Mock(),
+            is_input_done_event=Mock(),
         )
         profiler.print = Mock()
         profiler.db = mock_db

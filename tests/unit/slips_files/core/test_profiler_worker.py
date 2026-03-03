@@ -550,7 +550,9 @@ def test_main_no_msg():
     profiler.get_handler_obj.assert_not_called()
     profiler.input_handler.process_line.assert_not_called()
     profiler.add_flow_to_profile.assert_not_called()
-    profiler.print.assert_not_called()
+    profiler.print.assert_any_call(
+        "Module didn't subscribe to new_zeek_fields_line and is trying to get msgs from it."
+    )
 
 
 def test_is_stop_msg(monkeypatch):

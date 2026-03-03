@@ -70,6 +70,7 @@ def test_start_input_process(
             zeek_dir=zeek_dir,
             line_type=line_type,
             is_profiler_done_event=process_manager.is_profiler_done_event,
+            is_input_done_event=process_manager.is_input_done_event,
         )
         mock_input_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()
@@ -425,6 +426,7 @@ def test_start_profiler_process():
             is_profiler_done=process_manager.is_profiler_done,
             profiler_queue=process_manager.profiler_queue,
             is_profiler_done_event=process_manager.is_profiler_done_event,
+            is_input_done_event=process_manager.is_input_done_event,
         )
         mock_profiler_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()
