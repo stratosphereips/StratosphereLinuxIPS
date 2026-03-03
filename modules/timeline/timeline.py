@@ -26,10 +26,6 @@ class Timeline(IModule):
 
     def init(self):
         self.read_configuration()
-        self.c1 = self.db.subscribe("new_flow")
-        self.channels = {
-            "new_flow": self.c1,
-        }
         self.classifier = FlowClassifier()
         self.host_ips: List[str] = self.db.get_all_host_ips()
         # caches to avoid repetitive redis querying of the same val
@@ -42,6 +38,12 @@ class Timeline(IModule):
         # drains the new_flow channel to avoid msg buildup in RAM and
         # getting OOM killed
         self._new_flow_msgs_batch_size = 30
+
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("new_flow")
+        self.channels = {
+            "new_flow": self.c1,
+        }
 
     def read_configuration(self):
         conf = ConfigParser()

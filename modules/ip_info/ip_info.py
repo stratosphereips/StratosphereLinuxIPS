@@ -50,10 +50,19 @@ class IPInfo(AsyncModule):
 
     def init(self):
         """This will be called when initializing this module"""
-        self.pending_mac_queries = multiprocessing.Queue()
+        # 30MBs max size of this queue to avoid growing forever in mem
+        self.pending_mac_queries = multiprocessing.Queue(maxsize=30000000)
         self.asn = ASN(self.db)
         self.JARM = JARM()
         self.classifier = FlowClassifier()
+        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
+        self.is_running_non_stop: bool = self.db.is_running_non_stop()
+        self.valid_tlds = whois.validTlds()
+        self.is_running_in_ap_mode: bool = (
+            True if self.args.access_point else False
+        )
+
+    def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_ip")
         self.c2 = self.db.subscribe("new_MAC")
         self.c3 = self.db.subscribe("new_dns")
@@ -64,12 +73,6 @@ class IPInfo(AsyncModule):
             "new_dns": self.c3,
             "check_jarm_hash": self.c4,
         }
-        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
-        self.is_running_non_stop: bool = self.db.is_running_non_stop()
-        self.valid_tlds = whois.validTlds()
-        self.is_running_in_ap_mode: bool = (
-            True if self.args.access_point else False
-        )
 
     async def open_dbs(self):
         """Function to open the different offline databases used in this

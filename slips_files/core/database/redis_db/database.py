@@ -60,7 +60,7 @@ class RedisDB(
     constants = Constants()
     channels = Channels()
     # Stores instances per port
-    _instances = {}
+    instances = {}
     supported_channels = {
         "tw_modified",
         "evidence_added",
@@ -164,10 +164,10 @@ class RedisDB(
                     f"on port {cls.redis_port}: {err}"
                 )
 
-            cls._instances[cls.redis_port] = super().__new__(cls)
+            cls.instances[cls.redis_port] = super().__new__(cls)
             super().__init__(cls)
 
-        elif cls.redis_port not in cls._instances and not cls.args.killall:
+        elif cls.redis_port not in cls.instances and not cls.args.killall:
             cls._read_configuration()
             cls._setup_config_file()
             initialized, err = cls.init_redis_server()
@@ -177,7 +177,7 @@ class RedisDB(
                     f"on port {cls.redis_port}: {err}"
                 )
 
-            cls._instances[cls.redis_port] = super().__new__(cls)
+            cls.instances[cls.redis_port] = super().__new__(cls)
             super().__init__(cls)
 
             # By default the slips internal time is
@@ -186,7 +186,7 @@ class RedisDB(
             if not cls.get_slips_start_time():
                 cls._set_slips_start_time()
 
-        return cls._instances[cls.redis_port]
+        return cls.instances[cls.redis_port]
 
     def __init__(self, *args, **kwargs):
         self.call_mixins_setup()
@@ -523,6 +523,15 @@ class RedisDB(
             channel, ignore_subscribe_messages=ignore_subscribe_messages
         )
         return self.pubsub
+
+    def unsubscribe(self, channel_obj: Optional[redis.client.PubSub]):
+        if channel_obj is None:
+            return
+
+        try:
+            channel_obj.unsubscribe()
+        finally:
+            channel_obj.close()
 
     def publish_stop(self):
         """
@@ -1716,7 +1725,7 @@ class RedisDB(
 
             # Start the server again, but make sure it's flushed
             # and doesnt have any keys
-            os.system("redis-server redis.conf > /dev/null 2>&1")
+            os.system(f"redis-server {RedisDB._conf_file} > /dev/null 2>&1")
             return True
         except Exception:
             self.print(f"Error loading the database {backup_file}.")
@@ -1797,6 +1806,17 @@ class RedisDB(
         if not processed_flows:
             return 0
         return int(processed_flows)
+
+    def increment_profiler_workers_started(self) -> int:
+        """increments the number of profiler workers started"""
+        return self.r.incr(self.constants.PROFILER_WORKERS_STARTED, 1)
+
+    def get_profiler_workers_started(self) -> int:
+        """returns number of profiler workers started so far"""
+        count = self.r.get(self.constants.PROFILER_WORKERS_STARTED)
+        if not count:
+            return 0
+        return int(count)
 
     def store_std_file(self, **kwargs):
         """

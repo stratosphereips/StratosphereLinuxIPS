@@ -20,6 +20,7 @@ class Constants:
     DOMAINS_INFO = "DomainsInfo"
     IPS_INFO = "IPsInfo"
     PROCESSED_FLOWS_BY_PROFILER = "processed_flows_by_profiler_so_far"
+    PROFILER_WORKERS_STARTED = "profiler_workers_started"
     FLOWS_CAUSING_EVIDENCE = "flows_causing_evidence"
     PROCESSED_EVIDENCE = "processed_evidence"
     NUMBER_OF_EVIDENCE = "number_of_evidence"

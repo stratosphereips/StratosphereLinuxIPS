@@ -17,11 +17,13 @@ class RiskIQ(IModule):
     authors = ["Alya Gomaa"]
 
     def init(self):
+        self.read_configuration()
+
+    def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_ip")
         self.channels = {
             "new_ip": self.c1,
         }
-        self.read_configuration()
 
     def read_configuration(self):
         conf = ConfigParser()

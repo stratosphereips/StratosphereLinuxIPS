@@ -19,7 +19,7 @@ def test_mark_process_as_done_processing(monkeypatch):
 
     monkeypatch.setattr(profiler, "print", mock_print)
 
-    profiler.mark_process_as_done_processing()
+    profiler.mark_self_as_done_processing()
 
     profiler.done_processing.release.assert_called_once()
     profiler.is_profiler_done_event.set.assert_called_once()
@@ -91,14 +91,12 @@ def test_shutdown_gracefully(monkeypatch):
         Mock(received_lines=20),
         Mock(received_lines=3),
     ]
-    profiler.mark_process_as_done_processing = Mock()
+    profiler.mark_self_as_done_processing = Mock()
 
     # monkeypatch.setattr(profiler, "print", Mock())
     profiler.shutdown_gracefully()
-    profiler.print.assert_called_with(
-        "Stopping. Total lines read: 33", log_to_logfiles_only=True
-    )
-    profiler.mark_process_as_done_processing.assert_called_once()
+    profiler.print.assert_called_with("Stopping.", log_to_logfiles_only=True)
+    profiler.mark_self_as_done_processing.assert_called_once()
 
 
 def test_notify_observers_no_observers():

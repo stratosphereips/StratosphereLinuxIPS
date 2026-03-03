@@ -48,9 +48,6 @@ class FlowMLDetection(IModule):
     authors = ["Sebastian Garcia"]
 
     def init(self):
-        # Subscribe to the channel
-        self.c1 = self.db.subscribe("new_flow")
-        self.channels = {"new_flow": self.c1}
         self.fieldseparator = self.db.get_field_separator()
         # Set the output queue of our database instance
         # Read the configuration
@@ -63,6 +60,11 @@ class FlowMLDetection(IModule):
         self.scaler = StandardScaler()
         self.model_path = "./modules/flowmldetection/model.bin"
         self.scaler_path = "./modules/flowmldetection/scaler.bin"
+
+    def subscribe_to_channels(self):
+        # Subscribe to the channel
+        self.c1 = self.db.subscribe("new_flow")
+        self.channels = {"new_flow": self.c1}
 
     def read_configuration(self):
         conf = ConfigParser()

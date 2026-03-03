@@ -29,12 +29,6 @@ class Blocking(IModule):
     authors = ["Sebastian Garcia, Alya Gomaa"]
 
     def init(self):
-        self.c1 = self.db.subscribe("new_blocking")
-        self.c2 = self.db.subscribe("tw_closed")
-        self.channels = {
-            "new_blocking": self.c1,
-            "tw_closed": self.c2,
-        }
         if platform.system() == "Darwin":
             self.print("Mac OS blocking is not supported yet.")
             sys.exit()
@@ -53,6 +47,14 @@ class Blocking(IModule):
 
         self.ap_info: None | Dict[str, str] = self.db.get_ap_info()
         self.is_running_in_ap_mode = True if self.ap_info else False
+
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("new_blocking")
+        self.c2 = self.db.subscribe("tw_closed")
+        self.channels = {
+            "new_blocking": self.c1,
+            "tw_closed": self.c2,
+        }
 
     def log(self, text: str):
         """Logs the given text to the blocking log file"""

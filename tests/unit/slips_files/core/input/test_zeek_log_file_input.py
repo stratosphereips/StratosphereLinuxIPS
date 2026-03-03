@@ -28,5 +28,7 @@ def test_zeek_log_file_input_reads_file(tmp_path):
 
     handler.db.add_zeek_file.assert_called_once()
     input_process.zeek_utils.read_zeek_files.assert_called_once()
+    input_process.mark_self_as_done_processing.assert_not_called()
+    handler.shutdown_gracefully()
     input_process.mark_self_as_done_processing.assert_called_once()
     assert input_process.lines == 2
