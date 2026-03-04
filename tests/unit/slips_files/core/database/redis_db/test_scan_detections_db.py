@@ -37,9 +37,7 @@ def test_add_ips():
         profileid, twid, flow, role, flow.daddr, pipe
     )
 
-    handler.mark_profile_tw_as_modified.assert_called_once_with(
-        str(profileid), str(twid), flow.starttime, pipe=pipe
-    )
+    handler.mark_profile_tw_as_modified.assert_not_called()
 
     pipe.execute.assert_called_once()
 

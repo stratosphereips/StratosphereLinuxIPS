@@ -1,5 +1,5 @@
 <h1 align="center">
-Slips v1.1.16
+Slips v1.1.18
 </h1>
 
 
@@ -184,6 +184,7 @@ Slips key features are:
 * **Targeted Attacks and Command & Control Detection**: It places a strong emphasis on identifying targeted attacks and command and control channels in network traffic.
 * **Traffic Analysis Flexibility**: Slips can analyze network traffic in real-time, PCAP files, and network flows from popular tools like Suricata, Zeek/Bro, and Argus.
 * **Threat Intelligence Updates**: Slips continuously updates threat intelligence files and databases, providing relevant detections as updates occur.
+* **HTTPS Anomaly Detection**: Adaptive TLS/HTTPS anomaly detection with drift handling and a local HTML report generator for deep dives.
 * **Integration with External Platforms**: Modules in Slips can look up IP addresses on external platforms such as VirusTotal and RiskIQ.
 * **Graphical User Interface**: Slips provides a console graphical user interface (Kalipso) and a web interface for displaying detection with graphs and tables.
 * **Peer-to-Peer (P2P) Module**: Slips includes a complex automatic system to find other peers in the network and share IoC data automatically in a balanced, trusted manner. The P2P module can be enabled as needed.

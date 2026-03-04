@@ -206,6 +206,9 @@ class DBManager:
     def subscribe(self, *args, **kwargs):
         return self.rdb.subscribe(*args, **kwargs)
 
+    def unsubscribe(self, *args, **kwargs):
+        return self.rdb.unsubscribe(*args, **kwargs)
+
     def publish_stop(self, *args, **kwargs):
         return self.rdb.publish_stop(*args, **kwargs)
 
@@ -268,6 +271,12 @@ class DBManager:
 
     def get_disabled_modules(self, *args, **kwargs):
         return self.rdb.get_disabled_modules(*args, **kwargs)
+
+    def increment_profiler_workers_started(self, *args, **kwargs):
+        return self.rdb.increment_profiler_workers_started(*args, **kwargs)
+
+    def get_profiler_workers_started(self, *args, **kwargs):
+        return self.rdb.get_profiler_workers_started(*args, **kwargs)
 
     def set_input_metadata(self, *args, **kwargs):
         return self.rdb.set_input_metadata(*args, **kwargs)

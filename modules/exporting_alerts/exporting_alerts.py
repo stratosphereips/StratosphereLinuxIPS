@@ -27,15 +27,17 @@ class ExportingAlerts(IModule):
     def init(self):
         self.slack = SlackExporter(self.logger, self.db)
         self.stix = StixExporter(self.logger, self.db)
-        self.c1 = self.db.subscribe("export_evidence")
-        self.channels = {"export_evidence": self.c1}
-        self.print("Subscribed to export_evidence channel.", 2, 0)
         self.direct_export_stop = None
         self.direct_export_workers = []
         self.direct_export_start_lock = threading.Lock()
         self.queue_db = None
         self.queue_lock = threading.Lock()
         self.queue_db_path = None
+
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("export_evidence")
+        self.channels = {"export_evidence": self.c1}
+        self.print("Subscribed to export_evidence channel.", 2, 0)
 
     def _init_direct_export_queue(self):
         if self.queue_db:

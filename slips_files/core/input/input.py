@@ -58,6 +58,7 @@ class Input(ICore):
         zeek_dir=None,
         line_type=None,
         is_profiler_done_event: multiprocessing.Event = None,
+        is_input_done_event: multiprocessing.Event = None,
     ):
         self.input_type = input_type
         self.profiler_queue = profiler_queue
@@ -83,19 +84,21 @@ class Input(ICore):
         self.testing = False
         # number of lines read
         self.lines = 0
-        self.channels = {
-            "remove_old_files": self.db.subscribe("remove_old_files"),
-        }
         self.timeout = None
         self.zeek_utils = ZeekInputUtils(self)
-        self._done_processing_marked = False
-
         # is set by the profiler to tell this proc that we it is done processing
         # the input process and shut down and close the profiler queue no issue
         self.is_profiler_done_event = is_profiler_done_event
+        # is set by this proc to indicate no more flows are coming
+        self.is_input_done_event = is_input_done_event
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.input_handlers = self._build_input_handlers()
         self.active_handler = None
+
+    def subscribe_to_channels(self):
+        self.channels = {
+            "remove_old_files": self.db.subscribe("remove_old_files"),
+        }
 
     def _build_input_handlers(self):
         return {
@@ -116,9 +119,6 @@ class Input(ICore):
         marks this process as done processing and wait for the profiler to
         stop so slips.py would know when to terminate
         """
-        if self._done_processing_marked:
-            return
-        self._done_processing_marked = True
         # signal slips.py that this process is done
         # tell profiler that this process is
         # done and no more flows are arriving
@@ -126,7 +126,17 @@ class Input(ICore):
             "Telling Profiler to stop because " "no more input is arriving.",
             log_to_logfiles_only=True,
         )
-        self.profiler_queue.put("stop")
+        number_of_profiler_workers: int = (
+            self.db.get_profiler_workers_started()
+        )
+
+        for _ in range(number_of_profiler_workers):
+            self.profiler_queue.put("stop")
+        # this has to be done after the sentinel is put in the queue,
+        # or else we'll have a deadlock when slips is stopping
+        if self.is_input_done_event is not None:
+            self.is_input_done_event.set()
+
         self.print("Waiting for Profiler to stop.", log_to_logfiles_only=True)
         self.is_profiler_done_event.wait()
         # reaching here means the wait() is over and profiler did stop.

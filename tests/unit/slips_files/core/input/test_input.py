@@ -27,8 +27,6 @@ def test_handle_pcap_and_interface(tmp_path, input_type, input_information):
     input.zeek_utils.ensure_zeek_dir = Mock()
     input.zeek_utils.init_zeek = Mock()
     input.zeek_utils.read_zeek_files = Mock(return_value=7)
-    input.print_lines_read = Mock()
-    input.mark_self_as_done_processing = Mock()
 
     assert handler.run() is True
 
@@ -38,8 +36,6 @@ def test_handle_pcap_and_interface(tmp_path, input_type, input_information):
         handler.observer, input.zeek_dir, input.given_path
     )
     input.zeek_utils.read_zeek_files.assert_called_once()
-    input.print_lines_read.assert_called_once()
-    input.mark_self_as_done_processing.assert_called_once()
     handler.file_remover.start.assert_not_called()
     assert input.lines == 7
 
@@ -67,8 +63,8 @@ def test_read_zeek_folder(zeek_dir: str, is_tabs: bool):
         os.path.join(zeek_dir, "conn.log")
     ]
     input.db.is_growing_zeek_dir.return_value = False
-    input.mark_process_as_done_processing = Mock()
-    input.mark_process_as_done_processing.return_value = True
+    input.mark_self_as_done_processing = Mock()
+    input.mark_self_as_done_processing.return_value = True
     assert handler.run() is True
 
 

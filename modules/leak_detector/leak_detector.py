@@ -51,6 +51,9 @@ class LeakDetector(IModule):
         if self.is_yara_installed():
             self.bin_found = True
 
+    def subscribe_to_channels(self):
+        self.channels = {}
+
     def is_yara_installed(self) -> bool:
         """
         Checks if yara bin is installed

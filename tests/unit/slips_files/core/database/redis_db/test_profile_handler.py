@@ -1823,11 +1823,6 @@ def test_is_blocked_profile_and_tw(profile_tws, twid, expected_result):
             "1000.0",
             call("ModifiedTW", {"profile_1_timewindow1": 1000.0}),
         ),
-        # Testcase 3: Timestamp is None
-        (
-            None,
-            call("ModifiedTW", {"profile_1_timewindow1": 1000.0}),
-        ),
     ],
 )
 def test_mark_profile_tw_as_modified(timestamp, expected_zadd_call):
@@ -1851,6 +1846,21 @@ def test_mark_profile_tw_as_modified(timestamp, expected_zadd_call):
             }
         ),
     )
+
+
+def test_mark_profile_tw_as_modified_requires_timestamp():
+    handler = ModuleFactory().create_profile_handler_obj()
+
+    handler.publish = MagicMock()
+    handler.check_tw_to_close = MagicMock()
+
+    profileid = "profile_1"
+    twid = "timewindow1"
+    with pytest.raises(ValueError):
+        handler.mark_profile_tw_as_modified(profileid, twid, None)
+
+    handler.r.zadd.assert_not_called()
+    handler.publish.assert_not_called()
 
 
 def test_mark_profile_as_gateway():

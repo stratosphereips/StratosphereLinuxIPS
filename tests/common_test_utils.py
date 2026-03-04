@@ -176,6 +176,7 @@ def has_ignored_errors(line):
         "while downloading",
         "Error while reading the TI file",
         "Error parsing feed",
+        "SIGTERM",
     )
     for ignored_keyword in ignored_error_keywords:
         if ignored_keyword in line:

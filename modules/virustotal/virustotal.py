@@ -31,15 +31,6 @@ class VT(IModule):
         if not self.read_api_key() or self.key in ("", None):
             # We don't have a virustotal key
             return
-
-        self.c1 = self.db.subscribe("new_flow")
-        self.c2 = self.db.subscribe("new_dns")
-        self.c3 = self.db.subscribe("new_url")
-        self.channels = {
-            "new_flow": self.c1,
-            "new_dns": self.c2,
-            "new_url": self.c3,
-        }
         # Read the conf file
         # query counter for debugging purposes
         self.counter = 0
@@ -61,6 +52,19 @@ class VT(IModule):
         # API key, then the module will exit
         self.incorrect_API_key = False
         self.classifier = FlowClassifier()
+
+    def subscribe_to_channels(self):
+        if not hasattr(self, "key") or self.key in ("", None):
+            self.channels = {}
+            return
+        self.c1 = self.db.subscribe("new_flow")
+        self.c2 = self.db.subscribe("new_dns")
+        self.c3 = self.db.subscribe("new_url")
+        self.channels = {
+            "new_flow": self.c1,
+            "new_dns": self.c2,
+            "new_url": self.c3,
+        }
 
     def read_api_key(self):
         self.key = None

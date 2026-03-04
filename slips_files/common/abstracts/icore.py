@@ -41,6 +41,13 @@ class ICore(IModule, Process):
         """
         updates the db about the flows read per second
         """
+        if not hasattr(self, "next_fps_check_time"):
+            # Defensive init for cases where ICore.__init__ wasn't invoked.
+            now = time.monotonic()
+            self.last_flows_count = getattr(self, "last_flows_count", 0)
+            self.last_fps_check_time = now
+            self.next_fps_check_time = now + FIVE_MINS
+
         now = time.monotonic()
         if now < self.next_fps_check_time:
             return
@@ -64,7 +71,7 @@ class ICore(IModule, Process):
         must be called run because this is what multiprocessing runs
         """
         try:
-            self.pre_main()
+            self._pre_main()
             # this should be defined in every core file
             # this won't run in a loop because it's not a module
             self.main()

@@ -18,8 +18,6 @@ def test_zeek_dir_input_reads_directory(tmp_path):
     input_process.zeek_utils.is_zeek_tabs_file = MagicMock(return_value=True)
     input_process.zeek_utils.read_zeek_files = MagicMock(return_value=2)
     input_process.get_flows_number = MagicMock(return_value=2)
-    input_process.print_lines_read = MagicMock()
-    input_process.mark_self_as_done_processing = MagicMock()
 
     (tmp_path / "conn.log").write_text("#fields\nline1\n", encoding="utf-8")
 
@@ -34,6 +32,4 @@ def test_zeek_dir_input_reads_directory(tmp_path):
 
     handler.db.add_zeek_file.assert_called_once()
     input_process.zeek_utils.read_zeek_files.assert_called_once()
-    input_process.print_lines_read.assert_called_once()
-    input_process.mark_self_as_done_processing.assert_called_once()
     assert input_process.lines == 2

@@ -81,13 +81,6 @@ class EvidenceHandler(ICore):
             else:
                 self.popup_alerts = False
 
-        self.c1 = self.db.subscribe("evidence_added")
-        self.c2 = self.db.subscribe("new_blame")
-        self.channels = {
-            "evidence_added": self.c1,
-            "new_blame": self.c2,
-        }
-
         self.is_running_non_stop = self.db.is_running_non_stop()
         self.blocking_modules_supported = self.is_blocking_modules_supported()
 
@@ -100,7 +93,7 @@ class EvidenceHandler(ICore):
 
         # A thread that handing I/O to disk (writing evidence to log files)
         self.logger_stop_signal = threading.Event()
-        self.evidence_logger_q = multiprocessing.Queue()
+        self.evidence_logger_q = multiprocessing.Queue(maxsize=30000000)
         self.evidence_logger = EvidenceLogger(
             logger_stop_signal=self.logger_stop_signal,
             evidence_logger_q=self.evidence_logger_q,
@@ -112,6 +105,14 @@ class EvidenceHandler(ICore):
             name="thread_that_handles_evidence_logging_to_disk",
         )
         utils.start_thread(self.logger_thread, self.db)
+
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("evidence_added")
+        self.c2 = self.db.subscribe("new_blame")
+        self.channels = {
+            "evidence_added": self.c1,
+            "new_blame": self.c2,
+        }
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -525,11 +526,10 @@ class EvidenceHandler(ICore):
             return False
 
         # no new msgs are received in any of the channels here
-        # wait an extra 1 minute for new evidence to arrive
+        # wait some extra time for new evidence to arrive
         # without this, slips has problems processing the last evidence
-        # set by some of the modules.
-        if time.time() - self.last_msg_received_time < 60:
-            # one minute didnt pass yet
+        # sent by some of the modules.
+        if time.time() - self.last_msg_received_time < 30:
             return False
 
         # 1 min passed since the last evidence with no new msgs. stop.

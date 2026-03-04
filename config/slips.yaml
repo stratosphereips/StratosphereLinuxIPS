@@ -216,6 +216,51 @@ flowmldetection:
   mode: test
 
 #############################
+anomaly_detection_https:
+  # Number of initial hours used to train the baseline model assuming benign traffic.
+  # If set to 0, detection starts immediately and baseline is learned online.
+  training_hours: 0
+
+  # Thresholds for anomaly detection in hourly and per-flow checks.
+  hourly_zscore_threshold: 3.0
+  flow_zscore_threshold: 3.5
+
+  # If hourly anomaly score is lower than this, treat it as drift and adapt.
+  adaptation_score_threshold: 2.0
+
+  # Adaptation speed for baseline updates.
+  baseline_alpha: 0.1
+  drift_alpha: 0.05
+  suspicious_alpha: 0.005
+
+  # Minimum baseline history required before z-score checks are applied.
+  min_baseline_points: 6
+
+  # Max flow anomalies in an hour still considered "small drift".
+  max_small_flow_anomalies: 1
+
+  # Optional ADWIN-based drift trigger (river).
+  # If true, drift/suspicious update is decided only after ADWIN signals drift.
+  # If false, Slips uses the previous threshold-only drift logic.
+  use_adwin_drift: true
+  adwin_delta: 0.002
+  adwin_clock: 32
+  adwin_grace_period: 10
+  adwin_min_window_length: 5
+
+  # JA3 statistical fallback gate used only when training_hours = 0.
+  # If there is no benign training period, ja3_changes is not scored
+  # until this minimum hourly value is reached.
+  ja3_min_variants_per_server: 3
+
+  # Operational logging verbosity:
+  # 0: disabled
+  # 1: important events only (detections, drift, training fit, stop/start)
+  # 2: + hourly summaries (recommended)
+  # 3: + per-flow arrivals and model update details
+  log_verbosity: 3
+
+#############################
 virustotal:
   # This is the path to the API key. The file should contain the key at the
   # start of the first line, and nothing more.

@@ -53,19 +53,22 @@ from slips_files.core.profiler import Profiler
 class ProcessManager:
     def __init__(self, main):
         self.main = main
+        # Can be used by signal handlers before startup finishes.
+        self.processes: List[Process] = []
 
-        # this is the queue that will be used by the input proces
+        # this is the queue that will be used by the input process
         # to pass flows to the profiler
-        # this max size is decided based on the avg size of each flow and
-        # tha max memory (4g) that this queue is allowed to use
-        self.profiler_queue = Queue(maxsize=50000)
-        self.termination_event: Event = Event()
+        # this max size is decided based on the avg size of each flow (650
+        # bytes), and the max memory that this queue is allowed to
+        # use (1GB), so 1321528 bytes will be 2033 flows in queue at max
+        self.profiler_queue = Queue(maxsize=1321528)
+        self.termination_event = Event()
         # to make sure we only warn the user once about
         # the pending modules
         self.warning_printed_once = False
         # this one has its own termination event because we want it to
         # shutdown at the very end of all other slips modules.
-        self.evidence_handler_termination_event: Event = Event()
+        self.evidence_handler_termination_event = Event()
         self.stopped_modules = []
         # used to stop slips when these 2 are done
         # since the semaphore count is zero, slips.py will wait until another
@@ -81,6 +84,9 @@ class ProcessManager:
         # and inout stops and renders the profiler queue useless and profiler
         # cant get more lines anymore!
         self.is_profiler_done_event = Event()
+        # is set by the input process to indicate no more flows are coming
+        # so profiler can safely begin shutdown/joins.
+        self.is_input_done_event = Event()
         self.read_config()
 
     def read_config(self):
@@ -118,6 +124,7 @@ class ProcessManager:
             is_profiler_done=self.is_profiler_done,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
+            is_input_done_event=self.is_input_done_event,
         )
         profiler_process.start()
         self.main.print(
@@ -169,6 +176,7 @@ class ProcessManager:
             zeek_dir=self.main.zeek_dir,
             line_type=self.main.line_type,
             is_profiler_done_event=self.is_profiler_done_event,
+            is_input_done_event=self.is_input_done_event,
         )
         input_process.start()
         self.main.print(
@@ -566,7 +574,8 @@ class ProcessManager:
                 self.main.db.get_pid_of("Exporting Alerts")
             )
         # remove all None PIDs. this happens when a module in that list
-        # isnt started in the current run.
+        # isnt started in the current run. e.g. virustotal module starts then
+        # stops immediately if no API is found. so its pid will be None.
         pids_to_kill_last: List[int] = [
             pid for pid in pids_to_kill_last if pid is not None
         ]

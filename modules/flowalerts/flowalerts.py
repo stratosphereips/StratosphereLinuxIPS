@@ -28,7 +28,9 @@ class FlowAlerts(AsyncModule):
     authors = ["Kamila Babayeva", "Sebastian Garcia", "Alya Gomaa"]
 
     def init(self):
-        self.subscribe_to_channels()
+        # Use an instance-local channels dict; subscriptions happen in
+        # the common pre_main path.
+        self.channels = {}
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.dns = DNS(self.db, flowalerts=self)
         self.software = Software(self.db, flowalerts=self)
@@ -84,7 +86,7 @@ class FlowAlerts(AsyncModule):
     async def main(self):
         """runs in a loop, waiting for messages in subscribed channels"""
         for channel, analyzers in self.analyzers_map.items():
-            msg: dict = self.get_msg(channel)
+            msg: dict | None = self.get_msg(channel)
             if not msg:
                 continue
 

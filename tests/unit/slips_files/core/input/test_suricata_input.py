@@ -21,4 +21,6 @@ def test_suricata_input_reads_lines(tmp_path):
 
     line_sent = input_process.profiler_queue.get()
     assert line_sent["line"]["type"] == "suricata"
+    input_process.mark_self_as_done_processing.assert_not_called()
+    handler.shutdown_gracefully()
     input_process.mark_self_as_done_processing.assert_called_once()
