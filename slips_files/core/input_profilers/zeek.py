@@ -83,10 +83,20 @@ class Zeek:
 
     def remove_subsuffix(self, file_name: str) -> str:
         """
-        turns any x.log.y to x.log only
+        turns any x.log.y to x.log
+        turns any x.<something>.log to x.log
         """
-        if ".log" in file_name:
+
+        # is it something like notice.13:00:00-14:00:00.log?
+        splitted_filename = file_name.split(".")
+        if len(splitted_filename) == 3:
+            if splitted_filename[-1] == "log":
+                return splitted_filename[0] + ".log"
+
+        # its something.log
+        elif len(splitted_filename) == 2 and ".log" in file_name:
             return file_name.split(".log")[0] + ".log"
+
         return file_name
 
     def get_file_type(self, new_line: dict) -> str:
@@ -231,7 +241,6 @@ class ZeekJSON(IInputType, Zeek):
             )
 
             flow = slips_class(**self.reusable_flow_values_dict)
-
             return flow, ""
 
         err = f"Invalid file_type: {file_type}, line: {line}"
@@ -306,7 +315,6 @@ class ZeekTabs(IInputType, Zeek):
         )
 
         file_type: str = self.get_file_type(fields_line)
-
         indices = {file_type: indices_of_each_slips_field}
         self.line_processor_cache.update(indices)
         # for currently started profiler workers to know about the new file
