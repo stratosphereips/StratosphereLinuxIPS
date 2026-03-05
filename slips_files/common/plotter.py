@@ -1,7 +1,9 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import csv
+import math
 import os
+import statistics
 
 
 class Plotter:
@@ -46,6 +48,46 @@ class Plotter:
             ylabel="latency",
             title="Latency",
         )
+
+    def write_latency_metrics(self, metrics_path=None):
+        latency_path = os.path.join(self.output_dir, "latency.csv")
+        if not self.output_dir or not os.path.exists(latency_path):
+            return
+
+        latency_values = []
+        try:
+            with open(latency_path, newline="") as csv_file:
+                reader = csv.DictReader(csv_file)
+                if not reader.fieldnames or "latency" not in reader.fieldnames:
+                    return
+                for row in reader:
+                    raw_latency = row.get("latency")
+                    try:
+                        latency_values.append(float(raw_latency))
+                    except (TypeError, ValueError):
+                        pass
+        except Exception as exc:
+            self._log(f"[Plotter] Failed to read latency.csv: {exc}")
+            return
+
+        latency_p50 = self._percentile(latency_values, 50)
+        latency_p95 = self._percentile(latency_values, 95)
+        latency_p99 = self._percentile(latency_values, 99)
+        latency_avg = self._average(latency_values)
+
+        if metrics_path is None:
+            metrics_path = os.path.join(self.output_dir, "metrics.txt")
+        lines = [
+            f"p50 for latency: {self._format_metric(latency_p50)}",
+            f"p95 for latency: {self._format_metric(latency_p95)}",
+            f"p99 for latency: {self._format_metric(latency_p99)}",
+            f"avg for latency: {self._format_metric(latency_avg)}",
+        ]
+        try:
+            with open(metrics_path, "a", encoding="utf-8") as handle:
+                handle.write("\n".join(lines) + "\n")
+        except Exception as exc:
+            self._log(f"[Plotter] Failed to write metrics.txt: {exc}")
 
     def plot_throughput_csv(self):
         throughput_path = os.path.join(self.output_dir, "flows_per_minute.csv")
@@ -138,6 +180,74 @@ class Plotter:
                 title="flows_per_minute_for_all_profilers.csv combined",
             )
 
+    def write_throughput_metrics(self):
+        throughput_path = os.path.join(self.output_dir, "flows_per_minute.csv")
+        if not self.output_dir or not os.path.exists(throughput_path):
+            return
+
+        input_values = []
+        profiler_sums = []
+        profiler_columns = []
+        try:
+            with open(throughput_path, newline="") as csv_file:
+                reader = csv.DictReader(csv_file)
+                if not reader.fieldnames or "ts" not in reader.fieldnames:
+                    return
+
+                for column in reader.fieldnames:
+                    if column.startswith("profiler_flows_per_min"):
+                        profiler_columns.append(column)
+
+                for row in reader:
+                    raw_input = row.get("input_flows_per_min")
+                    try:
+                        input_values.append(float(raw_input))
+                    except (TypeError, ValueError):
+                        pass
+
+                    total = 0.0
+                    for column in profiler_columns:
+                        raw_value = row.get(column)
+                        try:
+                            value = float(raw_value)
+                        except (TypeError, ValueError):
+                            continue
+                        if not math.isnan(value):
+                            total += value
+                    profiler_sums.append(total)
+        except Exception as exc:
+            self._log(f"[Plotter] Failed to read flows_per_minute.csv: {exc}")
+            return
+
+        input_p50 = self._percentile(input_values, 50)
+        input_p95 = self._percentile(input_values, 95)
+        input_p99 = self._percentile(input_values, 99)
+        input_avg = self._average(input_values)
+        profiler_p50 = self._percentile(profiler_sums, 50)
+        profiler_p95 = self._percentile(profiler_sums, 95)
+        profiler_p99 = self._percentile(profiler_sums, 99)
+        profiler_avg = self._average(profiler_sums)
+
+        metrics_path = os.path.join(self.output_dir, "metrics.txt")
+        lines = [
+            f"p50 for input: {self._format_metric(input_p50)}",
+            f"p95 for input: {self._format_metric(input_p95)}",
+            f"p99 for input: {self._format_metric(input_p99)}",
+            f"avg for input: {self._format_metric(input_avg)}",
+            ("p50 for all profilers: " f"{self._format_metric(profiler_p50)}"),
+            ("p95 for all profilers: " f"{self._format_metric(profiler_p95)}"),
+            ("p99 for all profilers: " f"{self._format_metric(profiler_p99)}"),
+            ("avg for all profilers: " f"{self._format_metric(profiler_avg)}"),
+        ]
+        try:
+            with open(metrics_path, "w", encoding="utf-8") as handle:
+                handle.write("\n".join(lines) + "\n")
+        except Exception as exc:
+            self._log(f"[Plotter] Failed to write metrics.txt: {exc}")
+            return
+
+        self.write_latency_metrics(metrics_path=metrics_path)
+
     def _is_valid_input(self, csv_path):
         if not self.output_dir:
             return False
@@ -177,3 +287,48 @@ class Plotter:
     def _log(self, message):
         if self.print:
             self.print(message, log_to_logfiles_only=True)
+
+    def _percentile(self, values, percentile):
+        clean = []
+        for value in values:
+            if value is None:
+                continue
+            try:
+                if math.isnan(value):
+                    continue
+            except TypeError:
+                continue
+            clean.append(value)
+        if not clean:
+            return float("nan")
+        clean.sort()
+        if len(clean) == 1:
+            return clean[0]
+        rank = (len(clean) - 1) * (percentile / 100.0)
+        lower = math.floor(rank)
+        upper = math.ceil(rank)
+        if lower == upper:
+            return clean[int(rank)]
+        lower_value = clean[lower]
+        upper_value = clean[upper]
+        return lower_value + (upper_value - lower_value) * (rank - lower)
+
+    def _average(self, values):
+        clean = []
+        for value in values:
+            if value is None:
+                continue
+            try:
+                if math.isnan(value):
+                    continue
+            except TypeError:
+                continue
+            clean.append(value)
+        if not clean:
+            return float("nan")
+        return statistics.fmean(clean)
+
+    def _format_metric(self, value):
+        if math.isnan(value):
+            return "nan"
+        return f"{value}"

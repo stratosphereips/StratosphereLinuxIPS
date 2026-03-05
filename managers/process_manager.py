@@ -790,6 +790,7 @@ class ProcessManager:
             self.plotter = Plotter(self.main.args.output, print)
             self.plotter.plot_latency_csv()
             self.plotter.plot_throughput_csv()
+            self.plotter.write_throughput_metrics()
 
             if not self.main.args.stopdaemon:
                 print("\n" + "-" * 27)
