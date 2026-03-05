@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
-import csv
 import importlib
 import inspect
 import os
@@ -38,6 +37,7 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import (
     IModule,
 )
+from slips_files.common.plotter import Plotter
 
 from slips_files.common.style import green
 from slips_files.common.input_type import InputType
@@ -787,7 +787,9 @@ class ProcessManager:
         """
         try:
             print = self.get_print_function()
-            self.plot_latency_csv(print)
+            self.plotter = Plotter(self.main.args.output, print)
+            self.plotter.plot_latency_csv()
+            self.plotter.plot_throughput_csv()
 
             if not self.main.args.stopdaemon:
                 print("\n" + "-" * 27)
@@ -903,66 +905,3 @@ class ProcessManager:
 
         except KeyboardInterrupt:
             return False
-
-    def plot_latency_csv(self, print):
-        output_dir = getattr(self.main.args, "output", "")
-        if not output_dir:
-            return
-
-        latency_path = os.path.join(output_dir, "latency.csv")
-        if not os.path.exists(latency_path):
-            return
-
-        try:
-            import matplotlib
-
-            matplotlib.use("Agg")
-            from matplotlib import pyplot as plt
-        except Exception as exc:
-            print(
-                f"[Process Manager] Skipping latency plot: {exc}",
-                log_to_logfiles_only=True,
-            )
-            return
-
-        ts_values = []
-        latency_values = []
-        try:
-            with open(latency_path, newline="") as csv_file:
-                reader = csv.DictReader(csv_file)
-                for row in reader:
-                    ts = row.get("ts")
-                    latency = row.get("latency")
-                    if ts is None or latency is None:
-                        continue
-                    try:
-                        ts_values.append(float(ts))
-                        latency_values.append(float(latency))
-                    except ValueError:
-                        continue
-        except Exception as exc:
-            print(
-                f"[Process Manager] Failed to read latency.csv: {exc}",
-            )
-            return
-
-        if not ts_values:
-            return
-
-        output_path = os.path.join(output_dir, "latency_plot")
-        try:
-            plt.figure(figsize=(10, 4))
-            plt.plot(ts_values, latency_values, linewidth=1.0)
-            plt.xlabel("ts")
-            plt.ylabel("latency")
-            plt.title("Latency")
-            plt.tight_layout()
-            plt.savefig(output_path, format="png")
-            plt.close()
-            print(
-                f"[Process Manager] Saved latency plot to {output_path}",
-            )
-        except Exception as exc:
-            print(
-                f"[Process Manager] Failed to save latency plot: {exc}",
-            )
