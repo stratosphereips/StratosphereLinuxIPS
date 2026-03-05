@@ -106,6 +106,7 @@ class EvidenceHandler(ICore):
         )
         utils.start_thread(self.logger_thread, self.db)
         self.slips_start_time = self.db.get_slips_start_time()
+        self.is_running_non_stop: bool = self.db.is_running_non_stop()
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("evidence_added")
@@ -212,17 +213,28 @@ class EvidenceHandler(ICore):
             start_unix = utils.convert_ts_format(start_time, "unixtimestamp")
             create_unix = utils.convert_ts_format(create_time, "unixtimestamp")
 
-            # The time elapsed in the real world since slips started
-            wall_elapsed = float(create_unix) - float(self.slips_start_time)
-            # The time elapsed in the pcap since the first packet
-            pcap_elapsed = float(start_unix) - float(self.first_flow_pcap_time)
+            if self.is_running_non_stop:
+                latency = float(create_unix) - float(start_unix)
+            else:
+                # we need to convert pcap time to now time
 
-            latency = wall_elapsed - pcap_elapsed
-            # A negative latency means slips is processing data faster than
-            # it was originally recorded.
-            if latency < 0:
-                latency = 0
+                # The time elapsed in the real world since slips started
+                wall_elapsed = float(create_unix) - float(
+                    self.slips_start_time
+                )
+                # The time elapsed in the pcap since the first packet
+                pcap_elapsed = float(start_unix) - float(
+                    self.first_flow_pcap_time
+                )
 
+                latency = wall_elapsed - pcap_elapsed
+
+                # A negative latency means slips is processing data faster than
+                # it was originally recorded.
+                if latency < 0:
+                    latency = 0
+
+            latency = round(latency)
         except Exception as e:
             print(f"@@@@@@@@@@@@@@@@ {e}")
             return
