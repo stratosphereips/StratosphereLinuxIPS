@@ -105,6 +105,7 @@ class EvidenceHandler(ICore):
             name="thread_that_handles_evidence_logging_to_disk",
         )
         utils.start_thread(self.logger_thread, self.db)
+        self.slips_start_time = self.db.get_slips_start_time()
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("evidence_added")
@@ -196,6 +197,7 @@ class EvidenceHandler(ICore):
         except Exception as e:
             self.handle_unable_to_log(evidence, e)
 
+    # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
     def add_latency_to_csv(self, idmef_evidence: dict):
         start_time = idmef_evidence.get("StartTime")
         create_time = idmef_evidence.get("CreateTime")
@@ -206,8 +208,14 @@ class EvidenceHandler(ICore):
         try:
             start_unix = utils.convert_ts_format(start_time, "unixtimestamp")
             create_unix = utils.convert_ts_format(create_time, "unixtimestamp")
-            latency = create_unix - start_unix
-        except Exception:
+            # the start_unix is in pcap time, we need to convert it to now
+            # time (wall clock) like the create_unix.
+            start_time_but_in_wall_clock = float(
+                self.slips_start_time
+            ) + float(start_unix)
+            latency = create_unix - start_time_but_in_wall_clock
+        except Exception as e:
+            print(f"@@@@@@@@@@@@@@@@ {e}")
             return
 
         to_log = {
