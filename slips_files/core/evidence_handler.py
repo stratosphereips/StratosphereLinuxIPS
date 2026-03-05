@@ -205,15 +205,24 @@ class EvidenceHandler(ICore):
         if not (start_time and create_time and evidence_id):
             return
 
+        if not hasattr(self, "first_flow_pcap_time"):
+            self.first_flow_pcap_time = float(self.db.get_first_flow_time())
+
         try:
             start_unix = utils.convert_ts_format(start_time, "unixtimestamp")
             create_unix = utils.convert_ts_format(create_time, "unixtimestamp")
-            # the start_unix is in pcap time, we need to convert it to now
-            # time (wall clock) like the create_unix.
-            start_time_but_in_wall_clock = float(
-                self.slips_start_time
-            ) + float(start_unix)
-            latency = create_unix - start_time_but_in_wall_clock
+
+            # The time elapsed in the real world since slips started
+            wall_elapsed = float(create_unix) - float(self.slips_start_time)
+            # The time elapsed in the pcap since the first packet
+            pcap_elapsed = float(start_unix) - float(self.first_flow_pcap_time)
+
+            latency = wall_elapsed - pcap_elapsed
+            # A negative latency means slips is processing data faster than
+            # it was originally recorded.
+            if latency < 0:
+                latency = 0
+
         except Exception as e:
             print(f"@@@@@@@@@@@@@@@@ {e}")
             return
