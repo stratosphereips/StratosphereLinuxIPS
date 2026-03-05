@@ -78,10 +78,12 @@ class Plotter:
         if metrics_path is None:
             metrics_path = os.path.join(self.output_dir, "metrics.txt")
         lines = [
+            "latency.cs:v metrics:",
             f"p50 for latency: {self._format_metric(latency_p50)}",
             f"p95 for latency: {self._format_metric(latency_p95)}",
             f"p99 for latency: {self._format_metric(latency_p99)}",
             f"avg for latency: {self._format_metric(latency_avg)}",
+            "\n\n",
         ]
         try:
             with open(metrics_path, "a", encoding="utf-8") as handle:
@@ -230,6 +232,7 @@ class Plotter:
 
         metrics_path = os.path.join(self.output_dir, "metrics.txt")
         lines = [
+            "flows_per_minute.csv metrics:",
             f"p50 for input: {self._format_metric(input_p50)}",
             f"p95 for input: {self._format_metric(input_p95)}",
             f"p99 for input: {self._format_metric(input_p99)}",
@@ -238,6 +241,7 @@ class Plotter:
             ("p95 for all profilers: " f"{self._format_metric(profiler_p95)}"),
             ("p99 for all profilers: " f"{self._format_metric(profiler_p99)}"),
             ("avg for all profilers: " f"{self._format_metric(profiler_avg)}"),
+            "\n\n",
         ]
         try:
             with open(metrics_path, "w", encoding="utf-8") as handle:
