@@ -657,20 +657,13 @@ class ProfilerWorker(IModule):
 
             msg = self.get_msg_from_queue(self.profiler_queue)
             if not msg:
-                if (
-                    self.is_input_done_event is not None
-                    and self.is_input_done_event.is_set()
-                ):
-                    return 1
                 return
 
             if self.is_stop_msg(msg):
                 gc.collect()
                 # no need to wait for the should_stop(), this worker will
                 # never recv any new flows after the stop msg
-                self.print(
-                    f"Received stop signal, stopping {green(self.name)}"
-                )
+                self.print("Received stop signal. Stopping.")
                 return 1
 
             line: dict = msg["line"]
