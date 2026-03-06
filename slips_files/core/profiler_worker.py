@@ -668,6 +668,9 @@ class ProfilerWorker(IModule):
                 gc.collect()
                 # no need to wait for the should_stop(), this worker will
                 # never recv any new flows after the stop msg
+                self.print(
+                    f"Received stop signal, stopping {green(self.name)}"
+                )
                 return 1
 
             line: dict = msg["line"]
