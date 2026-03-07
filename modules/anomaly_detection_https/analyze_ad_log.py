@@ -691,6 +691,28 @@ def table_rows(rows: List[tuple]) -> str:
     )
 
 
+def is_important_event(e: Event) -> bool:
+    # Keep only anomaly/drift signals for the bottom event table.
+    important_types = {
+        "flow_detection",
+        "hourly_detection",
+        "drift_update",
+        "suspicious_update",
+    }
+    excluded_messages = {
+        "SSL flow received for processing",
+        "SSL flow matched with conn flow from DB",
+    }
+
+    if e.message in excluded_messages:
+        return False
+    if e.event_type in important_types:
+        return True
+
+    text = f"{e.event_type} {e.message}".lower()
+    return ("anomal" in text) or ("drift" in text)
+
+
 def build_html(
     log_path: Path,
     summary: Dict[str, Any],
@@ -832,7 +854,8 @@ def build_html(
 
     top_events = summary["event_counts"].most_common(15)
     host_rows = host_anomaly_rows(events)
-    recent = events[-20:]
+    important_events = [e for e in events if is_important_event(e)]
+    recent = list(reversed(important_events[-20:]))
     recent_rows = []
     for e in recent:
         event_ts_str = (
@@ -945,7 +968,7 @@ def build_html(
   </div>
 
   <div class="card">
-    <h3>Recent Events (latest 20)</h3>
+    <h3>Important Events (latest 20)</h3>
     <table>
       <thead><tr><th>Timestamp + Event</th><th>Details</th></tr></thead>
       <tbody>{table_rows(recent_rows)}</tbody>
