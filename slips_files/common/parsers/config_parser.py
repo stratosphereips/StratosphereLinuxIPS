@@ -589,32 +589,32 @@ class ConfigParser(object):
 
     def https_anomaly_adwin_delta(self) -> float:
         delta = self.read_configuration(
-            "anomaly_detection_https", "adwin_delta", 0.002
+            "anomaly_detection_https", "adwin_delta", 0.01
         )
         try:
             delta = float(delta)
         except (TypeError, ValueError):
-            delta = 0.002
+            delta = 0.01
         return min(max(delta, 0.000001), 1.0)
 
     def https_anomaly_adwin_clock(self) -> int:
         clock = self.read_configuration(
-            "anomaly_detection_https", "adwin_clock", 32
+            "anomaly_detection_https", "adwin_clock", 1
         )
         try:
             clock = int(clock)
         except (TypeError, ValueError):
-            clock = 32
+            clock = 1
         return max(1, clock)
 
     def https_anomaly_adwin_grace_period(self) -> int:
         grace = self.read_configuration(
-            "anomaly_detection_https", "adwin_grace_period", 10
+            "anomaly_detection_https", "adwin_grace_period", 5
         )
         try:
             grace = int(grace)
         except (TypeError, ValueError):
-            grace = 10
+            grace = 5
         return max(1, grace)
 
     def https_anomaly_adwin_min_window_length(self) -> int:
