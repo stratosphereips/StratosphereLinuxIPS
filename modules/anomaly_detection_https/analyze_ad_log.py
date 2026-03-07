@@ -173,12 +173,11 @@ def update_transition_timestamps(
     events: List[Event], event_types: List[str]
 ) -> Dict[str, List[float]]:
     """
-    Return timestamps only when update mode transitions happen.
-    This avoids plotting a line for every hour-close update.
+    Return hour-level timestamps for selected event types.
+    One marker is emitted per (hour, event_type).
     """
     allowed = set(event_types)
     out: Dict[str, List[float]] = {e: [] for e in event_types}
-    prev_mode: Optional[str] = None
     seen_hour_mode = set()
     for e in events:
         if e.event_ts is None or e.event_type not in allowed:
@@ -190,9 +189,7 @@ def update_transition_timestamps(
         if key in seen_hour_mode:
             continue
         seen_hour_mode.add(key)
-        if e.event_type != prev_mode:
-            out[e.event_type].append(float(hour_start))
-            prev_mode = e.event_type
+        out[e.event_type].append(float(hour_start))
     return out
 
 
@@ -275,6 +272,18 @@ def build_confidence_score_series(
     }
 
 
+def get_config_training_hours(events: List[Event]) -> int:
+    for e in events:
+        if e.event_type != "module_start":
+            continue
+        raw = e.metrics.get("training_hours")
+        try:
+            return max(0, int(raw))
+        except (TypeError, ValueError):
+            continue
+    return 0
+
+
 def detect_training_window(events: List[Event]) -> Dict[str, Any]:
     training_ts = sorted(
         float(e.event_ts)
@@ -289,14 +298,22 @@ def detect_training_window(events: List[Event]) -> Dict[str, Any]:
             "hours": 0,
         }
 
+    configured_training_hours = get_config_training_hours(events)
     # training_fit is logged on hour-close for hour buckets.
+    # Plot a fixed-width training window that matches configuration, not
+    # the span between first/last training_fit across different hosts.
     start_ts = training_ts[0]
-    end_ts = training_ts[-1] + 3600.0
+    if configured_training_hours > 0:
+        end_ts = start_ts + float(configured_training_hours) * 3600.0
+        hours = configured_training_hours
+    else:
+        end_ts = training_ts[-1] + 3600.0
+        hours = len(training_ts)
     return {
         "has_training": True,
         "start_ts": start_ts,
         "end_ts": end_ts,
-        "hours": len(training_ts),
+        "hours": hours,
     }
 
 
@@ -311,6 +328,7 @@ def svg_polyline_chart(
     training_end_ts: Optional[float] = None,
     drift_marker_ts: Optional[List[float]] = None,
     suspicious_marker_ts: Optional[List[float]] = None,
+    baseline_marker_ts: Optional[List[float]] = None,
     training_fit_marker_ts: Optional[List[float]] = None,
     width: int = 1100,
     height: int = 320,
@@ -324,8 +342,10 @@ def svg_polyline_chart(
         legend_items.append(("series", name))
     legend_items.extend(
         [
+            ("baseline", "baseline_update"),
             ("drift", "drift_update"),
             ("suspicious", "suspicious_update"),
+            ("training_fit", "training_fit"),
             ("training", "training_period"),
         ]
     )
@@ -428,12 +448,21 @@ def svg_polyline_chart(
 
     drift_marker_ts = drift_marker_ts or []
     suspicious_marker_ts = suspicious_marker_ts or []
+    baseline_marker_ts = baseline_marker_ts or []
     training_fit_marker_ts = training_fit_marker_ts or []
+    for ts in baseline_marker_ts:
+        xx = x_at_ts(ts)
+        lines.append(
+            f'<line x1="{xx:.1f}" y1="{margin_top}" x2="{xx:.1f}" y2="{margin_top+plot_h}" '
+            f'stroke="#2563eb" stroke-width="1.2" stroke-dasharray="1,3">'
+            f"<title>baseline_update at {escape(to_human_ts(ts))}</title>"
+            f"</line>"
+        )
     for ts in training_fit_marker_ts:
         xx = x_at_ts(ts)
         lines.append(
             f'<line x1="{xx:.1f}" y1="{margin_top}" x2="{xx:.1f}" y2="{margin_top+plot_h}" '
-            f'stroke="#2563eb" stroke-width="1.2" stroke-dasharray="4,4">'
+            f'stroke="#0f766e" stroke-width="1.2" stroke-dasharray="4,4">'
             f"<title>training_fit at {escape(to_human_ts(ts))}</title>"
             f"</line>"
         )
@@ -507,6 +536,12 @@ def svg_polyline_chart(
                 f'<rect x="{lx}" y="{ly-9}" width="14" height="4" fill="{color}" />'
             )
             label = name
+        elif kind == "baseline":
+            lines.append(
+                f'<line x1="{lx}" y1="{ly-8}" x2="{lx+14}" y2="{ly-8}" '
+                f'stroke="#2563eb" stroke-width="1.2" stroke-dasharray="1,3" />'
+            )
+            label = name
         elif kind == "drift":
             lines.append(
                 f'<line x1="{lx}" y1="{ly-8}" x2="{lx+14}" y2="{ly-8}" '
@@ -517,6 +552,12 @@ def svg_polyline_chart(
             lines.append(
                 f'<line x1="{lx}" y1="{ly-8}" x2="{lx+14}" y2="{ly-8}" '
                 f'stroke="#dc2626" stroke-width="1.6" stroke-dasharray="2,3" />'
+            )
+            label = name
+        elif kind == "training_fit":
+            lines.append(
+                f'<line x1="{lx}" y1="{ly-8}" x2="{lx+14}" y2="{ly-8}" '
+                f'stroke="#0f766e" stroke-width="1.2" stroke-dasharray="4,4" />'
             )
             label = name
         else:
@@ -731,11 +772,18 @@ def build_html(
         float(training["end_ts"]) if training.get("has_training") else None
     )
     transitions = update_transition_timestamps(
-        events, ["drift_update", "suspicious_update"]
+        events,
+        [
+            "baseline_update",
+            "drift_update",
+            "suspicious_update",
+            "training_fit",
+        ],
     )
+    baseline_marker_ts = transitions["baseline_update"]
     drift_marker_ts = transitions["drift_update"]
     suspicious_marker_ts = transitions["suspicious_update"]
-    training_fit_marker_ts: List[float] = []
+    training_fit_marker_ts = transitions["training_fit"]
     feature_series = build_hourly_feature_series(events, bins)
     confidence_series = build_confidence_score_series(events, bins)
 
@@ -751,6 +799,7 @@ def build_html(
         x_max_ts=max_ts,
         training_start_ts=training_start_ts,
         training_end_ts=training_end_ts,
+        baseline_marker_ts=baseline_marker_ts,
         drift_marker_ts=drift_marker_ts,
         suspicious_marker_ts=suspicious_marker_ts,
         training_fit_marker_ts=training_fit_marker_ts,
@@ -774,6 +823,7 @@ def build_html(
         x_max_ts=max_ts,
         training_start_ts=training_start_ts,
         training_end_ts=training_end_ts,
+        baseline_marker_ts=baseline_marker_ts,
         drift_marker_ts=drift_marker_ts,
         suspicious_marker_ts=suspicious_marker_ts,
         training_fit_marker_ts=training_fit_marker_ts,
@@ -790,6 +840,7 @@ def build_html(
         x_max_ts=max_ts,
         training_start_ts=training_start_ts,
         training_end_ts=training_end_ts,
+        baseline_marker_ts=baseline_marker_ts,
         drift_marker_ts=drift_marker_ts,
         suspicious_marker_ts=suspicious_marker_ts,
         training_fit_marker_ts=training_fit_marker_ts,
@@ -820,6 +871,7 @@ def build_html(
         x_max_ts=max_ts,
         training_start_ts=training_start_ts,
         training_end_ts=training_end_ts,
+        baseline_marker_ts=baseline_marker_ts,
         drift_marker_ts=drift_marker_ts,
         suspicious_marker_ts=suspicious_marker_ts,
         training_fit_marker_ts=training_fit_marker_ts,
@@ -847,6 +899,7 @@ def build_html(
         x_max_ts=max_ts,
         training_start_ts=training_start_ts,
         training_end_ts=training_end_ts,
+        baseline_marker_ts=baseline_marker_ts,
         drift_marker_ts=drift_marker_ts,
         suspicious_marker_ts=suspicious_marker_ts,
         training_fit_marker_ts=training_fit_marker_ts,
@@ -917,7 +970,8 @@ def build_html(
   <div class="card">
     <p class="small">
       Tip: move your mouse anywhere inside the plot area to see exact values for that time-bin.
-      Vertical lines: green dashed = drift update transition, red dashed = suspicious update transition.
+      Vertical lines: blue dotted = baseline update, green dashed = drift update,
+      red dashed = suspicious update, teal dashed = training fit.
     </p>
   </div>
 
