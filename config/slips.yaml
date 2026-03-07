@@ -243,11 +243,12 @@ anomaly_detection_https:
   # If true, drift/suspicious update is decided only after ADWIN signals drift.
   # If false, Slips uses the previous threshold-only drift logic.
   use_adwin_drift: true
-  adwin_delta: 0.002
-  adwin_clock: 32
-  adwin_grace_period: 10
+  adwin_delta: 0.01
+  adwin_clock: 1
+  adwin_grace_period: 5
   adwin_min_window_length: 5
   empirical_threshold_quantile: 0.995
+
 
   # JA3 statistical fallback gate used only when training_hours = 0.
   # If there is no benign training period, ja3_changes is not scored
