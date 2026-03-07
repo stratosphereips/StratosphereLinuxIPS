@@ -96,7 +96,9 @@ Calibration rule:
 
 ## Adaptation states
 
-After each hour closes, the module chooses model update mode:
+After each hour closes, the module chooses model update mode.
+
+When `use_adwin_drift=false`:
 
 1. `training_fit`  
    During benign training: Welford fit (no EWMA alpha).
@@ -109,14 +111,14 @@ After each hour closes, the module chooses model update mode:
 
 For normal non-anomalous periods outside training, per-feature EWMA uses `baseline_alpha`.
 
-### Optional ADWIN drift trigger
+### ADWIN drift trigger (`use_adwin_drift=true`)
 
-If `use_adwin_drift=true` and `river` is installed, ADWIN is used as drift trigger in both paths:
+If `use_adwin_drift=true` and `river` is installed, ADWIN is the only drift trigger in both paths:
 
 - **Hourly path**: ADWIN receives each raw hourly feature stream.
 - **Flow path**: ADWIN receives each raw per-flow signal stream.
 - ADWIN drift detected -> classify as `drift_update` or `suspicious_update` using existing thresholds.
-- No ADWIN drift -> use `baseline_update` (`baseline_alpha`).
+- No ADWIN drift -> use `baseline_update` (`baseline_alpha`), even if anomalies exist.
 - During benign training, ADWIN is still warmed with benign scores to reduce cold-start noise after training.
 
 Why raw signals:
@@ -129,6 +131,13 @@ Performance note:
 - hourly ADWIN cost scales with hourly feature count,
 - flow ADWIN cost scales with per-flow signal count,
 - both are constant-time scalar updates and usually lightweight.
+
+Current tuned defaults for faster ADWIN reaction:
+
+- `adwin_delta: 0.01`
+- `adwin_clock: 1`
+- `adwin_grace_period: 5`
+- `adwin_min_window_length: 5`
 
 ## New server vs JA3 behavior
 
@@ -192,7 +201,13 @@ Main keys:
 - `empirical_threshold_quantile`
 - `log_verbosity`
 
-Default: `use_adwin_drift=true`.
+Defaults (from parser/config):
+
+- `use_adwin_drift: true`
+- `adwin_delta: 0.01`
+- `adwin_clock: 1`
+- `adwin_grace_period: 5`
+- `adwin_min_window_length: 5`
 
 Reference:
 
