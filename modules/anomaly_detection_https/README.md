@@ -241,9 +241,22 @@ Performance impact:
 
 Feature-specific modeling:
 
-- count-like hourly features (`ssl_flows`, `unique_servers`, `new_servers`, `ja3_changes`) use `log1p` + robust z-score,
-- byte-like features (`known_server_avg_bytes`, `bytes_to_known_server`) use `log1p` + robust z-score,
-- novelty per-flow signals (`new_server`, `new_ja3s`) are modeled as binary raw streams for ADWIN drift triggering.
+- count-like hourly features (`ssl_flows`, `unique_servers`, `new_servers`, `ja3_changes`) are modeled as non-negative heavy-tail signals,
+- byte-like features (`known_server_avg_bytes`, `bytes_to_known_server`) are modeled as strongly heavy-tail signals,
+- novelty per-flow signals (`new_server`, `new_ja3s`) are modeled as binary Bernoulli-style raw streams for ADWIN drift triggering.
+
+Heavy-tail transform (`log1p`) used in this module:
+
+- definition: `y = log(1 + x)` for `x >= 0`,
+- where applied: before model fitting and scoring for count/bytes features,
+- why: compresses large spikes, reduces right-tail dominance, stabilizes scale and variance for robust online scoring,
+- when: always for the configured heavy-tail features (both during benign training and detection).
+
+Practical interpretation:
+
+- a jump from 10 to 20 is still visible after transform,
+- a jump from 10,000 to 20,000 is down-weighted relative to raw space,
+- this prevents one very large transfer from dominating the model state.
 
 Training stage (known benign):
 
@@ -267,15 +280,23 @@ Reason for this two-stage design:
 
 Scoring:
 
-- residual stream per model:
-  - `r_t = |x_t - mean_{t-1}|`
-- robust floor candidates from the recent residual window:
-  - `Q10(r)` (10th percentile of residuals)
-  - `sigma_MAD = 1.4826 * MAD(r)` where `MAD(r) = median(|r - median(r)|)`
-- floor update (smoothed):
-  - `min_std_floor_t = (1 - beta) * min_std_floor_{t-1} + beta * clip(max(Q10, sigma_MAD))`
-- z-score:
-  - `z = |x - mean| / sqrt(max(var, min_std_floor^2))`
+1. Transform the raw feature value:
+   - `y_t = log(1 + x_t)` for heavy-tail features, else `y_t = x_t`.
+2. Compute robust center/scale from recent transformed values:
+   - `m = median(y)`
+   - `MAD = median(|y - m|)`
+   - `sigma_robust = max(1.4826 * MAD, min_std_floor)`
+3. Robust z-score:
+   - `z_robust = |y_t - m| / sigma_robust`
+
+Residual-based floor maintenance (stability mechanism):
+
+- residual stream: `r_t = |y_t - mean_{t-1}|`
+- candidates from residual window:
+  - `Q10(r)` (10th percentile),
+  - `sigma_MAD(r) = 1.4826 * MAD(r)`
+- smoothed update:
+  - `min_std_floor_t = (1 - beta) * min_std_floor_{t-1} + beta * clip(max(Q10, sigma_MAD(r)))`
 
 Current floor defaults in code:
 
@@ -289,12 +310,25 @@ Operationally:
 - lower `alpha` -> slower adaptation, more memory of older behavior,
 - higher `alpha` -> faster adaptation, less stable anomaly boundary.
 
+Empirical threshold calibration (when `training_hours > 0`):
+
+- For each modeled signal, collect robust z-scores from confirmed benign training period.
+- Set threshold as a high quantile of benign robust z-score distribution:
+  - `threshold_signal = Quantile_q(z_robust_train)`, where `q = empirical_threshold_quantile`.
+- This creates feature-specific thresholds learned from local benign behavior.
+- If there is no benign training (or too few points), fallback thresholds are used:
+  - `hourly_zscore_threshold` for hourly features,
+  - `flow_zscore_threshold` for per-flow bytes feature.
+
 
 ## Learn more (algorithms and ideas used here)
 
 - Exponential smoothing / EWMA:
   - https://en.wikipedia.org/wiki/Exponential_smoothing
   - https://www.itl.nist.gov/div898/handbook/pmc/section4/pmc431.htm
+- Log transform for skewed/heavy-tail data:
+  - https://en.wikipedia.org/wiki/Data_transformation_(statistics)
+  - https://otexts.com/fpp3/transformations.html
 - Welford online variance:
   - https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
 - Z-score:
