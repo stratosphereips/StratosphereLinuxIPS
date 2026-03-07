@@ -67,16 +67,32 @@ Special fallback only for `ja3_changes`:
 
 ## Scoring
 
-Each modeled feature uses robust scoring:
+Each modeled feature uses robust scoring in three explicit steps:
 
-- heavy-tail features are transformed with `log1p`,
-- anomaly magnitude uses robust z-score (median/MAD window),
-- `std_effective` floor is still enforced to avoid unstable near-zero variance.
+1. Transform heavy-tail signals: `y = log(1 + x)` (`log1p`) for non-negative count/bytes features.
+2. Estimate robust center/scale on recent transformed values:
+   - `m = median(y)`
+   - `MAD = median(|y - m|)`
+   - `sigma_robust = max(1.4826 * MAD, min_std_floor)`
+3. Score deviation:
+   - `z_robust = |y_t - m| / sigma_robust`
+
+Why this is used:
+
+- HTTPS counts and byte volumes are typically right-skewed and heavy-tailed,
+- mean/std-only scoring overreacts to bursts and underreacts after outliers,
+- `log1p + median/MAD` is more stable under non-Gaussian traffic.
 
 Thresholds:
 
 - empirical thresholds calibrated from benign training when `training_hours > 0`,
 - otherwise defaults (`hourly_zscore_threshold`, `flow_zscore_threshold`).
+
+Calibration rule:
+
+- per signal, collect robust z-scores on confirmed benign training data,
+- set threshold to high benign quantile (`empirical_threshold_quantile`, default 0.995),
+- fallback to defaults if training data is insufficient.
 
 ## Adaptation states
 
@@ -181,6 +197,8 @@ Default: `use_adwin_drift=true`.
 Reference:
 
 - River ADWIN: https://riverml.xyz/latest/api/drift/ADWIN/
+- Data transformations for skew/heavy tails: https://otexts.com/fpp3/transformations.html
+- Robust scale (MAD): https://en.wikipedia.org/wiki/Median_absolute_deviation
 
 ## Operational logs
 
