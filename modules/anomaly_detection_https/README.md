@@ -168,6 +168,21 @@ Hourly anomalies are logged as JSON lines with:
 
 Model updates are always online, but the training stage uses a different fit method.
 
+Update event semantics:
+
+- `training_fit`:
+  initial benign baseline fit while `trained_hours < training_hours`;
+  uses training fit method (Welford-style), not EWMA alpha.
+- `baseline_update`:
+  normal post-training adaptation; uses EWMA with `baseline_alpha`.
+  In ADWIN mode, this is used when ADWIN does not signal drift.
+- `drift_update`:
+  post-training drift adaptation; uses EWMA with `drift_alpha`.
+  In ADWIN mode, this is used only after ADWIN drift signal and small/drift-like classification.
+- `suspicious_update`:
+  post-training conservative adaptation; uses EWMA with `suspicious_alpha`.
+  In ADWIN mode, this is used only after ADWIN drift signal and suspicious classification.
+
 After each hour, one update state is selected:
 
 1. **Training period**:
