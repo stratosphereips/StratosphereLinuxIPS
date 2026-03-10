@@ -4,6 +4,8 @@ import csv
 import math
 import os
 import statistics
+import subprocess
+import sys
 
 
 class Plotter:
@@ -251,6 +253,163 @@ class Plotter:
             return
 
         self.write_latency_metrics(metrics_path=metrics_path)
+
+    def plot_flows_from_conn_log(self):
+        conn_log = os.path.join(self.output_dir, "zeek_files", "conn.log")
+        if not os.path.exists(conn_log):
+            return
+
+        os.makedirs(self.plots_dir, exist_ok=True)
+        output_plot = os.path.join(
+            self.plots_dir, "flows_graph_from_conn_log.png"
+        )
+        # Assuming stress_testing_scripts is in the project root.
+        # This file is in slips_files/common/plotter.py
+        # So project root is 2 levels up.
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.abspath(os.path.join(current_dir, "../.."))
+        script_path = os.path.join(
+            project_root, "stress_testing_scripts", "plot_flows_over_time.py"
+        )
+
+        if not os.path.exists(script_path):
+            self._log(
+                f"[Plotter] Could not find plot_flows_over_time.py at "
+                f"{script_path}"
+            )
+            return
+
+        cmd = [
+            sys.executable,
+            script_path,
+            "--conn-log",
+            conn_log,
+            "--output",
+            output_plot,
+        ]
+
+        try:
+            subprocess.run(
+                cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            self._log(f"[Plotter] Saved flows over time plot to {output_plot}")
+        except subprocess.CalledProcessError as e:
+            self._log(
+                f"[Plotter] Failed to run plot_flows_over_time.py: {e.stderr}"
+            )
+        except Exception as exc:
+            self._log(
+                f"[Plotter] Error running plot_flows_over_time.py: {exc}"
+            )
+
+    def plot_resource_usage(self):
+        monitors_dir = os.path.join(self.output_dir, "monitors")
+        if not os.path.exists(monitors_dir):
+            return
+
+        # Prepare paths
+        redis_csv = os.path.join(monitors_dir, "redis_RAM_usage.csv")
+        slips_cpu = os.path.join(monitors_dir, "slips_CPU_usage.csv")
+        slips_ram = os.path.join(monitors_dir, "slips_RAM_usage.csv")
+
+        # Check if at least one exists
+        if not any(
+            os.path.exists(p) for p in [redis_csv, slips_cpu, slips_ram]
+        ):
+            return
+
+        # Create output dir
+        resource_usage_dir = os.path.join(self.plots_dir, "resource_usage")
+        os.makedirs(resource_usage_dir, exist_ok=True)
+        output_path = os.path.join(resource_usage_dir, "resource_usage.png")
+
+        try:
+            import matplotlib
+
+            matplotlib.use("Agg")
+            from matplotlib import pyplot as plt
+        except Exception as exc:
+            self._log(f"[Plotter] Skipping resource usage plot: {exc}")
+            return
+
+        try:
+            plt.figure(figsize=(10, 6))
+
+            # Plot Redis RAM
+            if os.path.exists(redis_csv):
+                ts_vals = []
+                mem_vals = []
+                with open(redis_csv, newline="") as f:
+                    reader = csv.reader(f)
+                    next(reader, None)  # Skip header
+                    for row in reader:
+                        if not row:
+                            continue
+                        try:
+                            t = float(row[0])
+                            m = float(row[1])
+                            ts_vals.append(t)
+                            mem_vals.append(m)
+                        except ValueError:
+                            continue
+                if ts_vals:
+                    plt.plot(ts_vals, mem_vals, label="Redis RAM (GB)")
+
+            # Plot Slips CPU
+            if os.path.exists(slips_cpu):
+                ts_vals = []
+                cpu_vals = []
+                with open(slips_cpu, newline="") as f:
+                    reader = csv.DictReader(f)
+                    if reader.fieldnames and "ts" in reader.fieldnames:
+                        for row in reader:
+                            try:
+                                t = float(row["ts"])
+                                c = float(
+                                    row[
+                                        "cpu_usage_of_slips_and_all_children_percent"
+                                    ]
+                                )
+                                ts_vals.append(t)
+                                cpu_vals.append(c)
+                            except ValueError:
+                                continue
+                if ts_vals:
+                    plt.plot(ts_vals, cpu_vals, label="Slips CPU (%)")
+
+            # Plot Slips RAM
+            if os.path.exists(slips_ram):
+                ts_vals = []
+                ram_vals = []
+                with open(slips_ram, newline="") as f:
+                    reader = csv.DictReader(f)
+                    if reader.fieldnames and "ts" in reader.fieldnames:
+                        for row in reader:
+                            try:
+                                t = float(row["ts"])
+                                r = float(
+                                    row[
+                                        "ram_usage_of_slips_and_all_children_in_GBs"
+                                    ]
+                                )
+                                ts_vals.append(t)
+                                ram_vals.append(r)
+                            except ValueError:
+                                continue
+                if ts_vals:
+                    plt.plot(ts_vals, ram_vals, label="Slips RAM (GB)")
+
+            plt.xlabel("Time")
+            plt.ylabel("Value")
+            plt.title("Resource Usage")
+            plt.legend()
+            plt.tight_layout()
+            plt.savefig(output_path, format="png")
+            plt.close()
+            self._log(f"[Plotter] Saved resource usage plot to {output_path}")
+
+        except Exception as exc:
+            self._log(f"[Plotter] Failed to save resource usage plot: {exc}")
 
     def _is_valid_input(self, csv_path):
         if not self.output_dir:

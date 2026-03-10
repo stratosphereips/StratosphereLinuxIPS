@@ -791,6 +791,8 @@ class ProcessManager:
             self.plotter.plot_latency_csv()
             self.plotter.plot_throughput_csv()
             self.plotter.write_throughput_metrics()
+            self.plotter.plot_flows_from_conn_log()
+            self.plotter.plot_resource_usage()
 
             if not self.main.args.stopdaemon:
                 print("\n" + "-" * 27)
