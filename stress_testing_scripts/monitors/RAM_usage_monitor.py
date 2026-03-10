@@ -130,17 +130,17 @@ def main():
     while True:
         now = time.time()
 
-        # Redis log every minute
-        rss, used = get_redis_memory(redis_port)
-        with open(redis_csv, "a", newline="") as f:
-            row = [minute_counter, rss, used]
-            log_row(row)
-            csv.writer(f).writerow(row)
-
-        minute_counter += 1
-
-        # Slips RAM every 3 minutes
+        # log  RAM usage every 3 minutes
         if now - last_slips >= 180:
+            # Redis log every minute
+            rss, used = get_redis_memory(redis_port)
+            with open(redis_csv, "a", newline="") as f:
+                row = [minute_counter, rss, used]
+                log_row(row)
+                csv.writer(f).writerow(row)
+
+            minute_counter += 1
+
             ram_gb = get_process_tree_ram_gb(parent_pid)
 
             with open(slips_csv, "a", newline="") as f:
@@ -150,7 +150,7 @@ def main():
 
             last_slips = now
 
-        # time.sleep(60)
+        time.sleep(60)
 
 
 if __name__ == "__main__":
