@@ -25,7 +25,7 @@ import aiohttp
 
 
 TARGET = "127.0.0.1"
-HTTP_PORT = 8080
+HTTP_PORT = 8000
 DNS_SERVER = ("8.8.8.8", 53)
 
 SOFT_BREAK_FPS = 1000
@@ -62,9 +62,7 @@ async def inc_counter():
 
 async def http_get(session):
     try:
-        async with session.get(
-            f"http://{TARGET}:{HTTP_PORT}{rand_path()}"
-        ) as resp:
+        async with session.get(f"http://{TARGET}:{HTTP_PORT}") as resp:
             await resp.read()
     except Exception:
         pass
@@ -92,7 +90,9 @@ async def http_post(session):
 
 async def dns_query():
     try:
-        qname = rand_path().strip("/") + ".example.com"
+        # 7f000001 is hex for 127.0.0.1 (a private IP)
+        # This will trigger your function because it's not .local or .arpa
+        qname = "7f000001.rbndr.us"
 
         tid = random.randint(0, 65535)
         header = struct.pack(">HHHHHH", tid, 0x0100, 1, 0, 0, 0)
@@ -107,17 +107,19 @@ async def dns_query():
 
         loop = asyncio.get_running_loop()
 
+        # You must ensure the response actually comes back to the transport
+        # so the 'flow' object in your detection logic is populated.
         transport, protocol = await loop.create_datagram_endpoint(
-            asyncio.DatagramProtocol,
+            lambda: asyncio.DatagramProtocol(),  # Standard protocol
             remote_addr=DNS_SERVER,
         )
 
         transport.sendto(msg)
 
-        await asyncio.sleep(0.05)
+        # Increased sleep to allow the RTT of a real DNS response
+        await asyncio.sleep(0.5)
 
         transport.close()
-
     except Exception:
         pass
 
