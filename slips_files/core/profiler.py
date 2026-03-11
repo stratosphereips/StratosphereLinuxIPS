@@ -338,8 +338,8 @@ class Profiler(ICore, IObservable):
         if not self.did_5min_pass_since_last_throughput_check():
             return
 
-        profiler_fps = self.db.get_module_flows_per_second(self.name) or 0
-        input_fps = self.db.get_module_flows_per_second("Input") or 0
+        profiler_fps = self.db.get_core_module_flows_per_second(self.name) or 0
+        input_fps = self.db.get_core_module_flows_per_second("Input") or 0
         if float(input_fps) > (
             float(profiler_fps) * 1.1
         ):  # 10% more input fps than profiler fps

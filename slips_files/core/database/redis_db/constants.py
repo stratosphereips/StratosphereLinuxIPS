@@ -69,8 +69,12 @@ class Constants:
     KNOWN_FP_MD5_HASHES = "known_fps"
     WILL_SLIPS_HAVE_MORE_FLOWS = "will_slips_have_more_flows"
     SUBS_WHO_PROCESSED_MSG = "number_of_subscribers_who_processed_this_msg"
-    FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN = "flows_analyzed_per_minute"
-    MODULES_FLOWS_PER_SECOND = "modules_processed_flows_per_second"
+    FLOWS_ANALYZED_BY_ALL_MODULES_PER_MIN = (
+        "flows_analyzed_by_all_modules_per_minute"
+    )
+    CORE_MODULE_NUMBER_OF_PROCESSED_FLOWS_PER_SECOND = (
+        "core_module_number_of_processed_flows_per_second"
+    )
     LINE_PROCESSORS = "line_processors"
     ALERTS = "alerts"
     MAX_THREAT_LEVEL = "max_threat_level"

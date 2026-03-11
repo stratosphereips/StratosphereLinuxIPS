@@ -292,11 +292,11 @@ class DBManager:
     def get_input_file(self, *args, **kwargs):
         return self.rdb.get_input_file(*args, **kwargs)
 
-    def store_module_flows_per_second(self, *args, **kwargs):
-        return self.rdb.store_module_flows_per_second(*args, **kwargs)
+    def store_core_module_flows_per_second(self, *args, **kwargs):
+        return self.rdb.store_core_module_flows_per_second(*args, **kwargs)
 
-    def get_module_flows_per_second(self, *args, **kwargs):
-        return self.rdb.get_module_flows_per_second(*args, **kwargs)
+    def get_core_module_flows_per_second(self, *args, **kwargs):
+        return self.rdb.get_core_module_flows_per_second(*args, **kwargs)
 
     def get_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.get_accumulated_threat_level(*args, **kwargs)
