@@ -9,6 +9,16 @@ class DoSProtector:
         # this protector runs
         self.flows_per_min_threshold = 2000
         self.flow_sampling_stop_time = 0
+        # number of seconds slips is going to be skipping flows for before
+        # returning to normal (aka before going back to reading all flows)
+        self.sampling_time_window = 60
+
+    def get_input_flows_per_min(self) -> int:
+        input_flows_per_s = (
+            self.db.get_core_module_flows_per_second("Input") or 0
+        )
+        input_flows_per_min = input_flows_per_s * 60
+        return input_flows_per_min
 
     def get_sampling_ratio(self) -> int:
         """
