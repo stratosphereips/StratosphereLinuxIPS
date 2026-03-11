@@ -16,36 +16,48 @@ class DoSProtector:
         this sr is the number of flows we're gonna skip to protect slips
         from DoS (or high traffic in general)
         """
-        ...
+        input_flows_per_min = self.get_input_flows_per_min()
+        if not input_flows_per_min:
+            return 1
+
+        return input_flows_per_min**2 / 20000
 
     def should_run(self) -> bool:
         """
         Returns true if slips is under high traffic and the DoS protector
         should run.
+        Runs only when analysing an interface or a growing zeek dir.
+        return True if:
+        1. if high traffic is detected
+        2. we're in the 1 min window after slips has detected a high
+        traffic. this is the 1 min of skipping flows before rechecking if
+        the read number of flows has decreased.
         """
         if not self.is_running_non_stop:
             return False
 
-        input_flows_per_s = (
-            self.db.get_core_module_flows_per_second("Input") or 0
-        )
-        input_flows_per_min = input_flows_per_s * 60
+        if time.time() < self.flow_sampling_stop_time:
+            # we should still be sampling.
+            return True
 
-        should_run: bool = input_flows_per_min > self.flows_per_min_threshold
+        input_flows_per_min = self.get_input_flows_per_min()
+        return input_flows_per_min > self.flows_per_min_threshold
 
-        # flow sampling is going to take place for the next 1 min
-        if should_run:
-            self.flow_sampling_stop_time = time.time() + 60
-            # sr = self.get_sampling_ratio()
+    def update_flow_sampling_stop_time_if_needed(self):
+        """
+        sets the next stop time to
+        now +  sampling_time_window
+        if the time now exceeded the last registered flow_sampling_stop_time
+        """
+        if time.time() > self.flow_sampling_stop_time:
+            # flow sampling is going to take place for the next 1 min
+            self.flow_sampling_stop_time = (
+                time.time() + self.sampling_time_window
+            )
 
     def get_number_of_flows_to_skip(self) -> int:
-        """
-        returns the number of flows to skip based on a sampling rate
-        """
-        if time.time() < self.flow_sampling_stop_time:
-            # sample
-            ...
-        else:
-            # if flow_sampling_stop_time has passed, stop sampling,
-            # read all flows
+        if not self.should_run():
             return 0
+
+        self.update_flow_sampling_stop_time_if_needed()
+        return self.get_sampling_ratio()
