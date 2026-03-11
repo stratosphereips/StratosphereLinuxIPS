@@ -129,7 +129,16 @@ class ZeekInputUtils:
 
         # We don't have any waiting line for this file, so proceed
         try:
+            flows_to_skip_reading_if_under_heavy_load: int = (
+                self.dos_protector.get_number_of_flows_to_skip()
+            )
+
+            # skips flows
+            for _ in range(flows_to_skip_reading_if_under_heavy_load):
+                file_handle.readline()
+
             zeek_line = file_handle.readline()
+
         except ValueError:
             # remover thread just finished closing all old handles.
             # comes here if I/O operation failed due to a closed file.

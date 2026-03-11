@@ -13,26 +13,26 @@ class DoSProtector:
         # returning to normal (aka before going back to reading all flows)
         self.sampling_time_window = 60
 
-    def get_input_flows_per_min(self) -> int:
+    def _get_input_flows_per_min(self) -> int:
         input_flows_per_s = (
             self.db.get_core_module_flows_per_second("Input") or 0
         )
         input_flows_per_min = input_flows_per_s * 60
         return input_flows_per_min
 
-    def get_sampling_ratio(self) -> int:
+    def _get_sampling_ratio(self) -> int:
         """
         sr = flow_per_min² / 20000
         this sr is the number of flows we're gonna skip to protect slips
         from DoS (or high traffic in general)
         """
-        input_flows_per_min = self.get_input_flows_per_min()
+        input_flows_per_min = self._get_input_flows_per_min()
         if not input_flows_per_min:
             return 1
 
         return input_flows_per_min**2 / 20000
 
-    def should_run(self) -> bool:
+    def _should_run(self) -> bool:
         """
         Returns true if slips is under high traffic and the DoS protector
         should run.
@@ -50,10 +50,10 @@ class DoSProtector:
             # we should still be sampling.
             return True
 
-        input_flows_per_min = self.get_input_flows_per_min()
+        input_flows_per_min = self._get_input_flows_per_min()
         return input_flows_per_min > self.flows_per_min_threshold
 
-    def update_flow_sampling_stop_time_if_needed(self):
+    def _update_flow_sampling_stop_time_if_needed(self):
         """
         sets the next stop time to
         now +  sampling_time_window
@@ -66,8 +66,13 @@ class DoSProtector:
             )
 
     def get_number_of_flows_to_skip(self) -> int:
-        if not self.should_run():
+        if not self._should_run():
             return 0
 
-        self.update_flow_sampling_stop_time_if_needed()
-        return self.get_sampling_ratio()
+        self._update_flow_sampling_stop_time_if_needed()
+
+        # -1 means read 1 flow every sampling_ratio flows.
+        # at 2000 flows/min → sr = 200, read 1 flow every 200 flows
+        # at 3000 flows/min → sr = 450, read 1 flow every 450 flows
+        # at 4000 flows/min → sr = 800, etc.
+        return self._get_sampling_ratio() - 1
