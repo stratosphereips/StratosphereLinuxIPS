@@ -7,12 +7,12 @@ Features
 • Precise flow rate control
 • Bounded concurrency
 • HTTP, DNS, ICMP, TCP traffic mix
-• Response reading for realistic flows
+• Occasional attacker-like traffic:
+    - external HTTP request
+    - arp-scan
+    - nmap vertical port scan
+    - IOC IP connections
 • Safe for long soak tests (no task explosion)
-
-Example target:
-    Soft break: 1000 FPS
-    Soak load: 70% → 700 FPS
 """
 
 import asyncio
@@ -22,7 +22,6 @@ import string
 import struct
 import time
 import aiohttp
-
 
 TARGET = "127.0.0.1"
 HTTP_PORT = 8000
@@ -38,6 +37,25 @@ TCP_RATIO = 0.2
 
 MAX_CONCURRENCY = 300
 
+IOC_IPS = [
+    "134.199.164.218",
+    "155.254.104.1",
+    "162.243.168.162",
+    "131.153.164.202",
+    "49.232.164.64",
+    "146.70.34.2",
+    "185.58.159.218",
+    "178.239.124.25",
+    "51.15.248.152",
+    "210.87.110.8",
+    "45.137.126.36",
+    "222.59.173.105",
+    "50.185.144.244",
+    "192.251.226.139",
+    "108.62.61.182",
+    "193.160.221.8",
+    "212.56.49.151",
+]
 
 running_flows = 0
 counter_lock = asyncio.Lock()
@@ -66,7 +84,6 @@ async def http_get(session):
             await resp.read()
     except Exception:
         pass
-
     await inc_counter()
 
 
@@ -79,7 +96,16 @@ async def http_post(session):
             await resp.read()
     except Exception:
         pass
+    await inc_counter()
 
+
+async def http_external(session):
+    """Occasional request to internet"""
+    try:
+        async with session.get("http://httpforever.com/") as resp:
+            await resp.read()
+    except Exception:
+        pass
     await inc_counter()
 
 
@@ -90,8 +116,7 @@ async def http_post(session):
 
 async def dns_query():
     try:
-        # 7f000001 is hex for 127.0.0.1 (a private IP)
-        # This will trigger your function because it's not .local or .arpa
+
         qname = "7f000001.rbndr.us"
 
         tid = random.randint(0, 65535)
@@ -107,19 +132,17 @@ async def dns_query():
 
         loop = asyncio.get_running_loop()
 
-        # You must ensure the response actually comes back to the transport
-        # so the 'flow' object in your detection logic is populated.
-        transport, protocol = await loop.create_datagram_endpoint(
-            lambda: asyncio.DatagramProtocol(),  # Standard protocol
+        transport, _ = await loop.create_datagram_endpoint(
+            lambda: asyncio.DatagramProtocol(),
             remote_addr=DNS_SERVER,
         )
 
         transport.sendto(msg)
 
-        # Increased sleep to allow the RTT of a real DNS response
         await asyncio.sleep(0.5)
 
         transport.close()
+
     except Exception:
         pass
 
@@ -154,18 +177,16 @@ async def icmp_ping():
         sock.setblocking(False)
 
         pid = random.randint(0, 65535)
-        seq = 1
 
-        header = struct.pack(">BBHHH", 8, 0, 0, pid, seq)
+        header = struct.pack(">BBHHH", 8, 0, 0, pid, 1)
         payload = b"soaktest"
 
         cs = checksum(header + payload)
-        header = struct.pack(">BBHHH", 8, 0, cs, pid, seq)
+        header = struct.pack(">BBHHH", 8, 0, cs, pid, 1)
 
         packet = header + payload
 
         await loop.sock_sendto(sock, packet, (DNS_SERVER[0], 0))
-
         sock.close()
 
     except Exception:
@@ -198,17 +219,87 @@ async def tcp_connect():
 
 
 # -----------------------------
-# Flow dispatcher
+# IOC IP probes
+# -----------------------------
+
+
+async def connect_ioc():
+    ip = random.choice(IOC_IPS)
+
+    try:
+        reader, writer = await asyncio.open_connection(ip, 80)
+        writer.close()
+        await writer.wait_closed()
+    except Exception:
+        pass
+
+
+# -----------------------------
+# ARP scan
+# -----------------------------
+
+
+async def run_arp_scan():
+
+    cmd = "arp-scan --interface=eth0 172.17.0.0/24 && arp-scan --interface=eth0 172.17.0.0/24"
+
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            cmd,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+
+        await proc.wait()
+
+    except Exception:
+        pass
+
+
+# -----------------------------
+# Nmap vertical scan
+# -----------------------------
+
+
+async def run_portscan():
+
+    cmd = [
+        "nmap",
+        "-Pn",
+        "-p",
+        "1-1024",
+        TARGET,
+    ]
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+
+        await proc.wait()
+
+    except Exception:
+        pass
+
+
+# -----------------------------
+# Dispatcher
 # -----------------------------
 
 
 async def do_flow(session):
+
     async with sem:
 
         r = random.random()
 
         if r < HTTP_RATIO:
-            if random.random() < 0.5:
+
+            if random.random() < 0.05:
+                await http_external(session)
+            elif random.random() < 0.5:
                 await http_get(session)
             else:
                 await http_post(session)
@@ -245,8 +336,28 @@ async def controller():
             elapsed = time.perf_counter() - start
 
             sleep = interval - elapsed
+
             if sleep > 0:
                 await asyncio.sleep(sleep)
+
+
+# -----------------------------
+# Background attacker behavior
+# -----------------------------
+
+
+async def background_attacks():
+
+    while True:
+
+        await asyncio.sleep(random.randint(20, 60))
+        asyncio.create_task(connect_ioc())
+
+        if random.random() < 0.3:
+            asyncio.create_task(run_portscan())
+
+        if random.random() < 0.2:
+            asyncio.create_task(run_arp_scan())
 
 
 # -----------------------------
@@ -259,6 +370,7 @@ async def metrics():
     global running_flows
 
     while True:
+
         await asyncio.sleep(1)
 
         async with counter_lock:
@@ -278,6 +390,7 @@ async def main():
     await asyncio.gather(
         controller(),
         metrics(),
+        background_attacks(),
     )
 
 
