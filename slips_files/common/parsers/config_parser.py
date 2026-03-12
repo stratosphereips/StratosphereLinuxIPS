@@ -489,6 +489,25 @@ class ConfigParser(object):
             training_hours = 24
         return max(0, training_hours)
 
+    def https_anomaly_training_alpha(self) -> float:
+        alpha = self.read_configuration(
+            "anomaly_detection_https", "training_alpha", 1.0
+        )
+        try:
+            alpha = float(alpha)
+        except (TypeError, ValueError):
+            alpha = 1.0
+        return min(max(alpha, 0.001), 1.0)
+
+    def https_anomaly_training_fit_method(self) -> str:
+        method = self.read_configuration(
+            "anomaly_detection_https", "training_fit_method", "welford"
+        )
+        method = str(method).strip().lower()
+        if method not in ("welford", "ewma"):
+            return "welford"
+        return method
+
     def https_anomaly_hourly_zscore_thr(self) -> float:
         threshold = self.read_configuration(
             "anomaly_detection_https", "hourly_zscore_threshold", 3.0
