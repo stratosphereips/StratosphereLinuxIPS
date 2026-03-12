@@ -219,7 +219,13 @@ flowmldetection:
 anomaly_detection_https:
   # Number of initial hours used to train the baseline model assuming benign traffic.
   # If set to 0, detection starts immediately and baseline is learned online.
-  training_hours: 1
+  training_hours: 2
+  # Training fit technique: welford or ewma.
+  training_fit_method: welford
+  # Training adaptation strength:
+  # 1.0 = Welford benign fit (strongest, equal-weight fit),
+  # <1.0 = EWMA-style training with this alpha (used when training_fit_method=ewma).
+  training_alpha: 1
 
   # Thresholds for anomaly detection in hourly and per-flow checks.
   hourly_zscore_threshold: 3.0
@@ -229,7 +235,7 @@ anomaly_detection_https:
   adaptation_score_threshold: 2.0
 
   # Adaptation speed for baseline updates.
-  baseline_alpha: 0.1
+  baseline_alpha: 0.5
   drift_alpha: 0.05
   suspicious_alpha: 0.005
 
