@@ -36,7 +36,7 @@ yappi==1.7.3
 pytest-sugar==1.1.1
 aid_hash
 cachetools
-black==25.9.0
+black==26.3.1
 ruff==0.14.3
 pre-commit==4.3.0
 coverage==7.11.0
