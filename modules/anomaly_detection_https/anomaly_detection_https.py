@@ -226,6 +226,8 @@ class AnomalyDetectionHTTPS(IModule):
             "HTTPS anomaly module started.",
             metrics={
                 "training_hours": self.training_hours,
+                "training_fit_method": self.training_fit_method,
+                "training_alpha": self.training_alpha,
                 "hourly_zscore_threshold": self.hourly_zscore_threshold,
                 "flow_zscore_threshold": self.flow_zscore_threshold,
                 "adaptation_score_threshold": self.adaptation_score_threshold,
@@ -258,6 +260,10 @@ class AnomalyDetectionHTTPS(IModule):
     def read_configuration(self):
         conf = ConfigParser()
         self.training_hours = conf.https_anomaly_training_hours()
+        self.training_fit_method = (
+            conf.https_anomaly_training_fit_method()
+        )
+        self.training_alpha = conf.https_anomaly_training_alpha()
         self.hourly_zscore_threshold = conf.https_anomaly_hourly_zscore_thr()
         self.flow_zscore_threshold = conf.https_anomaly_flow_zscore_thr()
         self.adaptation_score_threshold = conf.https_anomaly_adapt_score_thr()
@@ -854,9 +860,16 @@ class AnomalyDetectionHTTPS(IModule):
         model: EWMAStats,
         feature_name: str,
         value: float,
-    ):
+    ) -> str:
         transformed = self.transform_value(feature_name, value)
-        model.update_training(transformed)
+        if self.training_fit_method == "welford":
+            model.update_training(transformed)
+            return "welford_online_moments"
+        # Keep training-value collection available for threshold calibration
+        # even when training uses EWMA-style adaptation.
+        model.training_values.append(transformed)
+        model.update(transformed, self.training_alpha)
+        return "ewma_training"
 
     def finalize_hour_bucket(self, profileid: str, state: HostState):
         bucket = state.bucket
@@ -1018,13 +1031,21 @@ class AnomalyDetectionHTTPS(IModule):
             self.log_event(
                 1,
                 "training_fit",
-                "Baseline training hour fitted (Welford benign fit).",
+                "Baseline training hour fitted.",
                 traffic_ts=bucket.start_ts,
                 metrics={
                     "profileid": profileid,
                     "trained_hours": state.trained_hours,
                     "target_training_hours": self.training_hours,
-                    "fit_method": "welford_online_moments",
+                    "fit_method": (
+                        "welford_online_moments"
+                        if self.training_fit_method == "welford"
+                        else "ewma_training"
+                    ),
+                    "training_alpha": self.training_alpha,
+                    "training_alpha_active": (
+                        self.training_fit_method == "ewma"
+                    ),
                 },
             )
             update_alpha = None
@@ -1141,10 +1162,17 @@ class AnomalyDetectionHTTPS(IModule):
                     },
                 )
 
+        training_fit_method = (
+            "welford_online_moments"
+            if self.training_fit_method == "welford"
+            else "ewma_training"
+        )
         for feature_name, value in features.items():
             model = self.get_or_create_hourly_model(state, feature_name)
             if is_training_hour:
-                self.fit_benign_model(model, feature_name, value)
+                training_fit_method = self.fit_benign_model(
+                    model, feature_name, value
+                )
             else:
                 self.update_model(model, feature_name, value, update_alpha)
             self.log_event(
@@ -1163,7 +1191,7 @@ class AnomalyDetectionHTTPS(IModule):
                     "min_std_floor": round(model.min_std_floor, 6),
                     "alpha": update_alpha,
                     "fit_method": (
-                        "welford_online_moments"
+                        training_fit_method
                         if update_mode == "training_fit"
                         else "ewma"
                     ),
@@ -1325,6 +1353,11 @@ class AnomalyDetectionHTTPS(IModule):
             server_model = self.get_or_create_server_model(state, server)
             flow_score = self.compute_reason_score(flow_anomalies)
             flow_update_mode = "training_fit"
+            flow_training_fit_method = (
+                "welford_online_moments"
+                if self.training_fit_method == "welford"
+                else "ewma_training"
+            )
             flow_adwin_drift_detected = False
             drifted_flow_signals: List[str] = []
             flow_raw_signals = {
@@ -1363,7 +1396,7 @@ class AnomalyDetectionHTTPS(IModule):
                         },
                     )
                 alpha = None
-                self.fit_benign_model(
+                flow_training_fit_method = self.fit_benign_model(
                     server_model, "bytes_to_known_server", bytes_total
                 )
             else:
@@ -1443,7 +1476,7 @@ class AnomalyDetectionHTTPS(IModule):
                     "flow_raw_signals": flow_raw_signals,
                     "alpha": alpha,
                     "fit_method": (
-                        "welford_online_moments"
+                        flow_training_fit_method
                         if alpha is None
                         else "ewma"
                     ),
