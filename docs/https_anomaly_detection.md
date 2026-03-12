@@ -57,6 +57,18 @@ For the first configured benign hours, the module does **fit-only** (Welford onl
 - no detection decisions are emitted from hourly z-score rules before training ends,
 - baseline mean/variance are learned strongly from this period.
 
+Training fit strength is configurable with `training_alpha`:
+
+Training fit technique is selected by `training_fit_method`:
+
+- `training_fit_method = welford` -> Welford benign fit.
+- `training_fit_method = ewma` -> EWMA-style training adaptation.
+
+When `training_fit_method = ewma`, `training_alpha` controls strength:
+
+- higher `training_alpha` = faster adaptation,
+- lower `training_alpha` = slower adaptation.
+
 ### No explicit training (`training_hours = 0`)
 
 Detection starts immediately using online adaptation.
@@ -199,6 +211,8 @@ Section: `anomaly_detection_https` in `config/slips.yaml`.
 Main keys:
 
 - `training_hours`
+- `training_fit_method`
+- `training_alpha`
 - `hourly_zscore_threshold`
 - `flow_zscore_threshold`
 - `adaptation_score_threshold`
@@ -218,6 +232,8 @@ Main keys:
 
 Defaults (from parser/config):
 
+- `training_alpha: 1.0`
+- `training_fit_method: welford`
 - `use_adwin_drift: true`
 - `adwin_delta: 0.01`
 - `adwin_clock: 1`
