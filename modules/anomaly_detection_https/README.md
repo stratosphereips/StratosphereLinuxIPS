@@ -112,6 +112,9 @@ Important:
 - "hours" here are based on **traffic timestamps** (`flow.starttime`), not computer wall-clock time.
 - this keeps behavior consistent across interfaces, live Zeek folders, pcaps, and historical Zeek logs.
 - if `training_hours` is set to `0`, detection starts immediately and baseline is learned online.
+- `training_alpha` controls training fit strength:
+  - training technique is selected by `training_fit_method` (`welford` or `ewma`),
+  - when `training_fit_method=ewma`, `training_alpha` controls adaptation strength.
 
 
 ### 4) Flow-level anomaly checks
@@ -365,6 +368,8 @@ Configuration section:
 ```yaml
 anomaly_detection_https:
   training_hours: 24
+  training_fit_method: welford
+  training_alpha: 1.0
   hourly_zscore_threshold: 3.0
   flow_zscore_threshold: 3.5
   adaptation_score_threshold: 2.0
@@ -374,9 +379,9 @@ anomaly_detection_https:
   min_baseline_points: 6
   max_small_flow_anomalies: 1
   use_adwin_drift: true
-  adwin_delta: 0.002
-  adwin_clock: 32
-  adwin_grace_period: 10
+  adwin_delta: 0.01
+  adwin_clock: 1
+  adwin_grace_period: 5
   adwin_min_window_length: 5
   empirical_threshold_quantile: 0.995
   ja3_min_variants_per_server: 3
@@ -387,6 +392,11 @@ Parameter meaning:
 - `training_hours`:
   number of per-host hours used for benign-only baseline.
   If set to `0`, baseline learning starts online from the first seen traffic.
+- `training_fit_method`:
+  training fit technique, `welford` or `ewma`.
+- `training_alpha`:
+  training fit strength.
+  used when `training_fit_method=ewma`.
 - `hourly_zscore_threshold`:
   trigger threshold for aggregated hourly features.
 - `flow_zscore_threshold`:
