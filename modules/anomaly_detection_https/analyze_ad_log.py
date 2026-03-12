@@ -454,7 +454,7 @@ def svg_polyline_chart(
         xx = x_at_ts(ts)
         lines.append(
             f'<line x1="{xx:.1f}" y1="{margin_top}" x2="{xx:.1f}" y2="{margin_top+plot_h}" '
-            f'stroke="#2563eb" stroke-width="1.2" stroke-dasharray="1,3">'
+            f'stroke="#1e40af" stroke-width="2.0" stroke-dasharray="2,4" opacity="0.95">'
             f"<title>baseline_update at {escape(to_human_ts(ts))}</title>"
             f"</line>"
         )
@@ -462,7 +462,7 @@ def svg_polyline_chart(
         xx = x_at_ts(ts)
         lines.append(
             f'<line x1="{xx:.1f}" y1="{margin_top}" x2="{xx:.1f}" y2="{margin_top+plot_h}" '
-            f'stroke="#0f766e" stroke-width="1.2" stroke-dasharray="4,4">'
+            f'stroke="#0f766e" stroke-width="1.8" stroke-dasharray="5,4" opacity="0.95">'
             f"<title>training_fit at {escape(to_human_ts(ts))}</title>"
             f"</line>"
         )
@@ -539,7 +539,7 @@ def svg_polyline_chart(
         elif kind == "baseline":
             lines.append(
                 f'<line x1="{lx}" y1="{ly-8}" x2="{lx+14}" y2="{ly-8}" '
-                f'stroke="#2563eb" stroke-width="1.2" stroke-dasharray="1,3" />'
+                f'stroke="#1e40af" stroke-width="2.0" stroke-dasharray="2,4" />'
             )
             label = name
         elif kind == "drift":
@@ -557,7 +557,7 @@ def svg_polyline_chart(
         elif kind == "training_fit":
             lines.append(
                 f'<line x1="{lx}" y1="{ly-8}" x2="{lx+14}" y2="{ly-8}" '
-                f'stroke="#0f766e" stroke-width="1.2" stroke-dasharray="4,4" />'
+                f'stroke="#0f766e" stroke-width="1.8" stroke-dasharray="5,4" />'
             )
             label = name
         else:
