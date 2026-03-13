@@ -428,8 +428,11 @@ class Main:
         processed = self.db.get_flow_analyzed_by_the_profiler_so_far()
         if not processed:
             return ""
+        try:
+            percentage = (processed / self.total_flows) * 100
+        except ZeroDivisionError:
+            return ""
 
-        percentage = (processed / self.total_flows) * 100
         # in very large pcaps, thousands of flows are nothing compared to
         # the tot flows, so if the percentage is int, slips would print 0%
         # for a while, so we take the first number after the floating point
