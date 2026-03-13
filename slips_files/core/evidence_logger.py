@@ -4,6 +4,7 @@ import os
 import queue
 import threading
 import traceback
+import multiprocessing
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -13,7 +14,7 @@ class EvidenceLogger:
     def __init__(
         self,
         logger_stop_signal: threading.Event,
-        evidence_logger_q: queue.Queue,
+        evidence_logger_q: multiprocessing.Queue,
         output_dir: str,
     ):
         self.logger_stop_signal = logger_stop_signal
@@ -97,12 +98,16 @@ class EvidenceLogger:
         happening, so slips can process evidence faster there while we log
         as fast as possible here
         """
-        while not self.logger_stop_signal.is_set():
+        while True:
             try:
                 msg = self.evidence_logger_q.get(timeout=1)
             except queue.Empty:
+                if self.logger_stop_signal.is_set():
+                    break
                 continue
             except Exception:
+                if self.logger_stop_signal.is_set():
+                    break
                 continue
 
             destination = msg["where"]
