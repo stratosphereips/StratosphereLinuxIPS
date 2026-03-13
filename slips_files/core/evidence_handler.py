@@ -418,6 +418,9 @@ class EvidenceHandler(ICore):
         timewindow
         format is {evidence_id (str) :  Evidence obj}
         """
+        if not self.exporting_modules_enabled:
+            return
+
         for evidence in tw_evidence.values():
             evidence: Evidence
             evidence_dict: dict = utils.to_dict(evidence)
@@ -644,6 +647,7 @@ class EvidenceHandler(ICore):
                         f"{self.whitelist.get_bloom_filters_stats()}", 2, 0
                     )
                     continue
+
                 # here @@@@@@@@@@@@@@@@@@@@@
                 # convert time to local timezone
                 if self.is_running_non_stop:
