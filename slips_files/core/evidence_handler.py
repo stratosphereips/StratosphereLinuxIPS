@@ -133,6 +133,10 @@ class EvidenceHandler(ICore):
         self.UID = conf.get_UID()
 
         self.popup_alerts = conf.popup_alerts()
+        self.use_p2p: bool = conf.use_local_p2p() or conf.use_global_p2p()
+        self.exporting_modules_enabled: bool = (
+            conf.export_to() or conf.send_to_warden()
+        )
         # In docker, disable alerts no matter what slips.yaml says
         if IS_IN_A_DOCKER_CONTAINER:
             self.popup_alerts = False
@@ -369,7 +373,8 @@ class EvidenceHandler(ICore):
         filters the following
         * evidence that were part of a past alert in this same profileid
         twid (past_evidence_ids)
-        * evidence that weren't done by the given profileid
+        * evidence that weren't done by the given profileid (aka done by
+        others)
         """
 
         # delete already alerted evidence
@@ -424,7 +429,10 @@ class EvidenceHandler(ICore):
             )
             self.db.publish("export_evidence", json.dumps(evidence_dict))
 
-    def publish_single_evidence(self, evidence: Evidence):
+    def give_evidence_to_exporting_modules(self, evidence: Evidence):
+        if not self.exporting_modules_enabled:
+            return
+
         evidence_dict: dict = utils.to_dict(evidence)
         self.print(
             f"[EvidenceHandler] Export streaming {evidence_dict.get('id')} "
@@ -667,11 +675,13 @@ class EvidenceHandler(ICore):
                     accumulated_threat_level,
                 )
 
-                # stream every evidence toward exporting modules immediately
-                self.publish_single_evidence(evidence)
+                self.give_evidence_to_exporting_modules(evidence)
 
-                evidence_dict: dict = utils.to_dict(evidence)
-                self.db.publish("report_to_peers", json.dumps(evidence_dict))
+                if self.use_p2p:
+                    evidence_dict: dict = utils.to_dict(evidence)
+                    self.db.publish(
+                        "report_to_peers", json.dumps(evidence_dict)
+                    )
 
                 # This is the part to detect if the accumulated
                 # evidence was enough for generating a detection
