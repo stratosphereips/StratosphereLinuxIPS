@@ -26,10 +26,11 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 
 def get_process_tree_ram_gb(parent_pid: int) -> float:
-    """
+    r"""
     Returns the RAM usage of a process tree in GB.
 
     The function replicates the following shell pipeline:
@@ -58,38 +59,48 @@ def get_process_tree_ram_gb(parent_pid: int) -> float:
     return total_kb / (1024 * 1024)
 
 
-def get_redis_memory(redis_port: int):
+def get_redis_memory(
+    redis_port: int,
+) -> tuple[Optional[float], Optional[float]]:
     """
     Extracts Redis memory stats from `redis-cli info memory`.
 
     Returns:
         tuple(float used_memory_rss_GB, float used_memory_GB)
     """
-    out = subprocess.check_output(
-        ["redis-cli", "-p", str(redis_port), "info", "memory"],
-        text=True,
-    )
+    try:
+        out = subprocess.check_output(
+            ["redis-cli", "-p", str(redis_port), "info", "memory"],
+            text=True,
+            stderr=subprocess.STDOUT,
+        )
+    except subprocess.CalledProcessError as exc:
+        print(
+            f"{datetime.now().isoformat()} redis-cli failed on port "
+            f"{redis_port}: {exc.output.strip()}",
+            file=sys.stderr,
+        )
+        return None, None
 
-    rss = None
-    used = None
+    rss_bytes: Optional[int] = None
+    used_bytes: Optional[int] = None
 
     for line in out.splitlines():
-        if line.startswith("used_memory_rss_human:"):
-            rss = line.split(":")[1].strip()
-        if line.startswith("used_memory_human:"):
-            used = line.split(":")[1].strip()
+        if line.startswith("used_memory_rss:"):
+            rss_bytes = int(line.split(":", 1)[1].strip())
+        elif line.startswith("used_memory:"):
+            used_bytes = int(line.split(":", 1)[1].strip())
 
-    def human_to_gb(value: str):
-        num = float(re.findall(r"[0-9.]+", value)[0])
-        if value.endswith("G"):
-            return num
-        if value.endswith("M"):
-            return num / 1024
-        if value.endswith("K"):
-            return num / (1024 * 1024)
-        return num
+    if rss_bytes is None or used_bytes is None:
+        print(
+            f"{datetime.now().isoformat()} unable to parse Redis memory "
+            f"stats on port {redis_port}",
+            file=sys.stderr,
+        )
+        return None, None
 
-    return human_to_gb(rss), human_to_gb(used)
+    bytes_per_gb = 1024 * 1024 * 1024
+    return rss_bytes / bytes_per_gb, used_bytes / bytes_per_gb
 
 
 def main():
@@ -124,15 +135,14 @@ def main():
         writer.writerow(header)
 
     start = time.time()
-    last_slips = 0
+    last_slips = 0.0
+    last_redis = 0.0
     minute_counter = 0
 
     while True:
         now = time.time()
 
-        # log  RAM usage every 3 minutes
-        if now - last_slips >= 180:
-            # Redis log every minute
+        if now - last_redis >= 60:
             rss, used = get_redis_memory(redis_port)
             with open(redis_csv, "a", newline="") as f:
                 row = [minute_counter, rss, used]
@@ -140,7 +150,10 @@ def main():
                 csv.writer(f).writerow(row)
 
             minute_counter += 1
+            last_redis = now
 
+        # Log RAM usage every 3 minutes.
+        if now - last_slips >= 180:
             ram_gb = get_process_tree_ram_gb(parent_pid)
 
             with open(slips_csv, "a", newline="") as f:
