@@ -62,7 +62,6 @@ class EvidenceHandlerWorker(IModule):
         self.formatter = EvidenceFormatter(self.db, self.args)
         self.slips_start_time = self.db.get_slips_start_time()
         self.first_flow_pcap_time = None
-        self.received_msgs = 0
 
     def subscribe_to_channels(self):
         self.channels = {}
@@ -501,7 +500,6 @@ class EvidenceHandlerWorker(IModule):
             self.print("Received stop signal. Stopping.")
             return 1
 
-        self.received_msgs += 1
         channel = task["channel"]
         msg = task["message"]
 

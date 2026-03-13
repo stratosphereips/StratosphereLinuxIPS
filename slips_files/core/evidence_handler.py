@@ -23,7 +23,6 @@
 import threading
 import multiprocessing
 from typing import List
-import os
 import time
 
 from multiprocessing import Process
@@ -36,7 +35,7 @@ from slips_files.core.evidence_logger import EvidenceLogger
 from slips_files.common.abstracts.icore import ICore
 from slips_files.core.evidence_handler_worker import EvidenceHandlerWorker
 
-IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
+
 DEFAULT_EVIDENCE_HANDLER_WORKERS = 3
 
 
