@@ -47,6 +47,7 @@ from slips_files.core.structures.evidence import (
     dict_to_evidence,
     Evidence,
     TimeWindow,
+    ThreatLevel,
 )
 from slips_files.core.structures.alerts import (
     Alert,
@@ -564,6 +565,37 @@ class EvidenceHandler(ICore):
         # 1 min passed since the last evidence with no new msgs. stop.
         return True
 
+    def get_accumulated_threat_level(
+        self, profileid, twid, evidence: Evidence
+    ) -> float:
+        """
+        Adds the threat level of the given evidence to the accumulated
+        threat level of this profileid and twid IF necessary.
+        - ThreratLevel.INFO evidence dont add
+        - filtered evidence dont add
+        """
+        # early exit to avoid unnecessary checking of filtered evidence
+        # when the threat level is 0 so addition isnt necessary
+        if evidence.threat_level == ThreatLevel.INFO:
+            accumulated_threat_level: float = (
+                self.db.get_accumulated_threat_level(profileid, twid)
+            )
+            return accumulated_threat_level
+
+        past_evidence_ids: List[str] = (
+            self.get_evidence_that_were_part_of_a_past_alert(profileid, twid)
+        )
+        # filtered evidence dont add to the acc threat level
+        if not self.is_filtered_evidence(evidence, past_evidence_ids):
+            accumulated_threat_level: float = (
+                self.update_accumulated_threat_level(evidence)
+            )
+        else:
+            accumulated_threat_level: float = (
+                self.db.get_accumulated_threat_level(profileid, twid)
+            )
+        return accumulated_threat_level
+
     def pre_main(self):
         self.print(f"Using threshold: {green(self.detection_threshold)}")
 
@@ -625,20 +657,9 @@ class EvidenceHandler(ICore):
                 # Add the evidence to alerts.log
                 self.add_to_log_file(evidence_to_log)
 
-                past_evidence_ids: List[str] = (
-                    self.get_evidence_that_were_part_of_a_past_alert(
-                        profileid, twid
-                    )
+                accumulated_threat_level = self.get_accumulated_threat_level(
+                    profileid, twid, evidence
                 )
-                # filtered evidence dont add to the acc threat level
-                if not self.is_filtered_evidence(evidence, past_evidence_ids):
-                    accumulated_threat_level: float = (
-                        self.update_accumulated_threat_level(evidence)
-                    )
-                else:
-                    accumulated_threat_level: float = (
-                        self.db.get_accumulated_threat_level(profileid, twid)
-                    )
 
                 # add to alerts.json
                 self.add_evidence_to_json_log_file(
