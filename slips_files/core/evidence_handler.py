@@ -21,7 +21,6 @@
 # stratosphere@aic.fel.cvut.cz
 
 import json
-import multiprocessing
 import threading
 from typing import (
     List,
@@ -33,6 +32,7 @@ import sys
 import os
 import time
 
+import queue
 from slips_files.common.idmefv2 import IDMEFv2
 from slips_files.common.style import (
     green,
@@ -94,7 +94,7 @@ class EvidenceHandler(ICore):
 
         # A thread that handing I/O to disk (writing evidence to log files)
         self.logger_stop_signal = threading.Event()
-        self.evidence_logger_q = multiprocessing.Queue(maxsize=30000000)
+        self.evidence_logger_q = queue.Queue(maxsize=30000000)
         self.evidence_logger = EvidenceLogger(
             logger_stop_signal=self.logger_stop_signal,
             evidence_logger_q=self.evidence_logger_q,
