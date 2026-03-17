@@ -1,5 +1,7 @@
+import csv
 import json
 import os
+import time
 from dataclasses import asdict
 import ipaddress
 import pprint
@@ -71,6 +73,12 @@ class ProfilerWorker(IModule):
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
+        self.slips_start_time = self._get_slips_start_time()
+        self.latency_logfile = os.path.join(
+            self.output_dir,
+            f"{self._get_latency_filename_prefix()}_latency.csv",
+        )
+        self._initialize_latency_logfile()
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_zeek_fields_line")
@@ -138,6 +146,49 @@ class ProfilerWorker(IModule):
                 return
 
             self.db.set_input_metadata({"file_start": ts})
+
+    def _get_slips_start_time(self) -> float:
+        slips_start_time = self.db.get_slips_start_time()
+        try:
+            return float(slips_start_time)
+        except (TypeError, ValueError):
+            return time.time()
+
+    def _get_latency_filename_prefix(self) -> str:
+        if self.name.startswith("ProfilerWorker_Process_"):
+            worker_id = self.name.split("_")[-1]
+            return f"profiler_worker_{worker_id}"
+        return self.name.lower()
+
+    def _initialize_latency_logfile(self):
+        os.makedirs(self.output_dir, exist_ok=True)
+        if os.path.exists(self.latency_logfile):
+            return
+
+        with open(
+            self.latency_logfile, "w", newline="", encoding="utf-8"
+        ) as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                ["timestamp_now", "flow_uid", "latency_in_seconds"]
+            )
+
+    def _log_flow_latency(self, flow, flow_starttime) -> None:
+        try:
+            flow_start_ts = float(flow_starttime)
+        except (TypeError, ValueError):
+            return
+
+        now = time.time()
+        timestamp_now = now - self.slips_start_time
+        latency = now - flow_start_ts
+        flow_uid = getattr(flow, "uid", "")
+
+        with open(
+            self.latency_logfile, "a", newline="", encoding="utf-8"
+        ) as f:
+            writer = csv.writer(f)
+            writer.writerow([timestamp_now, flow_uid, int(latency)])
 
     def store_features_going_in(self, profileid: str, twid: str, flow):
         """
@@ -576,6 +627,8 @@ class ProfilerWorker(IModule):
                 return False
 
         self.get_gateway_info(flow)
+        flow_starttime = self.convert_starttime_to_unix_ts(flow.starttime)
+        self._log_flow_latency(flow, flow_starttime)
         # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(flow):
             self.print(f"{self.whitelist.get_bloom_filters_stats()}", 2, 0)
@@ -586,13 +639,13 @@ class ProfilerWorker(IModule):
         # in this tw for this profile
         profileid = f"profile_{flow.saddr}"
         self.print(f"Storing data in the profile: {profileid}", 3, 0)
-        flow.starttime = self.convert_starttime_to_unix_ts(flow.starttime)
+        flow.starttime = flow_starttime
 
         # Create profiles for all ips we see
         self.db.add_profile(profileid, flow.starttime)
 
         # For this 'forward' profile, find the id in the
-        # database of the tw where the flow belongs.        n = time.time()
+        # database of the tw where the flow belongs.
         twid = self.db.get_timewindow(flow.starttime, profileid)
 
         self.store_features_going_out(flow, profileid, twid)
