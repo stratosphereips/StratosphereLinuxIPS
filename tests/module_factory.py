@@ -147,6 +147,44 @@ class ModuleFactory:
         return http_analyzer
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_llm_obj(self, mock_db):
+        from modules.llm.llm import LLM
+
+        conf = Mock()
+        conf.llm_enabled = Mock(return_value=True)
+        conf.llm_default_backend = Mock(return_value="local_qwen")
+        conf.llm_worker_threads = Mock(return_value=1)
+        conf.llm_queue_size = Mock(return_value=10)
+        conf.llm_backends = Mock(
+            return_value={
+                "local_qwen": {
+                    "provider": "ollama",
+                    "model": "qwen2.5:3b",
+                    "base_url": "http://127.0.0.1:11434",
+                    "timeout": 60,
+                }
+            }
+        )
+
+        llm = LLM(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=conf,
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
+        )
+        llm.db.channels.LLM_REQUEST = "llm_request"
+        llm.db.channels.LLM_RESPONSE = "llm_response"
+        llm.channels = {"llm_request": llm.c1}
+        llm.print = Mock()
+        return llm
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_fides_module_obj(self, mock_db):
+        from modules.fidesModule.fidesModule import FidesModule
     def create_fides_obj(self, mock_db):
         from modules.fides.fides import FidesModule
 
