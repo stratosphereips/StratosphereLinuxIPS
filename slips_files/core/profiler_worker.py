@@ -632,17 +632,17 @@ class ProfilerWorker(IModule):
         if self.whitelist.is_whitelisted_flow(flow):
             self.print(f"{self.whitelist.get_bloom_filters_stats()}", 2, 0)
             return True
-        #
-        # # 5th. Store the data according to the paremeters
-        # # Now that we have the profileid and twid, add the data from the flow
-        # # in this tw for this profile
-        # profileid = f"profile_{flow.saddr}"
-        # self.print(f"Storing data in the profile: {profileid}", 3, 0)
-        # flow.starttime = flow_starttime
-        #
-        # # Create profiles for all ips we see
-        # self.db.add_profile(profileid, flow.starttime)
-        #
+
+        # 5th. Store the data according to the paremeters
+        # Now that we have the profileid and twid, add the data from the flow
+        # in this tw for this profile
+        profileid = f"profile_{flow.saddr}"
+        self.print(f"Storing data in the profile: {profileid}", 3, 0)
+        flow.starttime = flow_starttime
+
+        # Create profiles for all ips we see
+        self.db.add_profile(profileid, flow.starttime)
+
         # # For this 'forward' profile, find the id in the
         # # database of the tw where the flow belongs.
         # twid = self.db.get_timewindow(flow.starttime, profileid)
