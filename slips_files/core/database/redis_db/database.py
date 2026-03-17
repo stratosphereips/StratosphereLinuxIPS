@@ -727,6 +727,60 @@ class RedisDB(
         """
         return self.r.hkeys(self.constants.PIDS)
 
+    @staticmethod
+    def _empty_available_llm_backends() -> dict:
+        return {"default_backend": "", "backends": {}}
+
+    def set_available_llm_backends(self, registry: dict):
+        normalized = self._normalize_available_llm_backends_registry(registry)
+        self.r.set(
+            self.constants.AVAILABLE_LLM_BACKENDS, json.dumps(normalized)
+        )
+
+    def get_available_llm_backends(self) -> dict:
+        if registry := self.r.get(self.constants.AVAILABLE_LLM_BACKENDS):
+            try:
+                registry = json.loads(registry)
+            except json.JSONDecodeError:
+                return self._empty_available_llm_backends()
+            return self._normalize_available_llm_backends_registry(registry)
+
+        return self._empty_available_llm_backends()
+
+    def _normalize_available_llm_backends_registry(self, registry: dict) -> dict:
+        if not isinstance(registry, dict):
+            return self._empty_available_llm_backends()
+
+        backends = registry.get("backends")
+        if not isinstance(backends, dict):
+            backends = {}
+
+        normalized_backends = {}
+        for alias, metadata in backends.items():
+            if not isinstance(alias, str) or not alias.strip():
+                continue
+            if not isinstance(metadata, dict):
+                continue
+
+            provider = str(metadata.get("provider", "")).strip()
+            model = str(metadata.get("model", "")).strip()
+            if not provider or not model:
+                continue
+
+            normalized_backends[alias.strip()] = {
+                "provider": provider,
+                "model": model,
+            }
+
+        default_backend = str(registry.get("default_backend", "")).strip()
+        if default_backend not in normalized_backends:
+            default_backend = ""
+
+        return {
+            "default_backend": default_backend,
+            "backends": normalized_backends,
+        }
+
     def get_disabled_modules(self) -> List[str]:
         if disabled_modules := self.r.hget(
             self.constants.ANALYSIS, "disabled_modules"
