@@ -123,8 +123,23 @@ tr:nth-child(even) {
     <td>module to detect malicious flows using machine learning</td>
     <td>✅</td>
   </tr>
+  <tr>
+    <td>LLM</td>
+    <td>shared service module that sends prompts to configured OpenAI, Anthropic, or Ollama backends and publishes the replies for other modules</td>
+    <td>✅</td>
+  </tr>
 
 </table>
+
+## LLM Module
+
+The LLM module is a shared service for other Slips modules.
+
+It listens on the Redis channel `llm_request`, sends the request to the selected
+configured backend, and publishes the result on `llm_response`.
+
+For the full request and response format, backend configuration, and examples,
+see [LLM Module](llm_module.md).
 
 ## HTTPS Anomaly Detection Module
 
