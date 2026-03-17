@@ -61,6 +61,50 @@ def test_subscribe():
     assert isinstance(db.subscribe("new_flow"), redis.client.PubSub)
 
 
+def test_get_available_llm_backends_returns_empty_dict_when_unset():
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    db.r.delete(db.rdb.constants.AVAILABLE_LLM_BACKENDS)
+
+    assert db.get_available_llm_backends() == {
+        "default_backend": "",
+        "backends": {},
+    }
+
+
+def test_set_and_get_available_llm_backends():
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+
+    db.set_available_llm_backends(
+        {
+            "default_backend": "local_qwen",
+            "backends": {
+                "local_qwen": {
+                    "provider": "ollama",
+                    "model": "qwen2.5:3b",
+                },
+                "openai_default": {
+                    "provider": "openai",
+                    "model": "gpt-4o-mini",
+                },
+            },
+        }
+    )
+
+    assert db.get_available_llm_backends() == {
+        "default_backend": "local_qwen",
+        "backends": {
+            "local_qwen": {
+                "provider": "ollama",
+                "model": "qwen2.5:3b",
+            },
+            "openai_default": {
+                "provider": "openai",
+                "model": "gpt-4o-mini",
+            },
+        },
+    }
+
+
 def test_profile_moddule_labels():
     """tests set and get_profile_module_label"""
     db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
