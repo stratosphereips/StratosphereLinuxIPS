@@ -267,8 +267,11 @@ llm:
       # Default model for this backend alias. Caller modules may override the
       # model in an individual request while still using this connection.
       model: qwen2.5:3b
-      #base_url: http://127.0.0.1:11434
-      base_url: http://147.32.83.61:11434
+      # Optional. Defaults depend on provider:
+      # ollama=http://127.0.0.1:11434
+      # openai=https://api.openai.com/v1
+      # anthropic=https://api.anthropic.com
+      base_url: http://127.0.0.1:11434
       # Optional HTTP timeout in seconds.
       timeout: 120
 
