@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import csv
+import glob
 import math
 import os
 import statistics
@@ -50,6 +51,70 @@ class Plotter:
             ylabel="latency",
             title="Latency",
         )
+
+    def plot_profiler_latency_csvs(self):
+        if not self.output_dir:
+            return
+
+        csv_paths = sorted(
+            glob.glob(
+                os.path.join(self.output_dir, "profiler_worker_*_latency.csv")
+            )
+        )
+        if not csv_paths:
+            return
+
+        os.makedirs(self.plots_dir, exist_ok=True)
+        output_path = os.path.join(self.plots_dir, "profiler_latency.png")
+
+        try:
+            import matplotlib
+
+            matplotlib.use("Agg")
+            from matplotlib import pyplot as plt
+        except Exception as exc:
+            self._log(f"[Plotter] Skipping plot {output_path}: {exc}")
+            return
+
+        try:
+            plt.figure(figsize=(10, 4))
+            plotted_any_series = False
+
+            for csv_path in csv_paths:
+                ts_values = []
+                latency_values = []
+                with open(csv_path, newline="", encoding="utf-8") as csv_file:
+                    reader = csv.DictReader(csv_file)
+                    for row in reader:
+                        try:
+                            ts_values.append(float(row["timestamp_now"]))
+                            latency_values.append(
+                                float(row["latency_in_seconds"])
+                            )
+                        except (KeyError, TypeError, ValueError):
+                            continue
+
+                if not ts_values:
+                    continue
+
+                label = os.path.basename(csv_path).replace("_latency.csv", "")
+                plt.plot(ts_values, latency_values, linewidth=1.0, label=label)
+                plotted_any_series = True
+
+            if not plotted_any_series:
+                plt.close()
+                return
+
+            plt.xlabel("timestamp_now")
+            plt.ylabel("latency_in_seconds")
+            plt.title("Profiler latency")
+            plt.legend(fontsize="small", ncol=2)
+            plt.tight_layout()
+            plt.savefig(output_path, format="png")
+            plt.close()
+            self._log(f"[Plotter] Saved plot to {output_path}")
+        except Exception as exc:
+            self._log(f"[Plotter] Failed to save plot {output_path}: {exc}")
 
     def write_latency_metrics(self, metrics_path=None):
         latency_path = os.path.join(self.output_dir, "latency.csv")
