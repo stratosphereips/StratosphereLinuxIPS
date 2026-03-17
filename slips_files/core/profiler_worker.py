@@ -2,9 +2,7 @@ import csv
 import json
 import os
 import time
-from dataclasses import asdict
 import ipaddress
-import pprint
 import multiprocessing
 from typing import (
     List,
@@ -626,37 +624,38 @@ class ProfilerWorker(IModule):
                 # software and weird.log flows are allowed to not have a daddr
                 return False
 
-        self.get_gateway_info(flow)
         flow_starttime = self.convert_starttime_to_unix_ts(flow.starttime)
         self._log_flow_latency(flow, flow_starttime)
-        # Check if the flow is whitelisted and we should not process it
-        if self.whitelist.is_whitelisted_flow(flow):
-            self.print(f"{self.whitelist.get_bloom_filters_stats()}", 2, 0)
-            return True
-
-        # 5th. Store the data according to the paremeters
-        # Now that we have the profileid and twid, add the data from the flow
-        # in this tw for this profile
-        profileid = f"profile_{flow.saddr}"
-        self.print(f"Storing data in the profile: {profileid}", 3, 0)
-        flow.starttime = flow_starttime
-
-        # Create profiles for all ips we see
-        self.db.add_profile(profileid, flow.starttime)
-
-        # For this 'forward' profile, find the id in the
-        # database of the tw where the flow belongs.
-        twid = self.db.get_timewindow(flow.starttime, profileid)
-
-        self.store_features_going_out(flow, profileid, twid)
-
-        if self.analysis_direction == "all":
-            self.handle_in_flow(flow)
-
-        if self.db.is_cyst_enabled():
-            # print the added flow as a form of debugging feedback for
-            # the user to know that slips is working
-            self.print(pprint.pp(asdict(flow)))
+        #
+        # self.get_gateway_info(flow)
+        # # Check if the flow is whitelisted and we should not process it
+        # if self.whitelist.is_whitelisted_flow(flow):
+        #     self.print(f"{self.whitelist.get_bloom_filters_stats()}", 2, 0)
+        #     return True
+        #
+        # # 5th. Store the data according to the paremeters
+        # # Now that we have the profileid and twid, add the data from the flow
+        # # in this tw for this profile
+        # profileid = f"profile_{flow.saddr}"
+        # self.print(f"Storing data in the profile: {profileid}", 3, 0)
+        # flow.starttime = flow_starttime
+        #
+        # # Create profiles for all ips we see
+        # self.db.add_profile(profileid, flow.starttime)
+        #
+        # # For this 'forward' profile, find the id in the
+        # # database of the tw where the flow belongs.
+        # twid = self.db.get_timewindow(flow.starttime, profileid)
+        #
+        # self.store_features_going_out(flow, profileid, twid)
+        #
+        # if self.analysis_direction == "all":
+        #     self.handle_in_flow(flow)
+        #
+        # if self.db.is_cyst_enabled():
+        #     # print the added flow as a form of debugging feedback for
+        #     # the user to know that slips is working
+        #     self.print(pprint.pp(asdict(flow)))
         return True
 
     def update_the_files_input_handler_knows_about(self, msg: dict):
@@ -738,10 +737,10 @@ class ProfilerWorker(IModule):
                 return
 
             self.add_flow_to_profile(flow)
-            self.handle_setting_local_net(flow)
-            self.db.increment_processed_flows()
-            # @@@@@@@@@@@@@@@@@@@@@@@@
-            self.db.record_flow_per_minute(self.name)
+            # self.handle_setting_local_net(flow)
+            # self.db.increment_processed_flows()
+            #    # @@@@@@@@@@@@@@@@@@@@@@@@
+            # self.db.record_flow_per_minute(self.name)
 
             # manually run garbage collection to avoid the latency
             # introduced by it when slips is given a huge number of flows
