@@ -832,6 +832,127 @@ class ConfigParser(object):
         backends = self.read_configuration("llm", "backends", {})
         return backends if isinstance(backends, dict) else {}
 
+    def regex_generator_enabled(self) -> bool:
+        value = self.read_configuration("regex_generator", "enabled", False)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def regex_generator_generation_interval_seconds(self) -> float:
+        value = self.read_configuration(
+            "regex_generator", "generation_interval_seconds", 5
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 5
+        return max(0.1, value)
+
+    def regex_generator_allowed_backends(self) -> list:
+        value = self.read_configuration(
+            "regex_generator", "allowed_backends", []
+        )
+        if not isinstance(value, list):
+            return []
+        return [
+            str(backend).strip()
+            for backend in value
+            if str(backend).strip()
+        ]
+
+    def regex_generator_llm_temperature(self) -> float:
+        value = self.read_configuration(
+            "regex_generator", "llm_temperature", 1.2
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 1.2
+        return max(0.0, value)
+
+    def regex_generator_llm_max_tokens(self) -> int:
+        value = self.read_configuration(
+            "regex_generator", "llm_max_tokens", 220
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 220
+        return max(1, value)
+
+    def regex_generator_llm_response_timeout_seconds(self) -> int:
+        value = self.read_configuration(
+            "regex_generator", "llm_response_timeout_seconds", 90
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 90
+        return max(1, value)
+
+    def regex_generator_recent_history_size(self) -> int:
+        value = self.read_configuration(
+            "regex_generator", "recent_history_size", 20
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 20
+        return max(0, value)
+
+    def regex_generator_max_regex_length(self) -> int:
+        value = self.read_configuration(
+            "regex_generator", "max_regex_length", 180
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 180
+        return max(1, value)
+
+    def regex_generator_type_weights(self) -> dict:
+        default_weights = {
+            "dns_domain": 1,
+            "uri": 1,
+            "filename": 1,
+            "tls_sni": 1,
+            "certificate_cn": 1,
+        }
+        value = self.read_configuration(
+            "regex_generator", "type_weights", default_weights
+        )
+        if not isinstance(value, dict):
+            return default_weights
+
+        sanitized_weights = {}
+        for regex_type, default_weight in default_weights.items():
+            raw_weight = value.get(regex_type, default_weight)
+            try:
+                raw_weight = float(raw_weight)
+            except (TypeError, ValueError):
+                raw_weight = default_weight
+            sanitized_weights[regex_type] = max(0.0, raw_weight)
+
+        if not any(sanitized_weights.values()):
+            return default_weights
+        return sanitized_weights
+
+    def regex_generator_store_dir(self) -> str:
+        value = self.read_configuration(
+            "regex_generator", "store_dir", "output/regex_generator"
+        )
+        if not isinstance(value, str) or not value.strip():
+            return "output/regex_generator"
+        return value.strip()
+
+    def regex_generator_seed_benign_samples(self) -> bool:
+        value = self.read_configuration(
+            "regex_generator", "seed_benign_samples", True
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
     def analysis_direction(self):
         """
         Controls which traffic flows are processed and analyzed by SLIPS.
@@ -1041,6 +1162,9 @@ class ConfigParser(object):
 
         if not self.llm_enabled():
             to_ignore.append("llm")
+
+        if not self.regex_generator_enabled():
+            to_ignore.append("regex_generator")
 
         return to_ignore
 
