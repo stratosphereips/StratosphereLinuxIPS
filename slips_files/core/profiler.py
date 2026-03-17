@@ -409,7 +409,7 @@ class Profiler(ICore, IObservable):
         utils.start_thread(self.profiler_monitor_thread, self.db)
         # slips starts with these workers by default until it detects
         # high throughput that these workers arent enough to handle
-        num_of_profiler_workers = 5
+        num_of_profiler_workers = 3
         for worker_id in range(num_of_profiler_workers):
             self.last_worker_id = worker_id
             self.start_profiler_worker(worker_id)
