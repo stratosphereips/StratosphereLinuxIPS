@@ -696,6 +696,36 @@ class ConfigParser(object):
             "modules", "timeline_human_timestamp", False
         )
 
+    def llm_enabled(self) -> bool:
+        value = self.read_configuration("llm", "enabled", False)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def llm_default_backend(self) -> str:
+        value = self.read_configuration("llm", "default_backend", "")
+        return str(value or "").strip()
+
+    def llm_worker_threads(self) -> int:
+        value = self.read_configuration("llm", "worker_threads", 2)
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 2
+        return max(1, value)
+
+    def llm_queue_size(self) -> int:
+        value = self.read_configuration("llm", "queue_size", 100)
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 100
+        return max(1, value)
+
+    def llm_backends(self) -> dict:
+        backends = self.read_configuration("llm", "backends", {})
+        return backends if isinstance(backends, dict) else {}
+
     def analysis_direction(self):
         """
         Controls which traffic flows are processed and analyzed by SLIPS.
@@ -902,6 +932,9 @@ class ConfigParser(object):
 
         if not self.reading_flows_from_cyst():
             to_ignore.append("cyst")
+
+        if not self.llm_enabled():
+            to_ignore.append("llm")
 
         return to_ignore
 
