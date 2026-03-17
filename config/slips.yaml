@@ -202,6 +202,42 @@ modules:
   timeline_human_timestamp: true
 
 #############################
+llm:
+  # Enable the shared LLM service module.
+  enabled: false
+
+  # If a request does not specify a backend, this one is used.
+  default_backend: local_qwen
+
+  # Number of worker threads processing LLM requests in parallel.
+  worker_threads: 2
+
+  # Maximum number of pending requests kept in memory.
+  queue_size: 100
+
+  # Each backend is a named connection that other modules can select by name.
+  backends:
+    local_qwen:
+      provider: ollama
+      model: qwen2.5:3b
+      base_url: http://127.0.0.1:11434
+      timeout: 120
+
+    openai_default:
+      provider: openai
+      model: gpt-4o-mini
+      base_url: https://api.openai.com/v1
+      api_key_env: OPENAI_API_KEY
+      timeout: 60
+
+    claude_default:
+      provider: anthropic
+      model: claude-sonnet-4-5
+      base_url: https://api.anthropic.com
+      api_key_env: ANTHROPIC_API_KEY
+      timeout: 60
+
+#############################
 flowmldetection:
   # This is a module that uses machine learning for detection.
   # It can be used in train mode or test mode.
