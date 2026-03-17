@@ -106,6 +106,8 @@ class RedisDB(
         "slips2fides",
         "iris_internal",
         "new_zeek_fields_line",
+        "llm_request",
+        "llm_response",
     }
 
     separator = "_"
