@@ -801,6 +801,12 @@ class DBManager:
     def get_enabled_modules(self, *args, **kwargs):
         return self.rdb.get_enabled_modules(*args, **kwargs)
 
+    def set_available_llm_backends(self, *args, **kwargs):
+        return self.rdb.set_available_llm_backends(*args, **kwargs)
+
+    def get_available_llm_backends(self, *args, **kwargs):
+        return self.rdb.get_available_llm_backends(*args, **kwargs)
+
     def get_msgs_received_at_runtime(self, *args, **kwargs):
         return self.rdb.get_msgs_received_at_runtime(*args, **kwargs)
 
