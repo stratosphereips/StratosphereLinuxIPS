@@ -204,29 +204,43 @@ modules:
 #############################
 llm:
   # Enable the shared LLM service module.
-  enabled: false
+  enabled: true
 
-  # If a request does not specify a backend, this one is used.
+  # If a request does not specify a backend alias, this one is used.
+  # The value must match one of the keys under backends: below.
   default_backend: local_qwen
 
   # Number of worker threads processing LLM requests in parallel.
+  # All caller modules share the same request queue and the same response
+  # channel, so modules must correlate replies by request_id.
   worker_threads: 2
 
   # Maximum number of pending requests kept in memory.
   queue_size: 100
 
-  # Each backend is a named connection that other modules can select by name.
+  # Each backend is a named connection that other modules select by alias
+  # through the request field backend.
   backends:
     local_qwen:
+      # Supported providers: ollama, openai, anthropic
       provider: ollama
+      # Default model for this backend alias. Caller modules may override the
+      # model in an individual request while still using this connection.
       model: qwen2.5:3b
+      # Optional. Defaults depend on provider:
+      # ollama=http://127.0.0.1:11434
+      # openai=https://api.openai.com/v1
+      # anthropic=https://api.anthropic.com
       base_url: http://127.0.0.1:11434
+      # Optional HTTP timeout in seconds.
       timeout: 120
 
     openai_default:
       provider: openai
       model: gpt-4o-mini
       base_url: https://api.openai.com/v1
+      # Provide one of api_key, api_key_env, or api_key_file for providers
+      # that require authentication.
       api_key_env: OPENAI_API_KEY
       timeout: 60
 
@@ -235,6 +249,8 @@ llm:
       model: claude-sonnet-4-5
       base_url: https://api.anthropic.com
       api_key_env: ANTHROPIC_API_KEY
+      # Optional Anthropic API version header.
+      anthropic_version: 2023-06-01
       timeout: 60
 
 #############################
