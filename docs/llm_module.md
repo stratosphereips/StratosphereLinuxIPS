@@ -53,6 +53,26 @@ llm:
       timeout: 60
 ```
 
+Configuration reference:
+
+- `enabled`: enables or disables the LLM service module.
+- `default_backend`: backend alias used when a request omits `backend`.
+- `worker_threads`: number of requests processed in parallel.
+- `queue_size`: maximum number of queued requests in memory.
+- `backends`: mapping of backend alias to backend configuration.
+
+Per-backend options:
+
+- `provider`: one of `ollama`, `openai`, or `anthropic`.
+- `model`: default model for that backend alias.
+- `base_url`: provider endpoint. If omitted, the provider default is used.
+- `timeout`: HTTP timeout in seconds.
+- `api_key`: optional inline API key for `openai` or `anthropic`.
+- `api_key_env`: optional environment variable containing the API key.
+- `api_key_file`: optional file path containing the API key.
+- `anthropic_version`: optional Anthropic API version header. Default is
+  `2023-06-01`.
+
 Each backend is a named connection. Other modules select it by name using the
 `backend` field in the request.
 
@@ -94,6 +114,31 @@ During startup the helper may temporarily return:
 Caller modules should retry later if they need LLM access and the registry is
 still empty.
 
+## How Caller Modules Must Correlate Responses
+
+The current design uses:
+
+- one shared request channel: `llm_request`
+- one shared response channel: `llm_response`
+
+This means caller modules must correlate replies themselves.
+
+Required caller pattern:
+
+1. Subscribe to `llm_response` during module initialization.
+2. Discover runtime-ready backends with
+   `self.db.get_available_llm_backends()`.
+3. Choose a backend alias from the returned registry.
+4. Generate a unique `request_id` before publishing.
+5. Keep local pending state keyed by `request_id`.
+6. Publish the request to `llm_request`.
+7. When reading `llm_response`, ignore any response whose `request_id` is not
+   one of yours.
+
+If multiple caller modules send requests at the same time, `request_id` is what
+separates the replies. `requester` is only a human-readable label and should
+not be treated as the primary routing key.
+
 ## Redis Contract
 
 ### Request channel
@@ -129,7 +174,8 @@ Structured request:
 
 Fields:
 
-- `request_id`: optional but recommended. Generated if missing.
+- `request_id`: technically optional, but caller modules should always set it.
+  This is the main correlation key on the shared response channel.
 - `requester`: optional caller name.
 - `backend`: optional if `default_backend` is set.
 - `prompt`: shortcut for one user message.
@@ -184,14 +230,18 @@ Publish:
 
 ```python
 import json
+import uuid
 
 available = self.db.get_available_llm_backends()
 backend = available["default_backend"]
 if not backend:
     return
 
+request_id = f"{self.name}-{uuid.uuid4()}"
+pending_requests[request_id] = {"profileid": profileid}
+
 request = {
-    "request_id": "req-123",
+    "request_id": request_id,
     "requester": self.name,
     "backend": backend,
     "prompt": "Summarize this alert in 2 lines.",
@@ -212,14 +262,20 @@ Read:
 ```python
 if msg := self.get_msg("llm_response"):
     response = json.loads(msg["data"])
-    if response["request_id"] == "req-123":
-        text = response["text"]
+    request_id = response["request_id"]
+    if request_id not in pending_requests:
+        return
+
+    context = pending_requests.pop(request_id)
+    text = response["text"]
 ```
 
 ## Operational Notes
 
 - The module uses one shared response channel, so requesters must match on
   `request_id`.
+- Caller modules should always generate `request_id` themselves instead of
+  relying on the service to create one.
 - The first version is text-only.
 - If the module is disabled or no valid backends are configured, it will stop
   cleanly and no request processing will occur.
