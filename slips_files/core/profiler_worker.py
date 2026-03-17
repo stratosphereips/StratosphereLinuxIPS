@@ -626,12 +626,12 @@ class ProfilerWorker(IModule):
 
         flow_starttime = self.convert_starttime_to_unix_ts(flow.starttime)
         self._log_flow_latency(flow, flow_starttime)
-        #
-        # self.get_gateway_info(flow)
-        # # Check if the flow is whitelisted and we should not process it
-        # if self.whitelist.is_whitelisted_flow(flow):
-        #     self.print(f"{self.whitelist.get_bloom_filters_stats()}", 2, 0)
-        #     return True
+
+        self.get_gateway_info(flow)
+        # Check if the flow is whitelisted and we should not process it
+        if self.whitelist.is_whitelisted_flow(flow):
+            self.print(f"{self.whitelist.get_bloom_filters_stats()}", 2, 0)
+            return True
         #
         # # 5th. Store the data according to the paremeters
         # # Now that we have the profileid and twid, add the data from the flow
