@@ -77,6 +77,10 @@ class ModuleFactory:
         conf.use_local_p2p = Mock(return_value=False)
         conf.permanent_dir = Mock(return_value="permanent")
         conf.width = Mock(return_value=3600)
+        conf.regex_generator_store_dir = Mock(
+            return_value=os.path.join(output_dir, "regex_generator")
+        )
+        conf.regex_generator_seed_benign_samples = Mock(return_value=True)
 
         with (
             # to prevent config/redis.conf from being overwritten
@@ -181,6 +185,47 @@ class ModuleFactory:
         llm.channels = {"llm_request": llm.c1}
         llm.print = Mock()
         return llm
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_regex_generator_obj(self, mock_db, store_dir="dummy_output_dir/regex_generator"):
+        from modules.regex_generator.regex_generator import RegexGenerator
+
+        conf = Mock()
+        conf.regex_generator_enabled = Mock(return_value=True)
+        conf.regex_generator_generation_interval_seconds = Mock(return_value=5)
+        conf.regex_generator_allowed_backends = Mock(return_value=["local_qwen"])
+        conf.regex_generator_llm_temperature = Mock(return_value=1.2)
+        conf.regex_generator_llm_max_tokens = Mock(return_value=220)
+        conf.regex_generator_llm_response_timeout_seconds = Mock(return_value=90)
+        conf.regex_generator_recent_history_size = Mock(return_value=20)
+        conf.regex_generator_max_regex_length = Mock(return_value=180)
+        conf.regex_generator_type_weights = Mock(
+            return_value={
+                "dns_domain": 1,
+                "uri": 1,
+                "filename": 1,
+                "tls_sni": 1,
+                "certificate_cn": 1,
+            }
+        )
+        conf.regex_generator_store_dir = Mock(return_value=store_dir)
+        conf.regex_generator_seed_benign_samples = Mock(return_value=True)
+
+        regex_generator = RegexGenerator(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=conf,
+            ppid=12345,
+            bloom_filters_manager=Mock(),
+        )
+        regex_generator.db.channels.LLM_REQUEST = "llm_request"
+        regex_generator.db.channels.LLM_RESPONSE = "llm_response"
+        regex_generator.channels = {"llm_response": regex_generator.c_llm}
+        regex_generator.print = Mock()
+        return regex_generator
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_fides_module_obj(self, mock_db):
