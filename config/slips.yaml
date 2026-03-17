@@ -254,6 +254,50 @@ llm:
       timeout: 60
 
 #############################
+regex_generator:
+  # Enable the shared regex generator module.
+  enabled: true
+
+  # Wait this many seconds between completed generation cycles.
+  generation_interval_seconds: 30
+
+  # Preferred LLM backend aliases for this module. If empty, the module falls
+  # back to the runtime-ready LLM default backend.
+  allowed_backends: [local_qwen]
+
+  # Keep the temperature high enough to encourage variation over time.
+  llm_temperature: 1.2
+
+  # Token budget for the LLM response. The prompt asks for a tiny JSON object,
+  # so this should stay relatively small.
+  llm_max_tokens: 120
+
+  # Maximum time to wait for a matching llm_response before giving up on the
+  # current request.
+  llm_response_timeout_seconds: 300
+
+  # Number of recent regexes of the same type added to the prompt as "do not
+  # repeat" history.
+  recent_history_size: 1
+
+  # Reject generated regexes longer than this many characters.
+  max_regex_length: 180
+
+  # Weighted random choice for the next regex type to generate.
+  type_weights:
+    dns_domain: 1
+    uri: 1
+    filename: 1
+    tls_sni: 1
+    certificate_cn: 1
+
+  # Directory that stores the benign corpus DB and the generated regex DB.
+  store_dir: output/regex_generator
+
+  # Seed the benign corpus DB once with a small built-in sample for each type.
+  seed_benign_samples: true
+
+#############################
 flowmldetection:
   # This is a module that uses machine learning for detection.
   # It can be used in train mode or test mode.
