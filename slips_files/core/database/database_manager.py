@@ -44,8 +44,10 @@ class DBManager:
         self.conf = conf
         self.output_dir = output_dir
         self.redis_port = redis_port
+        self.main_pid = main_pid
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
+        self.regex_generator_storage = None
         # only the main process should ever flush the Redis DB. to avoid
         # children overwriting values set at the very start of slips
         if os.getpid() != main_pid:
@@ -1085,6 +1087,30 @@ class DBManager:
     def get_separator(self):
         return self.rdb.separator
 
+    def _get_regex_generator_storage(self):
+        if self.regex_generator_storage is None:
+            from slips_files.core.database.sqlite_db.regex_generator_db import (
+                RegexGeneratorStorage,
+            )
+
+            self.regex_generator_storage = RegexGeneratorStorage(
+                self.logger,
+                self.conf,
+                self.output_dir,
+                self.main_pid,
+            )
+        return self.regex_generator_storage
+
+    def get_generated_regexes(self, *args, **kwargs):
+        return self._get_regex_generator_storage().get_generated_regexes(
+            *args, **kwargs
+        )
+
+    def get_generated_regexes_count(self, *args, **kwargs):
+        return self._get_regex_generator_storage().get_generated_regexes_count(
+            *args, **kwargs
+        )
+
     def get_icmp_attack_info_to_single_host(self, *args, **kwargs):
         return self.rdb.get_icmp_attack_info_to_single_host(*args, **kwargs)
 
@@ -1179,6 +1205,8 @@ class DBManager:
         # when stopping the daemon using -S, slips doesn't start the sqlite db
         if self.sqlite:
             self.sqlite.close(*args, **kwargs)
+        if self.regex_generator_storage:
+            self.regex_generator_storage.close()
 
     def close_all_dbs(self):
         self.rdb.r.close()
