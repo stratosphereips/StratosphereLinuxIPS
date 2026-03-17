@@ -115,3 +115,5 @@ class Channels:
     GIVE_TI = "get_modified_profiles_since"
     NEW_ZEEK_FIELDS_LINE = "new_zeek_fields_line"
     CONTROL_CHANNEL = "control_channel"
+    LLM_REQUEST = "llm_request"
+    LLM_RESPONSE = "llm_response"
