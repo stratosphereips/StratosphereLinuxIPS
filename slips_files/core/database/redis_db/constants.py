@@ -107,6 +107,7 @@ class Constants:
     P2P_PEER_INFO_HASH = "peer_info"
     FIDES_CACHE_KEY = "fides_cache"
     FIDES_CACHE_CREATED_SECONDS = "created_seconds"
+    AVAILABLE_LLM_BACKENDS = "available_llm_backends"
 
 
 class Channels:
