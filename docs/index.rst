@@ -19,6 +19,8 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **LLM module**. Shared access to configured LLM backends from other Slips modules. See :doc:`LLM module <llm_module>`.
 
+- **Regex Generator module**. Shared service that generates and validates pseudo-random regexes for later Zeek-side use. See :doc:`Regex Generator module <regex_generator_module>`.
+
 - **HTTPS anomaly detection**. Detailed design and behavior of the HTTPS anomaly detector. See :doc:`HTTPS anomaly detection <https_anomaly_detection>`.
 
 - **Architecture**. Internal architecture of Slips (profiles, timewindows), the use of Zeek and connection to Redis. See :doc:`Architecture <architecture>`.
@@ -54,6 +56,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    architecture
    detection_modules
    llm_module
+   regex_generator_module
    https_anomaly_detection
    flowalerts
    features
