@@ -187,6 +187,7 @@ Slips key features are:
 * **HTTPS Anomaly Detection**: Adaptive TLS/HTTPS anomaly detection with drift handling and a local HTML report generator for deep dives.
 * **Integration with External Platforms**: Modules in Slips can look up IP addresses on external platforms such as VirusTotal and RiskIQ.
 * **Graphical User Interface**: Slips provides a web interface and an optional Kalipso terminal interface through the `modules/kalipso` submodule.
+* **Shared LLM Access**: Slips can expose configured LLM backends such as Ollama, OpenAI, and Anthropic to other modules through Redis channels.
 * **Peer-to-Peer (P2P) Module**: Slips includes a complex automatic system to find other peers in the network and share IoC data automatically in a balanced, trusted manner. The P2P module can be enabled as needed.
 * **Docker Implementation**: Running Slips through Docker on Linux systems is simplified, allowing real-time traffic analysis.
 * **Detailed Documentation**: Slips provides detailed documentation guiding users through usage instructions for efficient utilization of its features.
