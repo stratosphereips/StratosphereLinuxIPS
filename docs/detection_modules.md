@@ -128,6 +128,11 @@ tr:nth-child(even) {
     <td>shared service module that sends prompts to configured OpenAI, Anthropic, or Ollama backends and publishes the replies for other modules</td>
     <td>✅</td>
   </tr>
+  <tr>
+    <td>RegexGenerator</td>
+    <td>shared service module that continuously generates pseudo-random regexes, rejects those matching benign corpora, and stores accepted regexes for later modules</td>
+    <td>✅</td>
+  </tr>
 
 </table>
 
@@ -140,6 +145,17 @@ configured backend, and publishes the result on `llm_response`.
 
 For the full request and response format, backend configuration, and examples,
 see [LLM Module](llm_module.md).
+
+## Regex Generator Module
+
+The RegexGenerator module is a shared service for other Slips modules.
+
+It uses the shared LLM module to generate one regex at a time for DNS domains,
+URIs, filenames, TLS SNI, and certificate CN fields, tests that regex against
+a benign corpus, and stores accepted regexes in a local SQLite database.
+
+For the full configuration, acceptance pipeline, and DB helper usage, see
+[Regex Generator Module](regex_generator_module.md).
 
 ## HTTPS Anomaly Detection Module
 
