@@ -227,11 +227,8 @@ llm:
       # Default model for this backend alias. Caller modules may override the
       # model in an individual request while still using this connection.
       model: qwen2.5:3b
-      # Optional. Defaults depend on provider:
-      # ollama=http://127.0.0.1:11434
-      # openai=https://api.openai.com/v1
-      # anthropic=https://api.anthropic.com
-      base_url: http://127.0.0.1:11434
+      #base_url: http://127.0.0.1:11434
+      base_url: http://147.32.83.61:11434
       # Optional HTTP timeout in seconds.
       timeout: 120
 
@@ -258,8 +255,14 @@ regex_generator:
   # Enable the shared regex generator module.
   enabled: true
 
+  # Create output/regex_generator.log with detailed internal progress logs.
+  # This file follows the global parameters.rotation / rotation_period policy.
+  create_log_file: true
+
   # Wait this many seconds between completed generation cycles.
-  generation_interval_seconds: 30
+  # Set to 0 to start the next cycle immediately after the previous one
+  # finishes and the module is ready again.
+  generation_interval_seconds: 0
 
   # Preferred LLM backend aliases for this module. If empty, the module falls
   # back to the runtime-ready LLM default backend.
@@ -268,20 +271,26 @@ regex_generator:
   # Keep the temperature high enough to encourage variation over time.
   llm_temperature: 1.2
 
-  # Token budget for the LLM response. The prompt asks for a tiny JSON object,
-  # so this should stay relatively small.
-  llm_max_tokens: 120
+  # Token budget for the LLM response. The prompt asks for one regex line only,
+  # so this should stay very small.
+  llm_max_tokens: 80
 
-  # Maximum time to wait for a matching llm_response before giving up on the
-  # current request.
+  # Soft warning threshold in seconds while waiting for the matching
+  # llm_response. The module keeps waiting after this and only logs that the
+  # LLM is slow. Set to 0 to disable the warning.
   llm_response_timeout_seconds: 300
 
-  # Number of recent regexes of the same type added to the prompt as "do not
-  # repeat" history.
-  recent_history_size: 1
+  # Prompt history is not sent to the LLM. Repetition is checked locally with a
+  # bloom filter plus exact DB lookup, so keep this at 0.
+  recent_history_size: 0
 
   # Reject generated regexes longer than this many characters.
   max_regex_length: 180
+
+  # Hard wall-clock timeout for local regex validation and benign-corpus
+  # matching. This prevents one pathological regex from freezing the module.
+  # Set to 0 to disable the timeout.
+  regex_validation_timeout_seconds: 2
 
   # Weighted random choice for the next regex type to generate.
   type_weights:
@@ -292,9 +301,28 @@ regex_generator:
     certificate_cn: 1
 
   # Directory that stores the benign corpus DB and the generated regex DB.
+  # Absolute paths are used as-is. Relative paths are resolved inside the
+  # output directory of the current Slips run.
   store_dir: output/regex_generator
 
+  # Optional stable absolute directory for the regex SQLite files.
+  # If set, it takes precedence over store_dir and lets the generator reuse
+  # the same DBs across many Slips restarts.
+  persistent_store_dir: "~/StratosphereLinuxIPS/databases/regex_store"
+
+  # Persist rejected regexes in generated_regexes.sqlite.
+  # Leave this disabled unless you need audit/debug history, otherwise disk
+  # usage will grow with low-value rejected rows.
+  store_rejected_regexes: false
+
+  # If rejected regex persistence is enabled, keep at most this many rejected
+  # rows and prune older ones first. Set to 0 for unlimited retention.
+  max_stored_rejected_regexes: 10000
+
   # Seed the benign corpus DB once with a small built-in sample for each type.
+  # The module also imports domain entries from the configured local whitelist
+  # file into the benign corpus on each run for dns_domain, tls_sni, and
+  # certificate_cn checks.
   seed_benign_samples: true
 
 #############################
