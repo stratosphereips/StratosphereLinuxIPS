@@ -368,6 +368,7 @@ alert_summary:
 #############################
 regex_generator:
   # Enable the shared regex generator module.
+  enabled: true
   enabled: false
 
   # Create output/regex_generator.log with detailed internal progress logs.
