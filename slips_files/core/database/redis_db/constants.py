@@ -34,6 +34,7 @@ class Constants:
     PIDS = "PIDs"
     MAC = "MAC"
     MODIFIED_TIMEWINDOWS = "ModifiedTW"
+    TW_FLOWS_COUNTER = "timewindow_flows_counter"
     ACCUMULATED_THREAT_LEVELS = "accumulated_threat_levels"
     TRANCO_WHITELISTED_DOMAINS = "tranco_whitelisted_domains"
     WHITELIST = "whitelist"

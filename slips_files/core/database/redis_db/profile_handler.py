@@ -22,6 +22,9 @@ from redis.client import Pipeline
 from slips_files.core.structures.flow_attributes import Role
 
 
+MARK_PROFILE_TW_AS_MODIFIED_BATCH_SIZE = 40
+
+
 class ProfileHandler:
     """
     Helper class for the Redis class in database.py
@@ -1135,8 +1138,8 @@ class ProfileHandler:
         # Mark the TWs as closed so modules can work on its data
         pipe = self.r.pipeline()
         for profile_tw_to_close in profiles_tws_to_close:
-
             pipe.zrem(self.constants.MODIFIED_TIMEWINDOWS, profile_tw_to_close)
+            pipe.hdel(self.constants.TW_FLOWS_COUNTER, profile_tw_to_close)
             pipe = self.publish(
                 "tw_closed", profile_tw_to_close, pipeline=pipe
             )
@@ -1184,18 +1187,27 @@ class ProfileHandler:
                 "calling this function."
             )
 
-        data = {f"{profileid}{self.separator}{twid}": float(timestamp)}
-        client = pipe if pipe else self.r
-        client.zadd(self.constants.MODIFIED_TIMEWINDOWS, data)
-        self.publish(
-            "tw_modified",
-            json.dumps(
-                {
-                    "profileid": profileid,
-                    "twid": twid,
-                }
-            ),
+        profile_tw = f"{profileid}_{twid}"
+        modified_tw_details = {profile_tw: float(timestamp)}
+
+        # use the given pipe or create a new one
+        used_pipe = pipe if pipe else self.r.pipeline(transaction=False)
+
+        used_pipe.zadd(
+            self.constants.MODIFIED_TIMEWINDOWS, modified_tw_details
         )
+
+        # every 10 modified tws, we publish 1 msg in the tw_modified channel. why?
+        # because this is a costly operation in the hot path (runs every single
+        # flow) and we need to optimize it.
+        modifications = self.r.hincrby(
+            self.constants.TW_FLOWS_COUNTER, profile_tw, 1
+        )
+        if modifications % MARK_PROFILE_TW_AS_MODIFIED_BATCH_SIZE == 0:
+            self.publish(
+                "tw_modified",
+                json.dumps({"profileid": profileid, "twid": twid}),
+            )
         return pipe
 
     def publish_new_letter(
