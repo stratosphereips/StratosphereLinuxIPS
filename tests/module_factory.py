@@ -80,6 +80,11 @@ class ModuleFactory:
         conf.regex_generator_store_dir = Mock(
             return_value=os.path.join(output_dir, "regex_generator")
         )
+        conf.regex_generator_persistent_store_dir = Mock(return_value="")
+        conf.regex_generator_store_rejected_regexes = Mock(return_value=False)
+        conf.regex_generator_max_stored_rejected_regexes = Mock(
+            return_value=10000
+        )
         conf.regex_generator_seed_benign_samples = Mock(return_value=True)
 
         with (
@@ -192,13 +197,17 @@ class ModuleFactory:
 
         conf = Mock()
         conf.regex_generator_enabled = Mock(return_value=True)
+        conf.regex_generator_create_log_file = Mock(return_value=False)
         conf.regex_generator_generation_interval_seconds = Mock(return_value=5)
         conf.regex_generator_allowed_backends = Mock(return_value=["local_qwen"])
         conf.regex_generator_llm_temperature = Mock(return_value=1.2)
-        conf.regex_generator_llm_max_tokens = Mock(return_value=220)
+        conf.regex_generator_llm_max_tokens = Mock(return_value=80)
         conf.regex_generator_llm_response_timeout_seconds = Mock(return_value=90)
-        conf.regex_generator_recent_history_size = Mock(return_value=20)
+        conf.regex_generator_recent_history_size = Mock(return_value=0)
         conf.regex_generator_max_regex_length = Mock(return_value=180)
+        conf.regex_generator_regex_validation_timeout_seconds = Mock(
+            return_value=2
+        )
         conf.regex_generator_type_weights = Mock(
             return_value={
                 "dns_domain": 1,
@@ -209,7 +218,14 @@ class ModuleFactory:
             }
         )
         conf.regex_generator_store_dir = Mock(return_value=store_dir)
+        conf.regex_generator_persistent_store_dir = Mock(return_value="")
+        conf.regex_generator_store_rejected_regexes = Mock(return_value=False)
+        conf.regex_generator_max_stored_rejected_regexes = Mock(
+            return_value=10000
+        )
         conf.regex_generator_seed_benign_samples = Mock(return_value=True)
+        conf.rotation = Mock(return_value=True)
+        conf.rotation_period = Mock(return_value="1day")
 
         regex_generator = RegexGenerator(
             logger=self.logger,
