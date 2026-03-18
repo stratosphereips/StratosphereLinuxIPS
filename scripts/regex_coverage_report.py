@@ -93,7 +93,8 @@ class ProgressTracker:
     def print_plan(self):
         print(
             f"🔬 Coverage work estimate: {self.total_regexes} regexes, "
-            f"{self.total_comparisons} regex/string comparisons",
+            f"{self.total_comparisons} planned regex/string comparisons "
+            "(not raw TI entries)",
             flush=True,
         )
         self._render()
@@ -235,7 +236,10 @@ def parse_args() -> argparse.Namespace:
         default=0.25,
         help=(
             "Maximum wall-clock seconds allowed for one regex against one "
-            "population before it is skipped. Set 0 to disable."
+            "population of strings for one regex type before it is skipped. "
+            "The populations are: benign corpus values, malicious TI values, "
+            "observed traffic values, and the reference union of malicious+observed. "
+            "Set 0 to disable."
         ),
     )
     parser.add_argument(
@@ -243,8 +247,11 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=10000,
         help=(
-            "Maximum number of values evaluated per population and type. "
-            "Larger populations are sampled deterministically. Set 0 to disable."
+            "Maximum number of strings evaluated for each regex type inside each "
+            "population: benign corpus, malicious TI, observed traffic, and "
+            "reference union. This cap is applied after --sampling-ratio. "
+            "Larger populations are sampled deterministically. Set 0 to disable "
+            "the cap."
         ),
     )
     parser.add_argument(
@@ -252,16 +259,19 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.1,
         help=(
-            "Fraction of each population to evaluate before applying "
-            "max-population-size. Use values in (0, 1]. Default: 0.1."
+            "Fraction of strings to evaluate from each regex-type population "
+            "before applying --max-population-size. This is applied separately "
+            "to benign corpus values, malicious TI values, observed traffic values, "
+            "and reference-union values. Use values in (0, 1]. Default: 0.1."
         ),
     )
     parser.add_argument(
         "--full-scan",
         action="store_true",
         help=(
-            "Disable both population sampling and the size cap, and scan the "
-            "full benign, observed, and malicious populations."
+            "Disable both --sampling-ratio and --max-population-size, and scan "
+            "all strings in all populations for every regex type: benign corpus, "
+            "malicious TI, observed traffic, and reference union."
         ),
     )
     parser.add_argument(
@@ -949,12 +959,12 @@ def render_html(report: dict, sample_limit: int, top_regexes: int) -> str:
                 <thead>
                   <tr>
                     <th>Regex</th>
-                    <th>Reference Union</th>
-                    <th>Malicious TI</th>
-                    <th>Observed</th>
-                    <th>Benign</th>
-                    <th>Score</th>
-                    <th>Timeouts</th>
+                    <th><span class="help" title="Number of matched strings for this regex inside the Reference Union population for this type. Reference Union = Malicious TI ∪ Observed.">Reference Union</span></th>
+                    <th><span class="help" title="Number of matched strings for this regex inside the Malicious TI population for this type.">Malicious TI</span></th>
+                    <th><span class="help" title="Number of matched strings for this regex inside the Observed population for this type.">Observed</span></th>
+                    <th><span class="help" title="Number of matched strings for this regex inside the benign corpus for this type. Lower is better.">Benign</span></th>
+                    <th><span class="help" title="Current rough score = reference_union_matches minus benign_matches. Higher is better.">Score</span></th>
+                    <th><span class="help" title="How many population checks for this regex hit the timeout guard and were skipped.">Timeouts</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1011,6 +1021,15 @@ def render_html(report: dict, sample_limit: int, top_regexes: int) -> str:
               Values are shown as <code>matched / total (percent)</code>. If a population was sampled,
               the report says so explicitly and the percentage is over the sampled population, not the
               full original population.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Progress Bar Numbers</h4>
+            <p class="small">
+              In terminal output, <code>regex</code> means how many accepted regexes have been processed.
+              <code>cmp</code> means planned regex-versus-string match operations across the selected
+              populations. It is not the number of TI entries. The count grows because many regexes are
+              tested against many strings, often across multiple regex types.
             </p>
           </div>
           <div class="card">
@@ -1127,6 +1146,11 @@ def render_html(report: dict, sample_limit: int, top_regexes: int) -> str:
       background: #efe7d7;
       border: 1px solid var(--line);
     }}
+    .help {{
+      cursor: help;
+      text-decoration: underline dotted;
+      text-underline-offset: 3px;
+    }}
     section {{
       margin-top: 30px;
     }}
@@ -1171,11 +1195,11 @@ def render_html(report: dict, sample_limit: int, top_regexes: int) -> str:
       <thead>
         <tr>
           <th>Type</th>
-          <th>Accepted Regexes</th>
-          <th>Reference Union</th>
-          <th>Malicious TI</th>
-          <th>Observed</th>
-          <th>Benign Spillover</th>
+          <th><span class="help" title="Number of accepted regexes currently stored for this type.">Accepted Regexes</span></th>
+          <th><span class="help" title="Union of the Malicious TI and Observed populations for this regex type: all unique strings that are either in TI or seen in the selected run.">Reference Union</span></th>
+          <th><span class="help" title="Strings derived from Slips threat-intelligence data for this regex type. For domain-like types this mainly comes from the TI Redis cache.">Malicious TI</span></th>
+          <th><span class="help" title="Strings of this regex type extracted from the selected Slips run, usually from Zeek logs or flows.sqlite.">Observed</span></th>
+          <th><span class="help" title="Matches against the benign corpus for this regex type. Lower is better because these are likely false positives.">Benign Spillover</span></th>
         </tr>
       </thead>
       <tbody>
