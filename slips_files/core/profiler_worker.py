@@ -295,9 +295,9 @@ class ProfilerWorker(IModule):
         self.get_aid_and_store_flow_in_the_db(
             handler_func, flow_handler.handle_conn, flow, profileid, twid
         )
-        # # now that slips successfully parsed the flow,
-        # # mark this profile as modified
-        # self.db.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
+        # now that slips successfully parsed the flow,
+        # mark this profile as modified
+        self.db.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
         return True
 
     def get_rev_profile(self, flow):
