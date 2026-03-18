@@ -179,3 +179,4 @@ appendonly.aof
 /p2p_db.sqlite
 old-pipeline/
 databases/regex_store/
+utils/immune_web_sim/runs/
