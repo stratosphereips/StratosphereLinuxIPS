@@ -217,7 +217,7 @@ By default, large populations are sampled so the script finishes in practical
 time. It prints terminal progress while it runs, for example:
 
 ```text
-[37/752] type=dns_domain comparisons=742257/8547616 regex=...
+🧪 sampled estimate ███████░░░░░░░░░░░░ 31.62% | regex 247/781 | cmp 560,840/1,770,991 | type DNS Domain | ETA ⏳ 00:00:14
 ```
 
 If you want the exhaustive run for research, use:
@@ -233,8 +233,9 @@ If you want the exhaustive run for research, use:
 
 Useful knobs:
 
-- `--full-scan`: disable sampling and scan the full populations.
-- `--max-population-size`: sample cap for each population/type in estimate mode.
+- `--sampling-ratio`: fractional sample of each population in estimate mode. Default: `0.1`.
+- `--max-population-size`: hard cap applied after `--sampling-ratio` in estimate mode.
+- `--full-scan`: disable both sampling and the size cap, and scan the full populations.
 - `--match-timeout-seconds`: per-regex/per-population timeout guard.
 
 This generates:
