@@ -846,7 +846,15 @@ class ConfigParser(object):
             value = float(value)
         except (TypeError, ValueError):
             value = 5
-        return max(0.1, value)
+        return max(0.0, value)
+
+    def regex_generator_create_log_file(self) -> bool:
+        value = self.read_configuration(
+            "regex_generator", "create_log_file", False
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
 
     def regex_generator_allowed_backends(self) -> list:
         value = self.read_configuration(
@@ -872,12 +880,12 @@ class ConfigParser(object):
 
     def regex_generator_llm_max_tokens(self) -> int:
         value = self.read_configuration(
-            "regex_generator", "llm_max_tokens", 220
+            "regex_generator", "llm_max_tokens", 80
         )
         try:
             value = int(value)
         except (TypeError, ValueError):
-            value = 220
+            value = 80
         return max(1, value)
 
     def regex_generator_llm_response_timeout_seconds(self) -> int:
@@ -888,16 +896,16 @@ class ConfigParser(object):
             value = int(value)
         except (TypeError, ValueError):
             value = 90
-        return max(1, value)
+        return max(0, value)
 
     def regex_generator_recent_history_size(self) -> int:
         value = self.read_configuration(
-            "regex_generator", "recent_history_size", 20
+            "regex_generator", "recent_history_size", 0
         )
         try:
             value = int(value)
         except (TypeError, ValueError):
-            value = 20
+            value = 0
         return max(0, value)
 
     def regex_generator_max_regex_length(self) -> int:
@@ -909,6 +917,16 @@ class ConfigParser(object):
         except (TypeError, ValueError):
             value = 180
         return max(1, value)
+
+    def regex_generator_regex_validation_timeout_seconds(self) -> float:
+        value = self.read_configuration(
+            "regex_generator", "regex_validation_timeout_seconds", 2
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 2.0
+        return max(0.0, value)
 
     def regex_generator_type_weights(self) -> dict:
         default_weights = {
@@ -944,6 +962,32 @@ class ConfigParser(object):
         if not isinstance(value, str) or not value.strip():
             return "output/regex_generator"
         return value.strip()
+
+    def regex_generator_persistent_store_dir(self) -> str:
+        value = self.read_configuration(
+            "regex_generator", "persistent_store_dir", ""
+        )
+        if not isinstance(value, str) or not value.strip():
+            return ""
+        return value.strip()
+
+    def regex_generator_store_rejected_regexes(self) -> bool:
+        value = self.read_configuration(
+            "regex_generator", "store_rejected_regexes", False
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def regex_generator_max_stored_rejected_regexes(self) -> int:
+        value = self.read_configuration(
+            "regex_generator", "max_stored_rejected_regexes", 10000
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            return 10000
+        return max(0, value)
 
     def regex_generator_seed_benign_samples(self) -> bool:
         value = self.read_configuration(
