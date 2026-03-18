@@ -178,6 +178,7 @@ dataset-private/*
 appendonly.aof
 /p2p_db.sqlite
 old-pipeline/
+databases/regex_store/
 
 
 # permanen p2p dbs and encryption keys
