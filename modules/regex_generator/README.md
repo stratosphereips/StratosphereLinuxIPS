@@ -220,6 +220,11 @@ time. It prints terminal progress while it runs, for example:
 🧪 sampled estimate ███████░░░░░░░░░░░░ 31.62% | regex 247/781 | cmp 560,840/1,770,991 | type DNS Domain | ETA ⏳ 00:00:14
 ```
 
+In that progress line:
+
+- `regex 247/781` means 247 accepted regexes have been evaluated out of 781 total accepted regexes.
+- `cmp 560,840/1,770,991` means regex-versus-string match operations, not raw TI entries. The number grows because many regexes are checked against many strings across the benign corpus, malicious TI, observed traffic, and reference-union populations.
+
 If you want the exhaustive run for research, use:
 
 ```bash
@@ -233,10 +238,10 @@ If you want the exhaustive run for research, use:
 
 Useful knobs:
 
-- `--sampling-ratio`: fractional sample of each population in estimate mode. Default: `0.1`.
-- `--max-population-size`: hard cap applied after `--sampling-ratio` in estimate mode.
-- `--full-scan`: disable both sampling and the size cap, and scan the full populations.
-- `--match-timeout-seconds`: per-regex/per-population timeout guard.
+- `--sampling-ratio`: fraction of strings to evaluate from each regex-type population in estimate mode. This is applied separately to the benign corpus values, malicious TI values, observed traffic values, and reference-union values. Default: `0.1`.
+- `--max-population-size`: hard cap on the number of strings evaluated for each regex type inside each population, after `--sampling-ratio` is applied.
+- `--full-scan`: disable both `--sampling-ratio` and `--max-population-size`, and scan all strings in all populations for every regex type.
+- `--match-timeout-seconds`: timeout for one regex tested against one regex-type population of strings.
 
 This generates:
 
@@ -247,10 +252,10 @@ inside the selected run output directory.
 
 The report estimates coverage against:
 
-- the local benign corpus DB
-- TI-derived malicious reference strings from Redis and TI files
-- observed traffic strings from the same run, taken from Zeek logs or
-  `flows.sqlite`
+- the local benign corpus DB, grouped by regex type
+- TI-derived malicious reference strings from Redis and TI files, grouped by regex type
+- observed traffic strings from the same run, grouped by regex type and taken from Zeek logs or `flows.sqlite`
+- the per-type reference union, which is `malicious TI ∪ observed traffic`
 
 The report is offline only. It is not part of the continuous RegexGenerator
 loop.
