@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Immune Microenvironment Simulator</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">Spatial immune research utility</p>
+        <h1>Immune Microenvironment Simulator</h1>
+        <p class="lede">
+          Tissue-anchored cells, local infection spread, cytokine fields, antigen presentation,
+          adaptive suppression, and self-reactivity in one live experiment bench.
+        </p>
+      </div>
+      <div class="header-actions">
+        <div class="status-pill" id="runStatus">idle</div>
+        <div class="status-pill accent" id="outcomeBadge">Persistent infection</div>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="control-rail">
+        <section class="panel action-panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="section-kicker">Run control</p>
+              <h2>Experiment actions</h2>
+            </div>
+          </div>
+
+          <div class="button-grid">
+            <button id="applyBtn" class="btn subtle">Apply Params</button>
+            <button id="resetBtn" class="btn subtle">Reset World</button>
+            <button id="startBtn" class="btn primary">Start</button>
+            <button id="stopBtn" class="btn danger">Pause</button>
+          </div>
+
+          <div class="save-box">
+            <input id="runName" type="text" value="immune_experiment" placeholder="run name" />
+            <button id="saveBtn" class="btn primary block">Save Run + Summary Plot</button>
+          </div>
+
+          <div class="speed-box">
+            <label for="speedSlider">Time speed</label>
+            <input id="speedSlider" type="range" min="0.1" max="8" step="0.1" value="1" />
+            <span id="speedValue">1.0x</span>
+          </div>
+        </section>
+
+        <section class="panel presets-panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="section-kicker">Presets</p>
+              <h2>Scenario starters</h2>
+            </div>
+          </div>
+          <div class="preset-list">
+            <button data-preset="mild_viral" class="preset-btn">Mild viral</button>
+            <button data-preset="bacterial_burst" class="preset-btn">Bacterial burst</button>
+            <button data-preset="autoimmune_prone" class="preset-btn">Autoimmune-prone</button>
+            <button data-preset="high_treg" class="preset-btn">High Treg</button>
+          </div>
+        </section>
+
+        <section class="panel equations-panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="section-kicker">Model source</p>
+              <h2>Video and equations</h2>
+            </div>
+          </div>
+          <p class="equation-intro">
+            The systemic immune-control layer was adapted from the Fields Institute talk
+            <code>Modelling Immunity</code> by Jane Heffernan and the linked paper model.
+          </p>
+          <div class="equation-links">
+            <a href="https://www.youtube.com/watch?v=HoIT-kr7HnQ" target="_blank" rel="noreferrer">video</a>
+            <a href="https://www.fields.utoronto.ca/talks/Modelling-Immunity" target="_blank" rel="noreferrer">fields page</a>
+            <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8402548/" target="_blank" rel="noreferrer">paper</a>
+          </div>
+          <pre class="equation-block">dV/dt = input - α16 V A - γv V
+dT/dt = μ21 V - γt T
+dF/dt = μ32 T - γf F - α37 F C
+dI/dt = μ42 T - γi I - α45 I B
+dB/dt = μ52 T + α54 (I / (Si + I)) B - γb B
+dA/dt = μ65 B - γa A - α61 A V
+dC/dt = μ71 V + α73 (F / (Sf + F)) C - γc C</pre>
+          <p class="equation-note">
+            Here the simulator uses <code>V</code> as effective systemic antigen derived from the 2D pathogen field,
+            then couples <code>F</code>, <code>I</code>, <code>A</code>, <code>B</code>, and <code>C</code>
+            back into the spatial tissue dynamics.
+          </p>
+        </section>
+
+        <section class="panel controls-panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="section-kicker">Parameters</p>
+              <h2>Model controls</h2>
+            </div>
+          </div>
+          <div id="parameterGroups" class="parameter-groups"></div>
+        </section>
+      </aside>
+
+      <section class="panel stage-panel">
+        <div class="panel-head">
+          <div>
+            <p class="section-kicker">Live tissue state</p>
+            <h2>2D microenvironment</h2>
+          </div>
+          <div class="stage-toolbar">
+            <div class="mini-legend">
+              <span><i class="swatch healthy"></i>Healthy</span>
+              <span><i class="swatch infected-virus"></i>Virus-infected</span>
+              <span><i class="swatch infected-bacteria"></i>Bacteria-infected</span>
+              <span><i class="swatch damaged"></i>Damaged</span>
+              <span><i class="swatch dead"></i>Dead</span>
+            </div>
+            <div class="canvas-size-box">
+              <label for="canvasSizeSlider">Canvas size</label>
+              <input id="canvasSizeSlider" type="range" min="60" max="100" step="1" value="100" />
+              <span id="canvasSizeValue">100%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="metric-strip" id="metricStrip"></div>
+
+        <div class="canvas-frame">
+          <canvas id="tissueCanvas" width="1200" height="760"></canvas>
+          <div id="hoverCard" class="hover-card hidden"></div>
+        </div>
+
+        <div class="overlay-strip">
+          <span><i class="dot pathogen"></i>Pathogen burden overlay</span>
+          <span><i class="dot pro"></i>Pro-cytokine field</span>
+          <span><i class="dot anti"></i>Anti-cytokine field</span>
+          <span><i class="dot agent"></i>Mobile immune agents</span>
+        </div>
+
+        <div class="state-guide">
+          <div class="guide-card">
+            <strong>What each block means</strong>
+            <p>Green blocks are healthy benign tissue cells. Pale gray blocks are empty extracellular space with no anchored tissue cell.</p>
+          </div>
+          <div class="guide-card">
+            <strong>Use the mouse</strong>
+            <p>Hover any block to inspect the exact tissue state, local pathogen burden, cytokine levels, and any immune agents occupying that location.</p>
+          </div>
+        </div>
+      </section>
+
+      <aside class="analysis-rail">
+        <article class="panel chart-panel resizable-panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="section-kicker">Live chart</p>
+              <h2>Pathogen and host burden</h2>
+            </div>
+          </div>
+          <div class="chart-body">
+            <canvas id="burdenChart" height="220"></canvas>
+          </div>
+        </article>
+
+        <article class="panel chart-panel resizable-panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="section-kicker">Live chart</p>
+              <h2>Adaptive response</h2>
+            </div>
+          </div>
+          <div class="chart-body">
+            <canvas id="immuneChart" height="220"></canvas>
+          </div>
+        </article>
+
+        <article class="panel chart-panel resizable-panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="section-kicker">Live chart</p>
+              <h2>Regulation and damage</h2>
+            </div>
+          </div>
+          <div class="chart-body">
+            <canvas id="regulationChart" height="220"></canvas>
+          </div>
+        </article>
+
+        <article class="panel comparison-panel resizable-panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="section-kicker">Saved runs</p>
+              <h2>Comparison workspace</h2>
+            </div>
+          </div>
+          <div class="compare-help">
+            Solid lines are the current live run. Dashed lines are the selected saved run.
+            Both runs are aligned from their own start time (`t = 0`) so you compare behavior shape,
+            not wall-clock timestamps.
+          </div>
+          <div class="compare-controls">
+            <button id="refreshRunsBtn" class="btn subtle">Refresh list</button>
+            <select id="runSelect"></select>
+            <button id="loadRunBtn" class="btn subtle">Load compare run</button>
+          </div>
+          <div class="comparison-body">
+            <div class="comparison-summary" id="comparisonSummary">No comparison run loaded.</div>
+            <img id="runPlot" alt="Saved run summary plot" />
+            <pre id="runSummary"></pre>
+          </div>
+        </article>
+      </aside>
+    </div>
+  </div>
+
+  <script src="/static/charting.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
