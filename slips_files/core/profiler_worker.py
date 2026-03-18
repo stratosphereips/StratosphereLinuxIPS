@@ -1,9 +1,11 @@
 import csv
 import json
 import os
+import pprint
 import time
 import ipaddress
 import multiprocessing
+from dataclasses import asdict
 from typing import (
     List,
     Union,
@@ -290,12 +292,12 @@ class ProfilerWorker(IModule):
             else:
                 return False
 
-        self.get_aid_and_store_flow_in_the_db(
-            handler_func, flow_handler.handle_conn, flow, profileid, twid
-        )
-        # now that slips successfully parsed the flow,
-        # mark this profile as modified
-        self.db.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
+        # self.get_aid_and_store_flow_in_the_db(
+        #     handler_func, flow_handler.handle_conn, flow, profileid, twid
+        # )
+        # # now that slips successfully parsed the flow,
+        # # mark this profile as modified
+        # self.db.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
         return True
 
     def get_rev_profile(self, flow):
@@ -643,19 +645,19 @@ class ProfilerWorker(IModule):
         # Create profiles for all ips we see
         self.db.add_profile(profileid, flow.starttime)
 
-        # # For this 'forward' profile, find the id in the
-        # # database of the tw where the flow belongs.
-        # twid = self.db.get_timewindow(flow.starttime, profileid)
-        #
-        # self.store_features_going_out(flow, profileid, twid)
-        #
-        # if self.analysis_direction == "all":
-        #     self.handle_in_flow(flow)
-        #
-        # if self.db.is_cyst_enabled():
-        #     # print the added flow as a form of debugging feedback for
-        #     # the user to know that slips is working
-        #     self.print(pprint.pp(asdict(flow)))
+        # For this 'forward' profile, find the id in the
+        # database of the tw where the flow belongs.
+        twid = self.db.get_timewindow(flow.starttime, profileid)
+
+        self.store_features_going_out(flow, profileid, twid)
+
+        if self.analysis_direction == "all":
+            self.handle_in_flow(flow)
+
+        if self.db.is_cyst_enabled():
+            # print the added flow as a form of debugging feedback for
+            # the user to know that slips is working
+            self.print(pprint.pp(asdict(flow)))
         return True
 
     def update_the_files_input_handler_knows_about(self, msg: dict):
