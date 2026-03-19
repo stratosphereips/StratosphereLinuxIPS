@@ -1112,6 +1112,11 @@ class DBManager:
     def get_all_flows_in_profileid_twid(self, *args, **kwargs):
         return self.sqlite.get_all_flows_in_profileid_twid(*args, **kwargs)
 
+    def get_all_altflows_in_profileid_twid(self, *args, **kwargs):
+        return self.sqlite.get_all_altflows_in_profileid_twid(
+            *args, **kwargs
+        )
+
     def get_all_flows_in_profileid(self, *args, **kwargs):
         return self.sqlite.get_all_flows_in_profileid(*args, **kwargs)
 
