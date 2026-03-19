@@ -44,6 +44,7 @@ regex_generator:
   recent_history_size: 0
   max_regex_length: 180
   regex_validation_timeout_seconds: 2
+  benign_match_strength_threshold: 75
   type_weights:
     dns_domain: 1
     uri: 1
@@ -82,6 +83,9 @@ Configuration reference:
 - `regex_validation_timeout_seconds`: hard wall-clock timeout for local regex
   validation and benign-corpus matching. This prevents one pathological regex
   from freezing the module. Set `0` to disable it.
+- `benign_match_strength_threshold`: score from `0` to `100` used during the
+  benign scan. A regex is rejected only if its strongest benign match reaches
+  or exceeds this threshold. Higher values are more permissive.
 - `type_weights`: weighted random choice among the supported regex types.
 - `store_dir`: directory containing `benign_corpus.sqlite` and
   `generated_regexes.sqlite`. Absolute paths are used as-is. Relative paths are
@@ -121,6 +125,11 @@ Each generation request includes:
 The prompt requires the model to return exactly one regex line. No JSON,
 explanation, or code fences. The parser still accepts JSON-shaped replies as a
 fallback for compatibility, but the active prompt is raw-regex only.
+
+After the reply arrives, the module does not reject on any benign hit. It
+streams the benign corpus for the selected type, computes a benign
+match-strength score for each regex/string match, and rejects only if some
+benign string reaches or exceeds `benign_match_strength_threshold`.
 
 V1 keeps one request in flight at a time, so response correlation is simple:
 only the matching `request_id` is accepted.
@@ -162,8 +171,9 @@ After the matching `llm_response` arrives, the module:
 4. Applies static safety validation
 5. Checks local duplicates with a bloom filter and exact SQLite lookup
 6. Streams the benign corpus for the selected type
-7. Rejects on the first benign match
-8. Stores accepted regexes for later use
+7. Computes a benign match-strength score for each regex/string match
+8. Rejects only if some benign string reaches the configured threshold
+9. Stores accepted regexes for later use
 
 Static validation rejects:
 
@@ -175,6 +185,67 @@ Static validation rejects:
 - obviously broad patterns such as `.*` and `.+`
 - nested wildcard structures that risk catastrophic backtracking
 - invalid syntax
+
+The benign match-strength score is an estimate from `0` to `100`. It is
+computed per regex and per benign string using the strongest match span found
+by Python `re.finditer()`.
+
+For one matched span, the score is:
+
+```text
+score =
+  40 * span_ratio
+  + 12 * start_bonus
+  + 12 * end_bonus
+  + 16 * full_bonus
+  + 30 * specificity_ratio
+  - 18 * wildcard_penalty
+```
+
+The result is clipped to `0..100`. The regex keeps the highest score it
+obtains against that benign string. If any benign string reaches or exceeds
+`benign_match_strength_threshold`, the regex is rejected.
+
+The terms mean:
+
+- `span_ratio = matched_span_length / benign_string_length`
+- `start_bonus = 1` if the match starts at offset `0`, else `0`
+- `end_bonus = 1` if the match ends at the final character, else `0`
+- `full_bonus = 1` if the match covers the entire benign string, else `0`
+- `specificity_ratio = literal_chars / (literal_chars + meta_tokens)`
+- `wildcard_penalty = min(1.0, wildcard_points / ((literal_chars + meta_tokens) / 2))`
+
+Regex-specific features are measured from the regex text itself:
+
+- `literal_chars` counts explicit alphanumeric and common structural literal
+  characters such as `-`, `_`, `/`, `:`, `,`, `@`, and `=`
+- escaped literals such as `\.` count as literal characters
+- `meta_tokens` counts regex syntax such as `.`, `[]`, `*`, `+`, `?`, groups,
+  anchors, and generic escapes
+- `wildcard_points` penalize broad constructs:
+  - `.*` or `.+` adds `2.5`
+  - bare `.` adds `1.5`
+  - `[` character classes add `1.2`
+  - `*`, `+`, and `?` add `1.0`
+  - generic escapes such as `\w` also add penalty
+
+Examples:
+
+- Regex `^google\.com$` against benign string `google.com`
+  - full span match, starts at `0`, ends at the end, full-match bonus applies
+  - specificity is high because most of the pattern is literal
+  - wildcard penalty is low
+  - score is very high, so this benign match is rejected
+
+- Regex `google` against benign string `google.com`
+  - only part of the string is covered
+  - it starts at `0` but does not end at the final character
+  - no full-match bonus
+  - score is lower and may stay below the threshold
+
+- Regex `.*com`
+  - may match a long suffix, but it is penalized heavily by the wildcard term
+  - this keeps broad permissive patterns from automatically looking “strong”
 
 ## Benign corpus and bloom filters
 
