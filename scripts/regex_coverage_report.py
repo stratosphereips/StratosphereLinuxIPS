@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
 import re
 import signal
@@ -45,6 +46,10 @@ if str(REPO_ROOT) not in sys.path:
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.sqlite_db.regex_generator_db import REGEX_TYPES
+from modules.regex_generator.match_strength import (
+    compute_match_strength,
+    measure_regex_specificity,
+)
 
 
 DOMAIN_LIKE_TYPES = ("dns_domain", "tls_sni", "certificate_cn")
@@ -736,6 +741,40 @@ def sample_population(
     return sampled, original_total
 
 
+def mean_score(scores: list[float]) -> float | None:
+    if not scores:
+        return None
+    return sum(scores) / len(scores)
+
+
+def stddev_score(scores: list[float]) -> float | None:
+    if not scores:
+        return None
+    avg = mean_score(scores)
+    if avg is None:
+        return None
+    variance = sum((score - avg) ** 2 for score in scores) / len(scores)
+    return math.sqrt(variance)
+
+
+def build_score_stats(
+    scores_all: list[float],
+    matched_scores: list[float],
+    total_values: int,
+) -> dict:
+    match_count = len(matched_scores)
+    return {
+        "total_evaluated": total_values,
+        "match_count": match_count,
+        "match_ratio": (match_count / total_values) if total_values else None,
+        "avg_all": mean_score(scores_all),
+        "std_all": stddev_score(scores_all),
+        "avg_match": mean_score(matched_scores),
+        "std_match": stddev_score(matched_scores),
+        "max": max(scores_all) if scores_all else None,
+    }
+
+
 def compute_coverage(
     compiled_regexes: dict[str, list[dict]],
     benign_populations: dict[str, set[str]],
@@ -804,23 +843,44 @@ def compute_coverage(
                 "regex": row["regex"],
                 "request_id": row["request_id"],
                 "matches": {},
+                "score_stats": {},
                 "timed_out_populations": [],
                 "unique_reference_matches": 0,
                 "score": 0,
+                "quality_score": 0.0,
+                "strength_gap": 0.0,
             }
             compiled = row["compiled"]
+            regex_features = measure_regex_specificity(row["regex"])
             comparisons_for_regex = sum(len(values) for values in population_map.values())
             for population_name, values in population_map.items():
                 try:
                     with timeout_context(match_timeout_seconds):
-                        matched = [
-                            value for value in values if compiled.search(value)
-                        ]
+                        matched = []
+                        scores_all = []
+                        matched_scores = []
+                        for value in values:
+                            score = compute_match_strength(
+                                compiled,
+                                value,
+                                regex_features,
+                            )
+                            scores_all.append(score)
+                            if score > 0:
+                                matched.append(value)
+                                matched_scores.append(score)
                 except TimeoutError:
                     matched = []
+                    scores_all = []
+                    matched_scores = []
                     detail["timed_out_populations"].append(population_name)
                     population_timeout_counts[population_name] += 1
                 detail["matches"][population_name] = matched
+                detail["score_stats"][population_name] = build_score_stats(
+                    scores_all,
+                    matched_scores,
+                    len(values),
+                )
                 overall_matches[population_name].update(matched)
 
             detail["unique_reference_matches"] = len(
@@ -830,6 +890,10 @@ def compute_coverage(
                 len(detail["matches"]["reference_union"])
                 - len(detail["matches"]["benign"])
             )
+            malicious_avg = detail["score_stats"]["malicious"]["avg_all"] or 0.0
+            benign_avg = detail["score_stats"]["benign"]["avg_all"] or 0.0
+            detail["strength_gap"] = malicious_avg - benign_avg
+            detail["quality_score"] = detail["strength_gap"]
             regex_details.append(detail)
             if progress is not None:
                 progress.advance(
@@ -840,7 +904,8 @@ def compute_coverage(
 
         regex_details.sort(
             key=lambda item: (
-                item["score"],
+                item["quality_score"],
+                item["score_stats"]["malicious"]["avg_all"] or 0.0,
                 item["unique_reference_matches"],
                 -len(item["matches"]["benign"]),
             ),
@@ -925,6 +990,89 @@ def ratio_text(value: float | None) -> str:
     return f"{formatted}%"
 
 
+def score_text(value: float | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.2f}"
+
+
+def avg_std_text(stats: dict) -> str:
+    avg = stats.get("avg_all")
+    std = stats.get("std_all")
+    if avg is None:
+        return "n/a"
+    if std is None:
+        return f"{avg:.2f}"
+    return f"{avg:.2f} ± {std:.2f}"
+
+
+def matched_avg_std_text(stats: dict) -> str:
+    avg = stats.get("avg_match")
+    std = stats.get("std_match")
+    if avg is None:
+        return "n/a"
+    if std is None:
+        return f"{avg:.2f}"
+    return f"{avg:.2f} ± {std:.2f}"
+
+
+def render_scatter_plot(regex_type: str, regex_rows: list[dict]) -> str:
+    points = []
+    width = 520
+    height = 360
+    padding = 44
+    inner_w = width - padding * 2
+    inner_h = height - padding * 2
+    usable_rows = 0
+    for row in regex_rows:
+        benign_avg = row["score_stats"]["benign"]["avg_all"]
+        malicious_avg = row["score_stats"]["malicious"]["avg_all"]
+        if benign_avg is None and malicious_avg is None:
+            continue
+        usable_rows += 1
+        x = padding + (benign_avg or 0.0) / 100.0 * inner_w
+        y = height - padding - (malicious_avg or 0.0) / 100.0 * inner_h
+        quality = row.get("quality_score", 0.0)
+        color = "#1e7a46" if quality >= 0 else "#a73f24"
+        radius = 3 if row["score_stats"]["malicious"]["match_count"] < 5 else 4
+        title = (
+            f"{row['regex']}\n"
+            f"malicious avg_all={score_text(malicious_avg)} std_all={score_text(row['score_stats']['malicious']['std_all'])} "
+            f"avg_match={score_text(row['score_stats']['malicious']['avg_match'])} matches={row['score_stats']['malicious']['match_count']}\n"
+            f"benign avg_all={score_text(benign_avg)} std_all={score_text(row['score_stats']['benign']['std_all'])} "
+            f"avg_match={score_text(row['score_stats']['benign']['avg_match'])} matches={row['score_stats']['benign']['match_count']}\n"
+            f"gap={score_text(row.get('strength_gap'))}"
+        )
+        points.append(
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{radius}" fill="{color}" fill-opacity="0.68">'
+            f"<title>{escape(title)}</title></circle>"
+        )
+
+    if usable_rows == 0:
+        return '<p class="small">No benign/malicious score data available for this type.</p>'
+
+    return f"""
+    <div class="card">
+      <h4>Strength Scatter</h4>
+      <p class="small">Each point is one accepted regex. X uses the benign average score across all tested benign strings, with non-matches counted as 0. Y uses the malicious average score across all tested malicious strings, with non-matches counted as 0. The ideal area is upper-left.</p>
+      <svg viewBox="0 0 {width} {height}" width="100%" height="360" role="img" aria-label="{escape(TYPE_LABELS[regex_type])} strength scatter plot">
+        <rect x="0" y="0" width="{width}" height="{height}" fill="#fffdfa" />
+        <line x1="{padding}" y1="{height - padding}" x2="{width - padding}" y2="{height - padding}" stroke="#bfb6a8" stroke-width="1.5" />
+        <line x1="{padding}" y1="{padding}" x2="{padding}" y2="{height - padding}" stroke="#bfb6a8" stroke-width="1.5" />
+        <line x1="{padding}" y1="{height - padding - inner_h / 2:.1f}" x2="{width - padding}" y2="{height - padding - inner_h / 2:.1f}" stroke="#e4ddd1" stroke-dasharray="4 4" />
+        <line x1="{padding + inner_w / 2:.1f}" y1="{padding}" x2="{padding + inner_w / 2:.1f}" y2="{height - padding}" stroke="#e4ddd1" stroke-dasharray="4 4" />
+        <text x="{width / 2:.1f}" y="{height - 8}" text-anchor="middle" font-size="13" fill="#6c665d">Benign average score</text>
+        <text x="16" y="{height / 2:.1f}" text-anchor="middle" font-size="13" fill="#6c665d" transform="rotate(-90 16 {height / 2:.1f})">Malicious average score</text>
+        <text x="{padding}" y="{height - padding + 18}" font-size="12" fill="#6c665d">0</text>
+        <text x="{width - padding - 10}" y="{height - padding + 18}" font-size="12" fill="#6c665d">100</text>
+        <text x="{padding - 22}" y="{height - padding + 4}" font-size="12" fill="#6c665d">0</text>
+        <text x="{padding - 30}" y="{padding + 4}" font-size="12" fill="#6c665d">100</text>
+        {''.join(points)}
+      </svg>
+    </div>
+    """
+
+
 def render_html(report: dict, sample_limit: int, top_regexes: int) -> str:
     rows = []
     for regex_type in REGEX_TYPES:
@@ -948,6 +1096,7 @@ def render_html(report: dict, sample_limit: int, top_regexes: int) -> str:
         details = report["types"][regex_type]
         populations = details["populations"]
         regex_rows = details["regex_details"][:top_regexes]
+        all_regex_rows = details["regex_details"]
 
         population_blocks = []
         for population_name in ("reference_union", "malicious", "observed", "benign"):
@@ -978,11 +1127,14 @@ def render_html(report: dict, sample_limit: int, top_regexes: int) -> str:
                 f"""
                 <tr>
                   <td><code>{escape(row['regex'])}</code></td>
+                  <td>{row['score_stats']['malicious']['match_count']}</td>
+                  <td>{avg_std_text(row['score_stats']['malicious'])}</td>
+                  <td>{matched_avg_std_text(row['score_stats']['malicious'])}</td>
+                  <td>{row['score_stats']['benign']['match_count']}</td>
+                  <td>{avg_std_text(row['score_stats']['benign'])}</td>
+                  <td>{matched_avg_std_text(row['score_stats']['benign'])}</td>
+                  <td>{score_text(row.get('strength_gap'))}</td>
                   <td>{len(row['matches']['reference_union'])}</td>
-                  <td>{len(row['matches']['malicious'])}</td>
-                  <td>{len(row['matches']['observed'])}</td>
-                  <td>{len(row['matches']['benign'])}</td>
-                  <td>{row['score']}</td>
                   <td>{len(row['timed_out_populations'])}</td>
                 </tr>
                 """
@@ -995,21 +1147,25 @@ def render_html(report: dict, sample_limit: int, top_regexes: int) -> str:
               <div class="grid">
                 {''.join(population_blocks)}
               </div>
-              <h3>Top Regexes</h3>
+              {render_scatter_plot(regex_type, all_regex_rows)}
+              <h3>Top Regexes By Malicious-vs-Benign Strength</h3>
               <table>
                 <thead>
                   <tr>
                     <th>Regex</th>
+                    <th><span class="help" title="Number of matched strings for this regex inside the Malicious TI population for this type.">Malicious Matches</span></th>
+                    <th><span class="help" title="Average ± standard deviation of match strength across all malicious strings tested for this regex and this type. Non-matches count as score 0, so this rewards both coverage and strong matches. Higher is better.">Malicious All Avg ± Std</span></th>
+                    <th><span class="help" title="Average ± standard deviation of match strength only across malicious strings that this regex actually matched. This shows how strong the successful malicious matches are, independent of coverage.">Malicious Matched Avg ± Std</span></th>
+                    <th><span class="help" title="Number of matched strings for this regex inside the benign corpus for this type. Lower is better.">Benign Matches</span></th>
+                    <th><span class="help" title="Average ± standard deviation of match strength across all benign strings tested for this regex and this type. Non-matches count as score 0. Lower is better.">Benign All Avg ± Std</span></th>
+                    <th><span class="help" title="Average ± standard deviation of match strength only across benign strings that this regex actually matched. Lower is better.">Benign Matched Avg ± Std</span></th>
+                    <th><span class="help" title="Current ranking score = malicious all-strings average score minus benign all-strings average score. Higher is better.">Strength Gap</span></th>
                     <th><span class="help" title="Number of matched strings for this regex inside the Reference Union population for this type. Reference Union = Malicious TI ∪ Observed.">Reference Union</span></th>
-                    <th><span class="help" title="Number of matched strings for this regex inside the Malicious TI population for this type.">Malicious TI</span></th>
-                    <th><span class="help" title="Number of matched strings for this regex inside the Observed population for this type.">Observed</span></th>
-                    <th><span class="help" title="Number of matched strings for this regex inside the benign corpus for this type. Lower is better.">Benign</span></th>
-                    <th><span class="help" title="Current rough score = reference_union_matches minus benign_matches. Higher is better.">Score</span></th>
                     <th><span class="help" title="How many population checks for this regex hit the timeout guard and were skipped.">Timeouts</span></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {''.join(regex_table_rows) or '<tr><td colspan="7">No accepted regexes.</td></tr>'}
+                  {''.join(regex_table_rows) or '<tr><td colspan="9">No accepted regexes.</td></tr>'}
                 </tbody>
               </table>
             </section>
@@ -1084,8 +1240,25 @@ def render_html(report: dict, sample_limit: int, top_regexes: int) -> str:
           <div class="card">
             <h4>Top Regexes Score</h4>
             <p class="small">
-              The score is currently <code>reference_union_matches - benign_matches</code>. It is a rough
-              usefulness ranking, not a formal quality metric.
+              The top-regex ranking now uses <code>strength_gap = malicious_avg_all - benign_avg_all</code>.
+              Both averages are computed over all tested strings in that population, with non-matches counted as <code>0</code>.
+              Higher is better because it means broader and/or stronger malicious matches with weaker benign matches.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Match Strength</h4>
+            <p class="small">
+              Each regex/string match gets a score from <code>0</code> to <code>100</code> using the same
+              formula as the live RegexGenerator benign filter. The score rewards wider coverage, anchoring,
+              and specificity, and penalizes broad wildcard-heavy patterns. In the report, non-matches are
+              treated as score <code>0</code> when computing whole-population averages and standard deviations.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Strength Scatter</h4>
+            <p class="small">
+              Each point is one regex. X is the average benign match score. Y is the average malicious match score.
+              The ideal region is upper-left: high malicious strength and low benign strength.
             </p>
           </div>
         </div>
