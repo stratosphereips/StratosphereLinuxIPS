@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+import re
 import time
 from unittest.mock import Mock
 
@@ -61,6 +62,7 @@ def test_regex_generator_config_defaults():
     assert parser.regex_generator_recent_history_size() == 0
     assert parser.regex_generator_max_regex_length() == 180
     assert parser.regex_generator_regex_validation_timeout_seconds() == 2
+    assert parser.regex_generator_benign_match_strength_threshold() == 75
     assert parser.regex_generator_store_dir() == "output/regex_generator"
     assert parser.regex_generator_persistent_store_dir() == ""
     assert parser.regex_generator_store_rejected_regexes() is False
@@ -82,6 +84,7 @@ def test_regex_generator_config_sanitization():
             "recent_history_size": -2,
             "max_regex_length": "bad",
             "regex_validation_timeout_seconds": "bad",
+            "benign_match_strength_threshold": "bad",
             "type_weights": {
                 "dns_domain": 0,
                 "uri": 0,
@@ -106,6 +109,7 @@ def test_regex_generator_config_sanitization():
     assert parser.regex_generator_recent_history_size() == 0
     assert parser.regex_generator_max_regex_length() == 180
     assert parser.regex_generator_regex_validation_timeout_seconds() == 2
+    assert parser.regex_generator_benign_match_strength_threshold() == 75
     assert parser.regex_generator_type_weights() == {
         "dns_domain": 1,
         "uri": 1,
@@ -451,7 +455,7 @@ def test_validate_and_store_regex_rejects_validation_timeout(tmp_path):
     )
     regex_generator.storage = Mock()
     regex_generator.storage.might_have_generated_regex.return_value = False
-    regex_generator._find_matching_benign_value = Mock(
+    regex_generator._find_strong_benign_match = Mock(
         side_effect=TimeoutError("timed out")
     )
 
@@ -653,7 +657,7 @@ def test_benign_corpus_scan_rejects_matching_regex(tmp_path):
         regex_type="dns_domain",
         status="rejected",
     )
-    assert rejected[0]["rejection_reason"] == "matched_benign_data"
+    assert rejected[0]["rejection_reason"] == "matched_benign_data_too_strong"
     assert rejected[0]["matched_benign_value"] == "google.com"
     storage.close()
 
@@ -698,9 +702,61 @@ def test_benign_corpus_scan_rejects_regex_matching_whitelist_domain(tmp_path):
         regex_type="dns_domain",
         status="rejected",
     )
-    assert rejected[0]["rejection_reason"] == "matched_benign_data"
+    assert rejected[0]["rejection_reason"] == "matched_benign_data_too_strong"
     assert rejected[0]["matched_benign_value"] == "example.com"
     storage.close()
+
+
+def test_partial_benign_match_can_be_accepted_below_strength_threshold(tmp_path):
+    storage = RegexGeneratorStorage(
+        Mock(),
+        _build_storage_conf(str(tmp_path / "regex_generator")),
+        "dummy_output_dir",
+        12345,
+    )
+    regex_generator = ModuleFactory().create_regex_generator_obj(
+        store_dir=str(tmp_path / "regex_generator")
+    )
+    regex_generator.storage = storage
+    regex_generator.benign_match_strength_threshold = 80
+
+    regex_generator._validate_and_store_regex(
+        {
+            "regex_type": "dns_domain",
+            "regex": r"google",
+            "regex_hash": regex_generator._hash_regex(r"google"),
+            "backend_alias": "local_qwen",
+            "provider": "ollama",
+            "model": "qwen2.5:3b",
+            "temperature": 1.2,
+            "prompt_version": PROMPT_VERSION,
+            "request_id": "req-weak-benign",
+            "created_at": time.time(),
+        }
+    )
+
+    accepted = storage.get_generated_regexes(regex_type="dns_domain")
+    assert accepted
+    assert accepted[0]["regex"] == r"google"
+    storage.close()
+
+
+def test_match_strength_scores_full_specific_match_higher_than_partial_match(tmp_path):
+    regex_generator = ModuleFactory().create_regex_generator_obj(
+        store_dir=str(tmp_path / "regex_generator")
+    )
+    full_score = regex_generator._compute_match_strength(
+        re.compile(r"^google\.com$"),
+        "google.com",
+        regex_generator._measure_regex_specificity(r"^google\.com$"),
+    )
+    partial_score = regex_generator._compute_match_strength(
+        re.compile(r"google"),
+        "google.com",
+        regex_generator._measure_regex_specificity(r"google"),
+    )
+
+    assert full_score > partial_score
 
 
 def test_rejected_regexes_are_not_persisted_by_default(tmp_path):
