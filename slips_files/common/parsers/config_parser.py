@@ -832,6 +832,16 @@ class ConfigParser(object):
             value = 2.0
         return max(0.0, value)
 
+    def regex_generator_benign_match_strength_threshold(self) -> float:
+        value = self.read_configuration(
+            "regex_generator", "benign_match_strength_threshold", 75
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 75.0
+        return max(0.0, min(100.0, value))
+
     def regex_generator_type_weights(self) -> dict:
         default_weights = {
             "dns_domain": 1,
