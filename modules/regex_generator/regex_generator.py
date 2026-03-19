@@ -178,6 +178,7 @@ class RegexGenerator(IModule):
             self.conf,
             self.output_dir,
             self.ppid,
+            self.db,
         )
         self.next_generation_at = time.time()
         self._log_detail("RegexGenerator module ready.")
