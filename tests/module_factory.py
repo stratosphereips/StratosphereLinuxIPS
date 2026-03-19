@@ -86,6 +86,7 @@ class ModuleFactory:
             return_value=10000
         )
         conf.regex_generator_seed_benign_samples = Mock(return_value=True)
+        conf.tranco_top_benign_limit = Mock(return_value=1000)
 
         with (
             # to prevent config/redis.conf from being overwritten
@@ -224,6 +225,7 @@ class ModuleFactory:
             return_value=10000
         )
         conf.regex_generator_seed_benign_samples = Mock(return_value=True)
+        conf.tranco_top_benign_limit = Mock(return_value=1000)
         conf.rotation = Mock(return_value=True)
         conf.rotation_period = Mock(return_value="1day")
 
