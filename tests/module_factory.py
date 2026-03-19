@@ -231,7 +231,10 @@ class ModuleFactory:
         )
         regex_generator.db.channels.LLM_REQUEST = "llm_request"
         regex_generator.db.channels.LLM_RESPONSE = "llm_response"
-        regex_generator.channels = {"llm_response": regex_generator.c_llm}
+        regex_generator.channels = {
+            "llm_response": regex_generator.c_llm,
+            "tw_closed": regex_generator.c_tw_closed,
+        }
         regex_generator.print = Mock()
         return regex_generator
 
