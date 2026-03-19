@@ -209,6 +209,9 @@ class ModuleFactory:
         conf.regex_generator_regex_validation_timeout_seconds = Mock(
             return_value=2
         )
+        conf.regex_generator_benign_match_strength_threshold = Mock(
+            return_value=75
+        )
         conf.regex_generator_type_weights = Mock(
             return_value={
                 "dns_domain": 1,
