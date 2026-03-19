@@ -288,6 +288,27 @@ def test_check_if_update_online_whitelist_not_updated():
     update_manager.db.set_ti_feed_info.assert_not_called()
 
 
+def test_update_online_whitelist_stores_top_1000_domains():
+    update_manager = ModuleFactory().create_update_manager_obj()
+    update_manager.online_whitelist_update_period = 86400
+    update_manager.tranco_top_benign_limit = 3
+    lines = ["1,example.com", "2,google.com", "3,github.com"]
+    update_manager.responses["tranco_whitelist"] = Mock(
+        text="\n".join(lines)
+    )
+
+    update_manager.update_online_whitelist()
+
+    update_manager.db.store_tranco_whitelisted_domains.assert_called_once_with(
+        ["example.com", "google.com", "github.com"], ttl=86400
+    )
+    update_manager.db.store_tranco_top_domains.assert_called_once_with(
+        ["example.com", "google.com", "github.com"],
+        ttl=86400,
+        limit=3,
+    )
+
+
 @pytest.mark.parametrize(
     "headers, expected_last_modified",
     [
