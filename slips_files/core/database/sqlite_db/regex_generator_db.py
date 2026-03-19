@@ -111,15 +111,16 @@ class BenignCorpusSQLiteDB(_BaseRegexSQLiteDB):
         value: str,
         source: str,
         created_at: float | None = None,
-    ):
+    ) -> bool:
         created_at = created_at or time()
         value_hash = _make_sha256(f"{regex_type}\0{value}")
-        self.execute(
+        cursor = self.execute(
             "INSERT OR IGNORE INTO benign_strings "
             "(regex_type, value, value_hash, source, created_at) "
             "VALUES (?, ?, ?, ?, ?)",
             (regex_type, value, value_hash, source, created_at),
         )
+        return bool(cursor and cursor.rowcount)
 
     def seed_strings(self, seed_samples: Dict[str, Iterable[str]], source: str):
         for regex_type, values in seed_samples.items():
@@ -694,6 +695,29 @@ class RegexGeneratorStorage:
 
     def iter_benign_strings(self, regex_type: str):
         yield from self.benign_db.iter_values(regex_type)
+
+    def add_benign_strings(
+        self,
+        regex_type: str,
+        values: Iterable[str],
+        source: str,
+    ) -> int:
+        inserted = 0
+        bloom = self.bloom_filters.get(regex_type)
+        for value in values:
+            normalized = str(value or "").strip()
+            if not normalized:
+                continue
+            added = self.benign_db.insert_benign_string(
+                regex_type,
+                normalized,
+                source=source,
+            )
+            if added:
+                inserted += 1
+                if bloom is not None:
+                    bloom.add(normalized)
+        return inserted
 
     def get_recent_history(self, regex_type: str, limit: int) -> List[dict]:
         return self.generated_db.get_recent_history(regex_type, limit)
