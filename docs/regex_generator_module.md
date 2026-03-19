@@ -278,8 +278,9 @@ Redis storage note:
 It also builds one in-memory bloom filter per benign type and one bloom filter
 for generated regex hashes, but these do not replace the benign corpus scan.
 They help with exact membership checks and future scale improvements, while the
-acceptance decision still requires testing whether the regex matches any benign
-string.
+acceptance decision still requires computing the benign match-strength score
+against the benign corpus and rejecting the regex only if some benign string
+reaches or exceeds `benign_match_strength_threshold`.
 
 The current benign acceptance gate is:
 
@@ -287,7 +288,9 @@ The current benign acceptance gate is:
 SELECT value FROM benign_strings WHERE regex_type = ?
 ```
 
-streamed line by line until the first match.
+streamed line by line while the module computes the benign match-strength score
+for each string. The regex is rejected only if a score reaches the configured
+threshold.
 
 ## Reading accepted regexes from other modules
 
@@ -326,6 +329,39 @@ In that progress line:
 
 - `regex 247/781` means 247 accepted regexes have been evaluated out of 781 total accepted regexes.
 - `cmp 560,840/1,770,991` means regex-versus-string match operations, not raw TI entries. The number grows because many regexes are checked against many strings across the benign corpus, malicious TI, observed traffic, and reference-union populations.
+
+The report reuses the same `0..100` match-strength function as the live
+generator, but it applies it to every regex/string comparison in the selected
+populations:
+
+- non-match: score `0`
+- match: the same span/anchor/specificity/wildcard formula used by
+  `RegexGenerator`
+
+For each regex and each population, the report computes:
+
+- `match_count`: number of strings matched at all
+- `avg_all ± std_all`: average and standard deviation over all tested strings,
+  with non-matches counted as `0`
+- `avg_match ± std_match`: average and standard deviation over only the strings
+  that matched
+
+The top-regex ranking uses:
+
+```text
+strength_gap = malicious_avg_all - benign_avg_all
+```
+
+So the “best” regexes in the report are the ones that are stronger and/or
+broader on malicious strings while staying weak on benign strings.
+
+The HTML output also adds a `Strength Scatter` plot per regex type:
+
+- X axis: benign `avg_all`
+- Y axis: malicious `avg_all`
+- ideal area: upper-left
+
+This gives a faster view of many regexes than a table alone.
 
 If you want the exhaustive run for research, use:
 
