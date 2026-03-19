@@ -1150,6 +1150,41 @@ class RedisDB(
                 self.constants.TRANCO_WHITELISTED_DOMAINS, int(ttl)
             )
 
+    def store_tranco_top_domains(
+        self, domains: List[str], ttl: Optional[int] = None, limit: int = 1000
+    ):
+        """
+        store the ordered top-ranked Tranco domains so ranking can be reused
+        later by modules that need the actual top N entries
+        """
+        self.rcache.delete(self.constants.TRANCO_TOP_DOMAINS)
+        if limit <= 0:
+            return
+
+        ordered_domains = []
+        seen = set()
+        for domain in domains:
+            domain = str(domain or "").strip().lower()
+            if not domain or domain in seen:
+                continue
+            ordered_domains.append(domain)
+            seen.add(domain)
+            if len(ordered_domains) >= limit:
+                break
+
+        if ordered_domains:
+            self.rcache.rpush(
+                self.constants.TRANCO_TOP_DOMAINS, *ordered_domains
+            )
+            if ttl and ttl > 0:
+                self.rcache.expire(
+                    self.constants.TRANCO_TOP_DOMAINS, int(ttl)
+                )
+
+    def get_tranco_top_domains(self, limit: Optional[int] = None):
+        end = -1 if limit is None or limit <= 0 else limit - 1
+        return self.rcache.lrange(self.constants.TRANCO_TOP_DOMAINS, 0, end) or []
+
     def is_tranco_whitelist_expired(self) -> bool:
         """
         checks if tranco whitelist is expired based on Redis TTL
@@ -1164,7 +1199,10 @@ class RedisDB(
         )
 
     def delete_tranco_whitelist(self):
-        return self.rcache.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
+        return self.rcache.delete(
+            self.constants.TRANCO_WHITELISTED_DOMAINS,
+            self.constants.TRANCO_TOP_DOMAINS,
+        )
 
     def get_asn_info(self, ip: str) -> Optional[Dict[str, str]]:
         """

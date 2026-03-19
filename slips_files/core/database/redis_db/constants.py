@@ -35,6 +35,7 @@ class Constants:
     MODIFIED_TIMEWINDOWS = "ModifiedTW"
     ACCUMULATED_THREAT_LEVELS = "accumulated_threat_levels"
     TRANCO_WHITELISTED_DOMAINS = "tranco_whitelisted_domains"
+    TRANCO_TOP_DOMAINS = "tranco_top_domains"
     WHITELIST = "whitelist"
     GROWING_ZEEK_DIR = "growing_zeek_dir"
     DHCP_SERVERS = "DHCP_servers"
