@@ -277,7 +277,9 @@ Redis storage note:
 It builds one in-memory bloom filter per benign type and one additional bloom
 filter for generated regex hashes. These filters speed up exact membership
 checks, but they do not replace the benign corpus scan. Acceptance still
-requires checking whether a regex matches any benign string.
+requires computing the benign match-strength score against the benign corpus
+and rejecting the regex only if some benign string reaches or exceeds
+`benign_match_strength_threshold`.
 
 ## Stored regexes
 
@@ -315,6 +317,40 @@ In that progress line:
 
 - `regex 247/781` means 247 accepted regexes have been evaluated out of 781 total accepted regexes.
 - `cmp 560,840/1,770,991` means regex-versus-string match operations, not raw TI entries. The number grows because many regexes are checked against many strings across the benign corpus, malicious TI, observed traffic, and reference-union populations.
+
+The report reuses the same `0..100` match-strength function as the live
+module, but it applies it to every regex/string comparison in the selected
+populations:
+
+- if the regex does not match the string, the score is `0`
+- if it matches, the score is computed with the same span/anchor/specificity/
+  wildcard formula used by the generator
+
+For each regex and each population, the report now computes:
+
+- `match_count`: how many strings matched at all
+- `avg_all ± std_all`: average and standard deviation over all tested strings,
+  with non-matches counted as `0`
+- `avg_match ± std_match`: average and standard deviation over only the strings
+  that matched
+
+The top-regex table ranks regexes by:
+
+```text
+strength_gap = malicious_avg_all - benign_avg_all
+```
+
+This favors regexes that score strongly and/or broadly on malicious strings
+while staying weak on benign strings.
+
+The HTML report also includes a `Strength Scatter` plot per regex type:
+
+- X axis: benign `avg_all`
+- Y axis: malicious `avg_all`
+- ideal area: upper-left
+
+That plot is useful when there are too many regexes for a table alone to be
+read comfortably.
 
 If you want the exhaustive run for research, use:
 
