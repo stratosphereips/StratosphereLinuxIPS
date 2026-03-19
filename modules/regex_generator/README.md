@@ -263,6 +263,27 @@ If the daily Tranco whitelist has already been downloaded by Slips, the module
 also imports the ordered configured Tranco top benign domains from Redis into
 the same domain-like benign corpus.
 
+During runtime, the module also listens for `tw_closed`. When a finished time
+window belongs to one of the host IPs of the machine running Slips, it checks
+that host TW for alerts and evidence:
+
+- if the host TW has any alert or any evidence, nothing is imported
+- if the host TW has zero alerts and zero evidence, the module learns extra
+  benign strings from that clean local TW
+
+The runtime benign import currently uses:
+
+- DNS query names -> `dns_domain`
+- HTTP hostnames -> `dns_domain`
+- TLS `server_name` -> `tls_sni`
+- certificate `subject` CN -> `certificate_cn`
+- filenames derived from HTTP URIs -> `filename`
+
+The module logs the total alert count, total evidence count, and a separate
+best-effort anomaly-evidence count for that finished host TW. The anomaly
+count is only for visibility; the import gate itself is strict: the TW must
+have zero alerts and zero evidence.
+
 Redis storage note:
 
 - The original Tranco whitelist behavior is still present: Slips stores the
