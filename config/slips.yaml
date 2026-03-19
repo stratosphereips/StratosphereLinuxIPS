@@ -314,6 +314,11 @@ regex_generator:
   # Set to 0 to disable the timeout.
   regex_validation_timeout_seconds: 2
 
+  # Benign match strength threshold from 0 to 100. A generated regex is
+  # rejected only when its strongest match against a benign string reaches
+  # this score. Higher values are more permissive.
+  benign_match_strength_threshold: 75
+
   # Weighted random choice for the next regex type to generate.
   type_weights:
     dns_domain: 1
