@@ -475,6 +475,10 @@ whitelists:
   # 2 weeks = 1209600 seconds
   online_whitelist_update_period: 86400
   online_whitelist: https://tranco-list.eu/download/X5QNN/10000
+  # Keep the first N Tranco domains in order in Redis under
+  # `tranco_top_domains` so other modules can reuse them as benign data.
+  # RegexGenerator and the offline regex coverage report use this limit.
+  tranco_top_benign_limit: 1000
 
   # if this parameter is set to false, Slips runs with no whitelists at all.
   # May cause a lot of false positives
