@@ -261,6 +261,99 @@ def test_log_file_rotates_with_global_rotation_settings(tmp_path, mocker):
     regex_generator.shutdown_gracefully()
 
 
+def test_clean_host_tw_imports_runtime_benign_strings(tmp_path, mocker):
+    regex_generator = ModuleFactory().create_regex_generator_obj(
+        store_dir=str(tmp_path / "regex_generator")
+    )
+    mocker.patch(
+        "modules.regex_generator.regex_generator.utils.drop_root_privs_permanently"
+    )
+    regex_generator.pre_main()
+    regex_generator.get_msg = Mock(
+        side_effect=[
+            {"data": "profile_192.168.1.10_timewindow7"},
+        ]
+    )
+    regex_generator.db.get_all_host_ips = Mock(return_value=["192.168.1.10"])
+    regex_generator.db.get_profileid_twid_alerts = Mock(return_value={})
+    regex_generator.db.get_twid_evidence = Mock(return_value={})
+    regex_generator.db.get_all_altflows_in_profileid_twid = Mock(
+        return_value=[
+            {
+                "flow_type": "dns",
+                "flow": {"query": "printer.example.org"},
+            },
+            {
+                "flow_type": "http",
+                "flow": {"host": "updates.example.org", "uri": "/downloads/setup.msi"},
+            },
+            {
+                "flow_type": "ssl",
+                "flow": {
+                    "server_name": "api.github.com",
+                    "subject": "C=US,O=GitHub,CN=github.com",
+                },
+            },
+        ]
+    )
+
+    regex_generator._handle_one_tw_closed_message()
+
+    assert "printer.example.org" in set(
+        regex_generator.storage.iter_benign_strings("dns_domain")
+    )
+    assert "updates.example.org" in set(
+        regex_generator.storage.iter_benign_strings("dns_domain")
+    )
+    assert "setup.msi" in set(
+        regex_generator.storage.iter_benign_strings("filename")
+    )
+    assert "api.github.com" in set(
+        regex_generator.storage.iter_benign_strings("tls_sni")
+    )
+    assert "github.com" in set(
+        regex_generator.storage.iter_benign_strings("certificate_cn")
+    )
+    regex_generator.shutdown_gracefully()
+
+
+def test_dirty_host_tw_does_not_import_runtime_benign_strings(tmp_path, mocker):
+    regex_generator = ModuleFactory().create_regex_generator_obj(
+        store_dir=str(tmp_path / "regex_generator")
+    )
+    mocker.patch(
+        "modules.regex_generator.regex_generator.utils.drop_root_privs_permanently"
+    )
+    regex_generator.pre_main()
+    before_dns = set(regex_generator.storage.iter_benign_strings("dns_domain"))
+    regex_generator.get_msg = Mock(
+        side_effect=[
+            {"data": "profile_192.168.1.10_timewindow8"},
+        ]
+    )
+    regex_generator.db.get_all_host_ips = Mock(return_value=["192.168.1.10"])
+    regex_generator.db.get_profileid_twid_alerts = Mock(
+        return_value={"alert-1": ["ev-1"]}
+    )
+    regex_generator.db.get_twid_evidence = Mock(
+        return_value={"ev-1": json.dumps({"evidence_type": "MALICIOUS_FLOW"})}
+    )
+    regex_generator.db.get_all_altflows_in_profileid_twid = Mock(
+        return_value=[
+            {
+                "flow_type": "dns",
+                "flow": {"query": "should-not-be-added.example"},
+            },
+        ]
+    )
+
+    regex_generator._handle_one_tw_closed_message()
+
+    after_dns = set(regex_generator.storage.iter_benign_strings("dns_domain"))
+    assert after_dns == before_dns
+    regex_generator.shutdown_gracefully()
+
+
 def test_build_prompt_messages_uses_type_specific_prompt(tmp_path):
     regex_generator = ModuleFactory().create_regex_generator_obj(
         store_dir=str(tmp_path / "regex_generator")
