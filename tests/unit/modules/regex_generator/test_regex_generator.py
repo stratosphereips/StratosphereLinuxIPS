@@ -25,6 +25,7 @@ def _build_storage_conf(
     max_stored_rejected_regexes: int = 10000,
     enable_local_whitelist: bool = True,
     local_whitelist_path: str = "config/whitelist.conf",
+    tranco_top_benign_limit: int = 1000,
 ):
     conf = Mock()
     conf.regex_generator_store_dir = Mock(return_value=store_dir)
@@ -42,6 +43,7 @@ def _build_storage_conf(
     )
     conf.enable_local_whitelist = Mock(return_value=enable_local_whitelist)
     conf.local_whitelist_path = Mock(return_value=local_whitelist_path)
+    conf.tranco_top_benign_limit = Mock(return_value=tranco_top_benign_limit)
     return conf
 
 
@@ -64,6 +66,7 @@ def test_regex_generator_config_defaults():
     assert parser.regex_generator_store_rejected_regexes() is False
     assert parser.regex_generator_max_stored_rejected_regexes() == 10000
     assert parser.regex_generator_seed_benign_samples() is True
+    assert parser.tranco_top_benign_limit() == 1000
 
 
 def test_regex_generator_config_sanitization():
@@ -115,6 +118,7 @@ def test_regex_generator_config_sanitization():
     assert parser.regex_generator_store_rejected_regexes() is True
     assert parser.regex_generator_max_stored_rejected_regexes() == 10000
     assert parser.regex_generator_seed_benign_samples() is False
+    assert parser.tranco_top_benign_limit() == 1000
 
 
 def test_regex_generator_generation_interval_allows_zero():
@@ -568,6 +572,50 @@ def test_storage_skips_whitelist_import_when_disabled(tmp_path):
     assert "example.com" not in storage.get_benign_examples(
         "dns_domain", limit=100
     )
+    storage.close()
+
+
+def test_storage_imports_tranco_top_domains_into_matching_regex_types(tmp_path):
+    db = Mock()
+    db.get_tranco_top_domains = Mock(
+        return_value=["google.com", "github.com", "microsoft.com"]
+    )
+    storage = RegexGeneratorStorage(
+        Mock(),
+        _build_storage_conf(str(tmp_path / "regex_generator")),
+        "dummy_output_dir",
+        12345,
+        db=db,
+    )
+
+    assert "google.com" in storage.get_benign_examples("dns_domain", limit=200)
+    assert "github.com" in storage.get_benign_examples("tls_sni", limit=200)
+    assert "microsoft.com" in storage.get_benign_examples(
+        "certificate_cn", limit=200
+    )
+    db.get_tranco_top_domains.assert_called_once_with(limit=1000)
+    storage.close()
+
+
+def test_storage_skips_tranco_import_when_limit_is_zero(tmp_path):
+    db = Mock()
+    db.get_tranco_top_domains = Mock(return_value=["tranco-only-example.test"])
+    storage = RegexGeneratorStorage(
+        Mock(),
+        _build_storage_conf(
+            str(tmp_path / "regex_generator"),
+            seed_benign_samples=False,
+            tranco_top_benign_limit=0,
+        ),
+        "dummy_output_dir",
+        12345,
+        db=db,
+    )
+
+    assert "tranco-only-example.test" not in storage.get_benign_examples(
+        "dns_domain", limit=200
+    )
+    db.get_tranco_top_domains.assert_not_called()
     storage.close()
 
 
