@@ -3,7 +3,6 @@
 from datetime import datetime
 from typing import List, Dict
 import os.path
-import sqlite3
 import json
 import csv
 from dataclasses import asdict
@@ -107,6 +106,26 @@ class SQLiteDB(ISQLite):
             flow = flow[1]
             res[uid] = json.loads(flow)
         return res
+
+    def get_all_altflows_in_profileid_twid(self, profileid, twid):
+        condition = f'profileid = "{profileid}" ' f'AND twid = "{twid}"'
+        altflows: list = self.select("altflows", condition=condition)
+        if not altflows:
+            return []
+
+        rows = []
+        for altflow in altflows:
+            rows.append(
+                {
+                    "uid": altflow[0],
+                    "flow": json.loads(altflow[1]),
+                    "label": altflow[2],
+                    "profileid": altflow[3],
+                    "twid": altflow[4],
+                    "flow_type": altflow[5],
+                }
+            )
+        return rows
 
     def get_all_flows_in_profileid(self, profileid) -> Dict[str, dict]:
         """
