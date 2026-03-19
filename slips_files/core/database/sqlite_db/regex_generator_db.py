@@ -334,11 +334,13 @@ class RegexGeneratorStorage:
         conf,
         output_dir: str,
         main_pid: int,
+        db=None,
     ):
         self.logger = logger
         self.conf = conf
         self.output_dir = output_dir
         self.main_pid = main_pid
+        self.db = db
         self.store_dir = self._resolve_store_dir()
         self.store_rejected_regexes = self._read_store_rejected_regexes()
         self.max_stored_rejected_regexes = (
@@ -347,6 +349,7 @@ class RegexGeneratorStorage:
         self.seed_benign_samples = self._read_seed_benign_samples()
         self.enable_local_whitelist = self._read_enable_local_whitelist()
         self.local_whitelist_path = self._read_local_whitelist_path()
+        self.tranco_top_benign_limit = self._read_tranco_top_benign_limit()
         self.benign_db = BenignCorpusSQLiteDB(
             self.logger,
             str(Path(self.store_dir) / "benign_corpus.sqlite"),
@@ -360,6 +363,7 @@ class RegexGeneratorStorage:
         if self.seed_benign_samples and self.benign_db.is_empty():
             self.seed_default_benign_samples()
         self._import_local_whitelist_into_benign_corpus()
+        self._import_tranco_top_domains_into_benign_corpus()
         self.bloom_filters = self._build_bloom_filters()
         self.generated_regex_filter = self._build_generated_regex_filter()
         self.rejected_regex_filter = self._build_rejected_regex_filter()
@@ -513,6 +517,27 @@ class RegexGeneratorStorage:
                 return value.strip()
         return "config/whitelist.conf"
 
+    def _read_tranco_top_benign_limit(self) -> int:
+        value = self._read_int_config("tranco_top_benign_limit")
+        if value is not None:
+            return max(0, value)
+
+        parser = ConfigParser()
+        parser_getter = getattr(parser, "tranco_top_benign_limit", None)
+        if callable(parser_getter):
+            try:
+                value = parser_getter()
+            except TypeError:
+                value = None
+            if isinstance(value, int):
+                return max(0, value)
+            if isinstance(value, str):
+                try:
+                    return max(0, int(value.strip()))
+                except ValueError:
+                    pass
+        return 1000
+
     def _read_string_config(self, method_name: str) -> str | None:
         getter = getattr(self.conf, method_name, None)
         if not callable(getter):
@@ -580,6 +605,37 @@ class RegexGeneratorStorage:
                         regex_type,
                         value,
                         source=f"local_whitelist:{whitelist_path}",
+                    )
+
+    def _import_tranco_top_domains_into_benign_corpus(self):
+        if self.db is None or self.tranco_top_benign_limit <= 0:
+            return
+
+        getter = getattr(self.db, "get_tranco_top_domains", None)
+        if not callable(getter):
+            return
+
+        try:
+            domains = getter(limit=self.tranco_top_benign_limit) or []
+        except TypeError:
+            domains = getter() or []
+
+        for domain in domains[: self.tranco_top_benign_limit]:
+            domain = str(domain or "").strip().lower()
+            if not utils.is_valid_domain(domain):
+                continue
+
+            values = {domain}
+            hostname = utils.extract_hostname(domain)
+            if hostname:
+                values.add(hostname)
+
+            for regex_type in WHITELIST_COMPATIBLE_REGEX_TYPES:
+                for value in values:
+                    self.benign_db.insert_benign_string(
+                        regex_type,
+                        value,
+                        source="tranco_top_1000",
                     )
 
     @staticmethod
