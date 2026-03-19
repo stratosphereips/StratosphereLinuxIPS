@@ -8,6 +8,7 @@ import signal
 import time
 import uuid
 from hashlib import sha256
+from urllib.parse import urlparse
 
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -117,8 +118,10 @@ class RegexGenerator(IModule):
 
     def init(self):
         self.c_llm = self.db.subscribe(self.db.channels.LLM_RESPONSE)
+        self.c_tw_closed = self.db.subscribe("tw_closed")
         self.channels = {
             self.db.channels.LLM_RESPONSE: self.c_llm,
+            "tw_closed": self.c_tw_closed,
         }
         self.storage = None
         self.enabled = False
@@ -207,6 +210,8 @@ class RegexGenerator(IModule):
         return True
 
     def main(self):
+        self._handle_one_tw_closed_message()
+
         now = time.time()
         if self.pending_request:
             self._handle_pending_response(now)
@@ -236,6 +241,148 @@ class RegexGenerator(IModule):
             f"Starting generation cycle. regex_type={regex_type} backend={backend}"
         )
         self._send_generation_request(regex_type, backend)
+
+    def _handle_one_tw_closed_message(self):
+        if self.storage is None:
+            return
+
+        msg = self.get_msg("tw_closed")
+        if not msg:
+            return
+
+        profileid, twid = self._split_profileid_twid(msg.get("data", ""))
+        if not profileid or not twid:
+            return
+
+        if not self._is_host_profile(profileid):
+            return
+
+        alerts = self.db.get_profileid_twid_alerts(profileid, twid) or {}
+        evidence = self._normalize_evidence_records(
+            self.db.get_twid_evidence(profileid, twid) or {}
+        )
+        anomaly_evidence_count = self._count_anomaly_evidence(evidence)
+        self._log_detail(
+            f"Finished host TW profileid={profileid} twid={twid} "
+            f"alerts={len(alerts)} evidence={len(evidence)} "
+            f"anomaly_evidence={anomaly_evidence_count}"
+        )
+
+        if alerts or evidence:
+            return
+
+        learned = self._extract_benign_candidates_from_twid(profileid, twid)
+        learned_counts = {}
+        source = f"clean_client_tw:{profileid}:{twid}"
+        for regex_type, values in learned.items():
+            inserted = self.storage.add_benign_strings(regex_type, values, source)
+            if inserted:
+                learned_counts[regex_type] = inserted
+
+        if learned_counts:
+            summary = ", ".join(
+                f"{regex_type}={count}"
+                for regex_type, count in sorted(learned_counts.items())
+            )
+            self._log_detail(
+                f"Imported runtime benign strings from clean host TW "
+                f"profileid={profileid} twid={twid}: {summary}"
+            )
+
+    @staticmethod
+    def _split_profileid_twid(profileid_twid: str) -> tuple[str, str]:
+        text = str(profileid_twid or "").strip()
+        if not text or "_" not in text:
+            return "", ""
+        profileid, twid = text.rsplit("_", 1)
+        return profileid, twid
+
+    def _is_host_profile(self, profileid: str) -> bool:
+        profile_ip = str(profileid or "").split("_", 1)[-1]
+        host_ips = {str(ip).strip() for ip in self.db.get_all_host_ips() or []}
+        return profile_ip in host_ips
+
+    @staticmethod
+    def _normalize_evidence_records(raw_evidence: dict) -> dict[str, dict]:
+        normalized = {}
+        for evidence_id, payload in (raw_evidence or {}).items():
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
+            if isinstance(payload, dict):
+                normalized[evidence_id] = payload
+        return normalized
+
+    @staticmethod
+    def _count_anomaly_evidence(evidence_records: dict[str, dict]) -> int:
+        anomaly_evidence_types = {"MALICIOUS_FLOW"}
+        count = 0
+        for evidence in evidence_records.values():
+            evidence_type = str(evidence.get("evidence_type", ""))
+            description = str(evidence.get("description", "")).lower()
+            if (
+                evidence_type in anomaly_evidence_types
+                or "anomaly" in evidence_type.lower()
+                or "anomaly" in description
+            ):
+                count += 1
+        return count
+
+    def _extract_benign_candidates_from_twid(
+        self, profileid: str, twid: str
+    ) -> dict[str, set[str]]:
+        learned = {regex_type: set() for regex_type in REGEX_TYPES}
+        altflows = self.db.get_all_altflows_in_profileid_twid(profileid, twid) or []
+        for row in altflows:
+            flow = row.get("flow", {})
+            flow_type = row.get("flow_type") or flow.get("type_")
+            if flow_type == "dns":
+                domain = self._normalize_domain(flow.get("query", ""))
+                if domain:
+                    learned["dns_domain"].add(domain)
+            elif flow_type == "http":
+                host = self._normalize_domain(flow.get("host", ""))
+                if host:
+                    learned["dns_domain"].add(host)
+                filename = self._extract_filename_from_uri(flow.get("uri", ""))
+                if filename:
+                    learned["filename"].add(filename)
+            elif flow_type == "ssl":
+                server_name = self._normalize_domain(flow.get("server_name", ""))
+                if server_name:
+                    learned["tls_sni"].add(server_name)
+                cn = self._extract_cn(flow.get("subject", ""))
+                if cn:
+                    learned["certificate_cn"].add(cn)
+        return learned
+
+    @staticmethod
+    def _normalize_domain(value: str) -> str:
+        domain = str(value or "").strip().rstrip(".").lower()
+        if not domain or not utils.is_valid_domain(domain):
+            return ""
+        return domain
+
+    @staticmethod
+    def _extract_cn(subject: str) -> str:
+        match = re.search(r"(?:^|,)CN=([^,]+)", str(subject or ""))
+        if not match:
+            return ""
+        return match.group(1).strip()
+
+    @staticmethod
+    def _extract_filename_from_uri(uri: str) -> str:
+        value = str(uri or "").strip()
+        if not value:
+            return ""
+        parsed = urlparse(value)
+        path = parsed.path or value
+        filename = path.rsplit("/", 1)[-1].strip()
+        if not filename or "." not in filename:
+            return ""
+        return filename
 
     def _init_log_file(self):
         if not self.create_log_file:
