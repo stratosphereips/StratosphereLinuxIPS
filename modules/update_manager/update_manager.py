@@ -135,6 +135,7 @@ class UpdateManager(IModule):
             conf.online_whitelist_update_period()
         )
         self.online_whitelist = conf.online_whitelist()
+        self.tranco_top_benign_limit = conf.tranco_top_benign_limit()
         self.enable_online_whitelist: bool = conf.enable_online_whitelist()
         self.enable_local_whitelist: bool = conf.enable_local_whitelist()
 
@@ -1582,10 +1583,20 @@ class UpdateManager(IModule):
         response = self.responses["tranco_whitelist"]
         domains = []
         for line in response.text.splitlines():
-            domain = line.split(",")[1].strip()
+            parts = line.split(",")
+            if len(parts) < 2:
+                continue
+            domain = parts[1].strip().lower()
+            if not utils.is_valid_domain(domain):
+                continue
             domains.append(domain)
         self.db.store_tranco_whitelisted_domains(
             domains, ttl=self.online_whitelist_update_period
+        )
+        self.db.store_tranco_top_domains(
+            domains,
+            ttl=self.online_whitelist_update_period,
+            limit=self.tranco_top_benign_limit,
         )
 
         self.mark_feed_as_updated("tranco_whitelist")
