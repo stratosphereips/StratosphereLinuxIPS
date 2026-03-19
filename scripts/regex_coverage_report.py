@@ -380,6 +380,39 @@ def load_benign_corpus(benign_db_path: Path) -> dict[str, set[str]]:
     return populations
 
 
+def load_tranco_benign_populations(
+    ti_cache_port: int,
+    ti_cache_db: int,
+    limit: int,
+) -> dict[str, set[str]]:
+    populations = {regex_type: set() for regex_type in REGEX_TYPES}
+    if redis is None:
+        return populations
+
+    try:
+        cache_client = redis.Redis(
+            host="127.0.0.1",
+            port=ti_cache_port,
+            db=ti_cache_db,
+            decode_responses=True,
+            socket_connect_timeout=1,
+            socket_timeout=1,
+        )
+        if limit <= 0:
+            return populations
+        tranco_domains = cache_client.lrange("tranco_top_domains", 0, limit - 1)
+    except Exception:
+        return populations
+
+    for domain in tranco_domains:
+        domain = normalize_domain(domain)
+        if not domain:
+            continue
+        for regex_type in DOMAIN_LIKE_TYPES:
+            add_string(populations, regex_type, domain)
+    return populations
+
+
 def parse_zeek_json_log(path: Path) -> Iterable[dict]:
     with path.open("r", encoding="utf-8") as handle:
         for line in handle:
@@ -470,6 +503,14 @@ def load_observed_from_flows_sqlite(
                     "tls_sni",
                     flow.get("server_name", flow.get("subject", "")),
                 )
+
+
+def merge_populations(
+    base: dict[str, set[str]], extra: dict[str, set[str]]
+) -> dict[str, set[str]]:
+    for regex_type, values in extra.items():
+        base.setdefault(regex_type, set()).update(values)
+    return base
 
 
 def filename_from_uri(uri: str) -> str:
@@ -1011,8 +1052,9 @@ def render_html(report: dict, sample_limit: int, top_regexes: int) -> str:
           <div class="card">
             <h4>Benign Spillover</h4>
             <p class="small">
-              Matches against the benign corpus. Lower is better. High benign spillover means the
-              regex set is too broad for that type.
+              Matches against the benign corpus. For domain-like types this benign side may also
+              include the Tranco top 1000 domains from the Slips cache. Lower is better. High benign
+              spillover means the regex set is too broad for that type.
             </p>
           </div>
           <div class="card">
@@ -1163,6 +1205,8 @@ def render_html(report: dict, sample_limit: int, top_regexes: int) -> str:
       <p class="lede">
         Offline estimate of accepted RegexGenerator coverage against three reference populations:
         benign corpus, TI-derived malicious strings, and observed traffic from the selected Slips run.
+        For domain-like types, the benign side also includes the Tranco top 1000 domains when available
+        in the Slips cache.
       </p>
       <div class="meta">
         <div class="card">
@@ -1283,6 +1327,8 @@ def main():
     if args.full_scan:
         args.max_population_size = 0
         args.sampling_ratio = 1.0
+    config = ConfigParser()
+    tranco_top_benign_limit = config.tranco_top_benign_limit()
 
     (
         run_output_dir,
@@ -1294,6 +1340,14 @@ def main():
 
     regexes_by_type = load_regexes(regex_db_path)
     benign_populations = load_benign_corpus(benign_db_path)
+    benign_populations = merge_populations(
+        benign_populations,
+        load_tranco_benign_populations(
+            args.ti_cache_port,
+            args.ti_cache_db,
+            tranco_top_benign_limit,
+        ),
+    )
     observed_populations = load_observed_populations(run_output_dir)
     malicious_populations, ti_stats = load_ti_populations(
         args.redis_port,
