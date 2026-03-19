@@ -175,6 +175,16 @@ class ConfigParser(object):
             update_period = 604800
         return update_period
 
+    def tranco_top_benign_limit(self):
+        limit = self.read_configuration(
+            "whitelists", "tranco_top_benign_limit", 1000
+        )
+        try:
+            limit = int(limit)
+        except ValueError:
+            limit = 1000
+        return max(0, limit)
+
     def popup_alerts(self):
         return self.read_configuration("detection", "popup_alerts", False)
 
