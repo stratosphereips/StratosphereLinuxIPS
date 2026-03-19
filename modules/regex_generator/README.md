@@ -43,6 +43,9 @@ regex_generator:
   store_rejected_regexes: false
   max_stored_rejected_regexes: 10000
   seed_benign_samples: true
+
+whitelists:
+  tranco_top_benign_limit: 1000
 ```
 
 Configuration reference:
@@ -80,6 +83,9 @@ Configuration reference:
 - `max_stored_rejected_regexes`: retention cap for rejected rows when
   `store_rejected_regexes` is enabled. Set `0` for unlimited retention.
 - `seed_benign_samples`: seed the benign DB once with a small built-in sample.
+- `whitelists.tranco_top_benign_limit`: number of ordered Tranco domains kept
+  in Redis under `tranco_top_domains` and reused as benign data by
+  `RegexGenerator` and the offline coverage report.
 
 ## Runtime flow
 
@@ -183,6 +189,21 @@ types:
 - `tls_sni`
 - `certificate_cn`
 
+If the daily Tranco whitelist has already been downloaded by Slips, the module
+also imports the ordered configured Tranco top benign domains from Redis into
+the same domain-like benign corpus.
+
+Redis storage note:
+
+- The original Tranco whitelist behavior is still present: Slips stores the
+  full downloaded Tranco set in Redis under `tranco_whitelisted_domains`.
+- Slips now additionally stores the configured top-ranked Tranco domains in
+  order under `tranco_top_domains`.
+- `RegexGenerator` uses this new ordered Redis list so the top-ranked Tranco
+  domains can be treated as benign test data for domain-like regexes.
+- The number of domains kept in `tranco_top_domains` is configured with
+  `whitelists.tranco_top_benign_limit`.
+
 It builds one in-memory bloom filter per benign type and one additional bloom
 filter for generated regex hashes. These filters speed up exact membership
 checks, but they do not replace the benign corpus scan. Acceptance still
@@ -253,6 +274,7 @@ inside the selected run output directory.
 The report estimates coverage against:
 
 - the local benign corpus DB, grouped by regex type
+- the configured Tranco top benign domains from `whitelists.tranco_top_benign_limit` as extra benign data for domain-like types, when available in the Slips cache
 - TI-derived malicious reference strings from Redis and TI files, grouped by regex type
 - observed traffic strings from the same run, grouped by regex type and taken from Zeek logs or `flows.sqlite`
 - the per-type reference union, which is `malicious TI ∪ observed traffic`
