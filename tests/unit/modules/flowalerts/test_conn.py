@@ -205,6 +205,43 @@ def test_check_unknown_port_true_case(mocker):
     mock_set_evidence.assert_called_once_with(twid, flow)
 
 
+def test_check_unknown_port_uses_lowercase_protocol_for_known_ports(mocker):
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    flow = Conn(
+        starttime="1726249372.312124",
+        uid="123",
+        saddr="192.168.1.1",
+        daddr="147.32.82.7",
+        dur=1,
+        proto="UDP",
+        appproto="",
+        sport="12345",
+        dport="53",
+        spkts=2,
+        dpkts=1,
+        sbytes=120,
+        dbytes=60,
+        smac="",
+        dmac="",
+        state="Established",
+        history="S",
+    )
+
+    flow.interpreted_state = "Established"
+    conn.db.is_a_port_scanner = Mock(return_value=False)
+    conn.db.get_port_info = Mock(return_value="DNS")
+    conn.db.is_ftp_port = Mock(return_value=False)
+    mocker.patch.object(conn, "port_belongs_to_an_org", return_value=False)
+    mocker.patch.object(conn, "is_p2p", return_value=False)
+    mock_set_evidence = mocker.patch.object(conn.set_evidence, "unknown_port")
+
+    profileid = f"profile_{flow.saddr}"
+
+    assert conn.check_unknown_port(profileid, twid, flow) is False
+    conn.db.get_port_info.assert_called_once_with("53/udp")
+    mock_set_evidence.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "origstate, saddr, daddr, dport, uids, interpreted_state, expected_calls",
     [
