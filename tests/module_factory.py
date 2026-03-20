@@ -70,6 +70,10 @@ class ModuleFactory:
         conf = Mock()
         conf.delete_prev_db = Mock(return_value=False)
         conf.disabled_detections = Mock(return_value=[])
+        conf.evidence_signal_default = Mock(return_value="PAMP")
+        conf.evidence_signal_overrides = Mock(
+            return_value={"MALICIOUS_FLOW": "DAMP"}
+        )
         conf.get_tw_width_as_float = Mock(return_value=3600.0)
         conf.get_tw_width_in_seconds = Mock(return_value=3600)
         conf.get_args = Mock(return_value=Mock(killall=False))
@@ -1177,6 +1181,10 @@ class ModuleFactory:
         alert_handler.constants = Constants()
         alert_handler.default_ttl = 3600
         alert_handler.extended_ttl = 3600
+        alert_handler.default_evidence_signal = "PAMP"
+        alert_handler.evidence_signal_overrides = {
+            "MALICIOUS_FLOW": "DAMP"
+        }
         alert_handler.set_profileid_field = Mock()
         return alert_handler
 
