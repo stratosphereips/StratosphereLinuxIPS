@@ -12,11 +12,16 @@ creates one T Cell per:
 
 Main behavior:
 
-- only `PAMP` evidence activates the module in v1
+- only `PAMP` evidence starts antigen recognition and cell creation
 - antigens are extracted from evidence fields plus linked DNS/HTTP/SSL altflows
 - accepted regexes come from the existing RegexGenerator SQLite store
+- stored `DAMP` observations raise the danger pressure used by
+  co-stimulation and context for the same `profile.ip`
 - co-stimulation and context scores decide whether the cell becomes tolerant,
   activates, requests containment, or stores memory
+- state `1 - antigen-recognized` and state `3 - activated` can each wait for
+  at most one configured Slips time window before timing out to `2 - anergic`
+  or `0 - mature`
 - containment reuses the existing `new_blocking` payload shape
 - all T Cell state is stored in its own SQLite DB and log file
 
