@@ -333,13 +333,19 @@ regex_generator:
 #############################
 t_cell:
   # Enable the immune-inspired T Cell responder module.
-  enabled: false
+  enabled: true
 
   # Create output/t_cell.log with human-readable transition logs.
   create_log_file: true
 
   # Keep ANSI colors in the T Cell log file for quick scanning.
   log_colors: true
+
+  # File log verbosity:
+  # 1 = transitions and terminal actions only
+  # 2 = add decision summaries such as waiting for co-stimulation/context
+  # 3 = add per-evidence debug details such as extracted antigens
+  log_verbosity: 1
 
   # Directory that stores the isolated T Cell SQLite database.
   # Absolute paths are used as-is. Relative paths are resolved inside the
@@ -366,6 +372,12 @@ t_cell:
   # Saturation point for weighted profile danger:
   # sum(threat_level_value * confidence) / danger_saturation
   danger_saturation: 2.5
+
+  # DAMP observations do not create or match T Cells, but they do increase
+  # the danger pressure used by co-stimulation and context for the same
+  # profile IP:
+  # combined_raw_danger = pamp_raw_danger + damp_danger_weight * damp_raw_danger
+  damp_danger_weight: 1.5
 
   # Activation threshold for co-stimulation.
   co_stimulation_threshold: 0.65
@@ -737,6 +749,28 @@ EvidenceSignals:
   # override it here.
   overrides:
     MALICIOUS_FLOW: DAMP
+    ARP_SCAN: DAMP
+    UNSOLICITED_ARP: DAMP
+    CONNECTION_TO_MULTIPLE_PORTS: DAMP
+    CONNECTION_TO_PRIVATE_IP: DAMP
+    CONNECTION_WITHOUT_DNS: DAMP
+    DNS_ARPA_SCAN: DAMP
+    DNS_WITHOUT_CONNECTION: DAMP
+    HIGH_ENTROPY_DNS_ANSWER: DAMP
+    LONG_CONNECTION: DAMP
+    MULTIPLE_RECONNECTION_ATTEMPTS: DAMP
+    MULTIPLE_SSH_VERSIONS: DAMP
+    NON_SSL_PORT_443_CONNECTION: DAMP
+    UNKNOWN_PORT: DAMP
+    YOUNG_DOMAIN: DAMP
+    HTTP_TRAFFIC: DAMP
+    MULTIPLE_USER_AGENT: DAMP
+    NON_HTTP_PORT_80_CONNECTION: DAMP
+    MALICIOUS_IP_FROM_P2P_NETWORK: DAMP
+
+
+
+
 
 #############################
 Docker:
