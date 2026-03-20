@@ -22,6 +22,8 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Regex Generator module**. Shared service that generates and validates pseudo-random regexes for later Zeek-side use. See :doc:`Regex Generator module <regex_generator_module>`.
 
+- **T Cell module**. Immune-style responder that consumes PAMP evidence, regex matches, and context to decide blocking or memory. See :doc:`T Cell module <t_cell_module>`.
+
 - **HTTPS anomaly detection**. Detailed design and behavior of the HTTPS anomaly detector. See :doc:`HTTPS anomaly detection <https_anomaly_detection>`.
 
 - **Architecture**. Internal architecture of Slips (profiles, timewindows), the use of Zeek and connection to Redis. See :doc:`Architecture <architecture>`.
@@ -61,6 +63,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    brute_force_detector
    llm_module
    regex_generator_module
+   t_cell_module
    https_anomaly_detection
    flow_alerts
    features
