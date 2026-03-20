@@ -189,7 +189,8 @@ class Conn(IFlowalertsAnalyzer):
             # scanned from this attacker
             return False
 
-        portproto = f"{flow.dport}/{flow.proto}"
+        proto = str(flow.proto or "").lower()
+        portproto = f"{flow.dport}/{proto}"
         if self.db.get_port_info(portproto):
             # it's a known port
             return False
@@ -201,7 +202,7 @@ class Conn(IFlowalertsAnalyzer):
             return False
 
         if (
-            "icmp" not in flow.proto
+            "icmp" not in proto
             and not self.is_p2p(flow)
             and not self.db.is_ftp_port(flow.dport)
         ):
