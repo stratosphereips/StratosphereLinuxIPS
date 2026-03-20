@@ -7,6 +7,7 @@ from unittest.mock import Mock
 
 from modules.regex_generator.regex_generator import (
     PROMPT_VERSION,
+    RegexGenerator,
     SYSTEM_PROMPT,
     TYPE_PROMPTS,
 )
@@ -352,6 +353,17 @@ def test_dirty_host_tw_does_not_import_runtime_benign_strings(tmp_path, mocker):
     after_dns = set(regex_generator.storage.iter_benign_strings("dns_domain"))
     assert after_dns == before_dns
     regex_generator.shutdown_gracefully()
+
+
+def test_count_anomaly_evidence_counts_anomalous_flow():
+    count = RegexGenerator._count_anomaly_evidence(
+        {
+            "ev-1": {"evidence_type": "ANOMALOUS_FLOW", "description": ""},
+            "ev-2": {"evidence_type": "SSH_SUCCESSFUL", "description": ""},
+        }
+    )
+
+    assert count == 1
 
 
 def test_build_prompt_messages_uses_type_specific_prompt(tmp_path):
