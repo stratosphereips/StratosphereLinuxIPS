@@ -754,7 +754,7 @@ DisabledAlerts:
   # CONNECTION_TO_MULTIPLE_PORTS, HIGH_ENTROPY_DNS_ANSWER,
   # INVALID_DNS_RESOLUTION, PORT_0_CONNECTION, MALICIOUS_JA3, MALICIOUS_JA3S,
   # DATA_UPLOAD, BAD_SMTP_LOGIN, SMTP_LOGIN_BRUTEFORCE, MALICIOUS_SSL_CERT,
-  # MALICIOUS_FLOW, SUSPICIOUS_USER_AGENT, EMPTY_CONNECTIONS,
+  # ANOMALOUS_FLOW, MALICIOUS_FLOW, SUSPICIOUS_USER_AGENT, EMPTY_CONNECTIONS,
   # INCOMPATIBLE_USER_AGENT, EXECUTABLE_MIME_TYPE, MULTIPLE_USER_AGENT,
   # HTTP_TRAFFIC, MALICIOUS_JARM, NETWORK_GPS_LOCATION_LEAKED,
   # ICMP_TIMESTAMP_SCAN, ICMP_ADDRESS_SCAN, ICMP_ADDRESS_MASK_SCAN,
@@ -780,10 +780,11 @@ EvidenceSignals:
   default_signal: PAMP
 
   # Override the evidence signal per evidence type.
-  # By default MALICIOUS_FLOW is marked as DAMP because it is emitted by the
-  # anomaly detection modules. Everything else defaults to PAMP unless you
-  # override it here.
+  # By default ANOMALOUS_FLOW and MALICIOUS_FLOW are marked as DAMP because
+  # they are emitted by anomaly-detection modules. You can also override
+  # additional evidence types here.
   overrides:
+    ANOMALOUS_FLOW: DAMP
     MALICIOUS_FLOW: DAMP
     ARP_SCAN: DAMP
     UNSOLICITED_ARP: DAMP
