@@ -16,6 +16,7 @@ def test_evidence_signal_overrides_sanitizes_values():
     parser.config = {
         "EvidenceSignals": {
             "overrides": {
+                "anomalous_flow": "DAMP",
                 "malicious_flow": "damp",
                 "ssh_successful": "PAMP",
                 "bad_type": "invalid",
@@ -25,6 +26,7 @@ def test_evidence_signal_overrides_sanitizes_values():
     }
 
     assert parser.evidence_signal_overrides() == {
+        "ANOMALOUS_FLOW": "DAMP",
         "MALICIOUS_FLOW": "DAMP",
         "SSH_SUCCESSFUL": "PAMP",
     }
@@ -34,9 +36,10 @@ def test_t_cell_config_defaults():
     parser = ConfigParser.__new__(ConfigParser)
     parser.config = {}
 
-    assert parser.t_cell_enabled() is False
+    assert parser.t_cell_enabled() is True
     assert parser.t_cell_create_log_file() is True
     assert parser.t_cell_log_colors() is True
+    assert parser.t_cell_log_verbosity() == 1
     assert parser.t_cell_store_dir() == "output/t_cell"
     assert parser.t_cell_persistent_store_dir() == ""
     assert parser.t_cell_observation_retention_seconds() == 604800
@@ -44,6 +47,7 @@ def test_t_cell_config_defaults():
     assert parser.t_cell_related_lookback_seconds() == 3600
     assert parser.t_cell_related_pamps_saturation() == 5
     assert parser.t_cell_danger_saturation() == 2.5
+    assert parser.t_cell_damp_danger_weight() == 1.5
     assert parser.t_cell_co_stimulation_threshold() == 0.65
     assert parser.t_cell_co_stimulation_weights() == {
         "confidence": 0.35,
@@ -68,6 +72,7 @@ def test_t_cell_config_sanitization():
             "enabled": "true",
             "create_log_file": "false",
             "log_colors": "false",
+            "log_verbosity": "debug",
             "store_dir": "",
             "persistent_store_dir": " /tmp/tcell ",
             "observation_retention_seconds": "bad",
@@ -75,6 +80,7 @@ def test_t_cell_config_sanitization():
             "related_lookback_seconds": "bad",
             "related_pamps_saturation": "bad",
             "danger_saturation": 0,
+            "damp_danger_weight": -5,
             "co_stimulation_threshold": "bad",
             "co_stimulation_weights": {
                 "confidence": 0,
@@ -96,6 +102,7 @@ def test_t_cell_config_sanitization():
     assert parser.t_cell_enabled() is True
     assert parser.t_cell_create_log_file() is False
     assert parser.t_cell_log_colors() is False
+    assert parser.t_cell_log_verbosity() == 3
     assert parser.t_cell_store_dir() == "output/t_cell"
     assert parser.t_cell_persistent_store_dir() == "/tmp/tcell"
     assert parser.t_cell_observation_retention_seconds() == 604800
@@ -103,6 +110,7 @@ def test_t_cell_config_sanitization():
     assert parser.t_cell_related_lookback_seconds() == 3600
     assert parser.t_cell_related_pamps_saturation() == 5
     assert parser.t_cell_danger_saturation() == 0.01
+    assert parser.t_cell_damp_danger_weight() == 0.0
     assert parser.t_cell_co_stimulation_threshold() == 0.65
     assert parser.t_cell_co_stimulation_weights() == {
         "confidence": 0.35,
