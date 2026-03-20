@@ -48,3 +48,4 @@ pytest-asyncio
 vulture
 detect-secrets
 git+https://github.com/SECEF/python-idmefv2.git
+river
