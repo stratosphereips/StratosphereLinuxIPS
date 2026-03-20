@@ -640,6 +640,27 @@ DisabledAlerts:
   disabled_detections: []
 
 #############################
+EvidenceSignals:
+
+  # Slips adds an evidence_signal field to every evidence centrally when it
+  # reaches the shared evidence pipeline. Modules do not need to set it.
+  #
+  # Allowed values are:
+  # - PAMP
+  # - DAMP
+  #
+  # If an evidence type is not listed under overrides, Slips uses
+  # default_signal. Unknown or invalid entries also fall back to PAMP.
+  default_signal: PAMP
+
+  # Override the evidence signal per evidence type.
+  # By default MALICIOUS_FLOW is marked as DAMP because it is emitted by the
+  # anomaly detection modules. Everything else defaults to PAMP unless you
+  # override it here.
+  overrides:
+    MALICIOUS_FLOW: DAMP
+
+#############################
 Docker:
   # ID and group id of the user who started to docker container
   # the purpose of using them is to change the ownership of the docker created
