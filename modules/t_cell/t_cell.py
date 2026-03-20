@@ -210,6 +210,7 @@ class TCell(IModule):
             return
 
         now = time.time()
+        responsible_ip = self._get_responsible_ip(evidence)
         antigens = self._extract_antigen_candidates(evidence)
         if antigens:
             self._log_event(
@@ -230,7 +231,7 @@ class TCell(IModule):
                 "evidence_id": evidence.id,
                 "evidence_type": str(evidence.evidence_type),
                 "evidence_signal": str(evidence.evidence_signal),
-                "profile_ip": evidence.profile.ip,
+                "profile_ip": responsible_ip,
                 "timewindow_number": evidence.timewindow.number,
                 "timestamp": evidence.timestamp,
                 "observed_at": now,
@@ -274,7 +275,11 @@ class TCell(IModule):
 
         for candidate in antigens:
             match = self._process_candidate(
-                evidence, observation_id, candidate, now
+                evidence,
+                observation_id,
+                candidate,
+                now,
+                responsible_ip,
             )
             if match:
                 matched_regexes.append(match.as_dict())
@@ -288,9 +293,10 @@ class TCell(IModule):
         observation_id: int,
         candidate: AntigenCandidate,
         now: float,
+        responsible_ip: str,
     ) -> RegexMatch | None:
         cell = self._get_or_create_cell(
-            evidence.profile.ip, candidate.regex_type, candidate.value, now
+            responsible_ip, candidate.regex_type, candidate.value, now
         )
 
         if (
@@ -388,8 +394,32 @@ class TCell(IModule):
                 **match_updates,
             )
 
+        if cell["state"] == STATE_MEMORY:
+            self._update_cell(
+                cell,
+                now,
+                context={
+                    "reason": "memory_retained",
+                    "observation_id": observation_id,
+                    "matched_regex_hash": match.regex_hash,
+                },
+            )
+            self._log_event(
+                action="memory_retained",
+                state=STATE_MEMORY,
+                evidence=evidence,
+                cell=cell,
+                match=match,
+                details=(
+                    "memory already exists for this cell; keeping the memory "
+                    "state without storing a new memory event"
+                ),
+                verbosity=LOG_VERBOSITY_DEBUG,
+            )
+            return match
+
         co_stimulation = self._compute_co_stimulation(
-            evidence.profile.ip,
+            responsible_ip,
             observation_id,
             candidate,
             match,
@@ -473,7 +503,7 @@ class TCell(IModule):
                 return match
 
         context = self._compute_context_signals(
-            evidence.profile.ip,
+            responsible_ip,
             observation_id,
             candidate,
             match,
@@ -499,7 +529,14 @@ class TCell(IModule):
                     match=match,
                     scores=context,
                 )
-            self._apply_effector(cell, evidence, match, context, now)
+            self._apply_effector(
+                cell,
+                evidence,
+                match,
+                context,
+                now,
+                responsible_ip,
+            )
             return match
 
         if context["memory"]:
@@ -858,6 +895,7 @@ class TCell(IModule):
         match: RegexMatch,
         context: dict,
         now: float,
+        responsible_ip: str,
     ):
         cooldown_until = cell.get("effector_cooldown_until") or 0
         if now < cooldown_until:
@@ -876,12 +914,13 @@ class TCell(IModule):
             )
             return
 
-        target_ip = evidence.profile.ip
         blocking_data = {
-            "ip": target_ip,
+            "ip": responsible_ip,
             "block": True,
             "tw": evidence.timewindow.number,
-            "interface": utils.get_interface_of_ip(target_ip, self.db, self.args),
+            "interface": utils.get_interface_of_ip(
+                responsible_ip, self.db, self.args
+            ),
         }
         next_cooldown = now + self.effector_cooldown_seconds
         self._update_cell(
@@ -1061,11 +1100,12 @@ class TCell(IModule):
         if not entity:
             return
 
-        if entity.ioc_type == IoCType.DOMAIN:
+        ioc_type = self._enum_name(getattr(entity, "ioc_type", None))
+        if ioc_type == "DOMAIN":
             self._add_candidate(
                 candidates, "dns_domain", self._normalize_domain(entity.value)
             )
-        elif entity.ioc_type == IoCType.URL:
+        elif ioc_type == "URL":
             parsed = urlparse(str(entity.value or "").strip())
             self._add_candidate(
                 candidates, "dns_domain", self._normalize_domain(parsed.hostname)
@@ -1079,6 +1119,48 @@ class TCell(IModule):
         self._add_candidate(
             candidates, "tls_sni", self._normalize_domain(getattr(entity, "SNI", ""))
         )
+
+    @staticmethod
+    def _enum_name(value) -> str:
+        if hasattr(value, "name"):
+            return str(value.name).upper()
+        raw_value = str(value or "").strip()
+        if "." in raw_value:
+            raw_value = raw_value.rsplit(".", 1)[-1]
+        return raw_value.upper()
+
+    def _get_entity_ip(self, entity) -> str:
+        if not entity:
+            return ""
+        if self._enum_name(getattr(entity, "ioc_type", None)) != "IP":
+            return ""
+        value = str(getattr(entity, "value", "") or "").strip()
+        if not utils.is_valid_ip(value):
+            return ""
+        return value
+
+    def _get_responsible_ip(self, evidence) -> str:
+        attacker_ip = self._get_entity_ip(getattr(evidence, "attacker", None))
+        if attacker_ip:
+            return attacker_ip
+
+        for entity in (
+            getattr(evidence, "attacker", None),
+            getattr(evidence, "victim", None),
+        ):
+            if self._enum_name(getattr(entity, "direction", None)) != "SRC":
+                continue
+            entity_ip = self._get_entity_ip(entity)
+            if entity_ip:
+                return entity_ip
+
+        return str(getattr(getattr(evidence, "profile", None), "ip", "") or "")
+
+    def _get_target_ip(self, evidence) -> str:
+        victim_ip = self._get_entity_ip(getattr(evidence, "victim", None))
+        if victim_ip:
+            return victim_ip
+        return ""
 
     def _count_related_observations(
         self,
@@ -1260,6 +1342,12 @@ class TCell(IModule):
             parts.append(f"evidence={evidence.evidence_type.name}")
             parts.append(f"eid={evidence.id}")
             parts.append(f"profile={evidence.profile.ip}")
+            responsible_ip = self._get_responsible_ip(evidence)
+            if responsible_ip:
+                parts.append(f"responsible={responsible_ip}")
+            target_ip = self._get_target_ip(evidence)
+            if target_ip:
+                parts.append(f"target={target_ip}")
         if cell:
             parts.append(f"cell={cell['cell_key']}")
         if match:
