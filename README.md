@@ -170,7 +170,7 @@ Slips has a [config/slips.yaml](https://github.com/stratosphereips/StratosphereL
 * You can also specify whether to ```train``` or ```test``` the ML models
 
 * You can enable [popup notifications](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#popup-notifications) of evidence, enable [blocking](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#slips-permissions), [plug in your own zeek script](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#plug-in-a-zeek-script) and more.
-* You can enable the `t_cell` section to consume `PAMP` evidence, match extracted antigens against accepted regexes, and escalate to blocking or memory while keeping all responder state in its own SQLite DB.
+* The `t_cell` section is enabled by default so Slips can consume `PAMP` evidence, match extracted antigens against accepted regexes, and combine `DAMP` danger pressure into co-stimulation and context before escalating to blocking or memory, all while keeping responder state in its own SQLite DB.
 
 
 [More details about the config file options here]( https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#modifying-the-configuration-file)
@@ -188,7 +188,7 @@ Slips key features are:
 * **Integration with External Platforms**: Modules in Slips can look up IP addresses on external platforms such as VirusTotal and RiskIQ.
 * **Shared LLM Access**: Slips can expose configured LLM backends such as Ollama, OpenAI, and Anthropic to other modules through Redis channels.
 * **Pseudo-Random Regex Generation**: Slips can generate and validate pseudo-random regexes for DNS domains, URIs, filenames, TLS SNI, and certificate CN fields for later Zeek-side use.
-* **Immune-Style T Cell Response**: Slips can consume centrally tagged `PAMP` evidence, correlate it with accepted regexes, and escalate to blocking or long-term memory through the new T Cell module.
+* **Immune-Style T Cell Response**: Slips can consume centrally tagged `PAMP` evidence, correlate it with accepted regexes, and use `DAMP` danger pressure to refine co-stimulation and context before escalating to blocking or long-term memory through the T Cell module.
 * **Graphical User Interface**: Slips provides a console graphical user interface (Kalipso) and a web interface for displaying detection with graphs and tables.
 * **Peer-to-Peer (P2P) Module**: Slips includes a complex automatic system to find other peers in the network and share IoC data automatically in a balanced, trusted manner. The P2P module can be enabled as needed.
 * **Docker Implementation**: Running Slips through Docker on Linux systems is simplified, allowing real-time traffic analysis.
