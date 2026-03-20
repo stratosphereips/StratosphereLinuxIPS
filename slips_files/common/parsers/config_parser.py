@@ -942,7 +942,7 @@ class ConfigParser(object):
         return str(value).strip().lower() in ("true", "1", "yes", "on")
 
     def t_cell_enabled(self) -> bool:
-        value = self.read_configuration("t_cell", "enabled", False)
+        value = self.read_configuration("t_cell", "enabled", True)
         if isinstance(value, bool):
             return value
         return str(value).strip().lower() in ("true", "1", "yes", "on")
@@ -958,6 +958,29 @@ class ConfigParser(object):
         if isinstance(value, bool):
             return value
         return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def t_cell_log_verbosity(self) -> int:
+        value = self.read_configuration("t_cell", "log_verbosity", 1)
+        if isinstance(value, bool):
+            return 1
+        if isinstance(value, (int, float)):
+            value = int(value)
+        else:
+            normalized = str(value).strip().lower()
+            named_levels = {
+                "summary": 1,
+                "decision": 2,
+                "decisions": 2,
+                "debug": 3,
+            }
+            if normalized in named_levels:
+                value = named_levels[normalized]
+            else:
+                try:
+                    value = int(normalized)
+                except (TypeError, ValueError):
+                    value = 1
+        return max(1, min(3, int(value)))
 
     def t_cell_store_dir(self) -> str:
         value = self.read_configuration("t_cell", "store_dir", "output/t_cell")
@@ -1018,6 +1041,14 @@ class ConfigParser(object):
         except (TypeError, ValueError):
             value = 2.5
         return max(0.01, value)
+
+    def t_cell_damp_danger_weight(self) -> float:
+        value = self.read_configuration("t_cell", "damp_danger_weight", 1.5)
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 1.5
+        return max(0.0, value)
 
     def t_cell_co_stimulation_threshold(self) -> float:
         value = self.read_configuration(
