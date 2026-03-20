@@ -2,9 +2,11 @@
 
 Slips now adds an `evidence_signal` field to every evidence when the evidence reaches the shared evidence pipeline. Detection modules do not need to set this field themselves.
 
-The `T Cell` module consumes this same central field and, in v1, only activates
-its state machine for `PAMP` evidence. `DAMP` evidence is still stored by the
-module as an observation but is ignored for activation. See
+The `T Cell` module consumes this same central field and only activates its
+state machine for antigen recognition from `PAMP` evidence. `DAMP` evidence is
+still stored by the module as an observation and contributes to the danger
+pressure used in T-cell co-stimulation and context calculations for the same
+profile IP, but it does not create cells or perform regex matching. See
 [T Cell Module](t_cell_module.md) for the responder details.
 
 The supported values are:
@@ -22,6 +24,7 @@ Configure the default signal and per-evidence overrides in `config/slips.yaml`:
 EvidenceSignals:
   default_signal: PAMP
   overrides:
+    ANOMALOUS_FLOW: DAMP
     MALICIOUS_FLOW: DAMP
 ```
 
@@ -30,7 +33,7 @@ Rules:
 - `default_signal` is applied to every evidence type that is not listed in `overrides`.
 - `overrides` keys are evidence type names from `EvidenceType`.
 - Invalid values fall back to `PAMP`.
-- The default shipped mapping marks `MALICIOUS_FLOW` as `DAMP`.
+- The default shipped mapping marks `ANOMALOUS_FLOW` and `MALICIOUS_FLOW` as `DAMP`.
 
 ## Propagation
 
@@ -47,7 +50,7 @@ The table below lists the evidence types currently emitted by Slips modules and 
 
 | Module | Evidence type | Default signal |
 | --- | --- | --- |
-| `anomaly_detection_https` | `MALICIOUS_FLOW` | `DAMP` |
+| `anomaly_detection_https` | `ANOMALOUS_FLOW` | `DAMP` |
 | `arp` | `ARP_SCAN` | `PAMP` |
 | `arp` | `ARP_OUTSIDE_LOCALNET` | `PAMP` |
 | `arp` | `UNSOLICITED_ARP` | `PAMP` |
@@ -116,4 +119,6 @@ The table below lists the evidence types currently emitted by Slips modules and 
 | `threat_intelligence.urlhaus` | `MALICIOUS_DOWNLOADED_FILE` | `PAMP` |
 | `threat_intelligence.urlhaus` | `THREAT_INTELLIGENCE_MALICIOUS_URL` | `PAMP` |
 
-`MALICIOUS_FLOW` is listed under both `anomaly_detection_https` and `flowmldetection` because both modules emit that evidence type. Since signal assignment is centralized by evidence type, both inherit the same default mapping unless overridden in configuration.
+`ANOMALOUS_FLOW` is emitted by `anomaly_detection_https`, while `MALICIOUS_FLOW`
+is emitted by `flowmldetection`. Both are marked as `DAMP` by default in the
+central signal configuration.
