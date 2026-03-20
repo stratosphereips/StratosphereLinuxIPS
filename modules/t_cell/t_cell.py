@@ -51,6 +51,9 @@ DEFAULT_COSTIM_WEIGHTS = {
     "related_pamps": 0.25,
     "danger": 0.40,
 }
+LOG_VERBOSITY_SUMMARY = 1
+LOG_VERBOSITY_DECISIONS = 2
+LOG_VERBOSITY_DEBUG = 3
 
 
 @dataclass(frozen=True)
@@ -85,8 +88,9 @@ class RegexMatch:
 class TCell(IModule):
     name = "T Cell"
     description = (
-        "Immune-style responder that correlates PAMP evidence with regex "
-        "matches and escalates to blocking or memory."
+        "Immune-style responder that matches PAMP antigens to regexes and "
+        "uses both PAMP and DAMP danger pressure to escalate to blocking "
+        "or memory."
     )
     authors = ["OpenAI Codex"]
 
@@ -96,13 +100,16 @@ class TCell(IModule):
         self.enabled = False
         self.create_log_file = True
         self.log_colors = True
+        self.log_verbosity = LOG_VERBOSITY_SUMMARY
         self.log_file_path = os.path.join(self.output_dir, "t_cell.log")
         self.storage = None
+        self.state_wait_timeout_seconds = 3600.0
         self.observation_retention_seconds = 604800
         self.anergy_ttl_seconds = 21600
         self.related_lookback_seconds = 3600
         self.related_pamps_saturation = 5.0
         self.danger_saturation = 2.5
+        self.damp_danger_weight = 1.5
         self.co_stimulation_threshold = 0.65
         self.co_stimulation_weights = DEFAULT_COSTIM_WEIGHTS.copy()
         self.novelty_window_seconds = 86400
@@ -121,6 +128,13 @@ class TCell(IModule):
         self.enabled = conf.t_cell_enabled()
         self.create_log_file = conf.t_cell_create_log_file()
         self.log_colors = conf.t_cell_log_colors()
+        self.log_verbosity = conf.t_cell_log_verbosity()
+        try:
+            self.state_wait_timeout_seconds = float(
+                conf.get_tw_width_in_seconds()
+            )
+        except Exception:
+            self.state_wait_timeout_seconds = 3600.0
         self.observation_retention_seconds = (
             conf.t_cell_observation_retention_seconds()
         )
@@ -128,6 +142,7 @@ class TCell(IModule):
         self.related_lookback_seconds = conf.t_cell_related_lookback_seconds()
         self.related_pamps_saturation = conf.t_cell_related_pamps_saturation()
         self.danger_saturation = conf.t_cell_danger_saturation()
+        self.damp_danger_weight = conf.t_cell_damp_danger_weight()
         self.co_stimulation_threshold = conf.t_cell_co_stimulation_threshold()
         self.co_stimulation_weights = self._normalize_weights(
             conf.t_cell_co_stimulation_weights()
@@ -196,6 +211,20 @@ class TCell(IModule):
 
         now = time.time()
         antigens = self._extract_antigen_candidates(evidence)
+        if antigens:
+            self._log_event(
+                action="antigens_extracted",
+                state=None,
+                evidence=evidence,
+                details=(
+                    "antigens="
+                    + ", ".join(
+                        f"{candidate.regex_type}:{candidate.value}"
+                        for candidate in antigens
+                    )
+                ),
+                verbosity=LOG_VERBOSITY_DEBUG,
+            )
         observation_id = self.storage.insert_observation(
             {
                 "evidence_id": evidence.id,
@@ -224,6 +253,7 @@ class TCell(IModule):
                 state=None,
                 evidence=evidence,
                 details=f"signal={evidence.evidence_signal}",
+                verbosity=LOG_VERBOSITY_DECISIONS,
             )
             self._prune_observations(now)
             return
@@ -233,6 +263,11 @@ class TCell(IModule):
                 action="no_antigen_extracted",
                 state=None,
                 evidence=evidence,
+                details=(
+                    "no supported dns_domain/uri/filename/tls_sni/"
+                    "certificate_cn values found"
+                ),
+                verbosity=LOG_VERBOSITY_DECISIONS,
             )
             self._prune_observations(now)
             return
@@ -269,6 +304,7 @@ class TCell(IModule):
                 evidence=evidence,
                 cell=cell,
                 details=f"until={cell['anergic_until']:.3f}",
+                verbosity=LOG_VERBOSITY_DECISIONS,
             )
             return None
 
@@ -317,6 +353,11 @@ class TCell(IModule):
                     state=cell["state"],
                     evidence=evidence,
                     cell=cell,
+                    details=(
+                        "cell already active; keeping current state without "
+                        "a new regex match"
+                    ),
+                    verbosity=LOG_VERBOSITY_DECISIONS,
                 )
             return None
 
@@ -362,6 +403,7 @@ class TCell(IModule):
         )
 
         if cell["state"] < STATE_ACTIVATED:
+            wait_elapsed = self._get_state_wait_elapsed(cell, now)
             if co_stimulation["value"] >= self.co_stimulation_threshold:
                 cell = self._transition_cell(
                     cell=cell,
@@ -373,14 +415,60 @@ class TCell(IModule):
                     match=match,
                     scores=co_stimulation,
                 )
+            elif (
+                cell["state"] == STATE_ANTIGEN_RECOGNIZED
+                and self._state_wait_expired(cell, now)
+            ):
+                cell = self._transition_cell(
+                    cell=cell,
+                    to_state=STATE_ANERGIC,
+                    reason="co_stimulation_timeout",
+                    evidence=evidence,
+                    observation_id=observation_id,
+                    now=now,
+                    match=match,
+                    scores={
+                        **co_stimulation,
+                        "elapsed": wait_elapsed,
+                        "wait_limit": self.state_wait_timeout_seconds,
+                        "anergic_until": now + self.anergy_ttl_seconds,
+                    },
+                    extra_updates={
+                        "anergic_until": now + self.anergy_ttl_seconds,
+                    },
+                )
+                return match
             else:
                 self._log_event(
-                    action="co_stimulation_pending",
+                    action="waiting_for_co_stimulation",
                     state=cell["state"],
                     evidence=evidence,
                     cell=cell,
                     match=match,
-                    metrics={"co_stimulation": co_stimulation["value"]},
+                    details=(
+                        "score below threshold; keeping the cell in "
+                        "antigen-recognized state until more corroborating "
+                        "PAMPs arrive"
+                    ),
+                    metrics={
+                        "score": co_stimulation["value"],
+                        "threshold": co_stimulation["threshold"],
+                        "gap": max(
+                            0.0,
+                            co_stimulation["threshold"]
+                            - co_stimulation["value"],
+                        ),
+                        "confidence": co_stimulation["confidence"],
+                        "related_pamps": co_stimulation["related_pamp_count"],
+                        "related_score": co_stimulation["related_pamp_score"],
+                        "danger_score": co_stimulation["profile_danger_score"],
+                        "pamp_danger": co_stimulation["pamp_danger_score"],
+                        "damp_danger": co_stimulation["damp_danger_score"],
+                        "damp_weight": co_stimulation["damp_danger_weight"],
+                        "elapsed": wait_elapsed,
+                        "wait_limit": self.state_wait_timeout_seconds,
+                    },
+                    verbosity=LOG_VERBOSITY_DECISIONS,
                 )
                 return match
 
@@ -434,19 +522,58 @@ class TCell(IModule):
                 cell=cell,
                 match=match,
                 metrics={"memory_score": context["memory_score"]},
+                verbosity=LOG_VERBOSITY_SUMMARY,
+            )
+            return match
+
+        wait_elapsed = self._get_state_wait_elapsed(cell, now)
+        if (
+            cell["state"] == STATE_ACTIVATED
+            and self._state_wait_expired(cell, now)
+        ):
+            self._transition_cell(
+                cell=cell,
+                to_state=STATE_MATURE,
+                reason="context_timeout",
+                evidence=evidence,
+                observation_id=observation_id,
+                now=now,
+                match=match,
+                scores={
+                    **context,
+                    "elapsed": wait_elapsed,
+                    "wait_limit": self.state_wait_timeout_seconds,
+                },
             )
             return match
 
         self._log_event(
-            action="context_hold",
+            action="waiting_for_context",
             state=cell["state"],
             evidence=evidence,
             cell=cell,
             match=match,
+            details=(
+                "context is not strong enough yet for effector or memory; "
+                "keeping the current state and reevaluating on future PAMPs"
+            ),
             metrics={
                 "effector_score": context["effector_score"],
+                "effector_threshold": context["effector_threshold"],
                 "memory_score": context["memory_score"],
+                "memory_threshold": context["memory_threshold"],
+                "novelty_score": context["novelty_score"],
+                "related_pamps": context["recent_related_count"],
+                "recent_pamp_pressure": context["recent_pamp_pressure"],
+                "recent_damp_pressure": context["recent_damp_pressure"],
+                "previous_pamp_pressure": context["previous_pamp_pressure"],
+                "previous_damp_pressure": context["previous_damp_pressure"],
+                "damp_weight": context["damp_danger_weight"],
+                "trend_ratio": context["trend_ratio"],
+                "elapsed": wait_elapsed,
+                "wait_limit": self.state_wait_timeout_seconds,
             },
+            verbosity=LOG_VERBOSITY_DECISIONS,
         )
         return match
 
@@ -538,6 +665,7 @@ class TCell(IModule):
             cell=cell,
             match=match,
             metrics=scores,
+            verbosity=LOG_VERBOSITY_SUMMARY,
         )
         return cell
 
@@ -555,15 +683,20 @@ class TCell(IModule):
         match: RegexMatch,
         now: float,
     ) -> dict:
-        observations = self.storage.get_recent_observations(
+        pamp_observations = self.storage.get_recent_observations(
             profile_ip,
             now - self.related_lookback_seconds,
             evidence_signal="PAMP",
         )
+        damp_observations = self.storage.get_recent_observations(
+            profile_ip,
+            now - self.related_lookback_seconds,
+            evidence_signal="DAMP",
+        )
         current_observation = self.storage.get_observation(observation_id) or {}
         confidence = float(current_observation.get("confidence", 0.0))
         related_pamp_count = self._count_related_observations(
-            observations,
+            pamp_observations,
             candidate,
             match.regex_hash,
             exclude_observation_id=observation_id,
@@ -571,9 +704,11 @@ class TCell(IModule):
         related_pamp_score = self._clamp01(
             related_pamp_count / self.related_pamps_saturation
         )
-        profile_danger_score = self._normalize_danger(
-            self._sum_danger(observations)
+        danger_scores = self._compute_danger_scores(
+            pamp_observations,
+            damp_observations,
         )
+        profile_danger_score = danger_scores["combined_score"]
         value = (
             self.co_stimulation_weights["confidence"] * confidence
             + self.co_stimulation_weights["related_pamps"] * related_pamp_score
@@ -585,6 +720,9 @@ class TCell(IModule):
             "related_pamp_count": related_pamp_count,
             "related_pamp_score": related_pamp_score,
             "profile_danger_score": profile_danger_score,
+            "pamp_danger_score": danger_scores["pamp_score"],
+            "damp_danger_score": danger_scores["damp_score"],
+            "damp_danger_weight": self.damp_danger_weight,
             "threshold": self.co_stimulation_threshold,
         }
 
@@ -599,19 +737,30 @@ class TCell(IModule):
         recent_start = now - self.context_recent_window_seconds
         previous_start = now - (2 * self.context_recent_window_seconds)
 
-        recent_observations = self.storage.get_recent_observations(
+        recent_pamp_observations = self.storage.get_recent_observations(
             profile_ip,
             recent_start,
             evidence_signal="PAMP",
         )
-        previous_observations = self.storage.get_recent_observations(
+        recent_damp_observations = self.storage.get_recent_observations(
+            profile_ip,
+            recent_start,
+            evidence_signal="DAMP",
+        )
+        previous_pamp_observations = self.storage.get_recent_observations(
             profile_ip,
             previous_start,
             until_ts=recent_start,
             evidence_signal="PAMP",
         )
+        previous_damp_observations = self.storage.get_recent_observations(
+            profile_ip,
+            previous_start,
+            until_ts=recent_start,
+            evidence_signal="DAMP",
+        )
         recent_related_count = self._count_related_observations(
-            recent_observations,
+            recent_pamp_observations,
             candidate,
             match.regex_hash,
             exclude_observation_id=observation_id,
@@ -619,12 +768,16 @@ class TCell(IModule):
         recent_related_score = self._clamp01(
             recent_related_count / self.related_pamps_saturation
         )
-        recent_pressure = self._normalize_danger(
-            self._sum_danger(recent_observations)
+        recent_danger = self._compute_danger_scores(
+            recent_pamp_observations,
+            recent_damp_observations,
         )
-        previous_pressure = self._normalize_danger(
-            self._sum_danger(previous_observations)
+        previous_danger = self._compute_danger_scores(
+            previous_pamp_observations,
+            previous_damp_observations,
         )
+        recent_pressure = recent_danger["combined_score"]
+        previous_pressure = previous_danger["combined_score"]
         trend_ratio = recent_pressure / max(previous_pressure, 0.01)
         novelty_score = (
             1.0
@@ -663,6 +816,11 @@ class TCell(IModule):
             "novelty_score": novelty_score,
             "recent_pressure": recent_pressure,
             "previous_pressure": previous_pressure,
+            "recent_pamp_pressure": recent_danger["pamp_score"],
+            "recent_damp_pressure": recent_danger["damp_score"],
+            "previous_pamp_pressure": previous_danger["pamp_score"],
+            "previous_damp_pressure": previous_danger["damp_score"],
+            "damp_danger_weight": self.damp_danger_weight,
             "trend_ratio": trend_ratio,
             "recent_related_count": recent_related_count,
             "recent_related_score": recent_related_score,
@@ -710,6 +868,11 @@ class TCell(IModule):
                 cell=cell,
                 match=match,
                 metrics={"cooldown_until": cooldown_until},
+                details=(
+                    "effector already fired recently for this cell; "
+                    "suppressing repeated blocking"
+                ),
+                verbosity=LOG_VERBOSITY_DECISIONS,
             )
             return
 
@@ -737,6 +900,7 @@ class TCell(IModule):
                 cell=cell,
                 match=match,
                 metrics={"effector_score": context["effector_score"]},
+                verbosity=LOG_VERBOSITY_SUMMARY,
             )
             return
 
@@ -749,6 +913,7 @@ class TCell(IModule):
                 match=match,
                 details=json.dumps(blocking_data, sort_keys=True),
                 metrics={"effector_score": context["effector_score"]},
+                verbosity=LOG_VERBOSITY_SUMMARY,
             )
             return
 
@@ -759,6 +924,8 @@ class TCell(IModule):
             cell=cell,
             match=match,
             metrics={"effector_score": context["effector_score"]},
+            details="blocking modules are not running and simulation is disabled",
+            verbosity=LOG_VERBOSITY_SUMMARY,
         )
 
     def _store_memory(
@@ -951,12 +1118,45 @@ class TCell(IModule):
             for obs in observations
         )
 
+    def _compute_danger_scores(
+        self,
+        pamp_observations: list[dict],
+        damp_observations: list[dict],
+    ) -> dict:
+        pamp_raw = self._sum_danger(pamp_observations)
+        damp_raw = self._sum_danger(damp_observations)
+        combined_raw = pamp_raw + (self.damp_danger_weight * damp_raw)
+        return {
+            "pamp_score": self._normalize_danger(pamp_raw),
+            "damp_score": self._normalize_danger(damp_raw),
+            "combined_score": self._normalize_danger(combined_raw),
+        }
+
     def _normalize_danger(self, raw_value: float) -> float:
         return self._clamp01(raw_value / self.danger_saturation)
 
     @staticmethod
     def _clamp01(value: float) -> float:
         return max(0.0, min(1.0, float(value)))
+
+    @staticmethod
+    def _get_state_wait_elapsed(cell: dict, now: float) -> float:
+        start_ts = (
+            cell.get("last_transition_at")
+            or cell.get("created_at")
+            or now
+        )
+        try:
+            start_ts = float(start_ts)
+        except (TypeError, ValueError):
+            start_ts = now
+        return max(0.0, float(now) - start_ts)
+
+    def _state_wait_expired(self, cell: dict, now: float) -> bool:
+        return (
+            self._get_state_wait_elapsed(cell, now)
+            >= self.state_wait_timeout_seconds
+        )
 
     @staticmethod
     def _make_cell_key(profile_ip: str, regex_type: str, antigen_value: str) -> str:
@@ -1046,13 +1246,16 @@ class TCell(IModule):
         match: RegexMatch | None = None,
         details: str | None = None,
         metrics: dict | None = None,
+        verbosity: int = LOG_VERBOSITY_DECISIONS,
     ):
+        if verbosity > self.log_verbosity:
+            return
         parts = [
             utils.convert_ts_format(time.time(), utils.alerts_format),
-            action,
+            f"action={action}",
         ]
         if state is not None:
-            parts.append(self._colorize_state(state))
+            parts.append(f"state={self._colorize_state(state)}")
         if evidence:
             parts.append(f"evidence={evidence.evidence_type.name}")
             parts.append(f"eid={evidence.id}")
