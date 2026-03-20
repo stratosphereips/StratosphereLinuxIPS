@@ -626,6 +626,8 @@ class StixExporter(IExporter):
         custom_properties: Dict[str, object] = {
             "x_slips_evidence_id": evidence.get("id"),
             "x_slips_threat_level": evidence.get("threat_level"),
+            "x_slips_evidence_signal": evidence.get("evidence_signal")
+            or "PAMP",
             "x_slips_profile_ip": profile.get("ip"),
             "x_slips_timewindow": timewindow.get("number"),
             "x_slips_attacker_direction": attacker.get("direction"),
@@ -777,6 +779,7 @@ class StixExporter(IExporter):
         threat_level = evidence.get("threat_level")
         if threat_level:
             meta["threat_level"] = threat_level
+        meta["evidence_signal"] = evidence.get("evidence_signal") or "PAMP"
         victim_value = (evidence.get("victim") or {}).get("value")
         if victim_value:
             meta["victim"] = victim_value
