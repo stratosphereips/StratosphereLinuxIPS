@@ -8,6 +8,7 @@ from slips_files.core.structures.evidence import (
     Attacker,
     Direction,
     Evidence,
+    EvidenceSignal,
     EvidenceType,
     IoCType,
     ProfileID,
@@ -110,6 +111,7 @@ def test_evidence_post_init(
     assert evidence.dst_port == port
     assert evidence.id == id
     assert evidence.confidence == confidence
+    assert evidence.evidence_signal == EvidenceSignal.PAMP
 
 
 def test_evidence_post_init_invalid_uid():
@@ -258,6 +260,69 @@ def test_evidence_to_dict(
     assert evidence_dict["dst_port"] == port
     assert evidence_dict["id"] == id
     assert evidence_dict["confidence"] == confidence
+    assert evidence_dict["evidence_signal"] == EvidenceSignal.PAMP.name
+
+
+@pytest.mark.parametrize(
+    "raw_signal, expected_signal",
+    [
+        ("DAMP", EvidenceSignal.DAMP),
+        ("damp", EvidenceSignal.DAMP),
+        ("unknown", EvidenceSignal.PAMP),
+        (None, EvidenceSignal.PAMP),
+    ],
+)
+def test_dict_to_evidence_signal(raw_signal, expected_signal):
+    from slips_files.core.structures.evidence import dict_to_evidence
+
+    evidence_dict = {
+        "evidence_type": "ARP_SCAN",
+        "description": "ARP scan detected",
+        "interface": "eth0",
+        "attacker": {
+            "direction": "SRC",
+            "ioc_type": "IP",
+            "value": "192.168.1.1",
+            "profile": "",
+            "TI": None,
+            "AS": None,
+            "rDNS": None,
+            "SNI": None,
+            "DNS_resolution": None,
+            "queries": None,
+            "CNAME": None,
+        },
+        "threat_level": "info",
+        "victim": {
+            "direction": "DST",
+            "ioc_type": "IP",
+            "value": "8.8.8.8",
+            "TI": None,
+            "AS": None,
+            "rDNS": None,
+            "SNI": None,
+            "DNS_resolution": None,
+            "queries": None,
+            "CNAME": None,
+        },
+        "profile": {"ip": "192.168.1.1"},
+        "timewindow": {"number": 1},
+        "uid": ["uid-1"],
+        "timestamp": "2023/10/26 10:10:10.000000+0000",
+        "proto": "TCP",
+        "dst_port": 80,
+        "src_port": 12345,
+        "id": "d243119b-2aae-4d7a-8ea1-edf3c6e72f4a",
+        "rel_id": None,
+        "confidence": 0.8,
+        "method": "heuristic",
+    }
+    if raw_signal is not None:
+        evidence_dict["evidence_signal"] = raw_signal
+
+    evidence = dict_to_evidence(evidence_dict)
+
+    assert evidence.evidence_signal == expected_signal
 
 
 def test_validate_timestamp():
