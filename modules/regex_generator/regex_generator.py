@@ -595,16 +595,6 @@ class RegexGenerator(IModule):
         llm_text = response.get("text", "")
         regex, rejection_reason = self._extract_regex_from_llm_text(llm_text)
         if rejection_reason:
-            self._log_detail(
-                f"Rejected malformed LLM response request_id="
-                f"{self.pending_request['request_id']} reason={rejection_reason} "
-                f"raw_preview={self._short_preview(llm_text)!r}"
-            )
-            self.print(
-                f"RegexGenerator rejected malformed LLM response: {rejection_reason}",
-                0,
-                1,
-            )
             return
 
         record = {
