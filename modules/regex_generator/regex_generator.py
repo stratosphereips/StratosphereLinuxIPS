@@ -317,7 +317,7 @@ class RegexGenerator(IModule):
 
     @staticmethod
     def _count_anomaly_evidence(evidence_records: dict[str, dict]) -> int:
-        anomaly_evidence_types = {"MALICIOUS_FLOW"}
+        anomaly_evidence_types = {"ANOMALOUS_FLOW", "MALICIOUS_FLOW"}
         count = 0
         for evidence in evidence_records.values():
             evidence_type = str(evidence.get("evidence_type", ""))
