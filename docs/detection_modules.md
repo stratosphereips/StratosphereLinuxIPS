@@ -133,6 +133,11 @@ tr:nth-child(even) {
     <td>shared service module that continuously generates pseudo-random regexes, rejects those matching benign corpora, and stores accepted regexes for later modules</td>
     <td>✅</td>
   </tr>
+  <tr>
+    <td>T Cell</td>
+    <td>immune-style responder that consumes PAMP evidence, matches accepted regexes, and escalates to blocking or memory using a per-antigen state machine</td>
+    <td>✅</td>
+  </tr>
 
 </table>
 
@@ -156,6 +161,20 @@ a benign corpus, and stores accepted regexes in a local SQLite database.
 
 For the full configuration, acceptance pipeline, and DB helper usage, see
 [Regex Generator Module](regex_generator_module.md).
+
+## T Cell Module
+
+The T Cell module is a second-stage immune responder for Slips.
+
+It listens on `evidence_added`, uses the central `evidence_signal` field,
+extracts structured antigens from evidence and linked altflows, and checks
+those values against accepted regexes already stored by `RegexGenerator`.
+Depending on co-stimulation and context signals, it becomes tolerant,
+activates, requests containment over `new_blocking`, or stores memory in its
+own SQLite DB.
+
+For the full state machine, formulas, DB schema, and configuration, see
+[T Cell Module](t_cell_module.md).
 
 ## HTTPS Anomaly Detection Module
 
