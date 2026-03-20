@@ -97,6 +97,113 @@ class EvidenceHandler(ICore):
             2,
             0,
         )
+        self.GID = conf.get_GID()
+        self.UID = conf.get_UID()
+
+        self.popup_alerts = conf.popup_alerts()
+        # In docker, disable alerts no matter what slips.yaml says
+        if IS_IN_A_DOCKER_CONTAINER:
+            self.popup_alerts = False
+
+    def handle_unable_to_log(self, failed_log, error=None):
+        self.print(f"Error logging evidence/alert: {error}. {failed_log}.")
+
+    def add_alert_to_json_log_file(self, alert: Alert):
+        """
+        Add a new alert/event line to our alerts.json file in json format.
+        """
+        idmef_alert: dict = self.idmefv2.convert_to_idmef_alert(alert)
+        if not idmef_alert:
+            self.handle_unable_to_log(alert, "Can't convert to IDMEF alert")
+            return
+
+        to_log = {
+            "to_log": idmef_alert,
+            "where": "alerts.json",
+        }
+        self.evidence_logger_q.put(to_log)
+
+    def add_evidence_to_json_log_file(
+        self,
+        evidence,
+        accumulated_threat_level: float = 0,
+    ):
+        """
+        Add a new evidence line to our alerts.json file in json format.
+        """
+        idmef_evidence: dict = self.idmefv2.convert_to_idmef_event(evidence)
+        if not idmef_evidence:
+            self.handle_unable_to_log(
+                evidence, "Can't convert to IDMEF evidence"
+            )
+            return
+
+        try:
+            idmef_evidence.update(
+                {
+                    "Note": json.dumps(
+                        {
+                            # this is all the uids of the flows that cause
+                            # this evidence
+                            "uids": evidence.uid,
+                            "accumulated_threat_level": accumulated_threat_level,
+                            "threat_level": str(evidence.threat_level),
+                            "evidence_signal": str(
+                                evidence.evidence_signal
+                            ),
+                            "timewindow": evidence.timewindow.number,
+                        }
+                    )
+                }
+            )
+
+            to_log = {
+                "to_log": idmef_evidence,
+                "where": "alerts.json",
+            }
+
+            self.evidence_logger_q.put(to_log)
+
+        except KeyboardInterrupt:
+            return True
+        except Exception as e:
+            self.handle_unable_to_log(evidence, e)
+
+    def add_to_log_file(self, data: str):
+        """
+        Add a new evidence line to the alerts.log and other log files if
+        logging is enabled.
+        """
+        to_log = {"to_log": data, "where": "alerts.log"}
+        self.evidence_logger_q.put(to_log)
+
+    def log_alert(self, alert: Alert, blocked=False):
+        """
+        constructs the alert descript ion from the given alert and logs it
+        to alerts.log and alerts.json
+        :param blocked: bool. if the ip was blocked by the blocking module,
+                we should say so in alerts.log, if not, we should say that
+                we generated an alert
+        """
+        now = utils.get_human_readable_datetime()
+
+        alert_description = (
+            f"{alert.last_flow_datetime}: " f"Src IP {alert.profile.ip:26}. "
+        )
+        if blocked:
+            # Add to log files that this srcip is being blocked
+            alert_description += "Is blocked "
+        else:
+            alert_description += "Generated an alert "
+
+        alert_description += (
+            f"given enough evidence on timewindow "
+            f"{alert.timewindow.number}. (real time {now})"
+        )
+        # log to alerts.log
+        self.add_to_log_file(alert_description)
+        # log to alerts.json
+        self.add_alert_to_json_log_file(alert)
 
     def shutdown_gracefully(self):
         self.stop_evidence_workers()
