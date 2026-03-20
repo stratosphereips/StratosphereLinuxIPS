@@ -71,6 +71,7 @@ class DBManager:
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
         self.regex_generator_storage = None
+        self.t_cell_storage = None
         # only the main process should ever flush the Redis DB. to avoid
         # children overwriting values set at the very start of slips
         if os.getpid() != main_pid:
@@ -1365,6 +1366,23 @@ class DBManager:
             *args, **kwargs
         )
 
+    def _get_t_cell_storage(self):
+        if self.t_cell_storage is None:
+            from slips_files.core.database.sqlite_db.t_cell_db import (
+                TCellStorage,
+            )
+
+            self.t_cell_storage = TCellStorage(
+                self.logger,
+                self.conf,
+                self.output_dir,
+                self.main_pid,
+            )
+        return self.t_cell_storage
+
+    def get_t_cell_storage(self):
+        return self._get_t_cell_storage()
+
     def get_icmp_attack_info_to_single_host(self, *args, **kwargs):
         return self.rdb.get_icmp_attack_info_to_single_host(*args, **kwargs)
 
@@ -1461,6 +1479,8 @@ class DBManager:
             self.sqlite.close(*args, **kwargs)
         if self.regex_generator_storage:
             self.regex_generator_storage.close()
+        if self.t_cell_storage:
+            self.t_cell_storage.close()
 
     def close_all_dbs(self):
         self.rdb.r.close()
