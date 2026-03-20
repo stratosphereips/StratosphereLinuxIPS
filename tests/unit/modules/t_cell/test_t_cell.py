@@ -391,6 +391,7 @@ def test_t_cell_effector_publishes_blocking_and_respects_cooldown(tmp_path):
             match,
             {"effector_score": 0.95},
             fixed_now + 1,
+            profile_ip,
         )
 
     assert t_cell.db.publish.call_count == 1
@@ -489,6 +490,89 @@ def test_t_cell_moves_to_memory_and_stores_context(tmp_path):
     memories = storage.get_memories()
     assert cell["state"] == STATE_MEMORY
     assert any(memory["cell_key"] == cell["cell_key"] for memory in memories)
+
+
+def test_t_cell_does_not_repeat_memory_events_for_same_cell(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=3)
+    fixed_now = 12_500.0
+    profile_ip = "10.0.0.66"
+    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    evidence_1 = _build_evidence(
+        "memory-repeat-1",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.5,
+    )
+    evidence_2 = _build_evidence(
+        "memory-repeat-2",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.5,
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "memory-repeat-regex"
+    )
+    t_cell.db.get_pid_of.return_value = None
+
+    for index in range(5):
+        _insert_observation(
+            storage=storage,
+            evidence_id=f"hist-old-repeat-{index}",
+            profile_ip=profile_ip,
+            antigens=[antigen.as_dict()],
+            observed_at=fixed_now - 2400 - index,
+            confidence=1.0,
+            threat_level_value=0.8,
+        )
+    for index in range(3):
+        _insert_observation(
+            storage=storage,
+            evidence_id=f"hist-new-repeat-{index}",
+            profile_ip=profile_ip,
+            antigens=[antigen.as_dict()],
+            observed_at=fixed_now - 300 - index,
+            confidence=0.5,
+            threat_level_value=0.5,
+            threat_level="medium",
+        )
+    storage.upsert_memory(
+        {
+            "cell_key": "seeded-memory-cell",
+            "profile_ip": "10.0.0.1",
+            "regex_type": "dns_domain",
+            "antigen_value": "bad.example.com",
+            "regex_hash": "memory-repeat-regex",
+            "regex": r"^bad\.example\.com$",
+            "matched_value": "bad.example.com",
+            "context": {"seeded": True},
+            "created_at": fixed_now - 100,
+            "updated_at": fixed_now - 100,
+        }
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=fixed_now):
+        t_cell._process_evidence_message(_message_for(evidence_1))
+    with patch("modules.t_cell.t_cell.time.time", return_value=fixed_now + 10):
+        t_cell._process_evidence_message(_message_for(evidence_2))
+
+    cell = storage.get_all_cells()[0]
+    transitions = storage.get_transitions(cell["cell_key"])
+    assert cell["state"] == STATE_MEMORY
+    assert sum(
+        1 for transition in transitions if transition["reason"] == "context_memory"
+    ) == 1
+
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        log_contents = log_file.read()
+
+    assert log_contents.count("action=memory_stored") == 1
+    assert "action=memory_retained" in log_contents
 
 
 def test_t_cell_context_times_out_after_one_tw(tmp_path):
@@ -708,3 +792,82 @@ def test_t_cell_log_file_contains_color_codes(tmp_path):
 
     assert "\033[" in log_contents
     assert "4 - effector" in log_contents
+
+
+def test_t_cell_uses_responsible_attacker_ip_for_cell_and_blocking(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=3)
+    fixed_now = 16_000.0
+    responsible_ip = "138.68.100.107"
+    related_profile_ip = "147.32.80.37"
+    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    evidence = _build_evidence(
+        "responsible-ip-1",
+        profile_ip=related_profile_ip,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value=responsible_ip,
+        ),
+        victim=Victim(
+            direction=Direction.DST,
+            ioc_type=IoCType.IP,
+            value=related_profile_ip,
+        ),
+        uids=["dns-1"],
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "responsible-ip-regex"
+    )
+    t_cell.db.get_pid_of.side_effect = (
+        lambda name: 123 if name == "Blocking" else None
+    )
+    _seed_recent_related_observations(
+        storage, responsible_ip, antigen, fixed_now, count=4
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=fixed_now):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    cell = storage.get_all_cells()[0]
+    assert cell["cell_key"].startswith(f"{responsible_ip}|")
+    assert cell["profile_ip"] == responsible_ip
+
+    channel, payload = t_cell.db.publish.call_args.args
+    assert channel == "new_blocking"
+    assert json.loads(payload) == {
+        "ip": responsible_ip,
+        "block": True,
+        "tw": 1,
+        "interface": None,
+    }
+
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        log_contents = log_file.read()
+
+    assert f"profile={related_profile_ip}" in log_contents
+    assert f"responsible={responsible_ip}" in log_contents
+    assert f"target={related_profile_ip}" in log_contents
+
+
+def test_t_cell_falls_back_to_src_side_ip_when_attacker_is_not_ip(tmp_path):
+    t_cell, _ = _prepare_t_cell(tmp_path)
+    evidence = _build_evidence(
+        "src-fallback-1",
+        profile_ip="203.0.113.50",
+        attacker=Attacker(
+            direction=Direction.DST,
+            ioc_type=IoCType.DOMAIN,
+            value="bad.example.com",
+        ),
+        victim=Victim(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="10.0.0.50",
+        ),
+    )
+
+    assert t_cell._get_responsible_ip(evidence) == "10.0.0.50"
