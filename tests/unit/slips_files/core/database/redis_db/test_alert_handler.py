@@ -12,6 +12,7 @@ from slips_files.core.structures.evidence import (
     ProfileID,
     TimeWindow,
     Evidence,
+    EvidenceSignal,
     EvidenceType,
     Attacker,
     Direction,
@@ -296,7 +297,20 @@ def test_init_evidence_number(initial_value, expected_value):
         (None, True, False),  # whitelisted → ignored
     ],
 )
-def test_set_evidence(evidence_exists, whitelisted, expected):
+@pytest.mark.parametrize(
+    "evidence_type, expected_signal",
+    [
+        (EvidenceType.SSH_SUCCESSFUL, EvidenceSignal.PAMP),
+        (EvidenceType.MALICIOUS_FLOW, EvidenceSignal.DAMP),
+    ],
+)
+def test_set_evidence(
+    evidence_exists,
+    whitelisted,
+    expected,
+    evidence_type,
+    expected_signal,
+):
     db = ModuleFactory().create_alert_handler_obj()
 
     db.add_profile = Mock()
@@ -331,7 +345,7 @@ def test_set_evidence(evidence_exists, whitelisted, expected):
     )
 
     evidence = Evidence(
-        evidence_type=EvidenceType.SSH_SUCCESSFUL,
+        evidence_type=evidence_type,
         attacker=attacker,
         victim=victim,
         threat_level=ThreatLevel.INFO,
@@ -346,11 +360,16 @@ def test_set_evidence(evidence_exists, whitelisted, expected):
     result = db.set_evidence(evidence)
 
     assert result is expected
+    assert evidence.evidence_signal == expected_signal
 
     if expected:
         db.r.hset.assert_called_once()
         db.r.incr.assert_called_once_with(db.constants.NUMBER_OF_EVIDENCE)
         db.publish.assert_called_once()
+        stored_evidence = json.loads(db.r.hset.call_args.args[2])
+        published_evidence = json.loads(db.publish.call_args.args[1])
+        assert stored_evidence["evidence_signal"] == expected_signal.name
+        assert published_evidence["evidence_signal"] == expected_signal.name
     else:
         db.r.hset.assert_not_called()
         db.publish.assert_not_called()
