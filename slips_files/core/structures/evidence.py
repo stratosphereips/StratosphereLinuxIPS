@@ -141,6 +141,14 @@ class ThreatLevel(Enum):
         return self.name.lower()
 
 
+class EvidenceSignal(Enum):
+    PAMP = "PAMP"
+    DAMP = "DAMP"
+
+    def __str__(self):
+        return self.name
+
+
 class Proto(Enum):
     TCP = "tcp"
     UDP = "udp"
@@ -305,6 +313,7 @@ class Evidence:
             )
         },
     )
+    evidence_signal: EvidenceSignal = field(default=EvidenceSignal.PAMP)
 
     def __post_init__(self):
         if not isinstance(self.uid, list) or not all(
@@ -333,6 +342,7 @@ class Evidence:
             f"  ID: {self.id},\n"
             f"  Confidence: {self.confidence},\n"
             f"  Related ID: {self.rel_id}\n"
+            f"  Evidence Signal: {self.evidence_signal}\n"
             f")"
         )
 
@@ -343,6 +353,13 @@ def dict_to_evidence(evidence: dict) -> Evidence:
     :param evidence: Dictionary with evidence details.
     returns an instance of the Evidence class.
     """
+    try:
+        evidence_signal = EvidenceSignal[
+            str(evidence.get("evidence_signal", "PAMP")).upper()
+        ]
+    except KeyError:
+        evidence_signal = EvidenceSignal.PAMP
+
     evidence_attributes = {
         "evidence_type": EvidenceType[evidence["evidence_type"]],
         "description": evidence["description"],
@@ -373,6 +390,7 @@ def dict_to_evidence(evidence: dict) -> Evidence:
         "rel_id": evidence["rel_id"],
         "confidence": evidence["confidence"],
         "method": Method[evidence["method"].upper()],
+        "evidence_signal": evidence_signal,
     }
 
     return Evidence(**evidence_attributes)
