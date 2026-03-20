@@ -193,6 +193,16 @@ class RedisDB(
         self._init_ttls()
         self.set_new_incoming_flows(True)
 
+    @classmethod
+    def _get_conf_file_path(cls, redis_port: Optional[int] = None) -> str:
+        """Return a per-run redis config path to avoid parallel overwrite."""
+        redis_port = redis_port or cls.redis_port
+        output_dir = os.fspath(cls.output_dir or "output")
+        os.makedirs(output_dir, exist_ok=True)
+        return os.path.join(
+            output_dir, f"redis-server-port-{redis_port}-{os.getpid()}.conf"
+        )
+
     def _init_ttls(self):
         """sets the default and extended ttls for redis keys based on
         whether we're analysing files or interface"""
@@ -232,6 +242,7 @@ class RedisDB(
         Update cls._conf_file (config/redis.conf) based on the params given
         to slips (e.g -s)
         """
+        cls._conf_file = cls._get_conf_file_path()
         shutil.copy(cls._conf_file_template, cls._conf_file)
 
         cls._options = {}
@@ -242,7 +253,7 @@ class RedisDB(
                     continue
                 if " " in line:
                     key, value = line.split(None, 1)
-                    cls._options[key] = value.strip('"')
+                    cls._options[key] = value
 
         # because slips may use different redis ports at the same time,
         # logs should be port specific
@@ -427,6 +438,8 @@ class RedisDB(
         # but we dont care because we checked it in main before starting
         # the DBManager()
         if process.returncode != 0:
+            if utils.is_port_in_use(cls.redis_port):
+                return True
             raise RuntimeError(
                 f"database._start_redis_server: "
                 f"Redis did not start properly.\n{stderr}\n{stdout}"
@@ -1709,6 +1722,7 @@ class RedisDB(
             return False
 
         try:
+            RedisDB._conf_file = RedisDB._get_conf_file_path(32850)
             RedisDB._options.update(
                 {
                     "dbfilename": os.path.basename(backup_file),
