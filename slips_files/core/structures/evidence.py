@@ -85,6 +85,7 @@ class EvidenceType(Enum):
     BAD_SMTP_LOGIN = auto()
     SMTP_LOGIN_BRUTEFORCE = auto()
     MALICIOUS_SSL_CERT = auto()
+    ANOMALOUS_FLOW = auto()
     MALICIOUS_FLOW = auto()
     SUSPICIOUS_USER_AGENT = auto()
     EMPTY_CONNECTIONS = auto()
