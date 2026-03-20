@@ -171,7 +171,8 @@ extracts structured antigens from evidence and linked altflows, and checks
 those values against accepted regexes already stored by `RegexGenerator`.
 Depending on co-stimulation and context signals, it becomes tolerant,
 activates, requests containment over `new_blocking`, or stores memory in its
-own SQLite DB.
+own SQLite DB. `PAMP`s drive antigen recognition, while stored `DAMP`
+observations raise the danger pressure used by co-stimulation and context.
 
 For the full state machine, formulas, DB schema, and configuration, see
 [T Cell Module](t_cell_module.md).
