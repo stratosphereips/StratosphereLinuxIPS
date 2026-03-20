@@ -551,7 +551,7 @@ Every detection (`flow_detection` and `hourly_detection`) is emitted as Slips Ev
 
 Evidence design:
 
-- `evidence_type`: `MALICIOUS_FLOW`
+- `evidence_type`: `ANOMALOUS_FLOW`
 - `method`: `STATISTICAL`
 - `attacker`: source host (`profileid` IP, direction `SRC`)
 - `victim`: best available destination context (`SNI` domain first, otherwise destination IP/domain)
