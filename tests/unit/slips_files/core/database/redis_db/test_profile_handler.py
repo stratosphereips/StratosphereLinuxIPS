@@ -4,6 +4,7 @@ from dataclasses import asdict
 from unittest.mock import patch, MagicMock, call, Mock
 import json
 from tests.module_factory import ModuleFactory
+from slips_files.common.slips_utils import utils
 from slips_files.core.structures.flow_attributes import Role
 from slips_files.core.flows.zeek import HTTP, DNS
 from unittest.mock import ANY
@@ -2049,6 +2050,32 @@ def test_add_profile_existing_profile():
     handler.set_new_ip.assert_not_called()
     handler.publish.assert_not_called()
     handler.update_threat_level.assert_not_called()
+
+
+def test_add_profile_accepts_alerts_format_timestamp():
+    handler = ModuleFactory().create_profile_handler_obj()
+
+    handler.set_new_ip = MagicMock()
+    handler.publish = MagicMock()
+
+    profileid = f"profile{handler.separator}1"
+    starttime = utils.convert_ts_format(1678886400.0, utils.alerts_format)
+
+    handler.r.zscore.return_value = None
+
+    pipe = MagicMock()
+    handler.r.pipeline = MagicMock(return_value=pipe)
+    pipe.__enter__ = MagicMock(return_value=pipe)
+    pipe.__exit__ = MagicMock(return_value=False)
+
+    result = handler.add_profile(profileid, starttime)
+
+    assert result is True
+    handler.zadd_but_keep_n_entries.assert_called_once_with(
+        handler.constants.PROFILES,
+        {profileid: 1678886400.0},
+        2000,
+    )
 
 
 def test_mark_profile_as_dhcp_profile_not_exist():
