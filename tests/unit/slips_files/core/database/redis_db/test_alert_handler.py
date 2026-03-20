@@ -300,6 +300,7 @@ def test_init_evidence_number(initial_value, expected_value):
 @pytest.mark.parametrize(
     "evidence_type, expected_signal",
     [
+        (EvidenceType.ANOMALOUS_FLOW, EvidenceSignal.DAMP),
         (EvidenceType.SSH_SUCCESSFUL, EvidenceSignal.PAMP),
         (EvidenceType.MALICIOUS_FLOW, EvidenceSignal.DAMP),
     ],
