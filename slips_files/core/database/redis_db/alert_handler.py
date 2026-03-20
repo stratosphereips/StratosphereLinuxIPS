@@ -18,6 +18,7 @@ from slips_files.core.structures.alerts import (
 )
 from slips_files.core.structures.evidence import (
     Evidence,
+    EvidenceSignal,
     EvidenceType,
     Victim,
     IoCType,
@@ -37,6 +38,8 @@ class AlertHandler:
     default_ttl: int
     width: float
     disabled_detections: Any
+    default_evidence_signal: str
+    evidence_signal_overrides: Dict[str, str]
     publish: Callable[..., Any]
     zadd_but_keep_n_entries: Callable[..., Any]
     get_tw_start_time: Callable[..., Any]
@@ -114,6 +117,19 @@ class AlertHandler:
         Function to check if detection is disabled in slips.yaml
         """
         return str(evidence_type) in self.disabled_detections
+
+    def _classify_evidence_signal(
+        self, evidence_type: EvidenceType
+    ) -> EvidenceSignal:
+        evidence_type_name = str(evidence_type).upper()
+        signal = self.evidence_signal_overrides.get(
+            evidence_type_name,
+            self.default_evidence_signal,
+        )
+        try:
+            return EvidenceSignal[str(signal).upper()]
+        except KeyError:
+            return EvidenceSignal.PAMP
 
     def set_flow_causing_evidence(self, uids: list, evidence_id):
         """
@@ -261,6 +277,9 @@ class AlertHandler:
         self.add_profile(str(evidence.profile), evidence.timestamp)
         # normalize confidence, should range from 0 to 1
         evidence.confidence = min(evidence.confidence, 1)
+        evidence.evidence_signal = self._classify_evidence_signal(
+            evidence.evidence_type
+        )
 
         # Ignore evidence if it's disabled in the configuration file
         if self.is_detection_disabled(evidence.evidence_type):
