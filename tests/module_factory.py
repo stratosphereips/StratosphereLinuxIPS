@@ -86,6 +86,10 @@ class ModuleFactory:
             return_value=10000
         )
         conf.regex_generator_seed_benign_samples = Mock(return_value=True)
+        conf.t_cell_store_dir = Mock(
+            return_value=os.path.join(output_dir, "t_cell")
+        )
+        conf.t_cell_persistent_store_dir = Mock(return_value="")
         conf.tranco_top_benign_limit = Mock(return_value=1000)
 
         with (
@@ -241,6 +245,62 @@ class ModuleFactory:
         }
         regex_generator.print = Mock()
         return regex_generator
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_t_cell_obj(self, mock_db):
+        from modules.t_cell.t_cell import TCell
+
+        conf = Mock()
+        conf.t_cell_enabled = Mock(return_value=True)
+        conf.t_cell_create_log_file = Mock(return_value=True)
+        conf.t_cell_log_colors = Mock(return_value=True)
+        conf.t_cell_store_dir = Mock(return_value="dummy_output_dir/t_cell")
+        conf.t_cell_persistent_store_dir = Mock(return_value="")
+        conf.t_cell_observation_retention_seconds = Mock(return_value=604800)
+        conf.t_cell_anergy_ttl_seconds = Mock(return_value=21600)
+        conf.t_cell_related_lookback_seconds = Mock(return_value=3600)
+        conf.t_cell_related_pamps_saturation = Mock(return_value=5.0)
+        conf.t_cell_danger_saturation = Mock(return_value=2.5)
+        conf.t_cell_co_stimulation_threshold = Mock(return_value=0.65)
+        conf.t_cell_co_stimulation_weights = Mock(
+            return_value={
+                "confidence": 0.35,
+                "related_pamps": 0.25,
+                "danger": 0.40,
+            }
+        )
+        conf.t_cell_novelty_window_seconds = Mock(return_value=86400)
+        conf.t_cell_context_recent_window_seconds = Mock(return_value=1800)
+        conf.t_cell_effector_threshold = Mock(return_value=0.70)
+        conf.t_cell_effector_min_related_count = Mock(return_value=4)
+        conf.t_cell_effector_cooldown_seconds = Mock(return_value=1800)
+        conf.t_cell_memory_threshold = Mock(return_value=0.60)
+        conf.t_cell_memory_trend_ratio_max = Mock(return_value=0.60)
+        conf.t_cell_memory_min_related_count = Mock(return_value=3)
+        conf.t_cell_simulate_effector_without_blocking = Mock(
+            return_value=True
+        )
+
+        args = Mock()
+        args.interface = None
+        args.access_point = False
+
+        t_cell = TCell(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=args,
+            conf=conf,
+            ppid=12345,
+            bloom_filters_manager=Mock(),
+        )
+        t_cell.db.get_generated_regexes.return_value = []
+        t_cell.db.get_altflow_from_uid.return_value = {}
+        t_cell.db.get_pid_of.return_value = None
+        t_cell.db.publish = Mock()
+        t_cell.print = Mock()
+        return t_cell
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_fides_module_obj(self, mock_db):
