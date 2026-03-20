@@ -4,11 +4,13 @@ from multiprocessing import Event
 
 import pytest
 from unittest.mock import Mock, MagicMock, patch
+import json
 
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
+    EvidenceSignal,
     EvidenceType,
     TimeWindow,
     Attacker,
@@ -233,6 +235,42 @@ def test_add_alert_to_json_log_file(
             "where": "alerts.json",
         }
     )
+
+
+def test_add_evidence_to_json_log_file_includes_evidence_signal():
+    evidence_handler = ModuleFactory().create_evidence_handler_obj()
+    evidence_handler.idmefv2.convert_to_idmef_event = Mock(
+        return_value={"Category": "Intrusion.Detection"}
+    )
+    evidence_handler.evidence_logger_q.put = Mock()
+
+    evidence = Evidence(
+        evidence_type=EvidenceType.MALICIOUS_FLOW,
+        description="Anomalous HTTPS flow",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="192.168.1.20",
+        ),
+        threat_level=ThreatLevel.HIGH,
+        profile=ProfileID("192.168.1.20"),
+        timewindow=TimeWindow(1),
+        uid=["uid-1"],
+        timestamp="2024/10/04 15:45:30.123456+0000",
+        evidence_signal=EvidenceSignal.DAMP,
+    )
+
+    evidence_handler.add_evidence_to_json_log_file(
+        evidence, accumulated_threat_level=1.2
+    )
+
+    evidence_handler.evidence_logger_q.put.assert_called_once()
+    logged_event = evidence_handler.evidence_logger_q.put.call_args.args[0]
+    note = json.loads(logged_event["to_log"]["Note"])
+    assert logged_event["where"] == "alerts.json"
+    assert note["evidence_signal"] == "DAMP"
+    assert note["threat_level"] == "high"
+    assert note["timewindow"] == 1
 
 
 def test_show_popup():
