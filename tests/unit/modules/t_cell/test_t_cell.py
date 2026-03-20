@@ -4,9 +4,11 @@ import json
 from unittest.mock import Mock, patch
 
 from modules.t_cell.t_cell import (
+    STATE_ACTIVATED,
     STATE_ANERGIC,
     STATE_ANTIGEN_RECOGNIZED,
     STATE_EFFECTOR,
+    STATE_MATURE,
     STATE_MEMORY,
     AntigenCandidate,
     RegexMatch,
@@ -39,7 +41,7 @@ def _build_storage(tmp_path):
     return TCellStorage(Mock(), conf, str(tmp_path), 12345)
 
 
-def _prepare_t_cell(tmp_path):
+def _prepare_t_cell(tmp_path, log_verbosity: int = 3):
     t_cell = ModuleFactory().create_t_cell_obj()
     t_cell.output_dir = str(tmp_path)
     t_cell.log_file_path = str(tmp_path / "t_cell.log")
@@ -47,6 +49,7 @@ def _prepare_t_cell(tmp_path):
     t_cell.db.get_t_cell_storage.return_value = storage
     with patch("modules.t_cell.t_cell.utils.drop_root_privs_permanently"):
         assert t_cell.pre_main() is False
+    t_cell.log_verbosity = log_verbosity
     return t_cell, storage
 
 
@@ -99,12 +102,13 @@ def _insert_observation(
     threat_level_value: float,
     threat_level: str = "high",
     matched_regexes: list[dict] | None = None,
+    evidence_signal: str = "PAMP",
 ):
     return storage.insert_observation(
         {
             "evidence_id": evidence_id,
             "evidence_type": "THREAT_INTELLIGENCE_BLACKLISTED_DOMAIN",
-            "evidence_signal": "PAMP",
+            "evidence_signal": evidence_signal,
             "profile_ip": profile_ip,
             "timewindow_number": 1,
             "timestamp": TEST_TS,
@@ -267,6 +271,45 @@ def test_t_cell_no_match_becomes_anergic_and_expires(tmp_path):
     ]
     assert "anergy_expired" in transitions
     assert cell["state"] == STATE_ANTIGEN_RECOGNIZED
+
+
+def test_t_cell_co_stimulation_times_out_after_one_tw(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=2)
+    t_cell.state_wait_timeout_seconds = 100.0
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "timeout-regex"
+    )
+
+    first = _build_evidence(
+        "costim-timeout-1",
+        uids=["dns-1"],
+        threat_level=ThreatLevel.LOW,
+        confidence=0.1,
+    )
+    second = _build_evidence(
+        "costim-timeout-2",
+        uids=["dns-1"],
+        threat_level=ThreatLevel.LOW,
+        confidence=0.1,
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=5_000.0):
+        t_cell._process_evidence_message(_message_for(first))
+    with patch("modules.t_cell.t_cell.time.time", return_value=5_101.0):
+        t_cell._process_evidence_message(_message_for(second))
+
+    cell = storage.get_all_cells()[0]
+    transitions = [
+        transition["reason"]
+        for transition in storage.get_transitions(cell["cell_key"])
+    ]
+    assert "co_stimulation_timeout" in transitions
+    assert cell["state"] == STATE_ANERGIC
+    assert cell["anergic_until"] == 5_101.0 + t_cell.anergy_ttl_seconds
 
 
 def test_find_best_regex_match_prefers_specificity_and_newest(tmp_path):
@@ -448,6 +491,206 @@ def test_t_cell_moves_to_memory_and_stores_context(tmp_path):
     assert any(memory["cell_key"] == cell["cell_key"] for memory in memories)
 
 
+def test_t_cell_context_times_out_after_one_tw(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=2)
+    t_cell.state_wait_timeout_seconds = 100.0
+    profile_ip = "10.0.0.63"
+    evidence_1 = _build_evidence("context-timeout-1", profile_ip=profile_ip, uids=["dns-1"])
+    evidence_2 = _build_evidence("context-timeout-2", profile_ip=profile_ip, uids=["dns-1"])
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "context-timeout-regex"
+    )
+    for index in range(4):
+        _insert_observation(
+            storage=storage,
+            evidence_id=f"danger-{index}",
+            profile_ip=profile_ip,
+            antigens=[
+                {
+                    "regex_type": "dns_domain",
+                    "value": f"other-{index}.example.com",
+                }
+            ],
+            observed_at=5_800.0 - index,
+            confidence=1.0,
+            threat_level_value=0.8,
+        )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=6_000.0):
+        t_cell._process_evidence_message(_message_for(evidence_1))
+    with patch("modules.t_cell.t_cell.time.time", return_value=6_101.0):
+        t_cell._process_evidence_message(_message_for(evidence_2))
+
+    cell = storage.get_all_cells()[0]
+    transitions = [
+        transition["reason"]
+        for transition in storage.get_transitions(cell["cell_key"])
+    ]
+    assert "context_timeout" in transitions
+    assert cell["state"] == STATE_MATURE
+
+
+def test_t_cell_damp_observations_raise_co_stimulation(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    fixed_now = 14_000.0
+    profile_ip = "10.0.0.64"
+    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    evidence = _build_evidence(
+        "damp-costim-1",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.7,
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "damp-costim-regex"
+    )
+    t_cell.db.get_pid_of.return_value = None
+    _seed_recent_related_observations(
+        storage,
+        profile_ip,
+        antigen,
+        fixed_now,
+        count=2,
+        confidence=0.5,
+        threat_level_value=0.5,
+    )
+    _insert_observation(
+        storage=storage,
+        evidence_id="damp-pressure-1",
+        profile_ip=profile_ip,
+        antigens=[],
+        observed_at=fixed_now - 30,
+        confidence=1.0,
+        threat_level_value=1.0,
+        threat_level="critical",
+        evidence_signal="DAMP",
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=fixed_now):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    cell = storage.get_all_cells()[0]
+    transitions = storage.get_transitions(cell["cell_key"])
+    assert cell["state"] == STATE_ACTIVATED
+    assert any(
+        transition["reason"] == "co_stimulation_threshold_met"
+        and transition["scores"]["damp_danger_score"] > 0
+        for transition in transitions
+    )
+    assert t_cell.db.publish.call_count == 0
+
+
+def test_t_cell_damp_observations_raise_context_pressure(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    fixed_now = 15_000.0
+    profile_ip = "10.0.0.65"
+    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    evidence = _build_evidence(
+        "damp-context-1",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.LOW,
+        confidence=1.0,
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "damp-context-regex"
+    )
+    t_cell.db.get_pid_of.side_effect = (
+        lambda name: 123 if name == "Blocking" else None
+    )
+    _seed_recent_related_observations(
+        storage,
+        profile_ip,
+        antigen,
+        fixed_now,
+        count=4,
+        confidence=1.0,
+        threat_level_value=0.2,
+        age_seconds=120,
+    )
+    _insert_observation(
+        storage=storage,
+        evidence_id="damp-pressure-2",
+        profile_ip=profile_ip,
+        antigens=[],
+        observed_at=fixed_now - 20,
+        confidence=1.0,
+        threat_level_value=1.0,
+        threat_level="critical",
+        evidence_signal="DAMP",
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=fixed_now):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    cell = storage.get_all_cells()[0]
+    transitions = storage.get_transitions(cell["cell_key"])
+    assert cell["state"] == STATE_EFFECTOR
+    assert any(
+        transition["reason"] == "context_effector"
+        and transition["scores"]["recent_damp_pressure"] > 0
+        for transition in transitions
+    )
+    assert t_cell.db.publish.call_count == 1
+
+
+def test_t_cell_summary_log_hides_waiting_for_co_stimulation(tmp_path):
+    t_cell, _ = _prepare_t_cell(tmp_path, log_verbosity=1)
+    evidence = _build_evidence("pending-1", uids=["dns-1"])
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "pending-regex"
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=13_000.0):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        log_contents = log_file.read()
+
+    assert "action=antigen_recognized" in log_contents
+    assert "waiting_for_co_stimulation" not in log_contents
+
+
+def test_t_cell_decision_log_explains_waiting_for_co_stimulation(tmp_path):
+    t_cell, _ = _prepare_t_cell(tmp_path, log_verbosity=2)
+    evidence = _build_evidence("pending-2", uids=["dns-1"])
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "pending-regex"
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=13_500.0):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        log_contents = log_file.read()
+
+    assert "waiting_for_co_stimulation" in log_contents
+    assert "score=" in log_contents
+    assert "threshold=" in log_contents
+    assert "related_pamps=" in log_contents
+
+
 def test_t_cell_log_file_contains_color_codes(tmp_path):
     t_cell, _ = _prepare_t_cell(tmp_path)
     evidence = _build_evidence("log-1")
@@ -457,6 +700,7 @@ def test_t_cell_log_file_contains_color_codes(tmp_path):
         state=STATE_EFFECTOR,
         evidence=evidence,
         metrics={"score": 0.95},
+        verbosity=3,
     )
 
     with open(t_cell.log_file_path, encoding="utf-8") as log_file:
