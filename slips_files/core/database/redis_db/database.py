@@ -305,6 +305,10 @@ class RedisDB(
         # By default False. Meaning we don't DELETE the DB by default.
         cls.config_flush_db: bool = conf.delete_prev_db()
         cls.disabled_detections: List[str] = conf.disabled_detections()
+        cls.default_evidence_signal: str = conf.evidence_signal_default()
+        cls.evidence_signal_overrides: dict = (
+            conf.evidence_signal_overrides()
+        )
         cls.width = conf.get_tw_width_in_seconds()
         cls.client_ips: List[str] = conf.client_ips()
 
