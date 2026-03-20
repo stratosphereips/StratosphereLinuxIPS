@@ -331,6 +331,84 @@ regex_generator:
   seed_benign_samples: true
 
 #############################
+t_cell:
+  # Enable the immune-inspired T Cell responder module.
+  enabled: false
+
+  # Create output/t_cell.log with human-readable transition logs.
+  create_log_file: true
+
+  # Keep ANSI colors in the T Cell log file for quick scanning.
+  log_colors: true
+
+  # Directory that stores the isolated T Cell SQLite database.
+  # Absolute paths are used as-is. Relative paths are resolved inside the
+  # output directory of the current Slips run.
+  store_dir: output/t_cell
+
+  # Optional stable absolute directory for the T Cell SQLite database.
+  persistent_store_dir: ""
+
+  # Keep processed evidence observations for this many seconds.
+  observation_retention_seconds: 604800
+
+  # How long a cell remains anergic after a PAMP does not match any accepted
+  # regex for its antigen.
+  anergy_ttl_seconds: 21600
+
+  # Time window used to count related PAMP observations for the same profile.
+  related_lookback_seconds: 3600
+
+  # Saturation point for related PAMP scoring. A value of 5 means that 5 or
+  # more related observations contribute the full score.
+  related_pamps_saturation: 5
+
+  # Saturation point for weighted profile danger:
+  # sum(threat_level_value * confidence) / danger_saturation
+  danger_saturation: 2.5
+
+  # Activation threshold for co-stimulation.
+  co_stimulation_threshold: 0.65
+
+  # Co-stimulation weights are normalized internally.
+  co_stimulation_weights:
+    confidence: 0.35
+    related_pamps: 0.25
+    danger: 0.40
+
+  # Novelty lookback window used to decide whether a matched regex is new.
+  novelty_window_seconds: 86400
+
+  # Recent context window. The previous context window is the immediately
+  # preceding window of the same size.
+  context_recent_window_seconds: 1800
+
+  # Context threshold for escalating to the effector state.
+  effector_threshold: 0.70
+
+  # Minimum number of related recent observations required before an effector
+  # response is allowed.
+  effector_min_related_count: 4
+
+  # Cooldown between effector responses for the same T Cell.
+  effector_cooldown_seconds: 1800
+
+  # Context threshold for moving into the memory state.
+  memory_threshold: 0.60
+
+  # Maximum recent/previous pressure ratio to consider the threat to be
+  # decreasing enough for memory.
+  memory_trend_ratio_max: 0.60
+
+  # Minimum number of related recent observations required before memory is
+  # stored.
+  memory_min_related_count: 3
+
+  # If blocking or ARP-poisoning modules are not running, log a simulated
+  # effector action instead of publishing new_blocking.
+  simulate_effector_without_blocking: true
+
+#############################
 flowmldetection:
   # This is a module that uses machine learning for detection.
   # It can be used in train mode or test mode.
