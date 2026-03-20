@@ -22,20 +22,65 @@ modules:
 3. It extracts structured antigen values from evidence and linked altflows.
 4. It matches those values against accepted regexes already stored by
    `RegexGenerator`.
-5. It stores `DAMP` observations as profile-level danger signals and folds
+5. It stores `DAMP` observations as responsible-IP danger signals and folds
    them into co-stimulation and context pressure for later `PAMP`
    reevaluations.
 6. It computes co-stimulation and context scores.
 7. It either becomes tolerant, activates, requests blocking, or stores memory.
 
-The target of any effector response is always `evidence.profile.ip`, matching
-the existing Slips blocking path.
+The target of any effector response is the IP that T Cell identifies as the
+responsible source for the attack. This is not always the same as
+`evidence.profile.ip`.
+
+## Profile, Source, and Target
+
+The evidence object carries three different notions that must not be mixed:
+
+- `evidence.profile.ip`: the Slips profile bucket that the evidence belongs to.
+  It is the host related to the evidence in the current time window.
+- `evidence.attacker`: the attacking or responsible entity. In IDMEF export,
+  this becomes `Source`.
+- `evidence.victim`: the attacked entity. In IDMEF export, this becomes
+  `Target`.
+
+The `direction` field on `attacker` or `victim` says whether that entity was
+seen on the network flow source side (`SRC`) or destination side (`DST`). That
+flow-side direction is separate from the attack role:
+
+- `attacker` maps to IDMEF `Source`
+- `victim` maps to IDMEF `Target`
+- `direction=SRC/DST` maps to the network flow side
+
+T Cell uses a separate derived value called the responsible IP:
+
+1. If `evidence.attacker` is an IP, T Cell uses `evidence.attacker.value`.
+2. Otherwise, if either evidence entity is an IP on the network `SRC` side,
+   T Cell uses that IP.
+3. Otherwise, it falls back to `evidence.profile.ip`.
+
+This responsible IP is the IP that T Cell:
+
+- keys the cell on
+- aggregates co-stimulation and context observations on
+- sends to `new_blocking` when effector action is approved
+
+The original `evidence.profile.ip` is still logged, because it tells you which
+host/time-window context produced the evidence.
+
+Example:
+
+- `profile.ip = 147.32.80.37`
+- `Source.IP = 138.68.100.107`
+- `Target.IP = 147.32.80.37`
+
+In that case, T Cell keeps `147.32.80.37` as the related profile context, but
+the responsible IP for analysis and blocking is `138.68.100.107`.
 
 ## State Machine
 
 One T Cell is tracked per:
 
-- target profile IP
+- responsible IP
 - regex type
 - normalized antigen value
 
@@ -56,7 +101,7 @@ The runtime flow is:
    and stops for that evidence after storing the observation.
 4. Stored `DAMP` observations do not create or match cells, but they are kept
    as danger inputs and are included in the next co-stimulation or context
-   evaluation for the same `profile.ip`.
+   evaluation for the same responsible IP.
 5. If no structured antigen can be extracted, the module logs
    `no_antigen_extracted` and stops for that evidence.
 6. For each antigen candidate, the module loads or creates the cell in
@@ -70,7 +115,7 @@ The runtime flow is:
 10. If a regex matches, the cell goes `0 -> 1` and stores the chosen regex
    metadata.
 11. The module computes co-stimulation from the current `PAMP`, related
-    `PAMP`s, and stored `DAMP` danger pressure for the same profile.
+    `PAMP`s, and stored `DAMP` danger pressure for the same responsible IP.
 12. If co-stimulation crosses the configured threshold, the cell goes `1 -> 3`.
 13. If co-stimulation stays below threshold, the cell can wait in
     `1 - antigen-recognized` for at most one configured Slips time window.
@@ -85,12 +130,15 @@ The runtime flow is:
 18. If state `3` cannot decide effector or memory within one configured Slips
     time window, the cell goes `3 -> 0 - mature`.
 
-State `4` publishes the existing `new_blocking` payload when blocking support
-is present. If blocking or ARP poisoning modules are not running, the module
-can simulate the effector decision and log the exact payload instead.
+State `4` publishes the existing `new_blocking` payload for the responsible IP
+when blocking support is present. If blocking or ARP poisoning modules are not
+running, the module can simulate the effector decision and log the exact
+payload instead.
 
 State `5` stores the matched regex and the full context snapshot in the T Cell
-SQLite DB. It does not emit a new Slips evidence.
+SQLite DB when the cell first enters memory. It does not emit a new Slips
+evidence. Later matching evidence keeps the cell in `5 - memory`, but it does
+not create repeated `memory_stored` actions for the same cell.
 
 ## Antigen Extraction
 
@@ -153,11 +201,11 @@ Where:
 - `profile_danger_score = min(1, combined_danger_raw / danger_saturation)`
 - `combined_danger_raw = pamp_danger_raw + damp_danger_weight * damp_danger_raw`
 - `pamp_danger_raw = sum(threat_level_value * confidence)` over recent `PAMP`
-  observations for the same `profile.ip`
+  observations for the same responsible IP
 - `damp_danger_raw = sum(threat_level_value * confidence)` over recent `DAMP`
-  observations for the same `profile.ip`
+  observations for the same responsible IP
 
-Related PAMPs are recent `PAMP` observations for the same `profile.ip` that
+Related PAMPs are recent `PAMP` observations for the same responsible IP that
 share either:
 
 - the same antigen value, or
@@ -179,7 +227,8 @@ Interpretation:
 - `PAMP`s still provide antigen identity and the related-antigen correlation.
 - `DAMP`s do not match regexes and do not create cells.
 - `DAMP`s increase the danger term, so the same recognized antigen is treated
-  as riskier when the profile is also showing damage or anomaly signals.
+  as riskier when the responsible IP is also showing damage or anomaly
+  signals.
 
 Wait limit:
 
@@ -253,7 +302,7 @@ shape used by the existing Slips blocking path:
 
 ```json
 {
-  "ip": "<profile_ip>",
+  "ip": "<responsible_ip>",
   "block": true,
   "tw": 1,
   "interface": null
@@ -262,7 +311,7 @@ shape used by the existing Slips blocking path:
 
 Notes:
 
-- `ip` is always `evidence.profile.ip`
+- `ip` is the derived responsible IP, not necessarily `evidence.profile.ip`
 - `tw` is `evidence.timewindow.number`
 - `interface` uses the same `utils.get_interface_of_ip()` lookup as the rest
   of Slips
@@ -292,8 +341,9 @@ Default DB location:
 Tables:
 
 - `observations`: one processed evidence row with confidence, threat level,
-  extracted antigens, matched regexes, and the raw evidence JSON
-- `cells`: current state for each `profile_ip + regex_type + antigen_value`
+  extracted antigens, matched regexes, the tracked responsible IP, and the raw
+  evidence JSON
+- `cells`: current state for each `responsible_ip + regex_type + antigen_value`
 - `transitions`: auditable state transitions with reasons and score snapshots
 - `memories`: stored state-5 regex/context snapshots
 
@@ -314,7 +364,9 @@ decision or transition, with:
 - action
 - resulting state
 - evidence type and ID
-- profile IP
+- related profile IP
+- responsible IP
+- target IP when the evidence victim is an IP
 - cell key
 - matched regex hash and value when relevant
 - main scores
@@ -413,5 +465,5 @@ See [Evidence Signals](evidence_signals.md) for:
 T Cell antigen recognition and state creation start only from `PAMP`.
 `DAMP` observations are still stored in the T Cell observation table and are
 used as weighted danger signals in co-stimulation and context calculations for
-the same `profile.ip`, but they do not create cells or perform regex matching
-by themselves.
+the same responsible IP, but they do not create cells or perform regex
+matching by themselves.
