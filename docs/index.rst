@@ -31,6 +31,8 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Exporting**. The exporting module allows Slips to export to Slack and STIX servers. See :doc:`Exporting <exporting>`.
 
+- **Evidence signals**. Central PAMP/DAMP classification for evidence, configuration overrides, and the current evidence inventory. See :doc:`Evidence signals <evidence_signals>`.
+
 - **Slips in Action**. Example of using slips to analyze different PCAPs See :doc:`Slips in action <slips_in_action>`.
 
 - **Contributing**. Explanation how to contribute to Slips, and instructions how to implement new detection module in Slips. See :doc:`Contributing <contributing>`.
@@ -62,6 +64,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    features
    training
    exporting
+   evidence_signals
    P2P
    fides_module
    create_new_module
