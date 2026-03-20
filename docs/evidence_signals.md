@@ -6,7 +6,7 @@ The `T Cell` module consumes this same central field and only activates its
 state machine for antigen recognition from `PAMP` evidence. `DAMP` evidence is
 still stored by the module as an observation and contributes to the danger
 pressure used in T-cell co-stimulation and context calculations for the same
-profile IP, but it does not create cells or perform regex matching. See
+responsible IP, but it does not create cells or perform regex matching. See
 [T Cell Module](t_cell_module.md) for the responder details.
 
 The supported values are:
@@ -26,6 +26,15 @@ EvidenceSignals:
   overrides:
     ANOMALOUS_FLOW: DAMP
     MALICIOUS_FLOW: DAMP
+    ARP_SCAN: DAMP
+    UNSOLICITED_ARP: DAMP
+    CONNECTION_TO_MULTIPLE_PORTS: DAMP
+    CONNECTION_TO_PRIVATE_IP: DAMP
+    CONNECTION_WITHOUT_DNS: DAMP
+    DNS_ARPA_SCAN: DAMP
+    DNS_WITHOUT_CONNECTION: DAMP
+    HIGH_ENTROPY_DNS_ANSWER: DAMP
+    LONG_CONNECTION: DAMP
 ```
 
 Rules:
@@ -33,7 +42,11 @@ Rules:
 - `default_signal` is applied to every evidence type that is not listed in `overrides`.
 - `overrides` keys are evidence type names from `EvidenceType`.
 - Invalid values fall back to `PAMP`.
-- The default shipped mapping marks `ANOMALOUS_FLOW` and `MALICIOUS_FLOW` as `DAMP`.
+- The default shipped mapping marks the following evidence types as `DAMP`:
+  `ANOMALOUS_FLOW`, `MALICIOUS_FLOW`, `ARP_SCAN`, `UNSOLICITED_ARP`,
+  `CONNECTION_TO_MULTIPLE_PORTS`, `CONNECTION_TO_PRIVATE_IP`,
+  `CONNECTION_WITHOUT_DNS`, `DNS_ARPA_SCAN`, `DNS_WITHOUT_CONNECTION`,
+  `HIGH_ENTROPY_DNS_ANSWER`, and `LONG_CONNECTION`.
 
 ## Propagation
 
@@ -51,28 +64,28 @@ The table below lists the evidence types currently emitted by Slips modules and 
 | Module | Evidence type | Default signal |
 | --- | --- | --- |
 | `anomaly_detection_https` | `ANOMALOUS_FLOW` | `DAMP` |
-| `arp` | `ARP_SCAN` | `PAMP` |
+| `arp` | `ARP_SCAN` | `DAMP` |
 | `arp` | `ARP_OUTSIDE_LOCALNET` | `PAMP` |
-| `arp` | `UNSOLICITED_ARP` | `PAMP` |
+| `arp` | `UNSOLICITED_ARP` | `DAMP` |
 | `arp` | `MITM_ARP_ATTACK` | `PAMP` |
 | `flowalerts` | `BAD_SMTP_LOGIN` | `PAMP` |
 | `flowalerts` | `CN_URL_MISMATCH` | `PAMP` |
-| `flowalerts` | `CONNECTION_TO_MULTIPLE_PORTS` | `PAMP` |
-| `flowalerts` | `CONNECTION_TO_PRIVATE_IP` | `PAMP` |
-| `flowalerts` | `CONNECTION_WITHOUT_DNS` | `PAMP` |
+| `flowalerts` | `CONNECTION_TO_MULTIPLE_PORTS` | `DAMP` |
+| `flowalerts` | `CONNECTION_TO_PRIVATE_IP` | `DAMP` |
+| `flowalerts` | `CONNECTION_WITHOUT_DNS` | `DAMP` |
 | `flowalerts` | `DATA_UPLOAD` | `PAMP` |
 | `flowalerts` | `DEVICE_CHANGING_IP` | `PAMP` |
 | `flowalerts` | `DGA_NXDOMAINS` | `PAMP` |
 | `flowalerts` | `DIFFERENT_LOCALNET` | `PAMP` |
-| `flowalerts` | `DNS_ARPA_SCAN` | `PAMP` |
-| `flowalerts` | `DNS_WITHOUT_CONNECTION` | `PAMP` |
+| `flowalerts` | `DNS_ARPA_SCAN` | `DAMP` |
+| `flowalerts` | `DNS_WITHOUT_CONNECTION` | `DAMP` |
 | `flowalerts` | `GRE_SCAN` | `PAMP` |
 | `flowalerts` | `GRE_TUNNEL` | `PAMP` |
-| `flowalerts` | `HIGH_ENTROPY_DNS_ANSWER` | `PAMP` |
+| `flowalerts` | `HIGH_ENTROPY_DNS_ANSWER` | `DAMP` |
 | `flowalerts` | `HORIZONTAL_PORT_SCAN` | `PAMP` |
 | `flowalerts` | `INCOMPATIBLE_CN` | `PAMP` |
 | `flowalerts` | `INVALID_DNS_RESOLUTION` | `PAMP` |
-| `flowalerts` | `LONG_CONNECTION` | `PAMP` |
+| `flowalerts` | `LONG_CONNECTION` | `DAMP` |
 | `flowalerts` | `MALICIOUS_JA3` | `PAMP` |
 | `flowalerts` | `MALICIOUS_JA3S` | `PAMP` |
 | `flowalerts` | `MALICIOUS_SSL_CERT` | `PAMP` |
@@ -121,4 +134,8 @@ The table below lists the evidence types currently emitted by Slips modules and 
 
 `ANOMALOUS_FLOW` is emitted by `anomaly_detection_https`, while `MALICIOUS_FLOW`
 is emitted by `flowmldetection`. Both are marked as `DAMP` by default in the
-central signal configuration.
+central signal configuration. The additional shipped DAMP overrides in
+`config/slips.yaml` are `ARP_SCAN`, `UNSOLICITED_ARP`,
+`CONNECTION_TO_MULTIPLE_PORTS`, `CONNECTION_TO_PRIVATE_IP`,
+`CONNECTION_WITHOUT_DNS`, `DNS_ARPA_SCAN`, `DNS_WITHOUT_CONNECTION`,
+`HIGH_ENTROPY_DNS_ANSWER`, and `LONG_CONNECTION`.
