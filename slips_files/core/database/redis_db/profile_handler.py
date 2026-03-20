@@ -19,6 +19,7 @@ import redis
 import validators
 from redis.client import Pipeline
 
+from slips_files.common.slips_utils import utils
 from slips_files.core.structures.flow_attributes import Role
 
 
@@ -1049,7 +1050,7 @@ class ProfileHandler:
 
             self.zadd_but_keep_n_entries(
                 self.constants.PROFILES,
-                {str(profileid): float(starttime)},
+                {str(profileid): self._get_profile_start_score(starttime)},
                 2000,
             )
 
@@ -1081,6 +1082,13 @@ class ProfileHandler:
             self.print(type(inst), 0, 1)
             self.print(inst, 0, 1)
             return False
+
+    @staticmethod
+    def _get_profile_start_score(starttime) -> float:
+        try:
+            return float(utils.convert_ts_format(starttime, "unixtimestamp"))
+        except Exception:
+            return float(starttime)
 
     def set_module_label_for_profile(self, profileid, module, label):
         """
