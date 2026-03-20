@@ -2,6 +2,11 @@
 
 Slips now adds an `evidence_signal` field to every evidence when the evidence reaches the shared evidence pipeline. Detection modules do not need to set this field themselves.
 
+The `T Cell` module consumes this same central field and, in v1, only activates
+its state machine for `PAMP` evidence. `DAMP` evidence is still stored by the
+module as an observation but is ignored for activation. See
+[T Cell Module](t_cell_module.md) for the responder details.
+
 The supported values are:
 
 - `PAMP`
