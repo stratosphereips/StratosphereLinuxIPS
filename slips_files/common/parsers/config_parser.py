@@ -941,6 +941,203 @@ class ConfigParser(object):
             return value
         return str(value).strip().lower() in ("true", "1", "yes", "on")
 
+    def t_cell_enabled(self) -> bool:
+        value = self.read_configuration("t_cell", "enabled", False)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def t_cell_create_log_file(self) -> bool:
+        value = self.read_configuration("t_cell", "create_log_file", True)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def t_cell_log_colors(self) -> bool:
+        value = self.read_configuration("t_cell", "log_colors", True)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def t_cell_store_dir(self) -> str:
+        value = self.read_configuration("t_cell", "store_dir", "output/t_cell")
+        if not isinstance(value, str) or not value.strip():
+            return "output/t_cell"
+        return value.strip()
+
+    def t_cell_persistent_store_dir(self) -> str:
+        value = self.read_configuration(
+            "t_cell", "persistent_store_dir", ""
+        )
+        if not isinstance(value, str) or not value.strip():
+            return ""
+        return value.strip()
+
+    def t_cell_observation_retention_seconds(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "observation_retention_seconds", 604800
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 604800
+        return max(0, value)
+
+    def t_cell_anergy_ttl_seconds(self) -> int:
+        value = self.read_configuration("t_cell", "anergy_ttl_seconds", 21600)
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 21600
+        return max(0, value)
+
+    def t_cell_related_lookback_seconds(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "related_lookback_seconds", 3600
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 3600
+        return max(1, value)
+
+    def t_cell_related_pamps_saturation(self) -> float:
+        value = self.read_configuration(
+            "t_cell", "related_pamps_saturation", 5
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 5.0
+        return max(0.01, value)
+
+    def t_cell_danger_saturation(self) -> float:
+        value = self.read_configuration("t_cell", "danger_saturation", 2.5)
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 2.5
+        return max(0.01, value)
+
+    def t_cell_co_stimulation_threshold(self) -> float:
+        value = self.read_configuration(
+            "t_cell", "co_stimulation_threshold", 0.65
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 0.65
+        return max(0.0, min(1.0, value))
+
+    def t_cell_co_stimulation_weights(self) -> dict:
+        default_weights = {
+            "confidence": 0.35,
+            "related_pamps": 0.25,
+            "danger": 0.40,
+        }
+        value = self.read_configuration(
+            "t_cell", "co_stimulation_weights", default_weights
+        )
+        if not isinstance(value, dict):
+            return default_weights
+
+        sanitized_weights = {}
+        for weight_name, default_weight in default_weights.items():
+            raw_weight = value.get(weight_name, default_weight)
+            try:
+                raw_weight = float(raw_weight)
+            except (TypeError, ValueError):
+                raw_weight = default_weight
+            sanitized_weights[weight_name] = max(0.0, raw_weight)
+
+        if not any(sanitized_weights.values()):
+            return default_weights
+        return sanitized_weights
+
+    def t_cell_novelty_window_seconds(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "novelty_window_seconds", 86400
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 86400
+        return max(1, value)
+
+    def t_cell_context_recent_window_seconds(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "context_recent_window_seconds", 1800
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 1800
+        return max(1, value)
+
+    def t_cell_effector_threshold(self) -> float:
+        value = self.read_configuration("t_cell", "effector_threshold", 0.70)
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 0.70
+        return max(0.0, min(1.0, value))
+
+    def t_cell_effector_min_related_count(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "effector_min_related_count", 4
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 4
+        return max(1, value)
+
+    def t_cell_effector_cooldown_seconds(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "effector_cooldown_seconds", 1800
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 1800
+        return max(0, value)
+
+    def t_cell_memory_threshold(self) -> float:
+        value = self.read_configuration("t_cell", "memory_threshold", 0.60)
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 0.60
+        return max(0.0, min(1.0, value))
+
+    def t_cell_memory_trend_ratio_max(self) -> float:
+        value = self.read_configuration(
+            "t_cell", "memory_trend_ratio_max", 0.60
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 0.60
+        return max(0.0, value)
+
+    def t_cell_memory_min_related_count(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "memory_min_related_count", 3
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 3
+        return max(1, value)
+
+    def t_cell_simulate_effector_without_blocking(self) -> bool:
+        value = self.read_configuration(
+            "t_cell", "simulate_effector_without_blocking", True
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
     def analysis_direction(self):
         """
         Controls which traffic flows are processed and analyzed by SLIPS.
@@ -1153,6 +1350,9 @@ class ConfigParser(object):
 
         if not self.regex_generator_enabled():
             to_ignore.append("regex_generator")
+
+        if not self.t_cell_enabled():
+            to_ignore.append("t_cell")
 
         return to_ignore
 
