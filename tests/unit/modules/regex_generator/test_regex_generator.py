@@ -440,6 +440,33 @@ def test_handle_pending_response_keeps_waiting_after_soft_timeout(
     regex_generator.print.assert_called()
 
 
+def test_finalize_request_drops_malformed_llm_response_without_error_logging(
+    tmp_path,
+):
+    regex_generator = ModuleFactory().create_regex_generator_obj(
+        store_dir=str(tmp_path / "regex_generator")
+    )
+    regex_generator.pending_request = {
+        "request_id": "req-1",
+        "regex_type": "dns_domain",
+        "backend": "local_qwen",
+    }
+    regex_generator._log_detail = Mock()
+    regex_generator._validate_and_store_regex = Mock()
+
+    regex_generator._finalize_request(
+        {
+            "request_id": "req-1",
+            "success": True,
+            "text": "not json",
+        }
+    )
+
+    regex_generator.print.assert_not_called()
+    regex_generator._log_detail.assert_not_called()
+    regex_generator._validate_and_store_regex.assert_not_called()
+
+
 def test_extract_regex_from_llm_text_rejects_invalid_payloads(tmp_path):
     regex_generator = ModuleFactory().create_regex_generator_obj(
         store_dir=str(tmp_path / "regex_generator")
