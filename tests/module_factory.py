@@ -70,7 +70,10 @@ class ModuleFactory:
         conf.disabled_detections = Mock(return_value=[])
         conf.evidence_signal_default = Mock(return_value="PAMP")
         conf.evidence_signal_overrides = Mock(
-            return_value={"MALICIOUS_FLOW": "DAMP"}
+            return_value={
+                "ANOMALOUS_FLOW": "DAMP",
+                "MALICIOUS_FLOW": "DAMP",
+            }
         )
         conf.get_tw_width_as_float = Mock(return_value=3600.0)
         conf.get_tw_width_in_seconds = Mock(return_value=3600)
@@ -254,6 +257,8 @@ class ModuleFactory:
         conf.t_cell_enabled = Mock(return_value=True)
         conf.t_cell_create_log_file = Mock(return_value=True)
         conf.t_cell_log_colors = Mock(return_value=True)
+        conf.t_cell_log_verbosity = Mock(return_value=1)
+        conf.get_tw_width_in_seconds = Mock(return_value=3600.0)
         conf.t_cell_store_dir = Mock(return_value="dummy_output_dir/t_cell")
         conf.t_cell_persistent_store_dir = Mock(return_value="")
         conf.t_cell_observation_retention_seconds = Mock(return_value=604800)
@@ -261,6 +266,7 @@ class ModuleFactory:
         conf.t_cell_related_lookback_seconds = Mock(return_value=3600)
         conf.t_cell_related_pamps_saturation = Mock(return_value=5.0)
         conf.t_cell_danger_saturation = Mock(return_value=2.5)
+        conf.t_cell_damp_danger_weight = Mock(return_value=1.5)
         conf.t_cell_co_stimulation_threshold = Mock(return_value=0.65)
         conf.t_cell_co_stimulation_weights = Mock(
             return_value={
@@ -1130,7 +1136,8 @@ class ModuleFactory:
         alert_handler.extended_ttl = 3600
         alert_handler.default_evidence_signal = "PAMP"
         alert_handler.evidence_signal_overrides = {
-            "MALICIOUS_FLOW": "DAMP"
+            "ANOMALOUS_FLOW": "DAMP",
+            "MALICIOUS_FLOW": "DAMP",
         }
         alert_handler.set_profileid_field = Mock()
         return alert_handler
