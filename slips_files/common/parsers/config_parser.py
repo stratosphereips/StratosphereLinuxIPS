@@ -289,6 +289,36 @@ class ConfigParser(object):
             "DisabledAlerts", "disabled_detections", []
         )
 
+    def evidence_signal_default(self) -> str:
+        value = self.read_configuration(
+            "EvidenceSignals", "default_signal", "PAMP"
+        )
+        if not isinstance(value, str):
+            return "PAMP"
+        value = value.strip().upper()
+        if value not in ("PAMP", "DAMP"):
+            return "PAMP"
+        return value
+
+    def evidence_signal_overrides(self) -> dict:
+        overrides = self.read_configuration(
+            "EvidenceSignals", "overrides", {}
+        )
+        if not isinstance(overrides, dict):
+            return {}
+
+        sanitized = {}
+        for evidence_type, signal in overrides.items():
+            if not isinstance(evidence_type, str):
+                continue
+            if not isinstance(signal, str):
+                continue
+            normalized_signal = signal.strip().upper()
+            if normalized_signal not in ("PAMP", "DAMP"):
+                continue
+            sanitized[evidence_type.strip().upper()] = normalized_signal
+        return sanitized
+
     def get_tw_width(self) -> str:
         twid_width = self.get_tw_width_in_seconds()
         # timedelta puts it in the form of X days, hours:minutes:seconds
