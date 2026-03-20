@@ -759,7 +759,7 @@ class AnomalyDetectionHTTPS(IModule):
                 src_port = None
 
         evidence = Evidence(
-            evidence_type=EvidenceType.MALICIOUS_FLOW,
+            evidence_type=EvidenceType.ANOMALOUS_FLOW,
             description=description,
             attacker=Attacker(
                 direction=Direction.SRC,
