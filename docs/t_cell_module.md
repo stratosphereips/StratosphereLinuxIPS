@@ -418,6 +418,41 @@ Performance note:
 - trace mode performs extra observation lookups and extra file writes, so it
   should be treated as a verification feature, not the normal default path
 
+### Offline HTML Report
+
+The module includes a separate offline report generator:
+
+```bash
+./venv/bin/python modules/t_cell/analyze_t_cell.py \
+  --run-output-dir output/<run>
+```
+
+By default it writes:
+
+```text
+<selected_run_output_dir>/t_cell_report.html
+```
+
+The report is static and self-contained. It reads the T Cell SQLite DB as the
+primary source, then enriches the page with `t_cell.log` and
+`t_cell_trace.jsonl` when those files exist. This means:
+
+- it still explains the run when `log_verbosity` is `1`
+- it gains richer per-evidence detail when `log_verbosity` is `2` or `3`
+- it gains threshold-by-threshold explanations when decision tracing is enabled
+
+The page focuses on the run itself, including:
+
+- total `PAMP` and `DAMP` observations
+- evidence type mix
+- extracted antigens and matched regexes
+- current cells and their states
+- transition reasons and state-path counts
+- memories stored so far
+- observation, transition, and trace timelines
+- a sortable Recent Observations table at the bottom of the page
+- a compact, collapsed configuration snapshot at the very end
+
 Color mapping:
 
 - `0 - mature` -> cyan
