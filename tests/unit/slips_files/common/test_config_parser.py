@@ -40,6 +40,9 @@ def test_t_cell_config_defaults():
     assert parser.t_cell_create_log_file() is True
     assert parser.t_cell_log_colors() is True
     assert parser.t_cell_log_verbosity() == 1
+    assert parser.t_cell_decision_trace_mode() == 0
+    assert parser.t_cell_decision_trace_file() == "t_cell_trace.jsonl"
+    assert parser.t_cell_decision_trace_max_evidence() == 10
     assert parser.t_cell_store_dir() == "output/t_cell"
     assert parser.t_cell_persistent_store_dir() == ""
     assert parser.t_cell_observation_retention_seconds() == 604800
@@ -73,6 +76,9 @@ def test_t_cell_config_sanitization():
             "create_log_file": "false",
             "log_colors": "false",
             "log_verbosity": "debug",
+            "decision_trace_mode": "all",
+            "decision_trace_file": " ",
+            "decision_trace_max_evidence": "bad",
             "store_dir": "",
             "persistent_store_dir": " /tmp/tcell ",
             "observation_retention_seconds": "bad",
@@ -103,6 +109,9 @@ def test_t_cell_config_sanitization():
     assert parser.t_cell_create_log_file() is False
     assert parser.t_cell_log_colors() is False
     assert parser.t_cell_log_verbosity() == 3
+    assert parser.t_cell_decision_trace_mode() == 2
+    assert parser.t_cell_decision_trace_file() == "t_cell_trace.jsonl"
+    assert parser.t_cell_decision_trace_max_evidence() == 10
     assert parser.t_cell_store_dir() == "output/t_cell"
     assert parser.t_cell_persistent_store_dir() == "/tmp/tcell"
     assert parser.t_cell_observation_retention_seconds() == 604800
