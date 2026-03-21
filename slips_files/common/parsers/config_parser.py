@@ -982,6 +982,51 @@ class ConfigParser(object):
                     value = 1
         return max(1, min(3, int(value)))
 
+    def t_cell_decision_trace_mode(self) -> int:
+        value = self.read_configuration("t_cell", "decision_trace_mode", "off")
+        if isinstance(value, bool):
+            return 1 if value else 0
+        if isinstance(value, (int, float)):
+            return max(0, min(2, int(value)))
+
+        normalized = str(value).strip().lower()
+        named_levels = {
+            "off": 0,
+            "disabled": 0,
+            "none": 0,
+            "transitions": 1,
+            "transition": 1,
+            "state_changes": 1,
+            "changes": 1,
+            "all": 2,
+            "full": 2,
+            "debug": 2,
+        }
+        if normalized in named_levels:
+            return named_levels[normalized]
+        try:
+            return max(0, min(2, int(normalized)))
+        except (TypeError, ValueError):
+            return 0
+
+    def t_cell_decision_trace_file(self) -> str:
+        value = self.read_configuration(
+            "t_cell", "decision_trace_file", "t_cell_trace.jsonl"
+        )
+        if not isinstance(value, str) or not value.strip():
+            return "t_cell_trace.jsonl"
+        return value.strip()
+
+    def t_cell_decision_trace_max_evidence(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "decision_trace_max_evidence", 10
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 10
+        return max(1, value)
+
     def t_cell_store_dir(self) -> str:
         value = self.read_configuration("t_cell", "store_dir", "output/t_cell")
         if not isinstance(value, str) or not value.strip():
