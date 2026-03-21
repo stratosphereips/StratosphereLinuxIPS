@@ -38,6 +38,28 @@ Artifacts:
   The configured trace path is always forced under the selected run output
   directory.
 - module DB: `<run_output_dir>/t_cell/t_cell.sqlite`
+- offline HTML report: `<run_output_dir>/t_cell_report.html`
+
+## Local HTML Report
+
+Use the included offline report generator to build a static HTML page from a
+completed or running Slips output directory:
+
+```bash
+./venv/bin/python modules/t_cell/analyze_t_cell.py \
+  --run-output-dir output/<run>
+```
+
+By default it writes:
+
+```text
+output/<run>/t_cell_report.html
+```
+
+The report reads the T Cell SQLite DB first, then enriches the page with the
+module log and decision trace when those files exist. That means it still gives
+useful summaries when `log_verbosity` is `1` or `2`, and becomes more detailed
+when verbosity `3` or decision tracing is enabled.
 
 See [docs/t_cell_module.md](../../docs/t_cell_module.md) for the full design,
 configuration, formulas, and DB schema.
