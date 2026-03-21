@@ -709,12 +709,22 @@ def build_report_payload(
                 "evidence_id": transition["evidence_id"],
                 "from_state": from_label,
                 "to_state": to_label,
+                "from_state_order": transition.get("from_state", -1),
+                "to_state_order": transition.get("to_state", -1),
                 "reason": transition["reason"],
                 "matched_value": transition.get("matched_value") or "",
                 "scores": transition.get("scores") or {},
             }
         )
-    recent_transitions.sort(key=lambda item: item["ts"], reverse=True)
+    recent_transitions.sort(
+        key=lambda item: (
+            item["cell_key"].lower(),
+            float(item["ts"]),
+            int(item["from_state_order"]),
+            int(item["to_state_order"]),
+            item["evidence_id"],
+        )
+    )
 
     current_state_counts = Counter()
     recent_cells = []
@@ -995,6 +1005,67 @@ def render_sortable_observation_table(rows: list[dict]) -> str:
     )
 
 
+def render_sortable_transition_table(rows: list[dict]) -> str:
+    if not rows:
+        return '<p class="empty">No state transitions were recorded.</p>'
+
+    columns = [
+        "When",
+        "Path",
+        "Reason",
+        "Responsible",
+        "T Cell",
+        "Evidence",
+        "Scores",
+    ]
+    head = "".join(
+        (
+            "<th scope='col'>"
+            f"<button type='button' class='sort-button' data-column='{index}' aria-label='Sort by {escape(column)}'>"
+            f"{escape(column)}"
+            "<span class='sort-indicator' aria-hidden='true'>↕</span>"
+            "</button>"
+            "</th>"
+        )
+        for index, column in enumerate(columns)
+    )
+
+    body_rows = []
+    for index, row in enumerate(rows):
+        score_summary = ", ".join(
+            f"{key}={value}" for key, value in sorted((row["scores"] or {}).items())
+        ) or "n/a"
+        cells = [
+            (escape(row["wall"]), row["ts"]),
+            (
+                f"{render_badge(row['from_state'], state_class_name(row['from_state']))} "
+                f"→ {render_badge(row['to_state'], state_class_name(row['to_state']))}",
+                f"{row['from_state_order']:02d}->{row['to_state_order']:02d}",
+            ),
+            (escape(row["reason"]), row["reason"]),
+            (escape(row["responsible_ip"]), row["responsible_ip"]),
+            (escape(shorten(row["cell_key"], 54)), row["cell_key"]),
+            (escape(shorten(row["evidence_id"], 20)), row["evidence_id"]),
+            (
+                f"<details><summary>show</summary><pre>{render_pretty_json(row['scores'])}</pre></details>",
+                score_summary,
+            ),
+        ]
+        body_cells = "".join(
+            f"<td data-sort-value='{escape(str(sort_value))}'>{html_value}</td>"
+            for html_value, sort_value in cells
+        )
+        body_rows.append(f"<tr data-row-index='{index}'>{body_cells}</tr>")
+
+    body = "".join(body_rows)
+    return (
+        "<div class='table-wrap'>"
+        "<table class='report-table sortable-table' data-sortable-table='recent-transitions' "
+        "data-default-sort-column='4' data-default-sort-direction='asc'>"
+        f"<thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>"
+    )
+
+
 def render_svg_timeline(title: str, timeline: dict, series_order: list[str], color_map: dict[str, str]) -> str:
     if not timeline:
         return (
@@ -1062,6 +1133,189 @@ def render_svg_timeline(title: str, timeline: dict, series_order: list[str], col
     """
 
 
+def hex_to_rgba(hex_color: str, alpha: float) -> str:
+    color = hex_color.lstrip("#")
+    if len(color) != 6:
+        return f"rgba(31, 41, 55, {alpha})"
+    red = int(color[0:2], 16)
+    green = int(color[2:4], 16)
+    blue = int(color[4:6], 16)
+    return f"rgba({red}, {green}, {blue}, {alpha})"
+
+
+def render_state_machine_graph(report: dict) -> str:
+    node_layout = {
+        0: {"x": 40, "y": 122},
+        1: {"x": 320, "y": 44},
+        2: {"x": 320, "y": 244},
+        3: {"x": 600, "y": 122},
+        4: {"x": 880, "y": 30},
+        5: {"x": 880, "y": 214},
+    }
+    node_width = 210
+    node_height = 68
+    transition_counts = {
+        row["label"]: row["count"] for row in report.get("transition_paths", [])
+    }
+    current_state_counts = report.get("cell_states", {})
+
+    edges = [
+        {
+            "from": 0,
+            "to": 1,
+            "trigger": "regex match",
+            "path": "M 250 156 C 275 156, 286 120, 320 104",
+            "label_x": 272,
+            "label_y": 116,
+        },
+        {
+            "from": 0,
+            "to": 2,
+            "trigger": "no regex",
+            "path": "M 250 156 C 275 156, 286 286, 320 278",
+            "label_x": 268,
+            "label_y": 252,
+        },
+        {
+            "from": 2,
+            "to": 0,
+            "trigger": "anergy TTL",
+            "path": "M 320 306 C 248 338, 178 322, 146 190",
+            "label_x": 182,
+            "label_y": 330,
+        },
+        {
+            "from": 1,
+            "to": 1,
+            "trigger": "wait",
+            "path": "M 392 44 C 350 4, 502 4, 460 44",
+            "label_x": 426,
+            "label_y": 12,
+        },
+        {
+            "from": 1,
+            "to": 3,
+            "trigger": "co-stimulation",
+            "path": "M 530 78 L 600 156",
+            "label_x": 542,
+            "label_y": 94,
+        },
+        {
+            "from": 1,
+            "to": 2,
+            "trigger": "timeout",
+            "path": "M 425 112 L 425 244",
+            "label_x": 438,
+            "label_y": 184,
+        },
+        {
+            "from": 3,
+            "to": 3,
+            "trigger": "wait",
+            "path": "M 672 122 C 630 82, 782 82, 740 122",
+            "label_x": 706,
+            "label_y": 90,
+        },
+        {
+            "from": 3,
+            "to": 4,
+            "trigger": "contain",
+            "path": "M 810 144 L 880 86",
+            "label_x": 828,
+            "label_y": 112,
+        },
+        {
+            "from": 3,
+            "to": 5,
+            "trigger": "remember",
+            "path": "M 810 168 L 880 248",
+            "label_x": 824,
+            "label_y": 214,
+        },
+        {
+            "from": 3,
+            "to": 0,
+            "trigger": "context timeout",
+            "path": "M 600 156 C 536 236, 286 236, 250 156",
+            "label_x": 430,
+            "label_y": 260,
+        },
+        {
+            "from": 4,
+            "to": 4,
+            "trigger": "cooldown",
+            "path": "M 952 30 C 914 -8, 1088 -8, 1050 30",
+            "label_x": 1000,
+            "label_y": 2,
+        },
+        {
+            "from": 5,
+            "to": 5,
+            "trigger": "retained",
+            "path": "M 952 282 C 914 320, 1088 320, 1050 282",
+            "label_x": 998,
+            "label_y": 334,
+        },
+    ]
+
+    node_svg = []
+    for state_id, label in STATE_LABELS.items():
+        node = node_layout[state_id]
+        color = STATE_COLORS[state_class(state_id)]
+        count = current_state_counts.get(label, 0)
+        node_svg.append(
+            f"""
+            <g>
+              <rect x="{node['x']}" y="{node['y']}" width="{node_width}" height="{node_height}"
+                    rx="18" ry="18" fill="{hex_to_rgba(color, 0.10)}" stroke="{color}" stroke-width="2" />
+              <text x="{node['x'] + 16}" y="{node['y'] + 26}" fill="#1f2937" font-size="15" font-weight="700">{escape(label)}</text>
+              <text x="{node['x'] + 16}" y="{node['y'] + 48}" fill="#665c54" font-size="12">current cells: {count}</text>
+            </g>
+            """
+        )
+
+    edge_svg = []
+    for edge in edges:
+        from_label = STATE_LABELS[edge["from"]]
+        to_label = STATE_LABELS[edge["to"]]
+        path_key = f"{from_label} -> {to_label}"
+        count = int(transition_counts.get(path_key, 0))
+        active = count > 0
+        stroke = STATE_COLORS[state_class(edge["to"])]
+        edge_svg.append(
+            f"""
+            <g>
+              <path d="{edge['path']}" fill="none" stroke="{stroke}" stroke-width="{3 if active else 1.6}"
+                    stroke-opacity="{0.95 if active else 0.30}" stroke-dasharray="{'none' if active else '5 5'}"
+                    marker-end="url(#state-arrow)" />
+              <text x="{edge['label_x']}" y="{edge['label_y']}" fill="#5b4633" font-size="12" font-weight="700">
+                {escape(edge['trigger'])} · {count}
+              </text>
+            </g>
+            """
+        )
+
+    return f"""
+    <section class="panel" style="margin-top: 14px;">
+      <div class="panel-head">
+        <h2>T Cell State Machine</h2>
+        <p class="meta">Node badges show current cells in each state. Arrow labels show how many times each transition happened in this run.</p>
+      </div>
+      <svg viewBox="0 0 1120 360" class="timeline-svg" role="img" aria-label="T Cell state machine">
+        <defs>
+          <marker id="state-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+                  markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#7c2d12"></path>
+          </marker>
+        </defs>
+        <rect x="0" y="0" width="1120" height="360" fill="#fffdf8" />
+        {''.join(edge_svg)}
+        {''.join(node_svg)}
+      </svg>
+    </section>
+    """
+
+
 def render_pretty_json(value: Any) -> str:
     return escape(json.dumps(value, indent=2, sort_keys=True))
 
@@ -1116,32 +1370,8 @@ def render_html(report: dict) -> str:
         report["recent_observations"]
     )
 
-    transition_table = render_simple_table(
-        [
-            "When",
-            "Path",
-            "Reason",
-            "Responsible",
-            "Cell",
-            "Evidence",
-            "Scores",
-        ],
-        [
-            {
-                "When": escape(row["wall"]),
-                "Path": (
-                    f"{render_badge(row['from_state'], state_class_name(row['from_state']))} "
-                    f"→ {render_badge(row['to_state'], state_class_name(row['to_state']))}"
-                ),
-                "Reason": escape(row["reason"]),
-                "Responsible": escape(row["responsible_ip"]),
-                "Cell": escape(shorten(row["cell_key"], 54)),
-                "Evidence": escape(shorten(row["evidence_id"], 20)),
-                "Scores": f"<details><summary>show</summary><pre>{render_pretty_json(row['scores'])}</pre></details>",
-            }
-            for row in report["recent_transitions"]
-        ],
-        "No state transitions were recorded.",
+    transition_table = render_sortable_transition_table(
+        report["recent_transitions"]
     )
 
     cell_table = render_simple_table(
@@ -1332,6 +1562,7 @@ def render_html(report: dict) -> str:
         ["co-stimulation", "context"],
         TRACE_STAGE_COLORS,
     )
+    state_machine_graph = render_state_machine_graph(report)
 
     return f"""<!doctype html>
 <html lang="en">
@@ -1668,6 +1899,8 @@ def render_html(report: dict) -> str:
       {trace_timeline}
     </section>
 
+    {state_machine_graph}
+
     <section class="panel-grid">
       <section class="panel">
         <h2>Signals</h2>
@@ -1685,6 +1918,7 @@ def render_html(report: dict) -> str:
 
     <section class="panel" style="margin-top: 18px;">
       <h2>Transitions</h2>
+      <p class="meta">Click a column header to sort. Default order groups rows by T cell so each cell's path stays together.</p>
       {transition_table}
     </section>
 
