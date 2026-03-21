@@ -277,3 +277,21 @@ def test_ollama_backend_parses_response():
     assert response["usage"]["input_tokens"] == 9
     assert response["usage"]["output_tokens"] == 11
     assert response["usage"]["total_tokens"] == 20
+
+
+def test_llm_backend_pool_size_scales_with_worker_threads():
+    llm = ModuleFactory().create_llm_obj()
+    llm.worker_threads = 3
+    config = LLMBackendConfig.from_dict(
+        "local_qwen",
+        {
+            "provider": "ollama",
+            "model": "qwen2.5:3b",
+            "base_url": "http://127.0.0.1:11434",
+        },
+    )
+
+    with patch("modules.llm.llm.urllib3.PoolManager") as mock_pool:
+        llm._create_backend(config)
+
+    assert mock_pool.call_args.kwargs["maxsize"] == 6
