@@ -93,6 +93,58 @@ The persisted states are:
 - `4 - effector`
 - `5 - memory`
 
+Mermaid state diagram:
+
+```mermaid
+stateDiagram-v2
+    [*] --> S0 : new cell
+
+    state "0 - mature" as S0
+    state "1 - antigen-recognized" as S1
+    state "2 - anergic" as S2
+    state "3 - activated" as S3
+    state "4 - effector" as S4
+    state "5 - memory" as S5
+
+    S0 --> S1 : PAMP + antigen extracted\n+ accepted regex match
+    S0 --> S2 : PAMP + antigen extracted\n+ no regex match
+    S0 --> S0 : DAMP only or\nno antigen extracted
+
+    S2 --> S0 : anergy TTL expired
+
+    S1 --> S3 : co-stimulation >= threshold\nwithin 1 Slips TW
+    S1 --> S1 : re-evaluate on later evidence\nwhile below threshold
+    S1 --> S2 : co-stimulation timeout\nafter 1 Slips TW
+
+    S3 --> S4 : context says novel + intense
+    S3 --> S5 : context says familiar + cooling down
+    S3 --> S3 : re-evaluate on later evidence\nwhile undecided
+    S3 --> S0 : context timeout\nafter 1 Slips TW
+
+    S5 --> S5 : later matching evidence retained
+    S4 --> S4 : repeated hits gated by\neffector cooldown
+
+    note right of S0
+      DAMP observations are stored as danger signals.
+      They do not perform antigen recognition
+      and do not create a new cell by themselves.
+    end note
+
+    note right of S1
+      Co-stimulation combines:
+      current PAMP confidence
+      related PAMP count
+      weighted PAMP+DAMP danger
+      for the same responsible IP.
+    end note
+
+    note right of S3
+      Context uses the same mixed pressure model
+      to decide whether to contain now
+      or store memory for later.
+    end note
+```
+
 The runtime flow is:
 
 1. Slips publishes an evidence on `evidence_added`.
@@ -445,12 +497,14 @@ The page focuses on the run itself, including:
 
 - total `PAMP` and `DAMP` observations
 - evidence type mix
+- a rendered T-cell state-machine graph with per-state and per-transition counts
 - extracted antigens and matched regexes
 - current cells and their states
 - transition reasons and state-path counts
 - memories stored so far
 - observation, transition, and trace timelines
 - a sortable Recent Observations table at the bottom of the page
+- a sortable Transitions table that defaults to grouping rows by T cell
 - a compact, collapsed configuration snapshot at the very end
 
 Color mapping:
