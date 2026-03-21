@@ -31,6 +31,31 @@ Main behavior:
 - containment reuses the existing `new_blocking` payload shape
 - all T Cell state is stored in its own SQLite DB and log file
 
+## State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> S0
+
+    state "0 - mature" as S0
+    state "1 - antigen-recognized" as S1
+    state "2 - anergic" as S2
+    state "3 - activated" as S3
+    state "4 - effector" as S4
+    state "5 - memory" as S5
+
+    S0 --> S1 : PAMP + antigen + regex match
+    S0 --> S2 : PAMP + antigen + no regex match
+    S0 --> S0 : DAMP only or no antigen
+    S2 --> S0 : anergy TTL expired
+    S1 --> S3 : co-stimulation threshold met
+    S1 --> S2 : co-stimulation timeout
+    S3 --> S4 : context -> contain
+    S3 --> S5 : context -> remember
+    S3 --> S0 : context timeout
+    S5 --> S5 : later matching evidence retained
+```
+
 Artifacts:
 
 - module log: `output/t_cell.log`
