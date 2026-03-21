@@ -19,6 +19,8 @@ Main behavior:
   T-cell ownership use the evidence's responsible IP
 - stored `DAMP` observations raise the danger pressure used by
   co-stimulation and context for the same responsible IP
+- optional decision tracing writes a separate JSONL audit file showing which
+  evidence IDs contributed to threshold calculations
 - co-stimulation and context scores decide whether the cell becomes tolerant,
   activates, requests containment, or stores memory
 - state `1 - antigen-recognized` and state `3 - activated` can each wait for
@@ -32,6 +34,9 @@ Main behavior:
 Artifacts:
 
 - module log: `output/t_cell.log`
+- optional trace file: `<run_output_dir>/t_cell_trace.jsonl`
+  The configured trace path is always forced under the selected run output
+  directory.
 - module DB: `<run_output_dir>/t_cell/t_cell.sqlite`
 
 See [docs/t_cell_module.md](../../docs/t_cell_module.md) for the full design,
