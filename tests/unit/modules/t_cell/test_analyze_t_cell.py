@@ -317,8 +317,14 @@ def test_build_report_payload_and_html(tmp_path):
     assert "Run Findings" in html
     assert "Quick Summary" in html
     assert "Decision Trace" in html
+    assert "T Cell State Machine" in html
+    assert "regex match" in html
+    assert "current cells: 1" in html
     assert "Module Log Tail" not in html
     assert "data-sortable-table='recent-observations'" in html
+    assert "data-sortable-table='recent-transitions'" in html
+    assert "data-default-sort-column='4'" in html
+    assert "Default order groups rows by T cell" in html
     assert "Click a column header to sort." in html
     assert html.index("Recent Observations") < html.index("Run configuration snapshot")
     assert "co_stimulation_threshold_met" in html
