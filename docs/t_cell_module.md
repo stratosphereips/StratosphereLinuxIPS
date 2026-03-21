@@ -379,6 +379,45 @@ decision or transition, with:
   wait time, wait limit, and the split between `PAMP` and `DAMP` danger
 - `3`: also log per-evidence debug details such as extracted antigens
 
+### Decision Trace
+
+For verification runs, the module also supports a separate audit trace file:
+
+```text
+<selected_run_output_dir>/t_cell_trace.jsonl
+```
+
+This trace is disabled by default. When enabled, each JSON line explains one
+co-stimulation or context evaluation and includes:
+
+- the action being decided, for example `co_stimulation_threshold_met`,
+  `context_memory`, or `waiting_for_context`
+- the related profile IP, responsible IP, and target IP
+- the candidate antigen and matched regex
+- the exact score, threshold, and weighted formula terms
+- the evidence IDs that contributed to the related-PAMP count
+- the evidence IDs that contributed to `PAMP` and `DAMP` danger totals
+- omitted-contributor counts when the trace limit is reached
+
+The trace path is always resolved under the output directory selected for the
+current Slips run. If the config contains an absolute path or a path that tries
+to escape the output directory, the module collapses it back under the selected
+run output directory before writing the file.
+
+Recommended usage:
+
+- keep `decision_trace_mode: off` during normal runs
+- use `decision_trace_mode: transitions` when you only want threshold-passing
+  and state-change explanations
+- use `decision_trace_mode: all` only for focused evaluation runs where you
+  also want waiting decisions
+
+Performance note:
+
+- with `decision_trace_mode: off`, there is effectively no extra trace cost
+- trace mode performs extra observation lookups and extra file writes, so it
+  should be treated as a verification feature, not the normal default path
+
 Color mapping:
 
 - `0 - mature` -> cyan
@@ -398,6 +437,9 @@ t_cell:
   create_log_file: true
   log_colors: true
   log_verbosity: 1
+  decision_trace_mode: off
+  decision_trace_file: t_cell_trace.jsonl
+  decision_trace_max_evidence: 10
   store_dir: output/t_cell
   persistent_store_dir: ""
   observation_retention_seconds: 604800
@@ -429,6 +471,10 @@ Reference:
 - `log_colors`: keep ANSI colors in the module log
 - `log_verbosity`: `1` logs transitions/actions only, `2` adds decision
   summaries, `3` adds per-evidence debug details
+- `decision_trace_mode`: `off`, `transitions`, or `all`
+- `decision_trace_file`: JSONL audit file for threshold explanations, always
+  created under the selected run output directory
+- `decision_trace_max_evidence`: contributor cap per trace list
 - `store_dir`: run-local directory for the SQLite DB
 - `persistent_store_dir`: optional stable absolute directory for the DB
 - `observation_retention_seconds`: retention for observation rows
