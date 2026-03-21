@@ -367,7 +367,22 @@ t_cell:
   # 1 = transitions and terminal actions only
   # 2 = add decision summaries such as waiting for co-stimulation/context
   # 3 = add per-evidence debug details such as extracted antigens
-  log_verbosity: 1
+  log_verbosity: 3
+
+  # Optional evaluation trace for auditing why thresholds passed or failed.
+  # off         = disabled
+  # transitions = write detailed traces only when a state transition happens
+  # all         = also trace waiting evaluations
+  decision_trace_mode: off
+
+  # Separate trace file used only when decision_trace_mode is not off.
+  # This path is always resolved inside the selected output directory for the
+  # current Slips run. Absolute or outside paths are not honored.
+  decision_trace_file: t_cell_trace.jsonl
+
+  # Maximum number of contributing evidence rows stored per contributor list
+  # inside the trace file.
+  decision_trace_max_evidence: 10
 
   # Directory that stores the isolated T Cell SQLite database.
   # Absolute paths are used as-is. Relative paths are resolved inside the
@@ -384,7 +399,8 @@ t_cell:
   # regex for its antigen.
   anergy_ttl_seconds: 21600
 
-  # Time window used to count related PAMP observations for the same profile.
+  # Time window used to count related PAMP observations for the same
+  # responsible IP.
   related_lookback_seconds: 3600
 
   # Saturation point for related PAMP scoring. A value of 5 means that 5 or
@@ -397,7 +413,7 @@ t_cell:
 
   # DAMP observations do not create or match T Cells, but they do increase
   # the danger pressure used by co-stimulation and context for the same
-  # profile IP:
+  # responsible IP:
   # combined_raw_danger = pamp_raw_danger + damp_danger_weight * damp_raw_danger
   damp_danger_weight: 1.5
 
@@ -786,12 +802,10 @@ EvidenceSignals:
   overrides:
     ANOMALOUS_FLOW: DAMP
     MALICIOUS_FLOW: DAMP
-    ARP_SCAN: DAMP
     UNSOLICITED_ARP: DAMP
     CONNECTION_TO_MULTIPLE_PORTS: DAMP
     CONNECTION_TO_PRIVATE_IP: DAMP
     CONNECTION_WITHOUT_DNS: DAMP
-    DNS_ARPA_SCAN: DAMP
     DNS_WITHOUT_CONNECTION: DAMP
     HIGH_ENTROPY_DNS_ANSWER: DAMP
     LONG_CONNECTION: DAMP
@@ -803,7 +817,6 @@ EvidenceSignals:
     HTTP_TRAFFIC: DAMP
     MULTIPLE_USER_AGENT: DAMP
     NON_HTTP_PORT_80_CONNECTION: DAMP
-    MALICIOUS_IP_FROM_P2P_NETWORK: DAMP
     SSH_SUCCESSFUL: DAMP
 
 
