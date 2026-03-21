@@ -258,6 +258,11 @@ class ModuleFactory:
         conf.t_cell_create_log_file = Mock(return_value=True)
         conf.t_cell_log_colors = Mock(return_value=True)
         conf.t_cell_log_verbosity = Mock(return_value=1)
+        conf.t_cell_decision_trace_mode = Mock(return_value=0)
+        conf.t_cell_decision_trace_file = Mock(
+            return_value="t_cell_trace.jsonl"
+        )
+        conf.t_cell_decision_trace_max_evidence = Mock(return_value=10)
         conf.get_tw_width_in_seconds = Mock(return_value=3600.0)
         conf.t_cell_store_dir = Mock(return_value="dummy_output_dir/t_cell")
         conf.t_cell_persistent_store_dir = Mock(return_value="")
