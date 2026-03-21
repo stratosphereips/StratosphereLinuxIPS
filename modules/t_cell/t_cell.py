@@ -54,6 +54,9 @@ DEFAULT_COSTIM_WEIGHTS = {
 LOG_VERBOSITY_SUMMARY = 1
 LOG_VERBOSITY_DECISIONS = 2
 LOG_VERBOSITY_DEBUG = 3
+TRACE_MODE_OFF = 0
+TRACE_MODE_TRANSITIONS = 1
+TRACE_MODE_ALL = 2
 
 
 @dataclass(frozen=True)
@@ -102,6 +105,11 @@ class TCell(IModule):
         self.log_colors = True
         self.log_verbosity = LOG_VERBOSITY_SUMMARY
         self.log_file_path = os.path.join(self.output_dir, "t_cell.log")
+        self.decision_trace_mode = TRACE_MODE_OFF
+        self.decision_trace_max_evidence = 10
+        self.trace_file_path = os.path.join(
+            self.output_dir, "t_cell_trace.jsonl"
+        )
         self.storage = None
         self.state_wait_timeout_seconds = 3600.0
         self.observation_retention_seconds = 604800
@@ -129,6 +137,13 @@ class TCell(IModule):
         self.create_log_file = conf.t_cell_create_log_file()
         self.log_colors = conf.t_cell_log_colors()
         self.log_verbosity = conf.t_cell_log_verbosity()
+        self.decision_trace_mode = conf.t_cell_decision_trace_mode()
+        self.decision_trace_max_evidence = (
+            conf.t_cell_decision_trace_max_evidence()
+        )
+        self.trace_file_path = self._resolve_trace_file_path(
+            conf.t_cell_decision_trace_file()
+        )
         try:
             self.state_wait_timeout_seconds = float(
                 conf.get_tw_width_in_seconds()
@@ -173,6 +188,7 @@ class TCell(IModule):
 
         self.storage = self.db.get_t_cell_storage()
         self._init_log_file()
+        self._init_trace_file()
         self._log_detail("T Cell module ready.")
         return False
 
@@ -253,7 +269,6 @@ class TCell(IModule):
                 action="ignored_non_pamp",
                 state=None,
                 evidence=evidence,
-                details=f"signal={evidence.evidence_signal}",
                 verbosity=LOG_VERBOSITY_DECISIONS,
             )
             self._prune_observations(now)
@@ -435,6 +450,19 @@ class TCell(IModule):
         if cell["state"] < STATE_ACTIVATED:
             wait_elapsed = self._get_state_wait_elapsed(cell, now)
             if co_stimulation["value"] >= self.co_stimulation_threshold:
+                self._maybe_trace_co_stimulation(
+                    action="co_stimulation_threshold_met",
+                    evidence=evidence,
+                    cell=cell,
+                    candidate=candidate,
+                    match=match,
+                    co_stimulation=co_stimulation,
+                    responsible_ip=responsible_ip,
+                    observation_id=observation_id,
+                    now=now,
+                    from_state=cell["state"],
+                    to_state=STATE_ACTIVATED,
+                )
                 cell = self._transition_cell(
                     cell=cell,
                     to_state=STATE_ACTIVATED,
@@ -449,6 +477,24 @@ class TCell(IModule):
                 cell["state"] == STATE_ANTIGEN_RECOGNIZED
                 and self._state_wait_expired(cell, now)
             ):
+                self._maybe_trace_co_stimulation(
+                    action="co_stimulation_timeout",
+                    evidence=evidence,
+                    cell=cell,
+                    candidate=candidate,
+                    match=match,
+                    co_stimulation={
+                        **co_stimulation,
+                        "elapsed": wait_elapsed,
+                        "wait_limit": self.state_wait_timeout_seconds,
+                        "anergic_until": now + self.anergy_ttl_seconds,
+                    },
+                    responsible_ip=responsible_ip,
+                    observation_id=observation_id,
+                    now=now,
+                    from_state=cell["state"],
+                    to_state=STATE_ANERGIC,
+                )
                 cell = self._transition_cell(
                     cell=cell,
                     to_state=STATE_ANERGIC,
@@ -469,6 +515,23 @@ class TCell(IModule):
                 )
                 return match
             else:
+                self._maybe_trace_co_stimulation(
+                    action="waiting_for_co_stimulation",
+                    evidence=evidence,
+                    cell=cell,
+                    candidate=candidate,
+                    match=match,
+                    co_stimulation={
+                        **co_stimulation,
+                        "elapsed": wait_elapsed,
+                        "wait_limit": self.state_wait_timeout_seconds,
+                    },
+                    responsible_ip=responsible_ip,
+                    observation_id=observation_id,
+                    now=now,
+                    from_state=cell["state"],
+                    to_state=cell["state"],
+                )
                 self._log_event(
                     action="waiting_for_co_stimulation",
                     state=cell["state"],
@@ -518,6 +581,19 @@ class TCell(IModule):
         )
 
         if context["effector"]:
+            self._maybe_trace_context(
+                action="context_effector",
+                evidence=evidence,
+                cell=cell,
+                candidate=candidate,
+                match=match,
+                context=context,
+                responsible_ip=responsible_ip,
+                observation_id=observation_id,
+                now=now,
+                from_state=cell["state"],
+                to_state=STATE_EFFECTOR,
+            )
             if cell["state"] != STATE_EFFECTOR:
                 cell = self._transition_cell(
                     cell=cell,
@@ -540,6 +616,19 @@ class TCell(IModule):
             return match
 
         if context["memory"]:
+            self._maybe_trace_context(
+                action="context_memory",
+                evidence=evidence,
+                cell=cell,
+                candidate=candidate,
+                match=match,
+                context=context,
+                responsible_ip=responsible_ip,
+                observation_id=observation_id,
+                now=now,
+                from_state=cell["state"],
+                to_state=STATE_MEMORY,
+            )
             if cell["state"] != STATE_MEMORY:
                 cell = self._transition_cell(
                     cell=cell,
@@ -568,6 +657,23 @@ class TCell(IModule):
             cell["state"] == STATE_ACTIVATED
             and self._state_wait_expired(cell, now)
         ):
+            self._maybe_trace_context(
+                action="context_timeout",
+                evidence=evidence,
+                cell=cell,
+                candidate=candidate,
+                match=match,
+                context={
+                    **context,
+                    "elapsed": wait_elapsed,
+                    "wait_limit": self.state_wait_timeout_seconds,
+                },
+                responsible_ip=responsible_ip,
+                observation_id=observation_id,
+                now=now,
+                from_state=cell["state"],
+                to_state=STATE_MATURE,
+            )
             self._transition_cell(
                 cell=cell,
                 to_state=STATE_MATURE,
@@ -584,6 +690,23 @@ class TCell(IModule):
             )
             return match
 
+        self._maybe_trace_context(
+            action="waiting_for_context",
+            evidence=evidence,
+            cell=cell,
+            candidate=candidate,
+            match=match,
+            context={
+                **context,
+                "elapsed": wait_elapsed,
+                "wait_limit": self.state_wait_timeout_seconds,
+            },
+            responsible_ip=responsible_ip,
+            observation_id=observation_id,
+            now=now,
+            from_state=cell["state"],
+            to_state=cell["state"],
+        )
         self._log_event(
             action="waiting_for_context",
             state=cell["state"],
@@ -871,6 +994,372 @@ class TCell(IModule):
             "effector": effector,
             "memory": memory,
         }
+
+    def _maybe_trace_co_stimulation(
+        self,
+        action: str,
+        evidence,
+        cell: dict,
+        candidate: AntigenCandidate,
+        match: RegexMatch,
+        co_stimulation: dict,
+        responsible_ip: str,
+        observation_id: int,
+        now: float,
+        from_state: int,
+        to_state: int,
+    ):
+        if not self._should_write_decision_trace(action):
+            return
+
+        since_ts = now - self.related_lookback_seconds
+        pamp_observations = self.storage.get_recent_observations(
+            responsible_ip,
+            since_ts,
+            evidence_signal="PAMP",
+        )
+        damp_observations = self.storage.get_recent_observations(
+            responsible_ip,
+            since_ts,
+            evidence_signal="DAMP",
+        )
+        current_observation = self.storage.get_observation(observation_id) or {}
+        related_trace = self._build_related_trace(
+            pamp_observations,
+            candidate,
+            match.regex_hash,
+            exclude_observation_id=observation_id,
+        )
+        pamp_danger_trace = self._build_danger_trace(pamp_observations)
+        damp_danger_trace = self._build_danger_trace(damp_observations)
+
+        entry = {
+            "ts": utils.convert_ts_format(now, utils.alerts_format),
+            "stage": "co_stimulation",
+            "action": action,
+            "from_state": STATE_INFO[from_state]["label"],
+            "to_state": STATE_INFO[to_state]["label"],
+            "cell_key": cell["cell_key"],
+            "profile_ip": evidence.profile.ip,
+            "responsible_ip": responsible_ip,
+            "target_ip": self._get_target_ip(evidence),
+            "candidate": candidate.as_dict(),
+            "match": match.as_dict(),
+            "current_evidence": self._summarize_current_observation(
+                evidence, current_observation
+            ),
+            "formula": {
+                "value": co_stimulation["value"],
+                "threshold": co_stimulation["threshold"],
+                "weights": self.co_stimulation_weights,
+                "components": {
+                    "confidence": {
+                        "value": co_stimulation["confidence"],
+                        "weighted": (
+                            self.co_stimulation_weights["confidence"]
+                            * co_stimulation["confidence"]
+                        ),
+                        "evidence_id": evidence.id,
+                    },
+                    "related_pamps": {
+                        "count": co_stimulation["related_pamp_count"],
+                        "saturation": self.related_pamps_saturation,
+                        "score": co_stimulation["related_pamp_score"],
+                        "weighted": (
+                            self.co_stimulation_weights["related_pamps"]
+                            * co_stimulation["related_pamp_score"]
+                        ),
+                        "contributors": related_trace["contributors"],
+                        "omitted_count": related_trace["omitted_count"],
+                    },
+                    "danger": {
+                        "score": co_stimulation["profile_danger_score"],
+                        "weighted": (
+                            self.co_stimulation_weights["danger"]
+                            * co_stimulation["profile_danger_score"]
+                        ),
+                        "danger_saturation": self.danger_saturation,
+                        "damp_weight": self.damp_danger_weight,
+                        "pamp_score": co_stimulation["pamp_danger_score"],
+                        "damp_score": co_stimulation["damp_danger_score"],
+                        "pamp_total_raw": pamp_danger_trace["total_raw"],
+                        "damp_total_raw": damp_danger_trace["total_raw"],
+                        "pamp_contributors": pamp_danger_trace["contributors"],
+                        "pamp_omitted_count": pamp_danger_trace["omitted_count"],
+                        "damp_contributors": damp_danger_trace["contributors"],
+                        "damp_omitted_count": damp_danger_trace["omitted_count"],
+                    },
+                },
+            },
+        }
+        self._write_decision_trace(entry)
+
+    def _maybe_trace_context(
+        self,
+        action: str,
+        evidence,
+        cell: dict,
+        candidate: AntigenCandidate,
+        match: RegexMatch,
+        context: dict,
+        responsible_ip: str,
+        observation_id: int,
+        now: float,
+        from_state: int,
+        to_state: int,
+    ):
+        if not self._should_write_decision_trace(action):
+            return
+
+        recent_start = now - self.context_recent_window_seconds
+        previous_start = now - (2 * self.context_recent_window_seconds)
+        recent_pamp_observations = self.storage.get_recent_observations(
+            responsible_ip,
+            recent_start,
+            evidence_signal="PAMP",
+        )
+        recent_damp_observations = self.storage.get_recent_observations(
+            responsible_ip,
+            recent_start,
+            evidence_signal="DAMP",
+        )
+        previous_pamp_observations = self.storage.get_recent_observations(
+            responsible_ip,
+            previous_start,
+            until_ts=recent_start,
+            evidence_signal="PAMP",
+        )
+        previous_damp_observations = self.storage.get_recent_observations(
+            responsible_ip,
+            previous_start,
+            until_ts=recent_start,
+            evidence_signal="DAMP",
+        )
+        current_observation = self.storage.get_observation(observation_id) or {}
+        related_trace = self._build_related_trace(
+            recent_pamp_observations,
+            candidate,
+            match.regex_hash,
+            exclude_observation_id=observation_id,
+        )
+        has_memory = self.storage.has_memory_for_regex(match.regex_hash)
+        has_recent_activity = self.storage.has_recent_regex_activity(
+            responsible_ip,
+            match.regex_hash,
+            now - self.novelty_window_seconds,
+            exclude_observation_id=observation_id,
+        )
+
+        entry = {
+            "ts": utils.convert_ts_format(now, utils.alerts_format),
+            "stage": "context",
+            "action": action,
+            "from_state": STATE_INFO[from_state]["label"],
+            "to_state": STATE_INFO[to_state]["label"],
+            "cell_key": cell["cell_key"],
+            "profile_ip": evidence.profile.ip,
+            "responsible_ip": responsible_ip,
+            "target_ip": self._get_target_ip(evidence),
+            "candidate": candidate.as_dict(),
+            "match": match.as_dict(),
+            "current_evidence": self._summarize_current_observation(
+                evidence, current_observation
+            ),
+            "formula": {
+                "effector_score": context["effector_score"],
+                "effector_threshold": context["effector_threshold"],
+                "memory_score": context["memory_score"],
+                "memory_threshold": context["memory_threshold"],
+                "decision": {
+                    "effector": context["effector"],
+                    "memory": context["memory"],
+                },
+                "components": {
+                    "novelty": {
+                        "score": context["novelty_score"],
+                        "has_memory_for_regex": has_memory,
+                        "has_recent_regex_activity": has_recent_activity,
+                        "novelty_window_seconds": self.novelty_window_seconds,
+                    },
+                    "recent_related": {
+                        "count": context["recent_related_count"],
+                        "saturation": self.related_pamps_saturation,
+                        "score": context["recent_related_score"],
+                        "contributors": related_trace["contributors"],
+                        "omitted_count": related_trace["omitted_count"],
+                    },
+                    "recent_pressure": self._build_pressure_trace(
+                        recent_pamp_observations,
+                        recent_damp_observations,
+                        context["recent_pressure"],
+                        context["recent_pamp_pressure"],
+                        context["recent_damp_pressure"],
+                    ),
+                    "previous_pressure": self._build_pressure_trace(
+                        previous_pamp_observations,
+                        previous_damp_observations,
+                        context["previous_pressure"],
+                        context["previous_pamp_pressure"],
+                        context["previous_damp_pressure"],
+                    ),
+                    "trend_ratio": context["trend_ratio"],
+                    "decrease_score": context["decrease_score"],
+                    "familiarity_score": context["familiarity_score"],
+                    "stability_score": context["stability_score"],
+                },
+            },
+        }
+        self._write_decision_trace(entry)
+
+    def _build_pressure_trace(
+        self,
+        pamp_observations: list[dict],
+        damp_observations: list[dict],
+        combined_score: float,
+        pamp_score: float,
+        damp_score: float,
+    ) -> dict:
+        pamp_trace = self._build_danger_trace(pamp_observations)
+        damp_trace = self._build_danger_trace(damp_observations)
+        return {
+            "combined_score": combined_score,
+            "pamp_score": pamp_score,
+            "damp_score": damp_score,
+            "danger_saturation": self.danger_saturation,
+            "damp_weight": self.damp_danger_weight,
+            "pamp_total_raw": pamp_trace["total_raw"],
+            "damp_total_raw": damp_trace["total_raw"],
+            "pamp_contributors": pamp_trace["contributors"],
+            "pamp_omitted_count": pamp_trace["omitted_count"],
+            "damp_contributors": damp_trace["contributors"],
+            "damp_omitted_count": damp_trace["omitted_count"],
+        }
+
+    def _summarize_current_observation(
+        self, evidence, observation: dict | None
+    ) -> dict:
+        observation = observation or {}
+        return {
+            "observation_id": observation.get("id"),
+            "evidence_id": evidence.id,
+            "evidence_type": evidence.evidence_type.name,
+            "signal": str(evidence.evidence_signal),
+            "confidence": observation.get("confidence", evidence.confidence),
+            "threat_level": observation.get(
+                "threat_level", str(evidence.threat_level)
+            ),
+            "threat_level_value": observation.get(
+                "threat_level_value", float(evidence.threat_level.value)
+            ),
+            "danger_contribution": self._observation_danger_contribution(
+                observation
+            )
+            if observation
+            else float(evidence.confidence) * float(evidence.threat_level.value),
+        }
+
+    def _build_related_trace(
+        self,
+        observations: list[dict],
+        candidate: AntigenCandidate,
+        regex_hash: str,
+        exclude_observation_id: int,
+    ) -> dict:
+        contributors = []
+        for observation in observations:
+            if observation["id"] == exclude_observation_id:
+                continue
+            relations = self._get_observation_relations(
+                observation, candidate, regex_hash
+            )
+            if not relations:
+                continue
+            contributors.append(
+                self._summarize_observation(
+                    observation,
+                    relations=relations,
+                )
+            )
+
+        return self._limit_trace_items(contributors)
+
+    def _build_danger_trace(self, observations: list[dict]) -> dict:
+        contributors = [
+            self._summarize_observation(observation)
+            for observation in observations
+        ]
+        limited = self._limit_trace_items(contributors)
+        limited["total_raw"] = sum(
+            item["danger_contribution"] for item in contributors
+        )
+        return limited
+
+    def _summarize_observation(
+        self,
+        observation: dict,
+        relations: list[str] | None = None,
+    ) -> dict:
+        summary = {
+            "observation_id": observation.get("id"),
+            "evidence_id": observation.get("evidence_id"),
+            "evidence_type": observation.get("evidence_type"),
+            "signal": observation.get("evidence_signal"),
+            "observed_at": observation.get("observed_at"),
+            "confidence": float(observation.get("confidence", 0.0)),
+            "threat_level": observation.get("threat_level"),
+            "threat_level_value": float(
+                observation.get("threat_level_value", 0.0)
+            ),
+            "danger_contribution": self._observation_danger_contribution(
+                observation
+            ),
+        }
+        if relations:
+            summary["relations"] = relations
+        return summary
+
+    @staticmethod
+    def _observation_danger_contribution(observation: dict) -> float:
+        return float(observation.get("threat_level_value", 0.0)) * float(
+            observation.get("confidence", 0.0)
+        )
+
+    def _limit_trace_items(self, items: list[dict]) -> dict:
+        ordered_items = sorted(
+            items,
+            key=lambda item: (
+                float(item.get("danger_contribution", 0.0)),
+                float(item.get("observed_at", 0.0) or 0.0),
+            ),
+            reverse=True,
+        )
+        return {
+            "contributors": ordered_items[: self.decision_trace_max_evidence],
+            "omitted_count": max(
+                0,
+                len(ordered_items) - self.decision_trace_max_evidence,
+            ),
+        }
+
+    def _should_write_decision_trace(self, action: str) -> bool:
+        if self.decision_trace_mode == TRACE_MODE_OFF:
+            return False
+        if self.decision_trace_mode >= TRACE_MODE_ALL:
+            return True
+        return action not in {
+            "waiting_for_co_stimulation",
+            "waiting_for_context",
+        }
+
+    def _write_decision_trace(self, entry: dict):
+        if self.decision_trace_mode == TRACE_MODE_OFF:
+            return
+        trace_dir = os.path.dirname(self.trace_file_path)
+        if trace_dir:
+            os.makedirs(trace_dir, exist_ok=True)
+        with open(self.trace_file_path, "a", encoding="utf-8") as trace_file:
+            trace_file.write(json.dumps(entry, sort_keys=True))
+            trace_file.write("\n")
 
     def _is_novel_regex(
         self,
@@ -1177,20 +1666,35 @@ class TCell(IModule):
                 count += 1
         return count
 
-    @staticmethod
     def _is_related_observation(
-        observation: dict, candidate: AntigenCandidate, regex_hash: str
+        self,
+        observation: dict,
+        candidate: AntigenCandidate,
+        regex_hash: str,
     ) -> bool:
+        return bool(
+            self._get_observation_relations(observation, candidate, regex_hash)
+        )
+
+    @staticmethod
+    def _get_observation_relations(
+        observation: dict,
+        candidate: AntigenCandidate,
+        regex_hash: str,
+    ) -> list[str]:
+        relations = []
         for antigen in observation.get("antigens", []):
             if (
                 antigen.get("regex_type") == candidate.regex_type
                 and antigen.get("value") == candidate.value
             ):
-                return True
+                relations.append("same_antigen")
+                break
         for match in observation.get("matched_regexes", []):
             if regex_hash and match.get("regex_hash") == regex_hash:
-                return True
-        return False
+                relations.append("same_regex_hash")
+                break
+        return relations
 
     @staticmethod
     def _sum_danger(observations: list[dict]) -> float:
@@ -1313,6 +1817,39 @@ class TCell(IModule):
         with open(self.log_file_path, "w", encoding="utf-8") as log_file:
             log_file.write("")
 
+    def _init_trace_file(self):
+        if self.decision_trace_mode == TRACE_MODE_OFF:
+            return
+        trace_dir = os.path.dirname(self.trace_file_path)
+        if trace_dir:
+            os.makedirs(trace_dir, exist_ok=True)
+        with open(self.trace_file_path, "w", encoding="utf-8") as trace_file:
+            trace_file.write("")
+
+    def _resolve_trace_file_path(self, raw_path: str) -> str:
+        normalized = str(raw_path or "").strip()
+        if not normalized:
+            normalized = "t_cell_trace.jsonl"
+
+        normalized = normalized.replace("\\", "/")
+        while normalized.startswith("./"):
+            normalized = normalized[2:]
+        if os.path.isabs(normalized):
+            normalized = os.path.basename(normalized)
+        if normalized.startswith("output/"):
+            normalized = normalized[len("output/") :]
+
+        safe_parts = []
+        for part in normalized.split("/"):
+            if not part or part in (".", ".."):
+                continue
+            if part.endswith(":"):
+                continue
+            safe_parts.append(part)
+        if not safe_parts:
+            safe_parts = ["t_cell_trace.jsonl"]
+        return os.path.join(self.output_dir, *safe_parts)
+
     def _colorize_state(self, state: int) -> str:
         label = STATE_INFO[state]["label"]
         if not self.log_colors:
@@ -1341,6 +1878,7 @@ class TCell(IModule):
         if evidence:
             parts.append(f"evidence={evidence.evidence_type.name}")
             parts.append(f"eid={evidence.id}")
+            parts.append(f"signal={evidence.evidence_signal}")
             parts.append(f"profile={evidence.profile.ip}")
             responsible_ip = self._get_responsible_ip(evidence)
             if responsible_ip:
