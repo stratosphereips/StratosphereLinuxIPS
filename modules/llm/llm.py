@@ -114,11 +114,12 @@ class LLMBackendConfig:
 
 
 class LLMBackend:
-    def __init__(self, config: LLMBackendConfig):
+    def __init__(self, config: LLMBackendConfig, pool_maxsize: int = 2):
         self.config = config
         self.http = urllib3.PoolManager(
             cert_reqs="CERT_REQUIRED",
             ca_certs=certifi.where(),
+            maxsize=max(2, int(pool_maxsize)),
         )
 
     def generate(self, request: dict) -> dict:
@@ -345,11 +346,14 @@ class LLM(IModule):
                 self.failed_backends[alias] = str(exc)
 
     def _create_backend(self, config: LLMBackendConfig) -> LLMBackend:
+        # Keep the reusable HTTP connection pool comfortably above the
+        # worker concurrency so busy runs do not spam pool-discard warnings.
+        pool_maxsize = max(2, self.worker_threads * 2)
         if config.provider == "openai":
-            return OpenAIBackend(config)
+            return OpenAIBackend(config, pool_maxsize=pool_maxsize)
         if config.provider == "anthropic":
-            return AnthropicBackend(config)
-        return OllamaBackend(config)
+            return AnthropicBackend(config, pool_maxsize=pool_maxsize)
+        return OllamaBackend(config, pool_maxsize=pool_maxsize)
 
     @staticmethod
     def _empty_available_backends_registry() -> dict:
