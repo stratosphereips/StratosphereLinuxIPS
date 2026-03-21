@@ -41,15 +41,24 @@ def _build_storage(tmp_path):
     return TCellStorage(Mock(), conf, str(tmp_path), 12345)
 
 
-def _prepare_t_cell(tmp_path, log_verbosity: int = 3):
+def _prepare_t_cell(
+    tmp_path,
+    log_verbosity: int = 3,
+    trace_mode: int = 0,
+    trace_max_evidence: int = 10,
+):
     t_cell = ModuleFactory().create_t_cell_obj()
     t_cell.output_dir = str(tmp_path)
     t_cell.log_file_path = str(tmp_path / "t_cell.log")
+    t_cell.trace_file_path = str(tmp_path / "t_cell_trace.jsonl")
     storage = _build_storage(tmp_path)
     t_cell.db.get_t_cell_storage.return_value = storage
     with patch("modules.t_cell.t_cell.utils.drop_root_privs_permanently"):
         assert t_cell.pre_main() is False
     t_cell.log_verbosity = log_verbosity
+    t_cell.decision_trace_mode = trace_mode
+    t_cell.decision_trace_max_evidence = trace_max_evidence
+    t_cell._init_trace_file()
     return t_cell, storage
 
 
@@ -90,6 +99,15 @@ def _build_evidence(
 
 def _message_for(evidence: Evidence) -> dict:
     return {"data": json.dumps(utils.to_dict(evidence))}
+
+
+def _read_trace_entries(trace_path):
+    with open(trace_path, encoding="utf-8") as trace_file:
+        return [
+            json.loads(line)
+            for line in trace_file
+            if line.strip()
+        ]
 
 
 def _insert_observation(
@@ -223,7 +241,33 @@ def test_t_cell_ignores_damp_evidence(tmp_path):
     assert storage.get_all_cells() == []
     t_cell.db.publish.assert_not_called()
     with open(t_cell.log_file_path, encoding="utf-8") as log_file:
-        assert "ignored_non_pamp" in log_file.read()
+        log_contents = log_file.read()
+    assert "ignored_non_pamp" in log_contents
+    assert "signal=DAMP" in log_contents
+
+
+def test_t_cell_antigen_log_includes_evidence_signal(tmp_path):
+    t_cell, _ = _prepare_t_cell(tmp_path)
+    evidence = _build_evidence(
+        "damp-antigen-1",
+        signal=EvidenceSignal.DAMP,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.URL,
+            value="https://download.bad.example.com/payload/run.exe",
+        ),
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=2050.0):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        log_lines = log_file.read().splitlines()
+
+    antigen_line = next(
+        line for line in log_lines if "action=antigens_extracted" in line
+    )
+    assert "signal=DAMP" in antigen_line
 
 
 def test_t_cell_skips_pamp_without_antigens(tmp_path):
@@ -871,3 +915,93 @@ def test_t_cell_falls_back_to_src_side_ip_when_attacker_is_not_ip(tmp_path):
     )
 
     assert t_cell._get_responsible_ip(evidence) == "10.0.0.50"
+
+
+def test_t_cell_transition_trace_lists_contributing_evidence(tmp_path):
+    t_cell, storage = _prepare_t_cell(
+        tmp_path, trace_mode=1, trace_max_evidence=10
+    )
+    fixed_now = 17_000.0
+    profile_ip = "10.0.0.67"
+    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    evidence = _build_evidence("trace-transition-1", profile_ip=profile_ip, uids=["dns-1"])
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "trace-transition-regex"
+    )
+    t_cell.db.get_pid_of.side_effect = (
+        lambda name: 123 if name == "Blocking" else None
+    )
+    _seed_recent_related_observations(
+        storage, profile_ip, antigen, fixed_now, count=4
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=fixed_now):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    entries = _read_trace_entries(t_cell.trace_file_path)
+    actions = [entry["action"] for entry in entries]
+
+    assert "co_stimulation_threshold_met" in actions
+    assert "context_effector" in actions
+
+    co_stim_entry = next(
+        entry
+        for entry in entries
+        if entry["action"] == "co_stimulation_threshold_met"
+    )
+    assert co_stim_entry["formula"]["components"]["related_pamps"]["count"] == 4
+    related_ids = {
+        item["evidence_id"]
+        for item in co_stim_entry["formula"]["components"]["related_pamps"][
+            "contributors"
+        ]
+    }
+    assert "hist-recent-0" in related_ids
+    pamp_danger_ids = {
+        item["evidence_id"]
+        for item in co_stim_entry["formula"]["components"]["danger"][
+            "pamp_contributors"
+        ]
+    }
+    assert evidence.id in pamp_danger_ids
+
+
+def test_t_cell_all_trace_includes_waiting_evaluations(tmp_path):
+    t_cell, _ = _prepare_t_cell(tmp_path, trace_mode=2)
+    evidence = _build_evidence("trace-wait-1", uids=["dns-1"])
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "trace-wait-regex"
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=18_000.0):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    entries = _read_trace_entries(t_cell.trace_file_path)
+    assert [entry["action"] for entry in entries] == [
+        "waiting_for_co_stimulation"
+    ]
+    assert (
+        entries[0]["formula"]["components"]["related_pamps"]["count"] == 0
+    )
+
+
+def test_t_cell_trace_file_is_forced_inside_output_dir(tmp_path):
+    t_cell = ModuleFactory().create_t_cell_obj()
+    t_cell.output_dir = str(tmp_path / "selected-output")
+    t_cell.conf.t_cell_decision_trace_file.return_value = (
+        "/tmp/escape/outside_trace.jsonl"
+    )
+
+    t_cell.read_configuration()
+
+    assert t_cell.trace_file_path == str(
+        tmp_path / "selected-output" / "outside_trace.jsonl"
+    )
