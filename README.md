@@ -222,6 +222,9 @@ We appreciate your contributions and thank you for helping to improve Slips!
 
 T Cell design and configuration: [docs/t_cell_module.md](docs/t_cell_module.md)
 
+T Cell offline report generation and interpretation:
+[docs/t_cell_module.md#offline-html-report](docs/t_cell_module.md#offline-html-report)
+
 [Code docs](https://stratospherelinuxips.readthedocs.io/en/develop/code_documentation.html )
 
 ---
