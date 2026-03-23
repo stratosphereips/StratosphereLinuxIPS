@@ -151,6 +151,34 @@ def test_build_report_payload_and_html(tmp_path):
             "updated_at": 2000.3,
         }
     )
+    storage.upsert_cell(
+        {
+            "cell_key": "192.168.1.121|tls_sni|arpanet-network.com",
+            "profile_ip": "192.168.1.121",
+            "regex_type": "tls_sni",
+            "antigen_value": "arpanet-network.com",
+            "state": 3,
+            "state_name": "3 - activated",
+            "matched_regex_hash": "regex-hash-2",
+            "matched_regex": r"arpanet-network\.com$",
+            "matched_value": "arpanet-network.com",
+            "anergic_until": None,
+            "effector_cooldown_until": None,
+            "last_observation_id": pamp_observation_id,
+            "last_evidence_id": "pamp-1",
+            "last_transition_at": 2000.4,
+            "last_co_stimulation": 1.0,
+            "last_effector_score": 0.70,
+            "last_memory_score": 0.40,
+            "context": {
+                "waiting_for": "context",
+                "waiting_since": 2000.4,
+                "wait_deadline": 2060.4,
+            },
+            "created_at": 2000.4,
+            "updated_at": 2000.4,
+        }
+    )
     storage.insert_transition(
         {
             "cell_key": cell_key,
@@ -300,10 +328,15 @@ def test_build_report_payload_and_html(tmp_path):
     assert payload["totals"]["signals"] == {"DAMP": 1, "PAMP": 1}
     assert payload["totals"]["transitions"] == 3
     assert payload["totals"]["memories"] == 1
-    assert payload["cell_states"] == {"5 - memory": 1}
+    assert payload["cell_states"]["5 - memory"] == 1
+    assert payload["cell_states"]["3 - activated"] == 1
     assert payload["sources"]["trace_enabled"] is True
     assert payload["trace"]["total_rows"] == 2
     assert payload["recent_observations"][0]["category"] == "PAMP with regex match"
+    assert any(
+        row["waiting_label"] == "waiting for context"
+        for row in payload["recent_cells"]
+    )
     assert any(
         row["category"] == "DAMP with extracted antigens"
         for row in payload["recent_observations"]
@@ -319,10 +352,11 @@ def test_build_report_payload_and_html(tmp_path):
     assert "Decision Trace" in html
     assert "T Cell State Machine" in html
     assert "regex match" in html
-    assert "current cells: 1" in html
+    assert "current cells:" in html
     assert "Module Log Tail" not in html
     assert "data-sortable-table='recent-observations'" in html
     assert "data-sortable-table='recent-transitions'" in html
+    assert "data-sortable-table='recent-cells'" in html
     assert "data-default-sort-column='4'" in html
     assert "Default order groups rows by T cell" in html
     assert "Click a column header to sort." in html
@@ -332,5 +366,7 @@ def test_build_report_payload_and_html(tmp_path):
     assert "bad.example.com" in html
     assert "DAMP with extracted antigens" in html
     assert "PAMP with regex match" in html
+    assert "waiting for context" in html
+    assert "3 - activated (waiting for context)" not in html
 
     storage.close()
