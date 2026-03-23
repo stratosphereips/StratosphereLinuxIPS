@@ -285,6 +285,27 @@ class TCellSQLiteDB(_BaseTCellSQLiteDB):
         rows = self.select("cells", order_by="updated_at DESC") or []
         return [self._row_to_cell(row) for row in rows]
 
+    def get_cells_for_profile_states(
+        self, profile_ip: str, states: list[int] | tuple[int, ...]
+    ) -> list[dict]:
+        normalized_states = [
+            int(state) for state in (states or []) if state is not None
+        ]
+        if not normalized_states:
+            return []
+
+        placeholders = ", ".join("?" for _ in normalized_states)
+        rows = self.select(
+            "cells",
+            condition=(
+                f"profile_ip = ? AND state IN ({placeholders})"
+            ),
+            params=(profile_ip, *normalized_states),
+            order_by="updated_at DESC, created_at DESC",
+        )
+        rows = rows or []
+        return [self._row_to_cell(row) for row in rows]
+
     def upsert_cell(self, record: dict):
         self.execute(
             "INSERT OR REPLACE INTO cells ("
@@ -567,6 +588,11 @@ class TCellStorage:
 
     def get_all_cells(self) -> list[dict]:
         return self.db.get_all_cells()
+
+    def get_cells_for_profile_states(
+        self, profile_ip: str, states: list[int] | tuple[int, ...]
+    ) -> list[dict]:
+        return self.db.get_cells_for_profile_states(profile_ip, states)
 
     def upsert_cell(self, record: dict):
         self.db.upsert_cell(record)
