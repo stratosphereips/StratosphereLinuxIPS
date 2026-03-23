@@ -462,6 +462,16 @@ class ConfigParser(object):
 
         return threshold
 
+    def ssh_bruteforcing_threshold(self):
+        threshold = self.read_configuration(
+            "bruteforcing", "ssh_attempt_threshold", 9
+        )
+        try:
+            threshold = int(threshold)
+        except ValueError:
+            threshold = 9
+        return max(1, threshold)
+
     def data_exfiltration_threshold(self):
         """
         returns threshold in MBs
