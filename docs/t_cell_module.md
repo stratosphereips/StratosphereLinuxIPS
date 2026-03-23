@@ -6,7 +6,8 @@ accepted RegexGenerator regex corpus, and then escalates through a small state
 machine until it either becomes tolerant, publishes a containment request, or
 stores a memory snapshot for later reuse. `DAMP` observations do not perform
 antigen recognition, but they do raise the danger pressure used later in
-co-stimulation and context decisions.
+co-stimulation and context decisions and they now trigger reevaluation of
+already waiting cells for the same responsible IP.
 
 The module is started by the normal Slips module loader and is enabled by
 default through `t_cell.enabled: true`.
@@ -23,8 +24,8 @@ modules:
 4. It matches those values against accepted regexes already stored by
    `RegexGenerator`.
 5. It stores `DAMP` observations as responsible-IP danger signals and folds
-   them into co-stimulation and context pressure for later `PAMP`
-   reevaluations.
+   them into co-stimulation and context pressure, and `DAMP` arrivals also
+   trigger reevaluation of cells that are already waiting.
 6. It computes co-stimulation and context scores.
 7. It either becomes tolerant, activates, requests blocking, or stores memory.
 
@@ -93,6 +94,16 @@ The persisted states are:
 - `4 - effector`
 - `5 - memory`
 
+States `1 - antigen-recognized` and `3 - activated` can also carry an
+explicit waiting substatus in the stored cell context:
+
+- `1 - antigen-recognized (waiting for co-stimulation)`
+- `3 - activated (waiting for context)`
+
+This does not create new state numbers. It is an explicit runtime marker that
+the cell is still in state `1` or `3`, but is currently waiting for the next
+reevaluation.
+
 Mermaid state diagram:
 
 ```mermaid
@@ -113,12 +124,12 @@ stateDiagram-v2
     S2 --> S0 : anergy TTL expired
 
     S1 --> S3 : co-stimulation >= threshold\nwithin 1 Slips TW
-    S1 --> S1 : re-evaluate on later evidence\nwhile below threshold
+    S1 --> S1 : re-evaluate on later PAMP or DAMP\nwhile below threshold
     S1 --> S2 : co-stimulation timeout\nafter 1 Slips TW
 
     S3 --> S4 : context says novel + intense
     S3 --> S5 : context says familiar + cooling down
-    S3 --> S3 : re-evaluate on later evidence\nwhile undecided
+    S3 --> S3 : re-evaluate on later PAMP or DAMP\nwhile undecided
     S3 --> S0 : context timeout\nafter 1 Slips TW
 
     S5 --> S5 : later matching evidence retained
@@ -127,7 +138,8 @@ stateDiagram-v2
     note right of S0
       DAMP observations are stored as danger signals.
       They do not perform antigen recognition
-      and do not create a new cell by themselves.
+      and do not create a new cell by themselves,
+      but they do re-check waiting cells.
     end note
 
     note right of S1
@@ -149,11 +161,13 @@ The runtime flow is:
 
 1. Slips publishes an evidence on `evidence_added`.
 2. The module stores one observation row in its own SQLite DB.
-3. If the evidence signal is not `PAMP`, the module logs `ignored_non_pamp`
-   and stops for that evidence after storing the observation.
-4. Stored `DAMP` observations do not create or match cells, but they are kept
-   as danger inputs and are included in the next co-stimulation or context
-   evaluation for the same responsible IP.
+3. If the evidence signal is `DAMP`, the module stores the observation,
+   reevaluates any waiting cells for the same responsible IP, logs
+   `damp_reverification`, and does not attempt antigen recognition from that
+   evidence.
+4. If the evidence signal is neither `PAMP` nor `DAMP`, the module logs
+   `ignored_non_pamp` and stops for that evidence after storing the
+   observation.
 5. If no structured antigen can be extracted, the module logs
    `no_antigen_extracted` and stops for that evidence.
 6. For each antigen candidate, the module loads or creates the cell in
@@ -166,11 +180,13 @@ The runtime flow is:
    a new `anergic_until`.
 10. If a regex matches, the cell goes `0 -> 1` and stores the chosen regex
    metadata.
-11. The module computes co-stimulation from the current `PAMP`, related
-    `PAMP`s, and stored `DAMP` danger pressure for the same responsible IP.
+11. The module computes co-stimulation from the recognized `PAMP`
+    confidence, related `PAMP`s, and stored `DAMP` danger pressure for the
+    same responsible IP.
 12. If co-stimulation crosses the configured threshold, the cell goes `1 -> 3`.
 13. If co-stimulation stays below threshold, the cell can wait in
-    `1 - antigen-recognized` for at most one configured Slips time window.
+    `1 - antigen-recognized` for at most one configured Slips time window,
+    with the cell explicitly marked as waiting for co-stimulation.
 14. If that one-time-window wait expires without enough co-stimulation, the
     cell goes `1 -> 2 - anergic`.
 15. In state `3`, the module computes context signals from the same mixed
@@ -181,6 +197,11 @@ The runtime flow is:
     `5 - memory`.
 18. If state `3` cannot decide effector or memory within one configured Slips
     time window, the cell goes `3 -> 0 - mature`.
+
+Both waiting states are reevaluated on later matching `PAMP`s and on later
+`DAMP` observations for the same responsible IP. `DAMP` still does not create
+or match a new cell by itself; it only re-checks cells that already exist and
+are waiting.
 
 State `4` publishes the existing `new_blocking` payload for the responsible IP
 when blocking support is present. If blocking or ARP poisoning modules are not
@@ -485,6 +506,9 @@ By default it writes:
 <selected_run_output_dir>/t_cell_report.html
 ```
 
+You can then open that HTML file directly in any browser. If you want a
+different output filename, pass `--out <path-to-html>`.
+
 The report is static and self-contained. It reads the T Cell SQLite DB as the
 primary source, then enriches the page with `t_cell.log` and
 `t_cell_trace.jsonl` when those files exist. This means:
@@ -492,6 +516,10 @@ primary source, then enriches the page with `t_cell.log` and
 - it still explains the run when `log_verbosity` is `1`
 - it gains richer per-evidence detail when `log_verbosity` is `2` or `3`
 - it gains threshold-by-threshold explanations when decision tracing is enabled
+
+Example report screenshot from a real run:
+
+![T Cell HTML report overview](images/t_cell/t_cell_report_overview.png)
 
 The page focuses on the run itself, including:
 
@@ -506,6 +534,38 @@ The page focuses on the run itself, including:
 - a sortable Recent Observations table at the bottom of the page
 - a sortable Transitions table that defaults to grouping rows by T cell
 - a compact, collapsed configuration snapshot at the very end
+
+How to read the report:
+
+- **Quick Summary** and **Run Findings** tell you first whether the module saw
+  mostly `PAMP` or `DAMP`, whether cells were created at all, and whether the
+  run stalled because no supported antigen could be extracted.
+- **Observation / Transition timelines** show when pressure and state changes
+  happened over time. This is the fastest way to see whether the module was
+  mostly idle, mostly collecting danger, or actively moving cells.
+- **T Cell State Machine** overlays the abstract state machine with run data:
+  each node shows how many cells are currently in that state, and each arrow
+  shows how many times that transition happened in the run.
+- **Signals**, **Evidence Types**, and the top-* panels show what fed the
+  danger model: which evidence classes dominated, which responsible IPs or
+  targets were involved most often, and which antigens or unmatched `PAMP`
+  values kept appearing.
+- **Transitions** is the per-cell transition history. It is sortable and
+  defaults to grouping rows by T cell, so you can read one cell's path from
+  `0 - mature` onward without manually regrouping the table.
+- **Current Cells** shows the cells that still exist now, their current state,
+  any explicit waiting substatus such as `waiting for co-stimulation` or
+  `waiting for context`, and the latest co-stimulation / effector / memory
+  scores that were stored on the cell.
+- **Stored Memories** shows which cells have already reached
+  `5 - memory`, along with the saved context snapshot that will be reused
+  later.
+- **Decision Trace** is the threshold-audit section. When enabled, it is where
+  you verify why a threshold passed by checking the weighted formula terms and
+  contributing evidence IDs.
+- **Recent Observations** stays at the bottom as the raw sortable evidence
+  audit table. It is the best section to correlate what Slips generated with
+  what T Cell actually received and stored.
 
 Color mapping:
 
