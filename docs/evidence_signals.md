@@ -6,7 +6,9 @@ The `T Cell` module consumes this same central field and only activates its
 state machine for antigen recognition from `PAMP` evidence. `DAMP` evidence is
 still stored by the module as an observation and contributes to the danger
 pressure used in T-cell co-stimulation and context calculations for the same
-responsible IP, but it does not create cells or perform regex matching. See
+responsible IP, and each new `DAMP` also reevaluates cells that are already
+waiting on that responsible IP. `DAMP` does not create cells or perform regex
+matching by itself. See
 [T Cell Module](t_cell_module.md) for the responder details.
 
 The supported values are:
