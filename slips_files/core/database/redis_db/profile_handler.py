@@ -21,7 +21,7 @@ from redis.client import Pipeline
 
 from slips_files.core.structures.flow_attributes import Role
 
-
+# TODO @@@@@@@@@@@@@@@@@@@@@@@2 find the min that doesn't spike latency
 MARK_PROFILE_TW_AS_MODIFIED_BATCH_SIZE = 40
 
 

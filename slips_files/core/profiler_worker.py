@@ -739,10 +739,10 @@ class ProfilerWorker(IModule):
                 return
 
             self.add_flow_to_profile(flow)
-            self.handle_setting_local_net(flow)
-            self.db.increment_processed_flows()
-            # @@@@@@@@@@@@@@@@@@@@@@@@
-            self.db.record_flow_per_minute(self.name)
+            # self.handle_setting_local_net(flow)
+            # self.db.increment_processed_flows()
+            # # @@@@@@@@@@@@@@@@@@@@@@@@
+            # self.db.record_flow_per_minute(self.name)
 
             # manually run garbage collection to avoid the latency
             # introduced by it when slips is given a huge number of flows
