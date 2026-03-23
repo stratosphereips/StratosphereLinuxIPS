@@ -406,6 +406,9 @@ class ProfileHandler:
         """
         Used to associate this profile with it's used software and version
         """
+        if not flow.software:
+            return
+
         sw_dict = {
             flow.software: {
                 "version-major": flow.version_major,

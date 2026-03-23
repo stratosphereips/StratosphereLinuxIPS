@@ -377,6 +377,23 @@ class ModuleFactory:
         flowalerts.print = Mock()
         return flowalerts
 
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_bruteforcing_obj(self, mock_db):
+        from modules.bruteforcing.bruteforcing import Bruteforcing
+
+        bruteforcing = Bruteforcing(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
+        )
+        bruteforcing.print = Mock()
+        return bruteforcing
+
     @patch(DB_MANAGER, name="mock_db")
     def create_dns_analyzer_obj(self, mock_db):
         from modules.flowalerts.dns import DNS

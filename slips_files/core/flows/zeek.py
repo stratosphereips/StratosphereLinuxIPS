@@ -201,6 +201,8 @@ class SSH(BaseFlow):
 
     host_key_alg: str
     host_key: str
+    sport: str = ""
+    dport: str = ""
 
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
@@ -419,6 +421,7 @@ class Software(BaseFlow):
     unparsed_version: str
     version_major: str
     version_minor: str
+    software_name: str = ""
     # software log lines dont have daddr
     daddr: str = ""
     ground_truth_label: str = ""
@@ -428,6 +431,8 @@ class Software(BaseFlow):
     type_: str = field(default="software")
 
     def __post_init__(self) -> None:
+        if not self.software and self.software_name:
+            self.software = self.software_name
         # store info about everything except http:broswer
         # we're already reading browser UA from http.log
         self.http_browser = self.software == "HTTP::BROWSER"

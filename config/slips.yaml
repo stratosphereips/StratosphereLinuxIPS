@@ -216,6 +216,12 @@ flowmldetection:
   mode: test
 
 #############################
+bruteforcing:
+  # Minimum number of SSH attempts from one source to one destination
+  # before Slips considers it brute forcing.
+  ssh_attempt_threshold: 9
+
+#############################
 anomaly_detection_https:
   # Number of initial hours used to train the baseline model assuming benign traffic.
   # If set to 0, detection starts immediately and baseline is learned online.
