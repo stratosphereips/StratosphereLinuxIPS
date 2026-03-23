@@ -331,6 +331,15 @@ These helpers return accepted regexes by default.
 There is also a standalone offline report script for estimating how much the
 accepted regexes cover several reference populations for a given Slips run.
 
+Example HTML report overview:
+
+![RegexGenerator coverage report overview](images/regex_generator/coverage_report_overview.png)
+
+This report is useful for explaining the module because it shows, in one page,
+how many accepted regexes exist for each data type, how strongly they cover the
+reference-union and malicious TI populations, and how much benign spillover
+remains after negative selection.
+
 Example:
 
 ```bash
