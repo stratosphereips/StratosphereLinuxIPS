@@ -58,6 +58,10 @@ STATE_COLORS = {
 }
 SIGNAL_COLORS = {"PAMP": "#c2410c", "DAMP": "#0369a1"}
 TRACE_STAGE_COLORS = {"co_stimulation": "#b45309", "context": "#7c3aed"}
+WAITING_LABELS = {
+    "co_stimulation": "waiting for co-stimulation",
+    "context": "waiting for context",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -153,6 +157,19 @@ def state_label(state: int | None) -> str:
 
 def state_class(state: int | None) -> str:
     return STATE_CLASS.get(state, "state-unknown")
+
+
+def cell_waiting_label(cell: dict | None) -> str:
+    context = (cell or {}).get("context") or {}
+    return WAITING_LABELS.get(context.get("waiting_for"), "")
+
+
+def display_cell_state(cell: dict) -> str:
+    label = state_label(cell.get("state"))
+    waiting_label = cell_waiting_label(cell)
+    if waiting_label:
+        return f"{label} ({waiting_label})"
+    return label
 
 
 def shorten(value: Any, limit: int = 96) -> str:
@@ -738,6 +755,7 @@ def build_report_payload(
                 "cell_key": cell["cell_key"],
                 "responsible_ip": cell["responsible_ip"],
                 "state": label,
+                "state_display": display_cell_state(cell),
                 "state_class": state_class(cell["state"]),
                 "regex_type": cell["regex_type"],
                 "antigen_value": cell["antigen_value"],
@@ -746,6 +764,7 @@ def build_report_payload(
                 "last_effector_score": cell.get("last_effector_score"),
                 "last_memory_score": cell.get("last_memory_score"),
                 "last_evidence_id": cell.get("last_evidence_id") or "",
+                "waiting_label": cell_waiting_label(cell),
             }
         )
     recent_cells.sort(key=lambda item: item["ts"], reverse=True)
@@ -943,6 +962,90 @@ def render_simple_table(columns: list[str], rows: list[dict], empty_text: str) -
     body = "".join(body_rows)
     return (
         '<div class="table-wrap"><table class="report-table">'
+        f"<thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>"
+    )
+
+
+def render_sortable_cell_table(rows: list[dict]) -> str:
+    if not rows:
+        return '<p class="empty">No cells are stored.</p>'
+
+    columns = [
+        "Updated",
+        "State",
+        "Responsible",
+        "T Cell",
+        "Antigen",
+        "Matched value",
+        "Scores",
+    ]
+    head = "".join(
+        (
+            "<th scope='col'>"
+            f"<button type='button' class='sort-button' data-column='{index}' aria-label='Sort by {escape(column)}'>"
+            f"{escape(column)}"
+            "<span class='sort-indicator' aria-hidden='true'>↕</span>"
+            "</button>"
+            "</th>"
+        )
+        for index, column in enumerate(columns)
+    )
+
+    body_rows = []
+    for index, row in enumerate(rows):
+        score_parts = [
+            f"co={format_float(row['last_co_stimulation'])}"
+            if row["last_co_stimulation"] is not None
+            else "",
+            f"eff={format_float(row['last_effector_score'])}"
+            if row["last_effector_score"] is not None
+            else "",
+            f"mem={format_float(row['last_memory_score'])}"
+            if row["last_memory_score"] is not None
+            else "",
+        ]
+        score_summary = ", ".join(part for part in score_parts if part) or "n/a"
+        waiting_html = ""
+        if row["waiting_label"]:
+            waiting_html = (
+                f"<div class='cell-substate'>{escape(row['waiting_label'])}</div>"
+            )
+        cells = [
+            (escape(row["wall"]), row["ts"]),
+            (
+                "<div class='cell-state-stack'>"
+                f"{render_badge(row['state'], row['state_class'])}"
+                f"{waiting_html}"
+                "</div>",
+                row["state"],
+            ),
+            (escape(row["responsible_ip"]), row["responsible_ip"]),
+            (
+                f"<div class='cell-key'>{escape(shorten(row['cell_key'], 72))}</div>",
+                row["cell_key"],
+            ),
+            (
+                f"<div class='cell-key'>{escape(row['regex_type'])}:"
+                f"{escape(shorten(row['antigen_value'], 52))}</div>",
+                f"{row['regex_type']}:{row['antigen_value']}",
+            ),
+            (
+                f"<div class='cell-key'>{escape(shorten(row['matched_value'], 52))}</div>",
+                row["matched_value"],
+            ),
+            (escape(score_summary), score_summary),
+        ]
+        body_cells = "".join(
+            f"<td data-sort-value='{escape(str(sort_value))}'>{html_value}</td>"
+            for html_value, sort_value in cells
+        )
+        body_rows.append(f"<tr data-row-index='{index}'>{body_cells}</tr>")
+
+    body = "".join(body_rows)
+    return (
+        "<div class='table-wrap'>"
+        "<table class='report-table sortable-table cells-table' data-sortable-table='recent-cells' "
+        "data-default-sort-column='0' data-default-sort-direction='desc'>"
         f"<thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>"
     )
 
@@ -1374,47 +1477,7 @@ def render_html(report: dict) -> str:
         report["recent_transitions"]
     )
 
-    cell_table = render_simple_table(
-        [
-            "Updated",
-            "State",
-            "Responsible",
-            "Cell",
-            "Antigen",
-            "Matched value",
-            "Scores",
-        ],
-        [
-            {
-                "Updated": escape(row["wall"]),
-                "State": render_badge(row["state"], row["state_class"]),
-                "Responsible": escape(row["responsible_ip"]),
-                "Cell": escape(shorten(row["cell_key"], 56)),
-                "Antigen": escape(f"{row['regex_type']}:{shorten(row['antigen_value'], 40)}"),
-                "Matched value": escape(shorten(row["matched_value"], 48)),
-                "Scores": escape(
-                    ", ".join(
-                        part
-                        for part in [
-                            f"co={format_float(row['last_co_stimulation'])}"
-                            if row["last_co_stimulation"] is not None
-                            else "",
-                            f"eff={format_float(row['last_effector_score'])}"
-                            if row["last_effector_score"] is not None
-                            else "",
-                            f"mem={format_float(row['last_memory_score'])}"
-                            if row["last_memory_score"] is not None
-                            else "",
-                        ]
-                        if part
-                    )
-                    or "n/a"
-                ),
-            }
-            for row in report["recent_cells"]
-        ],
-        "No cells are stored.",
-    )
+    cell_table = render_sortable_cell_table(report["recent_cells"])
 
     memory_table = render_simple_table(
         ["Updated", "Responsible", "Cell", "Regex", "Matched value", "Context"],
@@ -1755,6 +1818,26 @@ def render_html(report: dict) -> str:
     .report-table tr:last-child td {{
       border-bottom: none;
     }}
+    .cells-table {{
+      min-width: 900px;
+      table-layout: auto;
+    }}
+    .cell-state-stack {{
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      align-items: start;
+    }}
+    .cell-substate {{
+      color: var(--muted);
+      font-size: 0.68rem;
+      line-height: 1.2;
+    }}
+    .cell-key {{
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }}
     .sort-button {{
       display: inline-flex;
       align-items: center;
@@ -1925,6 +2008,7 @@ def render_html(report: dict) -> str:
     <section class="panel-grid">
       <section class="panel">
         <h2>Current Cells</h2>
+        <p class="meta">Click a column header to sort. Waiting cells keep the main state badge and show the wait condition underneath.</p>
         {cell_table}
       </section>
       <section class="panel">
