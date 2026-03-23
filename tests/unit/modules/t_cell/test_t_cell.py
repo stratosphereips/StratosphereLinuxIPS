@@ -228,7 +228,7 @@ def test_extract_antigen_candidates_from_entities_and_altflows(tmp_path):
     assert ("certificate_cn", "cn.bad.example.com") in extracted
 
 
-def test_t_cell_ignores_damp_evidence(tmp_path):
+def test_t_cell_stores_damp_evidence_and_checks_waiting_cells(tmp_path):
     t_cell, storage = _prepare_t_cell(tmp_path)
     evidence = _build_evidence("damp-1", signal=EvidenceSignal.DAMP)
 
@@ -242,7 +242,8 @@ def test_t_cell_ignores_damp_evidence(tmp_path):
     t_cell.db.publish.assert_not_called()
     with open(t_cell.log_file_path, encoding="utf-8") as log_file:
         log_contents = log_file.read()
-    assert "ignored_non_pamp" in log_contents
+    assert "damp_reverification" in log_contents
+    assert "reevaluated_cells=0" in log_contents
     assert "signal=DAMP" in log_contents
 
 
@@ -797,7 +798,7 @@ def test_t_cell_summary_log_hides_waiting_for_co_stimulation(tmp_path):
 
 
 def test_t_cell_decision_log_explains_waiting_for_co_stimulation(tmp_path):
-    t_cell, _ = _prepare_t_cell(tmp_path, log_verbosity=2)
+    t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=2)
     evidence = _build_evidence("pending-2", uids=["dns-1"])
     t_cell.db.get_altflow_from_uid.return_value = {
         "type_": "dns",
@@ -813,10 +814,133 @@ def test_t_cell_decision_log_explains_waiting_for_co_stimulation(tmp_path):
     with open(t_cell.log_file_path, encoding="utf-8") as log_file:
         log_contents = log_file.read()
 
+    cell = storage.get_all_cells()[0]
+    assert cell["context"]["waiting_for"] == "co_stimulation"
     assert "waiting_for_co_stimulation" in log_contents
+    assert "waiting=waiting for co-stimulation" in log_contents
     assert "score=" in log_contents
     assert "threshold=" in log_contents
     assert "related_pamps=" in log_contents
+
+
+def test_t_cell_damp_reverifies_waiting_co_stimulation_cells(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=2)
+    fixed_now = 14_500.0
+    profile_ip = "10.0.0.80"
+    evidence_pamp = _build_evidence(
+        "damp-reverify-costim-pamp",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.LOW,
+        confidence=1.0,
+    )
+    evidence_damp = _build_evidence(
+        "damp-reverify-costim-damp",
+        signal=EvidenceSignal.DAMP,
+        profile_ip=profile_ip,
+        threat_level=ThreatLevel.CRITICAL,
+        confidence=1.0,
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "damp-reverify-costim-regex"
+    )
+    _insert_observation(
+        storage=storage,
+        evidence_id="seed-damp-1",
+        profile_ip=profile_ip,
+        antigens=[],
+        observed_at=fixed_now - 20,
+        confidence=1.0,
+        threat_level_value=1.0,
+        threat_level="critical",
+        evidence_signal="DAMP",
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=fixed_now):
+        t_cell._process_evidence_message(_message_for(evidence_pamp))
+
+    first_cell = storage.get_all_cells()[0]
+    assert first_cell["state"] == STATE_ANTIGEN_RECOGNIZED
+    assert first_cell["context"]["waiting_for"] == "co_stimulation"
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=fixed_now + 10):
+        t_cell._process_evidence_message(_message_for(evidence_damp))
+
+    cell = storage.get_all_cells()[0]
+    transitions = storage.get_transitions(cell["cell_key"])
+    assert cell["state"] == STATE_ACTIVATED
+    assert cell["context"]["waiting_for"] == "context"
+    assert any(
+        transition["reason"] == "co_stimulation_threshold_met"
+        and transition["evidence_id"] == evidence_damp.id
+        for transition in transitions
+    )
+
+
+def test_t_cell_damp_reverifies_waiting_context_cells(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=2)
+    fixed_now = 14_800.0
+    profile_ip = "10.0.0.81"
+    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    evidence_pamp = _build_evidence(
+        "damp-reverify-context-pamp",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.LOW,
+        confidence=1.0,
+    )
+    evidence_damp = _build_evidence(
+        "damp-reverify-context-damp",
+        signal=EvidenceSignal.DAMP,
+        profile_ip=profile_ip,
+        threat_level=ThreatLevel.CRITICAL,
+        confidence=1.0,
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "damp-reverify-context-regex"
+    )
+    t_cell.db.get_pid_of.side_effect = (
+        lambda name: 123 if name == "Blocking" else None
+    )
+    _seed_recent_related_observations(
+        storage,
+        profile_ip,
+        antigen,
+        fixed_now,
+        count=5,
+        confidence=1.0,
+        threat_level_value=0.1,
+        age_seconds=120,
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=fixed_now):
+        t_cell._process_evidence_message(_message_for(evidence_pamp))
+
+    first_cell = storage.get_all_cells()[0]
+    assert first_cell["state"] == STATE_ACTIVATED
+    assert first_cell["context"]["waiting_for"] == "context"
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=fixed_now + 10):
+        t_cell._process_evidence_message(_message_for(evidence_damp))
+
+    cell = storage.get_all_cells()[0]
+    transitions = storage.get_transitions(cell["cell_key"])
+    assert cell["state"] == STATE_EFFECTOR
+    assert "waiting_for" not in cell["context"]
+    assert any(
+        transition["reason"] == "context_effector"
+        and transition["evidence_id"] == evidence_damp.id
+        for transition in transitions
+    )
+    assert t_cell.db.publish.call_count == 1
 
 
 def test_t_cell_log_file_contains_color_codes(tmp_path):
