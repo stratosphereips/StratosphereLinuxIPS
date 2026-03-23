@@ -57,6 +57,13 @@ LOG_VERBOSITY_DEBUG = 3
 TRACE_MODE_OFF = 0
 TRACE_MODE_TRANSITIONS = 1
 TRACE_MODE_ALL = 2
+CONTEXT_REMOVE = object()
+WAITING_CO_STIMULATION = "co_stimulation"
+WAITING_CONTEXT = "context"
+WAITING_LABELS = {
+    WAITING_CO_STIMULATION: "waiting for co-stimulation",
+    WAITING_CONTEXT: "waiting for context",
+}
 
 
 @dataclass(frozen=True)
@@ -264,6 +271,27 @@ class TCell(IModule):
         )
         matched_regexes = []
 
+        if evidence.evidence_signal == EvidenceSignal.DAMP:
+            reevaluated_count = self._reevaluate_waiting_cells(
+                evidence=evidence,
+                observation_id=observation_id,
+                responsible_ip=responsible_ip,
+                now=now,
+            )
+            self._log_event(
+                action="damp_reverification",
+                state=None,
+                evidence=evidence,
+                metrics={"reevaluated_cells": reevaluated_count},
+                details=(
+                    "stored DAMP danger and rechecked waiting cells for this "
+                    "responsible IP"
+                ),
+                verbosity=LOG_VERBOSITY_DECISIONS,
+            )
+            self._prune_observations(now)
+            return
+
         if evidence.evidence_signal != EvidenceSignal.PAMP:
             self._log_event(
                 action="ignored_non_pamp",
@@ -364,10 +392,12 @@ class TCell(IModule):
                     now,
                     last_observation_id=observation_id,
                     last_evidence_id=evidence.id,
-                    context={
-                        "reason": "no_regex_match_after_activation",
-                        "observation_id": observation_id,
-                    },
+                )
+                self._update_cell_context(
+                    cell,
+                    now,
+                    reason="no_regex_match_after_activation",
+                    observation_id=observation_id,
                 )
                 self._log_event(
                     action="no_regex_match",
@@ -408,16 +438,21 @@ class TCell(IModule):
                 now,
                 **match_updates,
             )
+        cell = self._remember_match_context(
+            cell,
+            now,
+            observation_id,
+            evidence.id,
+            match,
+        )
 
         if cell["state"] == STATE_MEMORY:
-            self._update_cell(
+            self._update_cell_context(
                 cell,
                 now,
-                context={
-                    "reason": "memory_retained",
-                    "observation_id": observation_id,
-                    "matched_regex_hash": match.regex_hash,
-                },
+                reason="memory_retained",
+                observation_id=observation_id,
+                matched_regex_hash=match.regex_hash,
             )
             self._log_event(
                 action="memory_retained",
@@ -433,309 +468,16 @@ class TCell(IModule):
             )
             return match
 
-        co_stimulation = self._compute_co_stimulation(
-            responsible_ip,
-            observation_id,
-            candidate,
-            match,
-            now,
-        )
-        cell = self._update_cell(
-            cell,
-            now,
-            last_co_stimulation=co_stimulation["value"],
-            context={"co_stimulation": co_stimulation},
-        )
-
-        if cell["state"] < STATE_ACTIVATED:
-            wait_elapsed = self._get_state_wait_elapsed(cell, now)
-            if co_stimulation["value"] >= self.co_stimulation_threshold:
-                self._maybe_trace_co_stimulation(
-                    action="co_stimulation_threshold_met",
-                    evidence=evidence,
-                    cell=cell,
-                    candidate=candidate,
-                    match=match,
-                    co_stimulation=co_stimulation,
-                    responsible_ip=responsible_ip,
-                    observation_id=observation_id,
-                    now=now,
-                    from_state=cell["state"],
-                    to_state=STATE_ACTIVATED,
-                )
-                cell = self._transition_cell(
-                    cell=cell,
-                    to_state=STATE_ACTIVATED,
-                    reason="co_stimulation_threshold_met",
-                    evidence=evidence,
-                    observation_id=observation_id,
-                    now=now,
-                    match=match,
-                    scores=co_stimulation,
-                )
-            elif (
-                cell["state"] == STATE_ANTIGEN_RECOGNIZED
-                and self._state_wait_expired(cell, now)
-            ):
-                self._maybe_trace_co_stimulation(
-                    action="co_stimulation_timeout",
-                    evidence=evidence,
-                    cell=cell,
-                    candidate=candidate,
-                    match=match,
-                    co_stimulation={
-                        **co_stimulation,
-                        "elapsed": wait_elapsed,
-                        "wait_limit": self.state_wait_timeout_seconds,
-                        "anergic_until": now + self.anergy_ttl_seconds,
-                    },
-                    responsible_ip=responsible_ip,
-                    observation_id=observation_id,
-                    now=now,
-                    from_state=cell["state"],
-                    to_state=STATE_ANERGIC,
-                )
-                cell = self._transition_cell(
-                    cell=cell,
-                    to_state=STATE_ANERGIC,
-                    reason="co_stimulation_timeout",
-                    evidence=evidence,
-                    observation_id=observation_id,
-                    now=now,
-                    match=match,
-                    scores={
-                        **co_stimulation,
-                        "elapsed": wait_elapsed,
-                        "wait_limit": self.state_wait_timeout_seconds,
-                        "anergic_until": now + self.anergy_ttl_seconds,
-                    },
-                    extra_updates={
-                        "anergic_until": now + self.anergy_ttl_seconds,
-                    },
-                )
-                return match
-            else:
-                self._maybe_trace_co_stimulation(
-                    action="waiting_for_co_stimulation",
-                    evidence=evidence,
-                    cell=cell,
-                    candidate=candidate,
-                    match=match,
-                    co_stimulation={
-                        **co_stimulation,
-                        "elapsed": wait_elapsed,
-                        "wait_limit": self.state_wait_timeout_seconds,
-                    },
-                    responsible_ip=responsible_ip,
-                    observation_id=observation_id,
-                    now=now,
-                    from_state=cell["state"],
-                    to_state=cell["state"],
-                )
-                self._log_event(
-                    action="waiting_for_co_stimulation",
-                    state=cell["state"],
-                    evidence=evidence,
-                    cell=cell,
-                    match=match,
-                    details=(
-                        "score below threshold; keeping the cell in "
-                        "antigen-recognized state until more corroborating "
-                        "PAMPs arrive"
-                    ),
-                    metrics={
-                        "score": co_stimulation["value"],
-                        "threshold": co_stimulation["threshold"],
-                        "gap": max(
-                            0.0,
-                            co_stimulation["threshold"]
-                            - co_stimulation["value"],
-                        ),
-                        "confidence": co_stimulation["confidence"],
-                        "related_pamps": co_stimulation["related_pamp_count"],
-                        "related_score": co_stimulation["related_pamp_score"],
-                        "danger_score": co_stimulation["profile_danger_score"],
-                        "pamp_danger": co_stimulation["pamp_danger_score"],
-                        "damp_danger": co_stimulation["damp_danger_score"],
-                        "damp_weight": co_stimulation["damp_danger_weight"],
-                        "elapsed": wait_elapsed,
-                        "wait_limit": self.state_wait_timeout_seconds,
-                    },
-                    verbosity=LOG_VERBOSITY_DECISIONS,
-                )
-                return match
-
-        context = self._compute_context_signals(
-            responsible_ip,
-            observation_id,
-            candidate,
-            match,
-            now,
-        )
-        cell = self._update_cell(
-            cell,
-            now,
-            last_effector_score=context["effector_score"],
-            last_memory_score=context["memory_score"],
-            context={"co_stimulation": co_stimulation, "context": context},
-        )
-
-        if context["effector"]:
-            self._maybe_trace_context(
-                action="context_effector",
-                evidence=evidence,
-                cell=cell,
-                candidate=candidate,
-                match=match,
-                context=context,
-                responsible_ip=responsible_ip,
-                observation_id=observation_id,
-                now=now,
-                from_state=cell["state"],
-                to_state=STATE_EFFECTOR,
-            )
-            if cell["state"] != STATE_EFFECTOR:
-                cell = self._transition_cell(
-                    cell=cell,
-                    to_state=STATE_EFFECTOR,
-                    reason="context_effector",
-                    evidence=evidence,
-                    observation_id=observation_id,
-                    now=now,
-                    match=match,
-                    scores=context,
-                )
-            self._apply_effector(
-                cell,
-                evidence,
-                match,
-                context,
-                now,
-                responsible_ip,
-            )
-            return match
-
-        if context["memory"]:
-            self._maybe_trace_context(
-                action="context_memory",
-                evidence=evidence,
-                cell=cell,
-                candidate=candidate,
-                match=match,
-                context=context,
-                responsible_ip=responsible_ip,
-                observation_id=observation_id,
-                now=now,
-                from_state=cell["state"],
-                to_state=STATE_MEMORY,
-            )
-            if cell["state"] != STATE_MEMORY:
-                cell = self._transition_cell(
-                    cell=cell,
-                    to_state=STATE_MEMORY,
-                    reason="context_memory",
-                    evidence=evidence,
-                    observation_id=observation_id,
-                    now=now,
-                    match=match,
-                    scores=context,
-                )
-            self._store_memory(cell, match, context, now)
-            self._log_event(
-                action="memory_stored",
-                state=STATE_MEMORY,
-                evidence=evidence,
-                cell=cell,
-                match=match,
-                metrics={"memory_score": context["memory_score"]},
-                verbosity=LOG_VERBOSITY_SUMMARY,
-            )
-            return match
-
-        wait_elapsed = self._get_state_wait_elapsed(cell, now)
-        if (
-            cell["state"] == STATE_ACTIVATED
-            and self._state_wait_expired(cell, now)
-        ):
-            self._maybe_trace_context(
-                action="context_timeout",
-                evidence=evidence,
-                cell=cell,
-                candidate=candidate,
-                match=match,
-                context={
-                    **context,
-                    "elapsed": wait_elapsed,
-                    "wait_limit": self.state_wait_timeout_seconds,
-                },
-                responsible_ip=responsible_ip,
-                observation_id=observation_id,
-                now=now,
-                from_state=cell["state"],
-                to_state=STATE_MATURE,
-            )
-            self._transition_cell(
-                cell=cell,
-                to_state=STATE_MATURE,
-                reason="context_timeout",
-                evidence=evidence,
-                observation_id=observation_id,
-                now=now,
-                match=match,
-                scores={
-                    **context,
-                    "elapsed": wait_elapsed,
-                    "wait_limit": self.state_wait_timeout_seconds,
-                },
-            )
-            return match
-
-        self._maybe_trace_context(
-            action="waiting_for_context",
-            evidence=evidence,
+        return self._advance_cell_with_match(
             cell=cell,
+            evidence=evidence,
+            observation_id=observation_id,
             candidate=candidate,
             match=match,
-            context={
-                **context,
-                "elapsed": wait_elapsed,
-                "wait_limit": self.state_wait_timeout_seconds,
-            },
-            responsible_ip=responsible_ip,
-            observation_id=observation_id,
             now=now,
-            from_state=cell["state"],
-            to_state=cell["state"],
+            responsible_ip=responsible_ip,
+            reference_observation_id=observation_id,
         )
-        self._log_event(
-            action="waiting_for_context",
-            state=cell["state"],
-            evidence=evidence,
-            cell=cell,
-            match=match,
-            details=(
-                "context is not strong enough yet for effector or memory; "
-                "keeping the current state and reevaluating on future PAMPs"
-            ),
-            metrics={
-                "effector_score": context["effector_score"],
-                "effector_threshold": context["effector_threshold"],
-                "memory_score": context["memory_score"],
-                "memory_threshold": context["memory_threshold"],
-                "novelty_score": context["novelty_score"],
-                "related_pamps": context["recent_related_count"],
-                "recent_pamp_pressure": context["recent_pamp_pressure"],
-                "recent_damp_pressure": context["recent_damp_pressure"],
-                "previous_pamp_pressure": context["previous_pamp_pressure"],
-                "previous_damp_pressure": context["previous_damp_pressure"],
-                "damp_weight": context["damp_danger_weight"],
-                "trend_ratio": context["trend_ratio"],
-                "elapsed": wait_elapsed,
-                "wait_limit": self.state_wait_timeout_seconds,
-            },
-            verbosity=LOG_VERBOSITY_DECISIONS,
-        )
-        return match
 
     def _get_or_create_cell(
         self, profile_ip: str, regex_type: str, antigen_value: str, now: float
@@ -835,6 +577,557 @@ class TCell(IModule):
         self.storage.upsert_cell(cell)
         return cell
 
+    @staticmethod
+    def _merge_cell_context_values(cell: dict, **updates) -> dict:
+        merged = dict(cell.get("context") or {})
+        for key, value in updates.items():
+            if value is CONTEXT_REMOVE:
+                merged.pop(key, None)
+                continue
+            merged[key] = value
+        return merged
+
+    def _update_cell_context(self, cell: dict, now: float, **updates) -> dict:
+        return self._update_cell(
+            cell,
+            now,
+            context=self._merge_cell_context_values(cell, **updates),
+        )
+
+    def _remember_match_context(
+        self,
+        cell: dict,
+        now: float,
+        observation_id: int,
+        evidence_id: str,
+        match: RegexMatch,
+    ) -> dict:
+        return self._update_cell_context(
+            cell,
+            now,
+            recognition_observation_id=observation_id,
+            recognition_evidence_id=evidence_id,
+            matched_regex_created_at=match.created_at,
+            matched_regex_specificity=match.specificity,
+        )
+
+    def _clear_waiting_context(self, cell: dict, now: float) -> dict:
+        return self._update_cell_context(
+            cell,
+            now,
+            waiting_for=CONTEXT_REMOVE,
+            waiting_label=CONTEXT_REMOVE,
+            waiting_since=CONTEXT_REMOVE,
+            wait_deadline=CONTEXT_REMOVE,
+            wait_trigger_signal=CONTEXT_REMOVE,
+            wait_trigger_evidence_id=CONTEXT_REMOVE,
+            wait_trigger_observation_id=CONTEXT_REMOVE,
+        )
+
+    def _set_waiting_context(
+        self,
+        cell: dict,
+        now: float,
+        waiting_for: str,
+        evidence,
+        observation_id: int,
+    ) -> dict:
+        context = cell.get("context") or {}
+        waiting_since = context.get("waiting_since")
+        if context.get("waiting_for") != waiting_for or waiting_since is None:
+            waiting_since = (
+                cell.get("last_transition_at")
+                or cell.get("created_at")
+                or now
+            )
+        try:
+            waiting_since = float(waiting_since)
+        except (TypeError, ValueError):
+            waiting_since = float(now)
+        return self._update_cell_context(
+            cell,
+            now,
+            waiting_for=waiting_for,
+            waiting_label=WAITING_LABELS.get(waiting_for, waiting_for),
+            waiting_since=waiting_since,
+            wait_deadline=waiting_since + self.state_wait_timeout_seconds,
+            wait_trigger_signal=str(evidence.evidence_signal),
+            wait_trigger_evidence_id=evidence.id,
+            wait_trigger_observation_id=observation_id,
+        )
+
+    def _get_reference_observation_id(
+        self, cell: dict, fallback_observation_id: int
+    ) -> int:
+        context = cell.get("context") or {}
+        candidate_id = (
+            context.get("recognition_observation_id")
+            or cell.get("last_observation_id")
+            or fallback_observation_id
+        )
+        try:
+            return int(candidate_id)
+        except (TypeError, ValueError):
+            return int(fallback_observation_id)
+
+    def _build_match_from_cell(self, cell: dict) -> RegexMatch | None:
+        regex_hash = str(cell.get("matched_regex_hash") or "").strip()
+        regex = str(cell.get("matched_regex") or "").strip()
+        regex_type = str(cell.get("regex_type") or "").strip()
+        value = str(
+            cell.get("matched_value") or cell.get("antigen_value") or ""
+        ).strip()
+        if not (regex_hash and regex and regex_type and value):
+            return None
+
+        context = cell.get("context") or {}
+        created_at = context.get("matched_regex_created_at") or 0.0
+        try:
+            created_at = float(created_at)
+        except (TypeError, ValueError):
+            created_at = 0.0
+
+        specificity = context.get("matched_regex_specificity")
+        try:
+            specificity = float(specificity)
+        except (TypeError, ValueError):
+            specificity = measure_regex_specificity(regex)
+
+        return RegexMatch(
+            regex_type=regex_type,
+            value=value,
+            regex_hash=regex_hash,
+            regex=regex,
+            created_at=created_at,
+            specificity=specificity,
+        )
+
+    def _reevaluate_waiting_cells(
+        self,
+        evidence,
+        observation_id: int,
+        responsible_ip: str,
+        now: float,
+    ) -> int:
+        waiting_cells = self.storage.get_cells_for_profile_states(
+            responsible_ip,
+            [STATE_ANTIGEN_RECOGNIZED, STATE_ACTIVATED],
+        )
+        reevaluated = 0
+        for cell in waiting_cells:
+            match = self._build_match_from_cell(cell)
+            if not match:
+                self._log_event(
+                    action="waiting_cell_missing_match",
+                    state=cell["state"],
+                    evidence=evidence,
+                    cell=cell,
+                    details=(
+                        "cannot reevaluate waiting cell because the stored "
+                        "regex match metadata is incomplete"
+                    ),
+                    verbosity=LOG_VERBOSITY_DEBUG,
+                )
+                continue
+
+            candidate = AntigenCandidate(
+                regex_type=cell["regex_type"],
+                value=cell["antigen_value"],
+            )
+            reference_observation_id = self._get_reference_observation_id(
+                cell,
+                observation_id,
+            )
+            self._advance_cell_with_match(
+                cell=cell,
+                evidence=evidence,
+                observation_id=observation_id,
+                candidate=candidate,
+                match=match,
+                now=now,
+                responsible_ip=responsible_ip,
+                reference_observation_id=reference_observation_id,
+            )
+            reevaluated += 1
+        return reevaluated
+
+    def _advance_cell_with_match(
+        self,
+        cell: dict,
+        evidence,
+        observation_id: int,
+        candidate: AntigenCandidate,
+        match: RegexMatch,
+        now: float,
+        responsible_ip: str,
+        reference_observation_id: int,
+    ) -> RegexMatch:
+        if (
+            cell.get("last_observation_id") != observation_id
+            or cell.get("last_evidence_id") != evidence.id
+        ):
+            cell = self._update_cell(
+                cell,
+                now,
+                last_observation_id=observation_id,
+                last_evidence_id=evidence.id,
+            )
+
+        if cell["state"] == STATE_MEMORY:
+            cell = self._update_cell_context(
+                cell,
+                now,
+                reason="memory_retained",
+                observation_id=observation_id,
+                matched_regex_hash=match.regex_hash,
+            )
+            self._log_event(
+                action="memory_retained",
+                state=STATE_MEMORY,
+                evidence=evidence,
+                cell=cell,
+                match=match,
+                details=(
+                    "memory already exists for this cell; keeping the memory "
+                    "state without storing a new memory event"
+                ),
+                verbosity=LOG_VERBOSITY_DEBUG,
+            )
+            return match
+
+        co_stimulation = self._compute_co_stimulation(
+            responsible_ip,
+            reference_observation_id,
+            candidate,
+            match,
+            now,
+        )
+        cell = self._update_cell(
+            cell,
+            now,
+            last_co_stimulation=co_stimulation["value"],
+        )
+        cell = self._update_cell_context(
+            cell,
+            now,
+            co_stimulation=co_stimulation,
+        )
+
+        if cell["state"] < STATE_ACTIVATED:
+            wait_elapsed = self._get_state_wait_elapsed(cell, now)
+            if co_stimulation["value"] >= self.co_stimulation_threshold:
+                self._maybe_trace_co_stimulation(
+                    action="co_stimulation_threshold_met",
+                    evidence=evidence,
+                    cell=cell,
+                    candidate=candidate,
+                    match=match,
+                    co_stimulation=co_stimulation,
+                    responsible_ip=responsible_ip,
+                    observation_id=observation_id,
+                    now=now,
+                    from_state=cell["state"],
+                    to_state=STATE_ACTIVATED,
+                )
+                cell = self._transition_cell(
+                    cell=cell,
+                    to_state=STATE_ACTIVATED,
+                    reason="co_stimulation_threshold_met",
+                    evidence=evidence,
+                    observation_id=observation_id,
+                    now=now,
+                    match=match,
+                    scores=co_stimulation,
+                )
+                cell = self._clear_waiting_context(cell, now)
+            elif (
+                cell["state"] == STATE_ANTIGEN_RECOGNIZED
+                and self._state_wait_expired(cell, now)
+            ):
+                self._maybe_trace_co_stimulation(
+                    action="co_stimulation_timeout",
+                    evidence=evidence,
+                    cell=cell,
+                    candidate=candidate,
+                    match=match,
+                    co_stimulation={
+                        **co_stimulation,
+                        "elapsed": wait_elapsed,
+                        "wait_limit": self.state_wait_timeout_seconds,
+                        "anergic_until": now + self.anergy_ttl_seconds,
+                    },
+                    responsible_ip=responsible_ip,
+                    observation_id=observation_id,
+                    now=now,
+                    from_state=cell["state"],
+                    to_state=STATE_ANERGIC,
+                )
+                cell = self._transition_cell(
+                    cell=cell,
+                    to_state=STATE_ANERGIC,
+                    reason="co_stimulation_timeout",
+                    evidence=evidence,
+                    observation_id=observation_id,
+                    now=now,
+                    match=match,
+                    scores={
+                        **co_stimulation,
+                        "elapsed": wait_elapsed,
+                        "wait_limit": self.state_wait_timeout_seconds,
+                        "anergic_until": now + self.anergy_ttl_seconds,
+                    },
+                    extra_updates={
+                        "anergic_until": now + self.anergy_ttl_seconds,
+                    },
+                )
+                cell = self._clear_waiting_context(cell, now)
+                return match
+            else:
+                cell = self._set_waiting_context(
+                    cell,
+                    now,
+                    WAITING_CO_STIMULATION,
+                    evidence,
+                    observation_id,
+                )
+                self._maybe_trace_co_stimulation(
+                    action="waiting_for_co_stimulation",
+                    evidence=evidence,
+                    cell=cell,
+                    candidate=candidate,
+                    match=match,
+                    co_stimulation={
+                        **co_stimulation,
+                        "elapsed": wait_elapsed,
+                        "wait_limit": self.state_wait_timeout_seconds,
+                    },
+                    responsible_ip=responsible_ip,
+                    observation_id=observation_id,
+                    now=now,
+                    from_state=cell["state"],
+                    to_state=cell["state"],
+                )
+                self._log_event(
+                    action="waiting_for_co_stimulation",
+                    state=cell["state"],
+                    evidence=evidence,
+                    cell=cell,
+                    match=match,
+                    details=(
+                        "score below threshold; keeping the cell in "
+                        "antigen-recognized state and reevaluating on future "
+                        "PAMP or DAMP evidence"
+                    ),
+                    metrics={
+                        "score": co_stimulation["value"],
+                        "threshold": co_stimulation["threshold"],
+                        "gap": max(
+                            0.0,
+                            co_stimulation["threshold"]
+                            - co_stimulation["value"],
+                        ),
+                        "confidence": co_stimulation["confidence"],
+                        "related_pamps": co_stimulation["related_pamp_count"],
+                        "related_score": co_stimulation["related_pamp_score"],
+                        "danger_score": co_stimulation["profile_danger_score"],
+                        "pamp_danger": co_stimulation["pamp_danger_score"],
+                        "damp_danger": co_stimulation["damp_danger_score"],
+                        "damp_weight": co_stimulation["damp_danger_weight"],
+                        "elapsed": wait_elapsed,
+                        "wait_limit": self.state_wait_timeout_seconds,
+                    },
+                    verbosity=LOG_VERBOSITY_DECISIONS,
+                )
+                return match
+
+        context = self._compute_context_signals(
+            responsible_ip,
+            reference_observation_id,
+            candidate,
+            match,
+            now,
+        )
+        cell = self._update_cell(
+            cell,
+            now,
+            last_effector_score=context["effector_score"],
+            last_memory_score=context["memory_score"],
+        )
+        cell = self._update_cell_context(
+            cell,
+            now,
+            co_stimulation=co_stimulation,
+            context=context,
+        )
+
+        if context["effector"]:
+            self._maybe_trace_context(
+                action="context_effector",
+                evidence=evidence,
+                cell=cell,
+                candidate=candidate,
+                match=match,
+                context=context,
+                responsible_ip=responsible_ip,
+                observation_id=observation_id,
+                now=now,
+                from_state=cell["state"],
+                to_state=STATE_EFFECTOR,
+            )
+            if cell["state"] != STATE_EFFECTOR:
+                cell = self._transition_cell(
+                    cell=cell,
+                    to_state=STATE_EFFECTOR,
+                    reason="context_effector",
+                    evidence=evidence,
+                    observation_id=observation_id,
+                    now=now,
+                    match=match,
+                    scores=context,
+                )
+            cell = self._clear_waiting_context(cell, now)
+            self._apply_effector(
+                cell,
+                evidence,
+                match,
+                context,
+                now,
+                responsible_ip,
+            )
+            return match
+
+        if context["memory"]:
+            self._maybe_trace_context(
+                action="context_memory",
+                evidence=evidence,
+                cell=cell,
+                candidate=candidate,
+                match=match,
+                context=context,
+                responsible_ip=responsible_ip,
+                observation_id=observation_id,
+                now=now,
+                from_state=cell["state"],
+                to_state=STATE_MEMORY,
+            )
+            if cell["state"] != STATE_MEMORY:
+                cell = self._transition_cell(
+                    cell=cell,
+                    to_state=STATE_MEMORY,
+                    reason="context_memory",
+                    evidence=evidence,
+                    observation_id=observation_id,
+                    now=now,
+                    match=match,
+                    scores=context,
+                )
+            cell = self._clear_waiting_context(cell, now)
+            self._store_memory(cell, match, context, now)
+            self._log_event(
+                action="memory_stored",
+                state=STATE_MEMORY,
+                evidence=evidence,
+                cell=cell,
+                match=match,
+                metrics={"memory_score": context["memory_score"]},
+                verbosity=LOG_VERBOSITY_SUMMARY,
+            )
+            return match
+
+        wait_elapsed = self._get_state_wait_elapsed(cell, now)
+        if (
+            cell["state"] == STATE_ACTIVATED
+            and self._state_wait_expired(cell, now)
+        ):
+            self._maybe_trace_context(
+                action="context_timeout",
+                evidence=evidence,
+                cell=cell,
+                candidate=candidate,
+                match=match,
+                context={
+                    **context,
+                    "elapsed": wait_elapsed,
+                    "wait_limit": self.state_wait_timeout_seconds,
+                },
+                responsible_ip=responsible_ip,
+                observation_id=observation_id,
+                now=now,
+                from_state=cell["state"],
+                to_state=STATE_MATURE,
+            )
+            cell = self._transition_cell(
+                cell=cell,
+                to_state=STATE_MATURE,
+                reason="context_timeout",
+                evidence=evidence,
+                observation_id=observation_id,
+                now=now,
+                match=match,
+                scores={
+                    **context,
+                    "elapsed": wait_elapsed,
+                    "wait_limit": self.state_wait_timeout_seconds,
+                },
+            )
+            cell = self._clear_waiting_context(cell, now)
+            return match
+
+        cell = self._set_waiting_context(
+            cell,
+            now,
+            WAITING_CONTEXT,
+            evidence,
+            observation_id,
+        )
+        self._maybe_trace_context(
+            action="waiting_for_context",
+            evidence=evidence,
+            cell=cell,
+            candidate=candidate,
+            match=match,
+            context={
+                **context,
+                "elapsed": wait_elapsed,
+                "wait_limit": self.state_wait_timeout_seconds,
+            },
+            responsible_ip=responsible_ip,
+            observation_id=observation_id,
+            now=now,
+            from_state=cell["state"],
+            to_state=cell["state"],
+        )
+        self._log_event(
+            action="waiting_for_context",
+            state=cell["state"],
+            evidence=evidence,
+            cell=cell,
+            match=match,
+            details=(
+                "context is not strong enough yet for effector or memory; "
+                "keeping the current state and reevaluating on future PAMP "
+                "or DAMP evidence"
+            ),
+            metrics={
+                "effector_score": context["effector_score"],
+                "effector_threshold": context["effector_threshold"],
+                "memory_score": context["memory_score"],
+                "memory_threshold": context["memory_threshold"],
+                "novelty_score": context["novelty_score"],
+                "related_pamps": context["recent_related_count"],
+                "recent_pamp_pressure": context["recent_pamp_pressure"],
+                "recent_damp_pressure": context["recent_damp_pressure"],
+                "previous_pamp_pressure": context["previous_pamp_pressure"],
+                "previous_damp_pressure": context["previous_damp_pressure"],
+                "damp_weight": context["damp_danger_weight"],
+                "trend_ratio": context["trend_ratio"],
+                "elapsed": wait_elapsed,
+                "wait_limit": self.state_wait_timeout_seconds,
+            },
+            verbosity=LOG_VERBOSITY_DECISIONS,
+        )
+        return match
+
     def _compute_co_stimulation(
         self,
         profile_ip: str,
@@ -877,6 +1170,8 @@ class TCell(IModule):
         return {
             "value": value,
             "confidence": confidence,
+            "confidence_observation_id": current_observation.get("id"),
+            "confidence_evidence_id": current_observation.get("evidence_id"),
             "related_pamp_count": related_pamp_count,
             "related_pamp_score": related_pamp_score,
             "profile_danger_score": profile_danger_score,
@@ -1059,7 +1354,13 @@ class TCell(IModule):
                             self.co_stimulation_weights["confidence"]
                             * co_stimulation["confidence"]
                         ),
-                        "evidence_id": evidence.id,
+                        "evidence_id": co_stimulation.get(
+                            "confidence_evidence_id"
+                        )
+                        or evidence.id,
+                        "observation_id": co_stimulation.get(
+                            "confidence_observation_id"
+                        ),
                     },
                     "related_pamps": {
                         "count": co_stimulation["related_pamp_count"],
@@ -1416,7 +1717,12 @@ class TCell(IModule):
             cell,
             now,
             effector_cooldown_until=next_cooldown,
-            context={"context": context, "effector_payload": blocking_data},
+        )
+        self._update_cell_context(
+            cell,
+            now,
+            context=context,
+            effector_payload=blocking_data,
         )
 
         if self._blocking_modules_available():
@@ -1850,8 +2156,21 @@ class TCell(IModule):
             safe_parts = ["t_cell_trace.jsonl"]
         return os.path.join(self.output_dir, *safe_parts)
 
-    def _colorize_state(self, state: int) -> str:
+    @staticmethod
+    def _get_waiting_label(cell: dict | None) -> str:
+        context = (cell or {}).get("context") or {}
+        waiting_for = context.get("waiting_for")
+        return WAITING_LABELS.get(waiting_for, "")
+
+    def _format_state_label(self, state: int, cell: dict | None = None) -> str:
         label = STATE_INFO[state]["label"]
+        waiting_label = self._get_waiting_label(cell)
+        if waiting_label:
+            return f"{label} ({waiting_label})"
+        return label
+
+    def _colorize_state(self, state: int, cell: dict | None = None) -> str:
+        label = self._format_state_label(state, cell)
         if not self.log_colors:
             return label
         return f"{STATE_INFO[state]['color']}{label}{COLOR_RESET}"
@@ -1874,7 +2193,7 @@ class TCell(IModule):
             f"action={action}",
         ]
         if state is not None:
-            parts.append(f"state={self._colorize_state(state)}")
+            parts.append(f"state={self._colorize_state(state, cell=cell)}")
         if evidence:
             parts.append(f"evidence={evidence.evidence_type.name}")
             parts.append(f"eid={evidence.id}")
@@ -1888,6 +2207,9 @@ class TCell(IModule):
                 parts.append(f"target={target_ip}")
         if cell:
             parts.append(f"cell={cell['cell_key']}")
+            waiting_label = self._get_waiting_label(cell)
+            if waiting_label:
+                parts.append(f"waiting={waiting_label}")
         if match:
             parts.append(f"regex={match.regex_hash}")
             parts.append(f"value={match.value}")
