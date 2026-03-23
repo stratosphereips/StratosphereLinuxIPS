@@ -21,7 +21,7 @@ The detection techniques are:
 - Malicious JA3 hashes
 - Connections to port 0
 - Multiple reconnection attempts
-- Alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing
+- Alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans
 - DGA
 - Connection to multiple ports
 - Malicious SSL certificates
@@ -507,7 +507,12 @@ tr:nth-child(even) {
   </tr>
   <tr>
     <td>flowalerts</td>
-    <td>Finds malicious behaviours by analyzing only one flow. Now detects: self-signed certificates, TLS certificates which validation failed, vertical port scans detected by Zeek (contrary to detected by Slips), horizontal port scans detected by Zeek (contrary to detected by Slips), password guessing in SSH as detected by Zeek, long connection, successful ssh</td>
+    <td>Finds malicious behaviours by analyzing one flow at a time. It detects self-signed certificates, invalid TLS certificates, Zeek vertical and horizontal port-scan notices, long connections, successful SSH, DNS and connection heuristics, SMTP bruteforce, and related per-flow behaviours.</td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>bruteforcing</td>
+    <td>Detects SSH bruteforcing from repeated SSH sessions, SSH authentication metadata, client banners from software.log, and Zeek SSH password-guessing notices.</td>
     <td>✅</td>
   </tr>
   <tr>
