@@ -1187,17 +1187,20 @@ class ProfileHandler:
             )
             pipe.execute()
 
-        # # every 10 modified tws, we publish 1 msg in the tw_modified channel. why?
-        # # because this is a costly operation in the hot path (runs every single
-        # # flow) and we need to optimize it.
+        # every 10 modified tws, we publish 1 msg in the tw_modified channel. why?
+        # because this is a costly operation in the hot path (runs every single
+        # flow) and we need to optimize it.
         # modifications = self.r.hincrby(
         #     self.constants.TW_FLOWS_COUNTER, profile_tw, 1
         # )
         # if modifications % MARK_PROFILE_TW_AS_MODIFIED_BATCH_SIZE == 0:
-        #     self.publish(
-        #         "tw_modified",
-        #         json.dumps({"profileid": profileid, "twid": twid}),
-        #     )
+        for profileid_tw in modified_tw_details:
+            profile, ip, twid = profileid_tw.split("_")
+            profileid = f"{profile}_{ip}"
+            self.publish(
+                "tw_modified",
+                json.dumps({"profileid": profileid, "twid": twid}),
+            )
 
     def publish_new_letter(
         self, new_symbol: str, profileid: str, twid: str, tupleid: str, flow
