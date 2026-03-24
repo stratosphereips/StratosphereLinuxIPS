@@ -10,13 +10,10 @@ from typing import (
     List,
     Union,
     Optional,
-    Dict,
     Callable,
 )
 
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
-import netifaces
-import validators
 import gc
 
 from slips_files.common.abstracts.imodule import IModule
@@ -24,6 +21,8 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
 from slips_files.core.aid_manager import AIDManager
 from slips_files.core.helpers.flow_handler import FlowHandler
+from slips_files.core.helpers.localnet_cache import LocalnetCacheShared
+from slips_files.core.helpers.localnet_handler import LocalnetHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from slips_files.core.input_profilers.argus import Argus
@@ -39,7 +38,7 @@ class ProfilerWorker(IModule):
     def init(
         self,
         name,
-        localnet_cache,
+        localnet_cache: LocalnetCacheShared,
         profiler_queue: multiprocessing.Queue,
         handle_setting_local_net_lock: multiprocessing.Lock,
         input_handler: (
@@ -64,6 +63,7 @@ class ProfilerWorker(IModule):
         self.read_configuration()
         self.received_lines = 0
         self.localnet_cache = localnet_cache
+        self.localnet_handler = LocalnetHandler(self)
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.symbol = SymbolHandler(self.logger, self.db)
         # stores the MAC addresses of the gateway of each interface
@@ -110,19 +110,6 @@ class ProfilerWorker(IModule):
             return None
         except Exception:
             return None
-
-    def get_private_client_ips(
-        self,
-    ) -> List[Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]]:
-        """
-        returns the private ips found in the client_ips param
-        in the config file
-        """
-        private_clients = []
-        for ip in self.client_ips:
-            if utils.is_private_ip(ip):
-                private_clients.append(ip)
-        return private_clients
 
     def convert_starttime_to_unix_ts(self, starttime) -> str:
         if utils.is_unix_ts(starttime):
@@ -334,80 +321,6 @@ class ProfilerWorker(IModule):
         rev_twid: str = self.db.get_timewindow(flow.starttime, rev_profileid)
         return rev_profileid, rev_twid
 
-    def get_localnet_of_given_interface(self) -> Dict[str, str]:
-        """
-        returns the local network of the given interface only if slips is
-        running with -i
-        """
-        local_nets = {}
-        for interface in utils.get_all_interfaces(self.args):
-            addrs = netifaces.ifaddresses(interface).get(netifaces.AF_INET)
-            if not addrs:
-                return local_nets
-
-            for addr in addrs:
-                ip = addr.get("addr")
-                netmask = addr.get("netmask")
-                if ip and netmask:
-                    network = ipaddress.IPv4Network(
-                        f"{ip}/{netmask}", strict=False
-                    )
-                    local_nets[interface] = str(network)
-        return local_nets
-
-    def get_local_net_of_flow(self, flow) -> Dict[str, str]:
-        """
-        gets the local network from client_ip
-        param in the config file,
-        or by using the localnetwork of the first private
-        srcip seen in the traffic
-        """
-        local_net = {}
-        # Reaching this func means slips is running on a file. we either
-        # have a client ip or not
-        private_client_ips: List[
-            Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
-        ]
-        # get_private_client_ips from the config file
-        if private_client_ips := self.get_private_client_ips():
-            # does the client ip from the config already have the localnet?
-            for range_ in private_client_ips:
-                if isinstance(range_, IPv4Network) or isinstance(
-                    range_, IPv6Network
-                ):
-                    local_net["default"] = str(range_)
-                    return local_net
-
-        # For now the local network is only ipv4, but it
-        # could be ipv6 in the future. Todo.
-        ip: str = flow.saddr
-        if cidr := utils.get_cidr_of_private_ip(ip):
-            local_net["default"] = cidr
-            return local_net
-
-        return local_net
-
-    def handle_setting_local_net(self, flow):
-        """
-        stores the local network if possible
-        sets the self.localnet_cache dict
-        """
-        # this lock is to avoid running this func from the workers at the
-        # same time.
-        with self.handle_setting_local_net_lock:
-            if not self.should_set_localnet(flow):
-                return
-
-            if self.db.is_running_non_stop():
-                self._set_localnet_cache(
-                    self.get_localnet_of_given_interface()
-                )
-            else:
-                self._set_localnet_cache(self.get_local_net_of_flow(flow))
-
-            for interface, local_net in self._iter_localnet_cache_items():
-                self.db.set_local_network(local_net, interface)
-
     def is_gw_info_detected(self, info_type: str, interface: str) -> bool:
         """
         checks own attributes and the db for the gw mac/ip
@@ -532,72 +445,6 @@ class ProfilerWorker(IModule):
             or ip_obj.is_loopback
             or ip_obj.is_reserved
         )
-
-    def should_set_localnet(self, flow) -> bool:
-        """
-        returns true only if the saddr of the current flow is ipv4, private
-        and we don't have the local_net set already
-        """
-        if self.db.is_running_non_stop():
-            if self._localnet_cache_contains(flow.interface):
-                return False
-        elif self._localnet_cache_contains("default"):
-            # running on a file, impossible to get the interface
-            return False
-
-        if flow.saddr == "0.0.0.0":
-            return False
-
-        if self.get_private_client_ips():
-            # if we have private client ips, we're ready to set the
-            # localnetwork
-            return True
-
-        if not validators.ipv4(flow.saddr):
-            return False
-
-        if self.is_ignored_ip(flow.saddr):
-            return False
-
-        saddr_obj = ipaddress.ip_address(flow.saddr)
-        if not utils.is_private_ip(saddr_obj):
-            return False
-
-        return True
-
-    def _localnet_cache_contains(self, interface: str) -> bool:
-        """checks"""
-        cache = self.localnet_cache
-        if hasattr(cache, "contains"):
-            return cache.contains(interface)
-        try:
-            return interface in cache
-        except (AttributeError, TypeError):
-            self.localnet_cache = {}
-            return False
-
-    def _iter_localnet_cache_items(self):
-        cache = self.localnet_cache
-        if hasattr(cache, "items"):
-            try:
-                return list(cache.items())
-            except TypeError:
-                pass
-        if isinstance(cache, dict):
-            return list(cache.items())
-        self.localnet_cache = {}
-        return []
-
-    def _set_localnet_cache(self, new_cache: Dict[str, str]) -> None:
-        cache = self.localnet_cache
-        if hasattr(cache, "set"):
-            if cache.set(new_cache):
-                return
-        if isinstance(cache, dict):
-            cache.clear()
-            cache.update(new_cache)
-            return
-        self.localnet_cache = new_cache
 
     def _is_supported_flow_type(self, flow) -> bool:
         supported_types = (
@@ -755,7 +602,7 @@ class ProfilerWorker(IModule):
                 return
 
             self.add_flow_to_profile(flow)
-            self.handle_setting_local_net(flow)
+            self.localnet_handler.handle_setting_local_net(flow)
             # self.db.increment_processed_flows()
             # # @@@@@@@@@@@@@@@@@@@@@@@@
             # self.db.record_flow_per_minute(self.name)
