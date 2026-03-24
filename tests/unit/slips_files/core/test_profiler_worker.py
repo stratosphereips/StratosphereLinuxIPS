@@ -371,10 +371,11 @@ def test_handle_setting_local_net_when_already_set():
     profiler.handle_setting_local_net_lock = mock_lock
 
     local_net = "192.168.1.0/24"
-    profiler.should_set_localnet = Mock(return_value=False)
     profiler.localnet_cache = {"default": local_net}
     flow = Mock()
-    profiler.handle_setting_local_net(flow)
+    flow.interface = "eth0"
+    profiler.localnet_handler.handle_setting_local_net(flow)
+    mock_lock.__enter__.assert_not_called()
     profiler.db.set_local_network.assert_not_called()
 
 
@@ -386,15 +387,18 @@ def test_handle_setting_local_net():
     profiler.handle_setting_local_net_lock = mock_lock
 
     local_net = "192.168.1.0/24"
-    profiler.should_set_localnet = Mock(return_value=True)
-    profiler.get_local_net_of_flow = Mock(return_value={"default": local_net})
-    profiler.get_local_net = Mock(return_value=local_net)
-    profiler.db.is_running_non_stop = Mock(return_value=False)
+    profiler.localnet_handler.should_set_localnet = Mock(
+        side_effect=[True, True]
+    )
+    profiler.localnet_handler.get_local_net_of_flow = Mock(
+        return_value={"default": local_net}
+    )
+    profiler.localnet_handler.is_running_non_stop = False
 
     flow = Mock()
     flow.saddr = "192.168.1.1"
 
-    profiler.handle_setting_local_net(flow)
+    profiler.localnet_handler.handle_setting_local_net(flow)
     profiler.db.set_local_network.assert_called_once_with(local_net, "default")
 
 
@@ -578,7 +582,7 @@ def test_main():
     profiler.get_msg_from_queue = Mock()
     profiler.input_handler = Mock()
     profiler.add_flow_to_profile = Mock()
-    profiler.handle_setting_local_net = Mock()
+    profiler.localnet_handler.handle_setting_local_net = Mock()
     profiler.print = Mock()
     profiler.print_traceback = Mock()
     profiler.should_stop_profiler_workers.side_effect = [
@@ -596,7 +600,7 @@ def test_main():
 
     profiler.input_handler.process_line.assert_called_once()
     profiler.add_flow_to_profile.assert_called_once()
-    profiler.handle_setting_local_net.assert_called_once()
+    profiler.localnet_handler.handle_setting_local_net.assert_called_once()
     profiler.db.increment_processed_flows.assert_called_once()
 
 

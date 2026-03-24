@@ -1,9 +1,9 @@
 import ipaddress
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
 from typing import Dict, List, Union
+import validators
 
 import netifaces
-import validators
 
 from slips_files.common.slips_utils import utils
 
@@ -13,6 +13,9 @@ class LocalnetHandler:
         self.profiler = profiler
         self._private_client_ips = self.get_private_client_ips(
             self.profiler.client_ips
+        )
+        self._configured_default_localnet = (
+            self._get_configured_default_localnet()
         )
         self.is_running_non_stop = self.profiler.db.is_running_non_stop()
 
@@ -36,6 +39,14 @@ class LocalnetHandler:
             if utils.is_private_ip(ip):
                 private_clients.append(ip)
         return private_clients
+
+    def _get_configured_default_localnet(self) -> Dict[str, str]:
+        """if private client_ips are set in the config, derive the used
+        local net from it"""
+        for range_ in self._private_client_ips:
+            if isinstance(range_, (IPv4Network, IPv6Network)):
+                return {"default": str(range_)}
+        return {}
 
     def get_localnet_of_given_interface(self) -> Dict[str, str]:
         """
@@ -65,18 +76,14 @@ class LocalnetHandler:
         or by using the localnetwork of the first private
         srcip seen in the traffic
         """
-        local_net = {}
-        for range_ in self._private_client_ips:
-            if isinstance(range_, (IPv4Network, IPv6Network)):
-                local_net["default"] = str(range_)
-                return local_net
+        if self._configured_default_localnet:
+            return self._configured_default_localnet.copy()
 
         ip: str = flow.saddr
         if cidr := utils.get_cidr_of_private_ip(ip):
-            local_net["default"] = cidr
-            return local_net
+            return {"default": cidr}
 
-        return local_net
+        return {}
 
     def handle_setting_local_net(self, flow):
         """
