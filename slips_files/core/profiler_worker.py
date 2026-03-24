@@ -79,6 +79,9 @@ class ProfilerWorker(IModule):
             f"{self._get_latency_filename_prefix()}_latency.csv",
         )
         self._initialize_latency_logfile()
+        self._modified_tws = {}
+        self._time_to_update_modified_tws = time.time()
+        self._modified_timewindows_update_period = 3  # in seconds
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_zeek_fields_line")
@@ -190,6 +193,22 @@ class ProfilerWorker(IModule):
             writer = csv.writer(f)
             writer.writerow([timestamp_now, flow_uid, int(latency)])
 
+    def _update_modified_tws_in_the_db(self, profileid: str, twid: str, flow):
+        """
+        to avoid updating the modified tws in the db for every single flow,
+        we batch the updates and do them every 3 seconds
+        """
+        self._modified_tws.update({f"{profileid}_{twid}": flow.starttime})
+        now = time.time()
+        if now > self._time_to_update_modified_tws:
+            self._time_to_update_modified_tws = (
+                now + self._modified_timewindows_update_period
+            )
+            # now that slips successfully parsed the flow,
+            # mark this profile as modified
+            self.db.mark_profile_tw_as_modified(self._modified_tws)
+            self._modified_tws = {}
+
     def store_features_going_in(self, profileid: str, twid: str, flow):
         """
         If we have the all direction set , slips creates profiles
@@ -218,10 +237,7 @@ class ProfilerWorker(IModule):
         self.db.add_ips(profileid, twid, flow, role)
         # Add the flow with all the fields interpreted to the sqlite db
         self.aid_manager.submit_aid_task(flow, profileid, twid, self.label)
-
-        # now that slips successfully parsed the flow,
-        # mark this profile as modified
-        self.db.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
+        self._update_modified_tws_in_the_db(profileid, twid, flow)
 
     def get_aid_and_store_flow_in_the_db(
         self,
@@ -297,7 +313,7 @@ class ProfilerWorker(IModule):
         )
         # now that slips successfully parsed the flow,
         # mark this profile as modified
-        # self.db.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
+        self._update_modified_tws_in_the_db(profileid, twid, flow)
         return True
 
     def get_rev_profile(self, flow):

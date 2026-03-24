@@ -17,7 +17,6 @@ from typing import (
 )
 import redis
 import validators
-from redis.client import Pipeline
 
 from slips_files.core.structures.flow_attributes import Role
 
@@ -1160,42 +1159,33 @@ class ProfileHandler:
     def set_current_timewindow(self, timewindow: str) -> Optional[str]:
         self.r.set(self.constants.CURRENT_TIMEWINDOW, timewindow)
 
-    def mark_profile_tw_as_modified(
-        self, profileid, twid, timestamp, pipe: Pipeline = None
-    ):
+    def mark_profile_tw_as_modified(self, modified_tw_details: dict):
         """
-        Mark a TW in a profile as modified
-        This means:
-        1- To add it to the list of ModifiedTW
-        2- Add the timestamp received to the time_of_last_modification
-           in the TW itself
-
-        Modules wait for a TW modification to do some detections.
-        check the "tw_modified" channel usages to know why this func is
-        useful
-
+        PS: this function should be as optimized as possible, it's the main source of latency and it gets called per flow
+        :param modified_tw_details: a dict with {profileid_tw: ts, ...} to add to the
+        MODIFIED_TIMEWINDOWS key.
         """
-        if not timestamp:
-            # NEVER use time.time() as a default value for timestamp,
-            # using it when analyzing Pcaps/files leads to accumulation of tw
-            # data in RAM > redis getting OOM > slips crashing.
-            raise ValueError(
-                "timestamp is required to mark a TW as "
-                "modified. Received timestamp: None. This "
-                "leads to Slips running out of memory and crashing."
-                " Please make sure to provide a timestamp when "
-                "calling this function."
+        # why are we batch processing? because this function is called in
+        # an extremely hot path (per flow) and a zadd is O(log N) and we
+        # need this func to be way faster than that.
+        # right now, all usages of this key doesn't require it to be 100%
+        # real-time. so that's why we can batch update it. in the future if
+        # a usage requires it to be real-time, developers need to come up
+        # with something that wouldn't introduce latency and keep it
+        # real-time.
+        with self.r.pipeline() as pipe:
+            # without gt, older timestamps can overwrite newer ones
+            pipe.zadd(
+                self.constants.MODIFIED_TIMEWINDOWS,
+                modified_tw_details,
+                gt=True,
             )
-
-        profile_tw = f"{profileid}_{twid}"
-        modified_tw_details = {profile_tw: float(timestamp)}
-
-        # use the given pipe or create a new one
-        used_pipe = pipe if pipe else self.r.pipeline(transaction=False)
-
-        used_pipe.zadd(
-            self.constants.MODIFIED_TIMEWINDOWS, modified_tw_details
-        )
+            pipe.zadd(
+                self.constants.MODIFIED_TIMEWINDOWS,
+                modified_tw_details,
+                nx=True,
+            )
+            pipe.execute()
 
         # # every 10 modified tws, we publish 1 msg in the tw_modified channel. why?
         # # because this is a costly operation in the hot path (runs every single
@@ -1208,7 +1198,6 @@ class ProfileHandler:
         #         "tw_modified",
         #         json.dumps({"profileid": profileid, "twid": twid}),
         #     )
-        return pipe
 
     def publish_new_letter(
         self, new_symbol: str, profileid: str, twid: str, tupleid: str, flow
