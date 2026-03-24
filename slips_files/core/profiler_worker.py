@@ -300,7 +300,7 @@ class ProfilerWorker(IModule):
         )
         # now that slips successfully parsed the flow,
         # mark this profile as modified
-        self._update_modified_tws_in_the_db(profileid, twid, flow)
+        # self._update_modified_tws_in_the_db(profileid, twid, flow)
         return True
 
     def get_rev_profile(self, flow):
