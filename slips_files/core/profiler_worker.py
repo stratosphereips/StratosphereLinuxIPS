@@ -755,7 +755,7 @@ class ProfilerWorker(IModule):
                 return
 
             self.add_flow_to_profile(flow)
-            # self.handle_setting_local_net(flow)
+            self.handle_setting_local_net(flow)
             # self.db.increment_processed_flows()
             # # @@@@@@@@@@@@@@@@@@@@@@@@
             # self.db.record_flow_per_minute(self.name)
