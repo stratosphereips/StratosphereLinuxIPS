@@ -20,9 +20,6 @@ import validators
 
 from slips_files.core.structures.flow_attributes import Role
 
-# TODO @@@@@@@@@@@@@@@@@@@@@@@2 find the min that doesn't spike latency
-MARK_PROFILE_TW_AS_MODIFIED_BATCH_SIZE = 40
-
 
 class ProfileHandler:
     """
@@ -1138,7 +1135,6 @@ class ProfileHandler:
         pipe = self.r.pipeline()
         for profile_tw_to_close in profiles_tws_to_close:
             pipe.zrem(self.constants.MODIFIED_TIMEWINDOWS, profile_tw_to_close)
-            pipe.hdel(self.constants.TW_FLOWS_COUNTER, profile_tw_to_close)
             pipe = self.publish(
                 "tw_closed", profile_tw_to_close, pipeline=pipe
             )
@@ -1161,9 +1157,10 @@ class ProfileHandler:
 
     def mark_profile_tw_as_modified(self, modified_tw_details: dict):
         """
-        PS: this function should be as optimized as possible, it's the main source of latency and it gets called per flow
-        :param modified_tw_details: a dict with {profileid_tw: ts, ...} to add to the
-        MODIFIED_TIMEWINDOWS key.
+        PS: this function should be as optimized as possible, it's the main
+        source of latency and it gets called per flow
+        :param modified_tw_details: a dict with {profileid_tw: ts, ...} to
+        add to the MODIFIED_TIMEWINDOWS key.
         """
         # why are we batch processing? because this function is called in
         # an extremely hot path (per flow) and a zadd is O(log N) and we
@@ -1186,21 +1183,6 @@ class ProfileHandler:
                 nx=True,
             )
             pipe.execute()
-
-        # every 10 modified tws, we publish 1 msg in the tw_modified channel. why?
-        # because this is a costly operation in the hot path (runs every single
-        # flow) and we need to optimize it.
-        # modifications = self.r.hincrby(
-        #     self.constants.TW_FLOWS_COUNTER, profile_tw, 1
-        # )
-        # if modifications % MARK_PROFILE_TW_AS_MODIFIED_BATCH_SIZE == 0:
-        for profileid_tw in modified_tw_details:
-            profile, ip, twid = profileid_tw.split("_")
-            profileid = f"{profile}_{ip}"
-            self.publish(
-                "tw_modified",
-                json.dumps({"profileid": profileid, "twid": twid}),
-            )
 
     def publish_new_letter(
         self, new_symbol: str, profileid: str, twid: str, tupleid: str, flow

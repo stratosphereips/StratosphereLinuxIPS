@@ -1837,15 +1837,6 @@ def test_mark_profile_tw_as_modified(timestamp, expected_zadd_call):
         handler.mark_profile_tw_as_modified(profileid, twid, timestamp)
 
     handler.r.zadd.assert_called_once_with(*expected_zadd_call.args)
-    handler.publish.assert_called_once_with(
-        "tw_modified",
-        json.dumps(
-            {
-                "profileid": profileid,
-                "twid": twid,
-            }
-        ),
-    )
 
 
 def test_mark_profile_tw_as_modified_requires_timestamp():

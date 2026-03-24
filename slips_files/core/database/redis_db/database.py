@@ -62,7 +62,6 @@ class RedisDB(
     # Stores instances per port
     instances = {}
     supported_channels = {
-        "tw_modified",
         "evidence_added",
         "new_ip",
         "new_flow",
