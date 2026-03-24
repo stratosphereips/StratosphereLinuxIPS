@@ -164,7 +164,7 @@ def test_get_private_client_ips(client_ips, expected_private_ips, monkeypatch):
     profiler = ModuleFactory().create_profiler_worker_obj()
     profiler.client_ips = client_ips
     with patch(
-        "slips_files.core.profiler_worker.utils.is_private_ip"
+        "slips_files.core.helpers.localnet_handler.utils.is_private_ip"
     ) as mock_is_private_ip:
 
         def is_private_ip(ip):

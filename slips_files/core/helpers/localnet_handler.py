@@ -87,12 +87,17 @@ class LocalnetHandler:
             if not self.should_set_localnet(flow):
                 return
 
+            self.profiler.localnet_cache.clear()
             if self.is_running_non_stop:
-                self.set_cache(self.get_localnet_of_given_interface())
+                self.profiler.localnet_cache.update(
+                    self.get_localnet_of_given_interface()
+                )
             else:
-                self.set_cache(self.get_local_net_of_flow(flow))
+                self.profiler.localnet_cache.update(
+                    self.get_local_net_of_flow(flow)
+                )
 
-            for interface, local_net in self.iter_cache_items():
+            for interface, local_net in self.profiler.localnet_cache.items():
                 self.profiler.db.set_local_network(local_net, interface)
 
     def should_set_localnet(self, flow) -> bool:
@@ -101,9 +106,9 @@ class LocalnetHandler:
         and we don't have the local_net set already
         """
         if self.is_running_non_stop:
-            if self.cache_contains(flow.interface):
+            if flow.interface in self.profiler.localnet_cache:
                 return False
-        elif self.cache_contains("default"):
+        elif "default" in self.profiler.localnet_cache:
             return False
 
         if flow.saddr == "0.0.0.0":
@@ -123,34 +128,3 @@ class LocalnetHandler:
             return False
 
         return True
-
-    def cache_contains(self, interface: str) -> bool:
-        cache = self.profiler.localnet_cache
-        if hasattr(cache, "contains"):
-            return cache.contains(interface)
-        try:
-            return interface in cache
-        except (AttributeError, TypeError):
-            self.profiler.localnet_cache = {}
-            return False
-
-    def iter_cache_items(self):
-        cache = self.profiler.localnet_cache
-        try:
-            return list(cache.items())
-        except TypeError:
-            pass
-        if isinstance(cache, dict):
-            return list(cache.items())
-        self.profiler.localnet_cache = {}
-        return []
-
-    def set_cache(self, new_cache: Dict[str, str]) -> None:
-        cache = self.profiler.localnet_cache
-        if cache.set(new_cache):
-            return
-        if isinstance(cache, dict):
-            cache.clear()
-            cache.update(new_cache)
-            return
-        self.profiler.localnet_cache = new_cache

@@ -91,10 +91,14 @@ def test_shutdown_gracefully(monkeypatch):
         Mock(received_lines=20),
         Mock(received_lines=3),
     ]
+    manager = Mock()
+    profiler._localnet_cache_manager = manager
     profiler.mark_self_as_done_processing = Mock()
 
     # monkeypatch.setattr(profiler, "print", Mock())
     profiler.shutdown_gracefully()
+    manager.shutdown.assert_called_once()
+    assert profiler._localnet_cache_manager is None
     profiler.print.assert_called_with("Stopping.", log_to_logfiles_only=True)
     profiler.mark_self_as_done_processing.assert_called_once()
 

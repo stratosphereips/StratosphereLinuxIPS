@@ -6,6 +6,7 @@ import time
 import ipaddress
 import multiprocessing
 from dataclasses import asdict
+from multiprocessing.managers import DictProxy
 from typing import (
     List,
     Union,
@@ -21,7 +22,6 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.style import green
 from slips_files.core.aid_manager import AIDManager
 from slips_files.core.helpers.flow_handler import FlowHandler
-from slips_files.core.helpers.localnet_cache import LocalnetCacheShared
 from slips_files.core.helpers.localnet_handler import LocalnetHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
@@ -38,7 +38,7 @@ class ProfilerWorker(IModule):
     def init(
         self,
         name,
-        localnet_cache: LocalnetCacheShared,
+        localnet_cache: DictProxy,
         profiler_queue: multiprocessing.Queue,
         handle_setting_local_net_lock: multiprocessing.Lock,
         input_handler: (

@@ -20,9 +20,11 @@ import multiprocessing
 import time
 import threading
 from multiprocessing import Process
+from multiprocessing.managers import DictProxy, SyncManager
 from typing import (
     List,
     Union,
+    Optional,
 )
 
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
@@ -41,7 +43,6 @@ from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 from slips_files.core.profiler_worker import ProfilerWorker
-from slips_files.core.helpers.localnet_cache import LocalnetCacheShared
 
 SUPPORTED_INPUT_TYPES = {
     InputType.ZEEK: ZeekJSON,
@@ -108,8 +109,10 @@ class Profiler(ICore, IObservable):
         self.did_all_workers_stop = multiprocessing.Event()
         self.last_worker_id = -1
         self.handle_setting_local_net_lock = multiprocessing.Lock()
-        # small, shared JSON cache backed by shared memory (no Manager)
-        self.localnet_cache = LocalnetCacheShared()
+        self._localnet_cache_manager: Optional[SyncManager] = (
+            multiprocessing.Manager()
+        )
+        self.localnet_cache: DictProxy = self._localnet_cache_manager.dict()
         # max parallel profiler workers to start when high throughput is detected
         self.max_workers = 6
         # 30MBs max size of this queue to avoid growing forever in mem
@@ -270,38 +273,43 @@ class Profiler(ICore, IObservable):
         return input_handler_cls
 
     def shutdown_gracefully(self):
-        # wait for all flows to be processed by the profiler processes.
-        self.stop_profiler_workers()
+        try:
+            # wait for all flows to be processed by the profiler processes.
+            self.stop_profiler_workers()
 
-        self.aid_queue.put("stop")
-        self.stop_aid_manager_event.set()
-        self.aid_manager.shutdown()
+            self.aid_queue.put("stop")
+            self.stop_aid_manager_event.set()
+            self.aid_manager.shutdown()
 
-        used_queues = [
-            self.profiler_queue,
-            self.aid_queue,
-        ]
+            used_queues = [
+                self.profiler_queue,
+                self.aid_queue,
+            ]
 
-        for q in used_queues:
-            # By default if a process is not the creator of the queue then on
-            # exit it will attempt to join the queue’s background thread. The
-            # process can call cancel_join_thread() to make join_thread()
-            # do nothing.
-            q.cancel_join_thread()
+            for q in used_queues:
+                # By default if a process is not the creator of the queue then on
+                # exit it will attempt to join the queue’s background thread. The
+                # process can call cancel_join_thread() to make join_thread()
+                # do nothing.
+                q.cancel_join_thread()
 
-            # close the queues to avoid deadlocks.
-            # this step SHOULD NEVER be done before closing the workers
-            q.close()
+                # close the queues to avoid deadlocks.
+                # this step SHOULD NEVER be done before closing the workers
+                q.close()
 
-        if self.profiler_monitor_thread.is_alive():
-            self.profiler_monitor_thread.join(timeout=5)
+            if self.profiler_monitor_thread.is_alive():
+                self.profiler_monitor_thread.join(timeout=5)
+        finally:
+            if self._localnet_cache_manager is not None:
+                self._localnet_cache_manager.shutdown()
+                self._localnet_cache_manager = None
 
-        self.print(
-            "Stopping.",
-            log_to_logfiles_only=True,
-        )
-        self.mark_self_as_done_processing()
-        self.db.set_new_incoming_flows(False)
+            self.print(
+                "Stopping.",
+                log_to_logfiles_only=True,
+            )
+            self.mark_self_as_done_processing()
+            self.db.set_new_incoming_flows(False)
 
     def did_5min_pass_since_last_throughput_check(self) -> bool:
         """
