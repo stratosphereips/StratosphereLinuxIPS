@@ -25,44 +25,52 @@ Practical signals in baseline data: Missing or abruptly truncated outputs, crash
 
 ### CTU-Mixed-Capture-1
 
-**Flows/min**
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-1_flows_per_minute_for_all_profilers" width="640">
+
+**Flows/min for all profilers combined**
+
+<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-1_flows_per_min_for_all_profilers_combined.png" width="640">
 
 Input peaks at 23,404 flows per min.
 
-**Throughput**
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-1_throughput_plot" width="640">
+**Flows/min for each profiler**
 
-**Latency**
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-1_latency_plot" width="640">
+<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-1_flows_per_minute_for_each_profiler.png" width="640">
+
+**Latency over time**
+
+<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-1_latency_over_time.png" width="640">
 
 Near-zero latency with rare spikes to 32s.
 
 ### CTU-Mixed-Capture-2
 
-**Flows/min**
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-2_flows_per_minute_for_all_profilers" width="640">
+**Flows/min for all profilers combined**
 
-**Throughput**
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-2_throughput_plot" width="640">
+<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-2_flows_per_min_for_all_profilers_combined.png" width="640">
 
-**Latency**
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-2_latency_plot" width="640">
+**Flows/min for each profiler**
 
-max 32s
+<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-2_flows_per_minute_for_each_profiler.png" width="640">
+
+**Latency over time**
+
+<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-2_latency_over_time.png" width="640">
 
 ### CTU-Normal-18
 
-**Flows/min**
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Normal-18_flows_per_minute_for_all_profilers" width="640">
-
 Largest input-profiler gap among baselines.
 
-**Throughput**
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Normal-18_throughput_plot" width="640">
+**Flows/min for all profilers combined**
 
-**Latency**
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Normal-18_latency_plot" width="640">
+<img src="../images/immune/c3/stress_testing/baseline/CTU-Normal-18_flows_per_min_for_all_profilers_combined.png" width="640">
+
+**Flows/min for each profiler**
+
+<img src="../images/immune/c3/stress_testing/baseline/CTU-Normal-18_flows_per_minute_for_each_profiler.png" width="640">
+
+**Latency over time**
+
+<img src="../images/immune/c3/stress_testing/baseline/CTU-Normal-18_latency_over_time.png" width="640">
 
 Higher spikes; max 52s
 
@@ -109,28 +117,19 @@ This scenario covers sudden-spikes experiment. The input traffic pattern is desi
 
 ## Sudden-spikes plots and commentary
 
-### Flows/min captured in this experiment
+### Flows/min for all profilers combined
 
-<img src="../images/immune/c3/stress_testing/sudden_spikes/sudden_spikes_flows_graph_from_conn_log.png" width="640">
+<img src="../images/immune/c3/stress_testing/sudden_spikes/sudden_spikes_flows_per_min_for_all_profilers_combined.png" width="640">
 
-### Flows/min received by Slips profilers
+### Flows/min for each profiler
 
-
-<img src="../images/immune/c3/stress_testing/sudden_spikes/sudden_spikes_flows_per_minute_for_all_profilers.png" width="640">
+<img src="../images/immune/c3/stress_testing/sudden_spikes/sudden_spikes_flows_per_minute_for_each_profiler.png" width="640">
 
 Spikes occur every 10 mins up to 10,281 flows/min, this is the stress event.
 
-The conn.log view corroborates a sudden burst pattern rather than sustained elevated traffic.
+### Latency over time
 
-### Input vs processing speed
-<img src="../images/immune/c3/stress_testing/sudden_spikes/sudden_spikes_throughput_plot.png" >
-
-Profiler throughput mirrors input almost exactly (avg gap ~0.0006%), including at the peak.
-
-**Latency**
-<img src="../images/immune/c3/stress_testing/sudden_spikes/sudden_spikes_latency_plot.png" width="640">
-
-Latency is consistently high (avg 162.96s) with a heavy tail (p95 280s, p99 304s), indicating stress impact despite matched throughput.
+<img src="../images/immune/c3/stress_testing/sudden_spikes/sudden_spikes_latency_over_time.png" width="640">
 
 ## Sudden-spikes conclusions
 | Check | Result | Rationale |
@@ -169,35 +168,27 @@ This scenario covers soak-testing experiment. The input traffic pattern is desig
 ## Soak-testing plots and commentary
 
 
-### Flows/min captured in this experiment
-<img src="../images/immune/c3/stress_testing/soak_testing/flows_graph_from_conn_log.png" width="640">
+### Flows/min for all profilers combined
+<img src="../images/immune/c3/stress_testing/soak_testing/soak_testing_6_flows_per_min_for_all_profilers_combined.png" width="640">
 
-### Flows/min received by Slips profilers
+### Flows/min for each profiler
 
 
-<img src="../images/immune/c3/stress_testing/soak_testing/soak_testing_3_flows_per_minute_for_all_profilers" width="640">
+<img src="../images/immune/c3/stress_testing/soak_testing/soak_testing_6_flows_per_minute_for_each_profiler.png" width="640">
 
 Sustained traffic around 200 flows/min with a peak of 244 flows/min.
 
-### Input vs processing speed
-<img src="../images/immune/c3/stress_testing/soak_testing/soak_testing_3_throughput_plot" width="640">
+## Latency over time
 
-Profiler throughput mirrors input almost exactly.
+<img src="../images/immune/c3/stress_testing/soak_testing/soak_testing_6_latency_over_time.png" width="640">
 
-**Latency**
-<img src="../images/immune/c3/stress_testing/soak_testing/soak_testing_3_latency_plot" width="640">
+- Hard breaking point identified here: Slips has latency that grows linearly with time, which makes it unusable in the long term (when analyzing live traffic using an interface)
 
-
-
-### Resource usage
-
-
-<img src="../images/immune/c3/stress_testing/soak_testing/soak_testing_3_usage_plot.png" width="640">
 
 
 
 ## Soak-testing conclusions
-| Check | Result | Rationale                                                       |
-|---|---|-----------------------------------------------------------------|
-| Soft Break FPS | Not Reached | Throughput keeps up with input, all raff                        |
-| Hard Break | Not observed | Metrics and plots are complete; no evidence of a process crash. |
+| Check | Result      | Rationale                              |
+|---|-------------|----------------------------------------|
+| Soft Break FPS | Not Reached | Throughput keeps up with input.   |
+| Hard Break | Reached           | Slips has latency that grows linearly. |
