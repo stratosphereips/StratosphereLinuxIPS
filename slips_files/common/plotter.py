@@ -42,7 +42,9 @@ class Plotter:
         if not ts_values:
             return
 
-        output_path = os.path.join(self.plots_dir, "latency_plot")
+        output_path = os.path.join(
+            self.plots_dir, "latency_of_each_evidence_from_alerts_json.png"
+        )
         self._save_plot(
             output_path,
             ts_values,
@@ -65,7 +67,9 @@ class Plotter:
             return
 
         os.makedirs(self.plots_dir, exist_ok=True)
-        output_path = os.path.join(self.plots_dir, "profiler_latency.png")
+        output_path = os.path.join(
+            self.plots_dir, "all_profiler_workers_latency.png"
+        )
 
         try:
             import matplotlib
@@ -213,7 +217,7 @@ class Plotter:
             labeled_series[label] = values
 
         throughput_output_path = os.path.join(
-            self.plots_dir, "throughput_plot"
+            self.plots_dir, "input_proc_flows_per_min.png"
         )
         self._save_plot(
             throughput_output_path,
@@ -238,7 +242,8 @@ class Plotter:
                 profiler_sum.append(total)
 
             combined_output_path = os.path.join(
-                self.plots_dir, "flows_per_minute_for_all_profilers"
+                self.plots_dir,
+                "flows_per_minute_seen_by_all_profilers_combined.png",
             )
             self._save_plot(
                 combined_output_path,
@@ -326,7 +331,7 @@ class Plotter:
 
         os.makedirs(self.plots_dir, exist_ok=True)
         output_plot = os.path.join(
-            self.plots_dir, "flows_graph_from_conn_log.png"
+            self.plots_dir, "flows_per_second_seen_in_conn_log.png"
         )
         # Assuming stress_testing_scripts is in the project root.
         # This file is in slips_files/common/plotter.py
