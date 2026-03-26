@@ -1,45 +1,48 @@
 # Training
 
-Slips has one machine learning module that can be retrained by users. This is done by puttin slips in training mode so you can re-train the machine learning models with your own traffic. By default Slips includes an already trained model with our data, but it is sometimes necessary to adapt it to your own circumstances.
+Slips supports ML retraining with per-module train/test switches. Each ML module has its own section in `config/slips.yaml` and can be trained independently.
 
-Until Slips 0.7.3, there is only one module for now that can do this, the one called 'flow_ml_detection'. This module analyzes flows one by one, as formatted similarly as in a conn.log Zeek file. This module is enabled by default in testing mode. This module uses by default the SGDClassifier with a linear support vector machine (SVM). The decision to use SVM was done because is one of the few algorithms that can be used for online learning and that can extend a current model with new data.
+Current ML modules:
 
-To re-train this machine learning algorithm, you need to do the following:
+- `ml_linear_model`
+- `ml_online_model`
+- `flowmldetection` (legacy module, still available)
 
-1- Edit the config/slips.yaml file to put Slips in train mode. Search the word __train__ in the section __[flow_ml_detection]__ and uncomment the __mode = train__ and comment __mode = test__. It should look like
-
-    [flow_ml_detection]
-    # The mode 'train' should be used to tell the flow_ml_detection module that the flows received are all for training.
-    # A label should be provided in the [Parameters] section
-    mode = train
+## Per-module workflow
 
     # The mode 'test' should be used after training the models, to test in unknown data.
     # You should have trained at least once with 'Normal' data and once with 'Malicious' data in order for the test to work.
     #mode = test
+1. Select only the module you want to train and set its section to `mode: train`.
+2. Set `parameters.label` (`normal` or `malicious`) for the input you are feeding.
+3. Run Slips with your training data (pcap, Zeek directory, or interface).
+4. Repeat with additional labeled traffic as needed.
+5. Switch the same module back to `mode: test` to use trained artifacts.
 
-2- Establish the general label for all the traffic that you want to re-train with. For now we only support 1 label per file. Search in the [parameters] section and choose the type of traffic you will send to Slips.
+Example run commands:
 
-    # Set the label for all the flows that are being read. For now only normal and malware directly. No option for setting labels with a filter
-    label = normal
-    #label = malicious
-    #label = unknown
+```bash
+./slips.py -c config/slips.yaml -f ~/my-traffic.pcap
+./slips.py -c config/slips.yaml -f ~/my-zeek-dir/
+./slips.py -c config/slips.yaml -i eth0
+```
 
-After this edits, just run Slips as usual with any type of input, for example with a Zeek folder.
+## Important notes
 
-    ./slips.py -c config/slips.yaml -f ~/my-computer-normal/
+- Train/test is module-specific; there is no global ML train mode.
+- Keep model load/store paths per module (`ml_linear_model` and `ml_online_model` sections) so custom training does not overwrite shipped artifacts.
+- `training_batch_size`, `validate_on_train`, `seed`, and log settings are also module-specific.
 
-Or with a pcap file.
 
-    ./slips.py -c config/slips.yaml -f ~/my-computer-normal2.pcap
+## Official Models and Training Pipeline
 
-3- If you have also malicious traffic, first change the label to malicious in config/slips.yaml
+The official trained models used by SLIPS ML modules are maintained in a separate repository:
 
-    # Set the label for all the flows that are being read. For now only normal and malware directly. No option for setting labels with a filter
-    #label = normal
-    label = malicious
-    #label = unknown
+- [Stratosphere-ML-trained-models](https://github.com/stratosphereips/Stratosphere-ML-trained-models): Official, versioned, and evaluated ML models for SLIPS modules (including ml_linear_model and ml_online_model).
 
-    ./slips.py -c config/slips.yaml -f ~/my-computer-normal2.pcap
+The experiment/training pipeline is maintained as a standalone repository:
+
+- [Slips-ML-Training-Pipeline](https://github.com/stratosphereips/pipeline_ml_training_for_SLIPS): Used to produce and evaluate shipped ML artifacts for SLIPS modules.
 
 After this edits, just run Slips as usual with any type of input, for example another pcap
 
