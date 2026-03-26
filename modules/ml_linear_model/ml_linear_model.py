@@ -151,31 +151,25 @@ class MLLinearModel(ml_base.MLBaseDetection):
 
     def process_features(self, dataset: pd.DataFrame) -> pd.DataFrame:
         try:
-            cols = [
-                "proto",
-                "dport",
-                "sport",
-                "dur",
-                "pkts",
-                "spkts",
-                "bytes",
-                "sbytes",
-                "state",
-            ]
-            for col in cols:
-                if col in dataset.columns:
-                    try:
-                        dataset[col] = dataset[col].astype("float64")
-                    except (ValueError, AttributeError):
-                        pass
+            dataset = dataset.copy()
 
-            to_discard = ["arp", "ARP", "icmp", "igmp", "ipv6-icmp", ""]
-            for proto in to_discard:
-                dataset = dataset[dataset.proto != proto]
+            # normalize proto to lowercase string before filtering
+            if "proto" in dataset.columns:
+                dataset["proto"] = (
+                    dataset["proto"].astype(str).str.strip().str.lower()
+                )
+
+            # filter unsupported protocols
+            discard_set = {"arp", "icmp", "igmp", "ipv6-icmp", ""}
+            if "proto" in dataset.columns:
+                dataset = dataset[
+                    ~dataset["proto"].fillna("").isin(discard_set)
+                ]
 
             if dataset.empty:
                 return dataset
 
+            # drop non-feature columns
             to_drop = [
                 "appproto",
                 "daddr",
@@ -191,65 +185,35 @@ class MLLinearModel(ml_base.MLBaseDetection):
                 "flow_source",
                 "interface",
             ]
-            for field in to_drop:
-                try:
-                    dataset = dataset.drop(field, axis=1)
-                except (ValueError, KeyError):
-                    pass
+            dataset = dataset.drop(columns=to_drop, errors="ignore")
 
+            # coerce base numeric fields before deriving from them
+            for col in ["sbytes", "dbytes", "spkts", "dpkts"]:
+                if col not in dataset.columns:
+                    dataset[col] = 0.0
+                dataset[col] = pd.to_numeric(
+                    dataset[col], errors="coerce"
+                ).fillna(0.0)
+
+            # derived columns
+            dataset["bytes"] = dataset["sbytes"] + dataset["dbytes"]
+            dataset["pkts"] = dataset["spkts"] + dataset["dpkts"]
+
+            # encode proto via shared base class static
+            if "proto" in dataset.columns:
+                dataset["proto"] = dataset["proto"].apply(self._encode_proto)
+
+            # encode state via shared base class static
             dataset["state"] = dataset.apply(
-                lambda row: self.db.get_final_state_from_flags(
-                    row["state"], (row["spkts"] + row["dpkts"])
+                lambda row: self._infer_state(
+                    str(row.get("state", "")),
+                    row.get("spkts", 0.0),
+                    row.get("dpkts", 0.0),
                 ),
                 axis=1,
             )
 
-            dataset.state = dataset.state.str.replace(
-                r"(^.*Not Established.*$)", "0", regex=True
-            )
-            dataset.state = dataset.state.str.replace(
-                r"(^.*Established.*$)", "1", regex=True
-            )
-            dataset.state = dataset.state.astype("float64")
-
-            dataset.proto = dataset.proto.str.lower()
-            dataset.proto = dataset.proto.str.replace(
-                r"(^.*tcp.*$)", "0", regex=True
-            )
-            dataset.proto = dataset.proto.str.replace(
-                r"(^.*udp.*$)", "1", regex=True
-            )
-            dataset.proto = dataset.proto.str.replace(
-                r"(^.*icmp.*$)", "2", regex=True
-            )
-            dataset.proto = dataset.proto.str.replace(
-                r"(^.*icmp-ipv6.*$)", "3", regex=True
-            )
-            dataset.proto = dataset.proto.str.replace(
-                r"(^.*arp.*$)", "4", regex=True
-            )
-
-            dataset["bytes"] = dataset["sbytes"] + dataset["dbytes"]
-            dataset["pkts"] = dataset["spkts"] + dataset["dpkts"]
-
-            fields_to_convert_to_float = [
-                dataset.proto,
-                dataset.dport,
-                dataset.sport,
-                dataset.dur,
-                dataset.pkts,
-                dataset.spkts,
-                dataset.bytes,
-                dataset.sbytes,
-                dataset.state,
-            ]
-            for field in fields_to_convert_to_float:
-                try:
-                    field = field.astype("float64")
-                    dataset[field.name] = field
-                except (ValueError, AttributeError):
-                    pass
-
+            # enforce feature order and float64, fill missing with 0.0
             feature_order = [
                 "dur",
                 "proto",
@@ -274,18 +238,18 @@ class MLLinearModel(ml_base.MLBaseDetection):
             for col in feature_order:
                 if col not in dataset.columns:
                     dataset[col] = 0.0
-
-            for col in feature_order:
-                dataset[col] = pd.to_numeric(
-                    dataset[col], errors="coerce"
-                ).fillna(0.0)
+                dataset[col] = (
+                    pd.to_numeric(dataset[col], errors="coerce")
+                    .fillna(0.0)
+                    .astype("float64")
+                )
 
             existing_label_cols = [
                 col for col in label_cols if col in dataset.columns
             ]
             dataset = dataset[feature_order + existing_label_cols]
-
             return dataset
+
         except Exception:
             self.print("Error in process_features()")
             self.print(traceback.format_exc(), 0, 1)
@@ -301,12 +265,6 @@ class MLLinearModel(ml_base.MLBaseDetection):
 
     def create_empty_preprocessor(self):
         return StandardScaler()
-
-    def _is_scaler_initialized(self) -> bool:
-        return (
-            hasattr(self.preprocessor, "mean_")
-            and self.preprocessor.mean_ is not None
-        )
 
     def is_preprocessor_initialized(self) -> bool:
         return self._is_scaler_initialized() and self._is_pca_initialized()
@@ -431,16 +389,6 @@ class MLLinearModel(ml_base.MLBaseDetection):
         preds = self.clf.predict(x_data)
         return numpy.asarray([self._decode_target(pred) for pred in preds])
 
-    @staticmethod
-    def _normalize_label(label):
-        if isinstance(label, str):
-            normalized = label.strip().lower()
-            if normalized in {"benign", "normal"}:
-                return BENIGN
-            if normalized in {"malicious", "malware"}:
-                return MALICIOUS
-        return label
-
     def _guess_numeric_targets(self) -> bool:
         module_name = getattr(self.clf.__class__, "__module__", "")
         if module_name.startswith("sklearn."):
@@ -453,6 +401,16 @@ class MLLinearModel(ml_base.MLBaseDetection):
             except Exception:
                 return True
         return False
+
+    @staticmethod
+    def _normalize_label(label):
+        if isinstance(label, str):
+            normalized = label.strip().lower()
+            if normalized in {"benign", "normal"}:
+                return BENIGN
+            if normalized in {"malicious", "malware"}:
+                return MALICIOUS
+        return label
 
     def _encode_targets(
         self, targets: numpy.ndarray, numeric_targets: bool
