@@ -45,6 +45,7 @@ jobs:
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
+          lfs: true
 
       - name: Start Redis
         uses: ./.github/actions/start-redis
