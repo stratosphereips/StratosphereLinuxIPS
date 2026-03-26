@@ -89,7 +89,9 @@ class Zeek:
 
         # is it something like notice.13:00:00-14:00:00.log?
         splitted_filename = file_name.split(".")
-        if len(splitted_filename) == 3:
+        if len(splitted_filename) >= 3:
+            if splitted_filename[1] == "log":
+                return splitted_filename[0] + ".log"
             if splitted_filename[-1] == "log":
                 return splitted_filename[0] + ".log"
 
