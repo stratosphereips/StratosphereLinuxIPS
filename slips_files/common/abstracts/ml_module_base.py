@@ -25,7 +25,7 @@ from slips_files.core.structures.evidence import (
     Victim,
 )
 
-BACKGROUND = "background"
+BACKGROUND = "Background"
 BENIGN = "Benign"
 MALICIOUS = "Malicious"
 
@@ -417,7 +417,11 @@ class MLBaseDetection(IModule, ABC):
 
     def store_testing_results(self, original_label, predicted_label):
         """Accumulate online test metrics and flush snapshots in configured batches."""
-        if original_label == BACKGROUND:
+        if original_label in [
+            BACKGROUND,
+            BACKGROUND.upper(),
+            BACKGROUND.lower(),
+        ]:
             return
 
         if not hasattr(self, "malware_metrics"):
@@ -977,7 +981,11 @@ class MLBaseDetection(IModule, ABC):
                     self.ground_truth_config_label
                 )
 
-            if self.flow["ground_truth_label"] in [BACKGROUND]:
+            if self.flow["ground_truth_label"] in [
+                BACKGROUND,
+                BACKGROUND.upper(),
+                BACKGROUND.lower(),
+            ]:
                 return
 
             if self.mode == "train":
