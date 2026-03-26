@@ -193,8 +193,9 @@ modules:
   # Add the names of other modules that you want to disable
   # (they all should be lowercase with no special characters). Example,
   # threatintelligence, blocking, networkdiscovery, timeline, virustotal,
-  # rnnccdetection, flowmldetection, updatemanager
-  disable: [template]
+  # rnnccdetection, ml_linear_model, ml_online_model, flowmldetection, updatemanager
+  disable:
+    - template
 
   # For each line in timeline file there is a timestamp.
   # By default the timestamp is seconds in unix time. However
@@ -214,6 +215,133 @@ flowmldetection:
   # You should have trained at least once with 'Normal' data and once with
   # 'Malicious' data in order for the test to work.
   mode: test
+
+  # Write training/testing metrics logs to output dir.
+  # This affects only logging, not training behavior.
+  create_performance_metrics_log_files: false
+
+  # Used only when mode: train.
+  # If true, each training batch is split into train/validation for metrics.
+  validate_on_train: false
+
+  # Used only when validate_on_train is true.
+  # Fraction (0.0-1.0) or percent (1-100) of each training batch used for validation.
+  validation_percentage: 0.1
+
+  # Number of labeled flows collected before each training/retraining step.
+  training_batch_size: 500
+
+  # Reproducibility seed for train/test behavior in this module.
+  seed: 1111
+
+  # Global target conversion used by refactored ML modules when a backend
+  # expects numeric targets (for example some river models).
+  benign_target_value: 0.0
+  malicious_target_value: 1.0
+
+#############################
+ml_linear_model:
+  # Standalone sklearn-based ML module.
+  mode: test
+
+  # Training startup behavior (used only when mode: train):
+  # false -> warm-start from model_load_path/preprocess_load_path (recommended default)
+  # true  -> ignore load paths and train from scratch
+  train_from_scratch: false
+
+  # Write training/testing metrics logs to output dir.
+  # This affects only logging, not training behavior.
+  create_performance_metrics_log_files: true
+
+  # Used only when mode: train.
+  # If true, each training batch is split into train/validation for metrics.
+  validate_on_train: false
+
+  # Used only when validate_on_train is true.
+  # Fraction (0.0-1.0) or percent (1-100) of each training batch used for validation.
+  validation_percentage: 0.1
+
+  # Number of labeled flows collected before each training/retraining step.
+  training_batch_size: 500
+
+  # Reproducibility seed for train/test behavior in this module.
+  seed: 1111
+
+  # Optional per-module override for target conversion values.
+  # benign_target_value: 0.0
+  # malicious_target_value: 1.0
+
+  # Separate log names, so they never overwrite other ML module logs.
+  # Final files are: training_<log_suffix>.log and testing_<log_suffix>.log
+  log_suffix: ml_linear_model
+
+  # Used only in mode: test.
+  # Emit one testing-log snapshot every N processed flows.
+  test_log_batch_size: 1000
+
+  # Artifact paths used by modules/ml_linear_model/ml_linear_model.py
+  # Load paths point to provided reference artifacts for immediate test/warm-start use.
+  model_load_path: modules/ml_linear_model/artifacts/model.bin
+  preprocess_load_path: modules/ml_linear_model/artifacts/scaler.bin
+  pca_load_path: modules/ml_linear_model/artifacts/pca.bin
+  # Store paths point to custom artifacts so training does not overwrite provided ones.
+  model_store_path: modules/ml_linear_model/artifacts/model_custom.bin
+  preprocess_store_path: modules/ml_linear_model/artifacts/scaler_custom.bin
+  pca_store_path: modules/ml_linear_model/artifacts/pca_custom.bin
+
+############################ #
+ml_online_model:
+  # Standalone river-based ML module.
+  mode: test
+
+  # Training startup behavior (used only when mode: train):
+  # false -> warm-start from model_load_path/preprocess_load_path (recommended default)
+  # true  -> ignore load paths and train from scratch
+  train_from_scratch: false
+
+  # Write training/testing metrics logs to output dir.
+  # This affects only logging, not training behavior.
+  create_performance_metrics_log_files: true
+
+  # Used only when mode: train.
+  # If true, each training batch is split into train/validation for metrics.
+  validate_on_train: true
+
+  # Used only when validate_on_train is true.
+  # Fraction (0.0-1.0) or percent (1-100) of each training batch used for validation.
+  validation_percentage: 0.1
+
+  # Number of labeled flows collected before each training/retraining step.
+  training_batch_size: 500
+
+  # Reproducibility seed for train/test behavior in this module.
+  seed: 1111
+
+  # Optional per-module override for target conversion values.
+  # benign_target_value: 0.0
+  # malicious_target_value: 1.0
+
+  # Separate log names, so they never overwrite other ML module logs.
+  # Final files are: training_<log_suffix>.log and testing_<log_suffix>.log
+  log_suffix: ml_online_model
+
+  # Used only in mode: test.
+  # Emit one testing-log snapshot every N processed flows.
+  test_log_batch_size: 1000
+
+  # Artifact paths used by modules/ml_online_model/ml_online_model.py
+  # Load paths point to provided/default artifacts for immediate test/warm-start use.
+  model_load_path: modules/ml_online_model/artifacts/model.bin
+  preprocess_load_path: modules/ml_online_model/artifacts/scaler.bin
+  pca_load_path: modules/ml_online_model/artifacts/pca.bin
+  # Store paths point to custom artifacts so training does not overwrite provided ones.
+  model_store_path: modules/ml_online_model/artifacts/model_custom.bin
+  preprocess_store_path: modules/ml_online_model/artifacts/scaler_custom.bin
+  pca_store_path: modules/ml_online_model/artifacts/pca_custom.bin
+
+  # PCA training params (used only in mode: train)
+  pca_n_components: 11
+  pca_batch_size: 500
 
 #############################
 anomaly_detection_https:
