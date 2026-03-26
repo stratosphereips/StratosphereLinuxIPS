@@ -41,6 +41,13 @@ jobs:
         test_file: ${{ fromJson(needs.list-integration-tests.outputs.test_files) }}
 
     steps:
+
+      - name: Install Git LFS
+        run: |
+          apt-get update -qq
+          apt-get install -y git-lfs
+          git lfs install
+
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.ref }}
