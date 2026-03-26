@@ -82,7 +82,8 @@ In addition to the full stratosphereips/slips:latest image, there is now a minim
 * timeline/
 * kalipso/
 * p2ptrust/
-* flowmldetection/
+* ml_linear_model/
+* ml_online_model/
 * cyst/
 * cesnet/
 * exporting_alerts/
