@@ -10,9 +10,6 @@ Current ML modules:
 
 ## Per-module workflow
 
-    # The mode 'test' should be used after training the models, to test in unknown data.
-    # You should have trained at least once with 'Normal' data and once with 'Malicious' data in order for the test to work.
-    #mode = test
 1. Select only the module you want to train and set its section to `mode: train`.
 2. Set `parameters.label` (`normal` or `malicious`) for the input you are feeding.
 3. Run Slips with your training data (pcap, Zeek directory, or interface).
@@ -44,25 +41,4 @@ The experiment/training pipeline is maintained as a standalone repository:
 
 - [Slips-ML-Training-Pipeline](https://github.com/stratosphereips/pipeline_ml_training_for_SLIPS): Used to produce and evaluate shipped ML artifacts for SLIPS modules.
 
-After this edits, just run Slips as usual with any type of input, for example another pcap
-
-    ./slips.py -c config/slips.yaml -f ~/malware1.pcap
-
-You can also run slips in an interface and train it directly with your data
-
-    ./slips.py -c config/slips.yaml -i eth0
-
-4- Finally to use the model, put back the __test__ mode in the configuration config/slips.yaml
-
-    [flow_ml_detection]
-    # The mode 'train' should be used to tell the flow_ml_detection module that the flows received are all for training.
-    # A label should be provided in the [Parameters] section
-    #mode = train
-
-    # The mode 'test' should be used after training the models, to test in unknown data.
-    # You should have trained at least once with 'Normal' data and once with 'Malicious' data in order for the test to work.
-    mode = test
-
-5- Use slips normally in files or interfaces
-
-    ./slips.py -c config/slips.yaml -i eth0
+See also: `docs/related_repos.md`
