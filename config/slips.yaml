@@ -166,6 +166,10 @@ parameters:
 #############################
 Debug:
   # Generate latency, throughput, and other performance related CSV files and plots in output/performance_plots/ for debugging
+  # When enabled, Slips records extra per-flow/per-minute performance data from
+  # input, profiler workers, and evidence handling, then generates summary plots
+  # during shutdown. Keep this disabled for normal runs because it adds extra
+  # bookkeeping and disk writes.
   #  available options are true/false
   generate_performance_plots: false
 

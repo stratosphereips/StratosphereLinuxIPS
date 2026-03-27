@@ -520,6 +520,34 @@ def test_is_gw_info_detected(info_type, attr_name, db_method, db_value):
     mock_method.assert_called_once_with("eth0")
 
 
+def test_profiler_worker_main_skips_flow_per_minute_when_disabled():
+    profiler = ModuleFactory().create_profiler_worker_obj()
+    profiler.generate_performance_plots = False
+    profiler.get_msg = Mock(return_value=None)
+    profiler.get_msg_from_queue = Mock(return_value={"line": {"foo": "bar"}})
+    profiler.is_stop_msg = Mock(return_value=False)
+    profiler.input_handler.process_line = Mock(return_value=(Mock(), None))
+    profiler.add_flow_to_profile = Mock()
+    profiler.localnet_handler.handle_setting_local_net = Mock()
+
+    assert profiler.main() is None
+    profiler.db.record_flow_per_minute.assert_not_called()
+
+
+def test_profiler_worker_main_records_flow_per_minute_when_enabled():
+    profiler = ModuleFactory().create_profiler_worker_obj()
+    profiler.generate_performance_plots = True
+    profiler.get_msg = Mock(return_value=None)
+    profiler.get_msg_from_queue = Mock(return_value={"line": {"foo": "bar"}})
+    profiler.is_stop_msg = Mock(return_value=False)
+    profiler.input_handler.process_line = Mock(return_value=(Mock(), None))
+    profiler.add_flow_to_profile = Mock()
+    profiler.localnet_handler.handle_setting_local_net = Mock()
+
+    assert profiler.main() is None
+    profiler.db.record_flow_per_minute.assert_called_once_with(profiler.name)
+
+
 def test_is_gw_info_detected_unsupported_info_type():
     # create a profiler object using the ModuleFactory
     profiler = ModuleFactory().create_profiler_worker_obj()

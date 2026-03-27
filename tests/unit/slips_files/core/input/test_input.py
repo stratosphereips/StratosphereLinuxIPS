@@ -309,6 +309,24 @@ def test_read_from_stdin(line_type: str, line: str):
         assert line_sent["input_type"] == InputType.STDIN
 
 
+def test_give_profiler_skips_flow_per_minute_when_disabled():
+    input = ModuleFactory().create_input_obj("", InputType.STDIN)
+    input.conf.generate_performance_plots.return_value = False
+
+    input.give_profiler({"line": "value"})
+
+    input.db.record_flow_per_minute.assert_not_called()
+
+
+def test_give_profiler_records_flow_per_minute_when_enabled():
+    input = ModuleFactory().create_input_obj("", InputType.STDIN)
+    input.conf.generate_performance_plots.return_value = True
+
+    input.give_profiler({"line": "value"})
+
+    input.db.record_flow_per_minute.assert_called_once_with("input")
+
+
 @pytest.mark.parametrize(
     "line, input_type, expected_line, expected_input_type",
     [
