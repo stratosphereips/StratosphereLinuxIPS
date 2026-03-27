@@ -304,7 +304,7 @@ class DBManager:
         return self.rdb.get_module_flows_per_second(*args, **kwargs)
 
     def record_flow_per_minute(self, module: str, now: Optional[float] = None):
-        if self.conf.generate_performance_plots() is not True:
+        if not self.conf.generate_performance_plots():
             return
 
         now = time.time() if now is None else now
@@ -319,7 +319,7 @@ class DBManager:
             self._maybe_log_flows_per_minute(minute_ts)
 
     def _maybe_log_flows_per_minute(self, minute_ts: int):
-        if self.conf.generate_performance_plots() is not True:
+        if not self.conf.generate_performance_plots():
             return
 
         if not self.rdb.try_acquire_flows_per_minute_log_lock():

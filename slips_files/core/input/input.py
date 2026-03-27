@@ -214,7 +214,7 @@ class Input(ICore):
         to_send = {"line": line, "input_type": self.input_type}
         # when the queue is full, it blocks forever until a free slot is
         # available
-        if self.conf.generate_performance_plots() is True:
+        if self.conf.generate_performance_plots():
             # record the flow for per-minute stats
             self.db.record_flow_per_minute("input")
         self.profiler_queue.put(to_send, block=True, timeout=None)

@@ -399,10 +399,8 @@ class EvidenceHandlerWorker(IModule):
 
     def pre_main(self):
         worker_number = self.name.split("_")[-1]
-        self.print(
-            f"Started Evidence Handler Worker {green(worker_number)} "
-            f"[PID {green(os.getpid())}]"
-        )
+        worker_name = f"Evidence Handler Worker {worker_number}"
+        self.print(f"Started {green(worker_name)} [PID {green(os.getpid())}]")
 
     def should_stop(self) -> bool:
         return False
