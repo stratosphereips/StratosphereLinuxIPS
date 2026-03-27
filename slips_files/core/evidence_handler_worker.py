@@ -83,6 +83,9 @@ class EvidenceHandlerWorker(IModule):
         self.exporting_modules_enabled: bool = (
             conf.export_to() or conf.send_to_warden()
         )
+        self.generate_performance_plots = (
+            conf.generate_performance_plots() is True
+        )
         if IS_IN_A_DOCKER_CONTAINER:
             self.popup_alerts = False
 
@@ -140,6 +143,9 @@ class EvidenceHandlerWorker(IModule):
             self.handle_unable_to_log(evidence, error)
 
     def add_latency_to_csv(self, idmef_evidence: dict):
+        if not self.generate_performance_plots:
+            return
+
         start_time = idmef_evidence.get("StartTime")
         create_time = idmef_evidence.get("CreateTime")
         evidence_id = idmef_evidence.get("ID")

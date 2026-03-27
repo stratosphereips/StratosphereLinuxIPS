@@ -302,6 +302,11 @@ class ConfigParser(object):
             debug = 0
         return debug
 
+    def generate_performance_plots(self) -> bool:
+        return self.read_configuration(
+            "Debug", "generate_performance_plots", False
+        )
+
     def export_to(self):
         return self.read_configuration("exporting_alerts", "export_to", [])
 

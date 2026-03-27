@@ -19,6 +19,7 @@ import gc
 
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.slips_utils import utils
+from slips_files.common.performance_paths import get_performance_csv_path
 from slips_files.common.style import green
 from slips_files.core.aid_manager import AIDManager
 from slips_files.core.helpers.flow_handler import FlowHandler
@@ -74,11 +75,13 @@ class ProfilerWorker(IModule):
         self.first_flow = True
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.slips_start_time = self._get_slips_start_time()
-        self.latency_logfile = os.path.join(
-            self.output_dir,
-            f"{self._get_latency_filename_prefix()}_latency.csv",
-        )
-        self._initialize_latency_logfile()
+        self.latency_logfile = None
+        if self.generate_performance_plots:
+            self.latency_logfile = get_performance_csv_path(
+                self.output_dir,
+                f"{self._get_latency_filename_prefix()}_latency.csv",
+            )
+            self._initialize_latency_logfile()
         self._modified_tws = {}
         self._time_to_update_modified_tws = time.time()
         self._modified_timewindows_update_period = 3  # in seconds
@@ -99,6 +102,9 @@ class ProfilerWorker(IModule):
         self.analysis_direction = self.conf.analysis_direction()
         self.label = self.conf.label()
         self.width = self.conf.get_tw_width_in_seconds()
+        self.generate_performance_plots = (
+            self.conf.generate_performance_plots() is True
+        )
 
     def get_msg_from_queue(self, q: multiprocessing.Queue):
         """
@@ -151,7 +157,10 @@ class ProfilerWorker(IModule):
         return self.name.lower()
 
     def _initialize_latency_logfile(self):
-        os.makedirs(self.output_dir, exist_ok=True)
+        if not self.latency_logfile:
+            return
+
+        os.makedirs(os.path.dirname(self.latency_logfile), exist_ok=True)
         if os.path.exists(self.latency_logfile):
             return
 
@@ -164,6 +173,9 @@ class ProfilerWorker(IModule):
             )
 
     def _log_flow_latency(self, flow, flow_starttime) -> None:
+        if not self.generate_performance_plots or not self.latency_logfile:
+            return
+
         try:
             flow_start_ts = float(flow_starttime)
         except (TypeError, ValueError):

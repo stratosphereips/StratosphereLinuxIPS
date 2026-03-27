@@ -20,6 +20,7 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.performance_paths import get_performance_csv_path
 from slips_files.core.structures.evidence import Evidence
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.output import Output
@@ -316,6 +317,9 @@ class DBManager:
             self._maybe_log_flows_per_minute(minute_ts)
 
     def _maybe_log_flows_per_minute(self, minute_ts: int):
+        if self.conf.generate_performance_plots() is not True:
+            return
+
         if not self.rdb.try_acquire_flows_per_minute_log_lock():
             return
 
@@ -353,8 +357,8 @@ class DBManager:
         self, ts: int, input_count: int, profiler_counts: Dict[str, int]
     ):
         output_dir = self.get_output_dir() or self.output_dir
-        os.makedirs(output_dir, exist_ok=True)
-        csv_path = os.path.join(output_dir, "flows_per_minute.csv")
+        csv_path = get_performance_csv_path(output_dir, "flows_per_minute.csv")
+        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
         profiler_columns = self._get_profiler_columns(profiler_counts.keys())
         desired_header = ["ts", "input_flows_per_min"] + profiler_columns
         header = self._ensure_flows_per_minute_header(csv_path, desired_header)

@@ -1008,6 +1008,7 @@ class ModuleFactory:
             "fidesModule",
             "irisModule",
         ]
+        main_mock.conf.generate_performance_plots.return_value = False
         main_mock.input_type = InputType.PCAP
         main_mock.mode = "normal"
         main_mock.stdout = ""

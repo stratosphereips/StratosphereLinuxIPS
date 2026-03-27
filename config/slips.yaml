@@ -164,6 +164,12 @@ parameters:
   client_ips: []
 
 #############################
+Debug:
+  # Generate latency, throughput, and other performance related CSV files and plots in output/performance_plots/ for debugging
+  #  available options are true/false
+  generate_performance_plots: false
+
+#############################
 detection:
 
   # Evidence detection threshold is the minimum accumulated threat level per

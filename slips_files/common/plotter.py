@@ -8,15 +8,22 @@ import statistics
 import subprocess
 import sys
 
+from slips_files.common.performance_paths import (
+    get_performance_csv_dir,
+    get_performance_csv_path,
+    get_performance_plots_dir,
+)
+
 
 class Plotter:
     def __init__(self, output_dir, print_func):
         self.output_dir = output_dir or ""
         self.print = print_func
-        self.plots_dir = os.path.join(self.output_dir, "plots")
+        self.plots_dir = get_performance_plots_dir(self.output_dir)
+        self.csv_dir = get_performance_csv_dir(self.output_dir)
 
     def plot_latency_csv(self):
-        latency_path = os.path.join(self.output_dir, "latency.csv")
+        latency_path = get_performance_csv_path(self.output_dir, "latency.csv")
         if not self._is_valid_input(latency_path):
             return
 
@@ -60,7 +67,7 @@ class Plotter:
 
         csv_paths = sorted(
             glob.glob(
-                os.path.join(self.output_dir, "profiler_worker_*_latency.csv")
+                os.path.join(self.csv_dir, "profiler_worker_*_latency.csv")
             )
         )
         if not csv_paths:
@@ -121,7 +128,7 @@ class Plotter:
             self._log(f"[Plotter] Failed to save plot {output_path}: {exc}")
 
     def write_latency_metrics(self, metrics_path=None):
-        latency_path = os.path.join(self.output_dir, "latency.csv")
+        latency_path = get_performance_csv_path(self.output_dir, "latency.csv")
         if not self.output_dir or not os.path.exists(latency_path):
             return
 
@@ -163,7 +170,9 @@ class Plotter:
             self._log(f"[Plotter] Failed to write metrics.txt: {exc}")
 
     def plot_throughput_csv(self):
-        throughput_path = os.path.join(self.output_dir, "flows_per_minute.csv")
+        throughput_path = get_performance_csv_path(
+            self.output_dir, "flows_per_minute.csv"
+        )
         if not self._is_valid_input(throughput_path):
             return
 
@@ -255,7 +264,9 @@ class Plotter:
             )
 
     def write_throughput_metrics(self):
-        throughput_path = os.path.join(self.output_dir, "flows_per_minute.csv")
+        throughput_path = get_performance_csv_path(
+            self.output_dir, "flows_per_minute.csv"
+        )
         if not self.output_dir or not os.path.exists(throughput_path):
             return
 
@@ -371,115 +382,6 @@ class Plotter:
             self._log(
                 f"[Plotter] Error running plot_flows_over_time.py: {exc}"
             )
-
-    def plot_resource_usage(self):
-        monitors_dir = os.path.join(self.output_dir, "monitors")
-        if not os.path.exists(monitors_dir):
-            return
-
-        # Prepare paths
-        redis_csv = os.path.join(monitors_dir, "redis_RAM_usage.csv")
-        slips_cpu = os.path.join(monitors_dir, "slips_CPU_usage.csv")
-        slips_ram = os.path.join(monitors_dir, "slips_RAM_usage.csv")
-
-        # Check if at least one exists
-        if not any(
-            os.path.exists(p) for p in [redis_csv, slips_cpu, slips_ram]
-        ):
-            return
-
-        # Create output dir
-        resource_usage_dir = os.path.join(self.plots_dir, "resource_usage")
-        os.makedirs(resource_usage_dir, exist_ok=True)
-        output_path = os.path.join(resource_usage_dir, "resource_usage.png")
-
-        try:
-            import matplotlib
-
-            matplotlib.use("Agg")
-            from matplotlib import pyplot as plt
-        except Exception as exc:
-            self._log(f"[Plotter] Skipping resource usage plot: {exc}")
-            return
-
-        try:
-            plt.figure(figsize=(10, 6))
-
-            # Plot Redis RAM
-            if os.path.exists(redis_csv):
-                ts_vals = []
-                mem_vals = []
-                with open(redis_csv, newline="") as f:
-                    reader = csv.reader(f)
-                    next(reader, None)  # Skip header
-                    for row in reader:
-                        if not row:
-                            continue
-                        try:
-                            t = float(row[0])
-                            m = float(row[1])
-                            ts_vals.append(t)
-                            mem_vals.append(m)
-                        except ValueError:
-                            continue
-                if ts_vals:
-                    plt.plot(ts_vals, mem_vals, label="Redis RAM (GB)")
-
-            # Plot Slips CPU
-            if os.path.exists(slips_cpu):
-                ts_vals = []
-                cpu_vals = []
-                with open(slips_cpu, newline="") as f:
-                    reader = csv.DictReader(f)
-                    if reader.fieldnames and "ts" in reader.fieldnames:
-                        for row in reader:
-                            try:
-                                t = float(row["ts"])
-                                c = float(
-                                    row[
-                                        "cpu_usage_of_slips_and_all_children_percent"
-                                    ]
-                                )
-                                ts_vals.append(t)
-                                cpu_vals.append(c)
-                            except ValueError:
-                                continue
-                if ts_vals:
-                    plt.plot(ts_vals, cpu_vals, label="Slips CPU (%)")
-
-            # Plot Slips RAM
-            if os.path.exists(slips_ram):
-                ts_vals = []
-                ram_vals = []
-                with open(slips_ram, newline="") as f:
-                    reader = csv.DictReader(f)
-                    if reader.fieldnames and "ts" in reader.fieldnames:
-                        for row in reader:
-                            try:
-                                t = float(row["ts"])
-                                r = float(
-                                    row[
-                                        "ram_usage_of_slips_and_all_children_in_GBs"
-                                    ]
-                                )
-                                ts_vals.append(t)
-                                ram_vals.append(r)
-                            except ValueError:
-                                continue
-                if ts_vals:
-                    plt.plot(ts_vals, ram_vals, label="Slips RAM (GB)")
-
-            plt.xlabel("Time")
-            plt.ylabel("Value")
-            plt.title("Resource Usage")
-            plt.legend()
-            plt.tight_layout()
-            plt.savefig(output_path, format="png")
-            plt.close()
-            self._log(f"[Plotter] Saved resource usage plot to {output_path}")
-
-        except Exception as exc:
-            self._log(f"[Plotter] Failed to save resource usage plot: {exc}")
 
     def _is_valid_input(self, csv_path):
         if not self.output_dir:

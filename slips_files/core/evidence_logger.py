@@ -7,6 +7,7 @@ import traceback
 import multiprocessing
 
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.performance_paths import get_performance_csv_path
 from slips_files.common.slips_utils import utils
 
 
@@ -28,25 +29,42 @@ class EvidenceLogger:
         # clear output/alerts.json
         self.jsonfile = self.clean_file(self.output_dir, "alerts.json")
         utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
-        # clear output/latency.csv
-        self.latencyfile = self.clean_file(self.output_dir, "latency.csv")
-        utils.change_logfiles_ownership(
-            self.latencyfile.name, self.UID, self.GID
-        )
-        self.latency_writer = csv.writer(self.latencyfile)
-        self.latency_writer.writerow(["ts", "evidence_id", "latency"])
-        self.latencyfile.flush()
+        self.latency_file = None
+        self.latency_writer = None
+        if self.generate_performance_plots:
+            self._init_latency_file()
 
     def read_configuration(self):
         conf = ConfigParser()
         self.GID = conf.get_GID()
         self.UID = conf.get_UID()
+        self.generate_performance_plots = (
+            conf.generate_performance_plots() is True
+        )
+
+    def _init_latency_file(self):
+        self.latency_file = self.clean_file(
+            self.output_dir,
+            get_performance_csv_path(self.output_dir, "latency.csv"),
+        )
+        utils.change_logfiles_ownership(
+            self.latency_file.name, self.UID, self.GID
+        )
+        self.latency_writer = csv.writer(self.latency_file)
+        self.latency_writer.writerow(["ts", "evidence_id", "latency"])
+        self.latency_file.flush()
 
     def clean_file(self, output_dir, file_to_clean):
         """
         Clear the file if exists and return an open handle to it
         """
-        logfile_path = os.path.join(output_dir, file_to_clean)
+        if os.path.isabs(file_to_clean):
+            logfile_path = file_to_clean
+        else:
+            logfile_path = os.path.join(output_dir, file_to_clean)
+        logfile_dir = os.path.dirname(logfile_path)
+        if logfile_dir:
+            os.makedirs(logfile_dir, exist_ok=True)
         if os.path.exists(logfile_path):
             open(logfile_path, "w").close()
         return open(logfile_path, "a")
@@ -79,12 +97,15 @@ class EvidenceLogger:
             return
 
     def print_to_latency_csv(self, row: dict):
+        if self.latency_writer is None or self.latency_file is None:
+            return
+
         try:
             self.latency_writer.writerow(
                 [row["ts"], row["evidence_id"], row["latency"]]
             )
-            self.latencyfile.flush()  # flush Python buffer
-            os.fsync(self.latencyfile.fileno())  # flush OS buffer
+            self.latency_file.flush()  # flush Python buffer
+            os.fsync(self.latency_file.fileno())  # flush OS buffer
         except KeyboardInterrupt:
             return True
         except Exception:
@@ -125,4 +146,5 @@ class EvidenceLogger:
     def shutdown_gracefully(self):
         self.logfile.close()
         self.jsonfile.close()
-        self.latencyfile.close()
+        if self.latency_file is not None:
+            self.latency_file.close()
