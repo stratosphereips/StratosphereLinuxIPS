@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import json
 from dataclasses import asdict
+from typing import Tuple
 
 from slips_files.core.flows.suricata import SuricataFile
 from slips_files.common.slips_utils import utils
@@ -29,13 +30,12 @@ class FlowHandler:
         # Compute the symbol for this flow, for this TW, for this profile.
         # The symbol is based on the 'letters' of the original
         # Startosphere IPS tool
-        # symbol: Tuple = self.symbol.compute(self.flow, self.twid, "OutTuples")
+        symbol: Tuple = self.symbol.compute(self.flow, self.twid, "OutTuples")
 
         # Change symbol for its internal data. Symbol is a tuple and is
         # confusing if we ever change the API
         # Add the out tuple
-        # @@@@@@@@@@@@@@@@@@ commenting this out for debugging
-        # self.db.add_tuple(self.profileid, self.twid, symbol, role, self.flow)
+        self.db.add_tuple(self.profileid, self.twid, symbol, role, self.flow)
         self.db.add_ips(self.profileid, self.twid, self.flow, role)
         self.db.add_mac_addr_to_profile(
             self.profileid, self.flow.smac, self.flow.interface

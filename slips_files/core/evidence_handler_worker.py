@@ -173,8 +173,7 @@ class EvidenceHandlerWorker(IModule):
                     latency = 0
 
             latency = round(latency)
-        except Exception as error:
-            print(f"@@@@@@@@@@@@@@@@ {error}")
+        except Exception:
             return
 
         self.evidence_logger_q.put(

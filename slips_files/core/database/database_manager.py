@@ -303,8 +303,10 @@ class DBManager:
     def get_module_flows_per_second(self, *args, **kwargs):
         return self.rdb.get_module_flows_per_second(*args, **kwargs)
 
-    # @@@@@@@@@@@@@@@@@@@@@@@@
     def record_flow_per_minute(self, module: str, now: Optional[float] = None):
+        if self.conf.generate_performance_plots() is not True:
+            return
+
         now = time.time() if now is None else now
         minute_ts = int(now // 60) * 60
         self.rdb.increment_flows_per_minute(module, minute_ts)

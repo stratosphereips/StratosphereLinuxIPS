@@ -109,7 +109,6 @@ class Constants:
     P2P_PEER_INFO_HASH = "peer_info"
     FIDES_CACHE_KEY = "fides_cache"
     FIDES_CACHE_CREATED_SECONDS = "created_seconds"
-    #     # @@@@@@@@@@@@@@@@@@@@@@@@
     FLOWS_PER_MINUTE = "flows_per_minute"
     FLOWS_PER_MINUTE_MODULES = "flows_per_minute_modules"
     FLOWS_PER_MINUTE_LAST_LOGGED = "flows_per_minute_last_logged"

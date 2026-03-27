@@ -1480,35 +1480,28 @@ class RedisDB(
     def get_module_flows_per_second(self, module):
         return self.r.hget(self.constants.MODULES_FLOWS_PER_SECOND, module)
 
-    # @@@@@@@@@@@@@@@@@@@@@@@@
     def increment_flows_per_minute(self, module: str, minute_ts: int) -> int:
         key = f"{self.constants.FLOWS_PER_MINUTE}:{module}"
         return self.r.hincrby(key, minute_ts, 1)
 
-    # @@@@@@@@@@@@@@@@@@@@@@@@
     def get_flows_per_minute(self, module: str, minute_ts: int) -> int:
         key = f"{self.constants.FLOWS_PER_MINUTE}:{module}"
         value = self.r.hget(key, minute_ts)
         return int(value) if value else 0
 
-    # @@@@@@@@@@@@@@@@@@@@@@@@
     def record_flows_per_minute_module(self, module: str):
         self.r.sadd(self.constants.FLOWS_PER_MINUTE_MODULES, module)
 
-    # @@@@@@@@@@@@@@@@@@@@@@@@
     def get_flows_per_minute_modules(self) -> List[str]:
         return list(self.r.smembers(self.constants.FLOWS_PER_MINUTE_MODULES))
 
-    # @@@@@@@@@@@@@@@@@@@@@@@@
     def get_last_logged_flows_per_minute(self) -> Optional[int]:
         value = self.r.get(self.constants.FLOWS_PER_MINUTE_LAST_LOGGED)
         return int(value) if value is not None else None
 
-    # @@@@@@@@@@@@@@@@@@@@@@@@
     def set_last_logged_flows_per_minute(self, minute_ts: int):
         self.r.set(self.constants.FLOWS_PER_MINUTE_LAST_LOGGED, minute_ts)
 
-    # @@@@@@@@@@@@@@@@@@@@@@@@
     def try_acquire_flows_per_minute_log_lock(self, ttl_seconds: int = 10):
         return self.r.set(
             self.constants.FLOWS_PER_MINUTE_LOG_LOCK,
@@ -1517,7 +1510,6 @@ class RedisDB(
             ex=ttl_seconds,
         )
 
-    # @@@@@@@@@@@@@@@@@@@@@@@@
     def release_flows_per_minute_log_lock(self):
         self.r.delete(self.constants.FLOWS_PER_MINUTE_LOG_LOCK)
 
