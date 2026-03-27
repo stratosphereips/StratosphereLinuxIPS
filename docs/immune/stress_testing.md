@@ -278,10 +278,10 @@ After many experiments, trials and failures, and optimizations, we managed to ge
 ### PRs solving the above issues, and resource-related issues discovered while testing can be found here:
 
 * DoS Protector: https://github.com/stratosphereips/StratosphereLinuxIPS/issues/1767
-* Latency issue https://github.com/stratosphereips/StratosphereLinuxIPS/issues/1838
+* Latency issue https://github.com/stratosphereips/StratosphereLinuxIPS/issues/1838 and https://github.com/stratosphereips/StratosphereLinuxIPS/pull/1858
 * Incomplete processing of flows: https://github.com/stratosphereips/StratosphereLinuxIPS/issues/1848
 
-Resource related issues (Slips getting OOM killed because of consuming a lot of :
+Resource related issues:
 
 http://github.com/stratosphereips/StratosphereLinuxIPS/issues/1827
 https://github.com/stratosphereips/StratosphereLinuxIPS/issues/1815
