@@ -1009,3 +1009,42 @@ class MLBaseDetection(IModule, ABC):
 
         if "tw_closed" in self.channels and (msg := self.get_msg("tw_closed")):
             self.handle_tw_closed(msg)
+
+    def _infer_state(self, state: str, spkts: float, dpkts: float) -> float:
+        pkts = int(float(spkts or 0) + float(dpkts or 0))
+        pre = state.split("_")[0]
+        st = state.lower()
+        if "new" in st or st == "established":
+            return 1.0
+        if "closed" in st or st == "not established":
+            return 0.0
+        if state in ("S0", "REJ", "RSTOS0", "RSTRH", "SH", "SHR"):
+            return 0.0
+        if state in ("S1", "SF", "S2", "S3", "RSTO", "RSTP", "OTH"):
+            return 1.0
+        if "S" in pre and "A" in pre:
+            return 1.0
+        if "PA" in pre:
+            return 1.0
+        if any(x in pre for x in ("ECO", "ECR", "URH", "URP")):
+            return 1.0
+        if "EST" in pre:
+            return 1.0
+        if "RST" in pre or "FIN" in pre:
+            return 0.0 if pkts <= 3 else 1.0
+        return 0.0
+
+    def _encode_proto(self, proto: str) -> float:
+        proto_map = {
+            "tcp": 0.0,
+            "udp": 1.0,
+            "icmp-ipv6": 3.0,
+            "icmp": 2.0,
+            "arp": 4.0,
+        }
+        return proto_map.get(str(proto).strip().lower(), 0.0)
+
+    def _is_scaler_initialized(self) -> bool:
+        """Works for StandardScaler, MinMaxScaler, RobustScaler, etc."""
+        attrs = ["mean_", "scale_", "var_", "data_min_", "data_max_"]
+        return any(hasattr(self.preprocessor, attr) for attr in attrs)
