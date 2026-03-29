@@ -92,36 +92,25 @@ def test_shutdown_gracefully(monkeypatch):
         Mock(received_lines=20),
         Mock(received_lines=3),
     ]
-    localnet_cache = Mock()
-    profiler.localnet_cache = localnet_cache
+    profiler.stop_profiler_workers = Mock()
+    profiler.aid_queue = Mock()
+    profiler.stop_aid_manager_event = Mock()
+    profiler.aid_manager = Mock()
+    profiler.profiler_queue = Mock()
+    profiler.profiler_monitor_thread = Mock()
     profiler.mark_self_as_done_processing = Mock()
-
-    # monkeypatch.setattr(profiler, "print", Mock())
     profiler.shutdown_gracefully()
-    localnet_cache.shutdown_gracefully.assert_called_once()
-    assert profiler.localnet_cache is None
+
+    profiler.stop_profiler_workers.assert_called_once()
+    profiler.aid_queue.put.assert_called_once_with("stop")
+    profiler.stop_aid_manager_event.set.assert_called_once()
+    profiler.aid_manager.shutdown.assert_called_once()
+    profiler.profiler_queue.cancel_join_thread.assert_called_once()
+    profiler.profiler_queue.close.assert_called_once()
+    profiler.aid_queue.cancel_join_thread.assert_called_once()
+    profiler.aid_queue.close.assert_called_once()
     profiler.print.assert_called_with("Stopping.", log_to_logfiles_only=True)
     profiler.mark_self_as_done_processing.assert_called_once()
-
-
-def test_shutdown_localnet_cache_manager():
-    profiler = ModuleFactory().create_profiler_obj()
-    localnet_cache = Mock()
-    profiler.localnet_cache = localnet_cache
-
-    profiler._shutdown_localnet_cache_manager()
-
-    localnet_cache.shutdown_gracefully.assert_called_once()
-    assert profiler.localnet_cache is None
-
-
-def test_shutdown_localnet_cache_manager_without_shutdown_hook():
-    profiler = ModuleFactory().create_profiler_obj()
-    profiler.localnet_cache = {}
-
-    profiler._shutdown_localnet_cache_manager()
-
-    assert profiler.localnet_cache is None
 
 
 def test_notify_observers_no_observers():

@@ -12,7 +12,6 @@ def create_profiler(
 ):
     profiler = Mock()
     profiler.client_ips = client_ips or []
-    profiler.localnet_cache = localnet_cache or {}
     profiler.args = Mock(interface=None, access_point=None)
     profiler.db = Mock()
     profiler.db.is_running_non_stop.return_value = running_non_stop
@@ -53,7 +52,7 @@ def test_get_local_net_of_flow_prefers_configured_default_localnet():
     handler = LocalnetHandler(profiler)
     flow = Mock(saddr="10.0.0.8")
 
-    localnet = handler.get_local_net_of_flow(flow)
+    localnet = handler._get_local_net_of_flow(flow)
 
     assert localnet == {"default": "192.168.1.0/24"}
 
@@ -75,7 +74,7 @@ def test_get_localnet_of_given_interface_returns_ipv4_networks(
         {netifaces.AF_INET: [{"addr": "10.0.0.25", "netmask": "255.0.0.0"}]},
     ]
 
-    localnets = handler.get_localnet_of_given_interface()
+    localnets = handler._get_localnet_of_given_interfaces_using_netifaces()
 
     assert localnets == {
         "eth0": "192.168.1.0/24",
@@ -85,17 +84,17 @@ def test_get_localnet_of_given_interface_returns_ipv4_networks(
 
 def test_handle_setting_local_net_updates_cache_and_db():
     profiler = create_profiler(running_non_stop=False)
-    profiler.localnet_cache = {"old": "127.0.0.0/8"}
     handler = LocalnetHandler(profiler)
-    handler.should_set_localnet = Mock(return_value=True)
-    handler.get_local_net_of_flow = Mock(
+    handler.localnet_cache = {"old": "127.0.0.0/8"}
+    handler._should_set_localnet = Mock(return_value=True)
+    handler._get_local_net_of_flow = Mock(
         return_value={"default": "192.168.1.0/24"}
     )
     flow = Mock(saddr="192.168.1.8", interface="eth0")
 
     handler.handle_setting_local_net(flow)
 
-    assert profiler.localnet_cache == {"default": "192.168.1.0/24"}
+    assert handler.localnet_cache == {"default": "192.168.1.0/24"}
     profiler.db.set_local_network.assert_called_once_with(
         "192.168.1.0/24", "default"
     )
@@ -155,16 +154,17 @@ def test_should_set_localnet(
     )
     profiler.is_ignored_ip.return_value = is_ignored_ip
     handler = LocalnetHandler(profiler)
+    handler.localnet_cache = localnet_cache
     flow = Mock(saddr=saddr, interface=interface)
 
-    assert handler.should_set_localnet(flow) is expected
+    assert handler._should_set_localnet(flow) is expected
 
 
 def test_handle_setting_local_net_stores_interface_localnets_in_non_stop_mode():
     profiler = create_profiler(running_non_stop=True)
     handler = LocalnetHandler(profiler)
-    handler.should_set_localnet = Mock(return_value=True)
-    handler.get_localnet_of_given_interface = Mock(
+    handler._should_set_localnet = Mock(return_value=True)
+    handler._get_localnet_of_given_interfaces_using_netifaces = Mock(
         return_value={
             "eth0": "192.168.1.0/24",
             "wlan0": "10.0.0.0/8",
@@ -174,7 +174,7 @@ def test_handle_setting_local_net_stores_interface_localnets_in_non_stop_mode():
 
     handler.handle_setting_local_net(flow)
 
-    assert profiler.localnet_cache == {
+    assert handler.localnet_cache == {
         "eth0": "192.168.1.0/24",
         "wlan0": "10.0.0.0/8",
     }
