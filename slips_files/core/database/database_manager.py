@@ -267,6 +267,9 @@ class DBManager:
     def get_local_network(self, *args, **kwargs):
         return self.rdb.get_local_network(*args, **kwargs)
 
+    def get_total_recognized_localnets(self, *args, **kwargs):
+        return self.rdb.get_total_recognized_localnets(*args, **kwargs)
+
     def get_label_count(self, *args, **kwargs):
         return self.rdb.get_label_count(*args, **kwargs)
 

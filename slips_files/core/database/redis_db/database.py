@@ -656,6 +656,13 @@ class RedisDB(
     def get_local_network(self, interface):
         return self.r.hget(self.constants.LOCAL_NETWORK, interface)
 
+    def get_total_recognized_localnets(self):
+        """
+        when slips is running using 2 interfaces, Slips recognizes 2 diff
+        localnets, so this function is expected to return 2
+        """
+        return self.r.hlen(self.constants.LOCAL_NETWORK)
+
     def get_used_port(self) -> int:
         return int(self.r.config_get(self.constants.REDIS_USED_PORT)["port"])
 
