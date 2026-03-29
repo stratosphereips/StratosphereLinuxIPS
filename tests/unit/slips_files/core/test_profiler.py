@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Unit test for slips_files/core/iperformance_profiler.py"""
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from tests.module_factory import ModuleFactory
 import pytest
@@ -93,15 +93,42 @@ def test_shutdown_gracefully(monkeypatch):
         Mock(received_lines=3),
     ]
     manager = Mock()
+    manager_process = Mock()
+    manager_process.is_alive.return_value = False
+    manager._process = manager_process
     profiler._localnet_cache_manager = manager
+    profiler.localnet_cache = Mock()
     profiler.mark_self_as_done_processing = Mock()
 
     # monkeypatch.setattr(profiler, "print", Mock())
     profiler.shutdown_gracefully()
     manager.shutdown.assert_called_once()
+    manager_process.join.assert_called_once_with(timeout=5)
+    assert profiler.localnet_cache is None
     assert profiler._localnet_cache_manager is None
     profiler.print.assert_called_with("Stopping.", log_to_logfiles_only=True)
     profiler.mark_self_as_done_processing.assert_called_once()
+
+
+def test_shutdown_localnet_cache_manager_terminates_stuck_process():
+    profiler = ModuleFactory().create_profiler_obj()
+    manager = Mock()
+    manager_process = Mock()
+    manager_process.is_alive.return_value = True
+    manager._process = manager_process
+    profiler._localnet_cache_manager = manager
+    profiler.localnet_cache = Mock()
+
+    profiler._shutdown_localnet_cache_manager()
+
+    manager.shutdown.assert_called_once()
+    assert manager_process.join.call_args_list == [
+        call(timeout=5),
+        call(timeout=1),
+    ]
+    manager_process.terminate.assert_called_once()
+    assert profiler.localnet_cache is None
+    assert profiler._localnet_cache_manager is None
 
 
 def test_notify_observers_no_observers():

@@ -209,6 +209,31 @@ class Profiler(ICore, IObservable):
             log_to_logfiles_only=True,
         )
 
+    def _shutdown_localnet_cache_manager(self):
+        manager = self._localnet_cache_manager
+        if manager is None:
+            return
+        self.localnet_cache = None
+
+        try:
+            manager.shutdown()
+        except (AttributeError, EOFError, BrokenPipeError, OSError):
+            pass
+
+        finally:
+            manager_process = getattr(manager, "_process", None)
+            if manager_process is not None:
+                try:
+                    manager_process.join(timeout=5)
+                except (AssertionError, AttributeError, OSError):
+                    pass
+
+                if manager_process.is_alive():
+                    manager_process.terminate()
+                    manager_process.join(timeout=1)
+
+            self._localnet_cache_manager = None
+
     def get_msg_from_queue(self, q: multiprocessing.Queue):
         """
         retrieves a msg from the given queue
@@ -300,9 +325,7 @@ class Profiler(ICore, IObservable):
             if self.profiler_monitor_thread.is_alive():
                 self.profiler_monitor_thread.join(timeout=5)
         finally:
-            if self._localnet_cache_manager is not None:
-                self._localnet_cache_manager.shutdown()
-                self._localnet_cache_manager = None
+            self._shutdown_localnet_cache_manager()
 
             self.print(
                 "Stopping.",
