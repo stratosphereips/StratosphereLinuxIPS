@@ -22,7 +22,6 @@ from slips_files.common.performance_paths import get_performance_csv_path
 from slips_files.common.style import green
 from slips_files.core.aid_manager import AIDManager
 from slips_files.core.helpers.flow_handler import FlowHandler
-from slips_files.core.helpers.localnet_cache import LocalnetCacheShared
 from slips_files.core.helpers.localnet_handler import LocalnetHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
@@ -39,9 +38,7 @@ class ProfilerWorker(IModule):
     def init(
         self,
         name,
-        localnet_cache: LocalnetCacheShared,
         profiler_queue: multiprocessing.Queue,
-        handle_setting_local_net_lock: multiprocessing.Lock,
         input_handler: (
             ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         ),
@@ -60,10 +57,8 @@ class ProfilerWorker(IModule):
         # this is an instance of
         # ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         self.input_handler = input_handler
-        self.handle_setting_local_net_lock = handle_setting_local_net_lock
         self.read_configuration()
         self.received_lines = 0
-        self.localnet_cache = localnet_cache
         self.localnet_handler = LocalnetHandler(self)
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.symbol = SymbolHandler(self.logger, self.db)

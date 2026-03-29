@@ -35,7 +35,6 @@ from slips_files.common.style import green
 from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
 from slips_files.core.aid_manager import AIDManager
-from slips_files.core.helpers.localnet_cache import LocalnetCacheShared
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.input_profilers.argus import Argus
 from slips_files.core.input_profilers.nfdump import Nfdump
@@ -107,8 +106,6 @@ class Profiler(ICore, IObservable):
         # workers stoppped.
         self.did_all_workers_stop = multiprocessing.Event()
         self.last_worker_id = -1
-        self.handle_setting_local_net_lock = multiprocessing.Lock()
-        self.localnet_cache = LocalnetCacheShared()
         # max parallel profiler workers to start when high throughput is detected
         self.max_workers = 6
         # 30MBs max size of this queue to avoid growing forever in mem
@@ -205,17 +202,6 @@ class Profiler(ICore, IObservable):
             log_to_logfiles_only=True,
         )
 
-    def _shutdown_localnet_cache_manager(self):
-        localnet_cache = self.localnet_cache
-        if localnet_cache is None:
-            return
-        self.localnet_cache = None
-
-        try:
-            localnet_cache.shutdown_gracefully()
-        except (AttributeError, EOFError, BrokenPipeError, OSError):
-            pass
-
     def get_msg_from_queue(self, q: multiprocessing.Queue):
         """
         retrieves a msg from the given queue
@@ -241,9 +227,7 @@ class Profiler(ICore, IObservable):
             bloom_filters_manager=self.bloom_filters,
             # module specific kwargs
             name=worker_name,
-            localnet_cache=self.localnet_cache,
             profiler_queue=self.profiler_queue,
-            handle_setting_local_net_lock=self.handle_setting_local_net_lock,
             input_handler=self.input_handler_obj,
             aid_queue=self.aid_queue,
             aid_manager=self.aid_manager,
@@ -307,8 +291,6 @@ class Profiler(ICore, IObservable):
             if self.profiler_monitor_thread.is_alive():
                 self.profiler_monitor_thread.join(timeout=5)
         finally:
-            self._shutdown_localnet_cache_manager()
-
             self.print(
                 "Stopping.",
                 log_to_logfiles_only=True,
