@@ -20,11 +20,9 @@ import multiprocessing
 import time
 import threading
 from multiprocessing import Process
-from multiprocessing.managers import DictProxy, SyncManager
 from typing import (
     List,
     Union,
-    Optional,
 )
 
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
@@ -37,6 +35,7 @@ from slips_files.common.style import green
 from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
 from slips_files.core.aid_manager import AIDManager
+from slips_files.core.helpers.localnet_cache import LocalnetCacheShared
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.input_profilers.argus import Argus
 from slips_files.core.input_profilers.nfdump import Nfdump
@@ -109,10 +108,7 @@ class Profiler(ICore, IObservable):
         self.did_all_workers_stop = multiprocessing.Event()
         self.last_worker_id = -1
         self.handle_setting_local_net_lock = multiprocessing.Lock()
-        self._localnet_cache_manager: Optional[SyncManager] = (
-            multiprocessing.Manager()
-        )
-        self.localnet_cache: DictProxy = self._localnet_cache_manager.dict()
+        self.localnet_cache = LocalnetCacheShared()
         # max parallel profiler workers to start when high throughput is detected
         self.max_workers = 6
         # 30MBs max size of this queue to avoid growing forever in mem
@@ -210,29 +206,15 @@ class Profiler(ICore, IObservable):
         )
 
     def _shutdown_localnet_cache_manager(self):
-        manager = self._localnet_cache_manager
-        if manager is None:
+        localnet_cache = self.localnet_cache
+        if localnet_cache is None:
             return
         self.localnet_cache = None
 
         try:
-            manager.shutdown()
+            localnet_cache.shutdown_gracefully()
         except (AttributeError, EOFError, BrokenPipeError, OSError):
             pass
-
-        finally:
-            manager_process = getattr(manager, "_process", None)
-            if manager_process is not None:
-                try:
-                    manager_process.join(timeout=5)
-                except (AssertionError, AttributeError, OSError):
-                    pass
-
-                if manager_process.is_alive():
-                    manager_process.terminate()
-                    manager_process.join(timeout=1)
-
-            self._localnet_cache_manager = None
 
     def get_msg_from_queue(self, q: multiprocessing.Queue):
         """
