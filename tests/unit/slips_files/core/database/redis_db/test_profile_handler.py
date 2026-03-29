@@ -517,7 +517,7 @@ def test_get_modified_tw_since_time(
     modified_tws = handler._get_modified_tw_since_time(time)
 
     handler.r.zrangebyscore.assert_called_once_with(
-        "ModifiedTW", time, float("+inf"), withscores=True
+        "modified_timewindows", time, float("+inf"), withscores=True
     )
     assert modified_tws == expected_modified_tws
 
@@ -1812,31 +1812,58 @@ def test_is_blocked_profile_and_tw(profile_tws, twid, expected_result):
 
 
 @pytest.mark.parametrize(
-    "timestamp, expected_zadd_call",
+    "timestamp, expected_zadd_calls",
     [  # Testcase 1: Normal timestamp
         (
             1000.0,
-            call("ModifiedTW", {"profile_1_timewindow1": 1000.0}),
+            [
+                call(
+                    "modified_timewindows",
+                    {"profile_1_timewindow1": 1000.0},
+                    gt=True,
+                ),
+                call(
+                    "modified_timewindows",
+                    {"profile_1_timewindow1": 1000.0},
+                    nx=True,
+                ),
+            ],
         ),
         # Testcase 2: Timestamp as string
         (
             "1000.0",
-            call("ModifiedTW", {"profile_1_timewindow1": 1000.0}),
+            [
+                call(
+                    "modified_timewindows",
+                    {"profile_1_timewindow1": 1000.0},
+                    gt=True,
+                ),
+                call(
+                    "modified_timewindows",
+                    {"profile_1_timewindow1": 1000.0},
+                    nx=True,
+                ),
+            ],
         ),
     ],
 )
-def test_mark_profile_tw_as_modified(timestamp, expected_zadd_call):
+def test_mark_profile_tw_as_modified(timestamp, expected_zadd_calls):
     handler = ModuleFactory().create_profile_handler_obj()
 
     handler.publish = MagicMock()
     handler.check_tw_to_close = MagicMock()
+    pipe = Mock()
+    handler.r.pipeline = Mock(return_value=pipe)
 
     profileid = "profile_1"
     twid = "timewindow1"
+    modified_tw_details = {f"{profileid}_{twid}": timestamp}
     with patch("time.time", return_value=1000.0):
-        handler.mark_profile_tw_as_modified(profileid, twid, timestamp)
+        handler.mark_profile_tw_as_modified(modified_tw_details)
 
-    handler.r.zadd.assert_called_once_with(*expected_zadd_call.args)
+    handler.r.pipeline.assert_called_once_with()
+    pipe.zadd.assert_has_calls(expected_zadd_calls)
+    pipe.execute.assert_called_once_with()
 
 
 def test_mark_profile_tw_as_modified_requires_timestamp():
@@ -1844,13 +1871,18 @@ def test_mark_profile_tw_as_modified_requires_timestamp():
 
     handler.publish = MagicMock()
     handler.check_tw_to_close = MagicMock()
+    pipe = Mock()
+    handler.r.pipeline = Mock(return_value=pipe)
 
     profileid = "profile_1"
     twid = "timewindow1"
-    with pytest.raises(ValueError):
-        handler.mark_profile_tw_as_modified(profileid, twid, None)
+    modified_tw_details = {f"{profileid}_{twid}": None}
 
-    handler.r.zadd.assert_not_called()
+    with pytest.raises(ValueError):
+        handler.mark_profile_tw_as_modified(modified_tw_details)
+
+    handler.r.pipeline.assert_not_called()
+    pipe.zadd.assert_not_called()
     handler.publish.assert_not_called()
 
 

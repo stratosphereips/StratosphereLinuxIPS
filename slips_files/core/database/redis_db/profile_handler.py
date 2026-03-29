@@ -1170,19 +1170,20 @@ class ProfileHandler:
         # a usage requires it to be real-time, developers need to come up
         # with something that wouldn't introduce latency and keep it
         # real-time.
-        with self.r.pipeline() as pipe:
-            # without gt, older timestamps can overwrite newer ones
-            pipe.zadd(
-                self.constants.MODIFIED_TIMEWINDOWS,
-                modified_tw_details,
-                gt=True,
-            )
-            pipe.zadd(
-                self.constants.MODIFIED_TIMEWINDOWS,
-                modified_tw_details,
-                nx=True,
-            )
-            pipe.execute()
+
+        pipe = self.r.pipeline()
+        # without gt, older timestamps can overwrite newer ones
+        pipe.zadd(
+            self.constants.MODIFIED_TIMEWINDOWS,
+            modified_tw_details,
+            gt=True,
+        )
+        pipe.zadd(
+            self.constants.MODIFIED_TIMEWINDOWS,
+            modified_tw_details,
+            nx=True,
+        )
+        pipe.execute()
 
     def publish_new_letter(
         self, new_symbol: str, profileid: str, twid: str, tupleid: str, flow

@@ -275,7 +275,7 @@ After many experiments, trials and failures, and optimizations, we managed to ge
 
 <img src="../images/immune/c3/stress_testing/after_optimizations.jpg" >
 
-### PRs solving the above issues, and resource-related issues discovered while testing can be found here:
+**PRs solving the above issues, and resource-related issues discovered while testing can be found here:**
 
 * DoS Protector: https://github.com/stratosphereips/StratosphereLinuxIPS/issues/1767
 * Latency issue https://github.com/stratosphereips/StratosphereLinuxIPS/issues/1838 and https://github.com/stratosphereips/StratosphereLinuxIPS/pull/1858

@@ -62,6 +62,7 @@ class EvidenceLogger:
             logfile_path = file_to_clean
         else:
             logfile_path = os.path.join(output_dir, file_to_clean)
+
         logfile_dir = os.path.dirname(logfile_path)
         if logfile_dir:
             os.makedirs(logfile_dir, exist_ok=True)
