@@ -1835,12 +1835,12 @@ def test_is_blocked_profile_and_tw(profile_tws, twid, expected_result):
             [
                 call(
                     "modified_timewindows",
-                    {"profile_1_timewindow1": 1000.0},
+                    {"profile_1_timewindow1": "1000.0"},
                     gt=True,
                 ),
                 call(
                     "modified_timewindows",
-                    {"profile_1_timewindow1": 1000.0},
+                    {"profile_1_timewindow1": "1000.0"},
                     nx=True,
                 ),
             ],
@@ -1866,7 +1866,7 @@ def test_mark_profile_tw_as_modified(timestamp, expected_zadd_calls):
     pipe.execute.assert_called_once_with()
 
 
-def test_mark_profile_tw_as_modified_requires_timestamp():
+def test_mark_profile_tw_as_modified_allows_missing_timestamp():
     handler = ModuleFactory().create_profile_handler_obj()
 
     handler.publish = MagicMock()
@@ -1878,11 +1878,24 @@ def test_mark_profile_tw_as_modified_requires_timestamp():
     twid = "timewindow1"
     modified_tw_details = {f"{profileid}_{twid}": None}
 
-    with pytest.raises(ValueError):
-        handler.mark_profile_tw_as_modified(modified_tw_details)
+    handler.mark_profile_tw_as_modified(modified_tw_details)
 
-    handler.r.pipeline.assert_not_called()
-    pipe.zadd.assert_not_called()
+    handler.r.pipeline.assert_called_once_with()
+    pipe.zadd.assert_has_calls(
+        [
+            call(
+                "modified_timewindows",
+                {"profile_1_timewindow1": None},
+                gt=True,
+            ),
+            call(
+                "modified_timewindows",
+                {"profile_1_timewindow1": None},
+                nx=True,
+            ),
+        ]
+    )
+    pipe.execute.assert_called_once_with()
     handler.publish.assert_not_called()
 
 
