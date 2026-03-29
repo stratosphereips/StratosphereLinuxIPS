@@ -60,7 +60,7 @@ class EvidenceHandlerWorker(IModule):
         self.blocking_modules_supported = self.is_blocking_modules_supported()
         self.our_ips: List[str] = utils.get_own_ips(ret="List")
         self.formatter = EvidenceFormatter(self.db, self.args)
-        self.slips_start_time = self.db.get_slips_start_time()
+        self.slips_start_time: str = self.db.get_slips_start_time()
         self.first_flow_pcap_time = None
 
     def subscribe_to_channels(self):
