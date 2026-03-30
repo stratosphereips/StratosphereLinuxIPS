@@ -164,6 +164,16 @@ parameters:
   client_ips: []
 
 #############################
+Debug:
+  # Generate latency, throughput, and other performance related CSV files and plots in output/performance_plots/ for debugging
+  # When enabled, Slips records extra per-flow/per-minute performance data from
+  # input, profiler workers, and evidence handling, then generates summary plots
+  # during shutdown. Keep this disabled for normal runs because it adds extra
+  # bookkeeping and disk writes.
+  #  available options are true/false
+  generate_performance_plots: false
+
+#############################
 detection:
 
   # Evidence detection threshold is the minimum accumulated threat level per
@@ -342,6 +352,12 @@ ml_online_model:
   # PCA training params (used only in mode: train)
   pca_n_components: 11
   pca_batch_size: 500
+
+#############################
+bruteforcing:
+  # Minimum number of SSH attempts from one source to one destination
+  # before Slips considers it brute forcing.
+  ssh_attempt_threshold: 9
 
 #############################
 anomaly_detection_https:

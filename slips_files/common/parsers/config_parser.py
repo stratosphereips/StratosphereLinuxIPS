@@ -303,6 +303,11 @@ class ConfigParser(object):
             debug = 0
         return debug
 
+    def generate_performance_plots(self) -> bool:
+        return self.read_configuration(
+            "Debug", "generate_performance_plots", False
+        )
+
     def export_to(self):
         return self.read_configuration("exporting_alerts", "export_to", [])
 
@@ -462,6 +467,16 @@ class ConfigParser(object):
             threshold = 4290
 
         return threshold
+
+    def ssh_bruteforcing_threshold(self):
+        threshold = self.read_configuration(
+            "bruteforcing", "ssh_attempt_threshold", 9
+        )
+        try:
+            threshold = int(threshold)
+        except ValueError:
+            threshold = 9
+        return max(1, threshold)
 
     def data_exfiltration_threshold(self):
         """

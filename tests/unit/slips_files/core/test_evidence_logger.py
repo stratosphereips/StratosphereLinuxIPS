@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import pytest
 import os
-from unittest.mock import MagicMock, patch, Mock
+from unittest.mock import MagicMock, patch, Mock, call
 import queue
 import threading
 
@@ -12,26 +12,48 @@ from tests.module_factory import ModuleFactory
 @pytest.mark.parametrize(
     "output_dir, file_to_clean, file_exists",
     [
-        # testcase1: File doesn't exist
         ("/tmp", "nonexistent.log", False),
-        # testcase2: File exists
         ("/tmp", "existing.log", True),
+        ("/tmp", "/var/log/app.log", True),
     ],
 )
 def test_clean_file(output_dir, file_to_clean, file_exists):
     logger = ModuleFactory().create_evidence_loggr_obj()
+
     with patch("os.path.exists") as mock_exists, patch(
-        "builtins.open"
-    ) as mock_open:
+        "os.makedirs"
+    ) as mock_makedirs, patch("builtins.open") as mock_open:
+
         mock_exists.return_value = file_exists
+
         mock_file = Mock()
-        mock_open.return_value = mock_file
+        truncate_handle = Mock()
+        mock_open.side_effect = (
+            [truncate_handle, mock_file] if file_exists else [mock_file]
+        )
 
         result = logger.clean_file(output_dir, file_to_clean)
 
-        expected_path = os.path.join(output_dir, file_to_clean)
+        expected_path = (
+            file_to_clean
+            if os.path.isabs(file_to_clean)
+            else os.path.join(output_dir, file_to_clean)
+        )
+        expected_dir = os.path.dirname(expected_path)
+
         mock_exists.assert_called_once_with(expected_path)
-        mock_open.assert_called_with(expected_path, "a")
+        mock_makedirs.assert_called_once_with(expected_dir, exist_ok=True)
+
+        if file_exists:
+            assert mock_open.call_args_list == [
+                call(expected_path, "w"),
+                call(expected_path, "a"),
+            ]
+            truncate_handle.close.assert_called_once_with()
+        else:
+            assert mock_open.call_args_list == [
+                call(expected_path, "a"),
+            ]
 
         assert result == mock_file
 

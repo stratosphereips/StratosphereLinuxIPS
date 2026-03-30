@@ -95,7 +95,12 @@ tr:nth-child(even) {
   </tr>
   <tr>
     <td>Flow Alerts</td>
-    <td>Finds malicious behaviours by analyzing only one flow. Now detects: self-signed certificates, TLS certificates which validation failed, vertical port scans detected by Zeek (contrary to detected by Slips), horizontal port scans detected by Zeek (contrary to detected by Slips), password guessing in SSH as detected by Zeek, long connection, successful ssh</td>
+    <td>Finds malicious behaviours by analyzing one flow at a time. It detects self-signed certificates, invalid TLS certificates, Zeek vertical and horizontal port-scan notices, long connections, successful SSH, DNS and connection heuristics, SMTP bruteforce, and related per-flow behaviours.</td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>Bruteforcing</td>
+    <td>Detects SSH bruteforcing from repeated SSH sessions, SSH authentication metadata, client banners from software.log, and Zeek SSH password-guessing notices.</td>
     <td>✅</td>
   </tr>
   <tr>
@@ -132,6 +137,22 @@ tr:nth-child(even) {
   </tr>
 
 </table>
+
+## Bruteforcing Module
+
+The `Bruteforcing` module is responsible for SSH bruteforcing detection.
+
+It consumes:
+
+- `ssh.log`
+- `software.log`
+- `notice.log`
+
+It correlates repeated SSH sessions by source IP, destination IP, destination port, and time window. It starts alerting at `9` attempts by default, reports sparsely as the count grows, uses the SSH client banner to adjust confidence, and uses Zeek `SSH::Password_Guessing` notices as confirmation.
+
+For the full design and configuration details, see:
+
+- [Bruteforcing Module](bruteforcing.md)
 
 ## HTTPS Anomaly Detection Module
 

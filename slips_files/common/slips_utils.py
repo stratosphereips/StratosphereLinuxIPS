@@ -307,6 +307,7 @@ class Utils(object):
         """
         Check if any of the scan detection modules (horizontal portscan,
         vertical portscan, icmp scan) are interested in this ip
+        these modules are only interested in private or public ipv4
         """
         try:
             ip_obj = ipaddress.ip_address(ip)

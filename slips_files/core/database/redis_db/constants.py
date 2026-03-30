@@ -33,7 +33,8 @@ class Constants:
     CACHED_ASN = "cached_asn"
     PIDS = "PIDs"
     MAC = "MAC"
-    MODIFIED_TIMEWINDOWS = "ModifiedTW"
+    MODIFIED_TIMEWINDOWS = "modified_timewindows"
+    TW_FLOWS_COUNTER = "timewindow_flows_counter"
     ACCUMULATED_THREAT_LEVELS = "accumulated_threat_levels"
     TRANCO_WHITELISTED_DOMAINS = "tranco_whitelisted_domains"
     WHITELIST = "whitelist"
@@ -108,6 +109,10 @@ class Constants:
     P2P_PEER_INFO_HASH = "peer_info"
     FIDES_CACHE_KEY = "fides_cache"
     FIDES_CACHE_CREATED_SECONDS = "created_seconds"
+    FLOWS_PER_MINUTE = "flows_per_minute"
+    FLOWS_PER_MINUTE_MODULES = "flows_per_minute_modules"
+    FLOWS_PER_MINUTE_LAST_LOGGED = "flows_per_minute_last_logged"
+    FLOWS_PER_MINUTE_LOG_LOCK = "flows_per_minute_log_lock"
 
 
 class Channels:
