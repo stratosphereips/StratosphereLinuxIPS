@@ -135,22 +135,25 @@ class Input(ICore):
         # because 0 workers has started. this race condition causes slips
         # to stay up forever waiting for stop msgs that will never be recvd
         # in the profiler.
-        # this says " if the input took less than 1min to reach this line,
+        # this says " if the input took less than 2mins to reach this line,
         # give slips extra 10s justt o make sure profilers are started
-        # before sending the stop msgs
-        if time.time() < float(self.db.get_slips_start_time()) + 60:
+        # before sending the stop msgs"
+        if time.time() < float(self.db.get_slips_start_time()) + 120:
             self.print(
                 "Giving Slips time to start all profilers.",
                 log_to_logfiles_only=True,
             )
             time.sleep(10)
-        self.print(
-            f"Sending {self.db.get_profiler_workers_started()} stop "
-            f"signals for the profiler workers."
-        )
 
-        for _ in range(self.db.get_profiler_workers_started()):
+        started_workers: int = self.db.get_profiler_workers_started()
+        self.print(
+            f"Sending {started_workers} stop "
+            f"signals for the profiler workers.",
+            log_to_logfiles_only=True,
+        )
+        for _ in range(started_workers):
             self.profiler_queue.put("stop")
+
         # this has to be done after the sentinel is put in the queue,
         # or else we'll have a deadlock when slips is stopping
         if self.is_input_done_event is not None:
