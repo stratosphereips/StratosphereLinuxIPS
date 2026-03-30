@@ -135,15 +135,20 @@ class Input(ICore):
         # because 0 workers has started. this race condition causes slips
         # to stay up forever waiting for stop msgs that will never be recvd
         # in the profiler.
-        # this says " if the input took less than 2mins to reach this line,
+        # this says " if the input took less than 3mins to reach this line,
         # give slips extra 10s justt o make sure profilers are started
         # before sending the stop msgs"
-        if time.time() < float(self.db.get_slips_start_time()) + 120:
+        max_time_slips_can_take_to_start_all_processes = 60 * 3
+        if (
+            time.time()
+            < float(self.db.get_slips_start_time())
+            + max_time_slips_can_take_to_start_all_processes
+        ):
             self.print(
                 "Giving Slips time to start all profilers.",
                 log_to_logfiles_only=True,
             )
-            time.sleep(10)
+            time.sleep(20)
 
         started_workers: int = self.db.get_profiler_workers_started()
         self.print(
