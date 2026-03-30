@@ -139,7 +139,15 @@ class Input(ICore):
         # give slips extra 10s justt o make sure profilers are started
         # before sending the stop msgs
         if time.time() < float(self.db.get_slips_start_time()) + 60:
+            self.print(
+                "Giving Slips time to start all profilers.",
+                log_to_logfiles_only=True,
+            )
             time.sleep(10)
+        self.print(
+            f"Sending {self.db.get_profiler_workers_started()} stop "
+            f"signals for the profiler workers."
+        )
 
         for _ in range(self.db.get_profiler_workers_started()):
             self.profiler_queue.put("stop")
