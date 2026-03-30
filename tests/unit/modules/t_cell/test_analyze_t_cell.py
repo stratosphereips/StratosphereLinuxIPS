@@ -351,7 +351,11 @@ def test_build_report_payload_and_html(tmp_path):
     assert "Quick Summary" in html
     assert "Decision Trace" in html
     assert "T Cell State Machine" in html
-    assert "regex match" in html
+    assert "accepted regex match" in html
+    assert "no accepted regex match" in html
+    assert "stays mature" in html
+    assert "co-stimulation below threshold" in html
+    assert "no co-stimulation timeout" in html
     assert "current cells:" in html
     assert "Module Log Tail" not in html
     assert "data-sortable-table='recent-observations'" in html
