@@ -55,7 +55,7 @@ def test_subscribe():
     # invalid channel
     assert db.subscribe("invalid_channel") is False
     # valid channel, shoud return a pubsub object
-    assert isinstance(db.subscribe("tw_modified"), redis.client.PubSub)
+    assert isinstance(db.subscribe("new_flow"), redis.client.PubSub)
 
 
 def test_profile_moddule_labels():

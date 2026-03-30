@@ -578,9 +578,7 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
             name="mock_name",
-            localnet_cache={},
             profiler_queue=Mock(),
-            handle_setting_local_net_lock=Mock(),
             input_handler=Mock(),
             aid_queue=Mock(),
             aid_manager=Mock(),
@@ -877,6 +875,61 @@ class ModuleFactory:
         handler.db = mock_db
         return handler
 
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_evidence_handler_worker_obj(self, mock_db):
+        from slips_files.core.evidence_handler_worker import (
+            EvidenceHandlerWorker,
+        )
+
+        def fake_read_configuration(worker):
+            worker.width = 3600
+            worker.detection_threshold = 0.25
+            worker.popup_alerts = False
+            worker.use_p2p = False
+            worker.exporting_modules_enabled = False
+            worker.generate_performance_plots = False
+
+        with (
+            patch(
+                "slips_files.core.evidence_handler_worker.Whitelist",
+                return_value=Mock(),
+            ),
+            patch(
+                "slips_files.core.evidence_handler_worker.IDMEFv2",
+                return_value=Mock(),
+            ),
+            patch(
+                "slips_files.core.evidence_handler_worker.Notify",
+                return_value=Mock(bin_found=False),
+            ),
+            patch(
+                "slips_files.core.evidence_handler_worker."
+                "EvidenceHandlerWorker.read_configuration",
+                new=fake_read_configuration,
+            ),
+            patch(
+                "slips_files.core.evidence_handler_worker.utils.get_own_ips",
+                return_value=[],
+            ),
+        ):
+            worker = EvidenceHandlerWorker(
+                logger=self.logger,
+                output_dir="/tmp",
+                redis_port=6379,
+                termination_event=Mock(),
+                slips_args=Mock(),
+                conf=Mock(),
+                ppid=Mock(),
+                bloom_filters_manager=Mock(),
+                name="EvidenceHandlerWorker_Process_0",
+                evidence_queue=Mock(),
+                evidence_logger_q=Mock(),
+            )
+
+        worker.db = mock_db
+        worker.print = Mock()
+        return worker
+
     def create_evidence_loggr_obj(self):
         from slips_files.core.evidence_logger import EvidenceLogger
 
@@ -1025,6 +1078,7 @@ class ModuleFactory:
             "fidesModule",
             "irisModule",
         ]
+        main_mock.conf.generate_performance_plots.return_value = False
         main_mock.input_type = InputType.PCAP
         main_mock.mode = "normal"
         main_mock.stdout = ""

@@ -62,10 +62,9 @@ class ZeekDirInput(IInputHandler):
                 continue
 
             if not growing_zeek_dir:
-                # get the total number of flows slips is going to read
+                # get the total number of flow in this file
                 total_flows += self.input.get_flows_number(full_path)
 
-            # Add log file to the database
             self.db.add_zeek_file(full_path, interface)
 
             # in testing mode, we only need to read one zeek file to know
@@ -79,9 +78,8 @@ class ZeekDirInput(IInputHandler):
 
         self.input.total_flows = total_flows
         self.db.set_input_metadata({"total_flows": total_flows})
-        # needed in store_flows_read_per_second()
+        # keeps running until all zeek logs are over.
         self.input.lines = self.input.zeek_utils.read_zeek_files()
-
         return True
 
     def shutdown_gracefully(self):

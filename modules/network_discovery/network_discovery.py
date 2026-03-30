@@ -43,12 +43,12 @@ class NetworkDiscovery(IModule):
         self.classifier = FlowClassifier()
 
     def subscribe_to_channels(self):
-        self.c1 = self.db.subscribe("tw_modified")
+        self.c1 = self.db.subscribe("new_flow")
         self.c2 = self.db.subscribe("new_notice")
         self.c3 = self.db.subscribe("new_dhcp")
         self.c4 = self.db.subscribe("tw_closed")
         self.channels = {
-            "tw_modified": self.c1,
+            "new_flow": self.c1,
             "new_notice": self.c2,
             "new_dhcp": self.c3,
             "tw_closed": self.c4,
@@ -191,7 +191,7 @@ class NetworkDiscovery(IModule):
         utils.drop_root_privs_permanently()
 
     def main(self):
-        if msg := self.get_msg("tw_modified"):
+        if msg := self.get_msg("new_flow"):
             msg = json.loads(msg["data"])
             profileid = msg["profileid"]
             twid = msg["twid"]
