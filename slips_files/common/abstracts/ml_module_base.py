@@ -891,6 +891,7 @@ class MLBaseDetection(IModule, ABC):
 
         if self.log_file is not None:
             self.log_file.flush()
+            self.log_file.close()
 
     def last_training_in_window(self):
         """Optionally train on residual labeled flows before window/module ends."""
