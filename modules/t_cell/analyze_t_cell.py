@@ -1266,17 +1266,17 @@ def render_state_machine_graph(report: dict) -> str:
         {
             "from": 0,
             "to": 1,
-            "trigger": "regex match",
+            "trigger": "accepted regex match",
             "path": "M 250 156 C 275 156, 286 120, 320 104",
-            "label_x": 272,
+            "label_x": 258,
             "label_y": 116,
         },
         {
             "from": 0,
             "to": 2,
-            "trigger": "no regex",
+            "trigger": "no accepted regex match",
             "path": "M 250 156 C 275 156, 286 286, 320 278",
-            "label_x": 268,
+            "label_x": 236,
             "label_y": 252,
         },
         {
@@ -1290,9 +1290,9 @@ def render_state_machine_graph(report: dict) -> str:
         {
             "from": 1,
             "to": 1,
-            "trigger": "wait",
+            "trigger": "co-stimulation below threshold",
             "path": "M 392 44 C 350 4, 502 4, 460 44",
-            "label_x": 426,
+            "label_x": 350,
             "label_y": 12,
         },
         {
@@ -1306,7 +1306,7 @@ def render_state_machine_graph(report: dict) -> str:
         {
             "from": 1,
             "to": 2,
-            "trigger": "timeout",
+            "trigger": "no co-stimulation timeout",
             "path": "M 425 112 L 425 244",
             "label_x": 438,
             "label_y": 184,
@@ -1415,6 +1415,13 @@ def render_state_machine_graph(report: dict) -> str:
         {''.join(edge_svg)}
         {''.join(node_svg)}
       </svg>
+      <ul class="legend">
+        <li><span class="swatch" style="background:{STATE_COLORS['state-recognized']};"></span><strong>0 - mature -> 1 - antigen-recognized</strong>: `PAMP` with extracted antigen and an accepted regex match.</li>
+        <li><span class="swatch" style="background:{STATE_COLORS['state-anergic']};"></span><strong>0 - mature -> 2 - anergic</strong>: `PAMP` with extracted antigen but no accepted regex match.</li>
+        <li><span class="swatch" style="background:{STATE_COLORS['state-mature']};"></span><strong>0 - mature -> 0 - mature</strong>: `DAMP` only or no antigen extracted, so the cell stays mature and no recognition transition happens.</li>
+        <li><span class="swatch" style="background:{STATE_COLORS['state-recognized']};"></span><strong>1 - antigen-recognized -> 1 - antigen-recognized</strong>: co-stimulation is still below threshold, so the cell stays recognized and waits for re-evaluation.</li>
+        <li><span class="swatch" style="background:{STATE_COLORS['state-anergic']};"></span><strong>1 - antigen-recognized -> 2 - anergic</strong>: co-stimulation never reached threshold before the waiting window expired.</li>
+      </ul>
     </section>
     """
 
