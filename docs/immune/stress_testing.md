@@ -83,19 +83,19 @@ https://mcfp.felk.cvut.cz/publicDatasets/CTU-Mixed-Capture-1/
 
 **Flows/min for all profilers combined**
 
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-1_flows_per_min_for_all_profilers_combined.png" width="640">
+![](../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-1_flows_per_min_for_all_profilers_combined.png)
 
 Input peaks at 23,404 flows/min, while combined profiler throughput peaks at 11,967 flows/min and continues draining after input drops to zero.
 
 **Flows/min for each profiler**
 
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-1_flows_per_minute_for_each_profiler.png" width="640">
+![](../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-1_flows_per_minute_for_each_profiler.png)
 
 The five profilers are closely balanced; their per-minute peaks range from 2,316 to 2,514 flows/min.
 
 **Latency over time**
 
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-1_latency_over_time.png" width="640">
+![](../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-1_latency_over_time.png)
 
 Latency is effectively flat: 1,214 of 1,216 samples are 0s, with only two spikes at 18s and 32s.
 
@@ -107,19 +107,19 @@ https://mcfp.felk.cvut.cz/publicDatasets/CTU-Mixed-Capture-2/
 
 **Flows/min for all profilers combined**
 
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-2_flows_per_min_for_all_profilers_combined.png" width="640">
+![](../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-2_flows_per_min_for_all_profilers_combined.png)
 
 There are only two throughput samples: 15,215 input flows/min followed by a drain minute where profiler throughput reaches 9,636 flows/min after input is already zero.
 
 **Flows/min for each profiler**
 
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-2_flows_per_minute_for_each_profiler.png" width="640">
+![](../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-2_flows_per_minute_for_each_profiler.png)
 
 The workers remain fairly even during the drain minute, peaking between 1,876 and 2,080 flows/min.
 
 **Latency over time**
 
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-2_latency_over_time.png" width="640">
+![](../images/immune/c3/stress_testing/baseline/CTU-Mixed-Capture-2_latency_over_time.png)
 
 Latency is mostly 0s, with a short early tail up to 32s; p95 is 20s and p99 is 29s.
 
@@ -131,19 +131,19 @@ https://mcfp.felk.cvut.cz/publicDatasets/CTU-Normal-18/
 
 **Flows/min for all profilers combined**
 
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Normal-18_flows_per_min_for_all_profilers_combined.png" width="640">
+![](../images/immune/c3/stress_testing/baseline/CTU-Normal-18_flows_per_min_for_all_profilers_combined.png)
 
 The first minute reaches 21,277 input flows/min versus 6,402 profiled, and the profilers keep draining until they peak at 10,355 flows/min after input stops.
 
 **Flows/min for each profiler**
 
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Normal-18_flows_per_minute_for_each_profiler.png" width="640">
+![](../images/immune/c3/stress_testing/baseline/CTU-Normal-18_flows_per_minute_for_each_profiler.png)
 
 Profiler load is still balanced overall, with worker 2 slightly ahead and peaking at 2,239 flows/min.
 
 **Latency over time**
 
-<img src="../images/immune/c3/stress_testing/baseline/CTU-Normal-18_latency_over_time.png" width="640">
+![](../images/immune/c3/stress_testing/baseline/CTU-Normal-18_latency_over_time.png)
 
 Most latency samples are 0s; the tail comes from a handful of spikes, including a single 52s maximum.
 
@@ -190,19 +190,19 @@ This scenario covers sudden-spikes experiment. The input traffic pattern is desi
 
 #### Flows/min for all profilers combined
 
-<img src="../images/immune/c3/stress_testing/sudden_spikes/sudden_spikes_flows_per_min_for_all_profilers_combined.png" width="640">
+![](../images/immune/c3/stress_testing/sudden_spikes/sudden_spikes_flows_per_min_for_all_profilers_combined.png)
 
 The combined profiler series matches input exactly in 310 of 378 minutes; the visible mismatches are short catch-up periods immediately after large bursts.
 
 #### Flows/min for each profiler
 
-<img src="../images/immune/c3/stress_testing/sudden_spikes/sudden_spikes_flows_per_minute_for_each_profiler.png" width="640">
+![](../images/immune/c3/stress_testing/sudden_spikes/sudden_spikes_flows_per_minute_for_each_profiler.png)
 
 Spike load is spread fairly evenly across the profilers, but worker 5 does not contribute until 10 minutes into the run.
 
 #### Latency over time
 
-<img src="../images/immune/c3/stress_testing/sudden_spikes/sudden_spikes_latency_over_time.png" width="640">
+![](../images/immune/c3/stress_testing/sudden_spikes/sudden_spikes_latency_over_time.png)
 
 Latency starts in the low hundreds of seconds and then explodes late in the run; the last quarter alone pushes p95 to 17,715s and the maximum to 17,718s.
 
@@ -243,20 +243,20 @@ This scenario covers soak-testing experiment. The input traffic pattern is desig
 
 
 #### Flows/min for all profilers combined
-<img src="../images/immune/c3/stress_testing/soak_testing/soak_testing_6_flows_per_min_for_all_profilers_combined.png" width="640">
+![](../images/immune/c3/stress_testing/soak_testing/soak_testing_6_flows_per_min_for_all_profilers_combined.png)
 
 Input stays high between 2,643 and 10,391 flows/min, while combined profiler throughput never exceeds 5,892 flows/min.
 
 #### Flows/min for each profiler
 
 
-<img src="../images/immune/c3/stress_testing/soak_testing/soak_testing_6_flows_per_minute_for_each_profiler.png" width="640">
+![](../images/immune/c3/stress_testing/soak_testing/soak_testing_6_flows_per_minute_for_each_profiler.png)
 
 Only workers 0-2 carry traffic at the start; workers 3, 4, and 5 begin contributing roughly 10, 15, and 20 minutes into the run because slips adds more workers the more throughput it detects. here, the throughput gap remains large.
 
 #### Latency over time
 
-<img src="../images/immune/c3/stress_testing/soak_testing/soak_testing_6_latency_over_time.png" width="640">
+![](../images/immune/c3/stress_testing/soak_testing/soak_testing_6_latency_over_time.png)
 
 Latency grows through the run instead of flattening. This is considered a soft break. Slips is unable to keep up a tolerable performance under constant heavy load. We consider this the main issue that needs to be solved.
 
@@ -273,7 +273,7 @@ Latency grows through the run instead of flattening. This is considered a soft b
 After many experiments, trials and failures, and optimizations, we managed to get acceptable latency in Slips under high traffic
 
 
-<img src="../images/immune/c3/stress_testing/after_optimizations.jpg" >
+![](../images/immune/c3/stress_testing/after_optimizations.jpg)
 
 **PRs solving the above issues, and resource-related issues discovered while testing can be found here:**
 
