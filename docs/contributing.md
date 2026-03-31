@@ -167,6 +167,14 @@ Once all modules are done processing, EvidenceHandler is killed by the Process m
 - It runs the unit tests first, then the integration tests.
 - Please get familiar with pytest first https://docs.pytest.org/en/stable/how-to/output.html
 
+### What does `generate_performance_plots` do?
+
+- `Debug.generate_performance_plots` in [config/slips.yaml](config/slips.yaml) is a developer-only debugging switch for performance investigations.
+- When it is `true`, Slips writes extra CSVs under `output/performance_plots/csv/`, including alert latency (`latency.csv`), profiler worker latency (`profiler_worker_*_latency.csv`), and throughput (`flows_per_minute.csv`).
+- On shutdown, the process manager turns those CSVs into plots and metrics under `output/performance_plots/` and `output/metrics.txt`.
+- Leave it `false` for normal development and production-style runs. Enabling it adds Redis bookkeeping, file writes, and plot-generation work that are only useful when diagnosing throughput or latency behavior.
+- The plots shown in [docs/immune/stress_testing.md](docs/immune/stress_testing.md) were generated with this parameter enabled.
+
 ### Where and how do we get the GW info?
 
 Using one of these 3 ways

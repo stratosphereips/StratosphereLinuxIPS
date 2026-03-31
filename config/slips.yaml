@@ -164,6 +164,16 @@ parameters:
   client_ips: []
 
 #############################
+Debug:
+  # Generate latency, throughput, and other performance related CSV files and plots in output/performance_plots/ for debugging
+  # When enabled, Slips records extra per-flow/per-minute performance data from
+  # input, profiler workers, and evidence handling, then generates summary plots
+  # during shutdown. Keep this disabled for normal runs because it adds extra
+  # bookkeeping and disk writes.
+  #  available options are true/false
+  generate_performance_plots: false
+
+#############################
 detection:
 
   # Evidence detection threshold is the minimum accumulated threat level per
@@ -214,6 +224,12 @@ flowmldetection:
   # You should have trained at least once with 'Normal' data and once with
   # 'Malicious' data in order for the test to work.
   mode: test
+
+#############################
+bruteforcing:
+  # Minimum number of SSH attempts from one source to one destination
+  # before Slips considers it brute forcing.
+  ssh_attempt_threshold: 9
 
 #############################
 anomaly_detection_https:

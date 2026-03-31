@@ -15,6 +15,7 @@ This is the main guide to the documentation related to the changes done to Slips
 - [Testing](https://stratospherelinuxips.readthedocs.io/en/develop/immune/testing.html)
 - [LLM Research and Selection](https://stratospherelinuxips.readthedocs.io/en/develop/immune/research_and_selection_of_llm_candidates.html)
 - [LLM RPI Performance](https://stratospherelinuxips.readthedocs.io/en/develop/immune/research_rpi_llm_performance.html)
+- [Stress Testing](https://stratospherelinuxips.readthedocs.io/en/develop/immune/stress_testing.html)
 
 ### Security & Network Configuration
 

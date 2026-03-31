@@ -41,7 +41,6 @@ from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 from slips_files.core.profiler_worker import ProfilerWorker
-from slips_files.core.helpers.localnet_cache import LocalnetCacheShared
 
 SUPPORTED_INPUT_TYPES = {
     InputType.ZEEK: ZeekJSON,
@@ -102,14 +101,10 @@ class Profiler(ICore, IObservable):
         self.profiler_child_processes: List[Process] = []
         # to access their internal attributes if needed
         self.workers: List[ProfilerWorker] = []
-        self.stop_aid_manager_event = multiprocessing.Event()
         # is set by this module to indicate to the monitor thread that
         # workers stoppped.
         self.did_all_workers_stop = multiprocessing.Event()
         self.last_worker_id = -1
-        self.handle_setting_local_net_lock = multiprocessing.Lock()
-        # small, shared JSON cache backed by shared memory (no Manager)
-        self.localnet_cache = LocalnetCacheShared()
         # max parallel profiler workers to start when high throughput is detected
         self.max_workers = 6
         # 30MBs max size of this queue to avoid growing forever in mem
@@ -120,7 +115,6 @@ class Profiler(ICore, IObservable):
         self.aid_manager = AIDManager(
             self.db,
             self.aid_queue,
-            self.stop_aid_manager_event,
         )
         now = time.monotonic()
         self.next_throughput_check_time = now + 300
@@ -224,16 +218,14 @@ class Profiler(ICore, IObservable):
             logger=self.logger,
             output_dir=self.output_dir,
             redis_port=self.redis_port,
-            termination_event=self.stop_aid_manager_event,
+            termination_event=self.termination_event,
             conf=self.conf,
             ppid=self.ppid,
             slips_args=self.args,
             bloom_filters_manager=self.bloom_filters,
             # module specific kwargs
             name=worker_name,
-            localnet_cache=self.localnet_cache,
             profiler_queue=self.profiler_queue,
-            handle_setting_local_net_lock=self.handle_setting_local_net_lock,
             input_handler=self.input_handler_obj,
             aid_queue=self.aid_queue,
             aid_manager=self.aid_manager,
@@ -270,38 +262,38 @@ class Profiler(ICore, IObservable):
         return input_handler_cls
 
     def shutdown_gracefully(self):
-        # wait for all flows to be processed by the profiler processes.
-        self.stop_profiler_workers()
+        try:
+            # wait for all flows to be processed by the profiler processes.
+            self.stop_profiler_workers()
 
-        self.aid_queue.put("stop")
-        self.stop_aid_manager_event.set()
-        self.aid_manager.shutdown()
+            self.aid_queue.put("stop")
+            self.aid_manager.shutdown()
 
-        used_queues = [
-            self.profiler_queue,
-            self.aid_queue,
-        ]
+            used_queues = [
+                self.profiler_queue,
+                self.aid_queue,
+            ]
 
-        for q in used_queues:
-            # By default if a process is not the creator of the queue then on
-            # exit it will attempt to join the queue’s background thread. The
-            # process can call cancel_join_thread() to make join_thread()
-            # do nothing.
-            q.cancel_join_thread()
+            for q in used_queues:
+                # By default if a process is not the creator of the queue then on
+                # exit it will attempt to join the queue’s background thread. The
+                # process can call cancel_join_thread() to make join_thread()
+                # do nothing.
+                q.cancel_join_thread()
 
-            # close the queues to avoid deadlocks.
-            # this step SHOULD NEVER be done before closing the workers
-            q.close()
+                # close the queues to avoid deadlocks.
+                # this step SHOULD NEVER be done before closing the workers
+                q.close()
 
-        if self.profiler_monitor_thread.is_alive():
-            self.profiler_monitor_thread.join(timeout=5)
-
-        self.print(
-            "Stopping.",
-            log_to_logfiles_only=True,
-        )
-        self.mark_self_as_done_processing()
-        self.db.set_new_incoming_flows(False)
+            if self.profiler_monitor_thread.is_alive():
+                self.profiler_monitor_thread.join(timeout=5)
+        finally:
+            self.print(
+                "Stopping.",
+                log_to_logfiles_only=True,
+            )
+            self.mark_self_as_done_processing()
+            self.db.set_new_incoming_flows(False)
 
     def did_5min_pass_since_last_throughput_check(self) -> bool:
         """
@@ -398,6 +390,9 @@ class Profiler(ICore, IObservable):
             time.sleep(0.1)
 
         self.input_handler_obj = self.get_handler_obj(msg)
+        # put again that msg in queue to be processed by the profilers,
+        # we just checked it here to determine the input handler obj
+        self.profiler_queue.put(msg)
         if not self.input_handler_obj:
             self.print("Unsupported input type, exiting.")
             return 1
@@ -409,7 +404,7 @@ class Profiler(ICore, IObservable):
         utils.start_thread(self.profiler_monitor_thread, self.db)
         # slips starts with these workers by default until it detects
         # high throughput that these workers arent enough to handle
-        num_of_profiler_workers = 5
+        num_of_profiler_workers = 3
         for worker_id in range(num_of_profiler_workers):
             self.last_worker_id = worker_id
             self.start_profiler_worker(worker_id)

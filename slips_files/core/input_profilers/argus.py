@@ -33,6 +33,10 @@ class Argus(IInputType):
         line = new_line["data"]
         nline = line.strip().split(self.separator)
 
+        if self.is_header_line(nline):
+            self.define_columns(new_line)
+            return False, "Defined Columns"
+
         def get_value_of(field_name, default_=False):
             """field_name is used to get the index of
             the field from the column_idx dict"""
@@ -41,6 +45,13 @@ class Argus(IInputType):
                 return val or default_
             except (IndexError, KeyError):
                 return default_
+
+        def get_int_value_of(field_name) -> int:
+            value = get_value_of(field_name, 0)
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return 0
 
         self.flow: ArgusConn = ArgusConn(
             starttime=utils.convert_to_datetime(get_value_of("starttime")),
@@ -54,12 +65,12 @@ class Argus(IInputType):
             daddr=get_value_of("daddr"),
             dport=get_value_of("dport"),
             state=get_value_of("state"),
-            pkts=int(get_value_of("pkts")),
-            spkts=int(get_value_of("spkts")),
-            dpkts=int(get_value_of("dpkts")),
-            bytes=int(get_value_of("bytes")),
-            sbytes=int(get_value_of("sbytes")),
-            dbytes=int(get_value_of("dbytes")),
+            pkts=get_int_value_of("pkts"),
+            spkts=get_int_value_of("spkts"),
+            dpkts=get_int_value_of("dpkts"),
+            bytes=get_int_value_of("bytes"),
+            sbytes=get_int_value_of("sbytes"),
+            dbytes=get_int_value_of("dbytes"),
             interface="default",
         )
 
@@ -137,3 +148,9 @@ class Argus(IInputType):
             )
             self.print(traceback.format_exc(), 0, 1)
             sys.exit(1)
+
+    def is_header_line(self, nline) -> bool:
+        """Return True when the current line looks like an Argus header."""
+        header_tokens = {"starttime", "time", "srcaddr", "dstaddr", "totpkts"}
+        normalized_fields = {field.strip().lower() for field in nline}
+        return bool(header_tokens.intersection(normalized_fields))

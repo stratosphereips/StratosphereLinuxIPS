@@ -62,7 +62,6 @@ class RedisDB(
     # Stores instances per port
     instances = {}
     supported_channels = {
-        "tw_modified",
         "evidence_added",
         "new_ip",
         "new_flow",
@@ -381,7 +380,7 @@ class RedisDB(
         # normally; if it fails, an exception will be thrown
 
         return redis.StrictRedis(
-            host="localhost",
+            host=LOCALHOST,
             port=port,
             db=db,
             charset="utf-8",
@@ -669,6 +668,13 @@ class RedisDB(
 
     def get_local_network(self, interface):
         return self.r.hget(self.constants.LOCAL_NETWORK, interface)
+
+    def get_total_recognized_localnets(self):
+        """
+        when slips is running using 2 interfaces, Slips recognizes 2 diff
+        localnets, so this function is expected to return 2
+        """
+        return self.r.hlen(self.constants.LOCAL_NETWORK)
 
     def get_used_port(self) -> int:
         return int(self.r.config_get(self.constants.REDIS_USED_PORT)["port"])
@@ -1493,6 +1499,39 @@ class RedisDB(
 
     def get_module_flows_per_second(self, module):
         return self.r.hget(self.constants.MODULES_FLOWS_PER_SECOND, module)
+
+    def increment_flows_per_minute(self, module: str, minute_ts: int) -> int:
+        key = f"{self.constants.FLOWS_PER_MINUTE}:{module}"
+        return self.r.hincrby(key, minute_ts, 1)
+
+    def get_flows_per_minute(self, module: str, minute_ts: int) -> int:
+        key = f"{self.constants.FLOWS_PER_MINUTE}:{module}"
+        value = self.r.hget(key, minute_ts)
+        return int(value) if value else 0
+
+    def record_flows_per_minute_module(self, module: str):
+        self.r.sadd(self.constants.FLOWS_PER_MINUTE_MODULES, module)
+
+    def get_flows_per_minute_modules(self) -> List[str]:
+        return list(self.r.smembers(self.constants.FLOWS_PER_MINUTE_MODULES))
+
+    def get_last_logged_flows_per_minute(self) -> Optional[int]:
+        value = self.r.get(self.constants.FLOWS_PER_MINUTE_LAST_LOGGED)
+        return int(value) if value is not None else None
+
+    def set_last_logged_flows_per_minute(self, minute_ts: int):
+        self.r.set(self.constants.FLOWS_PER_MINUTE_LAST_LOGGED, minute_ts)
+
+    def try_acquire_flows_per_minute_log_lock(self, ttl_seconds: int = 10):
+        return self.r.set(
+            self.constants.FLOWS_PER_MINUTE_LOG_LOCK,
+            "1",
+            nx=True,
+            ex=ttl_seconds,
+        )
+
+    def release_flows_per_minute_log_lock(self):
+        self.r.delete(self.constants.FLOWS_PER_MINUTE_LOG_LOCK)
 
     def get_name_of_module_at(self, given_pid):
         """returns the name of the module that has the given pid"""

@@ -334,7 +334,13 @@ class RedisManager:
                     file, port, pid = line[1], line[2], line[3]
                     there_are_ports_to_print = True
                     to_print += f"[{line_number}] {file} - port {port}\n"
-                    open_servers[line_number] = (int(port), int(pid))
+                    try:
+                        open_servers[line_number] = (int(port), int(pid))
+                    except ValueError:
+                        # sometimes slips can't get the server pid and logs "False"
+                        # in the logfile instead of the PID
+                        # there's nothing we can do about it, we just skip this line
+                        pass
         except FileNotFoundError:
             print(
                 f"{self.running_logfile} is not found. Can't get open redis servers. Stopping."

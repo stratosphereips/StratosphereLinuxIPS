@@ -37,6 +37,7 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import (
     IModule,
 )
+from slips_files.common.plotter import Plotter
 
 from slips_files.common.style import green
 from slips_files.common.input_type import InputType
@@ -786,6 +787,13 @@ class ProcessManager:
         """
         try:
             print = self.get_print_function()
+            if self.main.conf.generate_performance_plots() is True:
+                self.plotter = Plotter(self.main.args.output, print)
+                self.plotter.plot_latency_csv()
+                self.plotter.plot_profiler_latency_csvs()
+                self.plotter.plot_throughput_csv()
+                self.plotter.write_throughput_metrics()
+                self.plotter.plot_flows_from_conn_log()
 
             if not self.main.args.stopdaemon:
                 print("\n" + "-" * 27)
