@@ -94,7 +94,6 @@ def test_shutdown_gracefully(monkeypatch):
     ]
     profiler.stop_profiler_workers = Mock()
     profiler.aid_queue = Mock()
-    profiler.stop_aid_manager_event = Mock()
     profiler.aid_manager = Mock()
     profiler.profiler_queue = Mock()
     profiler.profiler_monitor_thread = Mock()
@@ -103,7 +102,6 @@ def test_shutdown_gracefully(monkeypatch):
 
     profiler.stop_profiler_workers.assert_called_once()
     profiler.aid_queue.put.assert_called_once_with("stop")
-    profiler.stop_aid_manager_event.set.assert_called_once()
     profiler.aid_manager.shutdown.assert_called_once()
     profiler.profiler_queue.cancel_join_thread.assert_called_once()
     profiler.profiler_queue.close.assert_called_once()
