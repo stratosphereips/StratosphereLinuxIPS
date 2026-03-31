@@ -4,7 +4,7 @@
 * Improve performance under high-throughput traffic with parallel evidence handling, profiler/input optimizations.
 * Fix issues while slips is shutting down.
 * Add optional performance plots and CSV metrics for latency, throughput, and resource usage.
-* Fix skipped first-flow processing and reduce shutdown race conditions on small PCAPs.
+* Fix skipped first-flow processing and reduce shutdown race conditions on small files and PCAPs.
 
 1.1.18 (Mar 3rd, 2026)
 

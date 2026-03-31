@@ -35,7 +35,7 @@ class Argus(IInputType):
 
         if self.is_header_line(nline):
             self.define_columns(new_line)
-            return False, "Done defining columns"
+            return False, "Defined Columns"
 
         def get_value_of(field_name, default_=False):
             """field_name is used to get the index of
