@@ -101,7 +101,6 @@ class Profiler(ICore, IObservable):
         self.profiler_child_processes: List[Process] = []
         # to access their internal attributes if needed
         self.workers: List[ProfilerWorker] = []
-        self.stop_aid_manager_event = multiprocessing.Event()
         # is set by this module to indicate to the monitor thread that
         # workers stoppped.
         self.did_all_workers_stop = multiprocessing.Event()
@@ -116,7 +115,6 @@ class Profiler(ICore, IObservable):
         self.aid_manager = AIDManager(
             self.db,
             self.aid_queue,
-            self.stop_aid_manager_event,
         )
         now = time.monotonic()
         self.next_throughput_check_time = now + 300
@@ -220,7 +218,7 @@ class Profiler(ICore, IObservable):
             logger=self.logger,
             output_dir=self.output_dir,
             redis_port=self.redis_port,
-            termination_event=self.stop_aid_manager_event,
+            termination_event=self.termination_event,
             conf=self.conf,
             ppid=self.ppid,
             slips_args=self.args,
@@ -269,7 +267,6 @@ class Profiler(ICore, IObservable):
             self.stop_profiler_workers()
 
             self.aid_queue.put("stop")
-            self.stop_aid_manager_event.set()
             self.aid_manager.shutdown()
 
             used_queues = [

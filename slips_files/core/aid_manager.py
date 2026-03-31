@@ -1,6 +1,5 @@
 from multiprocessing import Process, Queue
 from queue import Empty
-from threading import Event
 
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
@@ -18,12 +17,9 @@ class AIDManager:
         self,
         db: DBManager,
         _aid_queue: Queue,
-        stop_profiler_workers_event: Event,
     ):
         self.db = db
         self._aid_queue: Queue = _aid_queue
-        # returns true when this process should shutdown
-        self.stop_profiler_workers_event = stop_profiler_workers_event
 
         self._process = Process(
             target=self._worker_loop,
@@ -35,11 +31,9 @@ class AIDManager:
 
     def _worker_loop(self, aid_queue, db: DBManager):
         """
-        TRuns in its own process
-        - Initialize DBManager once.
-        - Loop forever processing tasks.
+        Runs in its own process
         """
-        while not self.stop_profiler_workers_event.is_set():
+        while True:
             try:
                 task = aid_queue.get(timeout=1)
                 if task == "stop":
@@ -52,7 +46,7 @@ class AIDManager:
 
                 # CPU-heavy hashing
                 flow.aid = utils.get_aid(flow)
-                self.db.add_flow(flow, profileid, twid, label=label)
+                db.add_flow(flow, profileid, twid, label=label)
             except KeyboardInterrupt:
                 continue
             except Empty:
