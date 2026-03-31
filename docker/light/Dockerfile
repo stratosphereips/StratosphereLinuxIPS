@@ -62,8 +62,9 @@ RUN cd modules \
       CHANGELOG.md \
       conftest.py
 
-RUN pip3 install --no-cache-dir --upgrade pip  \
-    && grep -v -f docker/light/excluded_libs.txt install/requirements.txt | xargs -n 1 pip install \
+RUN python3 docker/light/generate_requirements.py \
+    && pip3 install --no-cache-dir --upgrade pip  \
+    && pip install --ignore-installed --no-cache-dir -r docker/light/requirements.txt \
     && chmod 774 slips.py \
     && git init \
     && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git
