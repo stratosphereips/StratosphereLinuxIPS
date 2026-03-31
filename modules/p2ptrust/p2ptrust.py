@@ -594,7 +594,7 @@ class Trust(IModule):
         self.db.publish("new_blame", data)
 
     def shutdown_gracefully(self):
-        if hasattr(self, "pigeon"):
+        if hasattr(self, "pigeon") and self.pigeon is not None:
             self.pigeon.send_signal(signal.SIGINT)
         if hasattr(self, "trust_db"):
             self.trust_db.__del__()
