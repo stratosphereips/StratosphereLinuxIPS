@@ -125,7 +125,7 @@ class RedisManager:
         Check if we have redis-server running (this is the cache db it should
         always be running) adn start it if not running.
         """
-        start_redis_server = True
+        start_redis_server = not utils.is_port_in_use(redis_port)
         # we dont care about the logger here we're just making sure the
         # server is up, this r isnt gonna be used later
         logger = ""

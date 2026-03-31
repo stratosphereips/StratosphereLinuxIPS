@@ -57,6 +57,18 @@ For the first configured benign hours, the module does **fit-only** (Welford onl
 - no detection decisions are emitted from hourly z-score rules before training ends,
 - baseline mean/variance are learned strongly from this period.
 
+Training fit strength is configurable with `training_alpha`:
+
+Training fit technique is selected by `training_fit_method`:
+
+- `training_fit_method = welford` -> Welford benign fit.
+- `training_fit_method = ewma` -> EWMA-style training adaptation.
+
+When `training_fit_method = ewma`, `training_alpha` controls strength:
+
+- higher `training_alpha` = faster adaptation,
+- lower `training_alpha` = slower adaptation.
+
 ### No explicit training (`training_hours = 0`)
 
 Detection starts immediately using online adaptation.
@@ -67,19 +79,53 @@ Special fallback only for `ja3_changes`:
 
 ## Scoring
 
-Each modeled feature uses z-score:
+Each modeled feature uses robust scoring in three explicit steps:
 
-- `z = |x - mean| / std_effective`
-- `std_effective` uses variance with a robust minimum floor to avoid unstable near-zero std.
+1. Transform heavy-tail signals: `y = log(1 + x)` (`log1p`) for non-negative count/bytes features.
+2. Estimate robust center/scale on recent transformed values:
+   - `m = median(y)`
+   - `MAD = median(|y - m|)`
+   - `sigma_robust = max(1.4826 * MAD, min_std_floor)`
+3. Score deviation:
+   - `z_robust = |y_t - m| / sigma_robust`
+
+Why this is used:
+
+- HTTPS counts and byte volumes are typically right-skewed and heavy-tailed,
+- mean/std-only scoring overreacts to bursts and underreacts after outliers,
+- `log1p + median/MAD` is more stable under non-Gaussian traffic.
 
 Thresholds:
 
-- `hourly_zscore_threshold` for hourly features
-- `flow_zscore_threshold` for flow bytes to known servers
+- empirical thresholds calibrated from benign training when `training_hours > 0`,
+- otherwise defaults (`hourly_zscore_threshold`, `flow_zscore_threshold`).
+
+Calibration rule:
+
+- per signal, collect robust z-scores on confirmed benign training data,
+- set threshold to high benign quantile (`empirical_threshold_quantile`, default 0.995),
+- fallback to defaults if training data is insufficient.
 
 ## Adaptation states
 
-After each hour closes, the module chooses model update mode:
+After each hour closes, the module chooses model update mode.
+
+Update event semantics:
+
+- `training_fit`:
+  initial benign baseline fit while `trained_hours < training_hours`;
+  uses training fit method (Welford-style), not EWMA alpha.
+- `baseline_update`:
+  normal post-training adaptation; uses EWMA with `baseline_alpha`.
+  In ADWIN mode, this is used when ADWIN does not signal drift.
+- `drift_update`:
+  post-training drift adaptation; uses EWMA with `drift_alpha`.
+  In ADWIN mode, this is used only after ADWIN drift signal and small/drift-like classification.
+- `suspicious_update`:
+  post-training conservative adaptation; uses EWMA with `suspicious_alpha`.
+  In ADWIN mode, this is used only after ADWIN drift signal and suspicious classification.
+
+When `use_adwin_drift=false`:
 
 1. `training_fit`  
    During benign training: Welford fit (no EWMA alpha).
@@ -92,14 +138,14 @@ After each hour closes, the module chooses model update mode:
 
 For normal non-anomalous periods outside training, per-feature EWMA uses `baseline_alpha`.
 
-### Optional ADWIN drift trigger
+### ADWIN drift trigger (`use_adwin_drift=true`)
 
-If `use_adwin_drift=true` and `river` is installed, ADWIN is used as drift trigger in both paths:
+If `use_adwin_drift=true` and `river` is installed, ADWIN is the only drift trigger in both paths:
 
-- **Hourly path**: ADWIN receives `hourly_adwin_score` (sum of hourly feature z-scores).
-- **Flow path**: ADWIN receives `flow_score` (sum of reason z-scores, novelty reasons mapped to a small fixed score).
+- **Hourly path**: ADWIN receives each raw hourly feature stream.
+- **Flow path**: ADWIN receives each raw per-flow signal stream.
 - ADWIN drift detected -> classify as `drift_update` or `suspicious_update` using existing thresholds.
-- No ADWIN drift -> use `baseline_update` (`baseline_alpha`).
+- No ADWIN drift -> use `baseline_update` (`baseline_alpha`), even if anomalies exist.
 - During benign training, ADWIN is still warmed with benign scores to reduce cold-start noise after training.
 
 Why raw signals:
@@ -112,6 +158,13 @@ Performance note:
 - hourly ADWIN cost scales with hourly feature count,
 - flow ADWIN cost scales with per-flow signal count,
 - both are constant-time scalar updates and usually lightweight.
+
+Current tuned defaults for faster ADWIN reaction:
+
+- `adwin_delta: 0.01`
+- `adwin_clock: 1`
+- `adwin_grace_period: 5`
+- `adwin_min_window_length: 5`
 
 ## New server vs JA3 behavior
 
@@ -158,6 +211,8 @@ Section: `anomaly_detection_https` in `config/slips.yaml`.
 Main keys:
 
 - `training_hours`
+- `training_fit_method`
+- `training_alpha`
 - `hourly_zscore_threshold`
 - `flow_zscore_threshold`
 - `adaptation_score_threshold`
@@ -172,13 +227,24 @@ Main keys:
 - `adwin_clock`
 - `adwin_grace_period`
 - `adwin_min_window_length`
+- `empirical_threshold_quantile`
 - `log_verbosity`
 
-Default: `use_adwin_drift=true`.
+Defaults (from parser/config):
+
+- `training_alpha: 1.0`
+- `training_fit_method: welford`
+- `use_adwin_drift: true`
+- `adwin_delta: 0.01`
+- `adwin_clock: 1`
+- `adwin_grace_period: 5`
+- `adwin_min_window_length: 5`
 
 Reference:
 
 - River ADWIN: https://riverml.xyz/latest/api/drift/ADWIN/
+- Data transformations for skew/heavy tails: https://otexts.com/fpp3/transformations.html
+- Robust scale (MAD): https://en.wikipedia.org/wiki/Median_absolute_deviation
 
 ## Operational logs
 

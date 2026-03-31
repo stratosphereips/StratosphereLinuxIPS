@@ -367,12 +367,25 @@ def test_set_evidence(evidence_exists, whitelisted, expected):
 def test_update_max_threat_level(
     max_threat_level, cur_threat_level, expected_max
 ):
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    alert_handler = ModuleFactory().create_alert_handler_obj()
     profileid = "profile_192.168.1.1"
-    db.set_max_threat_level(profileid, max_threat_level)
+    alert_handler.r = MagicMock()
+    alert_handler.r.hget.return_value = max_threat_level
+    alert_handler.set_max_threat_level = MagicMock()
+
     assert (
-        db.update_max_threat_level(profileid, cur_threat_level) == expected_max
+        alert_handler.update_max_threat_level(profileid, cur_threat_level)
+        == expected_max
     )
+
+    old_level = utils.threat_levels[max_threat_level]
+    cur_level = utils.threat_levels[cur_threat_level]
+    if old_level < cur_level:
+        alert_handler.set_max_threat_level.assert_called_once_with(
+            profileid, cur_threat_level
+        )
+    else:
+        alert_handler.set_max_threat_level.assert_not_called()
 
 
 @pytest.mark.parametrize(
