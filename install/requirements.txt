@@ -1,5 +1,6 @@
 maxminddb==3.0.0
 setuptools<81
+river --only-binary=:all:
 numpy==1.26.4
 watchdog==5.0.0
 redis==5.2.1
