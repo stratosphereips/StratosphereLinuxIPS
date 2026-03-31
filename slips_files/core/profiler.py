@@ -390,6 +390,9 @@ class Profiler(ICore, IObservable):
             time.sleep(0.1)
 
         self.input_handler_obj = self.get_handler_obj(msg)
+        # put again that msg in queue to be processed by the profilers,
+        # we just checked it here to determine the input handler obj
+        self.profiler_queue.put(msg)
         if not self.input_handler_obj:
             self.print("Unsupported input type, exiting.")
             return 1
