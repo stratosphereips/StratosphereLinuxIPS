@@ -1,5 +1,7 @@
 maxminddb==3.0.0
 setuptools<81
+--only-binary=river
+river
 numpy==1.26.4
 watchdog==5.0.0
 redis==5.2.1
@@ -49,3 +51,4 @@ pytest-asyncio
 vulture
 detect-secrets
 git+https://github.com/SECEF/python-idmefv2.git
+river

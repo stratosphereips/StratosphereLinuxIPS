@@ -1,3 +1,11 @@
+1.1.19 (Mar 31st, 2026)
+
+* Add SSH bruteforce detection based on Zeek SSH, software, and notice logs.
+* Improve performance under high-throughput traffic with parallel evidence handling, profiler/input optimizations.
+* Fix issues while slips is shutting down.
+* Add optional performance plots and CSV metrics for latency, throughput, and resource usage.
+* Fix skipped first-flow processing and reduce shutdown race conditions on small files and PCAPs.
+
 1.1.18 (Mar 3rd, 2026)
 
 * Add the HTTPS anomaly detection module with adaptive baselines, confidence scoring, and detailed evidence reasons.

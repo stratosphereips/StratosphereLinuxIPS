@@ -725,6 +725,25 @@ class ConfigParser(object):
             training_hours = 24
         return max(0, training_hours)
 
+    def https_anomaly_training_alpha(self) -> float:
+        alpha = self.read_configuration(
+            "anomaly_detection_https", "training_alpha", 1.0
+        )
+        try:
+            alpha = float(alpha)
+        except (TypeError, ValueError):
+            alpha = 1.0
+        return min(max(alpha, 0.001), 1.0)
+
+    def https_anomaly_training_fit_method(self) -> str:
+        method = self.read_configuration(
+            "anomaly_detection_https", "training_fit_method", "welford"
+        )
+        method = str(method).strip().lower()
+        if method not in ("welford", "ewma"):
+            return "welford"
+        return method
+
     def https_anomaly_hourly_zscore_thr(self) -> float:
         threshold = self.read_configuration(
             "anomaly_detection_https", "hourly_zscore_threshold", 3.0
@@ -825,32 +844,32 @@ class ConfigParser(object):
 
     def https_anomaly_adwin_delta(self) -> float:
         delta = self.read_configuration(
-            "anomaly_detection_https", "adwin_delta", 0.002
+            "anomaly_detection_https", "adwin_delta", 0.01
         )
         try:
             delta = float(delta)
         except (TypeError, ValueError):
-            delta = 0.002
+            delta = 0.01
         return min(max(delta, 0.000001), 1.0)
 
     def https_anomaly_adwin_clock(self) -> int:
         clock = self.read_configuration(
-            "anomaly_detection_https", "adwin_clock", 32
+            "anomaly_detection_https", "adwin_clock", 1
         )
         try:
             clock = int(clock)
         except (TypeError, ValueError):
-            clock = 32
+            clock = 1
         return max(1, clock)
 
     def https_anomaly_adwin_grace_period(self) -> int:
         grace = self.read_configuration(
-            "anomaly_detection_https", "adwin_grace_period", 10
+            "anomaly_detection_https", "adwin_grace_period", 5
         )
         try:
             grace = int(grace)
         except (TypeError, ValueError):
-            grace = 10
+            grace = 5
         return max(1, grace)
 
     def https_anomaly_adwin_min_window_length(self) -> int:
@@ -862,6 +881,16 @@ class ConfigParser(object):
         except (TypeError, ValueError):
             min_win = 5
         return max(1, min_win)
+
+    def https_anomaly_empirical_threshold_quantile(self) -> float:
+        value = self.read_configuration(
+            "anomaly_detection_https", "empirical_threshold_quantile", 0.995
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 0.995
+        return min(max(value, 0.90), 0.9999)
 
     def https_anomaly_log_verbosity(self) -> int:
         verbosity = self.read_configuration(

@@ -166,10 +166,14 @@ def test_load_db_failure(mock_db):
 
 def test_check_redis_database(mock_db):
     redis_manager = ModuleFactory().create_redis_manager_obj()
+    redis_manager.main.args.output = "output_dir"
     mock_db = Mock()
     mock_db.rcache.ping.return_value = True
 
-    with patch("managers.redis_manager.RedisDB", return_value=mock_db):
+    with (
+        patch("managers.redis_manager.utils.is_port_in_use", return_value=False),
+        patch("managers.redis_manager.RedisDB", return_value=mock_db),
+    ):
         result = redis_manager.start_redis_cache_if_not_running()
 
     assert result is True
@@ -179,15 +183,37 @@ def test_check_redis_database(mock_db):
 
 def test_check_redis_database_failure(mock_db):
     redis_manager = ModuleFactory().create_redis_manager_obj()
+    redis_manager.main.args.output = "output_dir"
     mock_db = Mock()
     mock_db.rcache.ping.side_effect = redis.exceptions.ConnectionError
 
     with (
+        patch("managers.redis_manager.utils.is_port_in_use", return_value=False),
         patch("managers.redis_manager.RedisDB", return_value=mock_db),
         pytest.raises(redis.exceptions.ConnectionError),
     ):
         redis_manager.start_redis_cache_if_not_running()
         assert mock_db.ping.call_count == 3
+
+
+def test_check_redis_database_uses_running_cache(mock_db):
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    redis_manager.main.args.output = "output_dir"
+    mock_db = Mock()
+    mock_db.rcache.ping.return_value = True
+
+    with (
+        patch("managers.redis_manager.utils.is_port_in_use", return_value=True),
+        patch("managers.redis_manager.RedisDB", return_value=mock_db) as mock_redis,
+    ):
+        result = redis_manager.start_redis_cache_if_not_running()
+
+    assert result is True
+    mock_redis.assert_called_once_with(
+        "", 6379, "output_dir", False, flush_db=False
+    )
+    mock_db.rcache.ping.assert_called_once_with()
+    mock_db.rcache.close.assert_called_once_with()
 
 
 def test_get_random_redis_port_first_available(mock_db):

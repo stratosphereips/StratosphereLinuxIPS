@@ -110,6 +110,7 @@ class ProfilerWorker(IModule):
         except multiprocessing.queues.Empty:
             return None
         except Exception:
+            self.print_traceback()
             return None
 
     def convert_starttime_to_unix_ts(self, starttime) -> str:

@@ -354,14 +354,12 @@ class Timeline(IModule):
 
     def main(self):
         for _ in range(self._new_flow_msgs_batch_size):
-            msg = self.get_msg("new_flow")
-            if not msg:
-                break
-            msg = json.loads(msg["data"])
-            profileid = msg["profileid"]
-            twid = msg["twid"]
-            flow = self.classifier.convert_to_flow_obj(msg["flow"])
-            self.process_flow(profileid, twid, flow)
+            if msg := self.get_msg("new_flow"):
+                msg = json.loads(msg["data"])
+                profileid = msg["profileid"]
+                twid = msg["twid"]
+                flow = self.classifier.convert_to_flow_obj(msg["flow"])
+                self.process_flow(profileid, twid, flow)
 
     def _cache_get(self, cache: OrderedDict, key):
         if key in cache:
