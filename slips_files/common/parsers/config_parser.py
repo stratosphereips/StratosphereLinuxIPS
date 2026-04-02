@@ -490,9 +490,9 @@ class ConfigParser(object):
 
         return threshold
 
-    def ssh_bruteforcing_threshold(self):
+    def ssh_brute_force_detector_threshold(self):
         threshold = self.read_configuration(
-            "brute_forcing", "ssh_attempt_threshold", 9
+            "brute_force_detector", "ssh_attempt_threshold", 9
         )
         try:
             threshold = int(threshold)

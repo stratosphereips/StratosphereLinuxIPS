@@ -195,11 +195,11 @@ section for more info
 
 Slips alerts when 3+ invalid SMTP login attempts occurs within 10s
 
-## SSH brute_forcing
+## SSH brute_force_detector
 
-SSH brute_forcing is documented in the dedicated `brute_forcing` module page:
+SSH brute force detector is documented in the dedicated `brute_force_detector` module page:
 
-- [brute_forcing Module](brute_forcing.md)
+- [brute_force_detector Module](brute_force_detector.md)
 
 The `flow_alerts` module still detects successful SSH sessions, but SSH password guessing is no longer owned by `flow_alerts`.
 

@@ -555,7 +555,7 @@ class ProfilerWorker(IModule):
         """
         worker_number = self.name.split("_")[-1]
         self.print(
-            f"Started Profiler Worker {green(worker_number)} [PID"
+            f"Started {green('Profiler Worker')} {green(worker_number)} [PID"
             f" {green(os.getpid())}]"
         )
 

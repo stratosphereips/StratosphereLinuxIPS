@@ -226,7 +226,7 @@ flow_ml_detection:
   mode: test
 
 #############################
-brute_forcing:
+brute_force_detector:
   # Minimum number of SSH attempts from one source to one destination
   # before Slips considers it brute forcing.
   ssh_attempt_threshold: 9
