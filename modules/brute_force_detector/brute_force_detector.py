@@ -61,8 +61,8 @@ class SSHBruteforceCampaign:
     reported_bucket: int = -1
 
 
-class Bruteforcing(IModule):
-    name = "brute_forcing"
+class BruteforceDetector(IModule):
+    name = "brute_force_detector"
     description = (
         "Detect SSH brute forcing using ssh.log, software.log, and Zeek "
         "notices."
@@ -94,7 +94,7 @@ class Bruteforcing(IModule):
 
     def read_configuration(self):
         conf = ConfigParser()
-        self.ssh_attempt_threshold = conf.ssh_bruteforcing_threshold()
+        self.ssh_attempt_threshold = conf.ssh_brute_force_detector_threshold()
 
     @staticmethod
     def _campaign_key(
@@ -248,7 +248,7 @@ class Bruteforcing(IModule):
         target = campaign.daddr or "an SSH server"
         destination = f"{target} on {port_label}" if port_label else target
         description = (
-            f"SSH brute_forcing from {campaign.saddr} to {destination}. "
+            f"SSH brute force detector from {campaign.saddr} to {destination}. "
             f"Attempts observed: {campaign.attempts}."
         )
         if banner:
@@ -314,7 +314,7 @@ class Bruteforcing(IModule):
     def _set_notice_evidence(self, profileid: str, twid: str, flow):
         srcip = flow.saddr
         description = (
-            f"SSH brute_forcing. {flow.msg}. "
+            f"SSH brute force detector. {flow.msg}. "
             f"Confirmed by Zeek notice.log. Confidence: 1.0. by Zeek"
         )
         evidence = Evidence(
