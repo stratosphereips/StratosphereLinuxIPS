@@ -1,4 +1,4 @@
-# Flow Alerts Module
+# `flow_alerts` Module
 
 The module of flow alerts has several behavioral techniques to detect attacks by analyzing the content of each flow alone.
 
@@ -195,13 +195,13 @@ section for more info
 
 Slips alerts when 3+ invalid SMTP login attempts occurs within 10s
 
-## SSH Bruteforcing
+## SSH brute_forcing
 
-SSH bruteforcing is documented in the dedicated `Bruteforcing` module page:
+SSH brute_forcing is documented in the dedicated `brute_forcing` module page:
 
-- [Bruteforcing Module](bruteforcing.md)
+- [brute_forcing Module](brute_forcing.md)
 
-The `Flow Alerts` module still detects successful SSH sessions, but SSH password guessing is no longer owned by `Flow Alerts`.
+The `flow_alerts` module still detects successful SSH sessions, but SSH password guessing is no longer owned by `flow_alerts`.
 
 ## DGA
 

@@ -1,6 +1,6 @@
 # Data saved to Slips
 
-Slips database expects a dictionary of data. The data from this module (for a given IP) has the following format: 
+Slips database expects a dictionary of data. The data from this module (for a given IP) has the following format:
 
 ```json
 {
@@ -14,18 +14,18 @@ Slips database expects a dictionary of data. The data from this module (for a gi
 ```
 
 The `p2p4slips` field in the database will the report from the network. The report will have the IP address that is
-reported, the computed score and confidence, and an additional value with score of all the peers that gave the opinion. 
+reported, the computed score and confidence, and an additional value with score of all the peers that gave the opinion.
 
 # Communication between python and go parts of the implementation
 
 The core of each peer is implemented in python. The python code collects data, shares this data with other peers
 (report), asks other peers for data (request) etc. Python code doesn't communicate with other peers directly - it relies
 on the go part of the node to do that work. The two parts of the node exchange information and instructions using redis
-channels. 
+channels.
 
 ## The channel from Slips to Go `p2p_pygo`
 
-Slips sends data to go in json. The Json object has two fields: `message` and `recipient`. 
+Slips sends data to go in json. The Json object has two fields: `message` and `recipient`.
 
 ```json
 {"message": "ewogICAgImtleV90eXBlIjogImlwIiwKICAgICJrZXkiOiAiMS4yLjMuNDAiLAogICAgImV........jYKfQ==", "recipient": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N"}
@@ -53,7 +53,7 @@ more reports at the same time.
 ```json
 {
   "message_type": "go_data",
-  "message_contents": 
+  "message_contents":
     {
       "reporter": "abcsakughroiauqrghaui",   // the peer that sent the data
       "report_time": 154900000,              // time of receiving the data

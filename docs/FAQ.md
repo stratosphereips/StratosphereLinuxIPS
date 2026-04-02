@@ -12,7 +12,7 @@ If the tensorflow version you're using isn't compatible with your architecture,
 you will get the "Illegal instruction" error and slips will terminate.
 
 To fix this you can disable the modules that use tensorflow by adding
-```rnn-cc-detection, flowmldetection``` to the ```disable``` key in ```config/slips.yaml```
+```rnn-cc-detection, flow_ml_detection``` to the ```disable``` key in ```config/slips.yaml```
 
 
 ## Docker time is not in sync with that of the host
