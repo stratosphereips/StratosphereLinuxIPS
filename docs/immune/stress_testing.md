@@ -51,10 +51,6 @@ The latency we're interested in here means "how long did Slips take to detect a 
 
 Please check [how Slips works](https://stratospherelinuxips.readthedocs.io/en/develop/immune/performance_evaluation.html#how-slips-works) for context on what profilers/input process are.
 
-All throughput and latency plots in this document were generated with
-`Debug.generate_performance_plots: true` in config/slips.yaml.
-That flag makes Slips record extra performance CSVs during the run and render
-the plots during shutdown.
 
 ## Baseline
 
