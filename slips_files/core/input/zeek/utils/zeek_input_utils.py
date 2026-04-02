@@ -28,8 +28,7 @@ class ZeekInputUtils:
         self.zeek_files = {}
         self.zeek_threads = []
         self.zeek_pids = []
-        self.dos_protector = DoSProtector(self.input.db)
-        self.skipping_flows_warning_printed = False
+        self.dos_protector = DoSProtector(self.input)
 
     def check_if_time_to_del_rotated_files(self):
         """
@@ -112,17 +111,6 @@ class ZeekInputUtils:
 
         return timestamp, nline
 
-    def print_skipping_flows_warning(self, flows_to_skip: int):
-        if self.skipping_flows_warning_printed:
-            return
-
-        if flows_to_skip:
-            self.input.print(
-                "Slips started skipping flows due to high "
-                "traffic for DoS protection."
-            )
-            self.skipping_flows_warning_printed = True
-
     def cache_nxt_line_in_file(self, filename: str, interface: str):
         """
         reads 1 line of the given file and stores in queue for sending to the profiler
@@ -142,10 +130,7 @@ class ZeekInputUtils:
         # We don't have any waiting line for this file, so proceed
         try:
             flows_to_skip_reading_if_under_heavy_load: int = (
-                self.dos_protector.get_number_of_flows_to_skip()
-            )
-            self.print_skipping_flows_warning(
-                flows_to_skip_reading_if_under_heavy_load
+                self.dos_protector.get_number_of_flows_to_skip_and_time_to_stop_sampling()
             )
 
             # skips flows
