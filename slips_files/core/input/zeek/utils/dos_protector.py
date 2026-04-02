@@ -58,8 +58,19 @@ class DoSProtector:
         input_flows_per_min = self._get_input_flows_per_min()
         should_skip_flows = input_flows_per_min > self.flows_per_min_threshold
 
-        if not should_skip_flows and self._is_now_sampling:
-            # slips was sampling and now stopped.
+        if self._is_now_sampling and input_flows_per_min == 0:
+            # this means we justtt stopped sampling, now we want slips to
+            # keep thinking thta it's in a sampling state until we get a
+            # input_flows_per_min = something, once we have a number we can
+            # decide whether to stop sampling or not, but until then we want to keep the sampling state
+            pass
+        elif (
+            not should_skip_flows
+            and self._is_now_sampling
+            and input_flows_per_min
+        ):
+            # slips was sampling and now stopped officially stopped,
+            # we have a input_flows_per_min that's less than the threshold.
             self._is_now_sampling = False
             self.input.print(
                 f"Throughput is back to normal. Input "
@@ -115,11 +126,19 @@ class DoSProtector:
             green_time_to_stop_sampling = green(
                 human_readable_time_to_stop_sampling
             )
-            # reaching here means slips decided again to start sampling flows
-            self.input.print(
-                f"Slips started skipping flows due to high "
-                f"traffic for DoS protection. "
-                f"Sampling ratio: {sr} flows. "
-                f"Time to stop sampling: {green_time_to_stop_sampling} "
-            )
+            if self._is_now_sampling:
+                # slips decided to extend the sampling period
+                self.input.print(
+                    f"Slips is still under high "
+                    f"traffic. The time to stop sampling has been extended to "
+                    f"{green_time_to_stop_sampling} "
+                )
+            else:
+                # reaching here means slips decided again to start sampling flows
+                self.input.print(
+                    f"Slips started skipping flows due to high "
+                    f"traffic for DoS protection. "
+                    f"Sampling ratio: {sr} flows. "
+                    f"Time to stop sampling: {green_time_to_stop_sampling} "
+                )
             self._is_now_sampling = True
