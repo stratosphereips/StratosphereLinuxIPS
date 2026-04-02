@@ -127,10 +127,8 @@ class IrisModule(IModule):
 
         self.print(f"Running Iris using command: {command_str}")
 
-        log_dir = os.path.join(self.output_dir, "iris")
-        os.makedirs(log_dir, exist_ok=True)
         # Open the log file
-        self.log_file_path = os.path.join(log_dir, "iris_logs.txt")
+        self.log_file_path = self.get_output_path("iris_logs.txt")
         self.log_file = open(self.log_file_path, "w")
         self.log_file.write(f"Running Iris using command: {command_str}")
 

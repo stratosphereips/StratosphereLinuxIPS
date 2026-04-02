@@ -5,8 +5,11 @@ An interface for modules that export evidence somewhere, whether to slack,
 warden etc.
 """
 
+import os
+
 from abc import ABC, abstractmethod
 
+from slips_files.common.output_paths import get_output_sqlite_path
 from slips_files.common.printer import Printer
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.output import Output
@@ -20,6 +23,30 @@ class IExporter(ABC):
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
+
+    def get_output_path(
+        self, *relative_path_parts: str, module_name: str | None = None
+    ) -> str:
+        output_dir = (
+            getattr(self.db, "output_dir", None) or self.db.get_output_dir()
+        )
+        if isinstance(output_dir, bytes):
+            output_dir = output_dir.decode("utf-8")
+        if not output_dir:
+            output_dir = "."
+        module_output_dir = os.path.join(output_dir, module_name or self.name)
+        os.makedirs(module_output_dir, exist_ok=True)
+        return os.path.join(module_output_dir, *relative_path_parts)
+
+    def get_database_path(self, filename: str) -> str:
+        output_dir = (
+            getattr(self.db, "output_dir", None) or self.db.get_output_dir()
+        )
+        if isinstance(output_dir, bytes):
+            output_dir = output_dir.decode("utf-8")
+        if not output_dir:
+            output_dir = "."
+        return get_output_sqlite_path(output_dir, filename)
 
     @property
     @abstractmethod

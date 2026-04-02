@@ -137,10 +137,8 @@ class Trust(IModule):
 
     def _init_log_files(self):
         # should be called after reading configs
-        self.pigeon_logfile_raw = os.path.join(self.output_dir, "p2p.log")
-        self.p2p_reports_logfile = os.path.join(
-            self.output_dir, "p2p_reports.log"
-        )
+        self.pigeon_logfile_raw = self.get_output_path("p2p.log")
+        self.p2p_reports_logfile = self.get_output_path("p2p_reports.log")
         if self.create_p2p_logfile:
             self.setup_pigeon_logfile_rotation()
 
