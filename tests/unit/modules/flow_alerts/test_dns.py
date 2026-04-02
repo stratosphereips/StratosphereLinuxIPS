@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-"""Unit test for modules/flowalerts/dns.py"""
+"""Unit test for modules/flow_alerts/dns.py"""
 
 from dataclasses import asdict
 

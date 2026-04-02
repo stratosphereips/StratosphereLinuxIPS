@@ -1,4 +1,4 @@
-CESNET:
+cesnet:
   configuration_file: config/warden.conf
   receive_alerts: false
   receive_delay: 86400
@@ -36,18 +36,18 @@ exporting_alerts:
   taxii_password: admin
   taxii_username: admin
   use_https: false
-flowalerts:
+flow_alerts:
   data_exfiltration_threshold: 500
   entropy_threshold: 5
   long_connection_threshold: 1500
   pastebin_download_threshold: 700
   ssh_succesful_detection_threshold: 4290
-flowmldetection:
+flow_ml_detection:
   mode: test
 global_p2p:
   bootstrapping_modules:
-  - fidesModule
-  - irisModule
+  - fides
+  - iris
   bootstrapping_node: false
   iris_conf: config/iris_config.yaml
   use_global_p2p: true

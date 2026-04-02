@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-"""Unit test for modules/flowalerts/conn.py"""
+"""Unit test for modules/flow_alerts/conn.py"""
 
 from slips_files.core.flows.zeek import Conn
 from tests.module_factory import ModuleFactory
@@ -163,7 +163,7 @@ def test_check_unknown_port(
     conn.db.is_ftp_port.return_value = mock_is_ftp_port
 
     port_belongs_mock = mocker.patch(
-        "modules.flowalerts.conn.Conn.port_belongs_to_an_org"
+        "modules.flow_alerts.conn.Conn.port_belongs_to_an_org"
     )
     port_belongs_mock.return_value = mock_port_belongs_to_an_org
 
@@ -352,7 +352,7 @@ def test_check_multiple_reconnection_attempts(
     """
     conn = ModuleFactory().create_conn_analyzer_obj()
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence."
+        "modules.flow_alerts.set_evidence."
         "SetEvidenceHelper.multiple_reconnection_attempts"
     )
     conn.db.get_reconnections_for_tw.return_value = {}
@@ -466,7 +466,7 @@ def test_check_data_upload(
     conn = ModuleFactory().create_conn_analyzer_obj()
     conn.is_ignored_ip_data_upload = Mock(return_value=ignored_ip)
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidenceHelper.data_exfiltration"
+        "modules.flow_alerts.set_evidence.SetEvidenceHelper.data_exfiltration"
     )
     conn.gateway = "192.168.1.1"
     flow = Conn(

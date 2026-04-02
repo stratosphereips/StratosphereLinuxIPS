@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-"""Unit test for modules/flowalerts/ssh.py"""
+"""Unit test for modules/flow_alerts/ssh.py"""
 
 from dataclasses import asdict
 
@@ -50,10 +50,10 @@ async def test_check_successful_ssh(
     mocker.patch("asyncio.sleep", return_value=get_mock_coro(None))
 
     mock_set_evidence_ssh_successful_by_zeek = mocker.patch(
-        "modules.flowalerts.ssh.SSH.set_evidence_ssh_successful_by_zeek"
+        "modules.flow_alerts.ssh.SSH.set_evidence_ssh_successful_by_zeek"
     )
     mock_detect_slips = mocker.patch(
-        "modules.flowalerts.ssh.SSH.detect_successful_ssh_by_slips"
+        "modules.flow_alerts.ssh.SSH.detect_successful_ssh_by_slips"
     )
     flow = SSH(
         starttime="1726655400.0",
@@ -85,7 +85,7 @@ async def test_check_successful_ssh(
     assert mock_detect_slips.called == expected_called_slips
 
 
-@patch("modules.flowalerts.ssh.ConfigParser")
+@patch("modules.flow_alerts.ssh.ConfigParser")
 def test_read_configuration(mock_config_parser):
     mock_parser = mock_config_parser.return_value
     mock_parser.ssh_succesful_detection_threshold.return_value = 12345

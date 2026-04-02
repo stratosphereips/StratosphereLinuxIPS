@@ -127,8 +127,8 @@ def test_messaging(
 
     # this will be used for the extraction of the connection string form the
     # logs of iris running under the main Slips
-    log_file_first_iris = output_dir / "iris/iris_logs.txt"
-    log_file_second_iris = output_dir_peer / "iris/iris_logs.txt"
+    log_file_first_iris = output_dir / "Iris/iris_logs.txt"
+    log_file_second_iris = output_dir_peer / "Iris/iris_logs.txt"
 
     # generate config of first peer
     slips_iris_main_config_file = (
@@ -297,7 +297,7 @@ def test_messaging(
     print("Deleting the output directories")
     shutil.rmtree(output_dir)
     shutil.rmtree(output_dir_peer)
-    os.remove("modules/irisModule/second.priv")
+    os.remove("modules/iris/second.priv")
     modify_yaml_config(
         input_path="config/iris_config.yaml",
         output_dir=os.path.dirname(iris_peer_config_file),

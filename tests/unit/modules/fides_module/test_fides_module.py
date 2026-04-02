@@ -1,5 +1,5 @@
 """
-Unit tests for modules/fidesModule/fidesModule.py
+Unit tests for modules/fides/fides.py
 
 The sqlite database used by and implemented in FidesModule has its own unit
 tests. You may find them here: .test_fides_sqlite_db.py
@@ -15,7 +15,9 @@ from modules.http_analyzer.http_analyzer import utils
 @pytest.fixture
 def cleanup_database():
     # name of the database created by Fides
-    db_name = "fides_p2p_db.sqlite"
+    db_name = os.path.join(
+        "dummy_output_dir", "databases", "fides_p2p_db.sqlite"
+    )
 
     yield  # Let the test run
 

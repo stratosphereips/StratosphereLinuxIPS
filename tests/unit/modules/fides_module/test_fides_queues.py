@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock
 from threading import Thread
-from modules.fidesModule.messaging.redis_simplex_queue import (
+from modules.fides_module.messaging.redis_simplex_queue import (
     RedisSimplexQueue,
     RedisDuplexQueue,
 )

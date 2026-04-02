@@ -60,6 +60,11 @@ def test_https_anomaly_module_is_instantiable_and_subscribes_to_new_ssl(
         )
 
     assert isinstance(module, AnomalyDetectionHTTPS)
+    assert module.output_dir == str(tmp_path / "anomaly_detection_https")
+    assert module.parent_output_dir == str(tmp_path)
+    assert module.operational_log_path == str(
+        tmp_path / "anomaly_detection_https" / "anomaly_detection_https.log"
+    )
 
     module.subscribe_to_channels()
 

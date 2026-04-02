@@ -101,33 +101,33 @@ def test_software_banner_increases_bruteforcing_confidence():
 
 
 def test_bruteforcing_uses_sparse_bucketed_reporting():
-    bruteforcing = ModuleFactory().create_bruteforcing_obj()
-    bruteforcing.db.get_port_info.return_value = "SSH"
+    brute_forcing = ModuleFactory().create_bruteforcing_obj()
+    brute_forcing.db.get_port_info.return_value = "SSH"
 
     for attempt in range(1, 25):
-        bruteforcing._handle_ssh(
+        brute_forcing._handle_ssh(
             PROFILEID,
             TWID,
             make_ssh_flow(uid=f"uid-{attempt}"),
         )
 
-    assert bruteforcing.db.set_evidence.call_count == 5
+    assert brute_forcing.db.set_evidence.call_count == 5
     observed_attempt_counts = [
         len(call_args[0][0].uid)
-        for call_args in bruteforcing.db.set_evidence.call_args_list
+        for call_args in brute_forcing.db.set_evidence.call_args_list
     ]
     assert observed_attempt_counts == [9, 10, 12, 16, 24]
 
 
 def test_confidence_reaches_full_at_30_attempts():
-    bruteforcing = ModuleFactory().create_bruteforcing_obj()
-    threshold_confidence = bruteforcing._calculate_confidence(
-        bruteforcing.ssh_attempt_threshold,
+    brute_forcing = ModuleFactory().create_bruteforcing_obj()
+    threshold_confidence = brute_forcing._calculate_confidence(
+        brute_forcing.ssh_attempt_threshold,
         "SSH-2.0-OpenSSH_9.6p1",
         "ssh.log",
     )
-    full_confidence = bruteforcing._calculate_confidence(
-        bruteforcing.ssh_full_confidence_attempts,
+    full_confidence = brute_forcing._calculate_confidence(
+        brute_forcing.ssh_full_confidence_attempts,
         "SSH-2.0-OpenSSH_9.6p1",
         "ssh.log",
     )
@@ -135,34 +135,34 @@ def test_confidence_reaches_full_at_30_attempts():
     assert threshold_confidence < 1.0
     assert full_confidence == 1.0
 
-    evidence = drive_threshold(bruteforcing)
+    evidence = drive_threshold(brute_forcing)
     assert evidence.threat_level == ThreatLevel.MEDIUM
 
 
 def test_notice_confirmation_emits_zeek_evidence_and_confirms_future_alerts():
-    bruteforcing = ModuleFactory().create_bruteforcing_obj()
-    drive_threshold(bruteforcing)
-    bruteforcing.db.set_evidence.reset_mock()
+    brute_forcing = ModuleFactory().create_bruteforcing_obj()
+    drive_threshold(brute_forcing)
+    brute_forcing.db.set_evidence.reset_mock()
 
-    bruteforcing._handle_notice(PROFILEID, TWID, make_notice_flow())
-    zeek_evidence = bruteforcing.db.set_evidence.call_args[0][0]
+    brute_forcing._handle_notice(PROFILEID, TWID, make_notice_flow())
+    zeek_evidence = brute_forcing.db.set_evidence.call_args[0][0]
     assert zeek_evidence.confidence == 1.0
     assert zeek_evidence.threat_level == ThreatLevel.MEDIUM
     assert "Confirmed by Zeek notice.log." in zeek_evidence.description
 
-    bruteforcing.db.set_evidence.reset_mock()
-    bruteforcing._handle_ssh(PROFILEID, TWID, make_ssh_flow(uid="uid-10"))
-    confirmed_evidence = bruteforcing.db.set_evidence.call_args[0][0]
+    brute_forcing.db.set_evidence.reset_mock()
+    brute_forcing._handle_ssh(PROFILEID, TWID, make_ssh_flow(uid="uid-10"))
+    confirmed_evidence = brute_forcing.db.set_evidence.call_args[0][0]
     assert confirmed_evidence.confidence == 1.0
     assert "Confirmed by Zeek notice.log." in confirmed_evidence.description
 
 
 def test_repeated_ssh_sessions_without_auth_attempts_still_trigger_detection():
-    bruteforcing = ModuleFactory().create_bruteforcing_obj()
-    bruteforcing.db.get_port_info.return_value = "SSH"
+    brute_forcing = ModuleFactory().create_bruteforcing_obj()
+    brute_forcing.db.get_port_info.return_value = "SSH"
 
     for attempt in range(20):
-        bruteforcing._handle_ssh(
+        brute_forcing._handle_ssh(
             PROFILEID,
             TWID,
             make_ssh_flow(
@@ -172,4 +172,4 @@ def test_repeated_ssh_sessions_without_auth_attempts_still_trigger_detection():
             ),
         )
 
-    assert bruteforcing.db.set_evidence.call_count == 4
+    assert brute_forcing.db.set_evidence.call_count == 4

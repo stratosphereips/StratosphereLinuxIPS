@@ -36,15 +36,15 @@ def test_get_passive_dns(mock_get, ip, api_response, expected_result):
     mock_response.status_code = 200
     mock_response.text = json.dumps(api_response)
 
-    riskiq = ModuleFactory().create_riskiq_obj()
-    riskiq.riskiq_email = "test@example.com"
-    riskiq.riskiq_key = "testkey"
+    risk_iq = ModuleFactory().create_riskiq_obj()
+    risk_iq.riskiq_email = "test@example.com"
+    risk_iq.riskiq_key = "testkey"
 
-    result = riskiq.get_passive_dns(ip)
+    result = risk_iq.get_passive_dns(ip)
     assert result == expected_result
 
     mock_get.assert_called_once_with(
-        "https://api.riskiq.net/pt/v2/dns/passive",
+        "https://api.risk_iq.net/pt/v2/dns/passive",
         params={"query": ip},
         timeout=5,
         verify=False,
@@ -68,7 +68,7 @@ def test_pre_main(email, key, expected_result, mock_db):
     with patch(
         "slips_files.common.slips_utils.utils.drop_root_privs_permanently"
     ):
-        riskiq = ModuleFactory().create_riskiq_obj()
-        riskiq.riskiq_email = email
-        riskiq.riskiq_key = key
-        assert riskiq.pre_main() == expected_result
+        risk_iq = ModuleFactory().create_riskiq_obj()
+        risk_iq.riskiq_email = email
+        risk_iq.riskiq_key = key
+        assert risk_iq.pre_main() == expected_result

@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-"""Unit test for modules/flowalerts/tunnel.py"""
+"""Unit test for modules/flow_alerts/tunnel.py"""
 
 from dataclasses import asdict
 from unittest.mock import Mock
@@ -30,7 +30,7 @@ def test_check_gre_tunnel(mocker, tunnel_type, expected_call_count):
     """
     tunnel = ModuleFactory().create_tunnel_analyzer_obj()
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidenceHelper.gre_tunnel"
+        "modules.flow_alerts.set_evidence.SetEvidenceHelper.gre_tunnel"
     )
     flow = Tunnel(
         starttime="1726655400.0",
@@ -61,7 +61,7 @@ def test_check_gre_tunnel(mocker, tunnel_type, expected_call_count):
 def test_check_gre_scan(mocker, tunnel_type, expected_call_count):
     tunnel = ModuleFactory().create_tunnel_analyzer_obj()
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidenceHelper.gre_scan"
+        "modules.flow_alerts.set_evidence.SetEvidenceHelper.gre_scan"
     )
     flow = Tunnel(
         starttime="1726655400.0",

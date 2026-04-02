@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-"""Unit test for modules/flowalerts/ssl.py"""
+"""Unit test for modules/flow_alerts/ssl.py"""
 
 from dataclasses import asdict
 from unittest.mock import (
@@ -47,7 +47,7 @@ def test_check_self_signed_certs(
 ):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence."
+        "modules.flow_alerts.set_evidence."
         "SetEvidenceHelper.self_signed_certificates"
     )
     flow = SSL(
@@ -99,10 +99,10 @@ def test_detect_malicious_ja3(
 ):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence_ja3 = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidenceHelper.malicious_ja3"
+        "modules.flow_alerts.set_evidence.SetEvidenceHelper.malicious_ja3"
     )
     mock_set_evidence_ja3s = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidenceHelper.malicious_ja3s"
+        "modules.flow_alerts.set_evidence.SetEvidenceHelper.malicious_ja3s"
     )
 
     ssl.db.get_all_blacklisted_ja3.return_value = {
@@ -150,7 +150,7 @@ def test_detect_malicious_ja3(
 def test_detect_doh(mocker, is_doh, expected_calls):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence_doh = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidenceHelper.doh"
+        "modules.flow_alerts.set_evidence.SetEvidenceHelper.doh"
     )
     ssl.db.set_ip_info = Mock()
     flow = SSL(
@@ -204,7 +204,7 @@ async def test_check_pastebin_download(
     ssl.pastebin_downloads_threshold = 12000
     ssl.wait_for_new_flows_or_timeout = get_mock_coro(True)
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidenceHelper.pastebin_download"
+        "modules.flow_alerts.set_evidence.SetEvidenceHelper.pastebin_download"
     )
 
     flow = SSL(
@@ -260,7 +260,7 @@ async def test_check_pastebin_download(
 def test_detect_incompatible_cn(mocker, subject, expected_call_count):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence = mocker.patch(
-        "modules.flowalerts.set_evidence.SetEvidenceHelper.incompatible_cn"
+        "modules.flow_alerts.set_evidence.SetEvidenceHelper.incompatible_cn"
     )
 
     ssl.db.whitelist.organization_whitelist.is_ip_in_org.return_value = False

@@ -201,9 +201,9 @@ modules:
   # List of modules to ignore. By default we always ignore the template,
   # do not remove it from the list
   # Add the names of other modules that you want to disable
-  # (they all should be lowercase with no special characters). Example,
-  # threatintelligence, blocking, networkdiscovery, timeline, virustotal,
-  # rnnccdetection, flowmldetection, updatemanager
+  # (use module snake_case names). Example,
+  # threat_intelligence, blocking, network_discovery, timeline, virustotal,
+  # rnn_cc_detection, flow_ml_detection, update_manager
   disable: [template]
 
   # For each line in timeline file there is a timestamp.
@@ -212,10 +212,10 @@ modules:
   timeline_human_timestamp: true
 
 #############################
-flowmldetection:
+flow_ml_detection:
   # This is a module that uses machine learning for detection.
   # It can be used in train mode or test mode.
-  # The mode 'train' should be used to tell the flowmldetection module
+  # The mode 'train' should be used to tell the flow_ml_detection module
   # that the flows received are all for training.
   # A label should be provided in the [Parameters] section
   # mode : train
@@ -226,7 +226,7 @@ flowmldetection:
   mode: test
 
 #############################
-bruteforcing:
+brute_forcing:
   # Minimum number of SSH attempts from one source to one destination
   # before Slips considers it brute forcing.
   ssh_attempt_threshold: 9
@@ -299,7 +299,7 @@ virustotal:
 #############################
 threatintelligence:
 
-  # By default, slips starts without the TI files, and runs the Update Manager
+  # By default, slips starts without the TI files, and runs the update_manager
   # in the background. If this option is set to true, slips will not start
   # analyzing the flows until the update manager finished and all TI files are
   # loaded successfully.
@@ -325,7 +325,7 @@ threatintelligence:
   # The remote TI files will be temporaly stored in this directory
   download_path_for_remote_threat_intelligence: modules/threat_intelligence/remote_data_files/
 
-  # Update period of Threat Intelligence files. How often should Slips update
+  # Update period of threat_intelligence files. How often should Slips update
   # the IoCs.
   # The expected value is in seconds.
   # 1 day = 86400 seconds
@@ -389,8 +389,8 @@ whitelists:
   local_whitelist_path: config/whitelist.conf
 
 #############################
-flowalerts:
-  # For the flowalerts module
+flow_alerts:
+  # For the flow_alerts module
   # We need a thrshold to determine a long connection in seconds.
   # In Slips by default is 25 minutes
   long_connection_threshold: 1500
@@ -487,7 +487,7 @@ exporting_alerts:
   taxii_timeout: 10
 
 #############################
-CESNET:
+cesnet:
   # Slips also supports exporting and importing evidence in the IDEA format to/from
   # warden servers of CESNET organization in Czech Republic.
   send_alerts: false
@@ -597,7 +597,7 @@ global_p2p:
    use_global_p2p: False
    iris_conf: config/iris_config.yaml
    bootstrapping_node: False
-   bootstrapping_modules: ["fidesModule", "irisModule"]
+   bootstrapping_modules: ["fides", "iris"]
 
 #############################
 local_p2p:

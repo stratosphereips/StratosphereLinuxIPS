@@ -556,11 +556,11 @@ def test_respond_to_message_request_with_info():
     confidence = 0.8
 
     with patch(
-        "modules.p2ptrust.utils." "go_director.get_ip_info_from_slips",
+        "modules.p2p_trust.utils." "go_director.get_ip_info_from_slips",
         return_value=(score, confidence),
     ) as mock_get_info:
         with patch(
-            "modules.p2ptrust." "utils.go_director." "send_evaluation_to_go"
+            "modules.p2p_trust." "utils.go_director." "send_evaluation_to_go"
         ) as mock_send_evaluation:
             go_director.respond_to_message_request(key, reporter)
 
@@ -591,11 +591,11 @@ def test_respond_to_message_request_without_info():
     confidence = None
 
     with patch(
-        "modules.p2ptrust.utils." "go_director.get_ip_info_from_slips",
+        "modules.p2p_trust.utils." "go_director.get_ip_info_from_slips",
         return_value=(score, confidence),
     ) as mock_get_info:
         with patch(
-            "modules.p2ptrust.utils." "go_director.send_evaluation_to_go"
+            "modules.p2p_trust.utils." "go_director.send_evaluation_to_go"
         ) as mock_send_evaluation:
             go_director.respond_to_message_request(key, reporter)
 

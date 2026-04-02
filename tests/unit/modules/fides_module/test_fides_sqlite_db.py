@@ -1,17 +1,17 @@
 import pytest
 from unittest.mock import MagicMock
 
-from modules.fidesModule.model.peer import PeerInfo
-from modules.fidesModule.model.peer_trust_data import PeerTrustData
-from modules.fidesModule.model.threat_intelligence import (
+from modules.fides_module.model.peer import PeerInfo
+from modules.fides_module.model.peer_trust_data import PeerTrustData
+from modules.fides_module.model.threat_intelligence import (
     SlipsThreatIntelligence,
 )
-from modules.fidesModule.persistence.fides_sqlite_db import FidesSQLiteDB
+from modules.fides_module.persistence.fides_sqlite_db import FidesSQLiteDB
 
-from modules.fidesModule.model.recommendation_history import (
+from modules.fides_module.model.recommendation_history import (
     RecommendationHistoryRecord,
 )
-from modules.fidesModule.model.service_history import ServiceHistoryRecord
+from modules.fides_module.model.service_history import ServiceHistoryRecord
 
 
 @pytest.fixture

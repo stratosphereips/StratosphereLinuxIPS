@@ -1,11 +1,11 @@
 import pytest
 from unittest.mock import MagicMock
-from modules.fidesModule.messaging.network_bridge import NetworkBridge
-from modules.fidesModule.messaging.queue import Queue
-from modules.fidesModule.messaging.message_handler import MessageHandler
-from modules.fidesModule.messaging.network_bridge import NetworkMessage
-from modules.fidesModule.model.aliases import PeerId, Target
-from modules.fidesModule.model.threat_intelligence import ThreatIntelligence
+from modules.fides_module.messaging.network_bridge import NetworkBridge
+from modules.fides_module.messaging.queue import Queue
+from modules.fides_module.messaging.message_handler import MessageHandler
+from modules.fides_module.messaging.network_bridge import NetworkMessage
+from modules.fides_module.model.aliases import PeerId, Target
+from modules.fides_module.model.threat_intelligence import ThreatIntelligence
 
 
 @pytest.fixture
