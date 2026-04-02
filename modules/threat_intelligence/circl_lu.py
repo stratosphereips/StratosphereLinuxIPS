@@ -6,7 +6,7 @@ import requests
 
 
 class Circllu:
-    name = "Circl.lu"
+    name = "circl_lu"
     description = "Circl.lu lookups of IPs"
     authors = ["Alya Gomaa"]
 

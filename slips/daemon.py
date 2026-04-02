@@ -16,7 +16,7 @@ from slips_files.core.database.database_manager import DBManager
 
 class Daemon:
     description = "This module runs when slips is in daemonized mode"
-    name = "Daemon"
+    name = "daemon"
 
     def __init__(self, slips):
         # to use read_configurations defined in Main

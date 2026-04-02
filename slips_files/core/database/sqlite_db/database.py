@@ -22,7 +22,7 @@ class SQLiteDB(ISQLite):
     Creates a new db and connects to it if there's none in the given output_dir
     """
 
-    name = "SQLiteDB"
+    name = "sqlite_db"
 
     def __init__(self, logger: Output, output_dir: str, main_pid: int):
         self.printer = Printer(logger, self.name)

@@ -41,7 +41,7 @@ DEFAULT_EVIDENCE_HANDLER_WORKERS = 3
 
 # Evidence Process
 class EvidenceHandler(ICore):
-    name = "EvidenceHandler"
+    name = "evidence_handler"
 
     def init(self):
         self.read_configuration()
@@ -121,7 +121,7 @@ class EvidenceHandler(ICore):
                 pass
 
     def start_evidence_worker(self, worker_id: int = None):
-        worker_name = f"EvidenceHandlerWorker_Process_{worker_id}"
+        worker_name = f"evidence_handler_worker_process_{worker_id}"
         worker = EvidenceHandlerWorker(
             logger=self.logger,
             output_dir=self.output_dir,

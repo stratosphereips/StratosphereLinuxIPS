@@ -24,7 +24,7 @@ class Blocking(IModule):
     by default this module flushes all slipsBlocking chains before it starts"""
 
     # Name: short name of the module. Do not use spaces
-    name = "Blocking"
+    name = "blocking"
     description = "Block malicious IPs connecting to this device"
     authors = ["Sebastian Garcia, Alya Gomaa"]
 

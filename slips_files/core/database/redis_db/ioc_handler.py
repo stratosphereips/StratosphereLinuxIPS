@@ -39,7 +39,7 @@ class IoCHandler:
     is_trie_cached: bool
     twid_width: int
 
-    name = "DB"
+    name = "ioc_handler_db"
 
     def setup(self, *args, **kwargs):
         # used for faster domain lookups

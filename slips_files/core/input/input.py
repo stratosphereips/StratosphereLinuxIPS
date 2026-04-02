@@ -46,7 +46,7 @@ from slips_files.core.input.zeek.utils.zeek_input_utils import ZeekInputUtils
 class Input(ICore):
     """A class process to run the process of the flows"""
 
-    name = "Input"
+    name = "input"
 
     def init(
         self,

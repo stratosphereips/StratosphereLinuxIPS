@@ -44,7 +44,7 @@ from slips_files.core.structures.evidence import (
 
 class IPInfo(AsyncModule):
     # Name: short name of the module. Do not use spaces
-    name = "IP Info"
+    name = "ip_info"
     description = "Get different info about an IP/MAC address"
     authors = ["Alya Gomaa", "Sebastian Garcia"]
 

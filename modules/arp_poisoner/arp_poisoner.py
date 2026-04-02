@@ -25,7 +25,7 @@ def generate_fake_mac():
 
 
 class ARPPoisoner(IModule):
-    name = "ARP Poisoner"
+    name = "arp_poisoner"
     description = "ARP poisons attackers to isolate them from the network."
     authors = ["Alya Gomaa"]
 

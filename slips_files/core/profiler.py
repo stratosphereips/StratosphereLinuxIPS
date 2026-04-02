@@ -63,7 +63,7 @@ SEPARATORS = {
 class Profiler(ICore, IObservable):
     """A class to create the profiles for IPs"""
 
-    name = "Profiler"
+    name = "profiler"
 
     def init(
         self,
@@ -213,7 +213,7 @@ class Profiler(ICore, IObservable):
 
     def start_profiler_worker(self, worker_id: int = None):
         """starts A profiler worker for faster processing of the flows"""
-        worker_name = f"ProfilerWorker_Process_{worker_id}"
+        worker_name = f"profiler_worker_process_{worker_id}"
         worker = ProfilerWorker(
             logger=self.logger,
             output_dir=self.output_dir,
@@ -341,7 +341,7 @@ class Profiler(ICore, IObservable):
             self.print(
                 f"Warning: High throughput detected. Started "
                 f"additional worker: "
-                f"ProfilerWorker_{worker_id} to handle the flows."
+                f"profiler_worker_{worker_id} to handle the flows."
             )
 
             if self.last_worker_id == self.max_workers - 1:

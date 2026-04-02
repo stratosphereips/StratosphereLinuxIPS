@@ -8,7 +8,7 @@ from slips_files.core.output import Output
 
 
 class SymbolHandler:
-    name = "SymbolHandler"
+    name = "symbol_handler"
 
     def __init__(self, logger: Output, db):
         self.printer = Printer(logger, self.name)

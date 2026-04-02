@@ -33,7 +33,7 @@ class DBManager:
     handler in here.
     """
 
-    name = "DBManager"
+    name = "db_manager"
 
     def __init__(
         self,
@@ -66,9 +66,9 @@ class DBManager:
         if self.conf.use_local_p2p():
             # import this on demand because slips light version doesn't
             # include the P2P dir
-            from modules.p2ptrust.trust.trustdb import TrustDB
+            from modules.p2p_trust.trust.trustdb import TrustDB
 
-            self.trust_db_path: str = self.init_p2ptrust_db()
+            self.trust_db_path: str = self.init_p2p_trust_db()
             self.trust_db = TrustDB(
                 self.logger,
                 self.trust_db_path,
@@ -123,12 +123,12 @@ class DBManager:
                 f"restart Slips."
             )
 
-    def init_p2ptrust_db(self) -> str:
-        """Initializes and returns the path to a valid trustdb inside p2ptrust_runtime_dir."""
-        p2ptrust_runtime_dir = os.path.join(os.getcwd(), "p2ptrust_runtime/")
-        Path(p2ptrust_runtime_dir).mkdir(parents=True, exist_ok=True)
-        db_path = os.path.join(p2ptrust_runtime_dir, "trustdb.db")
-        self.p2ptrust_runtime_dir = p2ptrust_runtime_dir
+    def init_p2p_trust_db(self) -> str:
+        """Initializes and returns the path to a valid trustdb inside p2p_trust_runtime_dir."""
+        p2p_trust_runtime_dir = os.path.join(os.getcwd(), "p2p_trust_runtime/")
+        Path(p2p_trust_runtime_dir).mkdir(parents=True, exist_ok=True)
+        db_path = os.path.join(p2p_trust_runtime_dir, "trustdb.db")
+        self.p2p_trust_runtime_dir = p2p_trust_runtime_dir
 
         if os.path.exists(db_path):
             if self.is_db_malformed(db_path):
@@ -181,10 +181,10 @@ class DBManager:
         ):
             return False
 
-    def get_p2ptrust_dir(self) -> str:
-        return self.p2ptrust_runtime_dir
+    def get_p2p_trust_dir(self) -> str:
+        return self.p2p_trust_runtime_dir
 
-    def get_p2ptrust_db_path(self) -> str:
+    def get_p2p_trust_db_path(self) -> str:
         return self.trust_db_path
 
     def print(self, *args, **kwargs):

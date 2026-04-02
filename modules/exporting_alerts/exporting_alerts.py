@@ -19,7 +19,7 @@ class ExportingAlerts(IModule):
     variables to use this module
     """
 
-    name = "Exporting Alerts"
+    name = "exporting_alerts"
     description = "Export alerts to slack or STIX format"
     authors = ["Alya Gomaa"]
 
@@ -333,7 +333,7 @@ class ExportingAlerts(IModule):
 
         if not export_to_slack and not export_to_stix:
             self.print(
-                "Exporting Alerts module disabled (no export targets configured).",
+                "exporting_alerts module disabled (no export targets configured).",
                 0,
                 2,
             )

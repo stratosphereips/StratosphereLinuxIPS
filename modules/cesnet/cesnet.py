@@ -23,7 +23,7 @@ from slips_files.common.idea_format import (
 
 
 class CESNET(IModule):
-    name = "CESNET"
+    name = "cesnet"
     description = "Send and receive alerts from warden servers."
     authors = ["Alya Gomaa"]
 

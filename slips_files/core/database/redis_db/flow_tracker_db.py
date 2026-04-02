@@ -13,7 +13,7 @@ class FlowTracker:
     r: Any
     constants: Any
 
-    name = "FlowTrackerDB"
+    name = "flow_tracker_db"
     # channels that recv actual flows, not msgs that we need to pass between
     # modules.
     subscribers_of_channels_that_recv_flows = {

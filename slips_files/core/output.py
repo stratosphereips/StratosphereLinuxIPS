@@ -34,7 +34,7 @@ class Output(IObserver):
      or logs, it should use The printer that uses this process.
     """
 
-    name = "Output"
+    name = "output"
     slips_logfile_lock = Lock()
     errors_logfile_lock = Lock()
     cli_lock = Lock()

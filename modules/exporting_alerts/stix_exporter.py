@@ -142,7 +142,7 @@ class StixExporter(IExporter):
         Falls back to the current working directory if the DB does not
         have an output directory set yet.
         """
-        output_dir = self.get_output_path(module_name="Exporting Alerts")
+        output_dir = self.get_output_path(module_name="exporting_alerts")
         if not output_dir:
             output_dir = os.getcwd()
         output_dir = os.path.abspath(output_dir)

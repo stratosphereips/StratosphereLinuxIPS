@@ -204,7 +204,7 @@ class HostState:
 
 
 class AnomalyDetectionHTTPS(IModule):
-    name = "Anomaly Detection HTTPS"
+    name = "anomaly_detection_https"
     description = (
         "HTTPS anomaly detector with hourly adaptive baselines and "
         "flow-level checks."
