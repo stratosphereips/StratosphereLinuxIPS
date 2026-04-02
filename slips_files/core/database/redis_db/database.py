@@ -62,7 +62,6 @@ class RedisDB(
     # Stores instances per port
     instances = {}
     supported_channels = {
-        "tw_modified",
         "evidence_added",
         "new_ip",
         "new_flow",
@@ -193,6 +192,16 @@ class RedisDB(
         self._init_ttls()
         self.set_new_incoming_flows(True)
 
+    @classmethod
+    def _get_conf_file_path(cls, redis_port: Optional[int] = None) -> str:
+        """Return a per-run redis config path to avoid parallel overwrite."""
+        redis_port = redis_port or cls.redis_port
+        output_dir = os.fspath(cls.output_dir or "output")
+        os.makedirs(output_dir, exist_ok=True)
+        return os.path.join(
+            output_dir, f"redis-server-port-{redis_port}-{os.getpid()}.conf"
+        )
+
     def _init_ttls(self):
         """sets the default and extended ttls for redis keys based on
         whether we're analysing files or interface"""
@@ -232,6 +241,7 @@ class RedisDB(
         Update cls._conf_file (config/redis.conf) based on the params given
         to slips (e.g -s)
         """
+        cls._conf_file = cls._get_conf_file_path()
         shutil.copy(cls._conf_file_template, cls._conf_file)
 
         cls._options = {}
@@ -242,7 +252,7 @@ class RedisDB(
                     continue
                 if " " in line:
                     key, value = line.split(None, 1)
-                    cls._options[key] = value.strip('"')
+                    cls._options[key] = value
 
         # because slips may use different redis ports at the same time,
         # logs should be port specific
@@ -370,7 +380,7 @@ class RedisDB(
         # normally; if it fails, an exception will be thrown
 
         return redis.StrictRedis(
-            host="localhost",
+            host=LOCALHOST,
             port=port,
             db=db,
             charset="utf-8",
@@ -427,6 +437,8 @@ class RedisDB(
         # but we dont care because we checked it in main before starting
         # the DBManager()
         if process.returncode != 0:
+            if utils.is_port_in_use(cls.redis_port):
+                return True
             raise RuntimeError(
                 f"database._start_redis_server: "
                 f"Redis did not start properly.\n{stderr}\n{stdout}"
@@ -656,6 +668,13 @@ class RedisDB(
 
     def get_local_network(self, interface):
         return self.r.hget(self.constants.LOCAL_NETWORK, interface)
+
+    def get_total_recognized_localnets(self):
+        """
+        when slips is running using 2 interfaces, Slips recognizes 2 diff
+        localnets, so this function is expected to return 2
+        """
+        return self.r.hlen(self.constants.LOCAL_NETWORK)
 
     def get_used_port(self) -> int:
         return int(self.r.config_get(self.constants.REDIS_USED_PORT)["port"])
@@ -1488,6 +1507,39 @@ class RedisDB(
             module,
         )
 
+    def increment_flows_per_minute(self, module: str, minute_ts: int) -> int:
+        key = f"{self.constants.FLOWS_PER_MINUTE}:{module}"
+        return self.r.hincrby(key, minute_ts, 1)
+
+    def get_flows_per_minute(self, module: str, minute_ts: int) -> int:
+        key = f"{self.constants.FLOWS_PER_MINUTE}:{module}"
+        value = self.r.hget(key, minute_ts)
+        return int(value) if value else 0
+
+    def record_flows_per_minute_module(self, module: str):
+        self.r.sadd(self.constants.FLOWS_PER_MINUTE_MODULES, module)
+
+    def get_flows_per_minute_modules(self) -> List[str]:
+        return list(self.r.smembers(self.constants.FLOWS_PER_MINUTE_MODULES))
+
+    def get_last_logged_flows_per_minute(self) -> Optional[int]:
+        value = self.r.get(self.constants.FLOWS_PER_MINUTE_LAST_LOGGED)
+        return int(value) if value is not None else None
+
+    def set_last_logged_flows_per_minute(self, minute_ts: int):
+        self.r.set(self.constants.FLOWS_PER_MINUTE_LAST_LOGGED, minute_ts)
+
+    def try_acquire_flows_per_minute_log_lock(self, ttl_seconds: int = 10):
+        return self.r.set(
+            self.constants.FLOWS_PER_MINUTE_LOG_LOCK,
+            "1",
+            nx=True,
+            ex=ttl_seconds,
+        )
+
+    def release_flows_per_minute_log_lock(self):
+        self.r.delete(self.constants.FLOWS_PER_MINUTE_LOG_LOCK)
+
     def get_name_of_module_at(self, given_pid):
         """returns the name of the module that has the given pid"""
         for name, pid in self.get_pids().items():
@@ -1716,6 +1768,7 @@ class RedisDB(
             return False
 
         try:
+            RedisDB._conf_file = RedisDB._get_conf_file_path(32850)
             RedisDB._options.update(
                 {
                     "dbfilename": os.path.basename(backup_file),

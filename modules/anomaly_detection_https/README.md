@@ -112,6 +112,9 @@ Important:
 - "hours" here are based on **traffic timestamps** (`flow.starttime`), not computer wall-clock time.
 - this keeps behavior consistent across interfaces, live Zeek folders, pcaps, and historical Zeek logs.
 - if `training_hours` is set to `0`, detection starts immediately and baseline is learned online.
+- `training_alpha` controls training fit strength:
+  - training technique is selected by `training_fit_method` (`welford` or `ewma`),
+  - when `training_fit_method=ewma`, `training_alpha` controls adaptation strength.
 
 
 ### 4) Flow-level anomaly checks
@@ -129,8 +132,9 @@ JA3 client fingerprints are handled as an hourly statistical feature
 
 3. **Bytes-to-known-server anomaly**
    - only for known servers with enough baseline points,
-   - compute z-score from per-server EWMA mean/variance,
-   - alert if z-score >= `flow_zscore_threshold`.
+   - transform bytes with `log1p`,
+   - compute robust z-score (median/MAD based),
+   - alert if robust z-score >= effective threshold (empirical from benign training if available, otherwise default `flow_zscore_threshold`).
 
 Flow anomalies are logged as JSON lines in:
 
@@ -147,12 +151,13 @@ On hour rollover, the module computes hourly features:
 - `ja3_changes` = number of first-seen JA3 values (per server) in the hour
 - `known_server_avg_bytes` = `known_servers_total_bytes / known_servers_flow_count`
 
-Each feature is scored against its EWMA baseline:
+Each feature is scored against its baseline:
 
-- z-score = `abs(value - mean) / std`
-- with an adaptive robust standard-deviation floor learned from recent residuals.
+- transform with `log1p` for heavy-tail features,
+- robust z-score using median/MAD from recent value window,
+- adaptive robust standard-deviation floor still applied.
 
-If z-score >= `hourly_zscore_threshold`, that feature is anomalous.
+If robust z-score >= effective threshold, that feature is anomalous.
 
 Hourly anomalies are logged as JSON lines with:
 
@@ -165,6 +170,21 @@ Hourly anomalies are logged as JSON lines with:
 ## Adaptive retraining strategy
 
 Model updates are always online, but the training stage uses a different fit method.
+
+Update event semantics:
+
+- `training_fit`:
+  initial benign baseline fit while `trained_hours < training_hours`;
+  uses training fit method (Welford-style), not EWMA alpha.
+- `baseline_update`:
+  normal post-training adaptation; uses EWMA with `baseline_alpha`.
+  In ADWIN mode, this is used when ADWIN does not signal drift.
+- `drift_update`:
+  post-training drift adaptation; uses EWMA with `drift_alpha`.
+  In ADWIN mode, this is used only after ADWIN drift signal and small/drift-like classification.
+- `suspicious_update`:
+  post-training conservative adaptation; uses EWMA with `suspicious_alpha`.
+  In ADWIN mode, this is used only after ADWIN drift signal and suspicious classification.
 
 After each hour, one update state is selected:
 
@@ -220,10 +240,10 @@ Why:
 
 ### ADWIN drift trigger (when `use_adwin_drift=true`)
 
-When enabled and `river` is available, ADWIN is used as a drift trigger:
+When enabled and `river` is available, ADWIN is used as a drift trigger on raw signals:
 
-- **Hourly stream** receives `hourly_adwin_score` (sum of hourly feature z-scores).
-- **Per-flow stream** receives `flow_score` (sum of reason z-scores; novelty reasons map to a fixed small score).
+- **Hourly stream** receives each raw hourly feature separately (`ssl_flows`, `unique_servers`, `new_servers`, `ja3_changes`, `known_server_avg_bytes`).
+- **Per-flow stream** receives each raw per-flow signal separately (`new_server`, `new_ja3s`, `bytes_to_known_server` when available).
 - If ADWIN signals drift, update path is classified as `drift_update` or `suspicious_update` using existing thresholds.
 - If ADWIN does not signal drift, update path is `baseline_update` with `baseline_alpha`.
 - During benign training, ADWIN is still updated with benign scores to warm its windows and reduce post-training cold-start noise.
@@ -236,6 +256,25 @@ Performance impact:
 
 
 ## Mathematical model details
+
+Feature-specific modeling:
+
+- count-like hourly features (`ssl_flows`, `unique_servers`, `new_servers`, `ja3_changes`) are modeled as non-negative heavy-tail signals,
+- byte-like features (`known_server_avg_bytes`, `bytes_to_known_server`) are modeled as strongly heavy-tail signals,
+- novelty per-flow signals (`new_server`, `new_ja3s`) are modeled as binary Bernoulli-style raw streams for ADWIN drift triggering.
+
+Heavy-tail transform (`log1p`) used in this module:
+
+- definition: `y = log(1 + x)` for `x >= 0`,
+- where applied: before model fitting and scoring for count/bytes features,
+- why: compresses large spikes, reduces right-tail dominance, stabilizes scale and variance for robust online scoring,
+- when: always for the configured heavy-tail features (both during benign training and detection).
+
+Practical interpretation:
+
+- a jump from 10 to 20 is still visible after transform,
+- a jump from 10,000 to 20,000 is down-weighted relative to raw space,
+- this prevents one very large transfer from dominating the model state.
 
 Training stage (known benign):
 
@@ -259,15 +298,23 @@ Reason for this two-stage design:
 
 Scoring:
 
-- residual stream per model:
-  - `r_t = |x_t - mean_{t-1}|`
-- robust floor candidates from the recent residual window:
-  - `Q10(r)` (10th percentile of residuals)
-  - `sigma_MAD = 1.4826 * MAD(r)` where `MAD(r) = median(|r - median(r)|)`
-- floor update (smoothed):
-  - `min_std_floor_t = (1 - beta) * min_std_floor_{t-1} + beta * clip(max(Q10, sigma_MAD))`
-- z-score:
-  - `z = |x - mean| / sqrt(max(var, min_std_floor^2))`
+1. Transform the raw feature value:
+   - `y_t = log(1 + x_t)` for heavy-tail features, else `y_t = x_t`.
+2. Compute robust center/scale from recent transformed values:
+   - `m = median(y)`
+   - `MAD = median(|y - m|)`
+   - `sigma_robust = max(1.4826 * MAD, min_std_floor)`
+3. Robust z-score:
+   - `z_robust = |y_t - m| / sigma_robust`
+
+Residual-based floor maintenance (stability mechanism):
+
+- residual stream: `r_t = |y_t - mean_{t-1}|`
+- candidates from residual window:
+  - `Q10(r)` (10th percentile),
+  - `sigma_MAD(r) = 1.4826 * MAD(r)`
+- smoothed update:
+  - `min_std_floor_t = (1 - beta) * min_std_floor_{t-1} + beta * clip(max(Q10, sigma_MAD(r)))`
 
 Current floor defaults in code:
 
@@ -281,12 +328,25 @@ Operationally:
 - lower `alpha` -> slower adaptation, more memory of older behavior,
 - higher `alpha` -> faster adaptation, less stable anomaly boundary.
 
+Empirical threshold calibration (when `training_hours > 0`):
+
+- For each modeled signal, collect robust z-scores from confirmed benign training period.
+- Set threshold as a high quantile of benign robust z-score distribution:
+  - `threshold_signal = Quantile_q(z_robust_train)`, where `q = empirical_threshold_quantile`.
+- This creates feature-specific thresholds learned from local benign behavior.
+- If there is no benign training (or too few points), fallback thresholds are used:
+  - `hourly_zscore_threshold` for hourly features,
+  - `flow_zscore_threshold` for per-flow bytes feature.
+
 
 ## Learn more (algorithms and ideas used here)
 
 - Exponential smoothing / EWMA:
   - https://en.wikipedia.org/wiki/Exponential_smoothing
   - https://www.itl.nist.gov/div898/handbook/pmc/section4/pmc431.htm
+- Log transform for skewed/heavy-tail data:
+  - https://en.wikipedia.org/wiki/Data_transformation_(statistics)
+  - https://otexts.com/fpp3/transformations.html
 - Welford online variance:
   - https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
 - Z-score:
@@ -308,6 +368,8 @@ Configuration section:
 ```yaml
 anomaly_detection_https:
   training_hours: 24
+  training_fit_method: welford
+  training_alpha: 1.0
   hourly_zscore_threshold: 3.0
   flow_zscore_threshold: 3.5
   adaptation_score_threshold: 2.0
@@ -317,10 +379,11 @@ anomaly_detection_https:
   min_baseline_points: 6
   max_small_flow_anomalies: 1
   use_adwin_drift: true
-  adwin_delta: 0.002
-  adwin_clock: 32
-  adwin_grace_period: 10
+  adwin_delta: 0.01
+  adwin_clock: 1
+  adwin_grace_period: 5
   adwin_min_window_length: 5
+  empirical_threshold_quantile: 0.995
   ja3_min_variants_per_server: 3
 ```
 
@@ -329,6 +392,11 @@ Parameter meaning:
 - `training_hours`:
   number of per-host hours used for benign-only baseline.
   If set to `0`, baseline learning starts online from the first seen traffic.
+- `training_fit_method`:
+  training fit technique, `welford` or `ewma`.
+- `training_alpha`:
+  training fit strength.
+  used when `training_fit_method=ewma`.
 - `hourly_zscore_threshold`:
   trigger threshold for aggregated hourly features.
 - `flow_zscore_threshold`:
@@ -352,6 +420,9 @@ Parameter meaning:
   if disabled, pre-ADWIN threshold-only drift logic is used.
 - `adwin_delta`, `adwin_clock`, `adwin_grace_period`, `adwin_min_window_length`:
   ADWIN hyperparameters used when `use_adwin_drift=true`.
+- `empirical_threshold_quantile`:
+  percentile of benign-training robust z-scores used to calibrate per-feature thresholds.
+  active when `training_hours > 0`; fallback is default thresholds otherwise.
 - `ja3_min_variants_per_server`:
   fallback gate used only when `training_hours = 0`:
   `ja3_changes` is not scored as anomalous unless hourly value is at least

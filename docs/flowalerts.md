@@ -13,7 +13,7 @@ The detection techniques are:
 - Malicious JA3 hashes
 - Connections to port 0
 - Multiple reconnection attempts
-- Alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing
+- Alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans
 - DGA
 - Connection to multiple ports
 - Malicious SSL certificates
@@ -184,9 +184,7 @@ the same destination IP on the same destination port.
 ## Zeek alerts
 
 By default, Slips depends on Zeek for detecting different behaviours, for example
-Self-signed certs, invalid certs, port-scans, address scans, and password guessing.
-
-Password guessing is detected by zeek when 30 failed ssh logins happen over 30 mins.
+Self-signed certs, invalid certs, port-scans, and address scans.
 
 Some scans are also detected by Slips independently of Zeek, like ICMP sweeps and vertical/horizontal portscans.
 Check
@@ -197,11 +195,13 @@ section for more info
 
 Slips alerts when 3+ invalid SMTP login attempts occurs within 10s
 
-## Password Guessing
+## SSH Bruteforcing
 
-Password guessing is detected using 2 ethods in slips
-1. by Zeek engine. when 30 failed ssh logins happen over 30 mins.
-2. By slips. when 20 failed ssh logins happen over 1 tiemwindow.
+SSH bruteforcing is documented in the dedicated `Bruteforcing` module page:
+
+- [Bruteforcing Module](bruteforcing.md)
+
+The `Flow Alerts` module still detects successful SSH sessions, but SSH password guessing is no longer owned by `Flow Alerts`.
 
 ## DGA
 

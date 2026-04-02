@@ -22,6 +22,7 @@ from managers.profilers_manager import ProfilersManager
 from managers.redis_manager import RedisManager
 from managers.ui_manager import UIManager
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.performance_paths import get_performance_plots_dir
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green, yellow
@@ -428,8 +429,11 @@ class Main:
         processed = self.db.get_flow_analyzed_by_the_profiler_so_far()
         if not processed:
             return ""
+        try:
+            percentage = (processed / self.total_flows) * 100
+        except ZeroDivisionError:
+            return ""
 
-        percentage = (processed / self.total_flows) * 100
         # in very large pcaps, thousands of flows are nothing compared to
         # the tot flows, so if the percentage is int, slips would print 0%
         # for a while, so we take the first number after the floating point
@@ -693,6 +697,12 @@ class Main:
                 "Warning: Slips may generate a large amount "
                 "of traffic by querying TI sites."
             )
+
+            if self.conf.generate_performance_plots():
+                self.print(
+                    f"Slips will generate performance plots on shutdown in "
+                    f"{green(get_performance_plots_dir(self.args.output))}."
+                )
 
             while (not self.proc_man.should_stop_slips()) and (
                 not self.sigterm_received

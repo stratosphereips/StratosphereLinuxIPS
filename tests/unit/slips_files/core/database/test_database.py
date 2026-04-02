@@ -7,8 +7,10 @@ from unittest.mock import (
 
 import redis
 import json
+import os
 
 from slips_files.core.flows.zeek import Conn
+from slips_files.core.database.redis_db.database import RedisDB
 from tests.module_factory import ModuleFactory
 
 
@@ -55,7 +57,7 @@ def test_subscribe():
     # invalid channel
     assert db.subscribe("invalid_channel") is False
     # valid channel, shoud return a pubsub object
-    assert isinstance(db.subscribe("tw_modified"), redis.client.PubSub)
+    assert isinstance(db.subscribe("new_flow"), redis.client.PubSub)
 
 
 def test_profile_moddule_labels():
@@ -150,3 +152,31 @@ def test_get_the_other_ip_version():
     # the other ip version is ipv6
     other_ip = json.loads(db.get_the_other_ip_version(profileid))
     assert other_ip == ipv6
+
+
+def test_setup_config_file_uses_isolated_path_and_preserves_save(
+    tmp_path, monkeypatch
+):
+    template = tmp_path / "redis.conf.template"
+    template.write_text(
+        'daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8"
+    )
+
+    monkeypatch.setattr(RedisDB, "_conf_file_template", str(template))
+    monkeypatch.setattr(RedisDB, "output_dir", tmp_path)
+    monkeypatch.setattr(RedisDB, "redis_port", 6379)
+    monkeypatch.setattr(RedisDB, "args", Mock(save=False))
+
+    RedisDB._setup_config_file()
+
+    expected_conf = (
+        tmp_path / f"redis-server-port-{RedisDB.redis_port}-{os.getpid()}.conf"
+    )
+    assert RedisDB._conf_file == str(expected_conf)
+
+    conf_contents = expected_conf.read_text(encoding="utf-8").splitlines()
+    assert 'save ""' in conf_contents
+    assert (
+        f"logfile {tmp_path / f'redis-server-port-{RedisDB.redis_port}.log'}"
+        in conf_contents
+    )

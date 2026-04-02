@@ -37,7 +37,7 @@ def get_all_tw_with_ts(profileid):
         tw_date = ts_to_date(tw_ts)
         dict_tws[tw_n]["tw"] = tw_n
         dict_tws[tw_n]["name"] = (
-            "TW " + tw_n.split("timewindow")[1] + ":" + tw_date
+            "TW " + tw_n.split("timewindow")[1] + " [ " + tw_date + " ]"
         )
         dict_tws[tw_n]["blocked"] = False  # needed to color profiles
     return dict_tws
@@ -253,6 +253,7 @@ def set_timeline(
     """
     data = []
     profileid = f"profile_{ip}"
+
     if timeline := db.get_profiled_tw_timeline(profileid, timewindow):
         for flow in timeline:
             flow = json.loads(flow)

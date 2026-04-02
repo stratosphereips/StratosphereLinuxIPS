@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
+import time
 
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -126,12 +127,38 @@ class Input(ICore):
             "Telling Profiler to stop because " "no more input is arriving.",
             log_to_logfiles_only=True,
         )
-        number_of_profiler_workers: int = (
-            self.db.get_profiler_workers_started()
-        )
 
-        for _ in range(number_of_profiler_workers):
+        # ok this very terrible solution is to prevent the race condition
+        # that happens when the analyzed file is extremely small, that the
+        # input reads it, sends to the profiler queue, and reaches here,
+        # before the workers all start!! so we end up sending 0 stop msgs
+        # because 0 workers has started. this race condition causes slips
+        # to stay up forever waiting for stop msgs that will never be recvd
+        # in the profiler.
+        # this says " if the input took less than 3mins to reach this line,
+        # give slips extra 10s justt o make sure profilers are started
+        # before sending the stop msgs"
+        max_time_slips_can_take_to_start_all_processes = 60 * 3
+        if (
+            time.time()
+            < float(self.db.get_slips_start_time())
+            + max_time_slips_can_take_to_start_all_processes
+        ):
+            self.print(
+                "Giving Slips time to start all profilers.",
+                log_to_logfiles_only=True,
+            )
+            time.sleep(20)
+
+        started_workers: int = self.db.get_profiler_workers_started()
+        self.print(
+            f"Sending {started_workers} stop "
+            f"signals for the profiler workers.",
+            log_to_logfiles_only=True,
+        )
+        for _ in range(started_workers):
             self.profiler_queue.put("stop")
+
         # this has to be done after the sentinel is put in the queue,
         # or else we'll have a deadlock when slips is stopping
         if self.is_input_done_event is not None:
@@ -202,7 +229,7 @@ class Input(ICore):
             try:
                 self.active_handler.shutdown_gracefully()
             except Exception:
-                pass
+                self.print_traceback()
 
         return True
 
@@ -214,6 +241,9 @@ class Input(ICore):
         to_send = {"line": line, "input_type": self.input_type}
         # when the queue is full, it blocks forever until a free slot is
         # available
+        if self.conf.generate_performance_plots():
+            # record the flow for per-minute stats
+            self.db.record_flow_per_minute("input")
         self.profiler_queue.put(to_send, block=True, timeout=None)
 
     def main(self):

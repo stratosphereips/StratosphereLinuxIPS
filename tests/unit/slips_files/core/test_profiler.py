@@ -26,22 +26,20 @@ def test_mark_process_as_done_processing(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "msg_from_queue, handler_obj, should_stop_side_effect, expected_start_workers, expect_print_called",
+    "msg_from_queue, handler_obj, expected_start_workers",
     [
-        # Case 1: triggers all branches
-        ({"line": {"f1": "v1"}}, Mock(), [False, True], 5, False),
+        # Case 1: valid input starts the default profiler workers
+        ({"line": {"f1": "v1"}}, Mock(), 3),
         # Case 2: unsupported input type, no input_handler_obj
-        ({"line": {"f1": "v1"}}, None, [True], 0, True),
+        ({"line": {"f1": "v1"}}, None, 0),
         # Case 3: empty queue initially, then valid msg
-        ({"line": {"f1": "v1"}}, Mock(), [False, True], 5, False),
+        (None, Mock(), 3),
     ],
 )
 def test_main(
     msg_from_queue,
     handler_obj,
-    should_stop_side_effect,
     expected_start_workers,
-    expect_print_called,
 ):
     profiler = ModuleFactory().create_profiler_obj()
     profiler.last_worker_id = 0
@@ -52,9 +50,7 @@ def test_main(
     profiler.store_flows_read_per_second = Mock()
     profiler._update_lines_read_by_all_workers = Mock()
     profiler.print = Mock()
-
-    # Mock should_stop
-    profiler.should_stop = Mock(side_effect=should_stop_side_effect)
+    profiler.profiler_monitor_thread = Mock()
 
     # Handle empty queue case
     if msg_from_queue is None:
@@ -69,18 +65,23 @@ def test_main(
 
     profiler.profiler_queue = Mock()
     profiler.workers = []
-    with patch("time.sleep"):
+    with (
+        patch("time.sleep"),
+        patch("slips_files.core.profiler.utils.start_thread") as start_thread,
+    ):
         profiler.main()
 
     if handler_obj:
-        handler_obj.process_line.assert_called_once_with(
-            msg_from_queue["line"]
+        handler_obj.process_line.assert_called_once_with({"f1": "v1"})
+        start_thread.assert_called_once_with(
+            profiler.profiler_monitor_thread, profiler.db
         )
         assert (
             profiler.start_profiler_worker.call_count == expected_start_workers
         )
     else:
         profiler.print.assert_called_once()
+        start_thread.assert_not_called()
         assert profiler.start_profiler_worker.call_count == 0
 
 
@@ -91,10 +92,21 @@ def test_shutdown_gracefully(monkeypatch):
         Mock(received_lines=20),
         Mock(received_lines=3),
     ]
+    profiler.stop_profiler_workers = Mock()
+    profiler.aid_queue = Mock()
+    profiler.aid_manager = Mock()
+    profiler.profiler_queue = Mock()
+    profiler.profiler_monitor_thread = Mock()
     profiler.mark_self_as_done_processing = Mock()
-
-    # monkeypatch.setattr(profiler, "print", Mock())
     profiler.shutdown_gracefully()
+
+    profiler.stop_profiler_workers.assert_called_once()
+    profiler.aid_queue.put.assert_called_once_with("stop")
+    profiler.aid_manager.shutdown.assert_called_once()
+    profiler.profiler_queue.cancel_join_thread.assert_called_once()
+    profiler.profiler_queue.close.assert_called_once()
+    profiler.aid_queue.cancel_join_thread.assert_called_once()
+    profiler.aid_queue.close.assert_called_once()
     profiler.print.assert_called_with("Stopping.", log_to_logfiles_only=True)
     profiler.mark_self_as_done_processing.assert_called_once()
 

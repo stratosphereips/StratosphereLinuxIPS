@@ -1,27 +1,28 @@
+import csv
 import json
 import os
-from dataclasses import asdict
-import ipaddress
 import pprint
+import time
+import ipaddress
 import multiprocessing
+from dataclasses import asdict
 from typing import (
     List,
     Union,
     Optional,
-    Dict,
     Callable,
 )
 
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
-import netifaces
-import validators
 import gc
 
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.slips_utils import utils
+from slips_files.common.performance_paths import get_performance_csv_path
 from slips_files.common.style import green
 from slips_files.core.aid_manager import AIDManager
 from slips_files.core.helpers.flow_handler import FlowHandler
+from slips_files.core.helpers.localnet_handler import LocalnetHandler
 from slips_files.core.helpers.symbols_handler import SymbolHandler
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from slips_files.core.input_profilers.argus import Argus
@@ -37,9 +38,7 @@ class ProfilerWorker(IModule):
     def init(
         self,
         name,
-        localnet_cache,
         profiler_queue: multiprocessing.Queue,
-        handle_setting_local_net_lock: multiprocessing.Lock,
         input_handler: (
             ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         ),
@@ -58,10 +57,9 @@ class ProfilerWorker(IModule):
         # this is an instance of
         # ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         self.input_handler = input_handler
-        self.handle_setting_local_net_lock = handle_setting_local_net_lock
         self.read_configuration()
         self.received_lines = 0
-        self.localnet_cache = localnet_cache
+        self.localnet_handler = LocalnetHandler(self)
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.symbol = SymbolHandler(self.logger, self.db)
         # stores the MAC addresses of the gateway of each interface
@@ -71,6 +69,17 @@ class ProfilerWorker(IModule):
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
+        self.slips_start_time = self._get_slips_start_time()
+        self.latency_logfile = None
+        if self.generate_performance_plots:
+            self.latency_logfile = get_performance_csv_path(
+                self.output_dir,
+                f"{self._get_latency_filename_prefix()}_latency.csv",
+            )
+            self._initialize_latency_logfile()
+        self._modified_tws = {}
+        self._time_to_update_modified_tws = time.time()
+        self._modified_timewindows_update_period = 3  # in seconds
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_zeek_fields_line")
@@ -88,6 +97,9 @@ class ProfilerWorker(IModule):
         self.analysis_direction = self.conf.analysis_direction()
         self.label = self.conf.label()
         self.width = self.conf.get_tw_width_in_seconds()
+        self.generate_performance_plots = (
+            self.conf.generate_performance_plots() is True
+        )
 
     def get_msg_from_queue(self, q: multiprocessing.Queue):
         """
@@ -98,20 +110,8 @@ class ProfilerWorker(IModule):
         except multiprocessing.queues.Empty:
             return None
         except Exception:
+            self.print_traceback()
             return None
-
-    def get_private_client_ips(
-        self,
-    ) -> List[Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]]:
-        """
-        returns the private ips found in the client_ips param
-        in the config file
-        """
-        private_clients = []
-        for ip in self.client_ips:
-            if utils.is_private_ip(ip):
-                private_clients.append(ip)
-        return private_clients
 
     def convert_starttime_to_unix_ts(self, starttime) -> str:
         if utils.is_unix_ts(starttime):
@@ -138,6 +138,71 @@ class ProfilerWorker(IModule):
                 return
 
             self.db.set_input_metadata({"file_start": ts})
+
+    def _get_slips_start_time(self) -> float:
+        slips_start_time = self.db.get_slips_start_time()
+        try:
+            return float(slips_start_time)
+        except (TypeError, ValueError):
+            return time.time()
+
+    def _get_latency_filename_prefix(self) -> str:
+        if self.name.startswith("ProfilerWorker_Process_"):
+            worker_id = self.name.split("_")[-1]
+            return f"profiler_worker_{worker_id}"
+        return self.name.lower()
+
+    def _initialize_latency_logfile(self):
+        if not self.latency_logfile:
+            return
+
+        os.makedirs(os.path.dirname(self.latency_logfile), exist_ok=True)
+        if os.path.exists(self.latency_logfile):
+            return
+
+        with open(
+            self.latency_logfile, "w", newline="", encoding="utf-8"
+        ) as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                ["timestamp_now", "flow_uid", "latency_in_seconds"]
+            )
+
+    def _log_flow_latency(self, flow, flow_starttime) -> None:
+        if not self.generate_performance_plots or not self.latency_logfile:
+            return
+
+        try:
+            flow_start_ts = float(flow_starttime)
+        except (TypeError, ValueError):
+            return
+
+        now = time.time()
+        timestamp_now = now - self.slips_start_time
+        latency = now - flow_start_ts
+        flow_uid = getattr(flow, "uid", "")
+
+        with open(
+            self.latency_logfile, "a", newline="", encoding="utf-8"
+        ) as f:
+            writer = csv.writer(f)
+            writer.writerow([timestamp_now, flow_uid, int(latency)])
+
+    def _update_modified_tws_in_the_db(self, profileid: str, twid: str, flow):
+        """
+        to avoid updating the modified tws in the db for every single flow,
+        we batch the updates and do them every 3 seconds
+        """
+        self._modified_tws.update({f"{profileid}_{twid}": flow.starttime})
+        now = time.time()
+        if now > self._time_to_update_modified_tws:
+            self._time_to_update_modified_tws = (
+                now + self._modified_timewindows_update_period
+            )
+            # now that slips successfully parsed the flow,
+            # mark this profile as modified
+            self.db.mark_profile_tw_as_modified(self._modified_tws)
+            self._modified_tws = {}
 
     def store_features_going_in(self, profileid: str, twid: str, flow):
         """
@@ -167,10 +232,7 @@ class ProfilerWorker(IModule):
         self.db.add_ips(profileid, twid, flow, role)
         # Add the flow with all the fields interpreted to the sqlite db
         self.aid_manager.submit_aid_task(flow, profileid, twid, self.label)
-
-        # now that slips successfully parsed the flow,
-        # mark this profile as modified
-        self.db.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
+        self._update_modified_tws_in_the_db(profileid, twid, flow)
 
     def get_aid_and_store_flow_in_the_db(
         self,
@@ -246,7 +308,7 @@ class ProfilerWorker(IModule):
         )
         # now that slips successfully parsed the flow,
         # mark this profile as modified
-        self.db.mark_profile_tw_as_modified(profileid, twid, flow.starttime)
+        self._update_modified_tws_in_the_db(profileid, twid, flow)
         return True
 
     def get_rev_profile(self, flow):
@@ -266,80 +328,6 @@ class ProfilerWorker(IModule):
         # belongs.
         rev_twid: str = self.db.get_timewindow(flow.starttime, rev_profileid)
         return rev_profileid, rev_twid
-
-    def get_localnet_of_given_interface(self) -> Dict[str, str]:
-        """
-        returns the local network of the given interface only if slips is
-        running with -i
-        """
-        local_nets = {}
-        for interface in utils.get_all_interfaces(self.args):
-            addrs = netifaces.ifaddresses(interface).get(netifaces.AF_INET)
-            if not addrs:
-                return local_nets
-
-            for addr in addrs:
-                ip = addr.get("addr")
-                netmask = addr.get("netmask")
-                if ip and netmask:
-                    network = ipaddress.IPv4Network(
-                        f"{ip}/{netmask}", strict=False
-                    )
-                    local_nets[interface] = str(network)
-        return local_nets
-
-    def get_local_net_of_flow(self, flow) -> Dict[str, str]:
-        """
-        gets the local network from client_ip
-        param in the config file,
-        or by using the localnetwork of the first private
-        srcip seen in the traffic
-        """
-        local_net = {}
-        # Reaching this func means slips is running on a file. we either
-        # have a client ip or not
-        private_client_ips: List[
-            Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
-        ]
-        # get_private_client_ips from the config file
-        if private_client_ips := self.get_private_client_ips():
-            # does the client ip from the config already have the localnet?
-            for range_ in private_client_ips:
-                if isinstance(range_, IPv4Network) or isinstance(
-                    range_, IPv6Network
-                ):
-                    local_net["default"] = str(range_)
-                    return local_net
-
-        # For now the local network is only ipv4, but it
-        # could be ipv6 in the future. Todo.
-        ip: str = flow.saddr
-        if cidr := utils.get_cidr_of_private_ip(ip):
-            local_net["default"] = cidr
-            return local_net
-
-        return local_net
-
-    def handle_setting_local_net(self, flow):
-        """
-        stores the local network if possible
-        sets the self.localnet_cache dict
-        """
-        # this lock is to avoid running this func from the workers at the
-        # same time.
-        with self.handle_setting_local_net_lock:
-            if not self.should_set_localnet(flow):
-                return
-
-            if self.db.is_running_non_stop():
-                self._set_localnet_cache(
-                    self.get_localnet_of_given_interface()
-                )
-            else:
-                self._set_localnet_cache(self.get_local_net_of_flow(flow))
-
-            for interface, local_net in self._iter_localnet_cache_items():
-                self.db.set_local_network(local_net, interface)
 
     def is_gw_info_detected(self, info_type: str, interface: str) -> bool:
         """
@@ -466,72 +454,6 @@ class ProfilerWorker(IModule):
             or ip_obj.is_reserved
         )
 
-    def should_set_localnet(self, flow) -> bool:
-        """
-        returns true only if the saddr of the current flow is ipv4, private
-        and we don't have the local_net set already
-        """
-        if self.db.is_running_non_stop():
-            if self._localnet_cache_contains(flow.interface):
-                return False
-        elif self._localnet_cache_contains("default"):
-            # running on a file, impossible to get the interface
-            return False
-
-        if flow.saddr == "0.0.0.0":
-            return False
-
-        if self.get_private_client_ips():
-            # if we have private client ips, we're ready to set the
-            # localnetwork
-            return True
-
-        if not validators.ipv4(flow.saddr):
-            return False
-
-        if self.is_ignored_ip(flow.saddr):
-            return False
-
-        saddr_obj = ipaddress.ip_address(flow.saddr)
-        if not utils.is_private_ip(saddr_obj):
-            return False
-
-        return True
-
-    def _localnet_cache_contains(self, interface: str) -> bool:
-        """checks"""
-        cache = self.localnet_cache
-        if hasattr(cache, "contains"):
-            return cache.contains(interface)
-        try:
-            return interface in cache
-        except (AttributeError, TypeError):
-            self.localnet_cache = {}
-            return False
-
-    def _iter_localnet_cache_items(self):
-        cache = self.localnet_cache
-        if hasattr(cache, "items"):
-            try:
-                return list(cache.items())
-            except TypeError:
-                pass
-        if isinstance(cache, dict):
-            return list(cache.items())
-        self.localnet_cache = {}
-        return []
-
-    def _set_localnet_cache(self, new_cache: Dict[str, str]) -> None:
-        cache = self.localnet_cache
-        if hasattr(cache, "set"):
-            if cache.set(new_cache):
-                return
-        if isinstance(cache, dict):
-            cache.clear()
-            cache.update(new_cache)
-            return
-        self.localnet_cache = new_cache
-
     def _is_supported_flow_type(self, flow) -> bool:
         supported_types = (
             "ssh",
@@ -575,6 +497,9 @@ class ProfilerWorker(IModule):
                 # software and weird.log flows are allowed to not have a daddr
                 return False
 
+        flow_starttime = self.convert_starttime_to_unix_ts(flow.starttime)
+        self._log_flow_latency(flow, flow_starttime)
+
         self.get_gateway_info(flow)
         # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(flow):
@@ -586,13 +511,13 @@ class ProfilerWorker(IModule):
         # in this tw for this profile
         profileid = f"profile_{flow.saddr}"
         self.print(f"Storing data in the profile: {profileid}", 3, 0)
-        flow.starttime = self.convert_starttime_to_unix_ts(flow.starttime)
+        flow.starttime = flow_starttime
 
         # Create profiles for all ips we see
         self.db.add_profile(profileid, flow.starttime)
 
         # For this 'forward' profile, find the id in the
-        # database of the tw where the flow belongs.        n = time.time()
+        # database of the tw where the flow belongs.
         twid = self.db.get_timewindow(flow.starttime, profileid)
 
         self.store_features_going_out(flow, profileid, twid)
@@ -657,11 +582,6 @@ class ProfilerWorker(IModule):
 
             msg = self.get_msg_from_queue(self.profiler_queue)
             if not msg:
-                if (
-                    self.is_input_done_event is not None
-                    and self.is_input_done_event.is_set()
-                ):
-                    return 1
                 return
 
             if self.is_stop_msg(msg):
@@ -689,8 +609,11 @@ class ProfilerWorker(IModule):
                 return
 
             self.add_flow_to_profile(flow)
-            self.handle_setting_local_net(flow)
+            self.localnet_handler.handle_setting_local_net(flow)
             self.db.increment_processed_flows()
+
+            if self.generate_performance_plots:
+                self.db.record_flow_per_minute(self.name)
 
             # manually run garbage collection to avoid the latency
             # introduced by it when slips is given a huge number of flows

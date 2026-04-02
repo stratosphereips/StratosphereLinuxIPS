@@ -48,5 +48,4 @@ class Notice(IFlowalertsAnalyzer):
 
         self.check_vertical_portscan(twid, flow)
         self.check_horizontal_portscan(flow, profileid, twid)
-        self.check_password_guessing(twid, flow)
         return True
