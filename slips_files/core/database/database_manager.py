@@ -300,11 +300,11 @@ class DBManager:
     def get_input_file(self, *args, **kwargs):
         return self.rdb.get_input_file(*args, **kwargs)
 
-    def store_module_flows_per_second(self, *args, **kwargs):
-        return self.rdb.store_module_flows_per_second(*args, **kwargs)
+    def store_core_module_flows_per_second(self, *args, **kwargs):
+        return self.rdb.store_core_module_flows_per_second(*args, **kwargs)
 
-    def get_module_flows_per_second(self, *args, **kwargs):
-        return self.rdb.get_module_flows_per_second(*args, **kwargs)
+    def get_core_module_flows_per_second(self, *args, **kwargs):
+        return self.rdb.get_core_module_flows_per_second(*args, **kwargs)
 
     def record_flow_per_minute(self, module: str, now: Optional[float] = None):
         if not self.conf.generate_performance_plots():
