@@ -1,42 +1,136 @@
 # AGENTS.md
 
-## Project overview
-- Entry point: `slips.py` (starts the main process, spawns modules, runs in interactive/daemon modes).
-- Core framework code lives in `slips/`, `slips_files/`, and `managers/`.
-- Detection/analysis modules are in `modules/` (implement the `IModule` interface).
-- Configuration is in `config/` (main config: `config/slips.yaml`).
-- Tests live under `tests/` (unit + integration suites).
-- Documentation is in `docs/` (see `docs/contributing.md` for contribution workflow, branching, and PR expectations).
-- UIs/tools: `SlipsWeb/`, `webinterface/`, `webinterface.sh`, and `kalipso.sh`.
+## 1. Project Overview
 
-## Build and test commands
-- Run locally (no build step):
-  - `./slips.py -e 1 -f dataset/test7-malicious.pcap -o output_dir`
-- Build the Docker image (from `docs/installation.md`):
-  - `docker build --no-cache -t slips -f docker/Dockerfile .`
-  - If build networking fails: `docker build --network=host --no-cache -t slips -f docker/Dockerfile .`
-- Run the Docker image:
-  - `docker run -it --rm --net=host slips`
+- Entry point: `slips.py`
+  - Starts the main process
+  - Spawns modules
+  - Supports interactive and daemon modes
 
-## Code style guidelines
-- Python formatting is enforced via pre-commit:
-  - Black with `--line-length 79` (see `.pre-commit-config.yaml`).
-  - Ruff is used for linting and autofixes.
-- Keep docstrings at the top of files where present (pre-commit `check-docstring-first`).
-- Maintain clean whitespace (no trailing whitespace, final newline).
-- Follow existing module patterns (`IModule` in `slips_files/common/abstracts/module.py`).
+- Core code directories:
+  - `slips/`
+  - `slips_files/`
+  - `managers/`
 
-## Testing instructions
-- The canonical test runner is `tests/run_all_tests.sh` (runs unit tests then integration tests).
-- Equivalent manual sequence (from `tests/run_all_tests.sh`):
-  - `./slips.py -cc`
-  - `printf "0" | ./slips.py -k`
-  - `python3 -m pytest tests/ --ignore="tests/integration_tests" -n 7 -p no:warnings -vvvv -s`
-  - `python3 tests/destrctor.py`
-  - `./slips.py -cc`
-  - `printf "0" | ./slips.py -k`
-  - `python3 -m pytest -s tests/integration_tests/test_portscans.py -p no:warnings -vv`
-  - `python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv`
-  - `python3 -m pytest -s tests/integration_tests/test_config_files.py -p no:warnings -vv`
-  - `printf "0" | ./slips.py -k`
-  - `./slips.py -cc`
+- Detection modules:
+  - Located in `modules/`
+  - Must implement `IModule` from:
+    `slips_files/common/abstracts/module.py`
+
+- Configuration:
+  - Main file: `config/slips.yaml`
+
+- Tests:
+  - Located in `tests/`
+  - Includes unit and integration tests
+
+- Documentation:
+  - Located in `docs/`
+  - Contribution guide: `docs/contributing.md`
+
+- UI / tools:
+  - `SlipsWeb/`
+  - `webinterface/`
+  - `webinterface.sh`
+  - `kalipso.sh`
+
+- Repository root:
+  - All commands MUST be executed from `StratosphereLinuxIPS/`
+
+---
+
+## 2. Build and Run
+
+### to run slips locally
+./slips.py -e 1 -f dataset/test7-malicious.pcap -o output_dir
+
+### Build Docker image
+docker build --no-cache -t slips -f docker/Dockerfile .
+
+- If networking fails:
+
+docker build --network=host --no-cache -t slips -f docker/Dockerfile .
+
+### Run Docker container
+docker run -it --rm --net=host slips
+
+## 3. Code Style Rules
+
+These rules MUST be followed:
+
+- No trailing whitespace
+- File must end with a newline
+- Docstring must be the first statement in a file (if present)
+- Avoid using environment variables, use variables from slips/config.yaml instead.
+
+### Paths:
+- NEVER use absolute paths
+- ALWAYS use relative paths
+### Files:
+- If a non-debug file is created → MUST be added with git add
+### Documentation:
+If a feature is added → MUST update relevant docs in docs/
+### Functions:
+- Every new function MUST include a docstring
+Docstrings MUST include:
+- Short description
+- Parameters (if applicable)
+- Return value (if applicable)
+
+## 4. Testing
+- Canonical test runner
+tests/run_all_tests.sh
+## 5. Unit Test Update Workflow
+
+When instructed to "update unit tests", follow EXACTLY:
+
+Step 1 — Run tests
+python3 -m pytest tests/unit/ \
+  --ignore="tests/integration_tests" \
+  -n 7 -p no:warnings -vvvv -s
+
+Step 2 — Identify failures
+Collect ALL failing tests
+
+Step 3 — Fix tests
+Update failing tests ONE BY ONE
+Do NOT batch fixes
+
+Step 4 — Add missing tests for new files
+For every new source file in the branch:
+
+- Mirror its directory under tests/unit/
+
+- C/reate file:
+test_<filename>.py
+- Add unit tests for that file
+
+Step 5 — Add tests for new functions
+- Identify functions added in this branch (not in origin/develop)
+- Add unit tests for each new function
+
+Step 6 — Test structure rules
+- MUST use @pytest.mark.parametrize when applicable
+
+EACH test MUST:
+Start with object creation using module_factory
+
+Step 7 — Re-run tests
+Run the same pytest command again
+Ensure ALL tests pass
+
+Step 8 — Git tracking
+If new test files were created → run:
+git add <files>
+
+Step 9 — Failure fallback
+If tests are still failing and cannot be fixed:
+STOP
+Report the issue
+
+## 6. Custom Instructions
+ALSO apply rules from:
+private/AGENTS.md
+
+If conflicts occur:
+Prefer private/AGENTS.md
