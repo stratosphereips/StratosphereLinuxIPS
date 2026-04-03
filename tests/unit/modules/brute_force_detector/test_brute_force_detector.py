@@ -84,11 +84,11 @@ def drive_threshold(module, client_banner="SSH-2.0-OpenSSH_9.6p1"):
     return module.db.set_evidence.call_args[0][0]
 
 
-def test_software_banner_increases_bruteforcing_confidence():
-    plain_module = ModuleFactory().create_bruteforcing_obj()
+def test_software_banner_increases_brute_force_detector_confidence():
+    plain_module = ModuleFactory().create_brute_force_detector_obj()
     plain_evidence = drive_threshold(plain_module)
 
-    banner_module = ModuleFactory().create_bruteforcing_obj()
+    banner_module = ModuleFactory().create_brute_force_detector_obj()
     banner_module._handle_software(make_software_flow())
     banner_evidence = drive_threshold(
         banner_module, client_banner="SSH-2.0-libssh2_1.11.0"
@@ -100,34 +100,34 @@ def test_software_banner_increases_bruteforcing_confidence():
     assert banner_evidence.dst_port == 902
 
 
-def test_bruteforcing_uses_sparse_bucketed_reporting():
-    brute_forcing = ModuleFactory().create_bruteforcing_obj()
-    brute_forcing.db.get_port_info.return_value = "SSH"
+def test_brute_force_detector_uses_sparse_bucketed_reporting():
+    brute_force_detector = ModuleFactory().create_brute_force_detector_obj()
+    brute_force_detector.db.get_port_info.return_value = "SSH"
 
     for attempt in range(1, 25):
-        brute_forcing._handle_ssh(
+        brute_force_detector._handle_ssh(
             PROFILEID,
             TWID,
             make_ssh_flow(uid=f"uid-{attempt}"),
         )
 
-    assert brute_forcing.db.set_evidence.call_count == 5
+    assert brute_force_detector.db.set_evidence.call_count == 5
     observed_attempt_counts = [
         len(call_args[0][0].uid)
-        for call_args in brute_forcing.db.set_evidence.call_args_list
+        for call_args in brute_force_detector.db.set_evidence.call_args_list
     ]
     assert observed_attempt_counts == [9, 10, 12, 16, 24]
 
 
 def test_confidence_reaches_full_at_30_attempts():
-    brute_forcing = ModuleFactory().create_bruteforcing_obj()
-    threshold_confidence = brute_forcing._calculate_confidence(
-        brute_forcing.ssh_attempt_threshold,
+    brute_force_detector = ModuleFactory().create_brute_force_detector_obj()
+    threshold_confidence = brute_force_detector._calculate_confidence(
+        brute_force_detector.ssh_attempt_threshold,
         "SSH-2.0-OpenSSH_9.6p1",
         "ssh.log",
     )
-    full_confidence = brute_forcing._calculate_confidence(
-        brute_forcing.ssh_full_confidence_attempts,
+    full_confidence = brute_force_detector._calculate_confidence(
+        brute_force_detector.ssh_full_confidence_attempts,
         "SSH-2.0-OpenSSH_9.6p1",
         "ssh.log",
     )
@@ -135,34 +135,36 @@ def test_confidence_reaches_full_at_30_attempts():
     assert threshold_confidence < 1.0
     assert full_confidence == 1.0
 
-    evidence = drive_threshold(brute_forcing)
+    evidence = drive_threshold(brute_force_detector)
     assert evidence.threat_level == ThreatLevel.MEDIUM
 
 
 def test_notice_confirmation_emits_zeek_evidence_and_confirms_future_alerts():
-    brute_forcing = ModuleFactory().create_bruteforcing_obj()
-    drive_threshold(brute_forcing)
-    brute_forcing.db.set_evidence.reset_mock()
+    brute_force_detector = ModuleFactory().create_brute_force_detector_obj()
+    drive_threshold(brute_force_detector)
+    brute_force_detector.db.set_evidence.reset_mock()
 
-    brute_forcing._handle_notice(PROFILEID, TWID, make_notice_flow())
-    zeek_evidence = brute_forcing.db.set_evidence.call_args[0][0]
+    brute_force_detector._handle_notice(PROFILEID, TWID, make_notice_flow())
+    zeek_evidence = brute_force_detector.db.set_evidence.call_args[0][0]
     assert zeek_evidence.confidence == 1.0
     assert zeek_evidence.threat_level == ThreatLevel.MEDIUM
     assert "Confirmed by Zeek notice.log." in zeek_evidence.description
 
-    brute_forcing.db.set_evidence.reset_mock()
-    brute_forcing._handle_ssh(PROFILEID, TWID, make_ssh_flow(uid="uid-10"))
-    confirmed_evidence = brute_forcing.db.set_evidence.call_args[0][0]
+    brute_force_detector.db.set_evidence.reset_mock()
+    brute_force_detector._handle_ssh(
+        PROFILEID, TWID, make_ssh_flow(uid="uid-10")
+    )
+    confirmed_evidence = brute_force_detector.db.set_evidence.call_args[0][0]
     assert confirmed_evidence.confidence == 1.0
     assert "Confirmed by Zeek notice.log." in confirmed_evidence.description
 
 
 def test_repeated_ssh_sessions_without_auth_attempts_still_trigger_detection():
-    brute_forcing = ModuleFactory().create_bruteforcing_obj()
-    brute_forcing.db.get_port_info.return_value = "SSH"
+    brute_force_detector = ModuleFactory().create_brute_force_detector_obj()
+    brute_force_detector.db.get_port_info.return_value = "SSH"
 
     for attempt in range(20):
-        brute_forcing._handle_ssh(
+        brute_force_detector._handle_ssh(
             PROFILEID,
             TWID,
             make_ssh_flow(
@@ -172,4 +174,4 @@ def test_repeated_ssh_sessions_without_auth_attempts_still_trigger_detection():
             ),
         )
 
-    assert brute_forcing.db.set_evidence.call_count == 4
+    assert brute_force_detector.db.set_evidence.call_count == 4
