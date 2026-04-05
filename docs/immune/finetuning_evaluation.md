@@ -67,7 +67,7 @@ python3 analyze_results.py \
 
 **Step 4 — Improvement report**
 
-Reads the report and CSV, computes deltas vs. both baselines, identifies the weakest complexity tier and category, and outputs suggestions for data and training config. Automated via the [`/finetune-eval`](https://github.com/stratosphereips/Slips-tools/tree/main/unsloth-scripts/.claude/skills/finetune-eval) skill in Claude Code.
+Reads the report and CSV, computes deltas vs. both baselines, identifies the weakest complexity tier and category, and outputs suggestions for data and training config. 
 
 ---
 
