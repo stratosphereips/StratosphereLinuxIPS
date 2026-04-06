@@ -1,8 +1,7 @@
 ### Quantization and Deployment for Finetuned Models
 
-**Keywords:** GGUF, Quantization, Ollama, imatrix, Raspberry Pi 5, Deployment
 
-**TL;DR:** Finetuned models are converted to GGUF and published to Ollama in three quantization variants (q4_k_m, q5_k_m, q8_0). Quality degrades gracefully: ~19% loss at q8_0, ~25% at q5_k_m, ~33% at q4_k_m. q5_k_m offers the best quality/size trade-off for CPU/RPi deployment; 16-bit is recommended when a GPU is available.
+**Summary:** Finetuned models are converted to GGUF and published to Ollama in three quantization variants (q4_k_m, q5_k_m, q8_0). Quality degrades gracefully: ~19% loss at q8_0, ~25% at q5_k_m, ~33% at q4_k_m. q5_k_m offers the best quality/size trade-off for CPU/RPi deployment; 16-bit is recommended when a GPU is available.
 
 > **Evaluation basis:** performance numbers in this document were measured on the [finetuned summarization model](finetuning_results.md) (47 held-out incidents, judge: gpt-oss-120b). The conversion and publication methodology applies to any finetuned model in this pipeline.
 

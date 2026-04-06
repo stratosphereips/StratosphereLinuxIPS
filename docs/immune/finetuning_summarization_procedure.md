@@ -1,8 +1,7 @@
 ### Summarization Fine-Tuning: Dataset and Training Procedure
 
-**Keywords:** Incident Summarization, SFT, LoRA, Dataset Filtering, Qwen2.5-1.5B
 
-**TL;DR:** The summarization model is trained on a quality-filtered subset of the Slips summarization dataset, using the highest-scoring model response per incident as the training target. The same general LoRA+Unsloth pipeline applies; this document covers the summarization-specific dataset preparation and system prompt.
+**Summary:** The summarization model is trained on a quality-filtered subset of the Slips summarization dataset, using the highest-scoring model response per incident as the training target. The same general LoRA+Unsloth pipeline applies; this document covers the summarization-specific dataset preparation and system prompt.
 
 ---
 

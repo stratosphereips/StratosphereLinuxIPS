@@ -1,8 +1,7 @@
 ### Summarization Fine-Tuned Model: Evaluation Results
 
-**Keywords:** Qwen2.5-1.5B, Incident Summarization, SFT, LLM-as-Judge, Win Rate
 
-**TL;DR:** The Qwen2.5-1.5B model fine-tuned for Slips incident summarization ranks 1st overall with a 7.73 avg score and 74.5% win rate — well above GPT-4o-mini — across simple and medium incidents. The primary weakness is a hard failure on very large incidents (>4000 events) caused by input truncation.
+**Summary:** The Qwen2.5-1.5B model fine-tuned for Slips incident summarization ranks 1st overall with a 7.73 avg score and 74.5% win rate — well above GPT-4o-mini — across simple and medium incidents. The primary weakness is a hard failure on very large incidents (>4000 events) caused by input truncation.
 
 **Model:** [stratosphere/qwen2.5-1.5b-slips-immune](https://huggingface.co/stratosphere/qwen2.5-1.5b-slips-immune)  
 **Judge:** gpt-oss-120b | **Incidents evaluated:** 47 (44 scored, 3 missing) | **Date:** 2026-04-05

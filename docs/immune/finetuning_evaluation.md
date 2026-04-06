@@ -1,8 +1,7 @@
 ### Fine-Tuning Evaluation Methodology
 
-**Keywords:** LLM-as-Judge, SFT Evaluation, Win Rate, Comparative Ranking
 
-**TL;DR:** Fine-tuned models are evaluated using the same LLM-as-judge framework used for baseline comparison, extended to include the finetuned model as a fifth competitor. The methodology — blind comparative ranking, three metrics, two breakdown dimensions — is identical across tasks.
+**Summary:** Fine-tuned models are evaluated using the same LLM-as-judge framework used for baseline comparison, extended to include the finetuned model as a fifth competitor. The methodology — blind comparative ranking, three metrics, two breakdown dimensions — is identical across tasks.
 
 ---
 

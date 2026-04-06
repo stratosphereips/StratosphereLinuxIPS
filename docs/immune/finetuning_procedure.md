@@ -1,8 +1,7 @@
 ### Fine-Tuning Approach for Slips Immune
 
-**Keywords:** SFT, LoRA, Unsloth, GGUF, Raspberry Pi 5, Qwen2.5
 
-**TL;DR:** Task-specific fine-tuning of compact models (1.5B parameters) using LoRA + Unsloth, exported to GGUF for CPU inference on the Raspberry Pi 5. The same training pipeline applies across tasks; only the dataset and system prompt are task-specific.
+**Summary:** Task-specific fine-tuning of compact models (1.5B parameters) using LoRA + Unsloth, exported to GGUF for CPU inference on the Raspberry Pi 5. The same training pipeline applies across tasks; only the dataset and system prompt are task-specific.
 
 ---
 
