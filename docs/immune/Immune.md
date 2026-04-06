@@ -47,6 +47,7 @@ This is the main guide to the documentation related to the changes done to Slips
 - [LLM RPI Finetuning Frameworks](https://stratospherelinuxips.readthedocs.io/en/develop/immune/finetuning_frameworks_rpi_5.html) - Framework selection rationale (Unsloth vs alternatives)
 - [Fine-Tuning Approach](https://stratospherelinuxips.readthedocs.io/en/develop/immune/finetuning_procedure.html) - General pipeline: LoRA, GGUF export, hardware setup
 - [Fine-Tuning Evaluation Methodology](https://stratospherelinuxips.readthedocs.io/en/develop/immune/finetuning_evaluation.html) - LLM-as-judge pipeline, metrics, and breakdown dimensions
+- [Quantization and Deployment](https://stratospherelinuxips.readthedocs.io/en/develop/immune/finetuning_quantization.html) - GGUF conversion, Ollama publication, and quantization performance analysis
 
   *Incident Summarization task:*
   - [Summarization Training Procedure](https://stratospherelinuxips.readthedocs.io/en/develop/immune/finetuning_summarization_procedure.html) - Dataset filtering, ground truth selection, system prompt

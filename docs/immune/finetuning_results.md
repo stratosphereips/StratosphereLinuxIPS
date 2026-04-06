@@ -92,4 +92,5 @@ Incidents in the 2000–3500 event range are handled well. Incidents above ~4000
 ---
 
 For evaluation methodology, see [Fine-Tuning Evaluation Methodology](finetuning_evaluation.md).  
-For training details, see [Summarization Fine-Tuning Procedure](finetuning_summarization_procedure.md).
+For training details, see [Summarization Fine-Tuning Procedure](finetuning_summarization_procedure.md).  
+For quantization impact and deployment options, see [Quantization and Deployment](finetuning_quantization.md).

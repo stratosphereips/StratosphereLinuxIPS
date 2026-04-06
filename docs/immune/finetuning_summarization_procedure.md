@@ -86,4 +86,5 @@ The trained model is published on HuggingFace:
 
 > **[stratosphere/qwen2.5-1.5b-slips-immune](https://huggingface.co/stratosphere/qwen2.5-1.5b-slips-immune)**
 
-For evaluation results, see [Summarization Fine-Tuned Model: Evaluation Results](finetuning_results.md).
+For evaluation results, see [Summarization Fine-Tuned Model: Evaluation Results](finetuning_results.md).  
+For GGUF conversion and Ollama deployment, see [Quantization and Deployment](finetuning_summarization_quantization.md).
