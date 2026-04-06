@@ -1,12 +1,10 @@
 ### Summarization Fine-Tuning: Dataset and Training Procedure
 
-
 **Summary:** The summarization model is trained on a quality-filtered subset of the Slips summarization dataset, using the highest-scoring model response per incident as the training target. The same general LoRA+Unsloth pipeline applies; this document covers the summarization-specific dataset preparation and system prompt.
 
 ---
 
 ### Index
-
 - [Dataset](#dataset)
 - [Step 1 — Quality Filtering](#step-1--quality-filtering)
 - [Step 2 — Ground Truth Selection](#step-2--ground-truth-selection)
@@ -16,7 +14,6 @@
 ---
 
 ### Dataset
-
 **Source:** [summarization_dataset_v3.json](https://github.com/stratosphereips/Slips-tools/raw/refs/heads/main/alert_summary/datasets/summarization_dataset_v3.json.gz)  
 532 security incidents from Slips, each with four LLM-generated summaries (GPT-4o, GPT-4o-mini, Qwen2.5 1B, Qwen2.5 3B) and associated LLM-as-judge quality scores.
 
@@ -25,7 +22,6 @@ For how this dataset was generated, see [Summarization Dataset Report](DATASET_R
 ---
 
 ### Step 1 — Quality Filtering
-
 [`filter_dataset.py`](https://github.com/stratosphereips/Slips-tools/blob/main/unsloth-scripts/filter_dataset.py) applies two filters per incident:
 
 - **Score threshold:** reject if best model score < 4 (bottom quality quartile)
@@ -42,7 +38,6 @@ python3 filter_dataset.py
 ---
 
 ### Step 2 — Ground Truth Selection
-
 [`select_best_responses.py`](https://github.com/stratosphereips/Slips-tools/blob/main/unsloth-scripts/select_best_responses.py) selects the highest-scoring model response per incident and formats each record as a three-turn SFT conversation:
 
 - `system` — security analyst persona with structured output format
@@ -61,7 +56,6 @@ The system prompt instructs the model to group identical events, assign severity
 ---
 
 ### Training
-
 Training follows the general procedure in [Fine-Tuning Approach](finetuning_procedure.md). Summarization-specific config values:
 
 | Parameter | Value |
@@ -80,10 +74,9 @@ python3 train_qwen.py
 ---
 
 ### Published Model
-
 The trained model is published on HuggingFace:
 
 > **[stratosphere/qwen2.5-1.5b-slips-immune](https://huggingface.co/stratosphere/qwen2.5-1.5b-slips-immune)**
 
 For evaluation results, see [Summarization Fine-Tuned Model: Evaluation Results](finetuning_results.md).  
-For GGUF conversion and Ollama deployment, see [Quantization and Deployment](finetuning_summarization_quantization.md).
+For GGUF conversion and Ollama deployment, see [Quantization and Deployment](finetuning_quantization.md).

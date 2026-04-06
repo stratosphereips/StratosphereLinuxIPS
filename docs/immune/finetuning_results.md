@@ -1,6 +1,5 @@
 ### Summarization Fine-Tuned Model: Evaluation Results
 
-
 **Summary:** The Qwen2.5-1.5B model fine-tuned for Slips incident summarization ranks 1st overall with a 7.73 avg score and 74.5% win rate — well above GPT-4o-mini — across simple and medium incidents. The primary weakness is a hard failure on very large incidents (>4000 events) caused by input truncation.
 
 **Model:** [stratosphere/qwen2.5-1.5b-slips-immune](https://huggingface.co/stratosphere/qwen2.5-1.5b-slips-immune)  
@@ -9,7 +8,6 @@
 ---
 
 ### Index
-
 - [Overall Rankings](#overall-rankings)
 - [Performance by Category](#performance-by-category)
 - [Performance by Complexity](#performance-by-complexity)
@@ -19,7 +17,6 @@
 ---
 
 ### Overall Rankings
-
 | Rank | Model | Avg Position | Avg Score | Win Rate |
 |------|-------|--------------|-----------|----------|
 | 1 | **Finetuned 1.5B** | 1.22 | 7.73/10 | 74.5% |
@@ -35,7 +32,6 @@ Position distribution shows the consistency: 35 first-place finishes, 3 seconds,
 ---
 
 ### Performance by Category
-
 | Category | Finetuned Score | Finetuned Win Rate | vs GPT-4o-mini |
 |---|---|---|---|
 | Malware (42 incidents) | 7.76/10 | 81.0% | +2.05 |
@@ -46,7 +42,6 @@ Normal traffic performance is competitive (7.00 avg, 1st/2nd split with GPT-4o-m
 ---
 
 ### Performance by Complexity
-
 | Complexity | Events | Finetuned Score | Win Rate | vs GPT-4o-mini |
 |---|---|---|---|---|
 | Simple | <500 (29 scored) | 8.31/10 | 89.7% | +2.83 |
@@ -71,7 +66,6 @@ Incidents in the 2000–3500 event range are handled well. Incidents above ~4000
 ---
 
 ### Key Findings
-
 1. **Stretch goal exceeded.** The finetuned 1.5B model surpasses Qwen2.5 3B by 3.59 avg score points, validating the hypothesis that task-specific fine-tuning compensates for parameter count on this domain.
 
 2. **Different quality tier for most incidents.** The +1.98 avg score gap vs GPT-4o-mini is not marginal — the model is operating at a higher quality level than the commercial baseline for the typical (simple/medium) incident.
@@ -83,7 +77,6 @@ Incidents in the 2000–3500 event range are handled well. Incidents above ~4000
 ---
 
 ### Known Limitations
-
 - **Input truncation ceiling:** Incidents with >4000 events exceed the 2048-token input budget. Mitigation options: increase `max_seq_length` to 4096, add dedicated training examples with aggressive truncation, or apply smarter DAG summarization before the LLM step.
 - **Small eval set:** 44 scored incidents (47 − 3 missing) is sufficient for directional conclusions but too small for robust statistical significance, especially on Normal (2 incidents) and Complex (8 incidents) subsets.
 - **3 missing records:** Incidents `5c8a1989` (122 events), `6d8fd038` (32 events), and `298b0c57` (2947 events) were not scored. Two are simple incidents, ruling out input length as cause — likely transient inference or evaluation failures.

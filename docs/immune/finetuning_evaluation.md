@@ -1,12 +1,10 @@
 ### Fine-Tuning Evaluation Methodology
 
-
 **Summary:** Fine-tuned models are evaluated using the same LLM-as-judge framework used for baseline comparison, extended to include the finetuned model as a fifth competitor. The methodology — blind comparative ranking, three metrics, two breakdown dimensions — is identical across tasks.
 
 ---
 
 ### Index
-
 - [Overview](#overview)
 - [Evaluation Pipeline](#evaluation-pipeline)
 - [Baselines and Success Criteria](#baselines-and-success-criteria)
@@ -18,7 +16,6 @@
 ---
 
 ### Overview
-
 After fine-tuning, the model is evaluated against a fixed set of competitors using LLM-as-judge methodology. A strong external judge model (default: `gpt-oss-120b`) acts as an experienced security analyst and scores all model outputs for each incident on a 1–10 scale. Model labels are randomized per incident to prevent position bias.
 
 This extends the [LLM Evaluation Guide](LLM_EVALUATION_GUIDE.md) used for baseline model comparison — the judge criteria, scoring format, and analysis scripts are identical; the only change is adding the finetuned model as a fifth competitor.
@@ -26,7 +23,6 @@ This extends the [LLM Evaluation Guide](LLM_EVALUATION_GUIDE.md) used for baseli
 ---
 
 ### Evaluation Pipeline
-
 Four sequential steps, applied identically for any task:
 
 **Step 1 — Inference on the eval split**
@@ -66,7 +62,7 @@ python3 analyze_results.py \
 
 **Step 4 — Improvement report**
 
-Reads the report and CSV, computes deltas vs. both baselines, identifies the weakest complexity tier and category, and outputs suggestions for data and training config. 
+Reads the report and CSV, computes deltas vs. both baselines, identifies the weakest complexity tier and category, and outputs concrete suggestions for data composition and training config.
 
 ---
 
@@ -84,7 +80,6 @@ The stretch goal tests whether task-specific fine-tuning compensates for paramet
 ---
 
 ### Metrics
-
 Three metrics are computed per model:
 
 | Metric | Description |
@@ -96,7 +91,6 @@ Three metrics are computed per model:
 ---
 
 ### Breakdown Dimensions
-
 Results are broken down along two dimensions for every task:
 
 **By incident category:**
@@ -113,7 +107,6 @@ The complexity dimension is particularly relevant for RPi deployment: complex in
 ---
 
 ### Running the Evaluation
-
 The full pipeline (dataset prep → training → inference → eval → report) can be run end-to-end:
 
 ```bash
@@ -126,7 +119,6 @@ The full pipeline (dataset prep → training → inference → eval → report) 
 ---
 
 ### Task-Specific Results
-
 | Task | Results Document |
 |---|---|
 | Incident Summarization | [Summarization Fine-Tuned Model: Evaluation Results](finetuning_results.md) |

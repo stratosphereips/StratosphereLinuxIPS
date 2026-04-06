@@ -1,6 +1,5 @@
 ### Quantization and Deployment for Finetuned Models
 
-
 **Summary:** Finetuned models are converted to GGUF and published to Ollama in three quantization variants (q4_k_m, q5_k_m, q8_0). Quality degrades gracefully: ~19% loss at q8_0, ~25% at q5_k_m, ~33% at q4_k_m. q5_k_m offers the best quality/size trade-off for CPU/RPi deployment; 16-bit is recommended when a GPU is available.
 
 > **Evaluation basis:** performance numbers in this document were measured on the [finetuned summarization model](finetuning_results.md) (47 held-out incidents, judge: gpt-oss-120b). The conversion and publication methodology applies to any finetuned model in this pipeline.
@@ -8,7 +7,6 @@
 ---
 
 ### Index
-
 - [GGUF Conversion](#gguf-conversion)
 - [Ollama Publication](#ollama-publication)
 - [Performance by Quantization](#performance-by-quantization)
@@ -17,7 +15,6 @@
 ---
 
 ### GGUF Conversion
-
 Script: [`convert_to_gguf.py`](https://github.com/stratosphereips/Slips-tools/blob/main/unsloth-scripts/convert_to_gguf.py)
 
 GGUF (GPT-Unified Format) is the binary format used by llama.cpp and Ollama to store quantized model weights for efficient CPU and GPU inference. The conversion script takes the merged 16-bit PyTorch model produced by training and converts it to a self-contained GGUF file at a target quantization level.
@@ -63,7 +60,6 @@ python3 convert_to_gguf.py \
 ---
 
 ### Ollama Publication
-
 Script: [`publish_to_ollama.sh`](https://github.com/stratosphereips/Slips-tools/blob/main/unsloth-scripts/publish_to_ollama.sh)
 
 Automates the complete pipeline from raw 16-bit weights to a publicly accessible model on Ollama. For each quantization variant (default: q4_k_m, q5_k_m, q8_0), the following steps run sequentially:
@@ -98,7 +94,6 @@ Each tag is pushed with `ollama push`. Requires prior `ollama login` with the `s
 ---
 
 ### Performance by Quantization
-
 The 16-bit model serves as the reference; all GGUF variants are compared against it.
 
 #### Overall
@@ -132,7 +127,6 @@ The 16-bit model serves as the reference; all GGUF variants are compared against
 ---
 
 ### Deployment Recommendation
-
 | Scenario | Recommended variant | Rationale |
 |---|---|---|
 | Raspberry Pi 5 (CPU-only) | **q5_k_m** | Best quality/size balance at 1.1 GB; fits RPi RAM with headroom |
