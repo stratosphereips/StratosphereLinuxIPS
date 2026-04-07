@@ -73,7 +73,7 @@ class Daemon:
 
     def read_configuration(self):
         conf = ConfigParser()
-        self.logsfile = conf.logsfile()
+        self.logsfile = conf.logs_file()
         self.stdout = conf.stdout()
         self.stderr = conf.stderr()
         # we don't use it anyway

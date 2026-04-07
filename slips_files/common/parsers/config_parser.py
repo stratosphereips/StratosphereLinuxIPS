@@ -206,14 +206,26 @@ class ConfigParser(object):
             "whitelists", "enable_local_whitelist", True
         )
 
-    def logsfile(self):
-        return self.read_configuration("modes", "logsfile", "slips.log")
+    def logs_file(self):
+        return self.read_configuration(
+            "output",
+            "logs",
+            self.read_configuration("modes", "logs", "slips.log"),
+        )
 
     def stdout(self):
-        return self.read_configuration("modes", "stdout", "slips.log")
+        return self.read_configuration(
+            "output",
+            "stdout",
+            self.read_configuration("modes", "stdout", "slips.log"),
+        )
 
     def stderr(self):
-        return self.read_configuration("modes", "stderr", "errors.log")
+        return self.read_configuration(
+            "output",
+            "stderr",
+            self.read_configuration("modes", "stderr", "errors.log"),
+        )
 
     def create_p2p_logfile(self):
         return self.read_configuration(

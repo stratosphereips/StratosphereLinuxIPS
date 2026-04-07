@@ -67,7 +67,7 @@ class BruteforceDetector(IModule):
         "Detect SSH brute forcing using ssh.log, software.log, and Zeek "
         "notices."
     )
-    authors = ["Sebastian Garcia", "OpenAI"]
+    authors = ["Sebastian Garcia"]
     ssh_full_confidence_attempts = 30
 
     def init(self):

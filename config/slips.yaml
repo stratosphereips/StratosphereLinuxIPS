@@ -1,14 +1,13 @@
 # This configuration file controls several aspects of the working of Slips.
 
 ---
-modes:
+output:
   # Define the file names for the default output.
   stdout: slips.log
   stderr: errors.log
-  logsfile: slips.log
+  logs: slips.log
 
 #############################
-# Parameters that can be also specified with modifiers in the command line
 
 parameters:
   # The verbosity is related to how much data you want to see about the
