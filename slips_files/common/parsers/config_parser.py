@@ -838,11 +838,11 @@ class ConfigParser(object):
     def delete_prev_db(self):
         return self.read_configuration("parameters", "deletePrevdb", True)
 
-    def rotation_period(self):
-        rotation_period = self.read_configuration(
-            "parameters", "rotation_period", "1 day"
+    def default_rotation_interval(self):
+        default_rotation_interval = self.read_configuration(
+            "parameters", "default_rotation_interval", "1 day"
         )
-        return utils.sanitize(rotation_period)
+        return utils.sanitize(default_rotation_interval)
 
     def parse_ip(self, ip: str):
         """converts the given IP address or CIDR to an obj"""

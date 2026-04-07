@@ -13,14 +13,15 @@ class ZeekCommandBuilder:
         self,
         zeek_or_bro: str,
         input_type: InputType,
-        rotation_period: str,
+        default_rotation_interval: str,
         enable_rotation: bool,
         tcp_inactivity_timeout: int,
         packet_filter: Optional[str] = None,
     ):
         self.zeek_or_bro = zeek_or_bro
         self.input_type = input_type
-        self.rotation_period = rotation_period
+        # this represents the zeek default_rotation_interval parameter
+        self.default_rotation_interval = default_rotation_interval
         self.enable_rotation = enable_rotation
         self.tcp_inactivity_timeout = tcp_inactivity_timeout
         self.packet_filter = packet_filter
@@ -40,11 +41,11 @@ class ZeekCommandBuilder:
     def _get_rotation_args(self) -> List[str]:
         # rotation is disabled unless it's an interface
         if self.input_type == InputType.INTERFACE and self.enable_rotation:
-            # how often to rotate zeek files? taken from slips.yaml
+            # default_rotation_interval is how often to rotate zeek files?
+            # taken from slips.yaml
             return [
                 "-e",
-                f'"redef Log::default_rotation_interval ='
-                f' {self.rotation_period} ;"',
+                f"redef Log::default_rotation_interval={self.default_rotation_interval};",
             ]
         return []
 
@@ -106,8 +107,6 @@ class ZeekCommandBuilder:
             f"redef tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins;",
             *rotation,
             zeek_scripts_dir,
-            # putting -f last is best practice
             *packet_filter,
         ]
-
         return command

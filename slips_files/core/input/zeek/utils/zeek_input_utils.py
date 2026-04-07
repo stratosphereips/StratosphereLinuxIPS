@@ -323,7 +323,7 @@ class ZeekInputUtils:
         builder = ZeekCommandBuilder(
             zeek_or_bro=self.input.zeek_or_bro,
             input_type=self.input.input_type,
-            rotation_period=self.input.rotation_period,
+            default_rotation_interval=self.input.default_rotation_interval,
             enable_rotation=self.input.enable_rotation,
             tcp_inactivity_timeout=self.input.tcp_inactivity_timeout,
             packet_filter=self.input.packet_filter,

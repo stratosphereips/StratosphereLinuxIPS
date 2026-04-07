@@ -177,7 +177,7 @@ class Input(ICore):
         self.packet_filter = self.packet_filter or conf.packet_filter()
         self.tcp_inactivity_timeout = conf.tcp_inactivity_timeout()
         self.enable_rotation = conf.rotation()
-        self.rotation_period = conf.rotation_period()
+        self.default_rotation_interval = conf.default_rotation_interval()
         self.keep_rotated_files_for = conf.keep_rotated_files_for()
 
     def stop_queues(self):
