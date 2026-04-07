@@ -36,22 +36,6 @@ class ZeekInputUtils:
         if not self.rotated_files_to_delete:
             return False
 
-        now = float(
-            utils.convert_ts_format(datetime.datetime.now(), "unixtimestamp")
-        )
-        time_to_delete = (
-            now >= self.time_rotated + self.input.keep_rotated_files_for
-        )
-        if time_to_delete:
-            # getting here means that the rotated
-            # files are kept enough ( keep_rotated_files_for seconds)
-            # and it's time to delete them
-            for file in self.to_be_deleted:
-                try:
-                    os.remove(file)
-                except FileNotFoundError:
-                    pass
-            self.to_be_deleted = []
         now = time.time()
         while self.rotated_files_to_delete:
             file, delete_after = self.rotated_files_to_delete.pop()
@@ -61,6 +45,10 @@ class ZeekInputUtils:
 
             try:
                 os.remove(file)
+                self.input.print(
+                    f"Done deleting rotated zeek file:" f" {file}.",
+                    log_to_logfiles_only=True,
+                )
             except FileNotFoundError:
                 pass
 
