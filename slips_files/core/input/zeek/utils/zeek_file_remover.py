@@ -1,17 +1,20 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 
-import datetime
 import json
 import os
 import threading
+import time
 
-from slips_files.common.slips_utils import utils
 from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
 
 
 class ZeekFileRemover:
     def __init__(self, input_process, zeek_utils):
+        """
+        Handles deleting rotated zeek files.
+        :param input_process: Input.py instance that owns the channels.
+        """
         self.input = input_process
         self.zeek_utils = zeek_utils
         self.thread = threading.Thread(
@@ -22,6 +25,11 @@ class ZeekFileRemover:
         self._started = False
 
     def start(self):
+        """
+        Start the remover thread once and ensure the rotation channel exists.
+
+        :return: None
+        """
         if self._started:
             return
         self._started = True
@@ -30,11 +38,45 @@ class ZeekFileRemover:
         self.thread.start()
 
     def shutdown_gracefully(self):
+        """
+        Wait briefly for the remover thread to exit.
+
+        :return: True
+        """
         try:
             self.thread.join(3)
         except Exception:
             pass
         return True
+
+    def process_rotation_message(self, changed_files: dict):
+        """
+        Close any stale handle for a rotated Zeek file and schedule cleanup.
+
+        :param changed_files: a dict with old_file and new_file paths.
+        """
+        # for example the old log file should be  ./zeek_files/dns.2022-05-11-14-43-20.log
+        # new log file should be dns.log without the ts
+        old_log_file = changed_files["old_file"]
+        new_log_file = changed_files["new_file"]
+        new_logfile_without_path = new_log_file.split("/")[-1].split(".")[0]
+
+        # ignored files have no open handle, so we should only delete them from disk
+        if new_logfile_without_path not in SUPPORTED_LOGFILES:
+            try:
+                # just delete the old file
+                os.remove(old_log_file)
+            except FileNotFoundError:
+                pass
+            return
+
+        self.zeek_utils.close_rotated_file_handle(new_log_file)
+        # this file was just rotated.
+        rotated_at = time.time()
+        # zeek utils decides when to delete it.
+        self.zeek_utils.schedule_rotated_file_deletion(
+            old_log_file, rotated_at
+        )
 
     def remove_old_zeek_files(self):
         """
@@ -47,39 +89,4 @@ class ZeekFileRemover:
                 # this channel receives renamed zeek log files,
                 # we can safely delete them and close their handle
                 changed_files = json.loads(msg["data"])
-
-                # for example the old log file should be  ./zeek_files/dns.2022-05-11-14-43-20.log
-                # new log file should be dns.log without the ts
-                old_log_file = changed_files["old_file"]
-                new_log_file = changed_files["new_file"]
-                new_logfile_without_path = new_log_file.split("/")[-1].split(
-                    "."
-                )[0]
-                # ignored files have no open handle, so we should only delete them from disk
-                if new_logfile_without_path not in SUPPORTED_LOGFILES:
-                    # just delete the old file
-                    os.remove(old_log_file)
-                    continue
-
-                # don't allow inputprocess to access the
-                # open_file_handlers dict until this thread sleeps again
-                lock = threading.Lock()
-                lock.acquire()
-                try:
-                    # close slips' open handles
-                    self.zeek_utils.open_file_handlers[new_log_file].close()
-                    # delete cached filename
-                    del self.zeek_utils.open_file_handlers[new_log_file]
-                except KeyError:
-                    # we don't have a handle for that file,
-                    # we probably don't need it in slips
-                    # ex: loaded_scripts.log, stats.log etc..
-                    pass
-                # delete the old log file (the one with the ts)
-                self.zeek_utils.to_be_deleted.append(old_log_file)
-                self.zeek_utils.time_rotated = float(
-                    utils.convert_ts_format(
-                        datetime.datetime.now(), "unixtimestamp"
-                    )
-                )
-                lock.release()
+                self.process_rotation_message(changed_files)
