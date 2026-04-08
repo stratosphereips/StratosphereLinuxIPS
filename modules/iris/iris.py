@@ -11,7 +11,7 @@ import subprocess
 import yaml
 
 
-class IrisModule(IModule):
+class Iris(IModule):
     # Name: short name of the module. Do not use spaces
     name = "iris"
     description = "Global P2P module cooperating with Fides"
