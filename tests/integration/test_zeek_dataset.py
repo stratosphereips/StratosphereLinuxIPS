@@ -162,6 +162,6 @@ def test_zeek_conn_log(
     profiles = database.get_profiles_len()
     assert profiles > expected_profiles
 
-    log_file = os.path.join(output_dir, alerts_file)
+    log_file = output_dir / "alerts" / alerts_file
     assert is_evidence_present(log_file, expected_evidence) is True
     shutil.rmtree(output_dir)

@@ -52,7 +52,7 @@ def test_horizontal(path, output_dir, redis_port):
     profiles = get_profiles_len_from_output_db(output_dir)
     assert profiles > 0
 
-    log_file = os.path.join(output_dir, alerts_file)
+    log_file = output_dir / "alerts" / alerts_file
     assert is_evidence_present(log_file, expected_evidence)
 
     shutil.rmtree(output_dir)
@@ -88,7 +88,7 @@ def test_vertical(path, output_dir, redis_port):
     profiles = get_profiles_len_from_output_db(output_dir)
     assert profiles > 0
 
-    log_file = os.path.join(output_dir, alerts_file)
+    log_file = output_dir / "alerts" / alerts_file
     assert is_evidence_present(log_file, expected_evidence)
 
     shutil.rmtree(output_dir)

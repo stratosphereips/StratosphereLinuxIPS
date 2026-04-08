@@ -99,7 +99,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     # expected_profiles is more than 50 because we're using direction = all
     assert profiles > expected_profiles
     print("Checking for a random evidence")
-    log_file = os.path.join(output_dir, alerts_file)
+    log_file = output_dir / "alerts" / alerts_file
 
     # testing disabled_detections param in the configuration file
     disabled_evidence = "a connection without DNS resolution"

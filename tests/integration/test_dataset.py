@@ -86,7 +86,7 @@ def test_binetflow(
     profiles = get_profiles_len_from_output_db(output_dir)
     assert profiles > expected_profiles
 
-    log_file = os.path.join(output_dir, alerts_file)
+    log_file = output_dir / "alerts" / alerts_file
     assert is_evidence_present(log_file, expected_evidence) is True
     shutil.rmtree(output_dir)
 
@@ -126,7 +126,7 @@ def test_suricata(suricata_path, output_dir, redis_port, expected_evidence):
     #  each run, we need to sy why
     assert profiles > 10
 
-    log_file = os.path.join(output_dir, alerts_file)
+    log_file = output_dir / "alerts" / alerts_file
     assert any(is_evidence_present(log_file, ev) for ev in expected_evidence)
     shutil.rmtree(output_dir)
 
