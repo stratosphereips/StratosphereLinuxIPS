@@ -20,7 +20,9 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.output_paths import get_output_sqlite_path
+from slips_files.common.output_paths import (
+    get_this_filepath_inside_permanent_dir,
+)
 from slips_files.common.performance_paths import get_performance_csv_path
 from slips_files.core.structures.evidence import Evidence
 from slips_files.core.structures.alerts import Alert
@@ -124,32 +126,6 @@ class DBManager:
                 f"restart Slips."
             )
 
-    def get_permanent_dir(self) -> str:
-        """
-        Return the root directory for persistent runtime data.
-
-        Returns:
-            Relative path where runtime-generated data that must persist
-            across different Slips runs is stored.
-        """
-        permanent_dir = self.conf.permanent_dir()
-        # make sure it's inside slips root dir
-        permanent_dir = os.path.join(os.getcwd(), permanent_dir)
-        Path(permanent_dir).mkdir(parents=True, exist_ok=True)
-        return permanent_dir
-
-    def get_permanent_database_path(self, filename: str) -> str:
-        """
-        Return the path of a persistent SQLite database file.
-
-        Parameters:
-            filename: Database file name.
-
-        Returns:
-            Path inside the permanent databases directory.
-        """
-        return get_output_sqlite_path(self.get_permanent_dir(), filename)
-
     def init_p2p_trust_db(self) -> str:
         """
         Initialize and return the path to the persistent local P2P trust DB.
@@ -157,10 +133,12 @@ class DBManager:
         Returns:
             Path to the local P2P trust SQLite database.
         """
-        p2p_trust_runtime_dir = os.path.join(
-            self.get_permanent_dir(), "p2p_trust_runtime"
+        p2p_trust_runtime_dir = get_this_filepath_inside_permanent_dir(
+            "p2p_trust_runtime"
         )
+
         Path(p2p_trust_runtime_dir).mkdir(parents=True, exist_ok=True)
+
         db_path = os.path.join(p2p_trust_runtime_dir, "trustdb.db")
         self.p2p_trust_runtime_dir = p2p_trust_runtime_dir
 
