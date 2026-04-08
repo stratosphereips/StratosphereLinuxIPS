@@ -285,7 +285,7 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
     config_temp_path = "modules/fides/config/fides.conf.yml.bak"
     config_line = "database: 'fides_test_database.sqlite'\n"
     shutil.copy(config_file_path, config_temp_path)
-    test_db = Path("permanent") / "databases" / "fides_test_database.sqlite"
+    test_db = Path("permanent") / "fides_test_database.sqlite"
     test_db.parent.mkdir(parents=True, exist_ok=True)
 
     try:

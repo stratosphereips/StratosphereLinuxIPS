@@ -87,6 +87,25 @@ def check_strings_in_file(string_list, file_path):
         return False
 
 
+def wait_for_file(file_path, timeout_seconds):
+    """
+    Wait until a file exists or the timeout elapses.
+
+    Parameters:
+        file_path: Path to the expected file.
+        timeout_seconds: Maximum number of seconds to wait.
+
+    Returns:
+        True if the file exists before the timeout, otherwise False.
+    """
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if os.path.exists(file_path):
+            return True
+        time.sleep(1)
+    return os.path.exists(file_path)
+
+
 def get_default_interface():
     with open("/proc/net/route") as f:
         for line in f.readlines()[1:]:
@@ -123,6 +142,8 @@ def test_messaging(
     which extends the standard use case of connecting to such P2P network.
     """
     # Two Slips instances are necessary to be run in this test.
+    default_interface = get_default_interface()
+
     # Prepare output dir for the main Slips instance.
     # The logs of both beers will be clearly separated and kept intact.
     output_dir: PosixPath = create_output_dir(output_dir)
@@ -135,8 +156,8 @@ def test_messaging(
 
     # this will be used for the extraction of the connection string form the
     # logs of iris running under the main Slips
-    log_file_first_iris = output_dir / "Iris/iris_logs.txt"
-    log_file_second_iris = output_dir_peer / "Iris/iris_logs.txt"
+    log_file_first_iris = output_dir / "iris/iris_logs.txt"
+    log_file_second_iris = output_dir_peer / "iris/iris_logs.txt"
 
     # generate config of first peer
     slips_iris_main_config_file = (
@@ -178,13 +199,14 @@ def test_messaging(
             # to the same file
             # command for the main Slips instance
             command = [
+                sys.executable,
                 "./slips.py",
                 "-t",
                 "-g",
                 str(zeek_dir_path),
                 # dummy interface required by -g
                 "-i",
-                get_default_interface(),
+                default_interface,
                 "-e",
                 "1",
                 "-o",
@@ -206,6 +228,9 @@ def test_messaging(
             countdown(20, "second peer")
             # get the connection string from the first peer and give it
             # to the second one so it is reachable
+            assert wait_for_file(
+                log_file_first_iris, 30
+            ), f"Expected Iris log file was not created: {log_file_first_iris}"
             with open(log_file_first_iris, "r") as log:
                 for line in log:
                     match = re.search(r"connection string:\s+'(.+)'", line)
@@ -238,13 +263,14 @@ def test_messaging(
             )
             # generate a second command for the second peer
             peer_command = [
+                sys.executable,
                 "./slips.py",
                 "-t",
                 "-g",
                 str(zeek_dir_path),
                 # dummy interface required by -g
                 "-i",
-                "eth0",
+                default_interface,
                 "-e",
                 "1",
                 "-o",

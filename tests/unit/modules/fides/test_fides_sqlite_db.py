@@ -76,6 +76,25 @@ def test_get_slips_threat_intelligence_by_target(db):
 
 
 def test_get_peer_trust_data(db):
+    db.store_peer_trust_data(
+        PeerTrustData(
+            info=PeerInfo(
+                id="peer-before",
+                organisations=["org0"],
+                ip="192.168.0.1",
+            ),
+            has_fixed_trust=False,
+            service_trust=0.1,
+            reputation=0.2,
+            recommendation_trust=0.3,
+            competence_belief=0.4,
+            integrity_belief=0.5,
+            initial_reputation_provided_by_count=1,
+            service_history=[],
+            recommendation_history=[],
+        )
+    )
+
     # Create peer info and peer trust data
     peer_info = PeerInfo(
         id="peer123", organisations=["org1", "org2"], ip="192.168.0.10"
@@ -119,6 +138,54 @@ def test_get_peer_trust_data(db):
     assert result.service_history[0].satisfaction == 0.5
     assert len(result.recommendation_history) == 1
     assert result.recommendation_history[0].satisfaction == 0.8
+
+
+def test_store_peer_trust_data_overwrites_existing_history(db):
+    """Ensure peer trust updates replace older rows for the same peer."""
+    peer_info = PeerInfo(
+        id="peer123", organisations=["org1", "org2"], ip="192.168.0.10"
+    )
+
+    db.store_peer_trust_data(
+        PeerTrustData(
+            info=peer_info,
+            has_fixed_trust=False,
+            service_trust=0.1,
+            reputation=0.2,
+            recommendation_trust=0.3,
+            competence_belief=0.4,
+            integrity_belief=0.5,
+            initial_reputation_provided_by_count=1,
+            service_history=[],
+            recommendation_history=[],
+        )
+    )
+
+    db.store_peer_trust_data(
+        PeerTrustData(
+            info=peer_info,
+            has_fixed_trust=False,
+            service_trust=0.7,
+            reputation=0.8,
+            recommendation_trust=0.9,
+            competence_belief=0.6,
+            integrity_belief=0.5,
+            initial_reputation_provided_by_count=2,
+            service_history=[
+                ServiceHistoryRecord(
+                    satisfaction=0.5, weight=0.9, timestamp=20.15
+                )
+            ],
+            recommendation_history=[],
+        )
+    )
+
+    result = db.get_peer_trust_data("peer123")
+
+    assert result is not None
+    assert result.service_trust == 0.7
+    assert result.reputation == 0.8
+    assert len(result.service_history) == 1
 
 
 def test_get_connected_peers_1(db):
