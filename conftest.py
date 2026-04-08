@@ -9,6 +9,7 @@ import pytest
 import os
 import sys
 import inspect
+import importlib
 from multiprocessing import Queue
 from unittest.mock import patch
 from slips_files.core.database.database_manager import DBManager
@@ -22,6 +23,11 @@ current_dir = os.path.dirname(
 )
 parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
+
+# Keep legacy test imports working after the fides package rename.
+sys.modules.setdefault(
+    "modules.fides_module", importlib.import_module("modules.fides")
+)
 
 
 # Suppress TensorFlow logs from C++ backend

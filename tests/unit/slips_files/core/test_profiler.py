@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-"""Unit test for slips_files/core/iperformance_profiler.py"""
+"""Unit tests for the profiler core process."""
 
 from unittest.mock import Mock, patch
 
-from tests.module_factory import ModuleFactory
 import pytest
+from tests.module_factory import ModuleFactory
 
 
 def mock_print(*args, **kwargs):
@@ -136,3 +136,39 @@ def test_notify_observers_with_correct_message():
     test_msg = {"action": "test_action"}
     profiler.notify_observers(test_msg)
     observer_mock.update.assert_called_once_with(test_msg)
+
+
+@patch("slips_files.core.profiler.ProfilerWorker")
+def test_start_profiler_worker_uses_parent_output_dir(mock_worker_cls):
+    profiler = ModuleFactory().create_profiler_obj()
+    worker = mock_worker_cls.return_value
+    profiler.profiler_child_processes = []
+    profiler.workers = []
+    profiler.profiler_queue = Mock()
+    profiler.input_handler_obj = Mock()
+    profiler.aid_queue = Mock()
+    profiler.aid_manager = Mock()
+    profiler.is_input_done_event = Mock()
+
+    profiler.start_profiler_worker(7)
+
+    mock_worker_cls.assert_called_once_with(
+        logger=profiler.logger,
+        output_dir=profiler.parent_output_dir,
+        redis_port=profiler.redis_port,
+        termination_event=profiler.termination_event,
+        conf=profiler.conf,
+        ppid=profiler.ppid,
+        slips_args=profiler.args,
+        bloom_filters_manager=profiler.bloom_filters,
+        name="profiler_worker_process_7",
+        profiler_queue=profiler.profiler_queue,
+        input_handler=profiler.input_handler_obj,
+        aid_queue=profiler.aid_queue,
+        aid_manager=profiler.aid_manager,
+        is_input_done_event=profiler.is_input_done_event,
+    )
+    worker.start.assert_called_once()
+    assert profiler.profiler_child_processes == [worker]
+    assert profiler.workers == []
+    profiler.db.increment_profiler_workers_started.assert_called_once()

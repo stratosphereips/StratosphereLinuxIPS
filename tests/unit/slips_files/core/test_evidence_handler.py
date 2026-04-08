@@ -55,7 +55,7 @@ def test_start_evidence_worker(mock_worker_cls):
 
     mock_worker_cls.assert_called_once_with(
         logger=handler.logger,
-        output_dir=handler.output_dir,
+        output_dir=handler.parent_output_dir,
         redis_port=handler.redis_port,
         termination_event=handler.termination_event,
         conf=handler.conf,

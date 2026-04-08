@@ -124,7 +124,7 @@ alerts_file = "alerts.log"
             "dataset/test9-mixed-zeek-dir/conn.log",
             4,
             "non-HTTP established connection to port 80. "
-            "destination IP: 194.132.197.198",  # the flows with uid
+            "destination IP: 194.132.197.198",  # the flow with uid
             # CAwUdr34dVnyOwbUuj should trigger this
             "test9-conn_log_only/",
             6659,
