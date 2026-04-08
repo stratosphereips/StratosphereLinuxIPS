@@ -12,7 +12,7 @@ from dns.resolver import NXDOMAIN
 
 
 class Spamhaus:
-    name = "Spamhaus"
+    name = "spamhaus"
     description = "Spamhaus lookups of IPs"
     authors = ["Alya Gomaa"]
 

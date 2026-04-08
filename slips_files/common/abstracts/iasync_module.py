@@ -15,11 +15,11 @@ class AsyncModule(IModule):
     An abstract class for asynchronous slips modules
     """
 
-    name = "AsyncModule"
+    name = "iasync_module"
 
     def __init__(self, *args, **kwargs):
         IModule.__init__(self, *args, **kwargs)
-        # list of async functions to await before flowalerts shuts down
+        # list of async functions to await before flow_alerts shuts down
         self.tasks: List[Task] = []
 
     def init(self, **kwargs): ...

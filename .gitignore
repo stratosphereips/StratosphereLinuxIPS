@@ -18,6 +18,10 @@ slack_bot_token_secret
 # Ignore daemon output files
 daemon/
 
+# Ignore private AGENTS.md, may contain private paths
+private/AGENTS.md
+
+
 # Ignore the results folders
 2019-
 2020-

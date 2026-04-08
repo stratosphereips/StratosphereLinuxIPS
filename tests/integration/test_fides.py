@@ -4,12 +4,12 @@ test/test.yaml and tests/test2.yaml
 """
 
 import shutil
-from pathlib import PosixPath
+from pathlib import PosixPath, Path
 
 import redis
 
-from modules.fidesModule.model.peer import PeerInfo
-from modules.fidesModule.persistence.fides_sqlite_db import FidesSQLiteDB
+from modules.fides.model.peer import PeerInfo
+from modules.fides.persistence.fides_sqlite_db import FidesSQLiteDB
 from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
@@ -21,7 +21,7 @@ import subprocess
 import time
 import sys
 from unittest.mock import Mock
-import modules.fidesModule.model.peer_trust_data as ptd
+import modules.fides.model.peer_trust_data as ptd
 
 # TODO
 # from tests.common_test_utils import (
@@ -221,9 +221,9 @@ def test_conf_file2(path, output_dir, redis_port):
     )
     # iris is supposed to be receiving this msg, that last thing fides does
     # is send a msg to this channel for iris to receive it
-    assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
-    assert db.get_msgs_received_at_runtime("Fides")["new_alert"] == "1"
-    print(db.get_msgs_received_at_runtime("Fides"))
+    assert db.get_msgs_received_at_runtime("fides")["fides2network"] == "1"
+    assert db.get_msgs_received_at_runtime("fides")["new_alert"] == "1"
+    print(db.get_msgs_received_at_runtime("fides"))
 
     print("Deleting the output directory")
     shutil.rmtree(output_dir, ignore_errors=True)
@@ -281,11 +281,12 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         "-P",
         str(redis_port),
     ]
-    config_file_path = "modules/fidesModule/config/fides.conf.yml"
-    config_temp_path = "modules/fidesModule/config/fides.conf.yml.bak"
+    config_file_path = "modules/fides/config/fides.conf.yml"
+    config_temp_path = "modules/fides/config/fides.conf.yml.bak"
     config_line = "database: 'fides_test_database.sqlite'\n"
     shutil.copy(config_file_path, config_temp_path)
-    test_db = "fides_test_database.sqlite"
+    test_db = Path("permanent") / "fides_test_database.sqlite"
+    test_db.parent.mkdir(parents=True, exist_ok=True)
 
     try:
         # Append the new line to the config
@@ -299,7 +300,7 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         mock_logger.print_line = Mock()
         mock_logger.error = Mock()
         print("Manipulating database")
-        fdb = FidesSQLiteDB(mock_logger, test_db)
+        fdb = FidesSQLiteDB(mock_logger, str(test_db))
         fdb.store_peer_trust_data(
             ptd.trust_data_prototype(
                 peer=PeerInfo(
@@ -354,7 +355,7 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
             redis_port, output_dir=output_dir, start_redis_server=False
         )
 
-        # assert db.get_msgs_received_at_runtime("Fides")["fides2network"] == "1"
+        # assert db.get_msgs_received_at_runtime("fides")["fides2network"] == "1"
 
         print("Checking Fides' data outlets")
         assert fdb.get_peer_trust_data("peer1").service_history != []

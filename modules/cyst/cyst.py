@@ -17,7 +17,7 @@ from slips_files.core.structures.alerts import (
 
 class Module(IModule):
     # Name: short name of the module. Do not use spaces
-    name = "CYST"
+    name = "cyst"
     description = "Communicates with CYST simulation framework"
     authors = ["Alya Gomaa"]
 

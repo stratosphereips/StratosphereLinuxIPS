@@ -456,15 +456,13 @@ def test_zeek_log_file_shutdown_closes_handles():
         "", InputType.ZEEK_LOG_FILE
     )
     handler = input_process.input_handlers[InputType.ZEEK_LOG_FILE]
-    input_process.zeek_utils.open_file_handlers = {
-        "test_file.log": MagicMock()
-    }
+    mock_handle = MagicMock()
+    input_process.zeek_utils.open_file_handles = {"test_file.log": mock_handle}
     input_process.mark_self_as_done_processing = MagicMock()
 
     assert handler.shutdown_gracefully() is True
-    assert input_process.zeek_utils.open_file_handlers[
-        "test_file.log"
-    ].close.called
+    mock_handle.close.assert_called_once()
+    assert input_process.zeek_utils.open_file_handles == {}
     input_process.mark_self_as_done_processing.assert_called_once()
 
 
@@ -475,7 +473,7 @@ def test_close_all_handles():
     )
     mock_handle1 = MagicMock()
     mock_handle2 = MagicMock()
-    input_process.zeek_utils.open_file_handlers = {
+    input_process.zeek_utils.open_file_handles = {
         "file1": mock_handle1,
         "file2": mock_handle2,
     }
@@ -536,21 +534,19 @@ def test_check_if_time_to_del_rotated_files_deletes_old_files():
     input_process = ModuleFactory().create_input_obj(
         "", InputType.ZEEK_LOG_FILE
     )
-    input_process.keep_rotated_files_for = 0
-    input_process.zeek_utils.time_rotated = 1
-    input_process.zeek_utils.to_be_deleted = ["old1.log", "old2.log"]
+    input_process.zeek_utils.rotated_files_to_delete = [
+        ("old1.log", 1.0),
+        ("old2.log", 1.0),
+    ]
 
     with (
-        patch(
-            "slips_files.core.input.zeek.utils.zeek_input_utils.utils.convert_ts_format",
-            return_value=2,
-        ),
+        patch("time.time", return_value=2.0),
         patch("os.remove") as mock_remove,
     ):
         input_process.zeek_utils.check_if_time_to_del_rotated_files()
 
     assert mock_remove.call_count == 2
-    assert input_process.zeek_utils.to_be_deleted == []
+    assert input_process.zeek_utils.rotated_files_to_delete == []
 
 
 @pytest.mark.parametrize(

@@ -170,7 +170,7 @@ modules:
    # List of modules to ignore. By default we always ignore the template! do not remove it from the list
    # Names of other modules that you can disable (they all should be lowercase with no special characters):
    # threatintelligence, blocking, networkdiscovery, timeline, virustotal,
-   # rnnccdetection, flowmldetection, updatemanager
+   # rnnccdetection, flow_ml_detection, updatemanager
    disable: [template, updatemanager]
 
    # For each line in timeline file there is a timestamp.
@@ -180,8 +180,8 @@ modules:
 
 
 #############################
-flowmldetection:
-   # The mode 'train' should be used to tell the flowmldetection module
+flow_ml_detection:
+   # The mode 'train' should be used to tell the flow_ml_detection module
    # that the flows received are all for training.
    # A label should be provided in the [Parameters] section
    # mode : train
@@ -206,7 +206,7 @@ virustotal:
 #############################
 threatintelligence:
 
-   # by default, slips starts without the TI files, and runs the Update Manager in the background
+   # by default, slips starts without the TI files, and runs the update_manager in the background
    # if thi option is set to yes, slips will not start untill the update manager is done
    # and all TI files are loaded successfully
    # this is usefull if you want to ensure that slips doesn't miss the detection of any blacklisted IPs
@@ -264,7 +264,7 @@ threatintelligence:
    update_period : 604800
 
 #############################
-flowalerts:
+flow_alerts:
 
    # we need a thrshold to determine a long connection. in slips by default is.
    long_connection_threshold : 1500
@@ -323,7 +323,7 @@ exporting_alerts:
    taxii_password : admin
 
 #############################
-CESNET:
+cesnet:
 
    # Slips supports exporting and importing evidence in the IDEA format to/from warden servers.
    send_alerts : False

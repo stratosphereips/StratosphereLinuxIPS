@@ -33,7 +33,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 class CCDetection(IModule):
     # Name: short name of the module. Do not use spaces
-    name = "RNN C&C Detection"
+    name = "rnn_cc_detection"
     description = "Detect C&C channels based on behavioral letters"
     authors = ["Sebastian Garcia", "Kamila Babayeva", "Ondrej Lukas"]
 

@@ -203,7 +203,7 @@ def test_print(
     text, verbose, debug, log_to_logfiles_only, expected_notification
 ):
     main = ModuleFactory().create_main_obj()
-    main.name = "Main"
+    main.name = "main"
     main.printer = Mock()
     main.printer.print = Mock()
     main.print(text, verbose, debug, log_to_logfiles_only)

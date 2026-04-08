@@ -8,7 +8,7 @@ import signal
 import subprocess
 import threading
 import time
-
+from typing import List, Tuple
 from re import split
 
 from slips_files.common.slips_utils import utils
@@ -19,12 +19,12 @@ from slips_files.core.zeek_cmd_builder import ZeekCommandBuilder
 class ZeekInputUtils:
     def __init__(self, input_process):
         self.input = input_process
-        self.open_file_handlers = {}
+        self.open_file_handles = {}
+        self.open_file_handlers_lock = threading.RLock()
         self.cache_lines = {}
         self.file_time = {}
         self.last_updated_file_time = None
-        self.to_be_deleted = []
-        self.time_rotated = None
+        self.rotated_files_to_delete: List[Tuple[str, float]] = []
         self.zeek_files = {}
         self.zeek_threads = []
         self.zeek_pids = []
@@ -35,45 +35,71 @@ class ZeekInputUtils:
         After a specific period (keep_rotated_files_for), slips deletes all rotated files
         Check if it's time to do so
         """
-        if not self.time_rotated:
+        if not self.rotated_files_to_delete:
             return False
 
-        now = float(
-            utils.convert_ts_format(datetime.datetime.now(), "unixtimestamp")
-        )
-        time_to_delete = (
-            now >= self.time_rotated + self.input.keep_rotated_files_for
-        )
-        if time_to_delete:
-            # getting here means that the rotated
-            # files are kept enough ( keep_rotated_files_for seconds)
-            # and it's time to delete them
-            for file in self.to_be_deleted:
-                try:
-                    os.remove(file)
-                except FileNotFoundError:
-                    pass
-            self.to_be_deleted = []
+        now = time.time()
+        while self.rotated_files_to_delete:
+            file, delete_after = self.rotated_files_to_delete.pop()
+            if now < delete_after:
+                # not time to del it yet
+                break
 
-    def get_file_handle(self, filename):
-        # Update which files we know about
-        try:
-            # We already opened this file
-            file_handler = self.open_file_handlers[filename]
-        except KeyError:
-            # First time opening this file.
             try:
-                file_handler = open(filename, "r")
-                lock = threading.Lock()
-                lock.acquire()
-                self.open_file_handlers[filename] = file_handler
-                lock.release()
+                os.remove(file)
+                self.input.print(
+                    f"Done deleting rotated zeek file:" f" {file}.",
+                    log_to_logfiles_only=True,
+                )
+            except FileNotFoundError:
+                pass
+
+    def schedule_rotated_file_deletion(
+        self, file_path: str, rotated_at: float = None
+    ):
+        """
+        Schedule a rotated Zeek logfile for deletion after the configured delay.
+
+        :param file_path: Full path to the rotated logfile.
+        :param rotated_at: Rotation timestamp as a unix timestamp.
+        :return: None
+        """
+        if rotated_at is None:
+            rotated_at = time.time()
+
+        delete_after = rotated_at + self.input.keep_rotated_files_for
+        self.rotated_files_to_delete.append((file_path, delete_after))
+
+    def close_rotated_file_handle(self, filename: str):
+        """
+        closes the given file's handle and removes it from
+        self.open_file_handlers
+
+        :param filename: Full path to the active logfile name.
+        """
+        with self.open_file_handlers_lock:
+            file_handler = self.open_file_handles.pop(filename, None)
+
+        if file_handler is not None:
+            file_handler.close()
+
+    def get_file_handle(self, filename: str):
+        with self.open_file_handlers_lock:
+            file_handle = self.open_file_handles.get(filename)
+
+            if file_handle:
+                return file_handle
+
+            try:
+                # First time opening this file.
+                file_handle = open(filename, "r")
+                self.open_file_handles[filename] = file_handle
                 # now that we replaced the old handle with the newly created file handle
                 # delete the old .log file, that has a timestamp in its name.
             except FileNotFoundError:
                 # for example dns.log
                 # zeek changes the dns.log file name every 1d, it adds a
-                # timestamp to it it doesn't create the new dns.log until a
+                # timestamp to it, it doesn't create the new dns.log until a
                 # new dns request
                 # occurs
                 # if slips tries to read from the old dns.log now it won't
@@ -81,7 +107,7 @@ class ZeekInputUtils:
                 # created yet simply continue until the new log file is
                 # created and added to the zeek_files list
                 return False
-        return file_handler
+        return file_handle
 
     def get_ts_from_line(self, zeek_line: str):
         """
@@ -190,12 +216,16 @@ class ZeekInputUtils:
         return False
 
     def close_all_handles(self):
-        # We reach here after the break produced
+        # We reach here after the break that happens
         # if no zeek files are being updated.
         # No more files to read. Close the files
-        for file, handle in self.open_file_handlers.items():
-            self.input.print(f"Closing file {file}", 2, 0)
-            handle.close()
+        with self.open_file_handlers_lock:
+            handles = list(self.open_file_handles.items())
+            self.open_file_handles = {}
+
+            for file, handle in handles:
+                self.input.print(f"Closing file {file}", 2, 0)
+                handle.close()
 
     def get_earliest_line(self):
         """
@@ -228,7 +258,7 @@ class ZeekInputUtils:
         """
         try:
             self.zeek_files = self.input.db.get_all_zeek_files()
-            self.open_file_handlers = {}
+            self.open_file_handles = {}
             # stores zeek_log_file_name: timestamp of the last flow read from
             # that file
             self.file_time = {}
@@ -338,7 +368,7 @@ class ZeekInputUtils:
         builder = ZeekCommandBuilder(
             zeek_or_bro=self.input.zeek_or_bro,
             input_type=self.input.input_type,
-            rotation_period=self.input.rotation_period,
+            default_rotation_interval=self.input.default_rotation_interval,
             enable_rotation=self.input.enable_rotation,
             tcp_inactivity_timeout=self.input.tcp_inactivity_timeout,
             packet_filter=self.input.packet_filter,

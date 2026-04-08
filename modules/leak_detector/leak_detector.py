@@ -31,7 +31,7 @@ from slips_files.core.structures.evidence import (
 
 class LeakDetector(IModule):
     # Name: short name of the module. Do not use spaces
-    name = "Leak Detector"
+    name = "leak_detector"
     description = "Detect leaks of data in the traffic"
     authors = ["Alya Gomaa"]
 

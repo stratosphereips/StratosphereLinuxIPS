@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import json
 import math
-import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -124,7 +123,9 @@ class EWMAStats:
         candidate = self.floor_scale * max(q10, sigma_mad, self.floor_min)
         candidate = min(self.floor_max, max(self.floor_min, candidate))
         beta = min(1.0, max(0.0, self.floor_update_beta))
-        self.min_std_floor = (1.0 - beta) * self.min_std_floor + beta * candidate
+        self.min_std_floor = (
+            1.0 - beta
+        ) * self.min_std_floor + beta * candidate
 
     def zscore(self, value: float) -> float:
         std = math.sqrt(max(self.var, self.min_std_floor * self.min_std_floor))
@@ -203,7 +204,7 @@ class HostState:
 
 
 class AnomalyDetectionHTTPS(IModule):
-    name = "Anomaly Detection HTTPS"
+    name = "anomaly_detection_https"
     description = (
         "HTTPS anomaly detector with hourly adaptive baselines and "
         "flow-level checks."
@@ -213,8 +214,8 @@ class AnomalyDetectionHTTPS(IModule):
     def init(self):
         self.classifier = FlowClassifier()
         self.read_configuration()
-        self.operational_log_path = os.path.join(
-            self.output_dir, "anomaly_detection_https.log"
+        self.operational_log_path = self.get_module_specific_output_path(
+            "anomaly_detection_https.log"
         )
 
         self.host_states: Dict[str, HostState] = {}
@@ -262,9 +263,7 @@ class AnomalyDetectionHTTPS(IModule):
     def read_configuration(self):
         conf = ConfigParser()
         self.training_hours = conf.https_anomaly_training_hours()
-        self.training_fit_method = (
-            conf.https_anomaly_training_fit_method()
-        )
+        self.training_fit_method = conf.https_anomaly_training_fit_method()
         self.training_alpha = conf.https_anomaly_training_alpha()
         self.hourly_zscore_threshold = conf.https_anomaly_hourly_zscore_thr()
         self.flow_zscore_threshold = conf.https_anomaly_flow_zscore_thr()
@@ -279,9 +278,7 @@ class AnomalyDetectionHTTPS(IModule):
         self.ja3_min_variants_per_server = (
             conf.https_anomaly_ja3_min_variants_per_server()
         )
-        self.requested_use_adwin_drift = (
-            conf.https_anomaly_use_adwin_drift()
-        )
+        self.requested_use_adwin_drift = conf.https_anomaly_use_adwin_drift()
         self.adwin_delta = conf.https_anomaly_adwin_delta()
         self.adwin_clock = conf.https_anomaly_adwin_clock()
         self.adwin_grace_period = conf.https_anomaly_adwin_grace_period()
@@ -379,9 +376,7 @@ class AnomalyDetectionHTTPS(IModule):
         reset = "\033[0m" if self.log_colors else ""
         wall_clock = self._ts_to_iso()
         traffic_clock = (
-            self._ts_to_iso(traffic_ts)
-            if traffic_ts is not None
-            else "n/a"
+            self._ts_to_iso(traffic_ts) if traffic_ts is not None else "n/a"
         )
         metrics_json = json.dumps(metrics, sort_keys=True)
         line = (
@@ -390,7 +385,9 @@ class AnomalyDetectionHTTPS(IModule):
         )
         if color:
             line = f"{color}{line}{reset}"
-        with open(self.operational_log_path, "a", encoding="utf-8") as log_file:
+        with open(
+            self.operational_log_path, "a", encoding="utf-8"
+        ) as log_file:
             log_file.write(f"{line}\n")
 
     @staticmethod
@@ -405,7 +402,9 @@ class AnomalyDetectionHTTPS(IModule):
         except (TypeError, ValueError):
             return float(default)
 
-    def get_traffic_ts(self, flow, fallback_ts: Optional[float] = None) -> float:
+    def get_traffic_ts(
+        self, flow, fallback_ts: Optional[float] = None
+    ) -> float:
         """
         Returns traffic timestamp from flow.starttime.
         Detection windows must use traffic time, not host wall-clock time.
@@ -621,7 +620,9 @@ class AnomalyDetectionHTTPS(IModule):
         )
 
     @staticmethod
-    def threat_level_from_confidence_level(confidence_level: str) -> ThreatLevel:
+    def threat_level_from_confidence_level(
+        confidence_level: str,
+    ) -> ThreatLevel:
         # Requested policy:
         # - confidence low/medium -> threat level low
         # - confidence high -> threat level medium
@@ -694,9 +695,9 @@ class AnomalyDetectionHTTPS(IModule):
             threshold = reason.get(
                 "threshold",
                 (
-                self.flow_zscore_threshold
-                if feature == "bytes_to_known_server"
-                else self.hourly_zscore_threshold
+                    self.flow_zscore_threshold
+                    if feature == "bytes_to_known_server"
+                    else self.hourly_zscore_threshold
                 ),
             )
 
@@ -729,7 +730,11 @@ class AnomalyDetectionHTTPS(IModule):
                 f"reason={reason_name}; value={value}; why={why}"
             )
 
-        reasons_text = " | ".join(reason_parts) if reason_parts else "reason=Unknown; value=; why=not provided"
+        reasons_text = (
+            " | ".join(reason_parts)
+            if reason_parts
+            else "reason=Unknown; value=; why=not provided"
+        )
         description = (
             f"HTTPS anomaly: type={kind}; confidence={confidence.get('level')} "
             f"({confidence_score:.3f}); {reasons_text}."
@@ -883,9 +888,8 @@ class AnomalyDetectionHTTPS(IModule):
         ssl_flows = float(bucket.ssl_flows)
         known_server_avg_bytes = 0.0
         if bucket.known_servers_flow_count > 0:
-            known_server_avg_bytes = (
-                bucket.known_servers_total_bytes
-                / float(bucket.known_servers_flow_count)
+            known_server_avg_bytes = bucket.known_servers_total_bytes / float(
+                bucket.known_servers_flow_count
             )
 
         features = {
@@ -1210,7 +1214,8 @@ class AnomalyDetectionHTTPS(IModule):
         twid_number: int,
     ):
         ts = self.get_traffic_ts(
-            ssl_flow, fallback_ts=self.to_float(conn_info.get("starttime"), 0.0)
+            ssl_flow,
+            fallback_ts=self.to_float(conn_info.get("starttime"), 0.0),
         )
         state = self.ensure_hour_bucket(profileid, ts)
         state.last_twid = twid_number
@@ -1478,9 +1483,7 @@ class AnomalyDetectionHTTPS(IModule):
                     "flow_raw_signals": flow_raw_signals,
                     "alpha": alpha,
                     "fit_method": (
-                        flow_training_fit_method
-                        if alpha is None
-                        else "ewma"
+                        flow_training_fit_method if alpha is None else "ewma"
                     ),
                 },
             )

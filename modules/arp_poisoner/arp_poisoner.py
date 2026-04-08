@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import logging
-import os
 import subprocess
 import time
 from threading import Lock
@@ -26,14 +25,16 @@ def generate_fake_mac():
 
 
 class ARPPoisoner(IModule):
-    name = "ARP Poisoner"
+    name = "arp_poisoner"
     description = "ARP poisons attackers to isolate them from the network."
     authors = ["Alya Gomaa"]
 
     def init(self):
         self._time_since_last_repoison = {}
         self._time_since_last_internet_cut = {}
-        self.log_file_path = os.path.join(self.output_dir, "arp_poisoning.log")
+        self.log_file_path = self.get_module_specific_output_path(
+            "arp_poisoning.log"
+        )
         self.blocking_logfile_lock = Lock()
         # clear it
         try:

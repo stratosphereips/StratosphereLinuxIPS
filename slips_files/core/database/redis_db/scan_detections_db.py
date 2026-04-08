@@ -69,7 +69,7 @@ class ScanDetectionsHandler:
     get_port_info: Callable[..., Any]
     mark_profile_tw_as_modified: Callable[..., Any]
 
-    name = "DB"
+    name = "scan_detections_handler_db"
 
     def setup(self, *args, **kwargs):
         self.use_local_p2p: bool = self.conf.use_local_p2p()

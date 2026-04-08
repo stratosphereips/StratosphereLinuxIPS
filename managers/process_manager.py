@@ -155,7 +155,7 @@ class ProcessManager:
             1,
             0,
         )
-        self.main.db.store_pid("EvidenceHandler", int(evidence_process.pid))
+        self.main.db.store_pid("evidence_handler", int(evidence_process.pid))
         return evidence_process
 
     def start_input_process(self):
@@ -266,7 +266,7 @@ class ProcessManager:
         return False
 
     def is_abstract_module(self, obj) -> bool:
-        return obj.name in ("IModule", "AsyncModule")
+        return obj.name in ("imodule", "iasync_module")
 
     def get_modules(self):
         """
@@ -356,11 +356,11 @@ class ProcessManager:
 
     def _prioritize_blocking_modules(self, plugins):
         """
-        Changes the order of the blocking modules (ARP poisoner and
-        Blocking) to load them before the rest of the modules
+        Changes the order of the blocking modules (`arp_poisoner` and
+        `blocking`) to load them before the rest of the modules
         so they can receive msgs sent from other modules
         """
-        blocking_modules = ("Blocking", "ARP Poisoner")
+        blocking_modules = ("blocking", "arp_poisoner")
 
         at_least_one_blocking_module_is_loaded = False
         for module in blocking_modules:
@@ -428,7 +428,7 @@ class ProcessManager:
         self, module_name: str, module_pid: int, module_description: str
     ) -> None:
         self.main.print(
-            f"\t\tStarting the module {green(module_name)} "
+            f"\t\tStarting {green(module_name)} module "
             f"({module_description}) "
             f"[PID {green(module_pid)}]",
             1,
@@ -541,9 +541,9 @@ class ProcessManager:
         )
 
         # check if update manager is still alive
-        if "Update Manager" in pending_module_names:
+        if "update_manager" in pending_module_names:
             self.main.print(
-                "Update Manager may take several minutes "
+                "update_manager may take several minutes "
                 "to finish updating 45+ TI files."
             )
 
@@ -563,16 +563,16 @@ class ProcessManager:
         # slips won't reach this function unless they are done already.
         # so no need to kill them last
         pids_to_kill_last = [
-            self.main.db.get_pid_of("EvidenceHandler"),
+            self.main.db.get_pid_of("evidence_handler"),
         ]
 
         if self.main.args.blocking:
-            pids_to_kill_last.append(self.main.db.get_pid_of("Blocking"))
-            pids_to_kill_last.append(self.main.db.get_pid_of("ARP Poisoner"))
+            pids_to_kill_last.append(self.main.db.get_pid_of("blocking"))
+            pids_to_kill_last.append(self.main.db.get_pid_of("arp_poisoner"))
 
         if "exporting_alerts" not in self.main.db.get_disabled_modules():
             pids_to_kill_last.append(
-                self.main.db.get_pid_of("Exporting Alerts")
+                self.main.db.get_pid_of("exporting_alerts")
             )
         # remove all None PIDs. this happens when a module in that list
         # isnt started in the current run. e.g. virustotal module starts then

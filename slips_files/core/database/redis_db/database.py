@@ -3,6 +3,9 @@
 import shutil
 import socket
 
+from slips_files.common.output_paths import (
+    get_redis_logs_path_inside_output_dir,
+)
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -194,12 +197,14 @@ class RedisDB(
 
     @classmethod
     def _get_conf_file_path(cls, redis_port: Optional[int] = None) -> str:
-        """Return a per-run redis config path to avoid parallel overwrite."""
+        """
+        Return a per-run redis config path to avoid parallel overwrite.
+        """
         redis_port = redis_port or cls.redis_port
         output_dir = os.fspath(cls.output_dir or "output")
         os.makedirs(output_dir, exist_ok=True)
-        return os.path.join(
-            output_dir, f"redis-server-port-{redis_port}-{os.getpid()}.conf"
+        return get_redis_logs_path_inside_output_dir(
+            cls.output_dir, f"redis-server-port-{redis_port}.conf"
         )
 
     def _init_ttls(self):
@@ -256,7 +261,7 @@ class RedisDB(
 
         # because slips may use different redis ports at the same time,
         # logs should be port specific
-        logfile = os.path.join(
+        logfile = get_redis_logs_path_inside_output_dir(
             cls.output_dir, f"redis-server-port-{cls.redis_port}.log"
         )
         cls._options.update({"logfile": logfile})

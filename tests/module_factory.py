@@ -70,8 +70,10 @@ class ModuleFactory:
         conf.disabled_detections = Mock(return_value=[])
         conf.get_tw_width_as_float = Mock(return_value=3600.0)
         conf.get_tw_width_in_seconds = Mock(return_value=3600)
+        conf.get_args = Mock(return_value=Mock(killall=False))
         conf.client_ips = Mock(return_value=[])
         conf.use_local_p2p = Mock(return_value=False)
+        conf.permanent_dir = Mock(return_value="permanent")
         conf.width = Mock(return_value=3600)
 
         with (
@@ -99,7 +101,7 @@ class ModuleFactory:
             )
 
         db.print = Mock()
-        db.init_p2ptrust_db = Mock()
+        db.init_p2p_trust_db = Mock()
         # for easier access to redis db
         db.r = db.rdb.r
         assert db.get_used_redis_port() == port
@@ -134,8 +136,18 @@ class ModuleFactory:
         return http_analyzer
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_fides_module_obj(self, mock_db):
-        from modules.fidesModule.fidesModule import FidesModule
+    def create_fides_obj(self, mock_db):
+        from modules.fides.fides import FidesModule
+
+        db_path = os.path.join("permanent", "databases", "fides_p2p_db.sqlite")
+
+        def get_permanent_database_path(_filename):
+            os.makedirs(os.path.dirname(db_path), exist_ok=True)
+            return db_path
+
+        mock_db.return_value.get_permanent_database_path.side_effect = (
+            get_permanent_database_path
+        )
 
         fm = FidesModule(
             logger=self.logger,
@@ -209,10 +221,10 @@ class ModuleFactory:
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_go_director_obj(self, mock_db):
-        from modules.p2ptrust.trust.trustdb import TrustDB
-        from modules.p2ptrust.utils.go_director import GoDirector
+        from modules.p2p_trust.trust.trustdb import TrustDB
+        from modules.p2p_trust.utils.go_director import GoDirector
 
-        with patch("modules.p2ptrust.utils.utils.send_evaluation_to_go"):
+        with patch("modules.p2p_trust.utils.utils.send_evaluation_to_go"):
             go_director = GoDirector(
                 logger=self.logger,
                 trustdb=Mock(spec=TrustDB),
@@ -252,7 +264,7 @@ class ModuleFactory:
 
     @patch("sqlite3.connect")
     def create_trust_db_obj(self, sqlite_mock):
-        from modules.p2ptrust.trust.trustdb import TrustDB
+        from modules.p2p_trust.trust.trustdb import TrustDB
 
         with (
             patch("slips_files.common.abstracts.isqlite.ISQLite._init_flock"),
@@ -274,7 +286,7 @@ class ModuleFactory:
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_base_model_obj(self, mock_db):
-        from modules.p2ptrust.trust.base_model import BaseModel
+        from modules.p2p_trust.trust.base_model import BaseModel
         from slips_files.core.output import Output
 
         logger = Mock(spec=Output)
@@ -362,7 +374,7 @@ class ModuleFactory:
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_flowalerts_obj(self, mock_db):
-        from modules.flowalerts.flowalerts import FlowAlerts
+        from modules.flow_alerts.flow_alerts import FlowAlerts
 
         flowalerts = FlowAlerts(
             logger=self.logger,
@@ -378,10 +390,12 @@ class ModuleFactory:
         return flowalerts
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_bruteforcing_obj(self, mock_db):
-        from modules.bruteforcing.bruteforcing import Bruteforcing
+    def create_brute_force_detector_obj(self, mock_db):
+        from modules.brute_force_detector.brute_force_detector import (
+            BruteforceDetector,
+        )
 
-        bruteforcing = Bruteforcing(
+        brute_force_detector = BruteforceDetector(
             logger=self.logger,
             output_dir="dummy_output_dir",
             redis_port=6379,
@@ -391,68 +405,68 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
-        bruteforcing.print = Mock()
-        return bruteforcing
+        brute_force_detector.print = Mock()
+        return brute_force_detector
 
     @patch(DB_MANAGER, name="mock_db")
     def create_dns_analyzer_obj(self, mock_db):
-        from modules.flowalerts.dns import DNS
+        from modules.flow_alerts.dns import DNS
 
         flowalerts = self.create_flowalerts_obj()
         return DNS(flowalerts.db, flowalerts=flowalerts)
 
     @patch(DB_MANAGER, name="mock_db")
     def create_notice_analyzer_obj(self, mock_db):
-        from modules.flowalerts.notice import Notice
+        from modules.flow_alerts.notice import Notice
 
         flowalerts = self.create_flowalerts_obj()
         return Notice(flowalerts.db, flowalerts=flowalerts)
 
     @patch(DB_MANAGER, name="mock_db")
     def create_smtp_analyzer_obj(self, mock_db):
-        from modules.flowalerts.smtp import SMTP
+        from modules.flow_alerts.smtp import SMTP
 
         flowalerts = self.create_flowalerts_obj()
         return SMTP(flowalerts.db, flowalerts=flowalerts)
 
     @patch(DB_MANAGER, name="mock_db")
     def create_ssl_analyzer_obj(self, mock_db):
-        from modules.flowalerts.ssl import SSL
+        from modules.flow_alerts.ssl import SSL
 
         flowalerts = self.create_flowalerts_obj()
         return SSL(flowalerts.db, flowalerts=flowalerts)
 
     @patch(DB_MANAGER, name="mock_db")
     def create_ssh_analyzer_obj(self, mock_db):
-        from modules.flowalerts.ssh import SSH
+        from modules.flow_alerts.ssh import SSH
 
         flowalerts = self.create_flowalerts_obj()
         return SSH(flowalerts.db, flowalerts=flowalerts)
 
     @patch(DB_MANAGER, name="mock_db")
     def create_downloaded_file_analyzer_obj(self, mock_db):
-        from modules.flowalerts.downloaded_file import DownloadedFile
+        from modules.flow_alerts.downloaded_file import DownloadedFile
 
         flowalerts = self.create_flowalerts_obj()
         return DownloadedFile(flowalerts.db, flowalerts=flowalerts)
 
     @patch(DB_MANAGER, name="mock_db")
     def create_tunnel_analyzer_obj(self, mock_db):
-        from modules.flowalerts.tunnel import Tunnel
+        from modules.flow_alerts.tunnel import Tunnel
 
         flowalerts = self.create_flowalerts_obj()
         return Tunnel(flowalerts.db, flowalerts=flowalerts)
 
     @patch(DB_MANAGER, name="mock_db")
     def create_conn_analyzer_obj(self, mock_db):
-        from modules.flowalerts.conn import Conn
+        from modules.flow_alerts.conn import Conn
 
         flowalerts = self.create_flowalerts_obj()
         return Conn(flowalerts.db, flowalerts=flowalerts)
 
     @patch(DB_MANAGER, name="mock_db")
     def create_software_analyzer_obj(self, mock_db):
-        from modules.flowalerts.software import Software
+        from modules.flow_alerts.software import Software
 
         flowalerts = self.create_flowalerts_obj()
         return Software(flowalerts.db, flowalerts=flowalerts)
@@ -723,7 +737,7 @@ class ModuleFactory:
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_set_evidence_helper(self, mock_db):
-        from modules.flowalerts.set_evidence import SetEvidenceHelper
+        from modules.flow_alerts.set_evidence import SetEvidenceHelper
 
         """Create an instance of SetEvidenceHelper."""
         set_evidence_helper = SetEvidenceHelper(mock_db)
@@ -921,7 +935,7 @@ class ModuleFactory:
                 conf=Mock(),
                 ppid=Mock(),
                 bloom_filters_manager=Mock(),
-                name="EvidenceHandlerWorker_Process_0",
+                name="evidence_handler_worker_process_0",
                 evidence_queue=Mock(),
                 evidence_logger_q=Mock(),
             )
@@ -984,9 +998,9 @@ class ModuleFactory:
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_riskiq_obj(self, mock_db):
-        from modules.riskiq.riskiq import RiskIQ
+        from modules.risk_iq.risk_iq import RiskIQ
 
-        riskiq = RiskIQ(
+        risk_iq = RiskIQ(
             logger=self.logger,
             output_dir="dummy_output_dir",
             redis_port=6379,
@@ -996,8 +1010,8 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
-        riskiq.db = mock_db
-        return riskiq
+        risk_iq.db = mock_db
+        return risk_iq
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_timeline_object(self, mock_db):
@@ -1075,8 +1089,8 @@ class ModuleFactory:
         # main_mock.conf.get_bootstrapping_setting.return_value = (False, [])
         main_mock.conf.is_bootstrapping_node.return_value = False
         main_mock.conf.get_bootstrapping_modules.return_value = [
-            "fidesModule",
-            "irisModule",
+            "fides",
+            "iris",
         ]
         main_mock.conf.generate_performance_plots.return_value = False
         main_mock.input_type = InputType.PCAP

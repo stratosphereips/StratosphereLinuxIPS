@@ -9,6 +9,7 @@ import csv
 from dataclasses import asdict
 
 from slips_files.common.abstracts.isqlite import ISQLite
+from slips_files.common.output_paths import get_this_db_path_inside_output_dir
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.alerts import Alert
@@ -21,11 +22,13 @@ class SQLiteDB(ISQLite):
     Creates a new db and connects to it if there's none in the given output_dir
     """
 
-    name = "SQLiteDB"
+    name = "sqlite_db"
 
     def __init__(self, logger: Output, output_dir: str, main_pid: int):
         self.printer = Printer(logger, self.name)
-        self._flows_db = os.path.join(output_dir, "flows.sqlite")
+        self._flows_db = get_this_db_path_inside_output_dir(
+            output_dir, "flows.sqlite"
+        )
 
         db_newly_created = False
         if not os.path.exists(self._flows_db):

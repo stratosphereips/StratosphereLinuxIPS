@@ -26,7 +26,7 @@ class NetworkDiscovery(IModule):
     This should be converted into a module that wakesup alone when a new alert arrives
     """
 
-    name = "Network Discovery"
+    name = "network_discovery"
     description = "Detect Horizonal, Vertical, and DHCP Scans."
     authors = ["Sebastian Garcia", "Alya Gomaa"]
 

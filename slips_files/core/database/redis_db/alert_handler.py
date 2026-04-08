@@ -50,7 +50,7 @@ class AlertHandler:
     set_profileid_field: Callable[..., Any]
     add_profile: Callable[..., Any]
 
-    name = "DB"
+    name = "alert_handler_db"
 
     def set_evidence_causing_alert(self, alert: Alert):
         """

@@ -17,7 +17,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Detection modules**. Explanation of detection modules in Slips, types of input and output. See :doc:`Detection modules <detection_modules>`.
 
-- **Bruteforcing**. Dedicated documentation for the SSH bruteforcing detection module. See :doc:`Bruteforcing <bruteforcing>`.
+- **brute_force_detector**. Dedicated documentation for the SSH brute force detector module. See :doc:`brute_force_detector <brute_force_detector>`.
 
 - **HTTPS anomaly detection**. Detailed design and behavior of the HTTPS anomaly detector. See :doc:`HTTPS anomaly detection <https_anomaly_detection>`.
 
@@ -25,7 +25,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Training with your own data**. Explanation on how to re-train the machine learning system of Slips with your own traffic (normal or malicious).See :doc:`Training <training>`.
 
-- **Detections per Flow**. Explanation on how Slips works to make detections on each flow with different techniques. See :doc:`Flow Alerts <flowalerts>`.
+- **Detections per Flow**. Explanation on how Slips works to make detections on each flow with different techniques. See :doc:`flow_alerts <flow_alerts>`.
 
 - **Exporting**. The exporting module allows Slips to export to Slack and STIX servers. See :doc:`Exporting <exporting>`.
 
@@ -53,14 +53,14 @@ This documentation gives an overview how Slips works, how to use it and how to h
    usage
    architecture
    detection_modules
-   bruteforcing
+   brute_force_detector
    https_anomaly_detection
-   flowalerts
+   flow_alerts
    features
    training
    exporting
    P2P
-   fides_module
+   fides
    create_new_module
    datasets
    immune/Immune

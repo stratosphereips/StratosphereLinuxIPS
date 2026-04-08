@@ -24,7 +24,7 @@ class AIDManager:
         self._process = Process(
             target=self._worker_loop,
             args=(self._aid_queue, self.db),
-            name="AIDManager",
+            name="aid_manager",
             daemon=True,
         )
         utils.start_process(self._process, self.db)

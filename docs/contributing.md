@@ -141,6 +141,9 @@ The goal of suppressing errors by default is the most errors should be handled b
 ### How are the modules loaded?
 
 - All modules in the modules/ directory that implement the IModule interface are automatically imported by slips, for more technical details check the load_modules() function in managers/process_manager.py
+- Module names must use snake_case and follow the `x_y_doer` style used by names such as `http_analyzer`.
+- Set the module class `name` to the same snake_case identifier as the module directory and main file.
+- Keep the module directory name, the main module file, the config section name, and any module references in docs aligned with that same snake_case name.
 
 
 ### There's some missing code in all modules, what's happening?
@@ -187,8 +190,8 @@ Using one of these 3 ways
 Variables used in the trust evaluation and its accompanied processes, such as database-backup in persistent
 SQLite storage and memory persistent
 Redis database of Slips, are strings, integers and floats grouped into custom dataclasses. Aforementioned data classes can
-be found in modules/fidesModule/model. The reader may find that all of the floating variables are in the interval <-1; 1>
-and some of them are between <0; 1>, please refer to the modules/fidesModule/model directory.
+be found in modules/fides/model. The reader may find that all of the floating variables are in the interval <-1; 1>
+and some of them are between <0; 1>, please refer to the modules/fides/model directory.
 
 The Fides Module is designed to cooperate with a global-peer-to-peer module. The communication is done using Slips' Redis
 channel, for more information please refer to communication and messages sections above.
@@ -248,8 +251,8 @@ redis_client.publish(channel, message)
 print(f"Message published to channel '{channel}'.")
 ```
 
-For more information about message handling, please also refer to modules/fidesModule/messaging/message_handler.py
-and to modules/fidesModule/messaging/dacite/core.py for message parsing.
+For more information about message handling, please also refer to modules/fides/messaging/message_handler.py
+and to modules/fides/messaging/dacite/core.py for message parsing.
 
 
 ### **Communication**
@@ -257,7 +260,7 @@ The module uses Slips' Redis to receive and send messages related to trust intel
 evaluation of trust in peers and alert message dispatch.
 
 **Used Channels**
-modules/fidesModule/messaging/message_handler.py
+modules/fides/messaging/message_handler.py
 | **Slips Channel Name** | **Purpose**                                                             |
 |-----------------|-------------------------------------------------------------------------|
 | `slips2fides`   | Provides communication channel from Slips to Fides                      |
@@ -282,4 +285,4 @@ For more details, the code [here](https://github.com/stratosphereips/fides/tree/
 |    `tl2nl_peers_reliability`    | `fides2network` | NetworkBridge.send_peers_reliability(...)                                                                             | Sends peer reliability, this message is only for network layer and is not dispatched to the network.  |
 
 
-Implementations of Fides_Module-network-communication can be found in ```modules/fidesModule/messaging/network_bridge.py```.
+Implementations of Fides_Module-network-communication can be found in ```modules/fides/messaging/network_bridge.py```.

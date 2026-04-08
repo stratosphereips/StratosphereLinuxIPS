@@ -2,16 +2,16 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from abc import ABC, abstractmethod
 
-from modules.flowalerts.set_evidence import SetEvidenceHelper
+from modules.flow_alerts.set_evidence import SetEvidenceHelper
 from slips_files.core.database.database_manager import DBManager
 
 
 class IFlowalertsAnalyzer(ABC):
     """
     keep in mind that every class that implements this interface MUST be
-    registered in flowalerts.py
+    registered in flow_alerts.py
     must by started, controlled, and terminated by it. msgs from the
-    appropriate channels should be passed to that class using flowalerts too.
+    appropriate channels should be passed to that class using flow_alerts too.
     """
 
     def __init__(self, db: DBManager, flowalerts=None, **kwargs):
@@ -37,7 +37,7 @@ class IFlowalertsAnalyzer(ABC):
     def init(self):
         """
         the goal of this is to have one common __init__() above for all
-        flowalerts helpers, which is the one in this file, and a different
+        flow_alerts helpers, which is the one in this file, and a different
         init() per helper
         this init will have access to all keyword args passes when
         initializing the module
