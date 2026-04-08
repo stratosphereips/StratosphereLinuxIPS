@@ -76,6 +76,11 @@ parameters:
   # whitelist file, current commit and date
   metadata_dir: true
 
+  # This directory stores databases and runtime-generated files that must
+  # persist across different slips runs and should not be overwritten.
+  # this dir is inside slips root dir.
+  permanent_dir: permanent
+
   # Default pcap packet filter. Used with zeek pcapfilter : 'ip or not ip'
   # If you want more important traffic and forget the multicast and broadcast
   # traffic, you can use

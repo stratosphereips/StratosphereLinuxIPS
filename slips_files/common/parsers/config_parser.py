@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from datetime import timedelta
+import os
 import sys
 from slips_files.common.input_type import InputType
 import ipaddress
@@ -291,6 +292,21 @@ class ConfigParser(object):
 
     def enable_metadata(self):
         return self.read_configuration("parameters", "metadata_dir", False)
+
+    def permanent_dir(self) -> str:
+        """
+        Return the directory used for persistent runtime data.
+
+        Returns:
+            Relative path where databases and runtime-generated files that
+            must persist across different Slips runs are stored.
+        """
+        permanent_dir = self.read_configuration(
+            "parameters", "permanent_dir", "permanent"
+        )
+        if not permanent_dir:
+            permanent_dir = "permanent"
+        return os.path.normpath(permanent_dir)
 
     def use_local_p2p(self):
         return self.read_configuration("local_p2p", "use_p2p", False)

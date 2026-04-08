@@ -523,6 +523,12 @@ In ```out``` mode, SLIPS still creates profiles for internal (A) and external (B
 
 This parameter allows you to tailor SLIPS's analysis focus based on your specific monitoring requirements, such as detecting potential data exfiltration attempts (```out``` mode) or performing comprehensive network monitoring in both directions (```all``` mode).
 
+**Persistent runtime data**
+
+Use ```permanent_dir``` to choose where Slips stores databases and runtime-generated files that must persist across different Slips runs and should not be overwritten.
+
+This includes persistent artifacts such as ```p2p_trust_runtime/``` and shared module databases like the Fides cache.
+
 
 
 <div class="zoom">

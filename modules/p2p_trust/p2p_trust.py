@@ -9,6 +9,7 @@ from typing import Dict, Optional, Tuple
 import json
 import socket
 
+from slips_files.common.style import green
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
@@ -176,8 +177,7 @@ class Trust(IModule):
         self.reputation_model = reputation_model.BaseModel(
             self.logger, self.trust_db, self.db
         )
-        # print(f"[DEBUGGING] Starting godirector with
-        # pygo_channel: {self.pygo_channel}")
+
         self.go_director = GoDirector(
             self.logger,
             self.trust_db,
@@ -195,7 +195,8 @@ class Trust(IModule):
         if self.start_pigeon:
             if not shutil.which(self.pigeon_binary):
                 self.print(
-                    f'P2p4slips binary not found in "{self.pigeon_binary}". '
+                    f"Warning: P2p4slips binary not found in "
+                    f'"{self.pigeon_binary}". '
                     f"Did you include it in PATH?. Exiting process."
                 )
                 return
@@ -208,10 +209,7 @@ class Trust(IModule):
                 "-redis-channel-pygo": self.pygo_channel_raw,
                 "-redis-channel-gopy": self.gopy_channel_raw,
             }
-            self.print(
-                f"P2P is listening on {self.host} port {self.port} "
-                f"(determined by p2p module)"
-            )
+            self.print(f"P2P is listening on {self.host} port {self.port}.")
             executable = [self.pigeon_binary] + [
                 item for pair in params.items() for item in pair
             ]
@@ -592,7 +590,7 @@ class Trust(IModule):
         self.db.publish("new_blame", data)
 
     def shutdown_gracefully(self):
-        if hasattr(self, "pigeon"):
+        if hasattr(self, "pigeon") and self.pigeon is not None:
             self.pigeon.send_signal(signal.SIGINT)
         if hasattr(self, "trust_db"):
             self.trust_db.__del__()
@@ -644,7 +642,7 @@ class Trust(IModule):
                 # give the pigeon time to put the multiaddr in the db
                 time.sleep(2)
                 multiaddr = self.db.get_multiaddr()
-                self.print(f"You Multiaddress is: {multiaddr}\n")
+                self.print(f"You Multiaddress is: {green(multiaddr)}\n")
                 self.mutliaddress_printed = True
 
         except Exception:
