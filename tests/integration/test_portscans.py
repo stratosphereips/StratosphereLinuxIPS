@@ -14,7 +14,7 @@ from tests.common_test_utils import (
     skip_if_missing_runtime_dependencies,
 )
 
-alerts_file = "alerts/alerts.log"
+alerts_file = "alerts.log"
 
 
 @pytest.mark.parametrize(
