@@ -72,6 +72,7 @@ class ModuleFactory:
         conf.get_tw_width_in_seconds = Mock(return_value=3600)
         conf.client_ips = Mock(return_value=[])
         conf.use_local_p2p = Mock(return_value=False)
+        conf.permanent_dir = Mock(return_value="permanent")
         conf.width = Mock(return_value=3600)
 
         with (
@@ -136,6 +137,16 @@ class ModuleFactory:
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_fides_module_obj(self, mock_db):
         from modules.fides.fides import FidesModule
+
+        db_path = os.path.join("permanent", "databases", "fides_p2p_db.sqlite")
+
+        def get_permanent_database_path(_filename):
+            os.makedirs(os.path.dirname(db_path), exist_ok=True)
+            return db_path
+
+        mock_db.return_value.get_permanent_database_path.side_effect = (
+            get_permanent_database_path
+        )
 
         fm = FidesModule(
             logger=self.logger,

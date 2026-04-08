@@ -43,6 +43,8 @@ To enable it, change ```use_fides=False``` to ```use_fides=True``` in ```config/
 
 And start Slips on your interface.
 
+The Fides shared SQLite cache is stored under the directory configured by ```parameters.permanent_dir```. By default, it is created in ```permanent/databases/```, so it persists across different Slips runs.
+
 ## How it works:
 
 Slips interacts with other slips peers for the following purposes:

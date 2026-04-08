@@ -2,7 +2,6 @@ import os
 import json
 from pathlib import Path
 
-from slips_files.common.output_paths import get_output_sqlite_path
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.parsers.config_parser import (
@@ -61,11 +60,10 @@ class FidesModule(IModule):
 
         db_name = os.path.basename(self.__trust_model_config.database)
         # this sqlite is shared between all runs, like a cache,
-        # so it shouldnt be stored in the current output dir, it should be
-        # in the main slips dir
+        # so it should not be stored in the current output dir.
         self.sqlite = FidesSQLiteDB(
             self.logger,
-            get_output_sqlite_path(self.parent_output_dir, db_name),
+            self.db.get_permanent_database_path(db_name),
         )
 
     def subscribe_to_channels(self):

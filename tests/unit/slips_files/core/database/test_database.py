@@ -180,3 +180,31 @@ def test_setup_config_file_uses_isolated_path_and_preserves_save(
         f"logfile {tmp_path / f'redis-server-port-{RedisDB.redis_port}.log'}"
         in conf_contents
     )
+
+
+def test_get_permanent_database_path_uses_configured_dir(
+    tmp_path, monkeypatch
+):
+    db = ModuleFactory().create_db_manager_obj(6379)
+    monkeypatch.chdir(tmp_path)
+    db.conf.permanent_dir = Mock(return_value="persistent_state")
+
+    path = db.get_permanent_database_path("shared.sqlite")
+
+    assert path == os.path.join(
+        "persistent_state", "databases", "shared.sqlite"
+    )
+    assert os.path.isdir(os.path.join("persistent_state", "databases"))
+
+
+def test_init_p2p_trust_db_uses_permanent_dir(tmp_path, monkeypatch):
+    db = ModuleFactory().create_db_manager_obj(6379)
+    monkeypatch.chdir(tmp_path)
+    db.conf.permanent_dir = Mock(return_value="persistent_state")
+
+    db_path = db.init_p2p_trust_db()
+
+    assert db_path == os.path.join(
+        "persistent_state", "p2p_trust_runtime", "trustdb.db"
+    )
+    assert os.path.isdir(os.path.join("persistent_state", "p2p_trust_runtime"))
