@@ -8,8 +8,8 @@ from pathlib import PosixPath, Path
 
 import redis
 
-from modules.fides_module.model.peer import PeerInfo
-from modules.fides_module.persistence.fides_sqlite_db import FidesSQLiteDB
+from modules.fides.model.peer import PeerInfo
+from modules.fides.persistence.fides_sqlite_db import FidesSQLiteDB
 from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
@@ -21,7 +21,7 @@ import subprocess
 import time
 import sys
 from unittest.mock import Mock
-import modules.fides_module.model.peer_trust_data as ptd
+import modules.fides.model.peer_trust_data as ptd
 
 # TODO
 # from tests.common_test_utils import (

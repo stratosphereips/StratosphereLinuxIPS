@@ -25,10 +25,10 @@ def cleanup_database():
 
 
 def test_pre_main(mocker, cleanup_database):
-    fides_module = ModuleFactory().create_fides_module_obj()
+    fides = ModuleFactory().create_fides_obj()
     mocker.patch(
         "slips_files.common.slips_utils.Utils.drop_root_privs_permanently"
     )
-    fides_module.subscribe_to_channels()
-    fides_module.pre_main()
+    fides.subscribe_to_channels()
+    fides.pre_main()
     utils.drop_root_privs_permanently.assert_called_once()
