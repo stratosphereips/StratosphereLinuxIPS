@@ -87,6 +87,14 @@ def check_strings_in_file(string_list, file_path):
         return False
 
 
+def get_default_interface():
+    with open("/proc/net/route") as f:
+        for line in f.readlines()[1:]:
+            fields = line.strip().split()
+            if fields[1] == "00000000":  # default route
+                return fields[0]
+
+
 @pytest.mark.parametrize(
     "zeek_dir_path, output_dir, peer_output_dir, redis_port, peer_redis_port",
     [
@@ -176,7 +184,7 @@ def test_messaging(
                 str(zeek_dir_path),
                 # dummy interface required by -g
                 "-i",
-                "eth0",
+                get_default_interface(),
                 "-e",
                 "1",
                 "-o",
