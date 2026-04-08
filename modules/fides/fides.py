@@ -13,24 +13,24 @@ from slips_files.core.structures.alerts import (
     Alert,
 )
 from .persistence.fides_sqlite_db import FidesSQLiteDB
-from ..fides_module.messaging.message_handler import MessageHandler
-from ..fides_module.messaging.network_bridge import NetworkBridge
-from ..fides_module.model.configuration import load_configuration
-from ..fides_module.model.threat_intelligence import SlipsThreatIntelligence
-from ..fides_module.protocols.alert import AlertProtocol
-from ..fides_module.protocols.initial_trusl import InitialTrustProtocol
-from ..fides_module.protocols.opinion import OpinionAggregator
-from ..fides_module.protocols.peer_list import PeerListUpdateProtocol
-from ..fides_module.protocols.recommendation import RecommendationProtocol
-from ..fides_module.protocols.threat_intelligence import (
+from .messaging.message_handler import MessageHandler
+from .messaging.network_bridge import NetworkBridge
+from .model.configuration import load_configuration
+from .model.threat_intelligence import SlipsThreatIntelligence
+from .protocols.alert import AlertProtocol
+from .protocols.initial_trusl import InitialTrustProtocol
+from .protocols.opinion import OpinionAggregator
+from .protocols.peer_list import PeerListUpdateProtocol
+from .protocols.recommendation import RecommendationProtocol
+from .protocols.threat_intelligence import (
     ThreatIntelligenceProtocol,
 )
-from ..fides_module.utils.logger import LoggerPrintCallbacks
-from ..fides_module.messaging.redis_simplex_queue import RedisSimplexQueue
-from ..fides_module.persistence.threat_intelligence_db import (
+from .utils.logger import LoggerPrintCallbacks
+from .messaging.redis_simplex_queue import RedisSimplexQueue
+from .persistence.threat_intelligence_db import (
     SlipsThreatIntelligenceDatabase,
 )
-from ..fides_module.persistence.trust_db import SlipsTrustDatabase
+from .persistence.trust_db import SlipsTrustDatabase
 
 
 class FidesModule(IModule):
