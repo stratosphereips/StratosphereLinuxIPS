@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import sqlite3
 from importlib.util import find_spec
 from pathlib import Path
 import os
@@ -8,7 +9,6 @@ import binascii
 import subprocess
 import base64
 import sys
-import sqlite3
 from typing import (
     Dict,
     Optional,
@@ -200,21 +200,6 @@ def check_for_text(txt, output_dir):
             if txt in line:
                 return True
     return False
-
-
-def get_profiles_len_from_output_db(output_dir):
-    """
-    Return the number of unique profiles stored in the output SQLite DB.
-
-    :param output_dir: integration test output directory
-    :return: number of unique profiles
-    """
-    db_path = os.path.join(output_dir, "databases", "flows.sqlite")
-    with sqlite3.connect(db_path) as conn:
-        row = conn.execute(
-            "SELECT COUNT(DISTINCT profileid) FROM flows"
-        ).fetchone()
-    return int(row[0] or 0)
 
 
 def get_label_count_from_output_db(output_dir, label):

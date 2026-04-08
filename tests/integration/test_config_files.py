@@ -13,12 +13,12 @@ from tests.common_test_utils import (
     assert_no_errors,
     check_for_text,
     get_label_count_from_output_db,
-    get_profiles_len_from_output_db,
     run_slips,
     get_slips_test_command,
     modify_yaml_config,
     skip_if_missing_runtime_dependencies,
 )
+from tests.module_factory import ModuleFactory
 import pytest
 import shutil
 import os
@@ -95,7 +95,10 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     print("Slip is done, checking for errors in the output dir.")
     assert_no_errors(output_dir)
     print("Comparing profiles with expected profiles")
-    profiles = get_profiles_len_from_output_db(output_dir)
+    database = ModuleFactory().create_db_manager_obj(
+        redis_port, output_dir=output_dir, start_redis_server=False
+    )
+    profiles = database.get_profiles_len()
     # expected_profiles is more than 50 because we're using direction = all
     assert profiles > expected_profiles
     print("Checking for a random evidence")

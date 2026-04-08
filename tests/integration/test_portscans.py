@@ -10,9 +10,9 @@ from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
     get_slips_test_command,
-    get_profiles_len_from_output_db,
     skip_if_missing_runtime_dependencies,
 )
+from tests.module_factory import ModuleFactory
 
 alerts_file = "alerts.log"
 
@@ -49,7 +49,10 @@ def test_horizontal(path, output_dir, redis_port):
     run_slips(command)
 
     assert_no_errors(output_dir)
-    profiles = get_profiles_len_from_output_db(output_dir)
+    database = ModuleFactory().create_db_manager_obj(
+        redis_port, output_dir=output_dir, start_redis_server=False
+    )
+    profiles = database.get_profiles_len()
     assert profiles > 0
 
     log_file = output_dir / "alerts" / alerts_file
@@ -85,7 +88,10 @@ def test_vertical(path, output_dir, redis_port):
 
     assert_no_errors(output_dir)
 
-    profiles = get_profiles_len_from_output_db(output_dir)
+    database = ModuleFactory().create_db_manager_obj(
+        redis_port, output_dir=output_dir, start_redis_server=False
+    )
+    profiles = database.get_profiles_len()
     assert profiles > 0
 
     log_file = output_dir / "alerts" / alerts_file
