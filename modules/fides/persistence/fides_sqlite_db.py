@@ -104,6 +104,37 @@ class FidesSQLiteDB:
 
     def store_peer_trust_data(self, peer_trust_data: PeerTrustData) -> None:
         with FidesSQLiteDB._lock:
+            self.__execute_query(
+                """
+                DELETE FROM PeerTrustServiceHistory
+                WHERE peer_trust_data_id IN (
+                    SELECT id FROM PeerTrustData WHERE peerID = ?
+                );
+            """,
+                [peer_trust_data.info.id],
+            )
+            self.__execute_query(
+                """
+                DELETE FROM PeerTrustRecommendationHistory
+                WHERE peer_trust_data_id IN (
+                    SELECT id FROM PeerTrustData WHERE peerID = ?
+                );
+            """,
+                [peer_trust_data.info.id],
+            )
+            self.__execute_query(
+                "DELETE FROM ServiceHistory WHERE peerID = ?;",
+                [peer_trust_data.info.id],
+            )
+            self.__execute_query(
+                "DELETE FROM RecommendationHistory WHERE peerID = ?;",
+                [peer_trust_data.info.id],
+            )
+            self.__execute_query(
+                "DELETE FROM PeerTrustData WHERE peerID = ?;",
+                [peer_trust_data.info.id],
+            )
+
             # Insert PeerInfo first to ensure the peer exists
             self.__execute_query(
                 """
@@ -143,6 +174,9 @@ class FidesSQLiteDB:
                     peer_trust_data.initial_reputation_provided_by_count,
                 ),
             )
+            peer_trust_data_id = self.__execute_query(
+                "SELECT last_insert_rowid();"
+            )[0][0]
 
             # Prepare to insert service history and link to PeerTrustData
             for sh in peer_trust_data.service_history:
@@ -163,8 +197,14 @@ class FidesSQLiteDB:
                 self.__execute_query(
                     """
                     INSERT INTO PeerTrustServiceHistory (peer_trust_data_id, service_history_id)
-                    VALUES (last_insert_rowid(), last_insert_rowid());
-                """
+                    VALUES (?, ?);
+                """,
+                    (
+                        peer_trust_data_id,
+                        self.__execute_query("SELECT last_insert_rowid();")[0][
+                            0
+                        ],
+                    ),
                 )
 
             # Prepare to insert recommendation history and link to PeerTrustData
@@ -186,8 +226,14 @@ class FidesSQLiteDB:
                 self.__execute_query(
                     """
                     INSERT INTO PeerTrustRecommendationHistory (peer_trust_data_id, recommendation_history_id)
-                    VALUES (last_insert_rowid(), last_insert_rowid());
-                """
+                    VALUES (?, ?);
+                """,
+                    (
+                        peer_trust_data_id,
+                        self.__execute_query("SELECT last_insert_rowid();")[0][
+                            0
+                        ],
+                    ),
                 )
 
     def get_peers_by_minimal_recommendation_trust(
