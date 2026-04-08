@@ -23,9 +23,9 @@ import sys
 def test_print(test_message, expected_log_content, tmpdir):
     output_dir = tmpdir.mkdir("output")
     daemon = ModuleFactory().create_daemon_object()
-    daemon.logs_file = os.path.join(output_dir, daemon.logs_file)
+    daemon.logsfile = os.path.join(output_dir, daemon.logsfile)
     daemon.print(test_message)
-    with open(daemon.logs_file, "r") as f:
+    with open(daemon.logsfile, "r") as f:
         log_content = f.read()
     assert log_content == expected_log_content
 
@@ -52,7 +52,7 @@ def test_create_std_streams(
 
     daemon.stderr = stderr
     daemon.stdout = stdout
-    daemon.logs_file = logsfile
+    daemon.logsfile = logsfile
 
     daemon.prepare_std_streams(str(output_dir))
 
@@ -94,7 +94,7 @@ def test_prepare_std_streams(
     daemon.prepare_std_streams(output_dir)
     assert daemon.stderr == expected_stderr
     assert daemon.stdout == expected_stdout
-    assert daemon.logs_file == expected_logsfile
+    assert daemon.logsfile == expected_logsfile
 
 
 @patch("os.fork")

@@ -373,7 +373,7 @@ def test_update_riskiq_feed(
             "malicious.com": json.dumps(
                 {
                     "description": "malicious domain detected by RiskIQ",
-                    "source": "https://api.risk_iq.net/pt/v2/articles/indicators",
+                    "source": "https://api.riskiq.net/pt/v2/articles/indicators",
                 }
             )
         }

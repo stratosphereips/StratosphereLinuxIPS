@@ -485,7 +485,7 @@ def test_print_started_module():
         )
 
         mock_print.assert_called_once_with(
-            "\t\tStarting module green_module_name "
+            "\t\tStarting green_module_name module "
             "(Test description) [PID green_module_name]",
             1,
             0,

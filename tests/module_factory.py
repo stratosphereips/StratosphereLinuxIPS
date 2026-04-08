@@ -135,7 +135,7 @@ class ModuleFactory:
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_fides_module_obj(self, mock_db):
-        from modules.fides_module.fides_module import FidesModule
+        from modules.fides.fides import FidesModule
 
         fm = FidesModule(
             logger=self.logger,

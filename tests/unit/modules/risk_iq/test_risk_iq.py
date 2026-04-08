@@ -44,7 +44,7 @@ def test_get_passive_dns(mock_get, ip, api_response, expected_result):
     assert result == expected_result
 
     mock_get.assert_called_once_with(
-        "https://api.risk_iq.net/pt/v2/dns/passive",
+        "https://api.riskiq.net/pt/v2/dns/passive",
         params={"query": ip},
         timeout=5,
         verify=False,
