@@ -136,7 +136,7 @@ class ModuleFactory:
         return http_analyzer
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_fides_module_obj(self, mock_db):
+    def create_fides_obj(self, mock_db):
         from modules.fides.fides import FidesModule
 
         db_path = os.path.join("permanent", "databases", "fides_p2p_db.sqlite")

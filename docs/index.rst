@@ -60,7 +60,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    training
    exporting
    P2P
-   fides_module
+   fides
    create_new_module
    datasets
    immune/Immune

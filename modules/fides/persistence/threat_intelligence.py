@@ -1,7 +1,7 @@
 from typing import Optional
 
-from modules.fides_module.model.aliases import Target
-from modules.fides_module.model.threat_intelligence import (
+from modules.fides.model.aliases import Target
+from modules.fides.model.threat_intelligence import (
     SlipsThreatIntelligence,
 )
 

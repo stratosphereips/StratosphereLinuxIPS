@@ -4,7 +4,7 @@ from typing import Optional
 from ..model.aliases import Target
 from ..model.configuration import TrustModelConfiguration
 from ..model.threat_intelligence import SlipsThreatIntelligence
-from modules.fides_module.persistence.threat_intelligence import (
+from modules.fides.persistence.threat_intelligence import (
     ThreatIntelligenceDatabase,
 )
 

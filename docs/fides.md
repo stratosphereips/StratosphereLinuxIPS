@@ -64,7 +64,7 @@ If a peer generates an alert based on evidence of an attack, it can alert other 
 ## Logs
 
 Slips contains a minimal log file for reports received by other peers and peer updates in the ```output``` directory if not manually specified using the appropriate slips parameter upon start.
-The custom logger ```modules/fides_module/utils/logger.py``` code is used by the Fides Module for internal logging.
+The custom logger ```modules/fides/utils/logger.py``` code is used by the Fides Module for internal logging.
 
 ## Implementation notes and credit
 The mathematical models for the trust evaluation were written by Lukáš Forst as part of his [Master Thesis](https://dspace.cvut.cz/handle/10467/101312).

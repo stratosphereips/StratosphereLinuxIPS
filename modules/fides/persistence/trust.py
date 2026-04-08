@@ -1,13 +1,13 @@
 from typing import List, Optional, Union
 
-from modules.fides_module.messaging.model import PeerInfo
-from modules.fides_module.model.aliases import PeerId, Target, OrganisationId
-from modules.fides_module.model.configuration import TrustModelConfiguration
-from modules.fides_module.model.peer_trust_data import (
+from modules.fides.messaging.model import PeerInfo
+from modules.fides.model.aliases import PeerId, Target, OrganisationId
+from modules.fides.model.configuration import TrustModelConfiguration
+from modules.fides.model.peer_trust_data import (
     PeerTrustData,
     TrustMatrix,
 )
-from modules.fides_module.model.threat_intelligence import (
+from modules.fides.model.threat_intelligence import (
     SlipsThreatIntelligence,
 )
 

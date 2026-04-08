@@ -5,7 +5,7 @@ from ..model.aliases import PeerId, Target, OrganisationId
 from ..model.configuration import TrustModelConfiguration
 from ..model.peer_trust_data import PeerTrustData, TrustMatrix
 from ..model.threat_intelligence import SlipsThreatIntelligence
-from modules.fides_module.persistence.trust import TrustDatabase
+from modules.fides.persistence.trust import TrustDatabase
 from .fides_sqlite_db import FidesSQLiteDB
 
 from slips_files.core.database.database_manager import DBManager
