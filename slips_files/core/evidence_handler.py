@@ -128,7 +128,7 @@ class EvidenceHandler(ICore):
         worker_name = f"evidence_handler_worker_process_{worker_id}"
         worker = EvidenceHandlerWorker(
             logger=self.logger,
-            output_dir=self.output_dir,
+            output_dir=self.parent_output_dir,
             redis_port=self.redis_port,
             termination_event=self.termination_event,
             conf=self.conf,

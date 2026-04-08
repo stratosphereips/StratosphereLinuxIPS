@@ -216,7 +216,7 @@ class Profiler(ICore, IObservable):
         worker_name = f"profiler_worker_process_{worker_id}"
         worker = ProfilerWorker(
             logger=self.logger,
-            output_dir=self.output_dir,
+            output_dir=self.parent_output_dir,
             redis_port=self.redis_port,
             termination_event=self.termination_event,
             conf=self.conf,
