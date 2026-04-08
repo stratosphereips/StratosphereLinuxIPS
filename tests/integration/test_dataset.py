@@ -18,7 +18,7 @@ import pytest
 import shutil
 import os
 
-alerts_file = "alerts/alerts.log"
+alerts_file = "alerts.log"
 
 
 @pytest.mark.parametrize(
