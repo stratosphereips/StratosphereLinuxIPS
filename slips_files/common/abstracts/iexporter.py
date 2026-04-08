@@ -9,7 +9,9 @@ import os
 
 from abc import ABC, abstractmethod
 
-from slips_files.common.output_paths import get_output_sqlite_path
+from slips_files.common.output_paths import (
+    get_databases_dir_path_inside_output_dir,
+)
 from slips_files.common.printer import Printer
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.output import Output
@@ -46,7 +48,7 @@ class IExporter(ABC):
             output_dir = output_dir.decode("utf-8")
         if not output_dir:
             output_dir = "."
-        return get_output_sqlite_path(output_dir, filename)
+        return get_databases_dir_path_inside_output_dir(output_dir, filename)
 
     @property
     @abstractmethod

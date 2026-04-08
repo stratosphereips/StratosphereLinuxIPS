@@ -214,7 +214,7 @@ class AnomalyDetectionHTTPS(IModule):
     def init(self):
         self.classifier = FlowClassifier()
         self.read_configuration()
-        self.operational_log_path = self.get_output_path(
+        self.operational_log_path = self.get_module_specific_output_path(
             "anomaly_detection_https.log"
         )
 

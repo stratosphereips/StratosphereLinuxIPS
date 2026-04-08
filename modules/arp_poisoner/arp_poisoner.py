@@ -32,7 +32,9 @@ class ARPPoisoner(IModule):
     def init(self):
         self._time_since_last_repoison = {}
         self._time_since_last_internet_cut = {}
-        self.log_file_path = self.get_output_path("arp_poisoning.log")
+        self.log_file_path = self.get_module_specific_output_path(
+            "arp_poisoning.log"
+        )
         self.blocking_logfile_lock = Lock()
         # clear it
         try:

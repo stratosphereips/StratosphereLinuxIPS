@@ -36,7 +36,9 @@ class Blocking(IModule):
         self.firewall = self._determine_linux_firewall()
         self.sudo = utils.get_sudo_according_to_env()
         self._init_chains_in_firewall()
-        self.blocking_log_path = self.get_output_path("blocking.log")
+        self.blocking_log_path = self.get_module_specific_output_path(
+            "blocking.log"
+        )
         self.blocking_logfile_lock = Lock()
         # clear it
         try:
