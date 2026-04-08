@@ -70,6 +70,7 @@ class ModuleFactory:
         conf.disabled_detections = Mock(return_value=[])
         conf.get_tw_width_as_float = Mock(return_value=3600.0)
         conf.get_tw_width_in_seconds = Mock(return_value=3600)
+        conf.get_args = Mock(return_value=Mock(killall=False))
         conf.client_ips = Mock(return_value=[])
         conf.use_local_p2p = Mock(return_value=False)
         conf.permanent_dir = Mock(return_value="permanent")

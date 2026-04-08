@@ -84,10 +84,6 @@ global_p2p:
 local_p2p:
   create_p2p_logfile: false
   use_p2p: false
-modes:
-  logsfile: slips.log
-  stderr: errors.log
-  stdout: slips.log
 modules:
   disable:
   - template
@@ -95,10 +91,15 @@ modules:
   - flow_ml_detection
   - update_manager
   timeline_human_timestamp: true
+output:
+  logs: slips.log
+  stderr: errors.log
+  stdout: slips.log
 parameters:
   analysis_direction: out
   client_ips: []
   debug: 0
+  default_rotation_interval: 30sec
   deletePrevdb: true
   delete_zeek_files: false
   export_format: json
@@ -108,8 +109,8 @@ parameters:
   label: normal
   metadata_dir: false
   pcapfilter: false
+  permanent_dir: permanent
   rotation: true
-  rotation_period: 1day
   store_a_copy_of_zeek_files: false
   store_zeek_files_in_the_output_dir: false
   tcp_inactivity_timeout: 60

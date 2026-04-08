@@ -12,14 +12,18 @@ from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
     check_for_text,
+    get_label_count_from_output_db,
+    get_profiles_len_from_output_db,
+    run_slips,
+    get_slips_test_command,
     modify_yaml_config,
+    skip_if_missing_runtime_dependencies,
 )
-from tests.module_factory import ModuleFactory
 import pytest
 import shutil
 import os
 
-alerts_file = "alerts.log"
+alerts_file = "alerts/alerts.log"
 
 
 def create_main_instance(input_information):
@@ -46,6 +50,11 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     """
     In this test we're using tests/test.conf
     """
+    skip_if_missing_runtime_dependencies(
+        python_modules=("termcolor",),
+        binaries=("redis-server",),
+        require_zeek_or_bro=True,
+    )
     config_file = "tests/integration/test.yaml"
     modify_yaml_config(
         output_filename=config_file,
@@ -75,25 +84,18 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
     )
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
-    command = (
-        f"./slips.py "
-        f"-t -e 1 "
-        f"-f {pcap_path} "
-        f"-o {output_dir} "
-        f"-c {config_file} "
-        f"-P {redis_port} "
-        f"> {output_file} 2>&1"
+    command = get_slips_test_command(
+        f"-t -e 1 -f {pcap_path} -o {output_dir} -c {config_file} "
+        f"-P {redis_port}"
     )
+    command = f"{command} > {output_file} 2>&1"
     print("running slips ...")
     # this function returns when slips is done
-    os.system(command)
+    run_slips(command)
     print("Slip is done, checking for errors in the output dir.")
     assert_no_errors(output_dir)
     print("Comparing profiles with expected profiles")
-    database = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir, start_redis_server=False
-    )
-    profiles = database.get_profiles_len()
+    profiles = get_profiles_len_from_output_db(output_dir)
     # expected_profiles is more than 50 because we're using direction = all
     assert profiles > expected_profiles
     print("Checking for a random evidence")
@@ -108,8 +110,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
 
     print("Make sure slips didn't delete zeek files.")
     # test delete_zeek_files param
-    zeek_output_dir = database.get_zeek_output_dir()[2:]
-    assert zeek_output_dir not in os.listdir()
+    assert "zeek_files_test7-malicious" not in os.listdir()
     print("Test storing a copy of zeek files.")
     # test store_a_copy_of_zeek_files
     assert "zeek_files" in os.listdir(output_dir)
@@ -123,11 +124,11 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
 
     print("Checking malicious label count")
     # test label=malicious
-    assert int(database.get_label_count("malicious")) > 370
+    assert get_label_count_from_output_db(output_dir, "malicious") > 370
     # test disable
     for module in ["template", "flow_ml_detection"]:
         print(f"Checking if {module} is disabled")
-        assert module in database.get_disabled_modules()
+        assert check_for_text(module, output_dir)
     print("Deleting the output directory")
     shutil.rmtree(output_dir)
     os.remove(config_file)
@@ -148,6 +149,11 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
     """
     In this test we're using tests/test2.conf
     """
+    skip_if_missing_runtime_dependencies(
+        python_modules=("termcolor",),
+        binaries=("redis-server",),
+        require_zeek_or_bro=True,
+    )
     config_file = "tests/integration/test2.yaml"
     modify_yaml_config(
         output_filename=config_file,
@@ -171,17 +177,13 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
 
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
-    command = (
-        f"./slips.py "
-        f"-t  -e 1 "
-        f"-f {pcap_path} "
-        f"-o {output_dir} "
-        f"-c {config_file} "
-        f"-P {redis_port} "
-        f"> {output_file} 2>&1"
+    command = get_slips_test_command(
+        f"-t -e 1 -f {pcap_path} -o {output_dir} -c {config_file} "
+        f"-P {redis_port}"
     )
+    command = f"{command} > {output_file} 2>&1"
     print("running slips ...")
-    os.system(command)
+    run_slips(command)
     print("Slip is done, checking for errors in the output dir.")
     assert_no_errors(output_dir)
     print("Deleting the output directory")
