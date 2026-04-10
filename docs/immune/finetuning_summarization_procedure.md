@@ -38,11 +38,12 @@ python3 filter_dataset.py
 ---
 
 ### Step 2 — Ground Truth Selection
-[`select_best_responses.py`](https://github.com/stratosphereips/Slips-tools/blob/main/unsloth-scripts/select_best_responses.py) selects the highest-scoring model response per incident and formats each record as a three-turn SFT conversation:
+[`select_best_responses.py`](https://github.com/stratosphereips/Slips-tools/blob/main/unsloth-scripts/select_best_responses.py) selects the highest-scoring model response per incident and formats each record as a two-turn SFT conversation using a **merged prompt format**:
 
-- `system` — security analyst persona with structured output format
-- `user` — DAG analysis text for the incident
+- `user` — a single message containing both the instructions (security analyst persona, task description, output format rules) and the DAG analysis text
 - `assistant` — best-scoring summary (ground truth)
+
+No system prompt is used. Instructions and DAG are concatenated into one user message so the model learns to handle both in the same context.
 
 DAG inputs exceeding the token budget are truncated at clean line boundaries with an explicit truncation marker, so the model learns to handle partial inputs gracefully.
 
@@ -51,7 +52,7 @@ python3 select_best_responses.py
 # Outputs: train_dataset.json, eval_dataset.json
 ```
 
-The system prompt instructs the model to group identical events, assign severity labels (CRITICAL / HIGH / MEDIUM / LOW / INFO), and produce a fixed structured output format. This format is what the judge and downstream Slips components expect.
+The user message instructs the model to group identical events, assign severity labels (CRITICAL / HIGH / MEDIUM / LOW / INFO), and produce a fixed structured output format. This format is what the judge and downstream Slips components expect.
 
 ---
 
@@ -60,11 +61,14 @@ Training follows the general procedure in [Fine-Tuning Approach](finetuning_proc
 
 | Parameter | Value |
 |---|---|
-| Max sequence length | 2048 |
+| Max sequence length | 4096 |
 | Epochs | 3 |
 | Learning rate | 1e-5 |
 | LoRA dropout | 0.05 |
 | Batch size (effective) | 8 (1 × grad accum 8) |
+| Precision | FP16 |
+| Quantization (training) | 4bit |
+| Hardware | A100 80GB MiG 20GB slice (e-infra.cz cloud) |
 
 ```bash
 python3 train_qwen.py
