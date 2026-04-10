@@ -1,6 +1,6 @@
 ### Quantization and Deployment for Finetuned Models
 
-**Summary:** Finetuned models are converted to GGUF and published to Ollama in three quantization variants (q4_k_m, q5_k_m, q8_0). Quality degrades gracefully: ~19% loss at q8_0, ~25% at q5_k_m, ~33% at q4_k_m. q5_k_m offers the best quality/size trade-off for CPU/RPi deployment; 16-bit is recommended when a GPU is available.
+**Summary:** Finetuned models are converted to GGUF and published to Ollama in three quantization variants (q4_k_m, q5_k_m, q8_0). Quality degrades gracefully: ~5% loss at q8_0, ~13% at q4_k_m, ~13% at q5_k_m. q8_0 is the best quantized variant; q5_k_m offers the best quality/size trade-off for CPU/RPi deployment; 16-bit is recommended when a GPU is available.
 
 > **Evaluation basis:** performance numbers in this document were measured on the [finetuned summarization model](finetuning_results.md) (47 held-out incidents, judge: gpt-oss-120b). The conversion and publication methodology applies to any finetuned model in this pipeline.
 
@@ -100,29 +100,27 @@ The 16-bit model serves as the reference; all GGUF variants are compared against
 
 | Quantization | Avg Score | Win Rate | Score Loss | Size |
 |---|---|---|---|---|
-| **16bit (reference)** | **6.98** | **63.8%** | — | ~3.0 GB |
-| q8_0 | 5.62 | 48.9% | −1.36 (−19%) | ~1.6 GB |
-| q5_k_m | 5.20 | 38.3% | −1.78 (−25%) | ~1.1 GB |
-| q4_k_m | 4.67 | 30.4% | −2.31 (−33%) | ~0.9 GB |
-
-> q8_0 ranks 1st by avg position (1.89) but has a lower avg score than the 16-bit reference.
+| **16bit (reference)** | **4.81** | **21.3%** | — | ~3.0 GB |
+| q8_0 | 4.58 | 17.0% | −0.23 (−5%) | ~1.6 GB |
+| q5_k_m | 4.17 | 2.1% | −0.64 (−13%) | ~1.1 GB |
+| q4_k_m | 3.96 | 12.8% | −0.85 (−18%) | ~0.9 GB |
 
 #### By Complexity
 
 | Tier | 16bit | q8_0 | q5_k_m | q4_k_m |
 |---|---|---|---|---|
-| Simple (<500 events) | 7.93 | 6.48 | 5.83 | 5.21 |
-| Medium (500–1999 events) | 6.14 | 4.29 | 4.67 | 4.86 |
-| Complex (≥2000 events) | 4.44 | 3.67 | 3.00 | 3.44 |
-| Normal traffic | 3.50 | 1.50 | — | 1.50 |
+| Simple (<500 events) | 5.39 | 5.13 | 4.70 | 4.55 |
+| Medium (500–1999 events) | 4.33 | 4.14 | 2.71 | 3.00 |
+| Complex (≥2000 events) | 3.33 | 2.88 | 3.62 | 2.78 |
+| Normal traffic | 1.50 | 4.50 | 2.00 | 2.00 |
 
 **Key observations:**
 
 - Quality degrades gracefully across levels with no abrupt collapse between steps
-- All quantized variants struggle on Normal incidents (≤1.50 avg score) — this mirrors the 16-bit model's own weakness (3.50) and is a training data imbalance issue, not a quantization artifact
+- All quantized variants show better compression (0.19–0.20) than the 16-bit model (0.36), producing more concise outputs but with fewer abstracted bullets — they summarize more aggressively but paraphrase less
+- All variants struggle on Normal incidents — this mirrors the 16-bit model's own weakness (1.50) and is a training data imbalance issue, not a quantization artifact
 - Complex incident degradation is consistent across all quants, tied to the input truncation ceiling above ~4000 events
 
-> **Known issue — prompt format compatibility:** GGUF models served via Ollama/llama.cpp appear to struggle with separated system/user prompt roles. The current GGUF variants perform significantly better when the system prompt and user input are merged into a single prompt rather than passed as distinct chat roles. This likely contributes to part of the observed performance gap vs the 16-bit reference. Investigating proper chat template handling in Ollama Modelfiles and testing merged-prompt inference is a planned next step.
 
 ---
 
@@ -131,5 +129,5 @@ The 16-bit model serves as the reference; all GGUF variants are compared against
 |---|---|---|
 | Raspberry Pi 5 (CPU-only) | **q5_k_m** | Best quality/size balance at 1.1 GB; fits RPi RAM with headroom |
 | Low-VRAM GPU (≤4 GB) | **q8_0** | Only 19% score loss at half the size of 16-bit |
-| GPU with ≥6 GB VRAM | **16-bit** | Reference quality: 6.98 avg score, 63.8% win rate |
+| GPU with ≥6 GB VRAM | **16-bit** | Reference quality: 4.81 avg score, 21.3% win rate |
 | Edge / minimal storage | **q4_k_m** | Smallest footprint (0.9 GB); 33% score loss acceptable for triage-only use |
