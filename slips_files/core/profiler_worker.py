@@ -18,7 +18,7 @@ import gc
 
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.slips_utils import utils
-from slips_files.common.performance_paths import get_performance_csv_path
+from slips_files.common.output_paths import get_performance_csv_path
 from slips_files.common.style import green
 from slips_files.core.aid_manager import AIDManager
 from slips_files.core.helpers.flow_handler import FlowHandler

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch, Mock, call
 import queue
 import threading
 
+from slips_files.core.evidence_logger import EvidenceLogger
 from tests.module_factory import ModuleFactory
 
 
@@ -114,3 +115,42 @@ def test_run_logger_thread(msg, expected_method):
 
     # assert shutdown was called once
     logger.shutdown_gracefully.assert_called_once()
+
+
+def test_init_latency_file_places_latency_csv_under_performance_csv_dir(
+    tmp_path, monkeypatch
+):
+    module_factory = ModuleFactory()
+    assert module_factory is not None
+
+    def fake_read_configuration(self):
+        self.GID = 0
+        self.UID = 0
+        self.generate_performance_plots = False
+
+    monkeypatch.chdir(tmp_path)
+
+    with patch.object(
+        EvidenceLogger, "read_configuration", fake_read_configuration
+    ), patch(
+        "slips_files.core.evidence_logger.utils.change_logfiles_ownership"
+    ):
+        logger = EvidenceLogger(
+            logger_stop_signal=threading.Event(),
+            evidence_logger_q=Mock(),
+            output_dir="output_dir",
+        )
+        logger._init_latency_file()
+        logger.shutdown_gracefully()
+
+    assert (
+        tmp_path / "output_dir" / "performance_plots" / "csv" / "latency.csv"
+    ).exists()
+    assert not (
+        tmp_path
+        / "output_dir"
+        / "output_dir"
+        / "performance_plots"
+        / "csv"
+        / "latency.csv"
+    ).exists()

@@ -133,7 +133,7 @@ parameters:
   # default_rotation_interval: 30min
   # default_rotation_interval: 2hr
   #default_rotation_interval: 30sec
-  default_rotation_interval: 1day
+  default_rotation_interval: 1min
 
   # How many days Slips keeps the rotated Zeek files before deleting them.
   # Value should be in days
@@ -174,7 +174,7 @@ Debug:
   # during shutdown. Keep this disabled for normal runs because it adds extra
   # bookkeeping and disk writes.
   #  available options are true/false
-  generate_performance_plots: false
+  generate_performance_plots: true
 
 #############################
 detection:

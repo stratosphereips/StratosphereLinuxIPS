@@ -22,8 +22,8 @@ from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.output_paths import (
     get_this_filepath_inside_permanent_dir,
+    get_performance_csv_path,
 )
-from slips_files.common.performance_paths import get_performance_csv_path
 from slips_files.core.structures.evidence import Evidence
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.output import Output

@@ -7,7 +7,7 @@ import traceback
 import multiprocessing
 
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.performance_paths import get_performance_csv_path
+from slips_files.common.output_paths import get_performance_csv_path
 from slips_files.common.slips_utils import utils
 
 
@@ -45,7 +45,7 @@ class EvidenceLogger:
     def _init_latency_file(self):
         self.latency_file = self.clean_file(
             self.output_dir,
-            get_performance_csv_path(self.output_dir, "latency.csv"),
+            get_performance_csv_path("", "latency.csv"),
         )
         utils.change_logfiles_ownership(
             self.latency_file.name, self.UID, self.GID

@@ -8,10 +8,10 @@ import statistics
 import subprocess
 import sys
 
-from slips_files.common.performance_paths import (
+from slips_files.common.output_paths import (
+    get_performance_plots_dir,
     get_performance_csv_dir,
     get_performance_csv_path,
-    get_performance_plots_dir,
 )
 
 
@@ -19,7 +19,7 @@ class Plotter:
     def __init__(self, output_dir, print_func):
         self.output_dir = output_dir or ""
         self.print = print_func
-        self.plots_dir = get_performance_plots_dir(self.output_dir)
+        self.performance_plots_dir = get_performance_plots_dir(self.output_dir)
         self.csv_dir = get_performance_csv_dir(self.output_dir)
 
     def plot_latency_csv(self):
@@ -50,7 +50,8 @@ class Plotter:
             return
 
         output_path = os.path.join(
-            self.plots_dir, "latency_of_each_evidence_from_alerts_json.png"
+            self.performance_plots_dir,
+            "latency_of_each_evidence_from_alerts_json.png",
         )
         self._save_plot(
             output_path,
@@ -73,9 +74,9 @@ class Plotter:
         if not csv_paths:
             return
 
-        os.makedirs(self.plots_dir, exist_ok=True)
+        os.makedirs(self.performance_plots_dir, exist_ok=True)
         output_path = os.path.join(
-            self.plots_dir, "all_profiler_workers_latency.png"
+            self.performance_plots_dir, "all_profiler_workers_latency.png"
         )
 
         try:
@@ -154,7 +155,9 @@ class Plotter:
         latency_avg = self._average(latency_values)
 
         if metrics_path is None:
-            metrics_path = os.path.join(self.output_dir, "metrics.txt")
+            metrics_path = os.path.join(
+                self.performance_plots_dir, "metrics.txt"
+            )
         lines = [
             "latency.cs:v metrics:",
             f"p50 for latency: {self._format_metric(latency_p50)}",
@@ -164,6 +167,7 @@ class Plotter:
             "\n\n",
         ]
         try:
+            os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
             with open(metrics_path, "a", encoding="utf-8") as handle:
                 handle.write("\n".join(lines) + "\n")
         except Exception as exc:
@@ -226,7 +230,7 @@ class Plotter:
             labeled_series[label] = values
 
         throughput_output_path = os.path.join(
-            self.plots_dir, "input_proc_flows_per_min.png"
+            self.performance_plots_dir, "input_proc_flows_per_min.png"
         )
         self._save_plot(
             throughput_output_path,
@@ -251,7 +255,7 @@ class Plotter:
                 profiler_sum.append(total)
 
             combined_output_path = os.path.join(
-                self.plots_dir,
+                self.performance_plots_dir,
                 "flows_per_minute_seen_by_all_profilers_combined.png",
             )
             self._save_plot(
@@ -313,7 +317,7 @@ class Plotter:
         profiler_p99 = self._percentile(profiler_sums, 99)
         profiler_avg = self._average(profiler_sums)
 
-        metrics_path = os.path.join(self.output_dir, "metrics.txt")
+        metrics_path = os.path.join(self.performance_plots_dir, "metrics.txt")
         lines = [
             "flows_per_minute.csv metrics:",
             f"p50 for input: {self._format_metric(input_p50)}",
@@ -327,6 +331,7 @@ class Plotter:
             "\n\n",
         ]
         try:
+            os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
             with open(metrics_path, "w", encoding="utf-8") as handle:
                 handle.write("\n".join(lines) + "\n")
         except Exception as exc:
@@ -340,9 +345,9 @@ class Plotter:
         if not os.path.exists(conn_log):
             return
 
-        os.makedirs(self.plots_dir, exist_ok=True)
+        os.makedirs(self.performance_plots_dir, exist_ok=True)
         output_plot = os.path.join(
-            self.plots_dir, "flows_per_second_seen_in_conn_log.png"
+            self.performance_plots_dir, "flows_per_second_seen_in_conn_log.png"
         )
         # Assuming stress_testing_scripts is in the project root.
         # This file is in slips_files/common/plotter.py
@@ -388,7 +393,7 @@ class Plotter:
             return False
         if not os.path.exists(csv_path):
             return False
-        os.makedirs(self.plots_dir, exist_ok=True)
+        os.makedirs(self.performance_plots_dir, exist_ok=True)
         return True
 
     def _save_plot(

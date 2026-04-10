@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 from unittest.mock import Mock, patch
+from pathlib import Path
 
 from modules.anomaly_detection_https.anomaly_detection_https import (
     AnomalyDetectionHTTPS,
@@ -60,10 +61,16 @@ def test_https_anomaly_module_is_instantiable_and_subscribes_to_new_ssl(
         )
 
     assert isinstance(module, AnomalyDetectionHTTPS)
-    assert module.output_dir == str(tmp_path / "anomaly_detection_https")
+    assert (
+        module.output_dir
+        == Path(tmp_path) / "modules" / "anomaly_detection_https"
+    )
     assert module.parent_output_dir == str(tmp_path)
     assert module.operational_log_path == str(
-        tmp_path / "anomaly_detection_https" / "anomaly_detection_https.log"
+        tmp_path
+        / "modules"
+        / "anomaly_detection_https"
+        / "anomaly_detection_https.log"
     )
 
     module.subscribe_to_channels()

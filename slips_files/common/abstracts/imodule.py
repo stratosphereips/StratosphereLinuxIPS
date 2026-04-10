@@ -7,6 +7,7 @@ import warnings
 from abc import ABC, abstractmethod
 from argparse import Namespace
 from multiprocessing import Process, Event
+from pathlib import Path
 from typing import (
     Dict,
     Optional,
@@ -47,7 +48,7 @@ class IModule(ABC, Process):
         Process.__init__(self)
         self.redis_port = redis_port
         self.parent_output_dir = output_dir
-        self.output_dir = os.path.join(output_dir, self.name)
+        self.output_dir = Path(self.parent_output_dir) / "modules" / self.name
         self.msg_received = False
         # as parsed by arg_parser, these are the cli args
         self.args: Namespace = slips_args

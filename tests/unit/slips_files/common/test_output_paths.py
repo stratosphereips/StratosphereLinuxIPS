@@ -1,33 +1,63 @@
-"""Unit tests for output path helpers."""
+# SPDX-FileCopyrightText: 2026 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
+
+import os
+
+import pytest
 
 from slips_files.common.output_paths import (
-    DATABASES_DIRNAME,
-    get_databases_dir_path_inside_output_dir,
-    get_this_db_path_inside_output_dir,
+    get_performance_csv_dir,
+    get_performance_csv_path,
+    get_performance_plots_dir,
 )
 from tests.module_factory import ModuleFactory
 
 
-def test_get_databases_dir_path_inside_output_dir_creates_directory(tmp_path):
-    """The databases helper should create and return the output databases directory."""
-    module_factory = ModuleFactory()
-    assert module_factory is not None
+@pytest.mark.parametrize(
+    "parent_dir, expected_path",
+    [
+        ("output", os.path.join("output", "performance_plots")),
+        ("", "performance_plots"),
+    ],
+)
+def test_get_performance_plots_dir(parent_dir, expected_path):
+    _ = ModuleFactory()
 
-    databases_dir = get_databases_dir_path_inside_output_dir(
-        str(tmp_path / "output")
-    )
-
-    assert databases_dir.endswith(DATABASES_DIRNAME)
-    assert (tmp_path / "output" / DATABASES_DIRNAME).is_dir()
+    assert get_performance_plots_dir(parent_dir) == expected_path
 
 
-def test_get_output_sqlite_path_joins_filename_under_databases_dir(tmp_path):
-    """The sqlite path helper should return a path inside the databases directory."""
-    module_factory = ModuleFactory()
-    assert module_factory is not None
+@pytest.mark.parametrize(
+    "parent_dir, expected_path",
+    [
+        (
+            "output",
+            os.path.join("output", "performance_plots", "csv"),
+        ),
+        ("", os.path.join("performance_plots", "csv")),
+    ],
+)
+def test_get_performance_csv_dir(parent_dir, expected_path):
+    _ = ModuleFactory()
 
-    sqlite_path = get_this_db_path_inside_output_dir(
-        str(tmp_path / "output"), "test.db"
-    )
+    assert get_performance_csv_dir(parent_dir) == expected_path
 
-    assert sqlite_path.endswith(f"{DATABASES_DIRNAME}/test.db")
+
+@pytest.mark.parametrize(
+    "output_dir, filename, expected_path",
+    [
+        (
+            "output",
+            "latency.csv",
+            os.path.join("output", "performance_plots", "csv", "latency.csv"),
+        ),
+        (
+            "",
+            "metrics.csv",
+            os.path.join("performance_plots", "csv", "metrics.csv"),
+        ),
+    ],
+)
+def test_get_performance_csv_path(output_dir, filename, expected_path):
+    _ = ModuleFactory()
+
+    assert get_performance_csv_path(output_dir, filename) == expected_path
