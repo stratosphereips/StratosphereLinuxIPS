@@ -1,5 +1,6 @@
 maxminddb==3.0.0
 setuptools<81
+# do NOT build river from source. Only install it if a wheel exists.
 --only-binary=river
 river
 numpy==1.26.4
@@ -50,4 +51,3 @@ pytest-asyncio
 vulture
 detect-secrets
 git+https://github.com/SECEF/python-idmefv2.git
-river
