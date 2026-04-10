@@ -73,7 +73,7 @@ class ProfilerWorker(IModule):
         self.latency_logfile = None
         if self.generate_performance_plots:
             self.latency_logfile = get_performance_csv_path(
-                self.output_dir,
+                self.parent_output_dir,
                 f"{self._get_latency_filename_prefix()}_latency.csv",
             )
             self._initialize_latency_logfile()

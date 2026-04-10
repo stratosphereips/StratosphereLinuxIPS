@@ -7,6 +7,28 @@ from slips_files.core.evidence_handler import DEFAULT_EVIDENCE_HANDLER_WORKERS
 from tests.module_factory import ModuleFactory
 
 
+@patch("slips_files.core.evidence_handler.utils.start_thread")
+@patch("slips_files.core.evidence_handler.EvidenceLogger")
+def test_init_passes_main_output_dir_to_evidence_logger(
+    mock_evidence_logger, mock_start_thread
+):
+    handler = ModuleFactory().create_evidence_handler_obj()
+    handler.parent_output_dir = "/tmp/output"
+    mock_evidence_logger.reset_mock()
+    mock_start_thread.reset_mock()
+
+    handler.init()
+
+    mock_evidence_logger.assert_called_once_with(
+        logger_stop_signal=handler.logger_stop_signal,
+        evidence_logger_q=handler.evidence_logger_q,
+        output_dir="/tmp/output",
+    )
+    mock_start_thread.assert_called_once_with(
+        handler.logger_thread, handler.db
+    )
+
+
 def test_shutdown_gracefully():
     handler = ModuleFactory().create_evidence_handler_obj()
     handler.stop_evidence_workers = Mock()

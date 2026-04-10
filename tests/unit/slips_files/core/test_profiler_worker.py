@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from slips_files.common.output_paths import get_performance_csv_path
 from slips_files.common.input_type import InputType
 from slips_files.core.flows.zeek import Conn
 from slips_files.core.profiler import SEPARATORS, SUPPORTED_INPUT_TYPES
@@ -129,6 +130,23 @@ def test_get_latency_filename_prefix(name, expected_prefix):
     profiler.name = name
 
     assert profiler._get_latency_filename_prefix() == expected_prefix
+
+
+def test_latency_logfile_uses_parent_output_dir():
+    profiler = ModuleFactory().create_profiler_worker_obj()
+    profiler.generate_performance_plots = True
+    profiler.parent_output_dir = "output_dir"
+    profiler.output_dir = "output_dir/modules/profiler_worker"
+    profiler.name = "profiler_worker_process_2"
+
+    profiler.latency_logfile = get_performance_csv_path(
+        profiler.parent_output_dir,
+        f"{profiler._get_latency_filename_prefix()}_latency.csv",
+    )
+
+    assert profiler.latency_logfile == (
+        "output_dir/performance_plots/csv/profiler_worker_2_latency.csv"
+    )
 
 
 def test_initialize_latency_logfile_creates_header(tmp_path):
