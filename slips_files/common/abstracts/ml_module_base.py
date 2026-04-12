@@ -1,10 +1,11 @@
 import json
+import ipaddress
 import os
 import pickle
 import random
 import traceback
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 import numpy
 import pandas as pd
@@ -47,6 +48,7 @@ class MLBaseDetection(IModule, ABC):
     authors = ["Jan Svoboda"]
     module_key = "ml_module"
     module_config_section = "ml_module"
+    malicious_flow_evidence_type = None
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_flow")
@@ -59,9 +61,13 @@ class MLBaseDetection(IModule, ABC):
         """Initialize channels, config, reproducibility, artifact paths, and logging."""
         self.fieldseparator = self.db.get_field_separator()
 
+        if not isinstance(self.malicious_flow_evidence_type, EvidenceType):
+            raise ValueError(
+                "ML modules must define malicious_flow_evidence_type as a module-specific EvidenceType."
+            )
+
         self.read_configuration()
 
-        self.last_number_of_flows_when_trained = 0
         self.classifier_initialized = False
         self.all_classes = [MALICIOUS, BENIGN]
 
@@ -71,63 +77,41 @@ class MLBaseDetection(IModule, ABC):
         self.last_closed_twid = None
 
         conf = ConfigParser()
-        (
-            default_model_load,
-            default_preprocess_load,
-            default_model_store,
-            default_preprocess_store,
-        ) = self.get_default_artifact_paths()
-
         section = self.module_config_section
         configured_model_load = conf.ml_module_model_load_path(
             section,
-            default_model_load,
+            None,
         )
         configured_preprocess_load = conf.ml_module_preprocess_load_path(
             section,
-            default_preprocess_load,
+            None,
         )
         configured_model_store = conf.ml_module_model_store_path(
             section,
-            default_model_store,
+            None,
         )
         configured_preprocess_store = conf.ml_module_preprocess_store_path(
             section,
-            default_preprocess_store,
+            None,
         )
-
-        key_upper = self.module_key.upper()
 
         configured_seed = conf.ml_module_seed(section, default=self.seed)
-        self.seed = int(
-            os.getenv(
-                f"SLIPS_{key_upper}_SEED",
-                os.getenv("SLIPS_FLOW_ML_SEED", str(configured_seed)),
-            )
-        )
+        self.seed = int(configured_seed)
         random.seed(self.seed)
         numpy.random.seed(self.seed)
         self.rng = numpy.random.default_rng(self.seed)
 
         self.model_load_path = self.resolve_artifact_path(
-            env_var=f"SLIPS_{key_upper}_MODEL_LOAD_PATH",
             explicit_path=configured_model_load,
-            fallback_env_var="SLIPS_FLOW_ML_MODEL_LOAD_PATH",
         )
         self.preprocess_load_path = self.resolve_artifact_path(
-            env_var=f"SLIPS_{key_upper}_PREPROCESS_LOAD_PATH",
             explicit_path=configured_preprocess_load,
-            fallback_env_var="SLIPS_FLOW_ML_PREPROCESS_LOAD_PATH",
         )
         self.model_path = self.resolve_artifact_path(
-            env_var=f"SLIPS_{key_upper}_MODEL_STORE_PATH",
             explicit_path=configured_model_store,
-            fallback_env_var="SLIPS_FLOW_ML_MODEL_STORE_PATH",
         )
         self.preprocess_path = self.resolve_artifact_path(
-            env_var=f"SLIPS_{key_upper}_PREPROCESS_STORE_PATH",
             explicit_path=configured_preprocess_store,
-            fallback_env_var="SLIPS_FLOW_ML_PREPROCESS_STORE_PATH",
         )
 
         configured_test_log_batch_size = conf.ml_module_test_log_batch_size(
@@ -135,26 +119,14 @@ class MLBaseDetection(IModule, ABC):
             default=self.batch_size,
         )
         self.testing_log_batch_size = max(
-            1,
-            int(
-                os.getenv(
-                    f"SLIPS_{key_upper}_TEST_LOG_BATCH_SIZE",
-                    os.getenv(
-                        "SLIPS_FLOW_ML_TEST_LOG_BATCH_SIZE",
-                        str(configured_test_log_batch_size),
-                    ),
-                )
-            ),
+            1, int(configured_test_log_batch_size)
         )
 
         configured_log_suffix = conf.ml_module_log_suffix(
             section,
             default=self.module_key,
         )
-        self.log_suffix = os.getenv(
-            f"SLIPS_{key_upper}_LOG_SUFFIX",
-            os.getenv("SLIPS_FLOW_ML_LOG_SUFFIX", configured_log_suffix),
-        )
+        self.log_suffix = configured_log_suffix
 
         # Backward compatibility for existing sklearn-specific references.
         self.scaler_load_path = self.preprocess_load_path
@@ -164,16 +136,19 @@ class MLBaseDetection(IModule, ABC):
 
     def resolve_artifact_path(
         self,
-        env_var: str,
-        explicit_path: str,
+        explicit_path: Optional[str],
+        env_var: Optional[str] = None,
         fallback_env_var: Optional[str] = None,
     ) -> str:
-        """Resolve artifact path from env/config and normalize relative paths."""
-        path = os.getenv(env_var)
-        if path is None and fallback_env_var:
-            path = os.getenv(fallback_env_var)
-        if path is None:
-            path = explicit_path
+        """Resolve artifact path from config and normalize relative paths."""
+        _ = env_var
+        _ = fallback_env_var
+        if explicit_path is None or str(explicit_path).strip() == "":
+            raise ValueError(
+                "Missing ML artifact path in slips.yaml. "
+                "Set model/preprocess load/store paths in the module config section."
+            )
+        path = str(explicit_path)
         if os.path.isabs(path):
             return path
         return os.path.join(".", path.lstrip("./"))
@@ -268,15 +243,6 @@ class MLBaseDetection(IModule, ABC):
             self.print(f"Error writing to log: {exc}", 0, 1)
 
     @abstractmethod
-    def get_default_artifact_paths(self) -> Tuple[str, str, str, str]:
-        """
-        Return backend default artifact paths.
-
-        Returns:
-            model_load_path, preprocess_load_path, model_store_path, preprocess_store_path.
-        """
-
-    @abstractmethod
     def process_features(self, dataset: pd.DataFrame) -> pd.DataFrame:
         """Convert raw flow dataframe to backend-ready numeric feature dataframe."""
         pass
@@ -325,7 +291,6 @@ class MLBaseDetection(IModule, ABC):
     def train(
         self,
         sum_labeled_flows,
-        last_number_of_flows_when_trained,
     ):
         """Backend train entrypoint; typically delegates to `_train_default`."""
 
@@ -557,9 +522,7 @@ class MLBaseDetection(IModule, ABC):
                     1,
                 )
 
-    def _train_default(
-        self, sum_labeled_flows, last_number_of_flows_when_trained
-    ):
+    def _train_default(self, sum_labeled_flows):
         """Shared incremental training flow used by backend `train` hooks."""
         if self.flows is None or self.flows.empty:
             self.print("No flows to train on. Skipping training.", 0, 1)
@@ -675,7 +638,6 @@ class MLBaseDetection(IModule, ABC):
             self.print(traceback.format_exc(), 0, 1)
             self.write_to_log("Error occurred during training.")
 
-        self.last_number_of_flows_when_trained = self.labeled_counter
         self.labeled_counter = 0
         self.training_flows = []
 
@@ -713,16 +675,9 @@ class MLBaseDetection(IModule, ABC):
             pred[0],
         )
 
-    def process_training_flows(self, last_number_of_flows_when_trained):
+    def process_training_flows(self):
         """Build and preprocess one training batch from buffered labeled flows."""
         try:
-            if last_number_of_flows_when_trained is None:
-                last_number_of_flows_when_trained = 0
-            else:
-                last_number_of_flows_when_trained = int(
-                    last_number_of_flows_when_trained
-                )
-
             new_flows = self.training_flows
             if len(new_flows) > self.batch_size:
                 self.print(
@@ -848,29 +803,40 @@ class MLBaseDetection(IModule, ABC):
 
     def set_evidence_malicious_flow(self, flow: dict, twid: str):
         """Emit Slips evidence object when a flow is predicted as malicious."""
+        try:
+            src_ip = str(ipaddress.ip_address(flow["saddr"]))
+            dst_ip = str(ipaddress.ip_address(flow["daddr"]))
+        except (ValueError, KeyError) as exc:
+            self.print(
+                f"Skipping ML evidence with invalid attacker/victim IPs: {exc}",
+                0,
+                1,
+            )
+            return
+
         confidence = 0.1
         description = (
             f"Flow with malicious characteristics by ML. Src IP"
-            f" {flow['saddr']}:{flow['sport']} to "
-            f"{flow['daddr']}:{flow['dport']}"
+            f" {src_ip}:{flow['sport']} to "
+            f"{dst_ip}:{flow['dport']}"
         )
         twid_number = int(twid.replace("timewindow", ""))
         evidence = Evidence(
-            evidence_type=EvidenceType.MALICIOUS_FLOW,
+            evidence_type=self.malicious_flow_evidence_type,
             attacker=Attacker(
                 direction=Direction.SRC,
                 ioc_type=IoCType.IP,
-                value=flow["saddr"],
+                value=src_ip,
             ),
             victim=Victim(
                 direction=Direction.DST,
                 ioc_type=IoCType.IP,
-                value=flow["daddr"],
+                value=dst_ip,
             ),
             threat_level=ThreatLevel.LOW,
             confidence=confidence,
             description=description,
-            profile=ProfileID(ip=flow["saddr"]),
+            profile=ProfileID(ip=src_ip),
             timewindow=TimeWindow(twid_number),
             uid=[flow["uid"]],
             timestamp=flow["starttime"],
@@ -891,7 +857,6 @@ class MLBaseDetection(IModule, ABC):
 
         if self.log_file is not None:
             self.log_file.flush()
-            self.log_file.close()
 
     def last_training_in_window(self):
         """Optionally train on residual labeled flows before window/module ends."""
@@ -910,14 +875,11 @@ class MLBaseDetection(IModule, ABC):
             self.print(
                 f"Training on the last {flows_left} flows in the window", 0, 1
             )
-            self.process_training_flows(self.last_number_of_flows_when_trained)
+            self.process_training_flows()
             self.print(
                 f"Size of the last training batch: {len(self.flows)}", 0, 1
             )
-            self.train(
-                self.labeled_counter,
-                self.last_number_of_flows_when_trained,
-            )
+            self.train(self.labeled_counter)
         else:
             self.print(
                 f"Not enough flows to finalize training. "
@@ -997,13 +959,8 @@ class MLBaseDetection(IModule, ABC):
                 if self.labeled_counter < self.minimum_labels_to_retrain:
                     return
 
-                self.process_training_flows(
-                    self.last_number_of_flows_when_trained
-                )
-                self.train(
-                    self.labeled_counter,
-                    self.last_number_of_flows_when_trained,
-                )
+                self.process_training_flows()
+                self.train(self.labeled_counter)
 
             elif self.mode == "test":
                 self.run_test_on_flow(self.flow)
