@@ -88,6 +88,8 @@ class EvidenceType(Enum):
     MALICIOUS_SSL_CERT = auto()
     ANOMALOUS_FLOW = auto()
     MALICIOUS_FLOW = auto()
+    ML_LINEAR_MALICIOUS_FLOW = auto()
+    ML_ONLINE_MALICIOUS_FLOW = auto()
     SUSPICIOUS_USER_AGENT = auto()
     EMPTY_CONNECTIONS = auto()
     INCOMPATIBLE_USER_AGENT = auto()
