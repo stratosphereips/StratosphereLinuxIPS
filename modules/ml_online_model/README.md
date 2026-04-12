@@ -10,7 +10,7 @@ This module provides a River-based flow model for SLIPS.
 
 ## Train/test (module-specific)
 
-Canonical workflow is in `slips_files/common/abstracts/README.md`.
+Canonical workflow is in `docs/create_new_module.md#ml-module`.
 
 `ml_online_model`-specific paths:
 
@@ -115,7 +115,7 @@ python3 slips_files/common/ml_modules_utils/plot_testing_performance.py -f path/
 ## Creating your own ML module
 
 To create a new ML module, see:
-- [slips_files/common/abstracts/README.md](../../slips_files/common/abstracts/README.md)
+- [docs/create_new_module.md#ml-module](../../docs/create_new_module.md#ml-module)
 - [docs/create_new_module.md](../../docs/create_new_module.md)
 
 These documents explain the base class, required methods, and configuration for new modules.

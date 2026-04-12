@@ -1,7 +1,7 @@
 import traceback
 import warnings
-from typing import Optional, Tuple
 import os
+from typing import Optional
 import pickle
 
 import numpy
@@ -23,25 +23,6 @@ def warn(*args, **kwargs):
 
 warnings.warn = warn
 
-# ---------------------------------------------------------------------------
-# Default artifact paths for linear sklearn model + preprocessor.
-# Override at runtime with environment variables:
-# - SLIPS_ML_LINEAR_MODEL_MODEL_LOAD_PATH
-# - SLIPS_ML_LINEAR_MODEL_PREPROCESS_LOAD_PATH
-# - SLIPS_ML_LINEAR_MODEL_MODEL_STORE_PATH
-# - SLIPS_ML_LINEAR_MODEL_PREPROCESS_STORE_PATH
-# ---------------------------------------------------------------------------
-DEFAULT_MODEL_LOAD_PATH = "./modules/ml_linear_model/artifacts/model.bin"
-DEFAULT_PREPROCESS_LOAD_PATH = "./modules/ml_linear_model/artifacts/scaler.bin"
-DEFAULT_MODEL_STORE_PATH = (
-    "./modules/ml_linear_model/artifacts/model_custom.bin"
-)
-DEFAULT_PREPROCESS_STORE_PATH = (
-    "./modules/ml_linear_model/artifacts/scaler_custom.bin"
-)
-DEFAULT_PCA_LOAD_PATH = "./modules/ml_linear_model/artifacts/pca.bin"
-DEFAULT_PCA_STORE_PATH = "./modules/ml_linear_model/artifacts/pca_custom.bin"
-
 
 class MLLinearModel(ml_base.MLBaseDetection):
     name = "ml_linear_model"
@@ -49,6 +30,9 @@ class MLLinearModel(ml_base.MLBaseDetection):
     authors = ["Jan Svoboda"]
     module_key = "ml_linear_model"
     module_config_section = "ml_linear_model"
+    malicious_flow_evidence_type = (
+        ml_base.EvidenceType.ML_LINEAR_MALICIOUS_FLOW
+    )
 
     def init(self):
         super().init()
@@ -57,26 +41,21 @@ class MLLinearModel(ml_base.MLBaseDetection):
 
         conf = ConfigParser()
         section = self.module_config_section
-        key_upper = self.module_key.upper()
 
         configured_pca_load = conf.ml_module_pca_load_path(
             section,
-            DEFAULT_PCA_LOAD_PATH,
+            None,
         )
         configured_pca_store = conf.ml_module_pca_store_path(
             section,
-            DEFAULT_PCA_STORE_PATH,
+            None,
         )
 
         self.pca_load_path = self.resolve_artifact_path(
-            env_var=f"SLIPS_{key_upper}_PCA_LOAD_PATH",
             explicit_path=configured_pca_load,
-            fallback_env_var="SLIPS_FLOW_ML_PCA_LOAD_PATH",
         )
         self.pca_store_path = self.resolve_artifact_path(
-            env_var=f"SLIPS_{key_upper}_PCA_STORE_PATH",
             explicit_path=configured_pca_store,
-            fallback_env_var="SLIPS_FLOW_ML_PCA_STORE_PATH",
         )
 
         self.pca_n_components = conf.ml_module_pca_n_components(
@@ -101,14 +80,6 @@ class MLLinearModel(ml_base.MLBaseDetection):
             BENIGN: self.benign_target_value,
             MALICIOUS: self.malicious_target_value,
         }
-
-    def get_default_artifact_paths(self) -> Tuple[str, str, str, str]:
-        return (
-            DEFAULT_MODEL_LOAD_PATH,
-            DEFAULT_PREPROCESS_LOAD_PATH,
-            DEFAULT_MODEL_STORE_PATH,
-            DEFAULT_PREPROCESS_STORE_PATH,
-        )
 
     def _add_dummy_flows(self):
         self.dummy_malicious_flow = numpy.array(
@@ -466,10 +437,8 @@ class MLLinearModel(ml_base.MLBaseDetection):
 
         self.pca = self._create_incremental_pca()
 
-    def train(self, sum_labeled_flows, last_number_of_flows_when_trained):
-        self._train_default(
-            sum_labeled_flows, last_number_of_flows_when_trained
-        )
+    def train(self, sum_labeled_flows):
+        self._train_default(sum_labeled_flows)
 
     def run_test_on_flow(self, flow: dict):
         self._test_default(flow)
