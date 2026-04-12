@@ -49,7 +49,7 @@ class _DummyBaseModule(MLBaseDetection):
     def is_preprocessor_initialized(self) -> bool:
         return True
 
-    def train(self, sum_labeled_flows, last_number_of_flows_when_trained):
+    def train(self, sum_labeled_flows):
         return None
 
     def run_test_on_flow(self, flow: dict):
@@ -136,7 +136,6 @@ def base_module():
     module.write_to_log = lambda *args, **kwargs: None
     module.labeled_counter = 0
     module.training_flows = []
-    module.last_number_of_flows_when_trained = 0
     module.preprocessor = object()
     return module
 
@@ -189,7 +188,7 @@ class TestMLBaseModule:
 
     def test_train_default_passes_both_classes_on_first_fit(self, base_module):
         base_module._train_default(
-            sum_labeled_flows=2, last_number_of_flows_when_trained=0
+            sum_labeled_flows=2
         )
 
         assert len(base_module.fit_calls) == 1
