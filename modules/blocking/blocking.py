@@ -24,7 +24,7 @@ class Blocking(IModule):
     by default this module flushes all slipsBlocking chains before it starts"""
 
     # Name: short name of the module. Do not use spaces
-    name = "Blocking"
+    name = "blocking"
     description = "Block malicious IPs connecting to this device"
     authors = ["Sebastian Garcia, Alya Gomaa"]
 
@@ -36,7 +36,9 @@ class Blocking(IModule):
         self.firewall = self._determine_linux_firewall()
         self.sudo = utils.get_sudo_according_to_env()
         self._init_chains_in_firewall()
-        self.blocking_log_path = os.path.join(self.output_dir, "blocking.log")
+        self.blocking_log_path = self.get_module_specific_output_path(
+            "blocking.log"
+        )
         self.blocking_logfile_lock = Lock()
         # clear it
         try:

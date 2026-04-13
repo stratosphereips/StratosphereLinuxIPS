@@ -81,13 +81,14 @@ In addition to the full stratosphereips/slips:latest image, there is now a minim
 * rnn_cc_detection/
 * timeline/
 * kalipso/
-* p2ptrust/
 * ml_linear_model/
 * ml_online_model/
+* p2p_trust/
+* flow_ml_detection/
 * cyst/
 * cesnet/
 * exporting_alerts/
-* riskiq/
+* risk_iq/
 * template/
 * blocking/
 * virustotal/

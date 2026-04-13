@@ -29,7 +29,7 @@ from slips_files.core.structures.evidence import (
 
 
 class Whitelist:
-    name = "Whitelist"
+    name = "whitelist"
 
     def __init__(self, logger: Output, db, bloom_filter_manager: BFManager):
         self.printer = Printer(logger, self.name)

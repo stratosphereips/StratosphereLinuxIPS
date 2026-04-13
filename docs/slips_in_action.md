@@ -31,7 +31,7 @@ First, Slips will start by updating all the remote TI feeds added in slips.yaml
 
 To make sure Slips is up to date with the most recent IoCs in all feeds,
 all feeds are loaded, parsed and updated periodically and automatically by
-Slips every 24 hours by our [Update Manager](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#update-manager-module), which requires no user interaction.
+Slips every 24 hours by our [update_manager](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#update-manager-module), which requires no user interaction.
 
 
 Afetr updating, slips modules start and print the PID of every successfully started module.

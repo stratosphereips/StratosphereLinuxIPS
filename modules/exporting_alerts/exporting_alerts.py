@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
-import os
 import sqlite3
 import threading
 import time
@@ -20,7 +19,7 @@ class ExportingAlerts(IModule):
     variables to use this module
     """
 
-    name = "Exporting Alerts"
+    name = "exporting_alerts"
     description = "Export alerts to slack or STIX format"
     authors = ["Alya Gomaa"]
 
@@ -42,9 +41,7 @@ class ExportingAlerts(IModule):
     def _init_direct_export_queue(self):
         if self.queue_db:
             return
-        self.queue_db_path = os.path.join(
-            self.output_dir, "stix_export_queue.sqlite"
-        )
+        self.queue_db_path = self.get_database_path("stix_export_queue.sqlite")
         self.queue_db = sqlite3.connect(
             self.queue_db_path, check_same_thread=False
         )
@@ -336,7 +333,7 @@ class ExportingAlerts(IModule):
 
         if not export_to_slack and not export_to_stix:
             self.print(
-                "Exporting Alerts module disabled (no export targets configured).",
+                "exporting_alerts module disabled (no export targets configured).",
                 0,
                 2,
             )

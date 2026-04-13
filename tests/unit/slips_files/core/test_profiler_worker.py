@@ -119,8 +119,8 @@ def test_get_slips_start_time_falls_back_to_now(mock_time):
 @pytest.mark.parametrize(
     "name, expected_prefix",
     [
-        ("ProfilerWorker_Process_2", "profiler_worker_2"),
-        ("ProfilerWorker", "profilerworker"),
+        ("profiler_worker_process_2", "profiler_worker_2"),
+        ("profiler_worker", "profiler_worker"),
         ("mock_name", "mock_name"),
     ],
 )
@@ -604,7 +604,7 @@ def test_should_stop_always_returns_false():
 
 def test_pre_main_updates_line_processor_cache():
     profiler = ModuleFactory().create_profiler_worker_obj()
-    profiler.name = "ProfilerWorker_Process_2"
+    profiler.name = "profiler_worker_process_2"
     profiler.input_handler.line_processor_cache = {}
     profiler.db.get_line_processors.return_value = {
         "conn.log": json.dumps({"ts": 0})

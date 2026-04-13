@@ -46,7 +46,7 @@ from slips_files.core.input.zeek.utils.zeek_input_utils import ZeekInputUtils
 class Input(ICore):
     """A class process to run the process of the flows"""
 
-    name = "Input"
+    name = "input"
 
     def init(
         self,
@@ -177,7 +177,7 @@ class Input(ICore):
         self.packet_filter = self.packet_filter or conf.packet_filter()
         self.tcp_inactivity_timeout = conf.tcp_inactivity_timeout()
         self.enable_rotation = conf.rotation()
-        self.rotation_period = conf.rotation_period()
+        self.default_rotation_interval = conf.default_rotation_interval()
         self.keep_rotated_files_for = conf.keep_rotated_files_for()
 
     def stop_queues(self):

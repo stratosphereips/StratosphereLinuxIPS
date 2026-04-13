@@ -40,7 +40,7 @@ def test_is_slips_peer(p2p_enabled, is_private, peer_trust, expected):
 )
 def test_is_self_defense(ip, our_ips, blocking, has_poisoner, expected):
     db = Mock()
-    db.get_pids.return_value = {"ARP Poisoner": 123} if has_poisoner else {}
+    db.get_pids.return_value = {"arp_poisoner": 123} if has_poisoner else {}
     args = Mock()
     args.blocking = blocking
 

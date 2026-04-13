@@ -1,11 +1,14 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import sqlite3
+from importlib.util import find_spec
 from pathlib import Path
 import os
 import shutil
 import binascii
 import subprocess
 import base64
+import sys
 from typing import (
     Dict,
     Optional,
@@ -88,8 +91,19 @@ def do_nothing(*args):
 def run_slips(cmd):
     """runs slips and waits for it to end"""
     slips = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)
-    return_code = slips.wait()
+    _, _ = slips.communicate(input=b"y\n")
+    return_code = slips.returncode
     return return_code
+
+
+def get_slips_test_command(arguments):
+    """
+    Build a Slips CLI command that uses the current Python interpreter.
+
+    :param arguments: CLI arguments to pass to slips.py
+    :return: shell command string
+    """
+    return f"{sys.executable} ./slips.py {arguments}"
 
 
 def get_random_uid():
@@ -126,6 +140,41 @@ def create_output_dir(dirname) -> PosixPath:
     return path
 
 
+def skip_if_missing_runtime_dependencies(
+    python_modules=None, binaries=None, require_zeek_or_bro=False
+):
+    """
+    Skip an integration test when required runtime dependencies are missing.
+
+    :param python_modules: iterable of importable module names
+    :param binaries: iterable of executable names expected on PATH
+    :param require_zeek_or_bro: require either zeek or bro to exist
+    :return: None
+    """
+    python_modules = python_modules or ()
+    binaries = binaries or ()
+    missing_dependencies = []
+
+    for module_name in python_modules:
+        if find_spec(module_name) is None:
+            missing_dependencies.append(module_name)
+
+    for binary_name in binaries:
+        if shutil.which(binary_name) is None:
+            missing_dependencies.append(binary_name)
+
+    if require_zeek_or_bro and not (
+        shutil.which("zeek") or shutil.which("bro")
+    ):
+        missing_dependencies.append("zeek|bro")
+
+    if missing_dependencies:
+        missing = ", ".join(missing_dependencies)
+        import pytest
+
+        pytest.skip(f"Missing integration runtime dependencies: {missing}")
+
+
 def msgs_published_are_eq_msgs_received_by_each_module(db) -> bool:
     """
     This functions checks that all modules received all msgs that were
@@ -151,6 +200,22 @@ def check_for_text(txt, output_dir):
             if txt in line:
                 return True
     return False
+
+
+def get_label_count_from_output_db(output_dir, label):
+    """
+    Return the number of flows stored with a given label in SQLite.
+
+    :param output_dir: integration test output directory
+    :param label: flow label to count
+    :return: number of matching flows
+    """
+    db_path = os.path.join(output_dir, "databases", "flows.sqlite")
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM flows WHERE label = ?", (label,)
+        ).fetchone()
+    return int(row[0] or 0)
 
 
 def has_error_keywords(line):

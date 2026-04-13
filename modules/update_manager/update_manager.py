@@ -30,7 +30,7 @@ from slips_files.core.helpers.whitelist.whitelist import Whitelist
 
 
 class UpdateManager(IModule):
-    name = "Update Manager"
+    name = "update_manager"
     description = "Update Threat Intelligence files"
     authors = ["Kamila Babayeva", "Alya Gomaa"]
 
@@ -426,7 +426,7 @@ class UpdateManager(IModule):
 
         # update period passed
         if "risk" in file_to_download:
-            # updating riskiq TI data does not depend on an e-tag
+            # updating risk_iq TI data does not depend on an e-tag
             return True
 
         # Update only if the e-tag is different
@@ -1729,7 +1729,7 @@ class UpdateManager(IModule):
                     )
                     task.add_done_callback(self.handle_task_exception)
             #######################################################
-            # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
+            # in case of risk_iq files, we don't have a link for them in ti_files, We update these files using their API
             # check if we have a username and api key and a week has passed since we last updated
             if self.should_update("riskiq_domains", self.riskiq_update_period):
                 self.update_riskiq_feed()

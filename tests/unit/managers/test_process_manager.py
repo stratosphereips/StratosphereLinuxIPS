@@ -115,7 +115,7 @@ def test_print_disabled_modules():
     [
         # Test case 1: No pending modules, no additional print calls
         ([], 1),
-        # Test case 2: Pending modules without Update Manager, one additional print call
+        # Test case 2: Pending modules without update_manager, one additional print call
         ([Mock(name="Module1"), Mock(name="Module2")], 1),
     ],
 )
@@ -139,13 +139,13 @@ def test_warn_about_pending_modules(pending_modules, expected_print_calls):
 @pytest.mark.parametrize(
     "blocking_enabled, exporting_alerts_disabled, "
     "expected_kill_first, expected_kill_last",
-    [  # Testcase1: blocking enabled, Exporting Alerts enabled
+    [  # Testcase1: blocking enabled, exporting_alerts enabled
         (True, False, [1, 2], [3, 4, 5]),
-        # Testcase2: Blocking disabled, Exporting Alerts enabled
+        # Testcase2: blocking disabled, exporting_alerts enabled
         (False, False, [1, 2, 4], [3, 5]),
-        # Testcase3: Blocking enabled, Exporting Alerts disabled
+        # Testcase3: blocking enabled, exporting_alerts disabled
         (True, True, [1, 2, 5], [3, 4]),
-        # Testcase4: Blocking disabled, Exporting Alerts disabled
+        # Testcase4: blocking disabled, exporting_alerts disabled
         (False, True, [1, 2, 4, 5], [3]),
         # Testcase5: All enabled, some PIDs are None
         (True, False, [1, 2], [3, 4, 5]),
@@ -161,15 +161,15 @@ def test_get_hitlist_in_order(
     process_manager.children = [
         Mock(pid=1, name="Process1"),
         Mock(pid=2, name="Process2"),
-        Mock(pid=3, name="EvidenceHandler"),
-        Mock(pid=4, name="Blocking"),
-        Mock(pid=5, name="Exporting Alerts"),
+        Mock(pid=3, name="evidence_handler"),
+        Mock(pid=4, name="blocking"),
+        Mock(pid=5, name="exporting_alerts"),
     ]
 
     process_manager.main.db.get_pid_of = lambda x: {
-        "EvidenceHandler": 3,
-        "Blocking": 4,
-        "Exporting Alerts": 5,
+        "evidence_handler": 3,
+        "blocking": 4,
+        "exporting_alerts": 5,
     }.get(x)
     process_manager.main.args.blocking = blocking_enabled
     process_manager.main.db.get_disabled_modules = lambda: (
@@ -471,7 +471,7 @@ def test_start_evidence_process(output_dir, redis_port):
         mock_evidence_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()
         process_manager.main.db.store_pid.assert_called_once_with(
-            "EvidenceHandler", 13579
+            "evidence_handler", 13579
         )
 
 
@@ -485,7 +485,7 @@ def test_print_started_module():
         )
 
         mock_print.assert_called_once_with(
-            "\t\tStarting the module green_module_name "
+            "\t\tStarting green_module_name module "
             "(Test description) [PID green_module_name]",
             1,
             0,

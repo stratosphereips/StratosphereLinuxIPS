@@ -53,7 +53,7 @@ class ProfileHandler:
     _is_gw_mac: Callable[..., Any]
     _last_sit: Callable[..., Any]
 
-    name = "DB"
+    name = "profile_handler_db"
 
     def set_profileid_field(self, profileid, field, value, pipe=None):
         """Set a single field in the profileid hash."""

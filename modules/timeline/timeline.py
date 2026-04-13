@@ -17,7 +17,7 @@ from slips_files.common.abstracts.imodule import IModule
 
 class Timeline(IModule):
     # Name: short name of the module. Do not use spaces
-    name = "Timeline"
+    name = "timeline"
     description = (
         "Creates kalipso timeline of what happened in the"
         " network based on flows and available data"

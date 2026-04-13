@@ -124,7 +124,7 @@ alerts_file = "alerts.log"
             "dataset/test9-mixed-zeek-dir/conn.log",
             4,
             "non-HTTP established connection to port 80. "
-            "destination IP: 194.132.197.198",  # the flows with uid
+            "destination IP: 194.132.197.198",  # the flow with uid
             # CAwUdr34dVnyOwbUuj should trigger this
             "test9-conn_log_only/",
             6659,
@@ -162,6 +162,6 @@ def test_zeek_conn_log(
     profiles = database.get_profiles_len()
     assert profiles > expected_profiles
 
-    log_file = os.path.join(output_dir, alerts_file)
+    log_file = output_dir / "alerts" / alerts_file
     assert is_evidence_present(log_file, expected_evidence) is True
     shutil.rmtree(output_dir)

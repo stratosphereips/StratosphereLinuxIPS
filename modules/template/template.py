@@ -20,7 +20,7 @@ import json
 
 class Template(IModule):
     # Name: short name of the module. Do not use spaces
-    name = "Template"
+    name = "template"
     description = "Template module"
     authors = ["Template Author"]
 

@@ -20,7 +20,7 @@ class P2PHandler:
     extended_ttl: int
     zadd_but_keep_n_entries: Callable[..., Any]
 
-    name = "P2PHandlerDB"
+    name = "p2p_handler_db"
 
     def get_fides_ti(self, target: str):
         """

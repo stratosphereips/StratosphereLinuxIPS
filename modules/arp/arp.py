@@ -29,7 +29,7 @@ from slips_files.core.structures.evidence import (
 
 class ARP(IModule):
 
-    name = "ARP"
+    name = "arp"
     description = "Detect ARP attacks"
     authors = ["Alya Gomaa"]
 

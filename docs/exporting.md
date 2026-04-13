@@ -1,6 +1,6 @@
 # Exporting Slips Alerts
 
-Slips supports exporting alerts to other systems using different modules (ExportingAlerts, CESNET sharing etc.)
+Slips supports exporting alerts to other systems using different modules (`exporting_alerts`, `cesnet`, etc.)
 
 For now the supported systems are:
 

@@ -39,7 +39,7 @@ DAEMONIZED_MODE = "daemonized"
 
 class Main:
     def __init__(self, testing=False):
-        self.name = "Main"
+        self.name = "main"
         self.alerts_default_path = "output/"
         self.mode = "interactive"
         self.sigterm_received = False

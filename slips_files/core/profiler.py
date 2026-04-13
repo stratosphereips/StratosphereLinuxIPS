@@ -63,7 +63,7 @@ SEPARATORS = {
 class Profiler(ICore, IObservable):
     """A class to create the profiles for IPs"""
 
-    name = "Profiler"
+    name = "profiler"
 
     def init(
         self,
@@ -213,10 +213,10 @@ class Profiler(ICore, IObservable):
 
     def start_profiler_worker(self, worker_id: int = None):
         """starts A profiler worker for faster processing of the flows"""
-        worker_name = f"ProfilerWorker_Process_{worker_id}"
+        worker_name = f"profiler_worker_process_{worker_id}"
         worker = ProfilerWorker(
             logger=self.logger,
-            output_dir=self.output_dir,
+            output_dir=self.parent_output_dir,
             redis_port=self.redis_port,
             termination_event=self.termination_event,
             conf=self.conf,
@@ -330,8 +330,8 @@ class Profiler(ICore, IObservable):
         if not self.did_5min_pass_since_last_throughput_check():
             return
 
-        profiler_fps = self.db.get_module_flows_per_second(self.name) or 0
-        input_fps = self.db.get_module_flows_per_second("Input") or 0
+        profiler_fps = self.db.get_core_module_flows_per_second(self.name) or 0
+        input_fps = self.db.get_core_module_flows_per_second("Input") or 0
         if float(input_fps) > (
             float(profiler_fps) * 1.1
         ):  # 10% more input fps than profiler fps
@@ -341,7 +341,7 @@ class Profiler(ICore, IObservable):
             self.print(
                 f"Warning: High throughput detected. Started "
                 f"additional worker: "
-                f"ProfilerWorker_{worker_id} to handle the flows."
+                f"profiler_worker_{worker_id} to handle the flows."
             )
 
             if self.last_worker_id == self.max_workers - 1:

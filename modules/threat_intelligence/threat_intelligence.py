@@ -37,7 +37,7 @@ from slips_files.core.structures.evidence import (
 
 
 class ThreatIntel(IModule, URLhaus, Spamhaus):
-    name = "Threat Intelligence"
+    name = "threat_intelligence"
     description = (
         "Check if the source IP or destination IP"
         " are in a malicious list of IPs"
