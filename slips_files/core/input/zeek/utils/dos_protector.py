@@ -11,7 +11,7 @@ class DoSProtector:
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         # is slips (input.py) is given > this number of flow per min,
         # this protector runs
-        self.flows_per_min_threshold = 2000
+        self.flows_per_min_threshold = 20000
         self.flow_sampling_stop_time = 0
         # number of seconds slips is going to be skipping flows for before
         # returning to normal (aka before going back to reading all flows)

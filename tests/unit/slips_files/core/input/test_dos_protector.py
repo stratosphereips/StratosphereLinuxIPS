@@ -70,6 +70,7 @@ def test_get_number_of_flows_to_skip_updates_sampling_window_and_prints():
     protector, input_process, _ = make_protector(
         is_running_non_stop=True, flows_per_second=50
     )
+    protector.flows_per_min_threshold = 2000
     protector.sampling_time_window = 60
 
     with (
