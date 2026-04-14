@@ -4,6 +4,7 @@
 This file tests all kinds of input in our dataset/
 It checks a random evidence and the total number of profiles in every file
 """
+from pathlib import PosixPath
 
 from tests.common_test_utils import (
     run_slips,
@@ -20,6 +21,11 @@ import os
 
 alerts_file = "alerts.log"
 
+
+
+def cleanup(dir: PosixPath):
+    return
+    shutil.rmtree(dir)
 
 @pytest.mark.parametrize(
     "binetflow_path, expected_profiles, expected_evidence, output_dir, redis_port",
@@ -91,7 +97,7 @@ def test_binetflow(
 
     log_file = output_dir / "alerts" / alerts_file
     assert is_evidence_present(log_file, expected_evidence) is True
-    shutil.rmtree(output_dir)
+    cleanup(output_dir)
 
 
 @pytest.mark.parametrize(
@@ -134,7 +140,7 @@ def test_suricata(suricata_path, output_dir, redis_port, expected_evidence):
 
     log_file = output_dir / "alerts" / alerts_file
     assert any(is_evidence_present(log_file, ev) for ev in expected_evidence)
-    shutil.rmtree(output_dir)
+    cleanup(output_dir)
 
 
 @pytest.mark.skipif(
@@ -173,4 +179,4 @@ def test_nfdump(nfdump_path, output_dir, redis_port):
 
     # log_file = os.path.join(output_dir, alerts_file)
     # assert is_evidence_present(log_file, expected_evidence) == True
-    shutil.rmtree(output_dir)
+    cleanup(output_dir)
