@@ -131,8 +131,8 @@ class Input(ICore):
         # ok this very terrible solution is to prevent the race condition
         # that happens when the analyzed file is extremely small, that the
         # input reads it, sends to the profiler queue, and reaches here,
-        # before the workers all start!! so we end up sending 0 stop msgs
-        # because 0 workers has started. this race condition causes slips
+        # before all the profiler workers even start!! so we end up sending 0
+        # stop msgs because 0 workers has started. this race condition causes slips
         # to stay up forever waiting for stop msgs that will never be recvd
         # in the profiler.
         # this says " if the input took less than 3mins to reach this line,
@@ -149,6 +149,12 @@ class Input(ICore):
                 log_to_logfiles_only=True,
             )
             time.sleep(20)
+            started_workers: int = self.db.get_profiler_workers_started()
+            self.print(
+                f"Done giving slips time to start all profilers. "
+                f"started_workers: {started_workers}",
+                log_to_logfiles_only=True,
+            )
 
         started_workers: int = self.db.get_profiler_workers_started()
         self.print(
