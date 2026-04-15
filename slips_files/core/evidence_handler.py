@@ -98,13 +98,16 @@ class EvidenceHandler(ICore):
         )
 
     def shutdown_gracefully(self):
+        self.print("Stopping all workers.", log_to_logfiles_only=True)
         self.stop_evidence_workers()
         self.logger_stop_signal.set()
+        self.print("Stopping the logger thread.", log_to_logfiles_only=True)
         try:
             self.logger_thread.join(timeout=5)
         except Exception:
             pass
 
+        self.print("Stopping the used queues.", log_to_logfiles_only=True)
         used_queues = [
             self.evidence_worker_queue,
             self.evidence_logger_q,
@@ -113,6 +116,7 @@ class EvidenceHandler(ICore):
         for q in used_queues:
             q.cancel_join_thread()
             q.close()
+        self.print("Done shutting down gracefully.")
 
     def stop_evidence_workers(self):
         for _ in self.evidence_worker_child_processes:

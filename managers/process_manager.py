@@ -596,7 +596,8 @@ class ProcessManager:
         self, processes_to_wait_for: List[Process]
     ) -> List[Process]:
         """
-        :param processes_to_wait_for: list of PIDs to wait for
+        :param processes_to_wait_for: list of PIDs to wait for, if one of
+        them is joined, a msg will be printed
         :return: list of PIDs that still are not done yet
         """
         alive_processes: List[Process] = []
@@ -690,7 +691,6 @@ class ProcessManager:
         returns 2 lists of alive children
         """
         # wait for the processes to be killed first as long as they want
-        # maximum time to wait is timeout_seconds
         alive_processes = self.wait_for_processes_to_finish(to_kill_first)
         if alive_processes:
             # update the list of processes to kill first with only the ones
@@ -702,11 +702,11 @@ class ProcessManager:
             # to join() em yet
             self.warn_about_pending_modules(alive_processes + to_kill_last)
             return to_kill_first, to_kill_last
-        else:
-            # all of them are killed
-            to_kill_first = []
-            # tell evidence to stop since all the modules are done
-            self.evidence_handler_termination_event.set()
+
+        # all of them are killed
+        to_kill_first = []
+        # tell evidence to stop since all the modules are done
+        self.evidence_handler_termination_event.set()
 
         alive_processes = self.wait_for_processes_to_finish(to_kill_last)
         if alive_processes:
@@ -835,7 +835,8 @@ class ProcessManager:
                 self.termination_event.set()
 
                 try:
-                    # Wait timeout_seconds for all the processes to finish
+                    # Wait up to timeout_seconds for all the processes to
+                    # finish
                     while time.time() - method_start_time < timeout:
                         (
                             to_kill_first,

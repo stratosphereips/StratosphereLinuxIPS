@@ -396,6 +396,23 @@ def test_give_profiler(line, input_type, expected_line, expected_input_type):
     assert line_sent["input_type"] == expected_input_type
 
 
+def test_mark_self_as_done_processing_signals_eof_without_worker_stops():
+    """Test input signals EOF without sending profiler worker sentinels."""
+    input_process = ModuleFactory().create_input_obj("", InputType.STDIN)
+    input_process.profiler_queue = Mock()
+    input_process.done_processing = Mock()
+    input_process.is_input_done_event = Mock()
+    input_process.is_profiler_done_event = Mock()
+
+    type(input_process).mark_self_as_done_processing(input_process)
+
+    input_process.is_input_done_event.set.assert_called_once()
+    input_process.is_profiler_done_event.wait.assert_called_once()
+    input_process.done_processing.release.assert_called_once()
+    input_process.profiler_queue.put.assert_not_called()
+    input_process.db.get_profiler_workers_started.assert_not_called()
+
+
 def test_get_file_handle_existing_file(tmp_path):
     """
     Test that the get_file_handle method correctly
