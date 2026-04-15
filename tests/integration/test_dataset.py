@@ -24,7 +24,6 @@ alerts_file = "alerts.log"
 
 
 def cleanup(dir: PosixPath):
-    return
     shutil.rmtree(dir)
 
 @pytest.mark.parametrize(
