@@ -170,10 +170,16 @@ class Profiler(ICore, IObservable):
         """
         wait as long as needed foreach worker to stop
         """
-        # ensure we don't block forever waiting for workers that will never
-        # receive the stop sentinel
         if self.is_input_done_event is not None:
             self.is_input_done_event.wait()
+
+        workers_count = len(self.profiler_child_processes)
+        self.print(
+            f"Sending {workers_count} stop signals for the profiler workers.",
+            log_to_logfiles_only=True,
+        )
+        for _ in range(workers_count):
+            self.profiler_queue.put("stop")
 
         for process in self.profiler_child_processes:
             try:
@@ -210,6 +216,13 @@ class Profiler(ICore, IObservable):
             return None
         except Exception:
             return None
+
+    def is_done_receiving_input(self) -> bool:
+        """Return True when input has signaled that no more flows will arrive."""
+        return (
+            self.is_input_done_event is not None
+            and self.is_input_done_event.is_set()
+        )
 
     def start_profiler_worker(self, worker_id: int = None):
         """starts A profiler worker for faster processing of the flows"""
@@ -324,6 +337,9 @@ class Profiler(ICore, IObservable):
         Checks for input and profile flows/sec imbalance and adds more
         profiler workers if needed.
         """
+        if self.is_done_receiving_input():
+            return
+
         if self.max_workers_started():
             return
 
@@ -387,6 +403,8 @@ class Profiler(ICore, IObservable):
         msg = None
         while not msg:
             msg = self.get_msg_from_queue(self.profiler_queue)
+            if not msg and self.is_done_receiving_input():
+                return
             time.sleep(0.1)
 
         self.input_handler_obj = self.get_handler_obj(msg)
