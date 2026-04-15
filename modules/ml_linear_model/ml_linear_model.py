@@ -33,6 +33,10 @@ class MLLinearModel(ml_base.MLBaseDetection):
     malicious_flow_evidence_type = (
         ml_base.EvidenceType.ML_LINEAR_MALICIOUS_FLOW
     )
+    malicious_flow_description_template = (
+        "Flow with malicious characteristics detected by ml_linear_model. "
+        "Src IP {src_ip}:{sport} to {dst_ip}:{dport}"
+    )
 
     def init(self):
         super().init()
