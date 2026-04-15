@@ -44,3 +44,9 @@ This is the main guide to the documentation related to the changes done to Slips
 
 **LLM finetuning**
 - [LLM RPI Finetuning Frameworks](https://stratospherelinuxips.readthedocs.io/en/develop/immune/finetuning_frameworks_rpi_5.html)
+
+### Paper Submission
+
+Target journals for the Immune paper:
+
+- [International Journal of Machine Learning and Cybernetics (Springer, journal 13042)](https://link.springer.com/journal/13042)
