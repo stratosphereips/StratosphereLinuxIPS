@@ -22,6 +22,10 @@ class MLBackendTemplate(MLBaseDetection):
     # Add a dedicated EvidenceType for your ML module in
     # slips_files/core/structures/evidence.py and set it here.
     malicious_flow_evidence_type = None
+    malicious_flow_description_template = (
+        "Flow with malicious characteristics detected by ml_backend_template. "
+        "Src IP {src_ip}:{sport} to {dst_ip}:{dport}"
+    )
 
     def process_features(self, dataset: pd.DataFrame) -> pd.DataFrame:
         return dataset

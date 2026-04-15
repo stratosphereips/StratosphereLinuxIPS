@@ -49,6 +49,10 @@ class MLBaseDetection(IModule, ABC):
     module_key = "ml_module"
     module_config_section = "ml_module"
     malicious_flow_evidence_type = None
+    malicious_flow_description_template = (
+        "Flow with malicious characteristics detected by {module_name}. "
+        "Src IP {src_ip}:{sport} to {dst_ip}:{dport}"
+    )
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_flow")
@@ -64,6 +68,12 @@ class MLBaseDetection(IModule, ABC):
         if not isinstance(self.malicious_flow_evidence_type, EvidenceType):
             raise ValueError(
                 "ML modules must define malicious_flow_evidence_type as a module-specific EvidenceType."
+            )
+        if not isinstance(self.malicious_flow_description_template, str) or (
+            not self.malicious_flow_description_template.strip()
+        ):
+            raise ValueError(
+                "ML modules must define malicious_flow_description_template as a non-empty string."
             )
 
         self.read_configuration()
@@ -815,11 +825,24 @@ class MLBaseDetection(IModule, ABC):
             return
 
         confidence = 0.1
-        description = (
-            f"Flow with malicious characteristics by ML. Src IP"
-            f" {src_ip}:{flow['sport']} to "
-            f"{dst_ip}:{flow['dport']}"
-        )
+        try:
+            description = self.malicious_flow_description_template.format(
+                module_name=self.name,
+                src_ip=src_ip,
+                sport=flow["sport"],
+                dst_ip=dst_ip,
+                dport=flow["dport"],
+            )
+        except (KeyError, ValueError) as exc:
+            self.print(
+                f"Invalid ML evidence description template/flow values: {exc}. Falling back to default description.",
+                0,
+                1,
+            )
+            description = (
+                f"Flow with malicious characteristics detected by {self.name}. "
+                f"Src IP {src_ip}:{flow.get('sport')} to {dst_ip}:{flow.get('dport')}"
+            )
         twid_number = int(twid.replace("timewindow", ""))
         evidence = Evidence(
             evidence_type=self.malicious_flow_evidence_type,
