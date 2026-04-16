@@ -18,6 +18,8 @@ class ArgumentParser(argparse.ArgumentParser):
 
     def add_argument(self, *args, **kwargs):
         super(ArgumentParser, self).add_argument(*args, **kwargs)
+        if kwargs.get("help") == argparse.SUPPRESS:
+            return
         option = {"flags": list(args)}
         for key in kwargs:
             option[key] = kwargs[key]
@@ -307,6 +309,14 @@ class ArgumentParser(argparse.ArgumentParser):
             "--no-recurse",
             action="store_true",
             help="Internal use only, prevents infinite recursion for cpu profiler dev mode multiprocess tracking",
+        )
+        # Internal flag used when Slips starts a newer version of itself.
+        self.add_argument(
+            "-u",
+            dest="is_slips_started_by_an_update",
+            action="store_true",
+            default=False,
+            help=argparse.SUPPRESS,
         )
         try:
             self.add_argument(
