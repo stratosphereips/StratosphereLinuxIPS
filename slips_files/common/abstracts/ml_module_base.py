@@ -323,6 +323,11 @@ class MLBaseDetection(IModule, ABC):
         """Compute train/validation metrics, persist model, and write one log snapshot."""
         relevant_labels = [MALICIOUS, BENIGN]
 
+        y_pred_train = self._normalize_binary_labels(y_pred_train)
+        y_gt_train = self._normalize_binary_labels(y_gt_train)
+        y_pred_val = self._normalize_binary_labels(y_pred_val)
+        y_gt_val = self._normalize_binary_labels(y_gt_val)
+
         def compute_metrics(y_true, y_pred):
             metrics = {
                 "TP": numpy.sum((y_pred == MALICIOUS) & (y_true == MALICIOUS)),
@@ -398,6 +403,9 @@ class MLBaseDetection(IModule, ABC):
             BACKGROUND.lower(),
         ]:
             return
+
+        original_label = self._normalize_binary_label(original_label)
+        predicted_label = self._normalize_binary_label(predicted_label)
 
         if not hasattr(self, "malware_metrics"):
             self.malware_metrics = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
@@ -661,16 +669,19 @@ class MLBaseDetection(IModule, ABC):
             original_label = processed_flow["ground_truth_label"].iloc[0]
         except KeyError:
             original_label = self.ground_truth_config_label
+        original_label = self._normalize_binary_label(original_label)
 
         processed_flow = self.drop_labels(processed_flow)
         pred = self.detect(processed_flow)
         if pred is None or getattr(pred, "size", 0) == 0:
             return
 
-        if pred[0] == MALICIOUS:
+        predicted_label = self._normalize_binary_label(pred[0])
+
+        if predicted_label == MALICIOUS:
             self.set_evidence_malicious_flow(flow, self.twid)
             self.print(
-                f"Prediction {pred[0]} for label {original_label}"
+                f"Prediction {predicted_label} for label {original_label}"
                 f' flow {flow["saddr"]}:'
                 f'{flow["sport"]} -> '
                 f'{flow["daddr"]}:'
@@ -682,7 +693,7 @@ class MLBaseDetection(IModule, ABC):
 
         self.store_testing_results(
             original_label,
-            pred[0],
+            predicted_label,
         )
 
     def process_training_flows(self):
@@ -811,7 +822,11 @@ class MLBaseDetection(IModule, ABC):
         # Backward compatibility for existing sklearn-specific references.
         self.scaler = self.preprocessor
 
-    def set_evidence_malicious_flow(self, flow: dict, twid: str):
+    def set_evidence_malicious_flow(
+        self,
+        flow: dict,
+        twid: str,
+    ):
         """Emit Slips evidence object when a flow is predicted as malicious."""
         try:
             src_ip = str(ipaddress.ip_address(flow["saddr"]))
@@ -967,6 +982,10 @@ class MLBaseDetection(IModule, ABC):
                     self.ground_truth_config_label
                 )
 
+            self.flow["ground_truth_label"] = self._normalize_binary_label(
+                self.flow["ground_truth_label"]
+            )
+
             if self.flow["ground_truth_label"] in [
                 BACKGROUND,
                 BACKGROUND.upper(),
@@ -1029,3 +1048,20 @@ class MLBaseDetection(IModule, ABC):
         """Works for StandardScaler, MinMaxScaler, RobustScaler, etc."""
         attrs = ["mean_", "scale_", "var_", "data_min_", "data_max_"]
         return any(hasattr(self.preprocessor, attr) for attr in attrs)
+
+    @staticmethod
+    def _normalize_binary_label(label):
+        if isinstance(label, str):
+            normalized = label.strip().lower()
+            if normalized in {"benign", "normal"}:
+                return BENIGN
+            if normalized in {"malicious", "malware"}:
+                return MALICIOUS
+        return label
+
+    def _normalize_binary_labels(self, labels):
+        if labels is None:
+            return None
+        return numpy.asarray(
+            [self._normalize_binary_label(label) for label in labels]
+        )
