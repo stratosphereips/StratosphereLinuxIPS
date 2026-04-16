@@ -517,7 +517,6 @@ class StixExporter(IExporter):
         return "stix" in self.export_to
 
     def read_configuration(self) -> bool:
-        """Reads configuration"""
         conf = ConfigParser()
         # Available options ['slack','stix']
         self.export_to = conf.export_to()

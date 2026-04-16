@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
-import subprocess
-
 # SPDX-License-Identifier: GPL-2.0-only
+import subprocess
 import psutil
 import sys
 import os

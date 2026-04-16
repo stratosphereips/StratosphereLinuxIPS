@@ -143,14 +143,14 @@ class ConfigParser(object):
     def packet_filter(self):
         return self.read_configuration("parameters", "pcapfilter", False)
 
-    def auto_update(self) -> bool:
+    def auto_update_slips(self) -> bool:
         """
         Read whether live Slips version auto-updates are enabled.
 
         Returns:
             True when automatic live updates are enabled, otherwise False.
         """
-        return self.read_configuration("update", "auto_update", False)
+        return self.read_configuration("update", "auto_update_slips", False)
 
     def online_whitelist(self):
         return self.read_configuration("whitelists", "online_whitelist", False)
