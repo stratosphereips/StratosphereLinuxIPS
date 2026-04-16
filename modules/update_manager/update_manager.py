@@ -1480,6 +1480,7 @@ class UpdateManager(IModule):
         """
         parses the local whitelist using the whitelist
          parser and stores it in the db
+         is only called when slips starts.
         """
         if self.enable_local_whitelist:
             self.whitelist.update()

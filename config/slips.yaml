@@ -1,6 +1,15 @@
 # This configuration file controls several aspects of the working of Slips.
 
 ---
+update:
+  # Enable automatic live updates of the installed Slips version.
+  # This setting is separate from the update_manager module, which only
+  # updates TI feeds and related files during runtime.
+  # Automatic Slips updates may overwrite the default config files shipped
+  # with Slips. If you want to keep your local configuration changes intact, avoid editing the default config files.
+  # Instead, create separate config files with different names and use those.
+  auto_update: false
+
 output:
   # Define the file names for the default output.
   stdout: slips.log

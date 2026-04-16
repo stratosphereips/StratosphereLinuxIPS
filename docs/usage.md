@@ -529,6 +529,19 @@ Use ```permanent_dir``` to choose where Slips stores databases and runtime-gener
 
 This includes persistent artifacts such as ```p2p_trust_runtime/``` and shared module databases like the Fides cache.
 
+**Live Slips auto update**
+
+Use ```update.auto_update``` to enable or disable automatic live updates of the installed Slips version.
+
+```yaml
+update:
+  auto_update: false
+```
+
+This setting is separate from the runtime ```update_manager``` module, which only updates TI feeds and related files.
+
+Automatic Slips updates may overwrite the default config files shipped with Slips. If you want to keep local config changes safe, do not modify the default config files. Create and use your own config files with different names instead.
+
 
 
 <div class="zoom">
