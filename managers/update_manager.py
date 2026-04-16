@@ -118,16 +118,18 @@ class UpdateManager:
         update_data = self._read_master_update_json()
         return bool(update_data.get("backwards_compatible", False))
 
-    def is_first_run(self) -> bool:
-        """
-        The very first time, slips is started by the user via CLI. then
-        for each new update, it's started by this update manager.
-        this func returns true if the user just started slips from cli.
-        """
-        return self.is_first_run
+    def _is_new_version_available(self) -> bool:
+        update_data = self._read_master_update_json()
+        latest_version = bool(update_data.get("version", False))
 
-    def update_slips_version(self):
-        if self.is_first_run():
+        if not latest_version:
+            return False
+
+        current_version = open("VERSION").read().strip()
+        return current_version == latest_version
+
+    def _update_slips_version(self):
+        if self.is_first_run:
             # we're not live updating, there isnt going to be an older
             # version of slips draining in this case.
             ...
