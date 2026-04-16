@@ -13,17 +13,26 @@ from urllib import error, request
 
 from git import InvalidGitRepositoryError, NoSuchPathError, Repo
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.core.database.database_manager import DBManager
 
 
 class UpdateManager:
-    def __init__(self, is_first_run: bool):
-        self.read_configuration()
-        self.is_first_run = is_first_run
+    def __init__(self, db: DBManager):
+        self.db = db
+        self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.cached_update_info: Optional[Dict[str, Any]] = None
+        self.conf = ConfigParser()
+        self.args = self.conf.get_args()
+        # The very first time, slips is started by the user via CLI. then
+        # for each new update, it's started by this update manager.
+        # this func returns true if the user just started slips from cli.
+        self.is_first_run: bool = (
+            True if not (self.args.is_slips_started_by_an_update) else False
+        )
+        self._read_configuration()
 
-    def read_configuration(self):
-        conf = ConfigParser()
-        self.update_slips = conf.auto_update_slips()
+    def _read_configuration(self):
+        self.auto_update_slips_enabled = self.conf.auto_update_slips()
 
     def _get_master_update_json_link(self) -> Optional[str]:
         """
@@ -63,7 +72,7 @@ class UpdateManager:
 
     def _read_master_update_json(self) -> Dict[str, Any]:
         """
-        Read the update.json metadata from the origin/master branch.
+        Read the update.json file from the origin/master branch of slips repo.
 
         Returns:
             Parsed update metadata if it can be fetched and decoded,
@@ -96,7 +105,7 @@ class UpdateManager:
         )
         return self.cached_update_info
 
-    def new_version_has_new_dependencies(self) -> bool:
+    def _new_version_has_new_dependencies(self) -> bool:
         """
         Check whether the version on master introduces new dependencies.
 
@@ -107,7 +116,7 @@ class UpdateManager:
         update_data = self._read_master_update_json()
         return bool(update_data.get("has_new_dependencies", True))
 
-    def new_version_is_backwards_compatible(self) -> bool:
+    def _new_version_is_backwards_compatible(self) -> bool:
         """
         Check whether the version on master is backwards compatible.
 
@@ -128,7 +137,7 @@ class UpdateManager:
         current_version = open("VERSION").read().strip()
         return current_version == latest_version
 
-    def _update_slips_version(self):
+    def _update_slips(self):
         if self.is_first_run:
             # we're not live updating, there isnt going to be an older
             # version of slips draining in this case.
@@ -138,10 +147,25 @@ class UpdateManager:
             ...
 
     def should_update_slips(self) -> bool:
-        if not self.update_slips:
+        """
+        returns true if the auto_update param in the config file is set to
+        true, and we're running on an interface, and there is a new
+        compatible version of slips.
+        """
+        if not self.auto_update_slips_enabled:
             return False
 
-        # Never live update when analyzing anything other than an interface
-        # If  not running on interface: return false
-        # return (new_version_available() and
-        #         new_version_supports_backwards_compatibility()):
+        if not self.is_running_non_stop:
+            # only update slips when running on an interface.
+            return False
+
+        if not self._is_new_version_available():
+            return False
+
+        if (
+            self._new_version_is_backwards_compatible()
+            and not self._new_version_has_new_dependencies()
+        ):
+            return True
+
+        return False
