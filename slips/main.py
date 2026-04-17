@@ -21,6 +21,7 @@ from managers.process_manager import ProcessManager
 from managers.profilers_manager import ProfilersManager
 from managers.redis_manager import RedisManager
 from managers.ui_manager import UIManager
+from managers.update_manager import UpdateManager
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_paths import get_performance_plots_dir
 from slips_files.common.printer import Printer
@@ -576,6 +577,10 @@ class Main:
                 }
             )
 
+            self.update_man = UpdateManager(
+                self.db, self.proc_man.is_slips_live_updating
+            )
+
             # this  func should be called as soon as we start the db,
             # before evdience proc starts.
             # to be able to use the host IP as analyzer IP in alerts.json
@@ -728,6 +733,8 @@ class Main:
                 )
 
                 self.host_ip_man.update_host_ip(host_ips, modified_profiles)
+                if self.update_man.check_for_update_every_1_day():
+                    self.update_man.update_slips()
 
         except KeyboardInterrupt:
             # the EINTR error code happens if a signal occurred while

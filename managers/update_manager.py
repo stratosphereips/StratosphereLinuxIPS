@@ -8,6 +8,7 @@ Handles updating of slips version
 
 import json
 import re
+import time
 from typing import Any, Dict, Optional
 from urllib import error, request
 
@@ -116,7 +117,7 @@ class UpdateManager:
         update_data = self._read_master_update_json()
         return bool(update_data.get("has_new_dependencies", True))
 
-    def _new_version_is_backwards_compatible(self) -> bool:
+    def _is_new_version_backwards_compatible(self) -> bool:
         """
         Check whether the version on master is backwards compatible.
 
@@ -137,14 +138,35 @@ class UpdateManager:
         current_version = open("VERSION").read().strip()
         return current_version == latest_version
 
-    def _update_slips(self):
-        if self.is_first_run:
-            # we're not live updating, there isnt going to be an older
-            # version of slips draining in this case.
-            ...
-        else:
-            # prep for handover. old version to the new one.
-            ...
+    def update_slips(self):
+        # if self.is_first_run:
+        #     # we're not live updating, there isnt going to be an older
+        #     # version of slips draining in this case.
+        #     ...
+        # else:
+        #     # prep for handover. old version to the new one.
+        #     ...
+        # self.is_slips_live_updating.set()
+        ...
+
+    def _did_1d_pass_since_last_update(self) -> bool:
+        """
+        returns true once every 1 day.
+        """
+        update_interval = 60 * 60 * 24
+        if time.time() >= self.last_update_time + update_interval:
+            self.last_update_time = time.time()
+            return True
+        return False
+
+    def check_for_update_every_1_day(self) -> bool:
+        """
+        return sTrue if a new compatible version is available and slips
+        should update itself
+        """
+        if self._did_1d_pass_since_last_update():
+            return self.should_update_slips()
+        return False
 
     def should_update_slips(self) -> bool:
         """
@@ -163,7 +185,7 @@ class UpdateManager:
             return False
 
         if (
-            self._new_version_is_backwards_compatible()
+            self._is_new_version_backwards_compatible()
             and not self._new_version_has_new_dependencies()
         ):
             return True
