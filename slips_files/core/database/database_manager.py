@@ -631,6 +631,12 @@ class DBManager:
     def get_all_zeek_files(self, *args, **kwargs):
         return self.rdb.get_all_zeek_files(*args, **kwargs)
 
+    def store_open_zeek_files_offsets(self, *args, **kwargs):
+        return self.rdb.store_open_zeek_files_offsets(*args, **kwargs)
+
+    def get_open_zeek_files_offsets(self, *args, **kwargs):
+        return self.rdb.get_open_zeek_files_offsets(*args, **kwargs)
+
     def get_gateway_ip(self, *args, **kwargs):
         return self.rdb.get_gateway_ip(*args, **kwargs)
 

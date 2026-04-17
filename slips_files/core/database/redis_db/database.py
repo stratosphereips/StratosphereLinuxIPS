@@ -1280,6 +1280,28 @@ class RedisDB(
         """Return all entries from the list of zeek files"""
         return self.r.hgetall(self.constants.ZEEK_FILES)
 
+    def store_open_zeek_files_offsets(self, zeek_files_offsets: dict):
+        """
+        Store the current offsets for open Zeek files.
+
+        :param zeek_files_offsets: Mapping of Zeek logfile path to offset.
+        :return: None
+        """
+        self.r.delete(self.constants.ZEEK_OPEN_FILES_OFFSETS)
+        if zeek_files_offsets:
+            self.r.hset(
+                self.constants.ZEEK_OPEN_FILES_OFFSETS,
+                mapping=zeek_files_offsets,
+            )
+
+    def get_open_zeek_files_offsets(self) -> dict:
+        """
+        Retrieve the current offsets for open Zeek files.
+
+        :return: Mapping of Zeek logfile path to offset.
+        """
+        return self.r.hgetall(self.constants.ZEEK_OPEN_FILES_OFFSETS)
+
     def _get_gw_info(self, interface: str) -> Dict[str, str] | None:
         """
         gets the gw of the given interface, when slips is runnuning on a
