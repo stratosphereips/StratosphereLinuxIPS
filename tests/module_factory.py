@@ -659,9 +659,9 @@ class ModuleFactory:
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_update_manager_obj(self, mock_db):
-        from modules.update_manager.update_manager import UpdateManager
+        from modules.update_manager.update_manager import FeedsUpdateManager
 
-        update_manager = UpdateManager(
+        update_manager = FeedsUpdateManager(
             logger=self.logger,
             output_dir="dummy_output_dir",
             redis_port=6379,

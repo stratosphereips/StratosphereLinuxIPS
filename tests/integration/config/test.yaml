@@ -64,7 +64,7 @@ modules:
   - template
   - ensembling
   - flow_ml_detection
-  - update_manager
+  - feeds_update_manager
   timeline_human_timestamp: true
 parameters:
   analysis_direction: all

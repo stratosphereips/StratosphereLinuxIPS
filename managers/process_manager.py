@@ -32,7 +32,9 @@ import multiprocessing
 
 
 import modules
-from modules.update_manager.update_manager import UpdateManager
+from modules.feeds_update_manager.feeds_update_manager import (
+    FeedsUpdateManager,
+)
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import (
     IModule,
@@ -497,7 +499,7 @@ class ProcessManager:
             with Lock(name="slips_ports_and_orgs"):
                 # pass a dummy termination event for update manager to
                 # update orgs and ports info
-                update_manager = UpdateManager(
+                update_manager = FeedsUpdateManager(
                     self.main.logger,
                     self.main.args.output,
                     self.main.redis_port,
@@ -541,9 +543,9 @@ class ProcessManager:
         )
 
         # check if update manager is still alive
-        if "update_manager" in pending_module_names:
+        if "feeds_update_manager" in pending_module_names:
             self.main.print(
-                "update_manager may take several minutes "
+                "feeds_update_manager may take several minutes "
                 "to finish updating 45+ TI files."
             )
 

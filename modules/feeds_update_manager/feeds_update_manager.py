@@ -29,8 +29,8 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 
 
-class UpdateManager(IModule):
-    name = "update_manager"
+class FeedsUpdateManager(IModule):
+    name = "feeds_update_manager"
     description = "Update Threat Intelligence files"
     authors = ["Kamila Babayeva", "Alya Gomaa"]
 

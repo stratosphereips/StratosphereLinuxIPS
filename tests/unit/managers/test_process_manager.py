@@ -115,7 +115,7 @@ def test_print_disabled_modules():
     [
         # Test case 1: No pending modules, no additional print calls
         ([], 1),
-        # Test case 2: Pending modules without update_manager, one additional print call
+        # Test case 2: Pending modules without feeds_update_manager, one additional print call
         ([Mock(name="Module1"), Mock(name="Module2")], 1),
     ],
 )

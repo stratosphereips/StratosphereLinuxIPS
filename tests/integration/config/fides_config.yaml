@@ -206,7 +206,7 @@ virustotal:
 #############################
 threatintelligence:
 
-   # by default, slips starts without the TI files, and runs the update_manager in the background
+   # by default, slips starts without the TI files, and runs the feeds_update_manager in the background
    # if thi option is set to yes, slips will not start untill the update manager is done
    # and all TI files are loaded successfully
    # this is usefull if you want to ensure that slips doesn't miss the detection of any blacklisted IPs

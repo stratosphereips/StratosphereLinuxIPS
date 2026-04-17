@@ -60,7 +60,7 @@ class BFManager:
         Updates the bloom filters with the whitelisted organization
         domains, asns, and ips
         fills the self.org_filters dict
-        is called from update_manager whether slips did update its local
+        is called from feeds_update_manager whether slips did update its local
         org files or not.
         this goal of calling this is to make sure slips has the bloom
         filters in mem at all times.

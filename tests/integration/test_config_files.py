@@ -77,7 +77,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
                     "template",
                     "ensembling",
                     "flow_ml_detection",
-                    "update_manager",
+                    "feeds_update_manager",
                 ]
             },
         },
@@ -172,7 +172,7 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
                     "template",
                     "ensembling",
                     "flow_ml_detection",
-                    "update_manager",
+                    "feeds_update_manager",
                 ]
             },
         },
