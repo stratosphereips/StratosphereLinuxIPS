@@ -22,6 +22,10 @@ class ZeekInputUtils:
         self.open_file_handles = {}
         self.open_file_handlers_lock = threading.RLock()
         self.cache_lines = {}
+        # used to start reading from where slips left off after slips auto
+        # updates.
+        self.zeek_logs_offsets = {}
+        self.last_consumed_offsets = {}
         self.file_time = {}
         self.last_updated_file_time = None
         self.rotated_files_to_delete: List[Tuple[str, float]] = []
@@ -164,6 +168,7 @@ class ZeekInputUtils:
                 file_handle.readline()
 
             zeek_line = file_handle.readline()
+            line_end_offset = file_handle.tell()
 
         except ValueError:
             # remover thread just finished closing all old handles.
@@ -195,7 +200,21 @@ class ZeekInputUtils:
             "data": nline,
             "interface": interface,
         }
+        self.zeek_logs_offsets[filename] = line_end_offset
         return True
+
+    def store_current_open_zeek_files_offsets_in_db(self):
+        """
+        Store the last committed offset for each currently open Zeek file.
+
+        :return: None
+        """
+        with self.open_file_handlers_lock:
+            current_offsets = {
+                filename: str(self.last_consumed_offsets.get(filename, 0))
+                for filename in self.open_file_handles
+            }
+        self.input.db.store_open_zeek_files_offsets(current_offsets)
 
     def reached_timeout(self) -> bool:
         # If we don't have any cached lines to send,
@@ -251,6 +270,20 @@ class ZeekInputUtils:
         earliest_line = self.cache_lines[file_with_earliest_flow]
         return earliest_line, file_with_earliest_flow
 
+    def _get_newest_known_offset(self, file):
+        previously_saved_offset = self.last_consumed_offsets.get(file, 0)
+        return self.zeek_logs_offsets.get(file, previously_saved_offset)
+
+    def _update_offsets(self, file):
+        newest_offset = self._get_newest_known_offset(file)
+        self.last_consumed_offsets[file] = newest_offset
+
+        if (
+            self.input.is_slips_live_updating is not None
+            and self.input.is_slips_live_updating.is_set()
+        ):
+            self.store_current_open_zeek_files_offsets_in_db()
+
     def read_zeek_files(self) -> int:
         """
         Runs when slips is analyzing pcaps, interface, zeek dirs, and zeek
@@ -263,6 +296,8 @@ class ZeekInputUtils:
             # that file
             self.file_time = {}
             self.cache_lines = {}
+            self.zeek_logs_offsets = {}
+            self.last_consumed_offsets = {}
             # Try to keep track of when was the last update so we stop this
             # reading
             self.last_updated_file_time = datetime.datetime.now()
@@ -298,11 +333,15 @@ class ZeekInputUtils:
 
                 self.input.give_profiler(earliest_line)
                 self.input.lines += 1
+
+                self._update_offsets(file_with_earliest_flow)
+
                 # when testing, no need to read the whole file!
                 if self.input.lines == 10 and self.input.testing:
                     break
                 # Delete this line from the cache and the time list
                 del self.cache_lines[file_with_earliest_flow]
+                self.zeek_logs_offsets.pop(file_with_earliest_flow, None)
                 del self.file_time[file_with_earliest_flow]
 
                 # Get the new list of files. Since new files may have been created by
