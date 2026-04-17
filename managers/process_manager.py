@@ -669,7 +669,7 @@ class ProcessManager:
 
         return (
             utils.is_msg_intended_for(message, "control_channel")
-            and message["data"] == "stop_slips"
+            and utils.get_msg_payload(message) == "stop_slips"
         )
 
     def is_debugger_active(self) -> bool:

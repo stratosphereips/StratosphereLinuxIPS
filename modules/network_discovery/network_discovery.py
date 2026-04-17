@@ -244,5 +244,5 @@ class NetworkDiscovery(IModule):
             self.check_dhcp_scan(profileid, twid, flow)
 
         if msg := self.get_msg("tw_closed"):
-            profileid_tw: List[str] = msg["data"].split("_")
+            profileid_tw: List[str] = utils.get_msg_payload(msg).split("_")
             self.cleanup_cache_dicts(profileid_tw)

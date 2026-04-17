@@ -784,6 +784,36 @@ class Utils(object):
             and message["channel"] == channel
         )
 
+    def get_msg_payload(self, message: dict) -> Any:
+        """
+        Return the actual payload stored in the given message. discards
+        metadata like "version" and returns the text only.
+
+        Parameters:
+        message: Pub/sub message returned by Redis.
+
+        Return:
+        The decoded payload. Wrapped plain-string messages return their text.
+        """
+        data = message["data"]
+        if not isinstance(data, str):
+            return data
+
+        try:
+            decoded = json.loads(data)
+        except (json.decoder.JSONDecodeError, TypeError):
+            return data
+
+        if (
+            isinstance(decoded, dict)
+            and "text" in decoded
+            and "version" in decoded
+            and len(decoded) == 2
+        ):
+            return decoded["text"]
+
+        return decoded
+
     def get_slips_version(self) -> str:
         version_file = "VERSION"
         with open(version_file, "r") as f:

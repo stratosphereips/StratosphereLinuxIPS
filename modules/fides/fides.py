@@ -221,7 +221,7 @@ class FidesModule(IModule):
             if not msg["data"]:
                 return
 
-            ip = msg["data"]
+            ip = utils.get_msg_payload(msg)
 
             if utils.detect_ioc_type(ip) != "ip":
                 return

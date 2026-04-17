@@ -473,4 +473,4 @@ class BruteforceDetector(IModule):
             self._handle_ssh(profileid, twid, flow)
 
         if msg := self.get_msg("tw_closed"):
-            self.cleanup_cache_dicts(msg["data"].split("_"))
+            self.cleanup_cache_dicts(utils.get_msg_payload(msg).split("_"))
