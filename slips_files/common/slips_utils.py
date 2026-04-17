@@ -920,6 +920,11 @@ class Utils(object):
             ts = ts + "0" * (6 - len(ts.split(".")[-1]))
         return ts
 
+    def get_current_version(self) -> str:
+        with open("VERSION", "r") as version_file:
+            current_version = version_file.read().strip()
+        return current_version
+
     def _convert_str_port_to_int(self, port) -> int:
         if isinstance(port, str):
             try:

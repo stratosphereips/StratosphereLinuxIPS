@@ -43,6 +43,7 @@ from typing import (
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 LOCALHOST = "127.0.0.1"
+VERSION = utils.get_current_version()
 
 
 class RedisDB(
@@ -507,10 +508,28 @@ class RedisDB(
         self.r.ping()
         self.rcache.ping()
 
+    def _add_version_to_msg(self, msg):
+        if isinstance(msg, str):
+            try:
+                msg = json.loads(msg)
+                msg.update({"version": VERSION})
+                msg = json.dumps(msg)
+            except json.decoder.JSONDecodeError:
+                # the msg is 1 str
+                msg = {
+                    "text": msg,
+                    "version": VERSION,
+                }
+                msg = json.dumps(msg)
+        elif isinstance(msg, dict):
+            msg.update({"version": VERSION})
+        return msg
+
     def publish(self, channel, msg, pipeline=None):
         """Publish a msg in the given channel.
         adds the instructions to the given pipeline if given and returns
         the pipeline"""
+        msg = self._add_version_to_msg(msg)
 
         # keeps track of how many msgs were published in the given channel
         if pipeline is not None:

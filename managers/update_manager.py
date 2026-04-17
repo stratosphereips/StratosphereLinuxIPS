@@ -14,12 +14,15 @@ from urllib import error, request
 
 from git import InvalidGitRepositoryError, NoSuchPathError, Repo
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
 
 
 class UpdateManager:
-    def __init__(self, db: DBManager = None, is_slips_live_updating=None):
-        self.db = db
+    def __init__(
+        self, database: DBManager = None, is_slips_live_updating=None
+    ):
+        self.db = database
         self.is_slips_live_updating = is_slips_live_updating
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.cached_update_info: Optional[Dict[str, Any]] = None
@@ -137,8 +140,7 @@ class UpdateManager:
         if not latest_version:
             return False
 
-        current_version = open("VERSION").read().strip()
-        return current_version == latest_version
+        return utils.get_current_version() == latest_version
 
     def update_slips(self):
         # if self.is_first_run:
