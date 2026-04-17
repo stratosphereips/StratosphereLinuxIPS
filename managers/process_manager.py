@@ -32,6 +32,7 @@ import multiprocessing
 
 
 import modules
+from managers.update_manager import UpdateManager
 from modules.feeds_update_manager.feeds_update_manager import (
     FeedsUpdateManager,
 )
@@ -90,6 +91,7 @@ class ProcessManager:
         # is set by the input process to indicate no more flows are coming
         # so profiler can safely begin shutdown/joins.
         self.is_input_done_event = Event()
+        self.is_slips_live_updating = Event()
         self.read_config()
 
     def read_config(self):
@@ -100,6 +102,12 @@ class ProcessManager:
         self.bootstrapping_modules = self.main.conf.get_bootstrapping_modules()
         # self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.
         # get_bootstrapping_setting()
+
+    def start_slips_update_manager(self):
+        return UpdateManager(
+            database=self.main.db,
+            is_slips_live_updating=self.is_slips_live_updating,
+        )
 
     def start_output_process(self, stderr, slips_logfile, stdout=""):
         output_process = Output(
@@ -180,6 +188,7 @@ class ProcessManager:
             line_type=self.main.line_type,
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
+            is_slips_live_updating=self.is_slips_live_updating,
         )
         input_process.start()
         self.main.print(

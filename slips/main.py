@@ -21,7 +21,6 @@ from managers.process_manager import ProcessManager
 from managers.profilers_manager import ProfilersManager
 from managers.redis_manager import RedisManager
 from managers.ui_manager import UIManager
-from managers.update_manager import UpdateManager
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_paths import get_performance_plots_dir
 from slips_files.common.printer import Printer
@@ -577,9 +576,7 @@ class Main:
                 }
             )
 
-            self.update_man = UpdateManager(
-                self.db, self.proc_man.is_slips_live_updating
-            )
+            self.update_man = self.proc_man.start_slips_update_manager()
 
             # this  func should be called as soon as we start the db,
             # before evdience proc starts.

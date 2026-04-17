@@ -18,8 +18,9 @@ from slips_files.core.database.database_manager import DBManager
 
 
 class UpdateManager:
-    def __init__(self, db: DBManager):
+    def __init__(self, db: DBManager = None, is_slips_live_updating=None):
         self.db = db
+        self.is_slips_live_updating = is_slips_live_updating
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.cached_update_info: Optional[Dict[str, Any]] = None
         self.conf = ConfigParser()
@@ -28,9 +29,10 @@ class UpdateManager:
         # for each new update, it's started by this update manager.
         # this func returns true if the user just started slips from cli.
         self.is_first_run: bool = (
-            True if not (self.args.is_slips_started_by_an_update) else False
+            True if not self.args.is_slips_started_by_an_update else False
         )
         self._read_configuration()
+        self.last_update_time = 0
 
     def _read_configuration(self):
         self.auto_update_slips_enabled = self.conf.auto_update_slips()

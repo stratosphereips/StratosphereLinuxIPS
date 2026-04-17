@@ -43,6 +43,7 @@ class Constants:
     LABELS = "labels"
     MSGS_PUBLISHED_AT_RUNTIME = "msgs_published_at_runtime"
     ZEEK_FILES = "zeekfiles"
+    ZEEK_OPEN_FILES_OFFSETS = "zeek_open_files_offsets"
     DEFAULT_GATEWAY = "default_gateway"
     IS_CYST_ENABLED = "is_cyst_enabled"
     LOCAL_NETWORK = "local_network"
