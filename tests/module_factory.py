@@ -280,6 +280,28 @@ class ModuleFactory:
                 "danger": 0.40,
             }
         )
+        conf.t_cell_priming_profiles = Mock(
+            return_value={
+                "PAMP": {
+                    "strength": 1.0,
+                    "co_stimulation_threshold_offset": 0.0,
+                    "effector_threshold_offset": 0.0,
+                    "memory_threshold_offset": 0.0,
+                    "state_wait_timeout_factor": 1.0,
+                    "effector_min_related_count_offset": 0,
+                    "memory_min_related_count_offset": 0,
+                },
+                "DAMP": {
+                    "strength": 0.6,
+                    "co_stimulation_threshold_offset": 0.15,
+                    "effector_threshold_offset": 0.10,
+                    "memory_threshold_offset": 0.05,
+                    "state_wait_timeout_factor": 0.5,
+                    "effector_min_related_count_offset": 1,
+                    "memory_min_related_count_offset": 1,
+                },
+            }
+        )
         conf.t_cell_novelty_window_seconds = Mock(return_value=86400)
         conf.t_cell_context_recent_window_seconds = Mock(return_value=1800)
         conf.t_cell_effector_threshold = Mock(return_value=0.70)
