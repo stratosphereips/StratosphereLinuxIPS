@@ -389,13 +389,14 @@ t_cell:
   # sum(threat_level_value * confidence) / danger_saturation
   danger_saturation: 2.5
 
-  # DAMP observations do not create or match T Cells, but they do increase
-  # the danger pressure used by co-stimulation and context for the same
-  # responsible IP:
+  # DAMP observations also contribute to danger pressure for the same
+  # responsible IP. That mixed pressure is used by co-stimulation and
+  # context:
   # combined_raw_danger = pamp_raw_danger + damp_danger_weight * damp_raw_danger
   damp_danger_weight: 1.5
 
-  # Activation threshold for co-stimulation.
+  # Base activation threshold for co-stimulation. Signal-specific priming
+  # profiles can raise this later for weaker priming sources such as DAMP.
   co_stimulation_threshold: 0.65
 
   # Co-stimulation weights are normalized internally.
@@ -404,6 +405,29 @@ t_cell:
     related_pamps: 0.25
     danger: 0.40
 
+  # Both PAMP and DAMP can move a mature T Cell into state 1 when an
+  # extracted antigen matches an accepted regex. The priming profile
+  # determines how strong that state-1 cell is by shifting later
+  # thresholds, required supporting evidence counts, and how long the
+  # cell can wait before timing out.
+  priming_profiles:
+    PAMP:
+      strength: 1.0
+      co_stimulation_threshold_offset: 0.0
+      effector_threshold_offset: 0.0
+      memory_threshold_offset: 0.0
+      state_wait_timeout_factor: 1.0
+      effector_min_related_count_offset: 0
+      memory_min_related_count_offset: 0
+    DAMP:
+      strength: 0.6
+      co_stimulation_threshold_offset: 0.15
+      effector_threshold_offset: 0.10
+      memory_threshold_offset: 0.05
+      state_wait_timeout_factor: 0.5
+      effector_min_related_count_offset: 1
+      memory_min_related_count_offset: 1
+
   # Novelty lookback window used to decide whether a matched regex is new.
   novelty_window_seconds: 86400
 
@@ -411,25 +435,27 @@ t_cell:
   # preceding window of the same size.
   context_recent_window_seconds: 1800
 
-  # Context threshold for escalating to the effector state.
+  # Base context threshold for escalating to the effector state. The
+  # effective threshold may be increased by the priming profile.
   effector_threshold: 0.70
 
-  # Minimum number of related recent observations required before an effector
-  # response is allowed.
+  # Base minimum number of related recent observations required before an
+  # effector response is allowed. The priming profile may add to this.
   effector_min_related_count: 4
 
   # Cooldown between effector responses for the same T Cell.
   effector_cooldown_seconds: 1800
 
-  # Context threshold for moving into the memory state.
+  # Base context threshold for moving into the memory state. The effective
+  # threshold may be increased by the priming profile.
   memory_threshold: 0.60
 
   # Maximum recent/previous pressure ratio to consider the threat to be
   # decreasing enough for memory.
   memory_trend_ratio_max: 0.60
 
-  # Minimum number of related recent observations required before memory is
-  # stored.
+  # Base minimum number of related recent observations required before
+  # memory is stored. The priming profile may add to this.
   memory_min_related_count: 3
 
   # If blocking or ARP-poisoning modules are not running, log a simulated
