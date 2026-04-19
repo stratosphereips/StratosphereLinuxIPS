@@ -2,13 +2,15 @@
 
 Slips now adds an `evidence_signal` field to every evidence when the evidence reaches the shared evidence pipeline. Detection modules do not need to set this field themselves.
 
-The `T Cell` module consumes this same central field and only activates its
-state machine for antigen recognition from `PAMP` evidence. `DAMP` evidence is
-still stored by the module as an observation and contributes to the danger
-pressure used in T-cell co-stimulation and context calculations for the same
+The `T Cell` module consumes this same central field and uses it to decide how
+strongly a new cell should be primed. Both `PAMP` and `DAMP` evidence can
+create `0 -> 1` when an extracted antigen matches an accepted regex.
+`PAMP` keeps the base downstream thresholds, while `DAMP` stores a weaker
+priming profile with stricter later thresholds, higher corroboration counts,
+and a shorter waiting window. `DAMP` evidence still contributes to the mixed
+danger pressure used in co-stimulation and context calculations for the same
 responsible IP, and each new `DAMP` also reevaluates cells that are already
-waiting on that responsible IP. `DAMP` does not create cells or perform regex
-matching by itself. See
+waiting on that responsible IP. See
 [T Cell Module](t_cell_module.md) for the responder details.
 
 The supported values are:
