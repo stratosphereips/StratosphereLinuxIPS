@@ -146,7 +146,24 @@ def test_build_report_payload_and_html(tmp_path):
             "last_co_stimulation": 0.91,
             "last_effector_score": 0.33,
             "last_memory_score": 0.78,
-            "context": {"novelty_score": 0, "recent_pressure": 0.42},
+            "context": {
+                "novelty_score": 0,
+                "recent_pressure": 0.42,
+                "priming_signal": "PAMP",
+                "priming_label": "pamp-primed",
+                "priming_strength": 1.0,
+                "priming_profile": {
+                    "signal": "PAMP",
+                    "label": "pamp-primed",
+                    "strength": 1.0,
+                    "co_stimulation_threshold": 0.65,
+                    "effector_threshold": 0.70,
+                    "memory_threshold": 0.60,
+                    "state_wait_timeout_seconds": 3600.0,
+                    "effector_min_related_count": 4,
+                    "memory_min_related_count": 3,
+                },
+            },
             "created_at": 2000.0,
             "updated_at": 2000.3,
         }
@@ -189,11 +206,22 @@ def test_build_report_payload_and_html(tmp_path):
             "observation_id": pamp_observation_id,
             "from_state": 0,
             "to_state": 1,
-            "reason": "antigen_match",
+            "reason": "antigen_recognized",
             "matched_regex_hash": "regex-hash-1",
             "matched_regex": r"^bad\.example\.com$",
             "matched_value": "bad.example.com",
-            "scores": {"specificity": 1.0},
+            "scores": {
+                "regex_specificity": 1.0,
+                "priming_signal": "PAMP",
+                "priming_label": "pamp-primed",
+                "priming_strength": 1.0,
+                "co_stimulation_threshold": 0.65,
+                "effector_threshold": 0.70,
+                "memory_threshold": 0.60,
+                "state_wait_timeout_seconds": 3600.0,
+                "effector_min_related_count": 4,
+                "memory_min_related_count": 3,
+            },
             "created_at": 2000.1,
         }
     )
@@ -267,7 +295,7 @@ def test_build_report_payload_and_html(tmp_path):
             [
                 "T Cell module ready.",
                 "2026/03/21 09:22:37.597262 | action=antigens_extracted | evidence=HTTP_TRAFFIC | eid=damp-1 | signal=DAMP | profile=2001:db8::5 | responsible=2001:db8::5 | target=2001:67c:2e8:22::c100:697 | antigens=dns_domain:rdap.db.ripe.net, uri:/ip/5.161.194.92",
-                "2026/03/21 09:22:37.607926 | action=ignored_non_pamp | evidence=HTTP_TRAFFIC | eid=damp-1 | signal=DAMP | profile=2001:db8::5 | responsible=2001:db8::5 | target=2001:67c:2e8:22::c100:697",
+                "2026/03/21 09:22:37.607926 | action=damp_reverification | evidence=HTTP_TRAFFIC | eid=damp-1 | signal=DAMP | profile=2001:db8::5 | responsible=2001:db8::5 | target=2001:67c:2e8:22::c100:697 | reevaluated_cells=0",
                 "2026/03/21 09:23:37.607926 | action=memory_stored | state=5 - memory | evidence=THREAT_INTELLIGENCE_BLACKLISTED_DOMAIN | eid=pamp-1 | signal=PAMP | profile=147.32.80.37 | responsible=203.0.113.90 | target=147.32.80.37 | cell=203.0.113.90|dns_domain|bad.example.com | regex=regex-hash-1 | value=bad.example.com",
             ]
         ),
@@ -302,6 +330,17 @@ def test_build_report_payload_and_html(tmp_path):
                         "formula": {
                             "value": 0.91,
                             "threshold": 0.65,
+                            "priming": {
+                                "signal": "PAMP",
+                                "label": "pamp-primed",
+                                "strength": 1.0,
+                                "co_stimulation_threshold": 0.65,
+                                "effector_threshold": 0.70,
+                                "memory_threshold": 0.60,
+                                "state_wait_timeout_seconds": 3600.0,
+                                "effector_min_related_count": 4,
+                                "memory_min_related_count": 3,
+                            },
                             "components": {
                                 "confidence": {
                                     "value": 1.0,
@@ -379,6 +418,17 @@ def test_build_report_payload_and_html(tmp_path):
                             "effector_threshold": 0.70,
                             "memory_score": 0.78,
                             "memory_threshold": 0.60,
+                            "priming": {
+                                "signal": "PAMP",
+                                "label": "pamp-primed",
+                                "strength": 1.0,
+                                "co_stimulation_threshold": 0.65,
+                                "effector_threshold": 0.70,
+                                "memory_threshold": 0.60,
+                                "state_wait_timeout_seconds": 3600.0,
+                                "effector_min_related_count": 4,
+                                "memory_min_related_count": 3,
+                            },
                             "decision": {"effector": False, "memory": True},
                             "components": {
                                 "novelty": {
@@ -456,7 +506,7 @@ def test_build_report_payload_and_html(tmp_path):
     assert "T Cell State Machine" in html
     assert "accepted regex match" in html
     assert "no accepted regex match" in html
-    assert "stays mature" in html
+    assert "weaker priming profile" in html
     assert "co-stimulation below threshold" in html
     assert "no co-stimulation timeout" in html
     assert "current cells:" in html
@@ -475,6 +525,7 @@ def test_build_report_payload_and_html(tmp_path):
     assert "PAMP with regex match" in html
     assert "waiting for context" in html
     assert "clamp01(x) = max(0, min(1, x))" in html
+    assert "Recognition &amp; Priming: 0 -&gt; 1 setup" in html
     assert "Co-Stimulation: 1 -&gt; 3 activation" in html
     assert "Context Effector: 3 -&gt; 4 containment" in html
     assert "Context Memory: 3 -&gt; 5 storage" in html
@@ -483,7 +534,10 @@ def test_build_report_payload_and_html(tmp_path):
     assert "novelty_score" in html
     assert "recent_pressure / max(previous_pressure, 0.01)" in html
     assert "Rule-Based Decisions" in html
+    assert "signal_specific_priming" in html
     assert "effector = (novelty_score &gt; 0)" in html
+    assert "priming=pamp-primed" in html
+    assert "Effective profile:" in html
     assert "data-report-tab=\"histories\"" in html
     assert "History Index" in html
     assert "State transition" in html
