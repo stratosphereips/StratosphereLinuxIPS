@@ -93,7 +93,8 @@ def parse_args() -> argparse.Namespace:
             "  The terminal output shows overall statistics, delay bands,\n"
             "  the alerts with the largest delays, and trend tables.\n"
             "  If --output-dir is given, the script also writes CSV files for\n"
-            "  each selected time resolution plus a summary.json file.\n\n"
+            "  each selected time resolution, a summary.json file, and a\n"
+            "  Markdown analysis report.\n\n"
             "Example:\n"
             "  python3 scripts/analyze_alert_creation_delay.py \\\n"
             "    output/test-tcell-8/alerts.json \\\n"
@@ -128,7 +129,7 @@ def parse_args() -> argparse.Namespace:
         default="",
         help=(
             "Optional directory where CSV trend files, top-delays CSV, and "
-            "summary.json will be written."
+            "summary.json and a Markdown report will be written."
         ),
     )
     parser.add_argument(
@@ -457,6 +458,184 @@ def ensure_output_dir(output_dir: str) -> Path | None:
     return path
 
 
+def markdown_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ")
+
+
+def append_markdown_bucket_table(lines: list[str], rows: list[BucketSummary]):
+    lines.append(
+        "| bucket_start | count | min_s | mean_s | p50_s | p95_s | p99_s | max_s |"
+    )
+    lines.append("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+    for row in rows:
+        lines.append(
+            f"| `{row.bucket_start}` | {row.count:,} | {row.min_seconds:.3f} | "
+            f"{row.mean_seconds:.3f} | {row.p50_seconds:.3f} | "
+            f"{row.p95_seconds:.3f} | {row.p99_seconds:.3f} | "
+            f"{row.max_seconds:.3f} |"
+        )
+    lines.append("")
+
+
+def write_markdown_report(
+    path: Path,
+    alerts_path: Path,
+    input_format: str | None,
+    bucket_time: str,
+    resolutions: tuple[str, ...],
+    overall_summary: SummaryStats,
+    band_counts: dict[str, int],
+    top_delay_records: list[AlertDelayRecord],
+    bucket_summaries: dict[str, list[BucketSummary]],
+    artifact_paths: dict[str, Path],
+    skipped_missing_timestamps: int,
+    skipped_invalid_timestamps: int,
+    negative_count: int,
+    zero_count: int,
+    trend_min: datetime | None,
+    trend_max: datetime | None,
+    print_limit: int,
+    top_buckets: int,
+    description_width: int,
+):
+    lines = [
+        "# Alert Creation Delay Analysis",
+        "",
+        "## Run Summary",
+        f"- Input: `{alerts_path}`",
+        f"- Input format: `{input_format}`",
+        f"- Trend bucket timestamp: `{bucket_time}` time",
+        f"- Valid alerts: {overall_summary.count:,}",
+        f"- Skipped missing timestamps: {skipped_missing_timestamps:,}",
+        f"- Skipped invalid timestamps: {skipped_invalid_timestamps:,}",
+        f"- Negative delays: {negative_count:,}",
+        f"- Zero delays: {zero_count:,}",
+    ]
+    if trend_min is not None and trend_max is not None:
+        lines.append(
+            f"- Trend range: `{trend_min.isoformat()}` to `{trend_max.isoformat()}`"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Overall Delay Statistics",
+            "",
+            "| metric | seconds |",
+            "| --- | ---: |",
+            f"| min_s | {overall_summary.min_seconds:.6f} |",
+            f"| mean_s | {overall_summary.mean_seconds:.6f} |",
+            f"| p50_s | {overall_summary.p50_seconds:.6f} |",
+            f"| p90_s | {overall_summary.p90_seconds:.6f} |",
+            f"| p95_s | {overall_summary.p95_seconds:.6f} |",
+            f"| p99_s | {overall_summary.p99_seconds:.6f} |",
+            f"| max_s | {overall_summary.max_seconds:.6f} |",
+            "",
+            "## Delay Bands",
+            "",
+            "| band | count | percentage |",
+            "| --- | ---: | ---: |",
+        ]
+    )
+    for label, _, _ in DELAY_BANDS:
+        count = band_counts.get(label, 0)
+        percentage = count / overall_summary.count * 100 if overall_summary.count else 0.0
+        lines.append(f"| {label} | {count:,} | {percentage:.2f}% |")
+
+    lines.extend(
+        [
+            "",
+            "## Largest Per-Alert Delays",
+            "",
+            "| rank | delay_s | record | severity | id | start | create | description |",
+            "| ---: | ---: | ---: | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for rank, item in enumerate(top_delay_records, start=1):
+        description = ellipsize(
+            markdown_escape(item.description), description_width
+        )
+        lines.append(
+            f"| {rank} | {item.delay_seconds:.6f} | {item.record_number} | "
+            f"{markdown_escape(item.severity or '-')} | "
+            f"{markdown_escape(item.alert_id or '-')} | "
+            f"`{item.start_time}` | `{item.create_time}` | {description} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Artifacts",
+            "",
+            f"- JSON summary: [{artifact_paths['summary_json'].name}]({artifact_paths['summary_json'].name})",
+            f"- Top delays CSV: [{artifact_paths['top_alerts'].name}]({artifact_paths['top_alerts'].name})",
+        ]
+    )
+    for resolution in resolutions:
+        lines.append(
+            f"- {resolution.capitalize()} CSV: "
+            f"[{artifact_paths[resolution].name}]({artifact_paths[resolution].name})"
+        )
+
+    lines.append("")
+    lines.append("## Trend Summary")
+    lines.append("")
+
+    for resolution in resolutions:
+        rows = bucket_summaries[resolution]
+        lines.append(f"### By {resolution}")
+        if not rows:
+            lines.extend(["No data.", ""])
+            continue
+
+        first_row = rows[0]
+        last_row = rows[-1]
+        lines.append(f"- Buckets: {len(rows):,}")
+        lines.append(
+            f"- First bucket: `{first_row.bucket_start}` with mean/p50/p95 "
+            f"`{first_row.mean_seconds:.3f} / {first_row.p50_seconds:.3f} / "
+            f"{first_row.p95_seconds:.3f}` seconds"
+        )
+        lines.append(
+            f"- Last bucket: `{last_row.bucket_start}` with mean/p50/p95 "
+            f"`{last_row.mean_seconds:.3f} / {last_row.p50_seconds:.3f} / "
+            f"{last_row.p95_seconds:.3f}` seconds"
+        )
+        lines.append(
+            f"- Full CSV: [{artifact_paths[resolution].name}]({artifact_paths[resolution].name})"
+        )
+        lines.append("")
+
+        if len(rows) <= print_limit:
+            append_markdown_bucket_table(lines, rows)
+            continue
+
+        worst_rows = sorted(
+            rows,
+            key=lambda row: (row.p95_seconds, row.max_seconds, row.mean_seconds),
+            reverse=True,
+        )[:top_buckets]
+        recent_rows = rows[-top_buckets:]
+
+        lines.append(
+            f"Full series omitted here because it has {len(rows):,} buckets and "
+            f"`--print-limit` is {print_limit}. The CSV contains every bucket."
+        )
+        lines.append("")
+        lines.append(f"#### Worst {len(worst_rows)} Buckets by p95_s")
+        lines.append("")
+        append_markdown_bucket_table(
+            lines, sorted(worst_rows, key=lambda row: row.bucket_start)
+        )
+        lines.append(f"#### Most Recent {len(recent_rows)} Buckets")
+        lines.append("")
+        append_markdown_bucket_table(lines, recent_rows)
+
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines))
+        handle.write("\n")
+
+
 def main() -> int:
     args = parse_args()
     alerts_path = Path(args.alerts_path).expanduser().resolve()
@@ -547,18 +726,26 @@ def main() -> int:
         for resolution in resolutions
     }
 
-    csv_paths: dict[str, str] = {}
+    artifact_paths: dict[str, Path] = {}
     if output_dir is not None:
         for resolution in resolutions:
-            csv_path = output_dir / f"alert_creation_delay_by_{resolution}.csv"
-            write_bucket_csv(csv_path, bucket_summaries[resolution])
-            csv_paths[resolution] = str(csv_path)
+            artifact_paths[resolution] = (
+                output_dir / f"alert_creation_delay_by_{resolution}.csv"
+            )
 
-        top_alerts_csv = output_dir / "alert_creation_delay_top_alerts.csv"
-        write_top_alerts_csv(top_alerts_csv, top_delay_records)
-        csv_paths["top_alerts"] = str(top_alerts_csv)
+        artifact_paths["top_alerts"] = (
+            output_dir / "alert_creation_delay_top_alerts.csv"
+        )
+        artifact_paths["summary_json"] = output_dir / "summary.json"
+        artifact_paths["analysis_md"] = (
+            output_dir / "alert_creation_delay_analysis.md"
+        )
 
-        summary_json = output_dir / "summary.json"
+        for resolution in resolutions:
+            write_bucket_csv(artifact_paths[resolution], bucket_summaries[resolution])
+
+        write_top_alerts_csv(artifact_paths["top_alerts"], top_delay_records)
+
         summary_payload = {
             "alerts_path": str(alerts_path),
             "input_format": input_format,
@@ -583,16 +770,39 @@ def main() -> int:
                 for label, _, _ in DELAY_BANDS
             ],
             "top_delays": [asdict(item) for item in top_delay_records],
-            "csv_outputs": csv_paths,
+            "artifacts": {
+                name: str(path) for name, path in artifact_paths.items()
+            },
             "bucket_counts": {
                 resolution: len(bucket_summaries[resolution])
                 for resolution in resolutions
             },
         }
-        with summary_json.open("w", encoding="utf-8") as handle:
+        with artifact_paths["summary_json"].open("w", encoding="utf-8") as handle:
             json.dump(summary_payload, handle, indent=2)
             handle.write("\n")
-        csv_paths["summary_json"] = str(summary_json)
+
+        write_markdown_report(
+            path=artifact_paths["analysis_md"],
+            alerts_path=alerts_path,
+            input_format=input_format,
+            bucket_time=args.bucket_time,
+            resolutions=resolutions,
+            overall_summary=overall_summary,
+            band_counts=band_counts,
+            top_delay_records=top_delay_records,
+            bucket_summaries=bucket_summaries,
+            artifact_paths=artifact_paths,
+            skipped_missing_timestamps=skipped_missing_timestamps,
+            skipped_invalid_timestamps=skipped_invalid_timestamps,
+            negative_count=negative_count,
+            zero_count=zero_count,
+            trend_min=trend_min,
+            trend_max=trend_max,
+            print_limit=args.print_limit,
+            top_buckets=args.top_buckets,
+            description_width=args.description_width,
+        )
 
     print(f"Input: {alerts_path}")
     print(f"Input format: {input_format}")
@@ -612,7 +822,7 @@ def main() -> int:
     print_top_alerts(top_delay_records, args.description_width)
 
     for resolution in resolutions:
-        csv_path = Path(csv_paths[resolution]) if resolution in csv_paths else None
+        csv_path = artifact_paths.get(resolution)
         print_resolution_summary(
             resolution=resolution,
             rows=bucket_summaries[resolution],
@@ -623,7 +833,8 @@ def main() -> int:
 
     if output_dir is not None:
         print(f"\nArtifacts written to: {output_dir}")
-        print(f"Summary JSON: {csv_paths['summary_json']}")
+        print(f"Summary JSON: {artifact_paths['summary_json']}")
+        print(f"Markdown report: {artifact_paths['analysis_md']}")
 
     return 0
 
