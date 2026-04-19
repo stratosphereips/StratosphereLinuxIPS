@@ -351,7 +351,7 @@ t_cell:
   # off         = disabled
   # transitions = write detailed traces only when a state transition happens
   # all         = also trace waiting evaluations
-  decision_trace_mode: off
+  decision_trace_mode: on
 
   # Separate trace file used only when decision_trace_mode is not off.
   # This path is always resolved inside the selected output directory for the
