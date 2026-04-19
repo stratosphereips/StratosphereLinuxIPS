@@ -1236,6 +1236,34 @@ class ConfigParser(object):
             return default_weights
         return sanitized_weights
 
+    def t_cell_priming_profiles(self) -> dict:
+        default_profiles = {
+            "PAMP": {
+                "strength": 1.0,
+                "co_stimulation_threshold_offset": 0.0,
+                "effector_threshold_offset": 0.0,
+                "memory_threshold_offset": 0.0,
+                "state_wait_timeout_factor": 1.0,
+                "effector_min_related_count_offset": 0,
+                "memory_min_related_count_offset": 0,
+            },
+            "DAMP": {
+                "strength": 0.6,
+                "co_stimulation_threshold_offset": 0.15,
+                "effector_threshold_offset": 0.10,
+                "memory_threshold_offset": 0.05,
+                "state_wait_timeout_factor": 0.5,
+                "effector_min_related_count_offset": 1,
+                "memory_min_related_count_offset": 1,
+            },
+        }
+        value = self.read_configuration(
+            "t_cell", "priming_profiles", default_profiles
+        )
+        if not isinstance(value, dict):
+            return default_profiles
+        return value
+
     def t_cell_novelty_window_seconds(self) -> int:
         value = self.read_configuration(
             "t_cell", "novelty_window_seconds", 86400
