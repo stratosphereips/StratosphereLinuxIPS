@@ -432,6 +432,11 @@ class TCell(IModule):
                 scores={"regex_specificity": match.specificity},
                 extra_updates=match_updates,
             )
+            cell = self._remember_consumed_transition_observation(
+                cell,
+                now,
+                observation_id,
+            )
         else:
             cell = self._update_cell(
                 cell,
@@ -445,6 +450,32 @@ class TCell(IModule):
             evidence.id,
             match,
         )
+        if cell["state"] == STATE_ANTIGEN_RECOGNIZED:
+            cell = self._set_waiting_context(
+                cell,
+                now,
+                WAITING_CO_STIMULATION,
+                evidence,
+                observation_id,
+            )
+            self._log_event(
+                action="waiting_for_co_stimulation",
+                state=cell["state"],
+                evidence=evidence,
+                cell=cell,
+                match=match,
+                details=(
+                    "recognized the antigen and stored the match context; "
+                    "co-stimulation is deferred until future evidence so this "
+                    "same observation cannot drive the next state change"
+                ),
+                metrics={
+                    "consumed_observation_id": observation_id,
+                    "consumed_evidence_id": evidence.id,
+                },
+                verbosity=LOG_VERBOSITY_DECISIONS,
+            )
+            return match
 
         if cell["state"] == STATE_MEMORY:
             self._update_cell_context(
@@ -476,7 +507,6 @@ class TCell(IModule):
             match=match,
             now=now,
             responsible_ip=responsible_ip,
-            reference_observation_id=observation_id,
         )
 
     def _get_or_create_cell(
@@ -611,6 +641,43 @@ class TCell(IModule):
             matched_regex_specificity=match.specificity,
         )
 
+    @staticmethod
+    def _normalize_observation_ids(values) -> set[int]:
+        if values is None:
+            return set()
+        if isinstance(values, (list, tuple, set)):
+            raw_values = values
+        else:
+            raw_values = [values]
+
+        normalized = set()
+        for value in raw_values:
+            try:
+                normalized.add(int(value))
+            except (TypeError, ValueError):
+                continue
+        return normalized
+
+    def _get_consumed_transition_observation_ids(self, cell: dict) -> set[int]:
+        context = cell.get("context") or {}
+        return self._normalize_observation_ids(
+            context.get("consumed_transition_observation_ids")
+        )
+
+    def _remember_consumed_transition_observation(
+        self,
+        cell: dict,
+        now: float,
+        observation_id: int,
+    ) -> dict:
+        consumed_ids = self._get_consumed_transition_observation_ids(cell)
+        consumed_ids.add(int(observation_id))
+        return self._update_cell_context(
+            cell,
+            now,
+            consumed_transition_observation_ids=sorted(consumed_ids),
+        )
+
     def _clear_waiting_context(self, cell: dict, now: float) -> dict:
         return self._update_cell_context(
             cell,
@@ -655,20 +722,6 @@ class TCell(IModule):
             wait_trigger_evidence_id=evidence.id,
             wait_trigger_observation_id=observation_id,
         )
-
-    def _get_reference_observation_id(
-        self, cell: dict, fallback_observation_id: int
-    ) -> int:
-        context = cell.get("context") or {}
-        candidate_id = (
-            context.get("recognition_observation_id")
-            or cell.get("last_observation_id")
-            or fallback_observation_id
-        )
-        try:
-            return int(candidate_id)
-        except (TypeError, ValueError):
-            return int(fallback_observation_id)
 
     def _build_match_from_cell(self, cell: dict) -> RegexMatch | None:
         regex_hash = str(cell.get("matched_regex_hash") or "").strip()
@@ -734,10 +787,6 @@ class TCell(IModule):
                 regex_type=cell["regex_type"],
                 value=cell["antigen_value"],
             )
-            reference_observation_id = self._get_reference_observation_id(
-                cell,
-                observation_id,
-            )
             self._advance_cell_with_match(
                 cell=cell,
                 evidence=evidence,
@@ -746,7 +795,6 @@ class TCell(IModule):
                 match=match,
                 now=now,
                 responsible_ip=responsible_ip,
-                reference_observation_id=reference_observation_id,
             )
             reevaluated += 1
         return reevaluated
@@ -760,7 +808,6 @@ class TCell(IModule):
         match: RegexMatch,
         now: float,
         responsible_ip: str,
-        reference_observation_id: int,
     ) -> RegexMatch:
         if (
             cell.get("last_observation_id") != observation_id
@@ -773,6 +820,9 @@ class TCell(IModule):
                 last_evidence_id=evidence.id,
             )
 
+        consumed_observation_ids = (
+            self._get_consumed_transition_observation_ids(cell)
+        )
         if cell["state"] == STATE_MEMORY:
             cell = self._update_cell_context(
                 cell,
@@ -797,10 +847,11 @@ class TCell(IModule):
 
         co_stimulation = self._compute_co_stimulation(
             responsible_ip,
-            reference_observation_id,
+            observation_id,
             candidate,
             match,
             now,
+            exclude_observation_ids=consumed_observation_ids,
         )
         cell = self._update_cell(
             cell,
@@ -839,7 +890,36 @@ class TCell(IModule):
                     match=match,
                     scores=co_stimulation,
                 )
-                cell = self._clear_waiting_context(cell, now)
+                cell = self._remember_consumed_transition_observation(
+                    cell,
+                    now,
+                    observation_id,
+                )
+                cell = self._set_waiting_context(
+                    cell,
+                    now,
+                    WAITING_CONTEXT,
+                    evidence,
+                    observation_id,
+                )
+                self._log_event(
+                    action="waiting_for_context",
+                    state=cell["state"],
+                    evidence=evidence,
+                    cell=cell,
+                    match=match,
+                    details=(
+                        "co-stimulation activated the cell; context is "
+                        "deferred until future evidence so this same "
+                        "observation cannot drive the next state change"
+                    ),
+                    metrics={
+                        "consumed_observation_id": observation_id,
+                        "consumed_evidence_id": evidence.id,
+                    },
+                    verbosity=LOG_VERBOSITY_DECISIONS,
+                )
+                return match
             elif (
                 cell["state"] == STATE_ANTIGEN_RECOGNIZED
                 and self._state_wait_expired(cell, now)
@@ -942,10 +1022,11 @@ class TCell(IModule):
 
         context = self._compute_context_signals(
             responsible_ip,
-            reference_observation_id,
+            observation_id,
             candidate,
             match,
             now,
+            exclude_observation_ids=consumed_observation_ids,
         )
         cell = self._update_cell(
             cell,
@@ -985,6 +1066,11 @@ class TCell(IModule):
                     match=match,
                     scores=context,
                 )
+                cell = self._remember_consumed_transition_observation(
+                    cell,
+                    now,
+                    observation_id,
+                )
             cell = self._clear_waiting_context(cell, now)
             self._apply_effector(
                 cell,
@@ -1020,6 +1106,11 @@ class TCell(IModule):
                     now=now,
                     match=match,
                     scores=context,
+                )
+                cell = self._remember_consumed_transition_observation(
+                    cell,
+                    now,
+                    observation_id,
                 )
             cell = self._clear_waiting_context(cell, now)
             self._store_memory(cell, match, context, now)
@@ -1135,7 +1226,11 @@ class TCell(IModule):
         candidate: AntigenCandidate,
         match: RegexMatch,
         now: float,
+        exclude_observation_ids: set[int] | None = None,
     ) -> dict:
+        exclude_observation_ids = self._normalize_observation_ids(
+            exclude_observation_ids
+        )
         pamp_observations = self.storage.get_recent_observations(
             profile_ip,
             now - self.related_lookback_seconds,
@@ -1148,11 +1243,13 @@ class TCell(IModule):
         )
         current_observation = self.storage.get_observation(observation_id) or {}
         confidence = float(current_observation.get("confidence", 0.0))
+        related_exclusions = set(exclude_observation_ids)
+        related_exclusions.add(int(observation_id))
         related_pamp_count = self._count_related_observations(
             pamp_observations,
             candidate,
             match.regex_hash,
-            exclude_observation_id=observation_id,
+            exclude_observation_ids=related_exclusions,
         )
         related_pamp_score = self._clamp01(
             related_pamp_count / self.related_pamps_saturation
@@ -1160,6 +1257,7 @@ class TCell(IModule):
         danger_scores = self._compute_danger_scores(
             pamp_observations,
             damp_observations,
+            exclude_observation_ids=exclude_observation_ids,
         )
         profile_danger_score = danger_scores["combined_score"]
         value = (
@@ -1188,7 +1286,11 @@ class TCell(IModule):
         candidate: AntigenCandidate,
         match: RegexMatch,
         now: float,
+        exclude_observation_ids: set[int] | None = None,
     ) -> dict:
+        exclude_observation_ids = self._normalize_observation_ids(
+            exclude_observation_ids
+        )
         recent_start = now - self.context_recent_window_seconds
         previous_start = now - (2 * self.context_recent_window_seconds)
 
@@ -1214,11 +1316,13 @@ class TCell(IModule):
             until_ts=recent_start,
             evidence_signal="DAMP",
         )
+        related_exclusions = set(exclude_observation_ids)
+        related_exclusions.add(int(observation_id))
         recent_related_count = self._count_related_observations(
             recent_pamp_observations,
             candidate,
             match.regex_hash,
-            exclude_observation_id=observation_id,
+            exclude_observation_ids=related_exclusions,
         )
         recent_related_score = self._clamp01(
             recent_related_count / self.related_pamps_saturation
@@ -1226,10 +1330,12 @@ class TCell(IModule):
         recent_danger = self._compute_danger_scores(
             recent_pamp_observations,
             recent_damp_observations,
+            exclude_observation_ids=exclude_observation_ids,
         )
         previous_danger = self._compute_danger_scores(
             previous_pamp_observations,
             previous_damp_observations,
+            exclude_observation_ids=exclude_observation_ids,
         )
         recent_pressure = recent_danger["combined_score"]
         previous_pressure = previous_danger["combined_score"]
@@ -1237,7 +1343,11 @@ class TCell(IModule):
         novelty_score = (
             1.0
             if self._is_novel_regex(
-                profile_ip, match, observation_id, now
+                profile_ip,
+                match,
+                observation_id,
+                now,
+                exclude_observation_ids=exclude_observation_ids,
             )
             else 0.0
         )
@@ -1308,6 +1418,11 @@ class TCell(IModule):
             return
 
         since_ts = now - self.related_lookback_seconds
+        consumed_observation_ids = (
+            self._get_consumed_transition_observation_ids(cell)
+        )
+        related_exclusions = set(consumed_observation_ids)
+        related_exclusions.add(int(observation_id))
         pamp_observations = self.storage.get_recent_observations(
             responsible_ip,
             since_ts,
@@ -1323,10 +1438,16 @@ class TCell(IModule):
             pamp_observations,
             candidate,
             match.regex_hash,
-            exclude_observation_id=observation_id,
+            exclude_observation_ids=related_exclusions,
         )
-        pamp_danger_trace = self._build_danger_trace(pamp_observations)
-        damp_danger_trace = self._build_danger_trace(damp_observations)
+        pamp_danger_trace = self._build_danger_trace(
+            pamp_observations,
+            exclude_observation_ids=consumed_observation_ids,
+        )
+        damp_danger_trace = self._build_danger_trace(
+            damp_observations,
+            exclude_observation_ids=consumed_observation_ids,
+        )
 
         entry = {
             "ts": utils.convert_ts_format(now, utils.alerts_format),
@@ -1436,19 +1557,24 @@ class TCell(IModule):
             until_ts=recent_start,
             evidence_signal="DAMP",
         )
+        consumed_observation_ids = (
+            self._get_consumed_transition_observation_ids(cell)
+        )
+        related_exclusions = set(consumed_observation_ids)
+        related_exclusions.add(int(observation_id))
         current_observation = self.storage.get_observation(observation_id) or {}
         related_trace = self._build_related_trace(
             recent_pamp_observations,
             candidate,
             match.regex_hash,
-            exclude_observation_id=observation_id,
+            exclude_observation_ids=related_exclusions,
         )
         has_memory = self.storage.has_memory_for_regex(match.regex_hash)
         has_recent_activity = self.storage.has_recent_regex_activity(
             responsible_ip,
             match.regex_hash,
             now - self.novelty_window_seconds,
-            exclude_observation_id=observation_id,
+            exclude_observation_ids=related_exclusions,
         )
 
         entry = {
@@ -1495,6 +1621,7 @@ class TCell(IModule):
                         context["recent_pressure"],
                         context["recent_pamp_pressure"],
                         context["recent_damp_pressure"],
+                        exclude_observation_ids=consumed_observation_ids,
                     ),
                     "previous_pressure": self._build_pressure_trace(
                         previous_pamp_observations,
@@ -1502,6 +1629,7 @@ class TCell(IModule):
                         context["previous_pressure"],
                         context["previous_pamp_pressure"],
                         context["previous_damp_pressure"],
+                        exclude_observation_ids=consumed_observation_ids,
                     ),
                     "trend_ratio": context["trend_ratio"],
                     "decrease_score": context["decrease_score"],
@@ -1519,9 +1647,16 @@ class TCell(IModule):
         combined_score: float,
         pamp_score: float,
         damp_score: float,
+        exclude_observation_ids: set[int] | None = None,
     ) -> dict:
-        pamp_trace = self._build_danger_trace(pamp_observations)
-        damp_trace = self._build_danger_trace(damp_observations)
+        pamp_trace = self._build_danger_trace(
+            pamp_observations,
+            exclude_observation_ids=exclude_observation_ids,
+        )
+        damp_trace = self._build_danger_trace(
+            damp_observations,
+            exclude_observation_ids=exclude_observation_ids,
+        )
         return {
             "combined_score": combined_score,
             "pamp_score": pamp_score,
@@ -1564,11 +1699,17 @@ class TCell(IModule):
         observations: list[dict],
         candidate: AntigenCandidate,
         regex_hash: str,
-        exclude_observation_id: int,
+        exclude_observation_ids: set[int] | None = None,
     ) -> dict:
+        exclude_observation_ids = self._normalize_observation_ids(
+            exclude_observation_ids
+        )
         contributors = []
         for observation in observations:
-            if observation["id"] == exclude_observation_id:
+            if self._observation_is_excluded(
+                observation,
+                exclude_observation_ids,
+            ):
                 continue
             relations = self._get_observation_relations(
                 observation, candidate, regex_hash
@@ -1584,10 +1725,21 @@ class TCell(IModule):
 
         return self._limit_trace_items(contributors)
 
-    def _build_danger_trace(self, observations: list[dict]) -> dict:
+    def _build_danger_trace(
+        self,
+        observations: list[dict],
+        exclude_observation_ids: set[int] | None = None,
+    ) -> dict:
+        exclude_observation_ids = self._normalize_observation_ids(
+            exclude_observation_ids
+        )
         contributors = [
             self._summarize_observation(observation)
             for observation in observations
+            if not self._observation_is_excluded(
+                observation,
+                exclude_observation_ids,
+            )
         ]
         limited = self._limit_trace_items(contributors)
         limited["total_raw"] = sum(
@@ -1668,14 +1820,19 @@ class TCell(IModule):
         match: RegexMatch,
         observation_id: int,
         now: float,
+        exclude_observation_ids: set[int] | None = None,
     ) -> bool:
+        excluded_ids = self._normalize_observation_ids(
+            exclude_observation_ids
+        )
+        excluded_ids.add(int(observation_id))
         if self.storage.has_memory_for_regex(match.regex_hash):
             return False
         return not self.storage.has_recent_regex_activity(
             profile_ip,
             match.regex_hash,
             now - self.novelty_window_seconds,
-            exclude_observation_id=observation_id,
+            exclude_observation_ids=excluded_ids,
         )
 
     def _apply_effector(
@@ -1962,11 +2119,17 @@ class TCell(IModule):
         observations: list[dict],
         candidate: AntigenCandidate,
         regex_hash: str,
-        exclude_observation_id: int,
+        exclude_observation_ids: set[int] | None = None,
     ) -> int:
+        exclude_observation_ids = self._normalize_observation_ids(
+            exclude_observation_ids
+        )
         count = 0
         for observation in observations:
-            if observation["id"] == exclude_observation_id:
+            if self._observation_is_excluded(
+                observation,
+                exclude_observation_ids,
+            ):
                 continue
             if self._is_related_observation(observation, candidate, regex_hash):
                 count += 1
@@ -2003,20 +2166,49 @@ class TCell(IModule):
         return relations
 
     @staticmethod
-    def _sum_danger(observations: list[dict]) -> float:
+    def _observation_is_excluded(
+        observation: dict,
+        exclude_observation_ids: set[int] | None,
+    ) -> bool:
+        if not exclude_observation_ids:
+            return False
+        try:
+            return int(observation.get("id")) in exclude_observation_ids
+        except (TypeError, ValueError):
+            return False
+
+    def _sum_danger(
+        self,
+        observations: list[dict],
+        exclude_observation_ids: set[int] | None = None,
+    ) -> float:
+        exclude_observation_ids = self._normalize_observation_ids(
+            exclude_observation_ids
+        )
         return sum(
             float(obs.get("threat_level_value", 0.0))
             * float(obs.get("confidence", 0.0))
             for obs in observations
+            if not self._observation_is_excluded(
+                obs,
+                exclude_observation_ids,
+            )
         )
 
     def _compute_danger_scores(
         self,
         pamp_observations: list[dict],
         damp_observations: list[dict],
+        exclude_observation_ids: set[int] | None = None,
     ) -> dict:
-        pamp_raw = self._sum_danger(pamp_observations)
-        damp_raw = self._sum_danger(damp_observations)
+        pamp_raw = self._sum_danger(
+            pamp_observations,
+            exclude_observation_ids=exclude_observation_ids,
+        )
+        damp_raw = self._sum_danger(
+            damp_observations,
+            exclude_observation_ids=exclude_observation_ids,
+        )
         combined_raw = pamp_raw + (self.damp_danger_weight * damp_raw)
         return {
             "pamp_score": self._normalize_danger(pamp_raw),
