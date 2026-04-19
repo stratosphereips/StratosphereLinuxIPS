@@ -51,6 +51,26 @@ DEFAULT_COSTIM_WEIGHTS = {
     "related_pamps": 0.25,
     "danger": 0.40,
 }
+DEFAULT_PRIMING_PROFILES = {
+    "PAMP": {
+        "strength": 1.0,
+        "co_stimulation_threshold_offset": 0.0,
+        "effector_threshold_offset": 0.0,
+        "memory_threshold_offset": 0.0,
+        "state_wait_timeout_factor": 1.0,
+        "effector_min_related_count_offset": 0,
+        "memory_min_related_count_offset": 0,
+    },
+    "DAMP": {
+        "strength": 0.6,
+        "co_stimulation_threshold_offset": 0.15,
+        "effector_threshold_offset": 0.10,
+        "memory_threshold_offset": 0.05,
+        "state_wait_timeout_factor": 0.5,
+        "effector_min_related_count_offset": 1,
+        "memory_min_related_count_offset": 1,
+    },
+}
 LOG_VERBOSITY_SUMMARY = 1
 LOG_VERBOSITY_DECISIONS = 2
 LOG_VERBOSITY_DEBUG = 3
@@ -127,6 +147,9 @@ class TCell(IModule):
         self.damp_danger_weight = 1.5
         self.co_stimulation_threshold = 0.65
         self.co_stimulation_weights = DEFAULT_COSTIM_WEIGHTS.copy()
+        self.priming_profiles = self._normalize_priming_profiles(
+            DEFAULT_PRIMING_PROFILES
+        )
         self.novelty_window_seconds = 86400
         self.context_recent_window_seconds = 1800
         self.effector_threshold = 0.70
@@ -168,6 +191,9 @@ class TCell(IModule):
         self.co_stimulation_threshold = conf.t_cell_co_stimulation_threshold()
         self.co_stimulation_weights = self._normalize_weights(
             conf.t_cell_co_stimulation_weights()
+        )
+        self.priming_profiles = self._normalize_priming_profiles(
+            conf.t_cell_priming_profiles()
         )
         self.novelty_window_seconds = conf.t_cell_novelty_window_seconds()
         self.context_recent_window_seconds = (
@@ -224,6 +250,54 @@ class TCell(IModule):
             sanitized = DEFAULT_COSTIM_WEIGHTS.copy()
         return {key: value / total for key, value in sanitized.items()}
 
+    @staticmethod
+    def _normalize_priming_profiles(profiles: dict | None) -> dict:
+        raw_profiles = profiles if isinstance(profiles, dict) else {}
+        normalized = {}
+        for signal_name, defaults in DEFAULT_PRIMING_PROFILES.items():
+            raw_profile = raw_profiles.get(signal_name, {})
+            if not isinstance(raw_profile, dict):
+                raw_profile = {}
+
+            profile = {}
+            for key, default_value in defaults.items():
+                raw_value = raw_profile.get(key, default_value)
+                if isinstance(default_value, int) and not isinstance(
+                    default_value, bool
+                ):
+                    try:
+                        raw_value = int(raw_value)
+                    except (TypeError, ValueError):
+                        raw_value = int(default_value)
+                else:
+                    try:
+                        raw_value = float(raw_value)
+                    except (TypeError, ValueError):
+                        raw_value = float(default_value)
+                profile[key] = raw_value
+
+            profile["strength"] = max(0.0, min(1.0, float(profile["strength"])))
+            profile["state_wait_timeout_factor"] = max(
+                0.01, float(profile["state_wait_timeout_factor"])
+            )
+            profile["co_stimulation_threshold_offset"] = float(
+                profile["co_stimulation_threshold_offset"]
+            )
+            profile["effector_threshold_offset"] = float(
+                profile["effector_threshold_offset"]
+            )
+            profile["memory_threshold_offset"] = float(
+                profile["memory_threshold_offset"]
+            )
+            profile["effector_min_related_count_offset"] = int(
+                profile["effector_min_related_count_offset"]
+            )
+            profile["memory_min_related_count_offset"] = int(
+                profile["memory_min_related_count_offset"]
+            )
+            normalized[signal_name] = profile
+        return normalized
+
     def _process_evidence_message(self, message: dict):
         try:
             raw_evidence = json.loads(message["data"])
@@ -271,6 +345,7 @@ class TCell(IModule):
         )
         matched_regexes = []
 
+        reevaluated_count = 0
         if evidence.evidence_signal == EvidenceSignal.DAMP:
             reevaluated_count = self._reevaluate_waiting_cells(
                 evidence=evidence,
@@ -289,10 +364,7 @@ class TCell(IModule):
                 ),
                 verbosity=LOG_VERBOSITY_DECISIONS,
             )
-            self._prune_observations(now)
-            return
-
-        if evidence.evidence_signal != EvidenceSignal.PAMP:
+        elif evidence.evidence_signal != EvidenceSignal.PAMP:
             self._log_event(
                 action="ignored_non_pamp",
                 state=None,
@@ -338,6 +410,7 @@ class TCell(IModule):
         now: float,
         responsible_ip: str,
     ) -> RegexMatch | None:
+        signal_name = self._signal_name(evidence.evidence_signal)
         cell = self._get_or_create_cell(
             responsible_ip, candidate.regex_type, candidate.value, now
         )
@@ -354,6 +427,21 @@ class TCell(IModule):
                 cell=cell,
                 details=f"until={cell['anergic_until']:.3f}",
                 verbosity=LOG_VERBOSITY_DECISIONS,
+            )
+            return None
+
+        if signal_name == "DAMP" and cell["state"] != STATE_MATURE:
+            self._log_event(
+                action="damp_match_skipped_existing_cell",
+                state=cell["state"],
+                evidence=evidence,
+                cell=cell,
+                details=(
+                    "existing non-mature cells are reevaluated through the "
+                    "waiting-cell path; skipping direct DAMP candidate "
+                    "advancement for this cell"
+                ),
+                verbosity=LOG_VERBOSITY_DEBUG,
             )
             return None
 
@@ -421,6 +509,7 @@ class TCell(IModule):
             "anergic_until": None,
         }
         if cell["state"] == STATE_MATURE:
+            priming_profile = self._build_effective_priming_profile(signal_name)
             cell = self._transition_cell(
                 cell=cell,
                 to_state=STATE_ANTIGEN_RECOGNIZED,
@@ -429,13 +518,77 @@ class TCell(IModule):
                 observation_id=observation_id,
                 now=now,
                 match=match,
-                scores={"regex_specificity": match.specificity},
+                scores={
+                    "priming_label": priming_profile["label"],
+                    "regex_specificity": match.specificity,
+                    "priming_signal": signal_name,
+                    "priming_strength": priming_profile["strength"],
+                    "base_co_stimulation_threshold": priming_profile[
+                        "base_co_stimulation_threshold"
+                    ],
+                    "co_stimulation_threshold": priming_profile[
+                        "co_stimulation_threshold"
+                    ],
+                    "co_stimulation_threshold_offset": priming_profile[
+                        "co_stimulation_threshold_offset"
+                    ],
+                    "base_effector_threshold": priming_profile[
+                        "base_effector_threshold"
+                    ],
+                    "effector_threshold": priming_profile[
+                        "effector_threshold"
+                    ],
+                    "effector_threshold_offset": priming_profile[
+                        "effector_threshold_offset"
+                    ],
+                    "base_memory_threshold": priming_profile[
+                        "base_memory_threshold"
+                    ],
+                    "memory_threshold": priming_profile["memory_threshold"],
+                    "memory_threshold_offset": priming_profile[
+                        "memory_threshold_offset"
+                    ],
+                    "base_state_wait_timeout_seconds": priming_profile[
+                        "base_state_wait_timeout_seconds"
+                    ],
+                    "state_wait_timeout_seconds": priming_profile[
+                        "state_wait_timeout_seconds"
+                    ],
+                    "state_wait_timeout_factor": priming_profile[
+                        "state_wait_timeout_factor"
+                    ],
+                    "base_effector_min_related_count": priming_profile[
+                        "base_effector_min_related_count"
+                    ],
+                    "effector_min_related_count": priming_profile[
+                        "effector_min_related_count"
+                    ],
+                    "effector_min_related_count_offset": priming_profile[
+                        "effector_min_related_count_offset"
+                    ],
+                    "base_memory_min_related_count": priming_profile[
+                        "base_memory_min_related_count"
+                    ],
+                    "memory_min_related_count": priming_profile[
+                        "memory_min_related_count"
+                    ],
+                    "memory_min_related_count_offset": priming_profile[
+                        "memory_min_related_count_offset"
+                    ],
+                },
                 extra_updates=match_updates,
             )
             cell = self._remember_consumed_transition_observation(
                 cell,
                 now,
                 observation_id,
+            )
+            cell = self._remember_priming_context(
+                cell,
+                now,
+                observation_id,
+                evidence.id,
+                signal_name,
             )
         else:
             cell = self._update_cell(
@@ -642,6 +795,104 @@ class TCell(IModule):
         )
 
     @staticmethod
+    def _signal_name(signal_value) -> str:
+        text = str(signal_value or "").strip().upper()
+        if "." in text:
+            text = text.rsplit(".", 1)[-1]
+        if text in DEFAULT_PRIMING_PROFILES:
+            return text
+        return "PAMP"
+
+    def _build_effective_priming_profile(self, signal_name: str) -> dict:
+        profile = self.priming_profiles.get(
+            signal_name, self.priming_profiles["PAMP"]
+        )
+        return {
+            "signal": signal_name,
+            "label": f"{signal_name.lower()}-primed",
+            "strength": float(profile["strength"]),
+            "base_co_stimulation_threshold": self.co_stimulation_threshold,
+            "base_effector_threshold": self.effector_threshold,
+            "base_memory_threshold": self.memory_threshold,
+            "base_state_wait_timeout_seconds": self.state_wait_timeout_seconds,
+            "base_effector_min_related_count": self.effector_min_related_count,
+            "base_memory_min_related_count": self.memory_min_related_count,
+            "co_stimulation_threshold_offset": float(
+                profile["co_stimulation_threshold_offset"]
+            ),
+            "effector_threshold_offset": float(
+                profile["effector_threshold_offset"]
+            ),
+            "memory_threshold_offset": float(
+                profile["memory_threshold_offset"]
+            ),
+            "state_wait_timeout_factor": float(
+                profile["state_wait_timeout_factor"]
+            ),
+            "effector_min_related_count_offset": int(
+                profile["effector_min_related_count_offset"]
+            ),
+            "memory_min_related_count_offset": int(
+                profile["memory_min_related_count_offset"]
+            ),
+            "co_stimulation_threshold": self._clamp01(
+                self.co_stimulation_threshold
+                + float(profile["co_stimulation_threshold_offset"])
+            ),
+            "effector_threshold": self._clamp01(
+                self.effector_threshold
+                + float(profile["effector_threshold_offset"])
+            ),
+            "memory_threshold": self._clamp01(
+                self.memory_threshold
+                + float(profile["memory_threshold_offset"])
+            ),
+            "state_wait_timeout_seconds": max(
+                1.0,
+                self.state_wait_timeout_seconds
+                * float(profile["state_wait_timeout_factor"]),
+            ),
+            "effector_min_related_count": max(
+                1,
+                self.effector_min_related_count
+                + int(profile["effector_min_related_count_offset"]),
+            ),
+            "memory_min_related_count": max(
+                1,
+                self.memory_min_related_count
+                + int(profile["memory_min_related_count_offset"]),
+            ),
+        }
+
+    def _remember_priming_context(
+        self,
+        cell: dict,
+        now: float,
+        observation_id: int,
+        evidence_id: str,
+        signal_name: str,
+    ) -> dict:
+        priming_profile = self._build_effective_priming_profile(signal_name)
+        return self._update_cell_context(
+            cell,
+            now,
+            priming_signal=signal_name,
+            priming_label=priming_profile["label"],
+            priming_strength=priming_profile["strength"],
+            priming_observation_id=observation_id,
+            priming_evidence_id=evidence_id,
+            priming_profile=priming_profile,
+        )
+
+    def _get_cell_priming_profile(self, cell: dict) -> dict:
+        context = cell.get("context") or {}
+        priming_profile = context.get("priming_profile")
+        if isinstance(priming_profile, dict) and priming_profile.get("signal"):
+            return priming_profile
+        signal_name = self._signal_name(context.get("priming_signal"))
+        return self._build_effective_priming_profile(signal_name)
+
+    @staticmethod
     def _normalize_observation_ids(values) -> set[int]:
         if values is None:
             return set()
@@ -691,6 +942,13 @@ class TCell(IModule):
             wait_trigger_observation_id=CONTEXT_REMOVE,
         )
 
+    def _effective_wait_limit(self, cell: dict) -> float:
+        return float(
+            self._get_cell_priming_profile(cell).get(
+                "state_wait_timeout_seconds", self.state_wait_timeout_seconds
+            )
+        )
+
     def _set_waiting_context(
         self,
         cell: dict,
@@ -717,7 +975,7 @@ class TCell(IModule):
             waiting_for=waiting_for,
             waiting_label=WAITING_LABELS.get(waiting_for, waiting_for),
             waiting_since=waiting_since,
-            wait_deadline=waiting_since + self.state_wait_timeout_seconds,
+            wait_deadline=waiting_since + self._effective_wait_limit(cell),
             wait_trigger_signal=str(evidence.evidence_signal),
             wait_trigger_evidence_id=evidence.id,
             wait_trigger_observation_id=observation_id,
@@ -823,6 +1081,12 @@ class TCell(IModule):
         consumed_observation_ids = (
             self._get_consumed_transition_observation_ids(cell)
         )
+        priming_profile = self._get_cell_priming_profile(cell)
+        wait_limit = float(
+            priming_profile.get(
+                "state_wait_timeout_seconds", self.state_wait_timeout_seconds
+            )
+        )
         if cell["state"] == STATE_MEMORY:
             cell = self._update_cell_context(
                 cell,
@@ -851,6 +1115,7 @@ class TCell(IModule):
             candidate,
             match,
             now,
+            priming_profile=priming_profile,
             exclude_observation_ids=consumed_observation_ids,
         )
         cell = self._update_cell(
@@ -866,7 +1131,7 @@ class TCell(IModule):
 
         if cell["state"] < STATE_ACTIVATED:
             wait_elapsed = self._get_state_wait_elapsed(cell, now)
-            if co_stimulation["value"] >= self.co_stimulation_threshold:
+            if co_stimulation["value"] >= co_stimulation["threshold"]:
                 self._maybe_trace_co_stimulation(
                     action="co_stimulation_threshold_met",
                     evidence=evidence,
@@ -933,7 +1198,7 @@ class TCell(IModule):
                     co_stimulation={
                         **co_stimulation,
                         "elapsed": wait_elapsed,
-                        "wait_limit": self.state_wait_timeout_seconds,
+                        "wait_limit": wait_limit,
                         "anergic_until": now + self.anergy_ttl_seconds,
                     },
                     responsible_ip=responsible_ip,
@@ -953,7 +1218,7 @@ class TCell(IModule):
                     scores={
                         **co_stimulation,
                         "elapsed": wait_elapsed,
-                        "wait_limit": self.state_wait_timeout_seconds,
+                        "wait_limit": wait_limit,
                         "anergic_until": now + self.anergy_ttl_seconds,
                     },
                     extra_updates={
@@ -979,7 +1244,7 @@ class TCell(IModule):
                     co_stimulation={
                         **co_stimulation,
                         "elapsed": wait_elapsed,
-                        "wait_limit": self.state_wait_timeout_seconds,
+                        "wait_limit": wait_limit,
                     },
                     responsible_ip=responsible_ip,
                     observation_id=observation_id,
@@ -1014,7 +1279,7 @@ class TCell(IModule):
                         "damp_danger": co_stimulation["damp_danger_score"],
                         "damp_weight": co_stimulation["damp_danger_weight"],
                         "elapsed": wait_elapsed,
-                        "wait_limit": self.state_wait_timeout_seconds,
+                        "wait_limit": wait_limit,
                     },
                     verbosity=LOG_VERBOSITY_DECISIONS,
                 )
@@ -1026,6 +1291,7 @@ class TCell(IModule):
             candidate,
             match,
             now,
+            priming_profile=priming_profile,
             exclude_observation_ids=consumed_observation_ids,
         )
         cell = self._update_cell(
@@ -1139,7 +1405,7 @@ class TCell(IModule):
                 context={
                     **context,
                     "elapsed": wait_elapsed,
-                    "wait_limit": self.state_wait_timeout_seconds,
+                    "wait_limit": wait_limit,
                 },
                 responsible_ip=responsible_ip,
                 observation_id=observation_id,
@@ -1158,7 +1424,7 @@ class TCell(IModule):
                 scores={
                     **context,
                     "elapsed": wait_elapsed,
-                    "wait_limit": self.state_wait_timeout_seconds,
+                    "wait_limit": wait_limit,
                 },
             )
             cell = self._clear_waiting_context(cell, now)
@@ -1180,7 +1446,7 @@ class TCell(IModule):
             context={
                 **context,
                 "elapsed": wait_elapsed,
-                "wait_limit": self.state_wait_timeout_seconds,
+                "wait_limit": wait_limit,
             },
             responsible_ip=responsible_ip,
             observation_id=observation_id,
@@ -1213,7 +1479,7 @@ class TCell(IModule):
                 "damp_weight": context["damp_danger_weight"],
                 "trend_ratio": context["trend_ratio"],
                 "elapsed": wait_elapsed,
-                "wait_limit": self.state_wait_timeout_seconds,
+                "wait_limit": wait_limit,
             },
             verbosity=LOG_VERBOSITY_DECISIONS,
         )
@@ -1226,6 +1492,7 @@ class TCell(IModule):
         candidate: AntigenCandidate,
         match: RegexMatch,
         now: float,
+        priming_profile: dict,
         exclude_observation_ids: set[int] | None = None,
     ) -> dict:
         exclude_observation_ids = self._normalize_observation_ids(
@@ -1276,7 +1543,55 @@ class TCell(IModule):
             "pamp_danger_score": danger_scores["pamp_score"],
             "damp_danger_score": danger_scores["damp_score"],
             "damp_danger_weight": self.damp_danger_weight,
-            "threshold": self.co_stimulation_threshold,
+            "threshold": priming_profile["co_stimulation_threshold"],
+            "priming_signal": priming_profile["signal"],
+            "priming_label": priming_profile["label"],
+            "priming_strength": priming_profile["strength"],
+            "base_co_stimulation_threshold": priming_profile[
+                "base_co_stimulation_threshold"
+            ],
+            "co_stimulation_threshold_offset": priming_profile[
+                "co_stimulation_threshold_offset"
+            ],
+            "base_effector_threshold": priming_profile[
+                "base_effector_threshold"
+            ],
+            "effector_threshold": priming_profile["effector_threshold"],
+            "effector_threshold_offset": priming_profile[
+                "effector_threshold_offset"
+            ],
+            "base_memory_threshold": priming_profile["base_memory_threshold"],
+            "memory_threshold": priming_profile["memory_threshold"],
+            "memory_threshold_offset": priming_profile[
+                "memory_threshold_offset"
+            ],
+            "base_state_wait_timeout_seconds": priming_profile[
+                "base_state_wait_timeout_seconds"
+            ],
+            "state_wait_timeout_seconds": priming_profile[
+                "state_wait_timeout_seconds"
+            ],
+            "state_wait_timeout_factor": priming_profile[
+                "state_wait_timeout_factor"
+            ],
+            "base_effector_min_related_count": priming_profile[
+                "base_effector_min_related_count"
+            ],
+            "effector_min_related_count": priming_profile[
+                "effector_min_related_count"
+            ],
+            "effector_min_related_count_offset": priming_profile[
+                "effector_min_related_count_offset"
+            ],
+            "base_memory_min_related_count": priming_profile[
+                "base_memory_min_related_count"
+            ],
+            "memory_min_related_count": priming_profile[
+                "memory_min_related_count"
+            ],
+            "memory_min_related_count_offset": priming_profile[
+                "memory_min_related_count_offset"
+            ],
         }
 
     def _compute_context_signals(
@@ -1286,6 +1601,7 @@ class TCell(IModule):
         candidate: AntigenCandidate,
         match: RegexMatch,
         now: float,
+        priming_profile: dict,
         exclude_observation_ids: set[int] | None = None,
     ) -> dict:
         exclude_observation_ids = self._normalize_observation_ids(
@@ -1359,7 +1675,7 @@ class TCell(IModule):
         decrease_score = self._clamp01(1.0 - trend_ratio)
         familiarity_score = 1.0 - novelty_score
         stability_score = self._clamp01(
-            recent_related_count / self.memory_min_related_count
+            recent_related_count / priming_profile["memory_min_related_count"]
         )
         memory_score = (
             (0.60 * decrease_score)
@@ -1368,14 +1684,16 @@ class TCell(IModule):
         )
         effector = (
             novelty_score > 0
-            and recent_related_count >= self.effector_min_related_count
-            and effector_score >= self.effector_threshold
+            and recent_related_count
+            >= priming_profile["effector_min_related_count"]
+            and effector_score >= priming_profile["effector_threshold"]
         )
         memory = (
             familiarity_score > 0
-            and recent_related_count >= self.memory_min_related_count
+            and recent_related_count
+            >= priming_profile["memory_min_related_count"]
             and trend_ratio <= self.memory_trend_ratio_max
-            and memory_score >= self.memory_threshold
+            and memory_score >= priming_profile["memory_threshold"]
         )
         return {
             "novelty_score": novelty_score,
@@ -1394,8 +1712,57 @@ class TCell(IModule):
             "decrease_score": decrease_score,
             "familiarity_score": familiarity_score,
             "stability_score": stability_score,
-            "effector_threshold": self.effector_threshold,
-            "memory_threshold": self.memory_threshold,
+            "effector_threshold": priming_profile["effector_threshold"],
+            "memory_threshold": priming_profile["memory_threshold"],
+            "effector_min_related_count": priming_profile[
+                "effector_min_related_count"
+            ],
+            "memory_min_related_count": priming_profile[
+                "memory_min_related_count"
+            ],
+            "priming_signal": priming_profile["signal"],
+            "priming_label": priming_profile["label"],
+            "priming_strength": priming_profile["strength"],
+            "base_co_stimulation_threshold": priming_profile[
+                "base_co_stimulation_threshold"
+            ],
+            "co_stimulation_threshold": priming_profile[
+                "co_stimulation_threshold"
+            ],
+            "co_stimulation_threshold_offset": priming_profile[
+                "co_stimulation_threshold_offset"
+            ],
+            "base_effector_threshold": priming_profile[
+                "base_effector_threshold"
+            ],
+            "effector_threshold_offset": priming_profile[
+                "effector_threshold_offset"
+            ],
+            "base_memory_threshold": priming_profile["base_memory_threshold"],
+            "memory_threshold_offset": priming_profile[
+                "memory_threshold_offset"
+            ],
+            "base_state_wait_timeout_seconds": priming_profile[
+                "base_state_wait_timeout_seconds"
+            ],
+            "state_wait_timeout_seconds": priming_profile[
+                "state_wait_timeout_seconds"
+            ],
+            "state_wait_timeout_factor": priming_profile[
+                "state_wait_timeout_factor"
+            ],
+            "base_effector_min_related_count": priming_profile[
+                "base_effector_min_related_count"
+            ],
+            "effector_min_related_count_offset": priming_profile[
+                "effector_min_related_count_offset"
+            ],
+            "base_memory_min_related_count": priming_profile[
+                "base_memory_min_related_count"
+            ],
+            "memory_min_related_count_offset": priming_profile[
+                "memory_min_related_count_offset"
+            ],
             "effector": effector,
             "memory": memory,
         }
@@ -1448,6 +1815,7 @@ class TCell(IModule):
             damp_observations,
             exclude_observation_ids=consumed_observation_ids,
         )
+        priming_profile = self._get_cell_priming_profile(cell)
 
         entry = {
             "ts": utils.convert_ts_format(now, utils.alerts_format),
@@ -1468,6 +1836,63 @@ class TCell(IModule):
                 "value": co_stimulation["value"],
                 "threshold": co_stimulation["threshold"],
                 "weights": self.co_stimulation_weights,
+                "priming": {
+                    "signal": priming_profile["signal"],
+                    "label": priming_profile["label"],
+                    "strength": priming_profile["strength"],
+                    "base_co_stimulation_threshold": priming_profile[
+                        "base_co_stimulation_threshold"
+                    ],
+                    "co_stimulation_threshold": priming_profile[
+                        "co_stimulation_threshold"
+                    ],
+                    "co_stimulation_threshold_offset": priming_profile[
+                        "co_stimulation_threshold_offset"
+                    ],
+                    "base_effector_threshold": priming_profile[
+                        "base_effector_threshold"
+                    ],
+                    "effector_threshold": priming_profile[
+                        "effector_threshold"
+                    ],
+                    "effector_threshold_offset": priming_profile[
+                        "effector_threshold_offset"
+                    ],
+                    "base_memory_threshold": priming_profile[
+                        "base_memory_threshold"
+                    ],
+                    "memory_threshold": priming_profile["memory_threshold"],
+                    "memory_threshold_offset": priming_profile[
+                        "memory_threshold_offset"
+                    ],
+                    "base_state_wait_timeout_seconds": priming_profile[
+                        "base_state_wait_timeout_seconds"
+                    ],
+                    "state_wait_timeout_seconds": priming_profile[
+                        "state_wait_timeout_seconds"
+                    ],
+                    "state_wait_timeout_factor": priming_profile[
+                        "state_wait_timeout_factor"
+                    ],
+                    "base_effector_min_related_count": priming_profile[
+                        "base_effector_min_related_count"
+                    ],
+                    "effector_min_related_count": priming_profile[
+                        "effector_min_related_count"
+                    ],
+                    "effector_min_related_count_offset": priming_profile[
+                        "effector_min_related_count_offset"
+                    ],
+                    "base_memory_min_related_count": priming_profile[
+                        "base_memory_min_related_count"
+                    ],
+                    "memory_min_related_count": priming_profile[
+                        "memory_min_related_count"
+                    ],
+                    "memory_min_related_count_offset": priming_profile[
+                        "memory_min_related_count_offset"
+                    ],
+                },
                 "components": {
                     "confidence": {
                         "value": co_stimulation["confidence"],
@@ -1569,6 +1994,7 @@ class TCell(IModule):
             match.regex_hash,
             exclude_observation_ids=related_exclusions,
         )
+        priming_profile = self._get_cell_priming_profile(cell)
         has_memory = self.storage.has_memory_for_regex(match.regex_hash)
         has_recent_activity = self.storage.has_recent_regex_activity(
             responsible_ip,
@@ -1597,6 +2023,63 @@ class TCell(IModule):
                 "effector_threshold": context["effector_threshold"],
                 "memory_score": context["memory_score"],
                 "memory_threshold": context["memory_threshold"],
+                "priming": {
+                    "signal": priming_profile["signal"],
+                    "label": priming_profile["label"],
+                    "strength": priming_profile["strength"],
+                    "base_co_stimulation_threshold": priming_profile[
+                        "base_co_stimulation_threshold"
+                    ],
+                    "co_stimulation_threshold": priming_profile[
+                        "co_stimulation_threshold"
+                    ],
+                    "co_stimulation_threshold_offset": priming_profile[
+                        "co_stimulation_threshold_offset"
+                    ],
+                    "base_effector_threshold": priming_profile[
+                        "base_effector_threshold"
+                    ],
+                    "effector_threshold": priming_profile[
+                        "effector_threshold"
+                    ],
+                    "effector_threshold_offset": priming_profile[
+                        "effector_threshold_offset"
+                    ],
+                    "base_memory_threshold": priming_profile[
+                        "base_memory_threshold"
+                    ],
+                    "memory_threshold": priming_profile["memory_threshold"],
+                    "memory_threshold_offset": priming_profile[
+                        "memory_threshold_offset"
+                    ],
+                    "base_state_wait_timeout_seconds": priming_profile[
+                        "base_state_wait_timeout_seconds"
+                    ],
+                    "state_wait_timeout_seconds": priming_profile[
+                        "state_wait_timeout_seconds"
+                    ],
+                    "state_wait_timeout_factor": priming_profile[
+                        "state_wait_timeout_factor"
+                    ],
+                    "base_effector_min_related_count": priming_profile[
+                        "base_effector_min_related_count"
+                    ],
+                    "effector_min_related_count": priming_profile[
+                        "effector_min_related_count"
+                    ],
+                    "effector_min_related_count_offset": priming_profile[
+                        "effector_min_related_count_offset"
+                    ],
+                    "base_memory_min_related_count": priming_profile[
+                        "base_memory_min_related_count"
+                    ],
+                    "memory_min_related_count": priming_profile[
+                        "memory_min_related_count"
+                    ],
+                    "memory_min_related_count_offset": priming_profile[
+                        "memory_min_related_count_offset"
+                    ],
+                },
                 "decision": {
                     "effector": context["effector"],
                     "memory": context["memory"],
@@ -2239,7 +2722,7 @@ class TCell(IModule):
     def _state_wait_expired(self, cell: dict, now: float) -> bool:
         return (
             self._get_state_wait_elapsed(cell, now)
-            >= self.state_wait_timeout_seconds
+            >= self._effective_wait_limit(cell)
         )
 
     @staticmethod
