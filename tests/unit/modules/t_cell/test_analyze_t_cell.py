@@ -281,6 +281,7 @@ def test_build_report_payload_and_html(tmp_path):
                         "ts": "2026/03/21 09:23:37.200000+0000",
                         "stage": "co_stimulation",
                         "action": "co_stimulation_threshold_met",
+                        "cell_key": cell_key,
                         "from_state": "1 - antigen-recognized",
                         "to_state": "3 - activated",
                         "responsible_ip": "203.0.113.90",
@@ -288,11 +289,64 @@ def test_build_report_payload_and_html(tmp_path):
                             "regex_type": "dns_domain",
                             "value": "bad.example.com",
                         },
+                        "current_evidence": {
+                            "observation_id": pamp_observation_id,
+                            "evidence_id": "pamp-1",
+                            "evidence_type": "THREAT_INTELLIGENCE_BLACKLISTED_DOMAIN",
+                            "signal": "PAMP",
+                            "confidence": 1.0,
+                            "threat_level": "high",
+                            "threat_level_value": 0.8,
+                            "danger_contribution": 0.8,
+                        },
                         "formula": {
                             "value": 0.91,
                             "threshold": 0.65,
                             "components": {
-                                "related_pamps": {"count": 1},
+                                "confidence": {
+                                    "value": 1.0,
+                                    "weighted": 0.35,
+                                },
+                                "related_pamps": {
+                                    "count": 1,
+                                    "saturation": 5,
+                                    "score": 0.2,
+                                    "weighted": 0.05,
+                                    "contributors": [
+                                        {
+                                            "observation_id": damp_observation_id,
+                                            "evidence_id": "damp-1",
+                                            "evidence_type": "HTTP_TRAFFIC",
+                                            "signal": "DAMP",
+                                            "confidence": 0.9,
+                                            "threat_level": "medium",
+                                            "threat_level_value": 0.5,
+                                            "danger_contribution": 0.45,
+                                            "relations": ["same_antigen"],
+                                        }
+                                    ],
+                                },
+                                "danger": {
+                                    "score": 0.51,
+                                    "weighted": 0.204,
+                                    "pamp_score": 0.32,
+                                    "damp_score": 0.18,
+                                    "damp_weight": 1.5,
+                                    "danger_saturation": 2.5,
+                                    "pamp_contributors": [],
+                                    "damp_contributors": [
+                                        {
+                                            "observation_id": damp_observation_id,
+                                            "evidence_id": "damp-1",
+                                            "evidence_type": "HTTP_TRAFFIC",
+                                            "signal": "DAMP",
+                                            "confidence": 0.9,
+                                            "threat_level": "medium",
+                                            "threat_level_value": 0.5,
+                                            "danger_contribution": 0.45,
+                                        }
+                                    ],
+                                },
                             },
                         },
                     }
@@ -302,6 +356,7 @@ def test_build_report_payload_and_html(tmp_path):
                         "ts": "2026/03/21 09:23:37.300000+0000",
                         "stage": "context",
                         "action": "context_memory",
+                        "cell_key": cell_key,
                         "from_state": "3 - activated",
                         "to_state": "5 - memory",
                         "responsible_ip": "203.0.113.90",
@@ -309,11 +364,57 @@ def test_build_report_payload_and_html(tmp_path):
                             "regex_type": "dns_domain",
                             "value": "bad.example.com",
                         },
+                        "current_evidence": {
+                            "observation_id": pamp_observation_id,
+                            "evidence_id": "pamp-1",
+                            "evidence_type": "THREAT_INTELLIGENCE_BLACKLISTED_DOMAIN",
+                            "signal": "PAMP",
+                            "confidence": 1.0,
+                            "threat_level": "high",
+                            "threat_level_value": 0.8,
+                            "danger_contribution": 0.8,
+                        },
                         "formula": {
                             "effector_score": 0.33,
                             "effector_threshold": 0.70,
                             "memory_score": 0.78,
                             "memory_threshold": 0.60,
+                            "decision": {"effector": False, "memory": True},
+                            "components": {
+                                "novelty": {
+                                    "score": 0,
+                                    "has_memory_for_regex": True,
+                                    "has_recent_regex_activity": True,
+                                },
+                                "recent_related": {
+                                    "count": 1,
+                                    "saturation": 5,
+                                    "score": 0.2,
+                                    "contributors": [],
+                                },
+                                "recent_pressure": {
+                                    "combined_score": 0.42,
+                                    "pamp_score": 0.32,
+                                    "damp_score": 0.10,
+                                    "pamp_total_raw": 0.8,
+                                    "damp_total_raw": 0.25,
+                                    "pamp_contributors": [],
+                                    "damp_contributors": [],
+                                },
+                                "previous_pressure": {
+                                    "combined_score": 0.70,
+                                    "pamp_score": 0.52,
+                                    "damp_score": 0.18,
+                                    "pamp_total_raw": 1.3,
+                                    "damp_total_raw": 0.45,
+                                    "pamp_contributors": [],
+                                    "damp_contributors": [],
+                                },
+                                "trend_ratio": 0.6,
+                                "decrease_score": 0.4,
+                                "familiarity_score": 1.0,
+                                "stability_score": 0.33,
+                            },
                         },
                     }
                 ),
@@ -350,6 +451,8 @@ def test_build_report_payload_and_html(tmp_path):
     assert "Run Findings" in html
     assert "Quick Summary" in html
     assert "Decision Trace" in html
+    assert "Decision Reference" in html
+    assert "T Cell Histories" in html
     assert "T Cell State Machine" in html
     assert "accepted regex match" in html
     assert "no accepted regex match" in html
@@ -371,6 +474,23 @@ def test_build_report_payload_and_html(tmp_path):
     assert "DAMP with extracted antigens" in html
     assert "PAMP with regex match" in html
     assert "waiting for context" in html
+    assert "clamp01(x) = max(0, min(1, x))" in html
+    assert "Co-Stimulation: 1 -&gt; 3 activation" in html
+    assert "Context Effector: 3 -&gt; 4 containment" in html
+    assert "Context Memory: 3 -&gt; 5 storage" in html
+    assert "Hover or focus a node to see where that term comes from." in html
+    assert "related_pamp_score" in html
+    assert "novelty_score" in html
+    assert "recent_pressure / max(previous_pressure, 0.01)" in html
+    assert "Rule-Based Decisions" in html
+    assert "effector = (novelty_score &gt; 0)" in html
+    assert "data-report-tab=\"histories\"" in html
+    assert "History Index" in html
+    assert "State transition" in html
+    assert "Decision trace" in html
+    assert "passed: 0.910 &gt;= 0.650" in html
+    assert "effector=no (0.330 / 0.700) | memory=yes (0.780 / 0.600)" in html
+    assert "Chronological lifecycle view for each cell" in html
     assert "3 - activated (waiting for context)" not in html
 
     storage.close()
