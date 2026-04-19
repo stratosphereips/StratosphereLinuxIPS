@@ -1,13 +1,17 @@
 # T Cell Module
 
 The `T Cell` module is an immune-inspired responder that consumes centrally
-classified Slips evidence, looks for `PAMP`-tagged antigens that match the
+classified Slips evidence, looks for extracted antigens that match the
 accepted RegexGenerator regex corpus, and then escalates through a small state
 machine until it either becomes tolerant, publishes a containment request, or
-stores a memory snapshot for later reuse. `DAMP` observations do not perform
-antigen recognition, but they do raise the danger pressure used later in
-co-stimulation and context decisions and they now trigger reevaluation of
-already waiting cells for the same responsible IP.
+stores a memory snapshot for later reuse. Both `PAMP` and `DAMP` evidence can
+prime a new cell when an extracted antigen matches an accepted regex, but the
+signal decides how strong that new cell is. `PAMP` keeps the base downstream
+thresholds and waiting window, while `DAMP` stores a weaker priming profile
+with stricter later thresholds, higher corroboration counts, and a shorter
+waiting window. `DAMP` observations also raise the danger pressure used later
+in co-stimulation and context decisions and trigger reevaluation of already
+waiting cells for the same responsible IP.
 
 The module is started by the normal Slips module loader and is enabled by
 default through `t_cell.enabled: true`.
@@ -18,15 +22,16 @@ The module adds a second-stage decision layer without changing detector
 modules:
 
 1. It listens to the shared `evidence_added` channel.
-2. It only creates or advances cells from `0 - mature` by using `PAMP`
-   evidence with extractable antigens.
+2. It creates or advances cells from `0 - mature` by using `PAMP` or `DAMP`
+   evidence with extractable antigens and accepted regex matches.
 3. It extracts structured antigen values from evidence and linked altflows.
 4. It matches those values against accepted regexes already stored by
    `RegexGenerator`.
-5. It stores `DAMP` observations as responsible-IP danger signals and folds
-   them into co-stimulation and context pressure, and `DAMP` arrivals also
-   trigger reevaluation of cells that are already waiting.
-6. It computes co-stimulation and context scores.
+5. It stores `DAMP` observations as responsible-IP danger signals, folds them
+   into co-stimulation and context pressure, and uses them to create weaker
+   DAMP-primed cells when they match an accepted regex.
+6. It computes co-stimulation and context scores using the per-cell priming
+   profile that was stored at recognition time.
 7. It either becomes tolerant, activates, requests blocking, or stores memory.
 
 The target of any effector response is the IP that T Cell identifies as the
@@ -117,9 +122,9 @@ stateDiagram-v2
     state "4 - effector" as S4
     state "5 - memory" as S5
 
-    S0 --> S1 : PAMP + antigen extracted\n+ accepted regex match
-    S0 --> S2 : PAMP + antigen extracted\n+ no regex match
-    S0 --> S0 : DAMP only or\nno antigen extracted
+    S0 --> S1 : PAMP or DAMP + antigen extracted\n+ accepted regex match
+    S0 --> S2 : PAMP or DAMP + antigen extracted\n+ no regex match
+    S0 --> S0 : no antigen extracted
 
     S2 --> S0 : anergy TTL expired
 
@@ -136,10 +141,10 @@ stateDiagram-v2
     S4 --> S4 : repeated hits gated by\neffector cooldown
 
     note right of S0
-      DAMP observations are stored as danger signals.
-      They do not perform antigen recognition
-      and do not create a new cell by themselves,
-      but they do re-check waiting cells.
+      PAMP keeps the base priming profile.
+      DAMP can also create state 1,
+      but stores a weaker priming profile
+      with stricter later gates.
     end note
 
     note right of S1
@@ -163,8 +168,8 @@ The runtime flow is:
 2. The module stores one observation row in its own SQLite DB.
 3. If the evidence signal is `DAMP`, the module stores the observation,
    reevaluates any waiting cells for the same responsible IP, logs
-   `damp_reverification`, and does not attempt antigen recognition from that
-   evidence.
+   `damp_reverification`, and still continues to antigen recognition if
+   extractable antigens are present.
 4. If the evidence signal is neither `PAMP` nor `DAMP`, the module logs
    `ignored_non_pamp` and stops for that evidence after storing the
    observation.
@@ -176,32 +181,41 @@ The runtime flow is:
    does nothing else.
 8. If the cell is `2 - anergic` and the TTL expired, it transitions back to
    `0 - mature`.
-9. If no accepted regex matches the antigen, the cell goes `0 -> 2` and stores
-   a new `anergic_until`.
-10. If a regex matches, the cell goes `0 -> 1` and stores the chosen regex
-   metadata.
-11. The module computes co-stimulation from the recognized `PAMP`
-    confidence, related `PAMP`s, and stored `DAMP` danger pressure for the
+9. If no accepted regex matches the antigen, the mature cell goes
+   `0 -> 2 - anergic` and stores a new `anergic_until`, regardless of whether
+   the evidence was `PAMP` or `DAMP`.
+10. If a regex matches, the cell goes `0 -> 1`, stores the chosen regex
+    metadata, and stores a priming profile snapshot derived from the signal
+    (`PAMP` or `DAMP`).
+11. The recognition observation is marked as consumed for that cell, so it
+    cannot also count toward the next transition.
+12. The module computes co-stimulation from the current evidence confidence,
+    related `PAMP`s, and stored mixed `PAMP` + weighted `DAMP` danger for the
     same responsible IP.
-12. If co-stimulation crosses the configured threshold, the cell goes `1 -> 3`.
-13. If co-stimulation stays below threshold, the cell can wait in
-    `1 - antigen-recognized` for at most one configured Slips time window,
-    with the cell explicitly marked as waiting for co-stimulation.
-14. If that one-time-window wait expires without enough co-stimulation, the
+13. If co-stimulation crosses the cell's effective threshold from its priming
+    profile, the cell goes `1 -> 3`.
+14. That activating observation is also marked as consumed for that cell, so
+    it cannot also count toward the next context transition.
+15. If co-stimulation stays below threshold, the cell can wait in
+    `1 - antigen-recognized` for at most the effective wait window from its
+    priming profile, with the cell explicitly marked as waiting for
+    co-stimulation.
+16. If that wait expires without enough co-stimulation, the
     cell goes `1 -> 2 - anergic`.
-15. In state `3`, the module computes context signals from the same mixed
+17. In state `3`, the module computes context signals from the same mixed
     pressure model: related `PAMP`s plus weighted `DAMP` danger.
-16. If the situation is novel and intense enough, the cell goes to
-    `4 - effector`.
-17. If the situation is familiar and clearly cooling down, the cell goes to
-    `5 - memory`.
-18. If state `3` cannot decide effector or memory within one configured Slips
-    time window, the cell goes `3 -> 0 - mature`.
+18. If the situation is novel and intense enough for the cell's effective
+    effector gate, the cell goes to `4 - effector`.
+19. If the situation is familiar and clearly cooling down enough for the
+    cell's effective memory gate, the cell goes to `5 - memory`.
+20. If state `3` cannot decide effector or memory within the cell's effective
+    wait window, the cell goes `3 -> 0 - mature`.
 
 Both waiting states are reevaluated on later matching `PAMP`s and on later
-`DAMP` observations for the same responsible IP. `DAMP` still does not create
-or match a new cell by itself; it only re-checks cells that already exist and
-are waiting.
+`DAMP` observations for the same responsible IP. Because transition-causing
+observations are remembered and excluded from later counts, pressure, and
+novelty checks, the same evidence cannot drive a full chain of activations for
+one cell.
 
 State `4` publishes the existing `new_blocking` payload for the responsible IP
 when blocking support is present. If blocking or ARP poisoning modules are not
@@ -295,18 +309,32 @@ Default activation threshold:
 
 - `co_stimulation_threshold = 0.65`
 
+Effective priming profiles:
+
+- `PAMP`: keeps the base threshold, base related-count requirements, and the
+  full wait window
+- `DAMP`: raises the later co-stimulation threshold, raises later effector and
+  memory thresholds, adds one more required related `PAMP` for effector and
+  memory, and shortens the wait window by a factor
+
 Interpretation:
 
 - `PAMP`s still provide antigen identity and the related-antigen correlation.
-- `DAMP`s do not match regexes and do not create cells.
-- `DAMP`s increase the danger term, so the same recognized antigen is treated
-  as riskier when the responsible IP is also showing damage or anomaly
+- `DAMP`s also increase the danger term, so the same recognized antigen is
+  treated as riskier when the responsible IP is also showing damage or anomaly
   signals.
+- If a `DAMP` itself matched an accepted regex and created the cell, the
+  effective co-stimulation threshold is higher and the wait is shorter because
+  the cell is marked as DAMP-primed.
+- The observation that caused `0 -> 1` is excluded from later co-stimulation
+  calculations for that cell.
 
 Wait limit:
 
-- state `1 - antigen-recognized` can wait for co-stimulation for at most one
-  configured Slips time window (`parameters.time_window_width`)
+- state `1 - antigen-recognized` can wait for co-stimulation for at most the
+  effective wait limit from its priming profile
+- by default, `PAMP` uses one configured Slips time window
+  (`parameters.time_window_width`) and `DAMP` uses half of that
 - if that wait expires, the cell goes `1 -> 2 - anergic`
 
 ## Context Signals
@@ -347,7 +375,7 @@ memory_score =
   + 0.15 * stability_score
 ```
 
-Default decisions:
+Base decisions:
 
 - `effector` requires:
   - `effector_score >= 0.70`
@@ -361,10 +389,19 @@ Default decisions:
 
 If both would pass, `effector` wins.
 
+Effective decisions:
+
+- `PAMP`-primed cells use the base effector and memory gates.
+- `DAMP`-primed cells raise the effector threshold, raise the memory
+  threshold, and require one more related recent `PAMP` for both decisions.
+- The observation that caused the previous state transition is excluded from
+  later context pressure, recent-related counts, and novelty checks for that
+  cell.
+
 Wait limit:
 
-- state `3 - activated` can wait for context for at most one configured Slips
-  time window (`parameters.time_window_width`)
+- state `3 - activated` can wait for context for at most the effective wait
+  limit from its priming profile
 - if that wait expires without effector or memory, the cell goes
   `3 -> 0 - mature`
 
@@ -602,6 +639,23 @@ t_cell:
     confidence: 0.35
     related_pamps: 0.25
     danger: 0.40
+  priming_profiles:
+    PAMP:
+      strength: 1.0
+      co_stimulation_threshold_offset: 0.0
+      effector_threshold_offset: 0.0
+      memory_threshold_offset: 0.0
+      state_wait_timeout_factor: 1.0
+      effector_min_related_count_offset: 0
+      memory_min_related_count_offset: 0
+    DAMP:
+      strength: 0.6
+      co_stimulation_threshold_offset: 0.15
+      effector_threshold_offset: 0.10
+      memory_threshold_offset: 0.05
+      state_wait_timeout_factor: 0.5
+      effector_min_related_count_offset: 1
+      memory_min_related_count_offset: 1
   novelty_window_seconds: 86400
   context_recent_window_seconds: 1800
   effector_threshold: 0.70
@@ -635,6 +689,11 @@ Reference:
   added to the `PAMP` danger term
 - `co_stimulation_threshold`: threshold for `1 -> 3`
 - `co_stimulation_weights`: normalized internally
+- `priming_profiles`: signal-specific offsets and wait factors applied after
+  `0 -> 1` to mark how strongly a cell was primed
+- `priming_profiles.PAMP`: base-strength profile, usually zero offsets
+- `priming_profiles.DAMP`: weaker profile that raises later thresholds,
+  raises related-count requirements, and shortens waiting
 - `novelty_window_seconds`: window for novelty suppression
 - `context_recent_window_seconds`: context window size
 - `effector_threshold`: minimum effector score
@@ -657,8 +716,9 @@ See [Evidence Signals](evidence_signals.md) for:
 - the current evidence inventory by module
 - the default shipped signal mapping
 
-T Cell antigen recognition and state creation start only from `PAMP`.
-`DAMP` observations are still stored in the T Cell observation table and are
-used as weighted danger signals in co-stimulation and context calculations for
-the same responsible IP, but they do not create cells or perform regex
-matching by themselves.
+T Cell antigen recognition and state creation now support both `PAMP` and
+`DAMP` when an extracted antigen matches an accepted regex. The signal is
+stored as a priming profile inside the cell and changes the later effective
+thresholds, required related-counts, and wait limits. `DAMP` observations are
+still stored in the T Cell observation table and still contribute weighted
+danger to co-stimulation and context calculations for the same responsible IP.
