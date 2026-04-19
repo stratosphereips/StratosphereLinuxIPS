@@ -62,6 +62,29 @@ WAITING_LABELS = {
     "co_stimulation": "waiting for co-stimulation",
     "context": "waiting for context",
 }
+DEFAULT_COSTIM_WEIGHTS = {
+    "confidence": 0.35,
+    "related_pamps": 0.25,
+    "danger": 0.40,
+}
+DEFAULT_DOC_CONFIG = {
+    "anergy_ttl_seconds": 21600.0,
+    "related_lookback_seconds": 3600.0,
+    "related_pamps_saturation": 5.0,
+    "danger_saturation": 2.5,
+    "damp_danger_weight": 1.5,
+    "co_stimulation_threshold": 0.65,
+    "co_stimulation_weights": DEFAULT_COSTIM_WEIGHTS,
+    "novelty_window_seconds": 86400.0,
+    "context_recent_window_seconds": 1800.0,
+    "effector_threshold": 0.70,
+    "effector_min_related_count": 4,
+    "effector_cooldown_seconds": 1800.0,
+    "memory_threshold": 0.60,
+    "memory_trend_ratio_max": 0.60,
+    "memory_min_related_count": 3,
+    "state_wait_timeout_seconds": 3600.0,
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -451,6 +474,54 @@ def safe_div(num: float, den: float) -> float:
     return num / den
 
 
+def normalize_costim_weights(weights: Any) -> dict[str, float]:
+    if not isinstance(weights, dict):
+        weights = {}
+    sanitized = {}
+    for key, default_value in DEFAULT_COSTIM_WEIGHTS.items():
+        raw_value = weights.get(key, default_value)
+        try:
+            raw_value = float(raw_value)
+        except (TypeError, ValueError):
+            raw_value = default_value
+        sanitized[key] = max(0.0, raw_value)
+
+    total = sum(sanitized.values())
+    if total <= 0:
+        total = sum(DEFAULT_COSTIM_WEIGHTS.values())
+        sanitized = DEFAULT_COSTIM_WEIGHTS.copy()
+    return {key: value / total for key, value in sanitized.items()}
+
+
+def coerce_time_window_width(raw_value: Any) -> float:
+    if raw_value in (None, ""):
+        return float(DEFAULT_DOC_CONFIG["state_wait_timeout_seconds"])
+    try:
+        return float(raw_value)
+    except (TypeError, ValueError):
+        text = str(raw_value)
+        if "only_one_tw" in text:
+            return 9999999999.0
+    return float(DEFAULT_DOC_CONFIG["state_wait_timeout_seconds"])
+
+
+def report_config_with_defaults(report: dict) -> dict:
+    config = dict(report.get("config") or {})
+    merged = {}
+    for key, default_value in DEFAULT_DOC_CONFIG.items():
+        raw_value = config.get(key, default_value)
+        if key == "co_stimulation_weights":
+            merged[key] = normalize_costim_weights(raw_value)
+            continue
+        if key == "state_wait_timeout_seconds":
+            merged[key] = coerce_time_window_width(raw_value)
+            continue
+        if raw_value in (None, "", {}):
+            raw_value = default_value
+        merged[key] = raw_value
+    return merged
+
+
 def build_findings(report: dict) -> list[str]:
     totals = report["totals"]
     categories = report["observation_categories"]
@@ -612,6 +683,523 @@ def bucket_items(
     }
 
 
+def trace_row_cell_key(entry: dict) -> str:
+    if entry.get("cell_key"):
+        return str(entry.get("cell_key"))
+    candidate = entry.get("candidate") or {}
+    responsible_ip = str(entry.get("responsible_ip") or "")
+    regex_type = str(candidate.get("regex_type") or "")
+    antigen_value = str(candidate.get("value") or "")
+    if responsible_ip and regex_type and antigen_value:
+        return f"{responsible_ip}|{regex_type}|{antigen_value}"
+    return ""
+
+
+def describe_current_evidence(current_evidence: dict | None) -> str:
+    current_evidence = current_evidence or {}
+    evidence_id = current_evidence.get("evidence_id") or "n/a"
+    evidence_type = current_evidence.get("evidence_type") or "unknown"
+    signal = current_evidence.get("signal") or "unknown"
+    confidence = format_float(current_evidence.get("confidence"))
+    threat_level = current_evidence.get("threat_level") or "unknown"
+    threat_level_value = format_float(current_evidence.get("threat_level_value"))
+    danger = format_float(current_evidence.get("danger_contribution"))
+    observation_id = current_evidence.get("observation_id")
+    observation_part = (
+        f"obs={observation_id} | " if observation_id not in (None, "") else ""
+    )
+    return (
+        f"{observation_part}eid={evidence_id} | {evidence_type} | {signal} | "
+        f"conf={confidence} | threat={threat_level} ({threat_level_value}) | "
+        f"danger={danger}"
+    )
+
+
+def describe_observation_row(observation: dict | None) -> str:
+    observation = observation or {}
+    if not observation:
+        return "no linked observation row"
+    return (
+        f"obs={observation.get('id')} | eid={observation.get('evidence_id')} | "
+        f"{observation.get('evidence_type')} | {observation.get('evidence_signal')} | "
+        f"conf={format_float(observation.get('confidence'))} | "
+        f"threat={observation.get('threat_level')} "
+        f"({format_float(observation.get('threat_level_value'))}) | "
+        f"antigens={summarize_antigens(observation.get('antigens') or [])} | "
+        f"matches={summarize_matched_regexes(observation.get('matched_regexes') or [])}"
+    )
+
+
+def describe_trace_contributor(prefix: str, contributor: dict) -> str:
+    relations = contributor.get("relations") or []
+    relations_text = f" | relations={','.join(relations)}" if relations else ""
+    return (
+        f"{prefix}: obs={contributor.get('observation_id')} | "
+        f"eid={contributor.get('evidence_id')} | {contributor.get('evidence_type')} | "
+        f"{contributor.get('signal')} | conf={format_float(contributor.get('confidence'))} | "
+        f"threat={contributor.get('threat_level')} "
+        f"({format_float(contributor.get('threat_level_value'))}) | "
+        f"danger={format_float(contributor.get('danger_contribution'))}"
+        f"{relations_text}"
+    )
+
+
+def summarize_lines(lines: list[str], fallback: str = "n/a", limit: int = 2) -> str:
+    cleaned = [str(line).strip() for line in lines if str(line).strip()]
+    if not cleaned:
+        return fallback
+    summary = " | ".join(cleaned[:limit])
+    if len(cleaned) > limit:
+        summary += f" | +{len(cleaned) - limit} more"
+    return summary
+
+
+def generic_threshold_result(scores: dict) -> tuple[str, list[str]]:
+    if not isinstance(scores, dict):
+        return ("n/a", ["No threshold snapshot was stored for this transition."])
+
+    if "value" in scores and "threshold" in scores:
+        value = scores.get("value")
+        threshold = scores.get("threshold")
+        passed = float(value) >= float(threshold)
+        comparator = ">=" if passed else "<"
+        status = "passed" if passed else "failed"
+        return (
+            f"{status}: {format_float(value)} {comparator} {format_float(threshold)}",
+            [
+                f"value={format_float(value)}",
+                f"threshold={format_float(threshold)}",
+            ],
+        )
+
+    result_lines = []
+    summary_bits = []
+    if "effector_score" in scores and "effector_threshold" in scores:
+        passed = float(scores["effector_score"]) >= float(scores["effector_threshold"])
+        summary_bits.append(
+            "effector "
+            + ("passed" if passed else "failed")
+            + f": {format_float(scores['effector_score'])} "
+            + (">=" if passed else "<")
+            + f" {format_float(scores['effector_threshold'])}"
+        )
+        result_lines.append(summary_bits[-1])
+    if "memory_score" in scores and "memory_threshold" in scores:
+        passed = float(scores["memory_score"]) >= float(scores["memory_threshold"])
+        summary_bits.append(
+            "memory "
+            + ("passed" if passed else "failed")
+            + f": {format_float(scores['memory_score'])} "
+            + (">=" if passed else "<")
+            + f" {format_float(scores['memory_threshold'])}"
+        )
+        result_lines.append(summary_bits[-1])
+    if not summary_bits:
+        return ("n/a", ["No threshold keys were stored in this score snapshot."])
+    return (" | ".join(summary_bits), result_lines)
+
+
+def build_trace_threshold_result(entry: dict) -> tuple[str, list[str]]:
+    formula = entry.get("formula") or {}
+    stage = entry.get("stage")
+    action = entry.get("action") or ""
+    if stage == "co_stimulation":
+        value = formula.get("value")
+        threshold = formula.get("threshold")
+        if value is None or threshold is None:
+            return ("n/a", ["Missing co-stimulation value or threshold."])
+        passed = float(value) >= float(threshold)
+        comparator = ">=" if passed else "<"
+        return (
+            f"{'passed' if passed else 'failed'}: "
+            f"{format_float(value)} {comparator} {format_float(threshold)}",
+            [
+                f"action={action}",
+                f"value={format_float(value)}",
+                f"threshold={format_float(threshold)}",
+            ],
+        )
+
+    if stage == "context":
+        decision = formula.get("decision") or {}
+        effector = bool(decision.get("effector"))
+        memory = bool(decision.get("memory"))
+        effector_score = formula.get("effector_score")
+        effector_threshold = formula.get("effector_threshold")
+        memory_score = formula.get("memory_score")
+        memory_threshold = formula.get("memory_threshold")
+        summary = (
+            f"effector={'yes' if effector else 'no'} "
+            f"({format_float(effector_score)} / {format_float(effector_threshold)}) | "
+            f"memory={'yes' if memory else 'no'} "
+            f"({format_float(memory_score)} / {format_float(memory_threshold)})"
+        )
+        return (
+            summary,
+            [
+                f"action={action}",
+                f"effector decision={'passed' if effector else 'failed'}",
+                f"memory decision={'passed' if memory else 'failed'}",
+                f"effector_score={format_float(effector_score)} threshold={format_float(effector_threshold)}",
+                f"memory_score={format_float(memory_score)} threshold={format_float(memory_threshold)}",
+            ],
+        )
+    return ("n/a", ["No threshold formatter for this trace stage."])
+
+
+def build_trace_considered_evidence(entry: dict) -> tuple[str, list[str]]:
+    formula = entry.get("formula") or {}
+    stage = entry.get("stage")
+    lines = []
+    current_evidence = entry.get("current_evidence") or {}
+    if current_evidence:
+        lines.append("current: " + describe_current_evidence(current_evidence))
+
+    components = formula.get("components") or {}
+    if stage == "co_stimulation":
+        related = (components.get("related_pamps") or {}).get("contributors") or []
+        danger = components.get("danger") or {}
+        pamp_contributors = danger.get("pamp_contributors") or []
+        damp_contributors = danger.get("damp_contributors") or []
+        for contributor in related:
+            lines.append(describe_trace_contributor("related_pamp", contributor))
+        for contributor in pamp_contributors:
+            lines.append(describe_trace_contributor("danger_pamp", contributor))
+        for contributor in damp_contributors:
+            lines.append(describe_trace_contributor("danger_damp", contributor))
+    elif stage == "context":
+        recent_related = (components.get("recent_related") or {}).get(
+            "contributors"
+        ) or []
+        recent_pressure = components.get("recent_pressure") or {}
+        previous_pressure = components.get("previous_pressure") or {}
+        for contributor in recent_related:
+            lines.append(describe_trace_contributor("recent_related", contributor))
+        for contributor in recent_pressure.get("pamp_contributors") or []:
+            lines.append(describe_trace_contributor("recent_pressure_pamp", contributor))
+        for contributor in recent_pressure.get("damp_contributors") or []:
+            lines.append(describe_trace_contributor("recent_pressure_damp", contributor))
+        for contributor in previous_pressure.get("pamp_contributors") or []:
+            lines.append(describe_trace_contributor("previous_pressure_pamp", contributor))
+        for contributor in previous_pressure.get("damp_contributors") or []:
+            lines.append(describe_trace_contributor("previous_pressure_damp", contributor))
+
+    if not lines:
+        lines.append("No contributor evidence snapshot was stored for this event.")
+    return (summarize_lines(lines, fallback="no stored evidence inputs"), lines)
+
+
+def build_trace_computation_lines(entry: dict) -> tuple[str, list[str]]:
+    formula = entry.get("formula") or {}
+    stage = entry.get("stage")
+    if stage == "co_stimulation":
+        components = formula.get("components") or {}
+        confidence = components.get("confidence") or {}
+        related = components.get("related_pamps") or {}
+        danger = components.get("danger") or {}
+        lines = [
+            f"value={format_float(formula.get('value'))}",
+            f"threshold={format_float(formula.get('threshold'))}",
+            (
+                "confidence: value="
+                f"{format_float(confidence.get('value'))} weighted="
+                f"{format_float(confidence.get('weighted'))}"
+            ),
+            (
+                "related_pamps: count="
+                f"{related.get('count', 'n/a')} saturation="
+                f"{format_float(related.get('saturation'))} score="
+                f"{format_float(related.get('score'))} weighted="
+                f"{format_float(related.get('weighted'))}"
+            ),
+            (
+                "danger: score="
+                f"{format_float(danger.get('score'))} weighted="
+                f"{format_float(danger.get('weighted'))} pamp_score="
+                f"{format_float(danger.get('pamp_score'))} damp_score="
+                f"{format_float(danger.get('damp_score'))} damp_weight="
+                f"{format_float(danger.get('damp_weight'))} saturation="
+                f"{format_float(danger.get('danger_saturation'))}"
+            ),
+        ]
+        return (summarize_trace_formula(formula, stage), lines)
+
+    if stage == "context":
+        components = formula.get("components") or {}
+        novelty = components.get("novelty") or {}
+        recent_related = components.get("recent_related") or {}
+        recent_pressure = components.get("recent_pressure") or {}
+        previous_pressure = components.get("previous_pressure") or {}
+        lines = [
+            (
+                "effector_score="
+                f"{format_float(formula.get('effector_score'))} threshold="
+                f"{format_float(formula.get('effector_threshold'))}"
+            ),
+            (
+                "memory_score="
+                f"{format_float(formula.get('memory_score'))} threshold="
+                f"{format_float(formula.get('memory_threshold'))}"
+            ),
+            (
+                "decision flags: effector="
+                f"{'yes' if (formula.get('decision') or {}).get('effector') else 'no'} "
+                "memory="
+                f"{'yes' if (formula.get('decision') or {}).get('memory') else 'no'}"
+            ),
+            (
+                "novelty: score="
+                f"{format_float(novelty.get('score'))} has_memory="
+                f"{'yes' if novelty.get('has_memory_for_regex') else 'no'} "
+                "recent_activity="
+                f"{'yes' if novelty.get('has_recent_regex_activity') else 'no'}"
+            ),
+            (
+                "recent_related: count="
+                f"{recent_related.get('count', 'n/a')} saturation="
+                f"{format_float(recent_related.get('saturation'))} score="
+                f"{format_float(recent_related.get('score'))}"
+            ),
+            (
+                "recent_pressure: combined="
+                f"{format_float(recent_pressure.get('combined_score'))} pamp="
+                f"{format_float(recent_pressure.get('pamp_score'))} damp="
+                f"{format_float(recent_pressure.get('damp_score'))} "
+                "raw_pamp="
+                f"{format_float(recent_pressure.get('pamp_total_raw'))} raw_damp="
+                f"{format_float(recent_pressure.get('damp_total_raw'))}"
+            ),
+            (
+                "previous_pressure: combined="
+                f"{format_float(previous_pressure.get('combined_score'))} pamp="
+                f"{format_float(previous_pressure.get('pamp_score'))} damp="
+                f"{format_float(previous_pressure.get('damp_score'))} "
+                "raw_pamp="
+                f"{format_float(previous_pressure.get('pamp_total_raw'))} raw_damp="
+                f"{format_float(previous_pressure.get('damp_total_raw'))}"
+            ),
+            f"trend_ratio={format_float(components.get('trend_ratio'))}",
+            f"decrease_score={format_float(components.get('decrease_score'))}",
+            f"familiarity_score={format_float(components.get('familiarity_score'))}",
+            f"stability_score={format_float(components.get('stability_score'))}",
+        ]
+        return (summarize_trace_formula(formula, stage), lines)
+
+    return ("n/a", ["No computation formatter for this trace stage."])
+
+
+def build_transition_computation_lines(transition: dict) -> tuple[str, list[str]]:
+    scores = transition.get("scores") or {}
+    if not scores:
+        return ("no score snapshot", ["This transition stored no score payload."])
+    lines = [f"{key}={format_float(value)}" for key, value in sorted(scores.items())]
+    return (summarize_lines(lines, fallback="score snapshot"), lines)
+
+
+def build_transition_event(
+    transition: dict, observations_by_id: dict[int, dict]
+) -> dict:
+    observation = observations_by_id.get(int(transition.get("observation_id") or 0), {})
+    threshold_summary, threshold_lines = generic_threshold_result(
+        transition.get("scores") or {}
+    )
+    computation_summary, computation_lines = build_transition_computation_lines(
+        transition
+    )
+    evidence_lines = [describe_observation_row(observation)]
+    return {
+        "ts": transition.get("created_at"),
+        "wall": ts_to_iso(transition.get("created_at")),
+        "source": "State transition",
+        "step": transition.get("reason") or "transition",
+        "stage": "transition",
+        "state_path": (
+            f"{state_label(transition.get('from_state'))} → "
+            f"{state_label(transition.get('to_state'))}"
+        ),
+        "evidence_id": transition.get("evidence_id") or "",
+        "threshold_summary": threshold_summary,
+        "threshold_lines": threshold_lines,
+        "considered_summary": summarize_lines(evidence_lines),
+        "considered_lines": evidence_lines,
+        "computation_summary": computation_summary,
+        "computation_lines": computation_lines,
+        "priority": 2,
+    }
+
+
+def build_trace_event(entry: dict) -> dict:
+    threshold_summary, threshold_lines = build_trace_threshold_result(entry)
+    considered_summary, considered_lines = build_trace_considered_evidence(entry)
+    computation_summary, computation_lines = build_trace_computation_lines(entry)
+    current_evidence = entry.get("current_evidence") or {}
+    evidence_id = current_evidence.get("evidence_id") or ""
+    evidence_type = current_evidence.get("evidence_type") or ""
+    signal = current_evidence.get("signal") or ""
+    if evidence_type or signal:
+        evidence_label = f"{evidence_id} | {evidence_type} | {signal}".strip(" |")
+    else:
+        evidence_label = evidence_id or "n/a"
+    return {
+        "ts": entry.get("_ts"),
+        "wall": entry.get("ts") or ts_to_iso(entry.get("_ts")),
+        "source": "Decision trace",
+        "step": f"{entry.get('stage') or 'trace'}: {entry.get('action') or 'event'}",
+        "stage": entry.get("stage") or "trace",
+        "state_path": (
+            f"{entry.get('from_state') or 'n/a'} → {entry.get('to_state') or 'n/a'}"
+        ),
+        "evidence_id": evidence_label,
+        "threshold_summary": threshold_summary,
+        "threshold_lines": threshold_lines,
+        "considered_summary": considered_summary,
+        "considered_lines": considered_lines,
+        "computation_summary": computation_summary,
+        "computation_lines": computation_lines,
+        "priority": 1,
+    }
+
+
+def build_life_path(
+    transitions_for_cell: list[dict], current_state_label: str | None
+) -> str:
+    ordered = sorted(
+        transitions_for_cell,
+        key=lambda item: (float(item.get("created_at") or 0.0), int(item.get("id") or 0)),
+    )
+    states = []
+    for transition in ordered:
+        from_label = state_label(transition.get("from_state"))
+        to_label = state_label(transition.get("to_state"))
+        if not states:
+            states.append(from_label)
+        if states[-1] != from_label:
+            states.append(from_label)
+        if states[-1] != to_label:
+            states.append(to_label)
+    if not states and current_state_label:
+        states = [current_state_label]
+    elif current_state_label and states[-1] != current_state_label:
+        states.append(current_state_label)
+    return " → ".join(states) if states else "no recorded state changes"
+
+
+def build_cell_histories(
+    observations: list[dict],
+    cells: list[dict],
+    transitions: list[dict],
+    trace_rows: list[dict],
+) -> list[dict]:
+    observations_by_id = {
+        int(observation["id"]): observation
+        for observation in observations
+        if observation.get("id") is not None
+    }
+    cells_by_key = {
+        str(cell.get("cell_key")): cell
+        for cell in cells
+        if cell.get("cell_key")
+    }
+    transitions_by_cell: dict[str, list[dict]] = defaultdict(list)
+    for transition in transitions:
+        cell_key = str(transition.get("cell_key") or "")
+        if cell_key:
+            transitions_by_cell[cell_key].append(transition)
+
+    traces_by_cell: dict[str, list[dict]] = defaultdict(list)
+    for entry in trace_rows:
+        cell_key = trace_row_cell_key(entry)
+        if cell_key:
+            traces_by_cell[cell_key].append(entry)
+
+    cell_keys = set(cells_by_key) | set(transitions_by_cell) | set(traces_by_cell)
+    histories = []
+    for cell_key in sorted(cell_keys):
+        cell = cells_by_key.get(cell_key, {})
+        cell_transitions = transitions_by_cell.get(cell_key, [])
+        cell_traces = traces_by_cell.get(cell_key, [])
+
+        events = [build_trace_event(entry) for entry in cell_traces]
+        events.extend(
+            build_transition_event(transition, observations_by_id)
+            for transition in cell_transitions
+        )
+        events.sort(
+            key=lambda item: (
+                item.get("ts") is None,
+                float(item.get("ts") or 0.0),
+                int(item.get("priority") or 9),
+                item.get("step") or "",
+            )
+        )
+
+        current_state_label = state_label(cell.get("state")) if cell else None
+        waiting_label = cell_waiting_label(cell) if cell else ""
+        first_ts_candidates = [
+            float(item.get("ts"))
+            for item in events
+            if item.get("ts") is not None
+        ]
+        if cell.get("created_at") is not None:
+            first_ts_candidates.append(float(cell.get("created_at")))
+        last_ts_candidates = [
+            float(item.get("ts"))
+            for item in events
+            if item.get("ts") is not None
+        ]
+        if cell.get("updated_at") is not None:
+            last_ts_candidates.append(float(cell.get("updated_at")))
+        first_seen = min(first_ts_candidates) if first_ts_candidates else None
+        last_seen = max(last_ts_candidates) if last_ts_candidates else None
+        current_state_display = current_state_label or "unknown"
+        if waiting_label:
+            current_state_display += f" ({waiting_label})"
+
+        histories.append(
+            {
+                "cell_key": cell_key,
+                "responsible_ip": cell.get("responsible_ip")
+                or (
+                    cell_transitions[0].get("profile_ip")
+                    if cell_transitions
+                    else (cell_traces[0].get("responsible_ip") if cell_traces else "")
+                ),
+                "regex_type": cell.get("regex_type")
+                or (
+                    cell_transitions[0].get("regex_type")
+                    if cell_transitions
+                    else ((cell_traces[0].get("candidate") or {}).get("regex_type", ""))
+                ),
+                "antigen_value": cell.get("antigen_value")
+                or (
+                    cell_transitions[0].get("antigen_value")
+                    if cell_transitions
+                    else ((cell_traces[0].get("candidate") or {}).get("value", ""))
+                ),
+                "matched_value": cell.get("matched_value")
+                or (
+                    cell_transitions[-1].get("matched_value")
+                    if cell_transitions
+                    else ((cell_traces[-1].get("match") or {}).get("value", ""))
+                ),
+                "current_state": current_state_display,
+                "current_state_class": state_class(cell.get("state"))
+                if cell
+                else "state-unknown",
+                "waiting_label": waiting_label,
+                "life_path": build_life_path(cell_transitions, current_state_label),
+                "first_seen": ts_to_iso(first_seen),
+                "last_seen": ts_to_iso(last_seen),
+                "event_count": len(events),
+                "transition_count": len(cell_transitions),
+                "trace_count": len(cell_traces),
+                "events": events,
+            }
+        )
+
+    return histories
+
+
 def build_report_payload(
     run_output_dir: Path,
     max_observations: int = 200,
@@ -631,7 +1219,9 @@ def build_report_payload(
     memories = db_records["memories"]
     log_data = load_log_entries(log_path, max_log_lines)
     trace_rows = load_trace_entries(trace_path)
-    config = load_yaml_config(metadata_path).get("t_cell", {})
+    metadata = load_yaml_config(metadata_path)
+    config = metadata.get("t_cell", {})
+    parameters = metadata.get("parameters", {})
 
     transitions_by_observation: dict[int, list[dict]] = defaultdict(list)
     for transition in transitions:
@@ -825,6 +1415,12 @@ def build_report_payload(
         }
         for entry in log_data["entries"][-max(1, max_log_lines) :]
     ]
+    cell_histories = build_cell_histories(
+        observations=observations,
+        cells=cells,
+        transitions=transitions,
+        trace_rows=trace_rows,
+    )
 
     report = {
         "generated_at": now_iso(),
@@ -843,11 +1439,29 @@ def build_report_payload(
             "log_verbosity": config.get("log_verbosity"),
             "decision_trace_mode": config.get("decision_trace_mode"),
             "related_lookback_seconds": config.get("related_lookback_seconds"),
+            "related_pamps_saturation": config.get("related_pamps_saturation"),
+            "danger_saturation": config.get("danger_saturation"),
+            "damp_danger_weight": config.get("damp_danger_weight"),
             "co_stimulation_threshold": config.get("co_stimulation_threshold"),
+            "co_stimulation_weights": normalize_costim_weights(
+                config.get("co_stimulation_weights")
+            ),
+            "novelty_window_seconds": config.get("novelty_window_seconds"),
+            "context_recent_window_seconds": config.get(
+                "context_recent_window_seconds"
+            ),
             "effector_threshold": config.get("effector_threshold"),
+            "effector_min_related_count": config.get(
+                "effector_min_related_count"
+            ),
             "memory_threshold": config.get("memory_threshold"),
+            "memory_trend_ratio_max": config.get("memory_trend_ratio_max"),
+            "memory_min_related_count": config.get("memory_min_related_count"),
             "anergy_ttl_seconds": config.get("anergy_ttl_seconds"),
             "effector_cooldown_seconds": config.get("effector_cooldown_seconds"),
+            "state_wait_timeout_seconds": coerce_time_window_width(
+                parameters.get("time_window_width")
+            ),
         },
         "totals": {
             "observations": len(observations),
@@ -893,6 +1507,7 @@ def build_report_payload(
             "rows": recent_trace_rows[: max(1, max_trace_rows)],
             "total_rows": len(trace_rows),
         },
+        "cell_histories": cell_histories,
         "log": {
             "rows": recent_log_rows,
             "tail_text": "\n".join(log_data["tail"]),
@@ -1430,6 +2045,723 @@ def render_pretty_json(value: Any) -> str:
     return escape(json.dumps(value, indent=2, sort_keys=True))
 
 
+def render_formula_box(lines: list[str]) -> str:
+    return (
+        "<pre class='formula-box'><code>"
+        + escape("\n".join(lines))
+        + "</code></pre>"
+    )
+
+
+def render_term_cards(terms: list[dict]) -> str:
+    return "".join(
+        f"""
+        <article class="term-card">
+          <p class="kicker">{escape(term['label'])}</p>
+          <p class="term-formula">{escape(term['formula'])}</p>
+          <p class="term-body">{escape(term['description'])}</p>
+        </article>
+        """
+        for term in terms
+    )
+
+
+def render_formula_tree_node(node: dict) -> str:
+    children = node.get("children") or []
+    child_class = "formula-children"
+    if len(children) > 1:
+        child_class += " has-multiple"
+    tooltip = node.get("tooltip") or ""
+    formula = node.get("formula") or ""
+    summary = node.get("summary") or ""
+    children_html = ""
+    if children:
+        children_html = (
+            f"<div class='{child_class}'>"
+            + "".join(
+                "<div class='formula-branch'>"
+                + render_formula_tree_node(child)
+                + "</div>"
+                for child in children
+            )
+            + "</div>"
+        )
+    return f"""
+    <div class="formula-node-wrap">
+      <div class="formula-node" tabindex="0" role="note">
+        <span class="formula-node-label">{escape(node.get('label', 'value'))}</span>
+        {f"<span class='formula-node-formula'>{escape(formula)}</span>" if formula else ""}
+        {f"<span class='formula-node-summary'>{escape(summary)}</span>" if summary else ""}
+        {f"<span class='formula-tooltip'>{escape(tooltip)}</span>" if tooltip else ""}
+      </div>
+      {children_html}
+    </div>
+    """
+
+
+def render_formula_tree(node: dict) -> str:
+    return f"<div class='formula-tree'>{render_formula_tree_node(node)}</div>"
+
+
+def render_decision_doc_card(card: dict) -> str:
+    equation_html = render_formula_box(card["equation_lines"])
+    gate_html = render_formula_box(card["gate_lines"])
+    term_cards_html = render_term_cards(card["terms"])
+    tree_html = render_formula_tree(card["tree"])
+    notes_html = "".join(
+        f"<p class='decision-note'>{escape(note)}</p>"
+        for note in card.get("notes", [])
+    )
+    return f"""
+    <article class="decision-doc">
+      <div class="panel-head">
+        <h3>{escape(card['title'])}</h3>
+        <p class="meta">{escape(card['summary'])}</p>
+      </div>
+      <div class="equation-grid">
+        <div>
+          <p class="kicker">Exact Equation</p>
+          {equation_html}
+        </div>
+        <div>
+          <p class="kicker">Decision Gate</p>
+          {gate_html}
+        </div>
+      </div>
+      {notes_html}
+      <div class="term-grid">
+        {term_cards_html}
+      </div>
+      <div class="tree-block">
+        <div class="panel-head">
+          <h4>Input Tree</h4>
+          <p class="meta">Hover or focus a node to see where that term comes from.</p>
+        </div>
+        {tree_html}
+      </div>
+    </article>
+    """
+
+
+def render_rule_cards(cards: list[dict]) -> str:
+    return "".join(
+        f"""
+        <article class="rule-card">
+          <p class="kicker">{escape(card['title'])}</p>
+          <p class="term-formula">{escape(card['rule'])}</p>
+          <p class="term-body">{escape(card['description'])}</p>
+        </article>
+        """
+        for card in cards
+    )
+
+
+def render_decision_reference(report: dict) -> str:
+    config = report_config_with_defaults(report)
+    weights = config["co_stimulation_weights"]
+    related_lookback = format_float(config["related_lookback_seconds"])
+    related_saturation = format_float(config["related_pamps_saturation"])
+    danger_saturation = format_float(config["danger_saturation"])
+    damp_weight = format_float(config["damp_danger_weight"])
+    novelty_window = format_float(config["novelty_window_seconds"])
+    context_window = format_float(config["context_recent_window_seconds"])
+    wait_limit = format_float(config["state_wait_timeout_seconds"])
+    co_threshold = format_float(config["co_stimulation_threshold"])
+    effector_threshold = format_float(config["effector_threshold"])
+    effector_min_related = str(int(config["effector_min_related_count"]))
+    effector_cooldown = format_float(config["effector_cooldown_seconds"])
+    memory_threshold = format_float(config["memory_threshold"])
+    memory_ratio_max = format_float(config["memory_trend_ratio_max"])
+    memory_min_related = str(int(config["memory_min_related_count"]))
+    anergy_ttl = format_float(config["anergy_ttl_seconds"])
+
+    decision_cards = [
+        {
+            "title": "Co-Stimulation: 1 -> 3 activation",
+            "summary": "This score is evaluated after antigen recognition to decide whether the cell activates.",
+            "equation_lines": [
+                (
+                    "co_stimulation = "
+                    f"{format_float(weights['confidence'])} * confidence"
+                ),
+                (
+                    f"                + {format_float(weights['related_pamps'])} "
+                    "* related_pamp_score"
+                ),
+                (
+                    f"                + {format_float(weights['danger'])} "
+                    "* profile_danger_score"
+                ),
+            ],
+            "gate_lines": [
+                f"activate when co_stimulation >= {co_threshold}",
+                "otherwise stay in 1 - antigen-recognized",
+                f"timeout to 2 - anergic after {wait_limit}s if still below threshold",
+            ],
+            "notes": [
+                f"Related PAMPs are counted over the last {related_lookback}s for the same responsible IP.",
+                "A related PAMP shares either the same antigen value or the same matched regex hash. The current observation is excluded from that count.",
+                "DAMP observations never create cells, but they do raise the mixed danger term used here.",
+            ],
+            "terms": [
+                {
+                    "label": "confidence",
+                    "formula": "current evidence.confidence",
+                    "description": "The confidence carried by the observation that is being evaluated right now.",
+                },
+                {
+                    "label": "related_pamp_score",
+                    "formula": f"clamp01(related_pamp_count / {related_saturation})",
+                    "description": "How much recent, related PAMP evidence reinforces the same antigen or regex identity.",
+                },
+                {
+                    "label": "profile_danger_score",
+                    "formula": (
+                        "clamp01((pamp_raw + "
+                        f"{damp_weight} * damp_raw) / {danger_saturation})"
+                    ),
+                    "description": "The mixed danger pressure for the same responsible IP, with DAMP raw danger amplified before normalization.",
+                },
+                {
+                    "label": "pamp_raw / damp_raw",
+                    "formula": "sum(threat_level_value * confidence)",
+                    "description": "Raw danger is the sum of threat level value multiplied by confidence across recent PAMP or DAMP observations.",
+                },
+            ],
+            "tree": {
+                "label": "co_stimulation",
+                "formula": (
+                    f"{format_float(weights['confidence'])} * confidence + "
+                    f"{format_float(weights['related_pamps'])} * related_pamp_score + "
+                    f"{format_float(weights['danger'])} * profile_danger_score"
+                ),
+                "summary": f"Activation score. Threshold = {co_threshold}",
+                "tooltip": "Final co-stimulation score used for the 1 -> 3 decision.",
+                "children": [
+                    {
+                        "label": "confidence",
+                        "formula": "current evidence.confidence",
+                        "summary": "Current PAMP confidence",
+                        "tooltip": "Read directly from the observation currently being processed.",
+                    },
+                    {
+                        "label": "related_pamp_score",
+                        "formula": f"clamp01(related_pamp_count / {related_saturation})",
+                        "summary": "Recent related PAMP reinforcement",
+                        "tooltip": "Normalized count of related PAMP observations in the related lookback window.",
+                        "children": [
+                            {
+                                "label": "related_pamp_count",
+                                "formula": "count of related recent PAMPs",
+                                "summary": "Same antigen value or same matched regex hash",
+                                "tooltip": (
+                                    f"Counted over the last {related_lookback}s for the same responsible IP. "
+                                    "The current observation is excluded."
+                                ),
+                            },
+                            {
+                                "label": "related_pamps_saturation",
+                                "formula": related_saturation,
+                                "summary": "Count where the score saturates at 1",
+                                "tooltip": "If the count reaches this value, related_pamp_score stops increasing.",
+                            },
+                        ],
+                    },
+                    {
+                        "label": "profile_danger_score",
+                        "formula": (
+                            "clamp01((pamp_raw + "
+                            f"{damp_weight} * damp_raw) / {danger_saturation})"
+                        ),
+                        "summary": "Normalized mixed danger for the responsible IP",
+                        "tooltip": "Recent PAMP and DAMP danger are combined, then clamped into the 0..1 range.",
+                        "children": [
+                            {
+                                "label": "pamp_raw",
+                                "formula": "sum(threat_level_value * confidence)",
+                                "summary": "Recent PAMP raw danger",
+                                "tooltip": (
+                                    f"Summed over PAMP observations for the same responsible IP within the last {related_lookback}s."
+                                ),
+                            },
+                            {
+                                "label": "damp_raw",
+                                "formula": "sum(threat_level_value * confidence)",
+                                "summary": "Recent DAMP raw danger",
+                                "tooltip": (
+                                    f"Summed over DAMP observations for the same responsible IP within the last {related_lookback}s."
+                                ),
+                            },
+                            {
+                                "label": "damp_danger_weight",
+                                "formula": damp_weight,
+                                "summary": "Amplifies DAMP raw danger before normalization",
+                                "tooltip": "DAMP pressure is scaled before it is added into the mixed danger term.",
+                            },
+                            {
+                                "label": "danger_saturation",
+                                "formula": danger_saturation,
+                                "summary": "Raw danger amount that maps to score 1",
+                                "tooltip": "The combined raw danger is divided by this value before clamp01 is applied.",
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+        {
+            "title": "Context Effector: 3 -> 4 containment",
+            "summary": "This score evaluates whether an activated cell should escalate into an effector response.",
+            "equation_lines": [
+                "effector_score = 0.45 * recent_pressure",
+                "                + 0.25 * recent_related_score",
+                "                + 0.30 * novelty_score",
+            ],
+            "gate_lines": [
+                "effector = (novelty_score > 0)",
+                f"           and (recent_related_count >= {effector_min_related})",
+                f"           and (effector_score >= {effector_threshold})",
+            ],
+            "notes": [
+                f"recent_pressure is computed over the last {context_window}s and uses the same mixed PAMP + weighted DAMP danger model as co-stimulation.",
+                f"novelty_score is binary: it becomes 1 only if the matched regex has no stored memory row and no recent transition activity in the last {novelty_window}s.",
+                f"If the cell reaches state 4, repeated containment is still gated by an effector cooldown of {effector_cooldown}s.",
+            ],
+            "terms": [
+                {
+                    "label": "recent_pressure",
+                    "formula": (
+                        "clamp01((recent_pamp_raw + "
+                        f"{damp_weight} * recent_damp_raw) / {danger_saturation})"
+                    ),
+                    "description": "The normalized mixed danger in the recent context window for the same responsible IP.",
+                },
+                {
+                    "label": "recent_related_score",
+                    "formula": f"clamp01(recent_related_count / {related_saturation})",
+                    "description": "How much recent PAMP evidence in the context window still points to the same antigen or regex identity.",
+                },
+                {
+                    "label": "novelty_score",
+                    "formula": "1 if no memory and no recent regex activity else 0",
+                    "description": "A binary novelty gate. If the regex is already familiar, the effector path is blocked immediately.",
+                },
+            ],
+            "tree": {
+                "label": "effector_score",
+                "formula": "0.45 * recent_pressure + 0.25 * recent_related_score + 0.30 * novelty_score",
+                "summary": f"Containment score. Threshold = {effector_threshold}",
+                "tooltip": "Final context score used to decide whether state 3 escalates to state 4.",
+                "children": [
+                    {
+                        "label": "recent_pressure",
+                        "formula": (
+                            "clamp01((recent_pamp_raw + "
+                            f"{damp_weight} * recent_damp_raw) / {danger_saturation})"
+                        ),
+                        "summary": f"Mixed danger during the most recent {context_window}s window",
+                        "tooltip": "Computed from the recent context window immediately before the current decision.",
+                        "children": [
+                            {
+                                "label": "recent_pamp_raw",
+                                "formula": "sum(threat_level_value * confidence)",
+                                "summary": "Recent PAMP raw danger",
+                                "tooltip": "Summed over recent PAMP observations in the context window.",
+                            },
+                            {
+                                "label": "recent_damp_raw",
+                                "formula": "sum(threat_level_value * confidence)",
+                                "summary": "Recent DAMP raw danger",
+                                "tooltip": "Summed over recent DAMP observations in the context window.",
+                            },
+                        ],
+                    },
+                    {
+                        "label": "recent_related_score",
+                        "formula": f"clamp01(recent_related_count / {related_saturation})",
+                        "summary": "Recent supporting PAMP count normalized to 0..1",
+                        "tooltip": "Counts related PAMP observations in the recent context window.",
+                        "children": [
+                            {
+                                "label": "recent_related_count",
+                                "formula": "count of related recent PAMPs",
+                                "summary": "Same antigen value or same matched regex hash",
+                                "tooltip": (
+                                    f"Counted only inside the recent context window of {context_window}s."
+                                ),
+                            },
+                            {
+                                "label": "related_pamps_saturation",
+                                "formula": related_saturation,
+                                "summary": "Cap for the normalized related score",
+                                "tooltip": "The count is divided by this saturation value before clamp01 is applied.",
+                            },
+                        ],
+                    },
+                    {
+                        "label": "novelty_score",
+                        "formula": "1 if no memory and no recent activity else 0",
+                        "summary": "Binary novelty gate",
+                        "tooltip": "Effector requires the regex to still look new for this responsible IP.",
+                        "children": [
+                            {
+                                "label": "has_memory_for_regex",
+                                "formula": "memory row exists for regex_hash",
+                                "summary": "If true, novelty_score becomes 0",
+                                "tooltip": "A stored memory for the regex marks it as familiar immediately.",
+                            },
+                            {
+                                "label": "has_recent_regex_activity",
+                                "formula": f"transition activity within {novelty_window}s",
+                                "summary": "If true, novelty_score becomes 0",
+                                "tooltip": "Any recent transition for the same responsible IP and regex hash removes novelty.",
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+        {
+            "title": "Context Memory: 3 -> 5 storage",
+            "summary": "This score evaluates whether an activated cell should store memory instead of escalating to containment.",
+            "equation_lines": [
+                "memory_score = 0.60 * decrease_score",
+                "             + 0.25 * familiarity_score",
+                "             + 0.15 * stability_score",
+            ],
+            "gate_lines": [
+                "memory = (familiarity_score > 0)",
+                f"         and (recent_related_count >= {memory_min_related})",
+                f"         and (trend_ratio <= {memory_ratio_max})",
+                f"         and (memory_score >= {memory_threshold})",
+            ],
+            "notes": [
+                "Memory is the cooling-down path: the same pattern is no longer novel, pressure is lower than before, and enough related evidence still supports the match.",
+                "trend_ratio compares the recent mixed pressure window against the previous adjacent window. Lower is better for memory.",
+                f"If neither effector nor memory passes, the cell stays in 3 - activated until the context wait timeout of {wait_limit}s expires.",
+            ],
+            "terms": [
+                {
+                    "label": "decrease_score",
+                    "formula": "clamp01(1 - trend_ratio)",
+                    "description": "Rewards situations where recent pressure is clearly lower than previous pressure.",
+                },
+                {
+                    "label": "trend_ratio",
+                    "formula": "recent_pressure / max(previous_pressure, 0.01)",
+                    "description": "Measures whether the mixed danger is falling, flat, or rising between adjacent context windows.",
+                },
+                {
+                    "label": "familiarity_score",
+                    "formula": "1 - novelty_score",
+                    "description": "Memory requires the regex to already be familiar rather than novel.",
+                },
+                {
+                    "label": "stability_score",
+                    "formula": f"clamp01(recent_related_count / {memory_min_related})",
+                    "description": "Ensures there is still enough related recent evidence to justify storing memory.",
+                },
+            ],
+            "tree": {
+                "label": "memory_score",
+                "formula": "0.60 * decrease_score + 0.25 * familiarity_score + 0.15 * stability_score",
+                "summary": f"Memory score. Threshold = {memory_threshold}",
+                "tooltip": "Final context score used to decide whether state 3 transitions into state 5.",
+                "children": [
+                    {
+                        "label": "decrease_score",
+                        "formula": "clamp01(1 - trend_ratio)",
+                        "summary": "Higher when recent pressure is falling",
+                        "tooltip": "A falling trend pushes the memory score up.",
+                        "children": [
+                            {
+                                "label": "trend_ratio",
+                                "formula": "recent_pressure / max(previous_pressure, 0.01)",
+                                "summary": f"Must stay <= {memory_ratio_max} for memory",
+                                "tooltip": "Compares the most recent context window against the immediately preceding one.",
+                                "children": [
+                                    {
+                                        "label": "recent_pressure",
+                                        "formula": (
+                                            "clamp01((recent_pamp_raw + "
+                                            f"{damp_weight} * recent_damp_raw) / {danger_saturation})"
+                                        ),
+                                        "summary": f"Mixed danger over the last {context_window}s",
+                                        "tooltip": "Same recent pressure value also used by effector_score.",
+                                    },
+                                    {
+                                        "label": "previous_pressure",
+                                        "formula": (
+                                            "clamp01((previous_pamp_raw + "
+                                            f"{damp_weight} * previous_damp_raw) / {danger_saturation})"
+                                        ),
+                                        "summary": f"Mixed danger over the previous {context_window}s window",
+                                        "tooltip": "Computed over the context window immediately before the recent one.",
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "label": "familiarity_score",
+                        "formula": "1 - novelty_score",
+                        "summary": "Higher when the regex is already familiar",
+                        "tooltip": "Memory is only allowed once novelty has disappeared.",
+                        "children": [
+                            {
+                                "label": "novelty_score",
+                                "formula": "1 if no memory and no recent activity else 0",
+                                "summary": "Same novelty gate used by the effector path",
+                                "tooltip": "If novelty_score stays 1, familiarity_score stays 0 and memory fails.",
+                            }
+                        ],
+                    },
+                    {
+                        "label": "stability_score",
+                        "formula": f"clamp01(recent_related_count / {memory_min_related})",
+                        "summary": "Recent evidence stability",
+                        "tooltip": "Memory still requires enough related recent PAMPs to support the pattern.",
+                        "children": [
+                            {
+                                "label": "recent_related_count",
+                                "formula": "count of related recent PAMPs",
+                                "summary": f"Must stay >= {memory_min_related}",
+                                "tooltip": "Related means same antigen value or same matched regex hash in the recent context window.",
+                            }
+                        ],
+                    },
+                ],
+            },
+        },
+    ]
+
+    rule_cards = [
+        {
+            "title": "Recognition",
+            "rule": "0 -> 1 when a PAMP has an extracted antigen and an accepted regex match",
+            "description": "If a PAMP has antigens but no accepted regex match, the cell instead goes 0 -> 2 and becomes anergic.",
+        },
+        {
+            "title": "Anergy Expiry",
+            "rule": f"2 -> 0 when anergy_ttl_seconds ({anergy_ttl}s) has elapsed",
+            "description": "Once the anergy TTL expires, the cell returns to mature and can be evaluated again.",
+        },
+        {
+            "title": "Co-Stimulation Timeout",
+            "rule": f"1 -> 2 when the co-stimulation wait reaches {wait_limit}s",
+            "description": "The cell can keep waiting in 1 - antigen-recognized while later PAMP or DAMP evidence reevaluates the score, but only for one configured Slips time window.",
+        },
+        {
+            "title": "Context Timeout",
+            "rule": f"3 -> 0 when the context wait reaches {wait_limit}s",
+            "description": "If neither effector nor memory passes before the waiting window ends, the cell falls back to 0 - mature.",
+        },
+        {
+            "title": "Effector Cooldown",
+            "rule": f"4 -> 4 suppress repeated containment until {effector_cooldown}s passes",
+            "description": "The state can stay effector while repeated blocking publications are suppressed by cooldown.",
+        },
+        {
+            "title": "Memory Retention",
+            "rule": "5 -> 5 keep the memory state on later matching evidence",
+            "description": "Once memory is stored for that cell, later hits retain state 5 without writing repeated memory_stored events.",
+        },
+    ]
+
+    decision_cards_html = "".join(
+        render_decision_doc_card(card) for card in decision_cards
+    )
+    rule_cards_html = render_rule_cards(rule_cards)
+    return f"""
+    <section class="panel decision-reference" style="margin-top: 18px;">
+      <div class="panel-head">
+        <h2>Decision Reference</h2>
+        <p class="meta">Bottom-of-report explanation of how the T Cell equations and branch conditions are computed.</p>
+      </div>
+      <p class="decision-lead">
+        This section documents the exact values, thresholds, and helper rules used by the report and by the T Cell module decision logic.
+        Normalization uses <code>clamp01(x) = max(0, min(1, x))</code>. Hover or focus a node in each tree to inspect where that term comes from.
+      </p>
+      <div class="decision-doc-grid">
+        {decision_cards_html}
+      </div>
+      <div class="tree-block" style="margin-top: 16px;">
+        <div class="panel-head">
+          <h3>Rule-Based Decisions</h3>
+          <p class="meta">These branches are not weighted equations, but they still change state or suppress actions.</p>
+        </div>
+        <div class="rule-grid">
+          {rule_cards_html}
+        </div>
+      </div>
+    </section>
+    """
+
+
+def render_history_details(summary: str, lines: list[str]) -> str:
+    details_body = escape("\n".join(lines or ["n/a"]))
+    return (
+        f"<details><summary>{escape(summary)}</summary>"
+        f"<pre>{details_body}</pre></details>"
+    )
+
+
+def render_history_event_table(events: list[dict]) -> str:
+    if not events:
+        return '<p class="empty">No history events were recorded for this T cell.</p>'
+
+    head = "".join(
+        f"<th>{escape(column)}</th>"
+        for column in [
+            "When",
+            "Source",
+            "Step",
+            "State path",
+            "Evidence",
+            "Threshold result",
+            "Evidence considered",
+            "Computation",
+        ]
+    )
+    rows = []
+    for event in events:
+        row_cells = [
+            escape(event.get("wall") or "n/a"),
+            escape(event.get("source") or "unknown"),
+            escape(event.get("step") or "event"),
+            escape(event.get("state_path") or "n/a"),
+            escape(event.get("evidence_id") or "n/a"),
+            render_history_details(
+                event.get("threshold_summary") or "n/a",
+                event.get("threshold_lines") or [],
+            ),
+            render_history_details(
+                event.get("considered_summary") or "n/a",
+                event.get("considered_lines") or [],
+            ),
+            render_history_details(
+                event.get("computation_summary") or "n/a",
+                event.get("computation_lines") or [],
+            ),
+        ]
+        rows.append(
+            "<tr>"
+            + "".join(f"<td>{cell}</td>" for cell in row_cells)
+            + "</tr>"
+        )
+    return (
+        "<div class='table-wrap'>"
+        "<table class='report-table history-table'>"
+        f"<thead><tr>{head}</tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def render_cell_histories(report: dict) -> str:
+    histories = report.get("cell_histories") or []
+    if not histories:
+        return """
+        <section class="panel">
+          <h2>T Cell Histories</h2>
+          <p class="empty">No T-cell histories were available for this run.</p>
+        </section>
+        """
+
+    index_rows = [
+        {
+            "Responsible": escape(item.get("responsible_ip") or ""),
+            "Cell": escape(shorten(item.get("cell_key") or "", 64)),
+            "Current state": render_badge(
+                item.get("current_state") or "unknown",
+                item.get("current_state_class") or "state-unknown",
+            ),
+            "Life path": escape(shorten(item.get("life_path") or "", 88)),
+            "Events": escape(str(item.get("event_count") or 0)),
+        }
+        for item in histories
+    ]
+    index_table = render_simple_table(
+        ["Responsible", "Cell", "Current state", "Life path", "Events"],
+        index_rows,
+        "No T-cell history index available.",
+    )
+
+    trace_mode = (report.get("config") or {}).get("decision_trace_mode")
+    if trace_mode in (None, "", {}):
+        trace_note = (
+            "Decision trace configuration was not found in metadata, so histories rely on whatever trace rows and transitions were stored."
+        )
+    elif str(trace_mode).lower() in {"0", "off"}:
+        trace_note = (
+            "Decision trace was off for this run, so histories can only show state transitions and any score snapshots saved with those transitions."
+        )
+    elif str(trace_mode).lower() in {"1", "transitions"}:
+        trace_note = (
+            "Decision trace was limited to transition events, so waiting reevaluations may be missing from the lifecycle view."
+        )
+    else:
+        trace_note = (
+            "Decision trace was fully enabled, so histories include both state changes and intermediate decision evaluations when available."
+        )
+
+    history_cards = []
+    for index, item in enumerate(histories):
+        title = (
+            f"{item.get('responsible_ip') or 'unknown'} | "
+            f"{item.get('regex_type') or 'unknown'}:{item.get('antigen_value') or ''}"
+        )
+        meta_bits = [
+            f"current={item.get('current_state') or 'unknown'}",
+            f"life path={item.get('life_path') or 'n/a'}",
+            f"first seen={item.get('first_seen') or 'n/a'}",
+            f"last seen={item.get('last_seen') or 'n/a'}",
+            f"events={item.get('event_count') or 0}",
+            f"transitions={item.get('transition_count') or 0}",
+            f"trace rows={item.get('trace_count') or 0}",
+        ]
+        table_html = render_history_event_table(item.get("events") or [])
+        history_cards.append(
+            f"""
+            <details class="history-card" {'open' if index == 0 else ''}>
+              <summary>
+                <div class="history-summary">
+                  <div>
+                    <p class="kicker">T Cell</p>
+                    <h3>{escape(title)}</h3>
+                    <p class="meta">{escape(' | '.join(meta_bits))}</p>
+                  </div>
+                  <div class="history-summary-side">
+                    {render_badge(item.get("current_state") or "unknown", item.get("current_state_class") or "state-unknown")}
+                  </div>
+                </div>
+              </summary>
+              <div class="history-body">
+                <p class="meta"><strong>Cell key:</strong> {escape(item.get('cell_key') or '')}</p>
+                <p class="meta"><strong>Matched value:</strong> {escape(item.get('matched_value') or 'n/a')}</p>
+                {table_html}
+              </div>
+            </details>
+            """
+        )
+
+    return f"""
+    <section class="panel">
+      <div class="panel-head">
+        <h2>T Cell Histories</h2>
+        <p class="meta">Chronological lifecycle view for each cell, combining stored state transitions with decision-trace computations.</p>
+      </div>
+      <p class="decision-lead">{escape(trace_note)}</p>
+      <section class="panel history-index-panel">
+        <h3>History Index</h3>
+        {index_table}
+      </section>
+      <div class="history-stack">
+        {''.join(history_cards)}
+      </div>
+    </section>
+    """
+
+
 def render_html(report: dict) -> str:
     findings_html = "".join(
         f"<li>{escape(item)}</li>" for item in report.get("findings", [])
@@ -1633,6 +2965,8 @@ def render_html(report: dict) -> str:
         TRACE_STAGE_COLORS,
     )
     state_machine_graph = render_state_machine_graph(report)
+    decision_reference = render_decision_reference(report)
+    histories_section = render_cell_histories(report)
 
     return f"""<!doctype html>
 <html lang="en">
@@ -1699,13 +3033,52 @@ def render_html(report: dict) -> str:
       font-size: 0.80rem;
       word-break: break-all;
     }}
-    .summary-grid, .panel-grid, .stats-grid {{
-      display: grid;
-      gap: 14px;
-    }}
-    .stats-grid {{
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    }}
+	    .summary-grid, .panel-grid, .stats-grid {{
+	      display: grid;
+	      gap: 14px;
+	    }}
+	    .tab-strip {{
+	      display: inline-flex;
+	      gap: 8px;
+	      margin: 16px 0 4px;
+	      padding: 6px;
+	      border-radius: 999px;
+	      background: rgba(255, 253, 248, 0.82);
+	      border: 1px solid rgba(123, 83, 44, 0.12);
+	      box-shadow: 0 12px 26px rgba(66, 43, 17, 0.07);
+	      position: sticky;
+	      top: 10px;
+	      z-index: 8;
+	      backdrop-filter: blur(8px);
+	    }}
+	    .tab-button {{
+	      border: 0;
+	      border-radius: 999px;
+	      padding: 10px 16px;
+	      background: transparent;
+	      color: var(--muted);
+	      font: inherit;
+	      font-weight: 700;
+	      letter-spacing: 0.01em;
+	      cursor: pointer;
+	    }}
+	    .tab-button:hover {{
+	      color: #7c2d12;
+	    }}
+	    .tab-button.is-active {{
+	      background: linear-gradient(180deg, rgba(180, 83, 9, 0.12), rgba(180, 83, 9, 0.18));
+	      color: #7c2d12;
+	      box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.12);
+	    }}
+	    .report-tab-panel {{
+	      display: none;
+	    }}
+	    .report-tab-panel.is-active {{
+	      display: block;
+	    }}
+	    .stats-grid {{
+	      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+	    }}
     .panel-grid {{
       grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       margin-top: 14px;
@@ -1941,23 +3314,300 @@ def render_html(report: dict) -> str:
     .footer-panel .report-table {{
       min-width: 480px;
     }}
-    .footer-panel .report-table th,
-    .footer-panel .report-table td {{
-      font-size: 0.70rem;
-      padding: 5px 7px;
-    }}
-    @media (max-width: 900px) {{
-      body {{ font-size: 13px; }}
-      main {{ padding: 16px 12px 40px; }}
-      .panel-grid {{ grid-template-columns: 1fr; }}
-      .report-table {{ min-width: 680px; }}
-    }}
-  </style>
+	    .footer-panel .report-table th,
+	    .footer-panel .report-table td {{
+	      font-size: 0.70rem;
+	      padding: 5px 7px;
+	    }}
+	    .decision-reference,
+	    .decision-doc,
+	    .tree-block {{
+	      overflow: visible;
+	    }}
+	    .decision-reference code,
+	    .formula-box code,
+	    .term-formula,
+	    .formula-node-formula {{
+	      font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+	    }}
+	    .decision-lead {{
+	      margin: 0 0 14px;
+	      color: var(--muted);
+	      font-size: 0.84rem;
+	      line-height: 1.55;
+	    }}
+	    .decision-doc-grid {{
+	      display: grid;
+	      gap: 14px;
+	      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+	    }}
+	    .decision-doc {{
+	      border: 1px solid rgba(123, 83, 44, 0.12);
+	      border-radius: 18px;
+	      background: linear-gradient(180deg, rgba(255, 253, 248, 0.96), rgba(245, 237, 224, 0.96));
+	      padding: 14px;
+	      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+	    }}
+	    .decision-doc .panel-head {{
+	      align-items: flex-start;
+	      margin-bottom: 12px;
+	    }}
+	    .decision-doc .panel-head h3,
+	    .tree-block .panel-head h4 {{
+	      margin: 0;
+	    }}
+	    .equation-grid {{
+	      display: grid;
+	      gap: 12px;
+	      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+	    }}
+	    .formula-box {{
+	      margin: 0;
+	      padding: 12px;
+	      border-radius: 14px;
+	      border: 1px solid rgba(180, 83, 9, 0.16);
+	      background: linear-gradient(180deg, rgba(255, 250, 240, 0.98), rgba(252, 242, 227, 0.98));
+	      color: #6b3f07;
+	      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+	      overflow: auto;
+	      white-space: pre-wrap;
+	    }}
+	    .decision-note {{
+	      margin: 10px 0 0;
+	      color: var(--muted);
+	      font-size: 0.79rem;
+	      line-height: 1.5;
+	    }}
+	    .term-grid,
+	    .rule-grid {{
+	      display: grid;
+	      gap: 10px;
+	      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	      margin-top: 12px;
+	    }}
+	    .term-card,
+	    .rule-card {{
+	      background: rgba(255, 255, 255, 0.62);
+	      border: 1px solid var(--line);
+	      border-radius: 14px;
+	      padding: 12px;
+	    }}
+	    .term-formula {{
+	      margin: 0 0 8px;
+	      font-size: 0.74rem;
+	      line-height: 1.5;
+	      color: #92400e;
+	      overflow-wrap: anywhere;
+	    }}
+	    .term-body {{
+	      margin: 0;
+	      color: var(--muted);
+	      font-size: 0.79rem;
+	      line-height: 1.52;
+	    }}
+	    .tree-block {{
+	      margin-top: 14px;
+	      padding: 12px;
+	      border-radius: 16px;
+	      border: 1px solid rgba(123, 83, 44, 0.12);
+	      background: rgba(255, 253, 248, 0.74);
+	    }}
+	    .formula-tree {{
+	      overflow: auto;
+	      padding: 96px 6px 6px;
+	    }}
+	    .formula-node-wrap {{
+	      display: flex;
+	      flex-direction: column;
+	      align-items: center;
+	      min-width: max-content;
+	      position: relative;
+	    }}
+	    .formula-node {{
+	      position: relative;
+	      display: grid;
+	      gap: 4px;
+	      min-width: 180px;
+	      max-width: 260px;
+	      padding: 10px 12px;
+	      border-radius: 14px;
+	      border: 1px solid rgba(123, 83, 44, 0.16);
+	      background: linear-gradient(180deg, rgba(255, 253, 248, 0.99), rgba(248, 239, 226, 0.98));
+	      box-shadow: 0 12px 24px rgba(66, 43, 17, 0.08);
+	      outline: none;
+	    }}
+	    .formula-node:hover,
+	    .formula-node:focus {{
+	      border-color: rgba(180, 83, 9, 0.72);
+	      box-shadow: 0 16px 28px rgba(180, 83, 9, 0.12);
+	    }}
+	    .formula-node-label {{
+	      font-weight: 700;
+	      font-size: 0.82rem;
+	      color: var(--ink);
+	    }}
+	    .formula-node-formula {{
+	      font-size: 0.71rem;
+	      line-height: 1.45;
+	      color: #92400e;
+	    }}
+	    .formula-node-summary {{
+	      font-size: 0.74rem;
+	      line-height: 1.4;
+	      color: var(--muted);
+	    }}
+	    .formula-tooltip {{
+	      position: absolute;
+	      left: 50%;
+	      bottom: calc(100% + 12px);
+	      transform: translateX(-50%) translateY(6px);
+	      min-width: 230px;
+	      max-width: 320px;
+	      padding: 10px 12px;
+	      border-radius: 12px;
+	      background: #1f2937;
+	      color: #f8fafc;
+	      font-size: 0.72rem;
+	      line-height: 1.45;
+	      box-shadow: 0 18px 28px rgba(15, 23, 42, 0.28);
+	      opacity: 0;
+	      pointer-events: none;
+	      transition: opacity 140ms ease, transform 140ms ease;
+	      z-index: 25;
+	    }}
+	    .formula-tooltip::after {{
+	      content: "";
+	      position: absolute;
+	      top: 100%;
+	      left: 50%;
+	      transform: translateX(-50%);
+	      border-width: 6px;
+	      border-style: solid;
+	      border-color: #1f2937 transparent transparent transparent;
+	    }}
+	    .formula-node:hover .formula-tooltip,
+	    .formula-node:focus .formula-tooltip,
+	    .formula-node:focus-within .formula-tooltip {{
+	      opacity: 1;
+	      transform: translateX(-50%) translateY(0);
+	    }}
+	    .formula-children {{
+	      display: flex;
+	      justify-content: center;
+	      gap: 16px;
+	      align-items: flex-start;
+	      position: relative;
+	      padding-top: 18px;
+	      margin-top: 10px;
+	    }}
+	    .formula-children::before {{
+	      content: "";
+	      position: absolute;
+	      top: 0;
+	      left: 50%;
+	      transform: translateX(-50%);
+	      width: 2px;
+	      height: 18px;
+	      background: var(--line);
+	    }}
+	    .formula-children.has-multiple::after {{
+	      content: "";
+	      position: absolute;
+	      top: 0;
+	      left: 12%;
+	      right: 12%;
+	      height: 2px;
+	      background: var(--line);
+	    }}
+	    .formula-branch {{
+	      position: relative;
+	      display: flex;
+	      flex-direction: column;
+	      align-items: center;
+	    }}
+	    .formula-branch::before {{
+	      content: "";
+	      position: absolute;
+	      top: -18px;
+	      left: 50%;
+	      transform: translateX(-50%);
+	      width: 2px;
+	      height: 18px;
+	      background: var(--line);
+	    }}
+	    .history-index-panel {{
+	      margin-top: 14px;
+	    }}
+	    .history-stack {{
+	      display: grid;
+	      gap: 12px;
+	      margin-top: 14px;
+	    }}
+	    .history-card {{
+	      border: 1px solid rgba(123, 83, 44, 0.12);
+	      border-radius: 18px;
+	      background: rgba(255, 253, 248, 0.92);
+	      overflow: hidden;
+	      box-shadow: 0 14px 24px rgba(66, 43, 17, 0.06);
+	    }}
+	    .history-card summary {{
+	      list-style: none;
+	      cursor: pointer;
+	      padding: 14px 16px;
+	    }}
+	    .history-card summary::-webkit-details-marker {{
+	      display: none;
+	    }}
+	    .history-card[open] summary {{
+	      border-bottom: 1px solid rgba(123, 83, 44, 0.12);
+	      background: linear-gradient(180deg, rgba(245, 237, 224, 0.96), rgba(255, 253, 248, 0.96));
+	    }}
+	    .history-summary {{
+	      display: flex;
+	      justify-content: space-between;
+	      gap: 12px;
+	      align-items: flex-start;
+	    }}
+	    .history-summary h3 {{
+	      margin: 0 0 6px;
+	      font-size: 0.94rem;
+	      line-height: 1.35;
+	    }}
+	    .history-summary-side {{
+	      flex-shrink: 0;
+	    }}
+	    .history-body {{
+	      padding: 14px 16px 16px;
+	    }}
+	    .history-table {{
+	      min-width: 1120px;
+	      table-layout: auto;
+	    }}
+	    .history-table td {{
+	      min-width: 120px;
+	    }}
+	    @media (max-width: 900px) {{
+	      body {{ font-size: 13px; }}
+	      main {{ padding: 16px 12px 40px; }}
+	      .panel-grid {{ grid-template-columns: 1fr; }}
+	      .report-table {{ min-width: 680px; }}
+	      .decision-doc-grid {{ grid-template-columns: 1fr; }}
+	      .formula-tree {{ padding-top: 104px; }}
+	      .tab-strip {{
+	        width: 100%;
+	        justify-content: stretch;
+	      }}
+	      .tab-button {{
+	        flex: 1 1 0;
+	        text-align: center;
+	      }}
+	    }}
+	  </style>
 </head>
 <body>
   <main>
-    <section class="hero">
-      <p class="kicker">T Cell HTML Report</p>
+	    <section class="hero">
+	      <p class="kicker">T Cell HTML Report</p>
       <div>
         <h1>T Cell Run Report</h1>
         <p>Static analysis of observations, signals, transitions, memories, and optional decision traces. Generated at {escape(report['generated_at'])}</p>
@@ -1967,11 +3617,18 @@ def render_html(report: dict) -> str:
         <div><p class="kicker">Database</p><code>{escape(report['sources']['db_path'])}</code></div>
         <div><p class="kicker">Module Log</p><code>{escape(report['sources']['log_path'])}</code></div>
         <div><p class="kicker">Decision Trace</p><code>{escape(report['sources']['trace_path'])}</code></div>
-      </div>
-    </section>
+	      </div>
+	    </section>
 
-    <section class="panel-grid" style="margin-top: 18px;">
-      <section class="panel">
+	    <section class="tab-strip" role="tablist" aria-label="Report sections">
+	      <button type="button" class="tab-button is-active" role="tab" aria-selected="true" data-report-tab="overview">Overview</button>
+	      <button type="button" class="tab-button" role="tab" aria-selected="false" data-report-tab="histories">T Cell Histories</button>
+	    </section>
+
+	    <section class="report-tab-panel is-active" data-report-tab-panel="overview">
+
+	    <section class="panel-grid" style="margin-top: 18px;">
+	      <section class="panel">
         <h2>Quick Summary</h2>
         <div class="stats-grid">
           {render_counter_cards(report)}
@@ -2030,27 +3687,55 @@ def render_html(report: dict) -> str:
       {trace_section}
     </section>
 
-    <section class="panel" style="margin-top: 18px;">
-      <h2>Recent Observations</h2>
-      <p class="meta">These rows come from the T Cell SQLite DB, so they remain available even when module log verbosity was low. Click a column header to sort.</p>
-      {observation_table}
-    </section>
+	    <section class="panel" style="margin-top: 18px;">
+	      <h2>Recent Observations</h2>
+	      <p class="meta">These rows come from the T Cell SQLite DB, so they remain available even when module log verbosity was low. Click a column header to sort.</p>
+	      {observation_table}
+	    </section>
 
-    <section class="panel footer-panel">
-      <details>
-        <summary>Run configuration snapshot</summary>
-        <p class="meta">Compact copy of the T Cell-related metadata used for this report.</p>
-        {config_section}
-      </details>
-    </section>
-  </main>
-  <script>
-    (() => {{
-      const collator = new Intl.Collator(undefined, {{ numeric: true, sensitivity: "base" }});
-      const tables = document.querySelectorAll("[data-sortable-table]");
+	    {decision_reference}
 
-      const compareValues = (left, right) => {{
-        const leftNumber = Number(left);
+	    <section class="panel footer-panel">
+	      <details>
+	        <summary>Run configuration snapshot</summary>
+	        <p class="meta">Compact copy of the T Cell-related metadata used for this report.</p>
+	        {config_section}
+	      </details>
+	    </section>
+	    </section>
+
+	    <section class="report-tab-panel" data-report-tab-panel="histories" hidden>
+	      {histories_section}
+	    </section>
+	  </main>
+	  <script>
+	    (() => {{
+	      const collator = new Intl.Collator(undefined, {{ numeric: true, sensitivity: "base" }});
+	      const tables = document.querySelectorAll("[data-sortable-table]");
+	      const tabButtons = Array.from(document.querySelectorAll("[data-report-tab]"));
+	      const tabPanels = Array.from(document.querySelectorAll("[data-report-tab-panel]"));
+
+	      const setActiveTab = (name) => {{
+	        tabButtons.forEach((button) => {{
+	          const isActive = button.dataset.reportTab === name;
+	          button.classList.toggle("is-active", isActive);
+	          button.setAttribute("aria-selected", isActive ? "true" : "false");
+	        }});
+	        tabPanels.forEach((panel) => {{
+	          const isActive = panel.dataset.reportTabPanel === name;
+	          panel.classList.toggle("is-active", isActive);
+	          panel.hidden = !isActive;
+	        }});
+	      }};
+
+	      tabButtons.forEach((button) => {{
+	        button.addEventListener("click", () => {{
+	          setActiveTab(button.dataset.reportTab);
+	        }});
+	      }});
+
+	      const compareValues = (left, right) => {{
+	        const leftNumber = Number(left);
         const rightNumber = Number(right);
         const leftIsNumber = Number.isFinite(leftNumber) && left.trim() !== "";
         const rightIsNumber = Number.isFinite(rightNumber) && right.trim() !== "";
