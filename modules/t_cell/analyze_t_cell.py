@@ -67,6 +67,26 @@ DEFAULT_COSTIM_WEIGHTS = {
     "related_pamps": 0.25,
     "danger": 0.40,
 }
+DEFAULT_PRIMING_PROFILES = {
+    "PAMP": {
+        "strength": 1.0,
+        "co_stimulation_threshold_offset": 0.0,
+        "effector_threshold_offset": 0.0,
+        "memory_threshold_offset": 0.0,
+        "state_wait_timeout_factor": 1.0,
+        "effector_min_related_count_offset": 0,
+        "memory_min_related_count_offset": 0,
+    },
+    "DAMP": {
+        "strength": 0.6,
+        "co_stimulation_threshold_offset": 0.15,
+        "effector_threshold_offset": 0.10,
+        "memory_threshold_offset": 0.05,
+        "state_wait_timeout_factor": 0.5,
+        "effector_min_related_count_offset": 1,
+        "memory_min_related_count_offset": 1,
+    },
+}
 DEFAULT_DOC_CONFIG = {
     "anergy_ttl_seconds": 21600.0,
     "related_lookback_seconds": 3600.0,
@@ -84,6 +104,7 @@ DEFAULT_DOC_CONFIG = {
     "memory_trend_ratio_max": 0.60,
     "memory_min_related_count": 3,
     "state_wait_timeout_seconds": 3600.0,
+    "priming_profiles": DEFAULT_PRIMING_PROFILES,
 }
 
 
@@ -444,9 +465,15 @@ def summarize_matched_regexes(matches: list[dict], limit: int = 2) -> str:
 def categorize_observation(observation: dict, transition_map: dict[int, list[dict]]) -> str:
     signal = observation.get("evidence_signal")
     if signal != "PAMP":
+        matches = observation.get("matched_regexes") or []
+        if matches:
+            return "DAMP with regex match"
+        transitions = transition_map.get(observation["id"], [])
+        if any(item.get("reason") == "no_regex_match" for item in transitions):
+            return "DAMP with no regex match"
         if observation.get("antigen_count", 0) > 0:
             return "DAMP with extracted antigens"
-        return "DAMP ignored for activation"
+        return "DAMP with no antigen"
 
     if observation.get("antigen_count", 0) <= 0:
         return "PAMP with no antigen"
@@ -493,6 +520,135 @@ def normalize_costim_weights(weights: Any) -> dict[str, float]:
     return {key: value / total for key, value in sanitized.items()}
 
 
+def normalize_priming_profiles(profiles: Any) -> dict[str, dict[str, float | int]]:
+    raw_profiles = profiles if isinstance(profiles, dict) else {}
+    normalized: dict[str, dict[str, float | int]] = {}
+    for signal_name, defaults in DEFAULT_PRIMING_PROFILES.items():
+        raw_profile = raw_profiles.get(signal_name, {})
+        if not isinstance(raw_profile, dict):
+            raw_profile = {}
+
+        profile: dict[str, float | int] = {}
+        for key, default_value in defaults.items():
+            raw_value = raw_profile.get(key, default_value)
+            if isinstance(default_value, int) and not isinstance(
+                default_value, bool
+            ):
+                try:
+                    raw_value = int(raw_value)
+                except (TypeError, ValueError):
+                    raw_value = int(default_value)
+            else:
+                try:
+                    raw_value = float(raw_value)
+                except (TypeError, ValueError):
+                    raw_value = float(default_value)
+            profile[key] = raw_value
+
+        profile["strength"] = max(0.0, min(1.0, float(profile["strength"])))
+        profile["state_wait_timeout_factor"] = max(
+            0.01, float(profile["state_wait_timeout_factor"])
+        )
+        profile["co_stimulation_threshold_offset"] = float(
+            profile["co_stimulation_threshold_offset"]
+        )
+        profile["effector_threshold_offset"] = float(
+            profile["effector_threshold_offset"]
+        )
+        profile["memory_threshold_offset"] = float(
+            profile["memory_threshold_offset"]
+        )
+        profile["effector_min_related_count_offset"] = int(
+            profile["effector_min_related_count_offset"]
+        )
+        profile["memory_min_related_count_offset"] = int(
+            profile["memory_min_related_count_offset"]
+        )
+        normalized[signal_name] = profile
+    return normalized
+
+
+def effective_priming_profile(config: dict, signal_name: str) -> dict:
+    priming_profiles = normalize_priming_profiles(config.get("priming_profiles"))
+    normalized_signal = str(signal_name or "PAMP").strip().upper()
+    if normalized_signal not in priming_profiles:
+        normalized_signal = "PAMP"
+    profile = priming_profiles[normalized_signal]
+    return {
+        "signal": normalized_signal,
+        "label": f"{normalized_signal.lower()}-primed",
+        "strength": float(profile["strength"]),
+        "base_co_stimulation_threshold": float(config["co_stimulation_threshold"]),
+        "base_effector_threshold": float(config["effector_threshold"]),
+        "base_memory_threshold": float(config["memory_threshold"]),
+        "base_state_wait_timeout_seconds": float(
+            config["state_wait_timeout_seconds"]
+        ),
+        "base_effector_min_related_count": int(
+            config["effector_min_related_count"]
+        ),
+        "base_memory_min_related_count": int(config["memory_min_related_count"]),
+        "co_stimulation_threshold_offset": float(
+            profile["co_stimulation_threshold_offset"]
+        ),
+        "effector_threshold_offset": float(profile["effector_threshold_offset"]),
+        "memory_threshold_offset": float(profile["memory_threshold_offset"]),
+        "state_wait_timeout_factor": float(profile["state_wait_timeout_factor"]),
+        "effector_min_related_count_offset": int(
+            profile["effector_min_related_count_offset"]
+        ),
+        "memory_min_related_count_offset": int(
+            profile["memory_min_related_count_offset"]
+        ),
+        "co_stimulation_threshold": max(
+            0.0,
+            min(
+                1.0,
+                float(config["co_stimulation_threshold"])
+                + float(profile["co_stimulation_threshold_offset"]),
+            ),
+        ),
+        "effector_threshold": max(
+            0.0,
+            min(
+                1.0,
+                float(config["effector_threshold"])
+                + float(profile["effector_threshold_offset"]),
+            ),
+        ),
+        "memory_threshold": max(
+            0.0,
+            min(
+                1.0,
+                float(config["memory_threshold"])
+                + float(profile["memory_threshold_offset"]),
+            ),
+        ),
+        "state_wait_timeout_seconds": max(
+            1.0,
+            float(config["state_wait_timeout_seconds"])
+            * float(profile["state_wait_timeout_factor"]),
+        ),
+        "effector_min_related_count": max(
+            1,
+            int(config["effector_min_related_count"])
+            + int(profile["effector_min_related_count_offset"]),
+        ),
+        "memory_min_related_count": max(
+            1,
+            int(config["memory_min_related_count"])
+            + int(profile["memory_min_related_count_offset"]),
+        ),
+    }
+
+
+def effective_priming_profiles(config: dict) -> dict[str, dict]:
+    return {
+        signal_name: effective_priming_profile(config, signal_name)
+        for signal_name in DEFAULT_PRIMING_PROFILES
+    }
+
+
 def coerce_time_window_width(raw_value: Any) -> float:
     if raw_value in (None, ""):
         return float(DEFAULT_DOC_CONFIG["state_wait_timeout_seconds"])
@@ -513,12 +669,16 @@ def report_config_with_defaults(report: dict) -> dict:
         if key == "co_stimulation_weights":
             merged[key] = normalize_costim_weights(raw_value)
             continue
+        if key == "priming_profiles":
+            merged[key] = normalize_priming_profiles(raw_value)
+            continue
         if key == "state_wait_timeout_seconds":
             merged[key] = coerce_time_window_width(raw_value)
             continue
         if raw_value in (None, "", {}):
             raw_value = default_value
         merged[key] = raw_value
+    merged["effective_priming_profiles"] = effective_priming_profiles(merged)
     return merged
 
 
@@ -549,6 +709,12 @@ def build_findings(report: dict) -> list[str]:
         findings.append(
             f"{categories['PAMP with no regex match']} PAMP observations reached "
             "antigen extraction but did not match any accepted regex."
+        )
+    if categories.get("DAMP with no regex match", 0):
+        findings.append(
+            f"{categories['DAMP with no regex match']} DAMP observations reached "
+            "antigen extraction but did not match any accepted regex, so the "
+            "cell became anergic."
         )
     if totals["cells"] == 0 and totals["transitions"] == 0:
         findings.append(
@@ -892,6 +1058,32 @@ def build_trace_considered_evidence(entry: dict) -> tuple[str, list[str]]:
 def build_trace_computation_lines(entry: dict) -> tuple[str, list[str]]:
     formula = entry.get("formula") or {}
     stage = entry.get("stage")
+    priming = formula.get("priming") or {}
+    priming_lines = []
+    if priming:
+        priming_lines = [
+            (
+                "priming: label="
+                f"{priming.get('label', 'n/a')} signal="
+                f"{priming.get('signal', 'n/a')} strength="
+                f"{format_float(priming.get('strength'))}"
+            ),
+            (
+                "effective thresholds: co="
+                f"{format_float(priming.get('co_stimulation_threshold'))} "
+                "effector="
+                f"{format_float(priming.get('effector_threshold'))} memory="
+                f"{format_float(priming.get('memory_threshold'))}"
+            ),
+            (
+                "effective wait/counts: wait="
+                f"{format_float(priming.get('state_wait_timeout_seconds'))} "
+                "effector_related>="
+                f"{format_float(priming.get('effector_min_related_count'))} "
+                "memory_related>="
+                f"{format_float(priming.get('memory_min_related_count'))}"
+            ),
+        ]
     if stage == "co_stimulation":
         components = formula.get("components") or {}
         confidence = components.get("confidence") or {}
@@ -922,6 +1114,7 @@ def build_trace_computation_lines(entry: dict) -> tuple[str, list[str]]:
                 f"{format_float(danger.get('danger_saturation'))}"
             ),
         ]
+        lines.extend(priming_lines)
         return (summarize_trace_formula(formula, stage), lines)
 
     if stage == "context":
@@ -983,6 +1176,7 @@ def build_trace_computation_lines(entry: dict) -> tuple[str, list[str]]:
             f"familiarity_score={format_float(components.get('familiarity_score'))}",
             f"stability_score={format_float(components.get('stability_score'))}",
         ]
+        lines.extend(priming_lines)
         return (summarize_trace_formula(formula, stage), lines)
 
     return ("n/a", ["No computation formatter for this trace stage."])
@@ -1084,11 +1278,49 @@ def build_life_path(
     return " → ".join(states) if states else "no recorded state changes"
 
 
+def extract_history_priming(
+    cell: dict,
+    transitions_for_cell: list[dict],
+    report_config: dict,
+) -> dict:
+    context = (cell or {}).get("context") or {}
+    priming_profile = context.get("priming_profile") or {}
+    if isinstance(priming_profile, dict) and priming_profile.get("signal"):
+        return {
+            "label": priming_profile.get("label") or "",
+            "signal": priming_profile.get("signal") or "",
+            "strength": priming_profile.get("strength"),
+            "profile": priming_profile,
+        }
+
+    for transition in transitions_for_cell:
+        scores = transition.get("scores") or {}
+        signal_name = str(scores.get("priming_signal") or "").strip().upper()
+        if not signal_name:
+            continue
+        return {
+            "label": scores.get("priming_label")
+            or f"{signal_name.lower()}-primed",
+            "signal": signal_name,
+            "strength": scores.get("priming_strength"),
+            "profile": effective_priming_profile(report_config, signal_name),
+        }
+
+    default_profile = effective_priming_profile(report_config, "PAMP")
+    return {
+        "label": default_profile["label"],
+        "signal": default_profile["signal"],
+        "strength": default_profile["strength"],
+        "profile": default_profile,
+    }
+
+
 def build_cell_histories(
     observations: list[dict],
     cells: list[dict],
     transitions: list[dict],
     trace_rows: list[dict],
+    report_config: dict,
 ) -> list[dict]:
     observations_by_id = {
         int(observation["id"]): observation
@@ -1154,6 +1386,7 @@ def build_cell_histories(
         current_state_display = current_state_label or "unknown"
         if waiting_label:
             current_state_display += f" ({waiting_label})"
+        priming = extract_history_priming(cell, cell_transitions, report_config)
 
         histories.append(
             {
@@ -1187,6 +1420,10 @@ def build_cell_histories(
                 if cell
                 else "state-unknown",
                 "waiting_label": waiting_label,
+                "priming_label": priming.get("label") or "",
+                "priming_signal": priming.get("signal") or "",
+                "priming_strength": priming.get("strength"),
+                "priming_profile": priming.get("profile") or {},
                 "life_path": build_life_path(cell_transitions, current_state_label),
                 "first_seen": ts_to_iso(first_seen),
                 "last_seen": ts_to_iso(last_seen),
@@ -1222,6 +1459,51 @@ def build_report_payload(
     metadata = load_yaml_config(metadata_path)
     config = metadata.get("t_cell", {})
     parameters = metadata.get("parameters", {})
+    report_config = report_config_with_defaults(
+        {
+            "config": {
+                "related_lookback_seconds": config.get(
+                    "related_lookback_seconds"
+                ),
+                "related_pamps_saturation": config.get(
+                    "related_pamps_saturation"
+                ),
+                "danger_saturation": config.get("danger_saturation"),
+                "damp_danger_weight": config.get("damp_danger_weight"),
+                "co_stimulation_threshold": config.get(
+                    "co_stimulation_threshold"
+                ),
+                "co_stimulation_weights": config.get(
+                    "co_stimulation_weights"
+                ),
+                "novelty_window_seconds": config.get(
+                    "novelty_window_seconds"
+                ),
+                "context_recent_window_seconds": config.get(
+                    "context_recent_window_seconds"
+                ),
+                "effector_threshold": config.get("effector_threshold"),
+                "effector_min_related_count": config.get(
+                    "effector_min_related_count"
+                ),
+                "effector_cooldown_seconds": config.get(
+                    "effector_cooldown_seconds"
+                ),
+                "memory_threshold": config.get("memory_threshold"),
+                "memory_trend_ratio_max": config.get(
+                    "memory_trend_ratio_max"
+                ),
+                "memory_min_related_count": config.get(
+                    "memory_min_related_count"
+                ),
+                "anergy_ttl_seconds": config.get("anergy_ttl_seconds"),
+                "state_wait_timeout_seconds": coerce_time_window_width(
+                    parameters.get("time_window_width")
+                ),
+                "priming_profiles": config.get("priming_profiles"),
+            }
+        }
+    )
 
     transitions_by_observation: dict[int, list[dict]] = defaultdict(list)
     for transition in transitions:
@@ -1420,6 +1702,7 @@ def build_report_payload(
         cells=cells,
         transitions=transitions,
         trace_rows=trace_rows,
+        report_config=report_config,
     )
 
     report = {
@@ -1462,6 +1745,7 @@ def build_report_payload(
             "state_wait_timeout_seconds": coerce_time_window_width(
                 parameters.get("time_window_width")
             ),
+            "priming_profiles": config.get("priming_profiles"),
         },
         "totals": {
             "observations": len(observations),
@@ -1521,10 +1805,15 @@ def build_report_payload(
 def summarize_trace_formula(formula: dict, stage: str | None) -> str:
     if not isinstance(formula, dict):
         return "n/a"
+    priming = formula.get("priming") or {}
+    priming_suffix = ""
+    if priming.get("label"):
+        priming_suffix = f" | {priming.get('label')}"
     if stage == "co_stimulation":
         return (
             f"value={format_float(formula.get('value'))} / "
             f"threshold={format_float(formula.get('threshold'))}"
+            f"{priming_suffix}"
         )
     if stage == "context":
         return (
@@ -1532,6 +1821,7 @@ def summarize_trace_formula(formula: dict, stage: str | None) -> str:
             f"{format_float(formula.get('effector_threshold'))}, "
             f"memory={format_float(formula.get('memory_score'))}/"
             f"{format_float(formula.get('memory_threshold'))}"
+            f"{priming_suffix}"
         )
     return "n/a"
 
@@ -2031,9 +2321,9 @@ def render_state_machine_graph(report: dict) -> str:
         {''.join(node_svg)}
       </svg>
       <ul class="legend">
-        <li><span class="swatch" style="background:{STATE_COLORS['state-recognized']};"></span><strong>0 - mature -> 1 - antigen-recognized</strong>: `PAMP` with extracted antigen and an accepted regex match.</li>
-        <li><span class="swatch" style="background:{STATE_COLORS['state-anergic']};"></span><strong>0 - mature -> 2 - anergic</strong>: `PAMP` with extracted antigen but no accepted regex match.</li>
-        <li><span class="swatch" style="background:{STATE_COLORS['state-mature']};"></span><strong>0 - mature -> 0 - mature</strong>: `DAMP` only or no antigen extracted, so the cell stays mature and no recognition transition happens.</li>
+        <li><span class="swatch" style="background:{STATE_COLORS['state-recognized']};"></span><strong>0 - mature -> 1 - antigen-recognized</strong>: `PAMP` or `DAMP` with an extracted antigen and an accepted regex match. `DAMP` creates a weaker priming profile.</li>
+        <li><span class="swatch" style="background:{STATE_COLORS['state-anergic']};"></span><strong>0 - mature -> 2 - anergic</strong>: `PAMP` or `DAMP` with extracted antigen but no accepted regex match.</li>
+        <li><span class="swatch" style="background:{STATE_COLORS['state-mature']};"></span><strong>0 - mature -> 0 - mature</strong>: any evidence with no extracted antigen leaves the mature cell unchanged, so no recognition transition happens.</li>
         <li><span class="swatch" style="background:{STATE_COLORS['state-recognized']};"></span><strong>1 - antigen-recognized -> 1 - antigen-recognized</strong>: co-stimulation is still below threshold, so the cell stays recognized and waits for re-evaluation.</li>
         <li><span class="swatch" style="background:{STATE_COLORS['state-anergic']};"></span><strong>1 - antigen-recognized -> 2 - anergic</strong>: co-stimulation never reached threshold before the waiting window expired.</li>
       </ul>
@@ -2159,6 +2449,9 @@ def render_rule_cards(cards: list[dict]) -> str:
 def render_decision_reference(report: dict) -> str:
     config = report_config_with_defaults(report)
     weights = config["co_stimulation_weights"]
+    priming_profiles = config["effective_priming_profiles"]
+    pamp_profile = priming_profiles["PAMP"]
+    damp_profile = priming_profiles["DAMP"]
     related_lookback = format_float(config["related_lookback_seconds"])
     related_saturation = format_float(config["related_pamps_saturation"])
     danger_saturation = format_float(config["danger_saturation"])
@@ -2166,19 +2459,152 @@ def render_decision_reference(report: dict) -> str:
     novelty_window = format_float(config["novelty_window_seconds"])
     context_window = format_float(config["context_recent_window_seconds"])
     wait_limit = format_float(config["state_wait_timeout_seconds"])
-    co_threshold = format_float(config["co_stimulation_threshold"])
-    effector_threshold = format_float(config["effector_threshold"])
-    effector_min_related = str(int(config["effector_min_related_count"]))
     effector_cooldown = format_float(config["effector_cooldown_seconds"])
-    memory_threshold = format_float(config["memory_threshold"])
     memory_ratio_max = format_float(config["memory_trend_ratio_max"])
-    memory_min_related = str(int(config["memory_min_related_count"]))
     anergy_ttl = format_float(config["anergy_ttl_seconds"])
 
     decision_cards = [
         {
+            "title": "Recognition & Priming: 0 -> 1 setup",
+            "summary": "Both PAMP and DAMP can recognize an antigen and create state 1, but the signal that primed the cell decides how hard the later gates will be.",
+            "equation_lines": [
+                "recognized when extracted_antigen matches an accepted regex",
+                "priming_profile = signal_specific_profile(PAMP or DAMP)",
+                (
+                    "effective gates = base thresholds/counts/wait "
+                    "+ offsets or factors from priming_profile"
+                ),
+            ],
+            "gate_lines": [
+                "PAMP or DAMP + extracted antigen + accepted regex => 0 -> 1",
+                "PAMP or DAMP + extracted antigen + no accepted regex => 0 -> 2",
+                "no extracted antigen => stay in 0 - mature",
+            ],
+            "notes": [
+                (
+                    "PAMP keeps the base profile: co-stimulation "
+                    f"{format_float(pamp_profile['co_stimulation_threshold'])}, effector "
+                    f"{format_float(pamp_profile['effector_threshold'])}, memory "
+                    f"{format_float(pamp_profile['memory_threshold'])}, wait "
+                    f"{format_float(pamp_profile['state_wait_timeout_seconds'])}s."
+                ),
+                (
+                    "DAMP creates a weaker cell: co-stimulation "
+                    f"{format_float(damp_profile['co_stimulation_threshold'])}, effector "
+                    f"{format_float(damp_profile['effector_threshold'])}, memory "
+                    f"{format_float(damp_profile['memory_threshold'])}, wait "
+                    f"{format_float(damp_profile['state_wait_timeout_seconds'])}s."
+                ),
+                "The recognition observation is consumed for that cell after the state change, so it cannot also count toward the next transition.",
+            ],
+            "terms": [
+                {
+                    "label": "PAMP profile",
+                    "formula": (
+                        f"strength={format_float(pamp_profile['strength'])}, "
+                        f"co={format_float(pamp_profile['co_stimulation_threshold'])}, "
+                        f"effector={format_float(pamp_profile['effector_threshold'])}, "
+                        f"memory={format_float(pamp_profile['memory_threshold'])}"
+                    ),
+                    "description": "PAMP-primed cells use the base thresholds, base counts, and the full wait window.",
+                },
+                {
+                    "label": "DAMP profile",
+                    "formula": (
+                        f"strength={format_float(damp_profile['strength'])}, "
+                        f"co={format_float(damp_profile['co_stimulation_threshold'])}, "
+                        f"effector={format_float(damp_profile['effector_threshold'])}, "
+                        f"memory={format_float(damp_profile['memory_threshold'])}"
+                    ),
+                    "description": "DAMP-primed cells raise later thresholds, require more supporting related PAMPs, and shorten the wait window.",
+                },
+                {
+                    "label": "state_wait_timeout_seconds",
+                    "formula": (
+                        "base_wait_timeout * priming_profile.state_wait_timeout_factor"
+                    ),
+                    "description": "The same priming profile controls how long the cell can remain waiting in state 1 or state 3.",
+                },
+                {
+                    "label": "consumed transition evidence",
+                    "formula": "exclude consumed observation IDs from later counts and danger",
+                    "description": "Once evidence causes a state change for a cell, that observation is excluded from later related-count, danger, and novelty calculations for the same cell.",
+                },
+            ],
+            "tree": {
+                "label": "signal_specific_priming",
+                "formula": "PAMP or DAMP decides the effective thresholds, counts, and wait limit",
+                "summary": "Recognition creates a primed cell profile that shapes every later decision.",
+                "tooltip": "Both signals can create state 1, but they do not create equally strong cells.",
+                "children": [
+                    {
+                        "label": "PAMP",
+                        "formula": "base thresholds and counts",
+                        "summary": (
+                            f"co={format_float(pamp_profile['co_stimulation_threshold'])}, "
+                            f"effector={format_float(pamp_profile['effector_threshold'])}, "
+                            f"memory={format_float(pamp_profile['memory_threshold'])}"
+                        ),
+                        "tooltip": "PAMP priming keeps the baseline gates and full wait window.",
+                        "children": [
+                            {
+                                "label": "wait_limit",
+                                "formula": format_float(
+                                    pamp_profile["state_wait_timeout_seconds"]
+                                ),
+                                "summary": "Full wait window",
+                                "tooltip": "PAMP-primed cells can wait for the full configured time window.",
+                            },
+                            {
+                                "label": "related counts",
+                                "formula": (
+                                    f"effector>={format_float(pamp_profile['effector_min_related_count'])}, "
+                                    f"memory>={format_float(pamp_profile['memory_min_related_count'])}"
+                                ),
+                                "summary": "Base supporting PAMP requirements",
+                                "tooltip": "No extra related-count offset is added for PAMP priming.",
+                            },
+                        ],
+                    },
+                    {
+                        "label": "DAMP",
+                        "formula": "base values + offsets/factor",
+                        "summary": (
+                            f"co={format_float(damp_profile['co_stimulation_threshold'])}, "
+                            f"effector={format_float(damp_profile['effector_threshold'])}, "
+                            f"memory={format_float(damp_profile['memory_threshold'])}"
+                        ),
+                        "tooltip": "DAMP priming deliberately makes later activation harder and the wait window shorter.",
+                        "children": [
+                            {
+                                "label": "wait_limit",
+                                "formula": (
+                                    f"{wait_limit} * "
+                                    f"{format_float(damp_profile['state_wait_timeout_factor'])}"
+                                ),
+                                "summary": format_float(
+                                    damp_profile["state_wait_timeout_seconds"]
+                                )
+                                + "s effective wait",
+                                "tooltip": "DAMP priming shortens how long the cell can wait before timing out.",
+                            },
+                            {
+                                "label": "related counts",
+                                "formula": (
+                                    f"effector>={format_float(damp_profile['effector_min_related_count'])}, "
+                                    f"memory>={format_float(damp_profile['memory_min_related_count'])}"
+                                ),
+                                "summary": "Extra corroboration required",
+                                "tooltip": "DAMP priming adds one more related PAMP requirement for both effector and memory.",
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+        {
             "title": "Co-Stimulation: 1 -> 3 activation",
-            "summary": "This score is evaluated after antigen recognition to decide whether the cell activates.",
+            "summary": "This score is evaluated after antigen recognition to decide whether the cell activates. The effective threshold depends on the cell’s priming profile.",
             "equation_lines": [
                 (
                     "co_stimulation = "
@@ -2194,14 +2620,25 @@ def render_decision_reference(report: dict) -> str:
                 ),
             ],
             "gate_lines": [
-                f"activate when co_stimulation >= {co_threshold}",
+                "activate when co_stimulation >= priming_profile.co_stimulation_threshold",
+                (
+                    "PAMP threshold="
+                    f"{format_float(pamp_profile['co_stimulation_threshold'])} | "
+                    "DAMP threshold="
+                    f"{format_float(damp_profile['co_stimulation_threshold'])}"
+                ),
                 "otherwise stay in 1 - antigen-recognized",
-                f"timeout to 2 - anergic after {wait_limit}s if still below threshold",
+                (
+                    "timeout to 2 - anergic after the priming-specific wait limit "
+                    f"(PAMP {format_float(pamp_profile['state_wait_timeout_seconds'])}s, "
+                    f"DAMP {format_float(damp_profile['state_wait_timeout_seconds'])}s)"
+                ),
             ],
             "notes": [
                 f"Related PAMPs are counted over the last {related_lookback}s for the same responsible IP.",
                 "A related PAMP shares either the same antigen value or the same matched regex hash. The current observation is excluded from that count.",
-                "DAMP observations never create cells, but they do raise the mixed danger term used here.",
+                "DAMP observations also contribute to the mixed danger term, and DAMP-primed cells use the stricter threshold from their stored priming profile.",
+                "Previously consumed transition evidence for this cell is excluded from the related-count and danger inputs so one observation cannot chain multiple state changes.",
             ],
             "terms": [
                 {
@@ -2227,6 +2664,11 @@ def render_decision_reference(report: dict) -> str:
                     "formula": "sum(threat_level_value * confidence)",
                     "description": "Raw danger is the sum of threat level value multiplied by confidence across recent PAMP or DAMP observations.",
                 },
+                {
+                    "label": "priming_profile.co_stimulation_threshold",
+                    "formula": "base_co_stimulation_threshold + co_stimulation_threshold_offset",
+                    "description": "The effective activation threshold comes from the profile stored when the cell entered state 1.",
+                },
             ],
             "tree": {
                 "label": "co_stimulation",
@@ -2235,7 +2677,11 @@ def render_decision_reference(report: dict) -> str:
                     f"{format_float(weights['related_pamps'])} * related_pamp_score + "
                     f"{format_float(weights['danger'])} * profile_danger_score"
                 ),
-                "summary": f"Activation score. Threshold = {co_threshold}",
+                "summary": (
+                    "Activation score. Threshold depends on priming: "
+                    f"PAMP {format_float(pamp_profile['co_stimulation_threshold'])}, "
+                    f"DAMP {format_float(damp_profile['co_stimulation_threshold'])}"
+                ),
                 "tooltip": "Final co-stimulation score used for the 1 -> 3 decision.",
                 "children": [
                     {
@@ -2311,7 +2757,7 @@ def render_decision_reference(report: dict) -> str:
         },
         {
             "title": "Context Effector: 3 -> 4 containment",
-            "summary": "This score evaluates whether an activated cell should escalate into an effector response.",
+            "summary": "This score evaluates whether an activated cell should escalate into an effector response. The threshold and minimum related count depend on priming.",
             "equation_lines": [
                 "effector_score = 0.45 * recent_pressure",
                 "                + 0.25 * recent_related_score",
@@ -2319,13 +2765,26 @@ def render_decision_reference(report: dict) -> str:
             ],
             "gate_lines": [
                 "effector = (novelty_score > 0)",
-                f"           and (recent_related_count >= {effector_min_related})",
-                f"           and (effector_score >= {effector_threshold})",
+                "           and (recent_related_count >= priming_profile.effector_min_related_count)",
+                "           and (effector_score >= priming_profile.effector_threshold)",
+                (
+                    "PAMP gate: related>="
+                    f"{format_float(pamp_profile['effector_min_related_count'])}, "
+                    "threshold="
+                    f"{format_float(pamp_profile['effector_threshold'])}"
+                ),
+                (
+                    "DAMP gate: related>="
+                    f"{format_float(damp_profile['effector_min_related_count'])}, "
+                    "threshold="
+                    f"{format_float(damp_profile['effector_threshold'])}"
+                ),
             ],
             "notes": [
                 f"recent_pressure is computed over the last {context_window}s and uses the same mixed PAMP + weighted DAMP danger model as co-stimulation.",
                 f"novelty_score is binary: it becomes 1 only if the matched regex has no stored memory row and no recent transition activity in the last {novelty_window}s.",
                 f"If the cell reaches state 4, repeated containment is still gated by an effector cooldown of {effector_cooldown}s.",
+                "Consumed transition observations for that cell are excluded from novelty, pressure, and recent-related calculations.",
             ],
             "terms": [
                 {
@@ -2346,11 +2805,20 @@ def render_decision_reference(report: dict) -> str:
                     "formula": "1 if no memory and no recent regex activity else 0",
                     "description": "A binary novelty gate. If the regex is already familiar, the effector path is blocked immediately.",
                 },
+                {
+                    "label": "priming_profile.effector_threshold",
+                    "formula": "base_effector_threshold + effector_threshold_offset",
+                    "description": "The effective effector threshold is higher for weaker priming profiles such as DAMP.",
+                },
             ],
             "tree": {
                 "label": "effector_score",
                 "formula": "0.45 * recent_pressure + 0.25 * recent_related_score + 0.30 * novelty_score",
-                "summary": f"Containment score. Threshold = {effector_threshold}",
+                "summary": (
+                    "Containment score. Priming-specific gate: "
+                    f"PAMP>={format_float(pamp_profile['effector_threshold'])}, "
+                    f"DAMP>={format_float(damp_profile['effector_threshold'])}"
+                ),
                 "tooltip": "Final context score used to decide whether state 3 escalates to state 4.",
                 "children": [
                     {
@@ -2423,7 +2891,7 @@ def render_decision_reference(report: dict) -> str:
         },
         {
             "title": "Context Memory: 3 -> 5 storage",
-            "summary": "This score evaluates whether an activated cell should store memory instead of escalating to containment.",
+            "summary": "This score evaluates whether an activated cell should store memory instead of escalating to containment. The threshold and minimum related count depend on priming.",
             "equation_lines": [
                 "memory_score = 0.60 * decrease_score",
                 "             + 0.25 * familiarity_score",
@@ -2431,14 +2899,30 @@ def render_decision_reference(report: dict) -> str:
             ],
             "gate_lines": [
                 "memory = (familiarity_score > 0)",
-                f"         and (recent_related_count >= {memory_min_related})",
+                "         and (recent_related_count >= priming_profile.memory_min_related_count)",
                 f"         and (trend_ratio <= {memory_ratio_max})",
-                f"         and (memory_score >= {memory_threshold})",
+                "         and (memory_score >= priming_profile.memory_threshold)",
+                (
+                    "PAMP gate: related>="
+                    f"{format_float(pamp_profile['memory_min_related_count'])}, "
+                    "threshold="
+                    f"{format_float(pamp_profile['memory_threshold'])}"
+                ),
+                (
+                    "DAMP gate: related>="
+                    f"{format_float(damp_profile['memory_min_related_count'])}, "
+                    "threshold="
+                    f"{format_float(damp_profile['memory_threshold'])}"
+                ),
             ],
             "notes": [
                 "Memory is the cooling-down path: the same pattern is no longer novel, pressure is lower than before, and enough related evidence still supports the match.",
                 "trend_ratio compares the recent mixed pressure window against the previous adjacent window. Lower is better for memory.",
-                f"If neither effector nor memory passes, the cell stays in 3 - activated until the context wait timeout of {wait_limit}s expires.",
+                (
+                    "If neither effector nor memory passes, the cell stays in 3 - activated until the priming-specific context timeout expires: "
+                    f"PAMP {format_float(pamp_profile['state_wait_timeout_seconds'])}s, "
+                    f"DAMP {format_float(damp_profile['state_wait_timeout_seconds'])}s."
+                ),
             ],
             "terms": [
                 {
@@ -2458,14 +2942,23 @@ def render_decision_reference(report: dict) -> str:
                 },
                 {
                     "label": "stability_score",
-                    "formula": f"clamp01(recent_related_count / {memory_min_related})",
+                    "formula": "clamp01(recent_related_count / priming_profile.memory_min_related_count)",
                     "description": "Ensures there is still enough related recent evidence to justify storing memory.",
+                },
+                {
+                    "label": "priming_profile.memory_threshold",
+                    "formula": "base_memory_threshold + memory_threshold_offset",
+                    "description": "The effective memory threshold is profile-specific, so DAMP-primed cells require stronger memory evidence.",
                 },
             ],
             "tree": {
                 "label": "memory_score",
                 "formula": "0.60 * decrease_score + 0.25 * familiarity_score + 0.15 * stability_score",
-                "summary": f"Memory score. Threshold = {memory_threshold}",
+                "summary": (
+                    "Memory score. Priming-specific gate: "
+                    f"PAMP>={format_float(pamp_profile['memory_threshold'])}, "
+                    f"DAMP>={format_float(damp_profile['memory_threshold'])}"
+                ),
                 "tooltip": "Final context score used to decide whether state 3 transitions into state 5.",
                 "children": [
                     {
@@ -2518,14 +3011,16 @@ def render_decision_reference(report: dict) -> str:
                     },
                     {
                         "label": "stability_score",
-                        "formula": f"clamp01(recent_related_count / {memory_min_related})",
+                        "formula": "clamp01(recent_related_count / priming_profile.memory_min_related_count)",
                         "summary": "Recent evidence stability",
                         "tooltip": "Memory still requires enough related recent PAMPs to support the pattern.",
                         "children": [
                             {
                                 "label": "recent_related_count",
                                 "formula": "count of related recent PAMPs",
-                                "summary": f"Must stay >= {memory_min_related}",
+                                "summary": (
+                                    "Must satisfy the priming-specific minimum related count"
+                                ),
                                 "tooltip": "Related means same antigen value or same matched regex hash in the recent context window.",
                             }
                         ],
@@ -2538,8 +3033,18 @@ def render_decision_reference(report: dict) -> str:
     rule_cards = [
         {
             "title": "Recognition",
-            "rule": "0 -> 1 when a PAMP has an extracted antigen and an accepted regex match",
-            "description": "If a PAMP has antigens but no accepted regex match, the cell instead goes 0 -> 2 and becomes anergic.",
+            "rule": "0 -> 1 when PAMP or DAMP has an extracted antigen and an accepted regex match",
+            "description": "Both signals can create a recognized cell, but the stored priming profile marks whether that cell is PAMP-primed or DAMP-primed.",
+        },
+        {
+            "title": "Signal-Specific No-Match",
+            "rule": "PAMP or DAMP no-match => 0 -> 2 when an extracted antigen has no accepted regex",
+            "description": "If a mature cell receives an extracted antigen but no accepted regex matches it, the cell becomes anergic regardless of whether the evidence was PAMP or DAMP.",
+        },
+        {
+            "title": "Consumed Transition Evidence",
+            "rule": "exclude transition-causing observation IDs from later counts, danger, and novelty",
+            "description": "The same observation should not drive a whole chain of activations for the same cell, so transition-causing evidence is remembered and excluded from later steps.",
         },
         {
             "title": "Anergy Expiry",
@@ -2548,13 +3053,16 @@ def render_decision_reference(report: dict) -> str:
         },
         {
             "title": "Co-Stimulation Timeout",
-            "rule": f"1 -> 2 when the co-stimulation wait reaches {wait_limit}s",
-            "description": "The cell can keep waiting in 1 - antigen-recognized while later PAMP or DAMP evidence reevaluates the score, but only for one configured Slips time window.",
+            "rule": "1 -> 2 when the co-stimulation wait reaches the priming-specific wait limit",
+            "description": (
+                "The cell can keep waiting in 1 - antigen-recognized while later PAMP or DAMP evidence reevaluates the score, "
+                f"but only until its stored wait limit expires. PAMP uses {format_float(pamp_profile['state_wait_timeout_seconds'])}s and DAMP uses {format_float(damp_profile['state_wait_timeout_seconds'])}s."
+            ),
         },
         {
             "title": "Context Timeout",
-            "rule": f"3 -> 0 when the context wait reaches {wait_limit}s",
-            "description": "If neither effector nor memory passes before the waiting window ends, the cell falls back to 0 - mature.",
+            "rule": "3 -> 0 when the context wait reaches the priming-specific wait limit",
+            "description": "If neither effector nor memory passes before the waiting window ends, the cell falls back to 0 - mature and keeps no active waiting context.",
         },
         {
             "title": "Effector Cooldown",
@@ -2580,7 +3088,7 @@ def render_decision_reference(report: dict) -> str:
       </div>
       <p class="decision-lead">
         This section documents the exact values, thresholds, and helper rules used by the report and by the T Cell module decision logic.
-        Normalization uses <code>clamp01(x) = max(0, min(1, x))</code>. Hover or focus a node in each tree to inspect where that term comes from.
+        Normalization uses <code>clamp01(x) = max(0, min(1, x))</code>. Thresholds and wait windows can change per cell because the priming profile stored at <code>0 -> 1</code> is carried into later decisions. Hover or focus a node in each tree to inspect where that term comes from.
       </p>
       <div class="decision-doc-grid">
         {decision_cards_html}
@@ -2706,12 +3214,14 @@ def render_cell_histories(report: dict) -> str:
 
     history_cards = []
     for index, item in enumerate(histories):
+        priming_profile = item.get("priming_profile") or {}
         title = (
             f"{item.get('responsible_ip') or 'unknown'} | "
             f"{item.get('regex_type') or 'unknown'}:{item.get('antigen_value') or ''}"
         )
         meta_bits = [
             f"current={item.get('current_state') or 'unknown'}",
+            f"priming={item.get('priming_label') or 'n/a'}",
             f"life path={item.get('life_path') or 'n/a'}",
             f"first seen={item.get('first_seen') or 'n/a'}",
             f"last seen={item.get('last_seen') or 'n/a'}",
@@ -2738,6 +3248,8 @@ def render_cell_histories(report: dict) -> str:
               <div class="history-body">
                 <p class="meta"><strong>Cell key:</strong> {escape(item.get('cell_key') or '')}</p>
                 <p class="meta"><strong>Matched value:</strong> {escape(item.get('matched_value') or 'n/a')}</p>
+                <p class="meta"><strong>Priming:</strong> {escape(item.get('priming_label') or 'n/a')} | signal={escape(item.get('priming_signal') or 'n/a')} | strength={escape(format_float(item.get('priming_strength')))}</p>
+                <p class="meta"><strong>Effective profile:</strong> co_threshold={escape(format_float(priming_profile.get('co_stimulation_threshold')))} | effector_threshold={escape(format_float(priming_profile.get('effector_threshold')))} | memory_threshold={escape(format_float(priming_profile.get('memory_threshold')))} | wait_limit={escape(format_float(priming_profile.get('state_wait_timeout_seconds')))} | effector_related&gt;={escape(format_float(priming_profile.get('effector_min_related_count')))} | memory_related&gt;={escape(format_float(priming_profile.get('memory_min_related_count')))}</p>
                 {table_html}
               </div>
             </details>
