@@ -405,15 +405,32 @@ class TCellSQLiteDB(_BaseTCellSQLiteDB):
         profile_ip: str,
         regex_hash: str,
         since_ts: float,
+        exclude_observation_ids: list[int] | tuple[int, ...] | set[int] | None = None,
         exclude_observation_id: int | None = None,
     ) -> bool:
         condition = (
             "profile_ip = ? AND matched_regex_hash = ? AND created_at >= ?"
         )
         params = [profile_ip, regex_hash, since_ts]
+        excluded_ids = set()
+        for value in exclude_observation_ids or []:
+            try:
+                excluded_ids.add(int(value))
+            except (TypeError, ValueError):
+                continue
         if exclude_observation_id is not None:
-            condition += " AND (observation_id IS NULL OR observation_id != ?)"
-            params.append(exclude_observation_id)
+            try:
+                excluded_ids.add(int(exclude_observation_id))
+            except (TypeError, ValueError):
+                pass
+        if excluded_ids:
+            placeholders = ",".join("?" for _ in excluded_ids)
+            condition += (
+                " AND (observation_id IS NULL OR observation_id NOT IN ("
+                + placeholders
+                + "))"
+            )
+            params.extend(sorted(excluded_ids))
         row = self.select(
             "transitions",
             columns="id",
@@ -608,12 +625,14 @@ class TCellStorage:
         profile_ip: str,
         regex_hash: str,
         since_ts: float,
+        exclude_observation_ids: list[int] | tuple[int, ...] | set[int] | None = None,
         exclude_observation_id: int | None = None,
     ) -> bool:
         return self.db.has_recent_regex_activity(
             profile_ip,
             regex_hash,
             since_ts,
+            exclude_observation_ids=exclude_observation_ids,
             exclude_observation_id=exclude_observation_id,
         )
 
