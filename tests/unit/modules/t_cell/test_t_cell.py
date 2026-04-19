@@ -276,6 +276,142 @@ def test_t_cell_antigen_log_includes_evidence_signal(tmp_path):
     assert "signal=DAMP" in antigen_line
 
 
+def test_t_cell_damp_can_prime_antigen_recognized_cell(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    evidence = _build_evidence(
+        "damp-prime-1",
+        signal=EvidenceSignal.DAMP,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.DOMAIN,
+            value="bad.example.com",
+        ),
+    )
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "damp-prime-regex"
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=2100.0):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    cell = storage.get_all_cells()[0]
+    assert cell["state"] == STATE_ANTIGEN_RECOGNIZED
+    assert cell["context"]["waiting_for"] == "co_stimulation"
+    assert cell["context"]["priming_signal"] == "DAMP"
+    assert cell["context"]["priming_label"] == "damp-primed"
+    assert cell["context"]["priming_strength"] == 0.6
+    assert (
+        cell["context"]["priming_profile"]["co_stimulation_threshold"]
+        > t_cell.co_stimulation_threshold
+    )
+    assert (
+        cell["context"]["priming_profile"]["state_wait_timeout_seconds"]
+        < t_cell.state_wait_timeout_seconds
+    )
+    transition = storage.get_transitions(cell["cell_key"])[0]
+    assert transition["reason"] == "antigen_recognized"
+    assert transition["scores"]["priming_signal"] == "DAMP"
+    assert transition["scores"]["co_stimulation_threshold"] == 0.8
+    assert transition["scores"]["effector_threshold"] == 0.8
+    assert transition["scores"]["memory_threshold"] == 0.65
+
+
+def test_t_cell_damp_no_regex_match_becomes_anergic(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    evidence = _build_evidence(
+        "damp-no-match-1",
+        signal=EvidenceSignal.DAMP,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.DOMAIN,
+            value="unknown.example.com",
+        ),
+    )
+    t_cell.db.get_generated_regexes.return_value = []
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=2150.0):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    cell = storage.get_all_cells()[0]
+    assert cell["state"] == STATE_ANERGIC
+    assert cell["anergic_until"] == 2150.0 + t_cell.anergy_ttl_seconds
+    transitions = storage.get_transitions(cell["cell_key"])
+    assert len(transitions) == 1
+    assert transitions[0]["reason"] == "no_regex_match"
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        log_contents = log_file.read()
+    assert "action=no_regex_match" in log_contents
+    assert "state=2 - anergic" in log_contents
+
+
+def test_t_cell_damp_priming_uses_stricter_co_stimulation_threshold(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    fixed_now = 2_200.0
+    profile_ip = "10.0.0.77"
+    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "damp-threshold-regex"
+    )
+
+    damp_prime = _build_evidence(
+        "damp-threshold-1",
+        signal=EvidenceSignal.DAMP,
+        profile_ip=profile_ip,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.DOMAIN,
+            value="bad.example.com",
+        ),
+    )
+    low_costim = _build_evidence(
+        "damp-threshold-2",
+        profile_ip=profile_ip,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.DOMAIN,
+            value="bad.example.com",
+        ),
+        confidence=0.5,
+    )
+    high_costim = _build_evidence(
+        "damp-threshold-3",
+        profile_ip=profile_ip,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.DOMAIN,
+            value="bad.example.com",
+        ),
+        confidence=0.7,
+    )
+
+    _seed_recent_related_observations(
+        storage,
+        profile_ip,
+        antigen,
+        fixed_now,
+        count=4,
+    )
+
+    _process_evidence_at(t_cell, damp_prime, fixed_now)
+    _process_evidence_at(t_cell, low_costim, fixed_now + 1)
+
+    cell = storage.get_all_cells()[0]
+    assert cell["state"] == STATE_ANTIGEN_RECOGNIZED
+    assert abs(cell["last_co_stimulation"] - 0.775) < 1e-9
+    assert cell["context"]["co_stimulation"]["threshold"] == 0.8
+
+    _process_evidence_at(t_cell, high_costim, fixed_now + 2)
+
+    cell = storage.get_all_cells()[0]
+    transitions = storage.get_transitions(cell["cell_key"])
+    assert cell["state"] == STATE_ACTIVATED
+    assert any(
+        transition["reason"] == "co_stimulation_threshold_met"
+        and transition["evidence_id"] == high_costim.id
+        for transition in transitions
+    )
+
+
 def test_t_cell_skips_pamp_without_antigens(tmp_path):
     t_cell, storage = _prepare_t_cell(tmp_path)
     evidence = _build_evidence("no-antigen-1")
