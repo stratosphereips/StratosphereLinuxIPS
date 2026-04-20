@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import json
 import pytest
 from unittest.mock import Mock, patch
 from managers.process_manager import ProcessManager
@@ -297,6 +298,16 @@ def test_get_analysis_time(
         (None, True, False),
         # Test case 2: Message doesn't contain "stop_slips"
         ({"data": "some_other_message"}, True, False),
+        # Test case 3: Wrapped plain-text messages should be decoded first
+        (
+            {
+                "data": json.dumps(
+                    {"text": "stop_slips", "version": "test-version"}
+                )
+            },
+            True,
+            True,
+        ),
         # Test case 3: Message contains
         # "stop_slips" but not intended for control channel
         ({"data": "stop_slips"}, False, False),

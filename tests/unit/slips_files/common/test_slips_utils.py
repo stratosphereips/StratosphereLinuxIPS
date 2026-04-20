@@ -27,6 +27,28 @@ def test_get_sha256_hash_from_nonexistent_file():
         utils.get_sha256_hash_of_file_contents("nonexistent_file.txt")
 
 
+def test_initialize_logfile_creates_file(tmp_path):
+    utils = ModuleFactory().create_utils_obj()
+    logfile = tmp_path / "logs" / "module.log"
+
+    initialized = utils.initialize_logfile(str(logfile), False)
+
+    assert initialized is True
+    assert logfile.exists()
+    assert logfile.read_text() == ""
+
+
+def test_initialize_logfile_skips_file_when_started_by_update(tmp_path):
+    utils = ModuleFactory().create_utils_obj()
+    logfile = tmp_path / "module.log"
+    logfile.write_text("existing\n")
+
+    initialized = utils.initialize_logfile(str(logfile), True)
+
+    assert initialized is False
+    assert logfile.read_text() == "existing\n"
+
+
 @pytest.mark.parametrize(
     "filepath, expected_result",
     [  # Testcase 1: Supported file
@@ -63,6 +85,29 @@ def test_get_sha256_hash_permission_error():
     with patch("builtins.open", side_effect=PermissionError):
         with pytest.raises(PermissionError):
             utils.get_sha256_hash_of_file_contents("restricted_file.txt")
+
+
+@pytest.mark.parametrize(
+    "message, expected_payload",
+    [
+        ({"data": "plain-text"}, "plain-text"),
+        (
+            {"data": json.dumps({"text": "stop_slips", "version": "1.0"})},
+            "stop_slips",
+        ),
+        (
+            {
+                "data": json.dumps(
+                    {"flow": {"uid": "abc"}, "profileid": "profile_1"}
+                )
+            },
+            {"flow": {"uid": "abc"}, "profileid": "profile_1"},
+        ),
+    ],
+)
+def test_get_msg_payload(message, expected_payload):
+    utils = ModuleFactory().create_utils_obj()
+    assert utils.get_msg_payload(message) == expected_payload
 
 
 @pytest.mark.parametrize(

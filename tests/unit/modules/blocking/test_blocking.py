@@ -206,8 +206,16 @@ def test_main_blocking_logic(block, expected_block_called):
 @pytest.mark.parametrize(
     "last_closed_tw, msg_data, should_call",
     [
-        ("tw1", "profileid_123_tw2", True),  # new tw, should call update
-        ("tw2", "profileid_234_tw2", False),  # same tw, no update
+        (
+            "tw1",
+            json.dumps({"text": "profileid_123_tw2", "version": "1.0"}),
+            True,
+        ),
+        (
+            "tw2",
+            json.dumps({"text": "profileid_234_tw2", "version": "1.0"}),
+            False,
+        ),
     ],
 )
 def test_main_tw_closed_triggers_update(last_closed_tw, msg_data, should_call):
