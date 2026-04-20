@@ -195,6 +195,11 @@ class RedisDB(
         self.call_mixins_setup()
         self._init_ttls()
         self.set_new_incoming_flows(True)
+        if not self.flush_db:
+            self.print(
+                "Continuing on previous data stored in redis.",
+                log_to_logfiles_only=True,
+            )
 
     @classmethod
     def _get_conf_file_path(cls, redis_port: Optional[int] = None) -> str:

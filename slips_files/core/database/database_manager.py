@@ -49,11 +49,27 @@ class DBManager:
         start_redis_server=True,
         **kwargs,
     ):
+        """
+        Initialize Redis and SQLite database handlers.
+
+        :param logger: output logger used by database handlers.
+        :param output_dir: directory where database files and logs are stored.
+        :param redis_port: port used to connect to Redis.
+        :param conf: loaded Slips configuration parser.
+        :param main_pid: PID of the main Slips process.
+        :param start_sqlite: whether to initialize the SQLite handler.
+        :param start_redis_server: whether to start Redis before connecting.
+
+        :param kwargs: additional RedisDB options. Supported keys are:
+            flush_db: whether this manager may flush Redis on startup when
+                the configuration also allows deleting previous DB contents.
+        """
         self.conf = conf
         self.output_dir = output_dir
         self.redis_port = redis_port
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
+
         # only the main process should ever flush the Redis DB. to avoid
         # children overwriting values set at the very start of slips
         if os.getpid() != main_pid:

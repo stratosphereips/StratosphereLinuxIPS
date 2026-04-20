@@ -534,6 +534,7 @@ class Main:
             self.print_version()
             print("https://stratosphereips.org")
             print("-" * 27)
+
             self.setup_print_levels()
             stderr: str = self.get_slips_error_file()
             slips_logfile: str = self.get_slips_logfile()
@@ -543,10 +544,22 @@ class Main:
                 stderr, slips_logfile
             )
             self.printer = Printer(self.logger, self.name)
+
             self.print(f"Storing Slips logs in {self.args.output}")
+
             self.redis_port: int = self.redis_man.get_redis_port()
-            # dont start the redis server if it's already started
-            start_redis_server = not utils.is_port_in_use(self.redis_port)
+            if self.args.is_slips_live_updating:
+                # -u means slips is started by slips after it auto-updated,
+                # the redis server should already be up, this slips should
+                # just connect to it
+                start_redis_server = False
+                self.print(
+                    f"Slips is done auto updating. Currently running "
+                    f"version: {green(utils.get_current_version())}"
+                )
+            else:
+                # dont start the redis server if it's already started
+                start_redis_server = not utils.is_port_in_use(self.redis_port)
 
             try:
                 self.db = DBManager(
@@ -556,6 +569,7 @@ class Main:
                     self.conf,
                     int(self.pid),
                     start_redis_server=start_redis_server,
+                    flush_db=not self.args.is_slips_started_by_an_update,
                 )
 
             except RuntimeError as e:
@@ -605,9 +619,7 @@ class Main:
                 0,
             )
             self.print(
-                f'Started {green("Main")} process '
-                f"[PID"
-                f" {green(self.pid)}]",
+                f'Started {green("Main")} process [PID {green(self.pid)}]',
                 1,
                 0,
             )

@@ -475,9 +475,9 @@ class ProcessManager:
         Starts a thread that keeps track of the current timewindow if
         running on an interface
 
-        why is this not started in the redis db? because each module
+        why is this not started by the redis db? because each module
         has a db insteance, and we don't want a thread per module,
-        so starrting this thread once in main is enough
+        so starting this thread once in main is enough
         """
         if not self.main.args.interface:
             return
