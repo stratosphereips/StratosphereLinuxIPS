@@ -42,7 +42,8 @@ class Blocking(IModule):
         self.blocking_logfile_lock = Lock()
         # clear it
         try:
-            open(self.blocking_log_path, "w").close()
+            if not self.args.is_slips_started_by_an_update:
+                open(self.blocking_log_path, "w").close()
         except FileNotFoundError:
             pass
         self.last_closed_tw = None

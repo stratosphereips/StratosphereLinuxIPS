@@ -49,6 +49,8 @@ class Daemon:
 
     def create_std_streams(self):
         """Create standard steam files and dirs and clear them"""
+        if self.args.is_slips_started_by_an_update:
+            return
 
         std_streams = [self.stderr, self.stdout, self.logsfile]
         for file in std_streams:

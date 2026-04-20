@@ -67,7 +67,8 @@ class GoDirector:
         self.report_func = report_func
         self.request_func = request_func
         # clear the logfile
-        open(p2p_reports_logfile, "w").close()
+        if not self.args.is_slips_started_by_an_update:
+            open(p2p_reports_logfile, "w").close()
         self.reports_logfile = open(p2p_reports_logfile, "a")
         self.print(f"Storing peer reports in {p2p_reports_logfile}")
         # TODO: there should be some better mechanism to add new processing

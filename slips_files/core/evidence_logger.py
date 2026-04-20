@@ -66,7 +66,11 @@ class EvidenceLogger:
         logfile_dir = os.path.dirname(logfile_path)
         if logfile_dir:
             os.makedirs(logfile_dir, exist_ok=True)
-        if os.path.exists(logfile_path):
+
+        if (
+            os.path.exists(logfile_path)
+            and not self.args.is_slips_started_by_an_update
+        ):
             open(logfile_path, "w").close()
         return open(logfile_path, "a")
 

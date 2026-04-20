@@ -118,7 +118,8 @@ class Output(IObserver):
         except FileNotFoundError:
             p = Path(os.path.dirname(path))
             p.mkdir(parents=True, exist_ok=True)
-            open(path, "w").close()
+            if not self.args.is_slips_started_by_an_update:
+                open(path, "w").close()
 
     def log_line(self, msg: dict):
         """
