@@ -155,6 +155,7 @@ class RedisDB(
         cls.flush_db = flush_db
         # start the redis server using cli if it's not started?
         cls.start_server = start_redis_server
+        cls.logger = logger
         cls.printer = Printer(logger, cls.name)
         cls.conf = ConfigParser()
         cls.args = cls.conf.get_args()
@@ -195,7 +196,7 @@ class RedisDB(
         self.call_mixins_setup()
         self._init_ttls()
         self.set_new_incoming_flows(True)
-        if not self.flush_db:
+        if self.logger and not self.flush_db:
             self.print(
                 "Continuing on previous data stored in redis.",
                 log_to_logfiles_only=True,

@@ -548,7 +548,7 @@ class Main:
             self.print(f"Storing Slips logs in {self.args.output}")
 
             self.redis_port: int = self.redis_man.get_redis_port()
-            if self.args.is_slips_live_updating:
+            if self.args.is_slips_started_by_an_update:
                 # -u means slips is started by slips after it auto-updated,
                 # the redis server should already be up, this slips should
                 # just connect to it
