@@ -71,12 +71,39 @@ def test_start_input_process(
             line_type=line_type,
             is_profiler_done_event=process_manager.is_profiler_done_event,
             is_input_done_event=process_manager.is_input_done_event,
+            is_slips_live_updating_event=(
+                process_manager.is_slips_live_updating_event
+            ),
         )
         mock_input_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()
         process_manager.main.db.store_pid.assert_called_once_with(
             "Input", 54321
         )
+
+
+@pytest.mark.parametrize(
+    "is_slips_started_by_an_update,expected_is_set",
+    [(True, True), (False, False)],
+)
+def test_init_sets_live_update_event_for_update_start(
+    is_slips_started_by_an_update,
+    expected_is_set,
+):
+    """Test that -u startup marks Slips as live-updating."""
+    main_mock = Mock()
+    main_mock.args.is_slips_started_by_an_update = (
+        is_slips_started_by_an_update
+    )
+    main_mock.conf.get_disabled_modules.return_value = []
+    main_mock.conf.is_bootstrapping_node.return_value = False
+    main_mock.conf.get_bootstrapping_modules.return_value = []
+
+    process_manager = ProcessManager(main_mock)
+
+    assert process_manager.is_slips_live_updating_event.is_set() is (
+        expected_is_set
+    )
 
 
 @pytest.mark.parametrize(

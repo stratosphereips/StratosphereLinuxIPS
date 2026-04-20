@@ -338,7 +338,7 @@ class ZeekInputUtils:
             self.cache_lines = {}
             self.zeek_logs_offsets = {}
             self.last_consumed_offsets = {}
-            if self.args.is_slips_live_updating:
+            if self.args.is_slips_started_by_an_update:
                 self.restore_zeek_files_offsets_from_db()
             # Try to keep track of when was the last update so we stop this
             # reading
@@ -417,7 +417,7 @@ class ZeekInputUtils:
         observer.start(zeek_dir, pcap_or_interface)
 
         zeek_files = os.listdir(zeek_dir)
-        if len(zeek_files) > 0 and not self.args.is_slips_live_updating:
+        if len(zeek_files) > 0 and not self.args.is_slips_started_by_an_update:
             # First clear the zeek folder of old .log files
             for file_name in zeek_files:
                 os.remove(os.path.join(zeek_dir, file_name))

@@ -87,7 +87,7 @@ class ProcessManager:
         # is set by the input process to indicate no more flows are coming
         # so profiler can safely begin shutdown/joins.
         self.is_input_done_event = Event()
-        self.is_slips_live_updating = Event()
+        self.is_slips_live_updating_event = Event()
         self.read_config()
 
     def read_config(self):
@@ -102,7 +102,7 @@ class ProcessManager:
     def start_slips_update_manager(self):
         return UpdateManager(
             database=self.main.db,
-            is_slips_live_updating=self.is_slips_live_updating,
+            is_slips_live_updating_event=self.is_slips_live_updating_event,
         )
 
     def start_output_process(self, stderr, slips_logfile, stdout=""):
@@ -185,7 +185,7 @@ class ProcessManager:
             line_type=self.main.line_type,
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
-            is_slips_live_updating=self.is_slips_live_updating,
+            is_slips_live_updating_event=self.is_slips_live_updating_event,
         )
         input_process.start()
         self.main.print(

@@ -20,10 +20,10 @@ from slips_files.core.database.database_manager import DBManager
 
 class UpdateManager:
     def __init__(
-        self, database: DBManager = None, is_slips_live_updating=None
+        self, database: DBManager = None, is_slips_live_updating_event=None
     ):
         self.db = database
-        self.is_slips_live_updating = is_slips_live_updating
+        self.is_slips_live_updating_event = is_slips_live_updating_event
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.cached_update_info: Optional[Dict[str, Any]] = None
         self.conf = ConfigParser()
@@ -153,7 +153,7 @@ class UpdateManager:
 
         # this event signals input.py to save the current zeek offsets in
         # the db
-        self.is_slips_live_updating.set()
+        self.is_slips_live_updating_event.set()
         ...
 
     def _did_1d_pass_since_last_update(self) -> bool:
