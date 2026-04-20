@@ -14,8 +14,6 @@ class ArgumentParser(argparse.ArgumentParser):
         super(ArgumentParser, self).__init__(*args, **kwargs)
         self.program = {key: kwargs[key] for key in kwargs}
 
-        self.alerts_default_path = "output/"
-
     def add_argument(self, *args, **kwargs):
         super(ArgumentParser, self).add_argument(*args, **kwargs)
         if kwargs.get("help") == argparse.SUPPRESS:
@@ -211,8 +209,7 @@ class ArgumentParser(argparse.ArgumentParser):
             action="store",
             metavar="<dir>",
             required=False,
-            default=self.alerts_default_path,
-            help="Store alerts.json and alerts.txt in the given folder.",
+            help="Store Slips logs in the given folder.",
         )
         self.add_argument(
             "-s",

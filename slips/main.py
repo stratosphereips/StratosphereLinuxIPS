@@ -40,7 +40,7 @@ DAEMONIZED_MODE = "daemonized"
 class Main:
     def __init__(self, testing=False):
         self.name = "main"
-        self.alerts_default_path = "output/"
+        self.parent_output_dir = "output/"
         self.mode = "interactive"
         self.sigterm_received = False
         # objects to manage various functionality
@@ -73,6 +73,13 @@ class Main:
                     self.input_information,
                     self.line_type,
                 ) = self.checker.get_input_type()
+                self.input_information = os.path.normpath(
+                    self.input_information
+                )
+                self.input_information = self.input_information.replace(
+                    ",", "_"
+                )
+
                 # If we need zeek (bro), test if we can run it.
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
@@ -171,6 +178,28 @@ class Main:
         if self.conf.delete_zeek_files():
             shutil.rmtree(self.zeek_dir)
 
+    def del_file_or_dir(self, file):
+        """deletes a file or dir inside the output dir"""
+        file_path = os.path.join(self.args.output, file)
+        with contextlib.suppress(Exception):
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+
+    def construct_output_dir_name(self) -> str:
+        dir_name = os.path.join(
+            self.parent_output_dir,
+            os.path.basename(
+                self.input_information
+            ),  # get pcap name from path
+        )
+
+        # add timestamp to avoid conflicts e.g wlp3s0_2022-03-1_03:55
+        ts = utils.convert_ts_format(datetime.now(), "%Y-%m-%d_%H:%M:%S")
+        dir_name += f"_{ts}/"
+        return dir_name
+
     def prepare_output_dir(self):
         """
         Clears the output dir if it already exists , or creates a
@@ -178,47 +207,33 @@ class Main:
         Log dirs are stored in output/<input>_%Y-%m-%d_%H:%M:%S
         @return: None
         """
-        # default output/
-        if "-o" in sys.argv:
-            # -o is given
-            # delete all old files in the output dir
-            if os.path.exists(self.args.output):
-                for file in os.listdir(self.args.output):
-                    # in integration tests, slips redirects its
-                    # output to slips_output.txt,
-                    # don't delete that file
-                    if self.args.testing and "slips_output.txt" in file:
-                        continue
+        if self.args.is_slips_started_by_an_update:
+            # we should append to existing files in the output dir,
+            # and never overwrite them.
+            return
 
-                    file_path = os.path.join(self.args.output, file)
-                    with contextlib.suppress(Exception):
-                        if os.path.isfile(file_path):
-                            os.remove(file_path)
-                        elif os.path.isdir(file_path):
-                            shutil.rmtree(file_path)
-            else:
-                os.makedirs(self.args.output)
+        if not self.args.output:
+            # the user didnt give slips an output dir to use, construct one
+            self.args.output = self.construct_output_dir_name()
+            os.makedirs(self.args.output)
+
             os.chmod(self.args.output, 0o777)
             return
 
-        # self.args.output is the same as self.alerts_default_path
-        self.input_information = os.path.normpath(self.input_information)
-        self.input_information = self.input_information.replace(",", "_")
-        # now that slips can run several instances,
-        # each created dir will be named after the instance
-        # that created it
-        # it should be output/wlp3s0
-        self.args.output = os.path.join(
-            self.alerts_default_path,
-            os.path.basename(
-                self.input_information
-            ),  # get pcap name from path
-        )
-        # add timestamp to avoid conflicts wlp3s0_2022-03-1_03:55
-        ts = utils.convert_ts_format(datetime.now(), "%Y-%m-%d_%H:%M:%S")
-        self.args.output += f"_{ts}/"
+        # -o is given
+        # delete all old files in the output dir
+        if os.path.exists(self.args.output):
+            for file in os.listdir(self.args.output):
+                # in integration tests, slips redirects its
+                # output to slips_output.txt,
+                # don't delete that file
+                if self.args.testing and "slips_output.txt" in file:
+                    continue
+                self.del_file_or_dir(file)
 
-        os.makedirs(self.args.output)
+        else:
+            os.makedirs(self.args.output)
+
         os.chmod(self.args.output, 0o777)
 
     def set_mode(self, mode, daemon=""):

@@ -18,7 +18,7 @@ class Checker:
         supported input_type values are:
             interface, argus, suricata, zeek, nfdump, db
         supported input_information:
-            given filepath, interface or type of line given in stdin,
+            given filepath, interface, or type of line given in stdin,
             comma separated access point interfaces like wlan0,eth0
         """
         # only defined in stdin lines
