@@ -17,6 +17,8 @@ from os import path
 from operator import itemgetter
 from pathlib import Path
 
+from slips_files.common.slips_utils import utils
+
 VERSION = "3.0-beta2"
 
 
@@ -181,11 +183,13 @@ class Client(object):
         idstore=None,
         name="org.example.warden.test",
         secret=None,
+        is_slips_started_by_an_update: bool = False,
     ):
         if errlog is None:
             errlog = {}
         self.name = name
         self.secret = secret
+        self.is_slips_started_by_an_update = is_slips_started_by_an_update
         # Init logging as soon as possible and make sure we don't
         # spit out exceptions but just log or return Error objects
         self.init_log(errlog, syslog, filelog)
@@ -221,7 +225,11 @@ class Client(object):
         # filename = path.basename(filepath)
         p = Path(dir)
         p.mkdir(parents=True, exist_ok=True)
-        open(filepath, "w").close()
+        utils.initialize_logfile(
+            filepath,
+            self.is_slips_started_by_an_update,
+            create_parent_dirs=False,
+        )
 
     def init_log(self, errlog: dict, syslog: dict, filelog: dict):
         def loglevel(lev):
@@ -650,6 +658,6 @@ def format_time(
 def read_cfg(cfgfile):
     with open(cfgfile, "r") as f:
         stripcomments = "\n".join(
-            (l for l in f if not l.lstrip().startswith(("#", "//")))
+            (line for line in f if not line.lstrip().startswith(("#", "//")))
         )
         return json.loads(stripcomments)

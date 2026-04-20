@@ -52,6 +52,7 @@ class GoDirector:
         gopy_channel: str = "p2p_gopy",
         pygo_channel: str = "p2p_pygo",
         p2p_reports_logfile: str = "p2p_reports.log",
+        is_slips_started_by_an_update: bool = False,
     ):
         self.printer = Printer(logger, self.name)
 
@@ -67,8 +68,9 @@ class GoDirector:
         self.report_func = report_func
         self.request_func = request_func
         # clear the logfile
-        if not self.args.is_slips_started_by_an_update:
-            open(p2p_reports_logfile, "w").close()
+        utils.initialize_logfile(
+            p2p_reports_logfile, is_slips_started_by_an_update
+        )
         self.reports_logfile = open(p2p_reports_logfile, "a")
         self.print(f"Storing peer reports in {p2p_reports_logfile}")
         # TODO: there should be some better mechanism to add new processing

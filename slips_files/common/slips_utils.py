@@ -835,6 +835,34 @@ class Utils(object):
 
         os.system(f"chown {UID}:{GID} {file}")
 
+    def initialize_logfile(
+        self,
+        logfile_path: str,
+        started_by_update: bool,
+        mode: str = "w",
+        create_parent_dirs: bool = True,
+    ) -> bool:
+        """
+        Initialize a log file unless Slips was started by an update.
+        when slips is being updated , we dont want the new version to clear
+        the used logfiles, instead it will append to them
+
+        :param logfile_path: path to the log file to initialize.
+        :param started_by_update: whether Slips was started by an update.
+        :param mode: file mode used to initialize the log file.
+        :param create_parent_dirs: whether to create missing parent dirs.
+        :return: True if the file was initialized, False otherwise.
+        """
+        if started_by_update:
+            return False
+
+        logfile_dir = os.path.dirname(logfile_path)
+        if create_parent_dirs and logfile_dir:
+            os.makedirs(logfile_dir, exist_ok=True)
+        # clear the logfile
+        open(logfile_path, mode).close()
+        return True
+
     def get_ip_identification_as_str(self, ip_identification: dict) -> str:
         id = ""
         if "DNS_resolution" in ip_identification:

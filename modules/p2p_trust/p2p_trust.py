@@ -193,6 +193,9 @@ class Trust(IModule):
             gopy_channel=self.gopy_channel,
             pygo_channel=self.pygo_channel,
             p2p_reports_logfile=self.p2p_reports_logfile,
+            is_slips_started_by_an_update=getattr(
+                self.args, "is_slips_started_by_an_update", False
+            ),
         )
 
         self.pigeon = None

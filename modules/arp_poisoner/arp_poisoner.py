@@ -37,11 +37,10 @@ class ARPPoisoner(IModule):
         )
         self.blocking_logfile_lock = Lock()
         # clear it
-        try:
-            if not self.args.is_slips_started_by_an_update:
-                open(self.log_file_path, "w").close()
-        except FileNotFoundError:
-            pass
+        utils.initialize_logfile(
+            self.log_file_path,
+            getattr(self.args, "is_slips_started_by_an_update", False),
+        )
         self.unblocker = ARPUnblocker(
             self.db, self.should_stop, self.logger, self.log
         )

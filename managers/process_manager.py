@@ -118,6 +118,7 @@ class ProcessManager:
             debug=self.main.args.debug,
             input_type=self.main.input_type,
             create_logfiles=False if self.main.args.stopdaemon else True,
+            slips_args=self.main.args,
         )
         self.slips_logfile = output_process.slips_logfile
         return output_process

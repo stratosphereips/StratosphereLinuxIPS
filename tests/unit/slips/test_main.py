@@ -488,7 +488,7 @@ def test_prepare_output_dir_without_o_flag(
 ):
     main = ModuleFactory().create_main_obj()
     main.args = MagicMock()
-    main.alerts_default_path = str(tmp_path)
+    main.parent_output_dir = str(tmp_path)
     main.input_information = "/fake/input/wlp3s0"
     monkeypatch.setattr(sys, "argv", ["script.py"])  # No -o
 
