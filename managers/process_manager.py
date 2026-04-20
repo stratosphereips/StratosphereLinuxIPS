@@ -9,7 +9,6 @@ import signal
 import sys
 import time
 import traceback
-import threading
 from collections import OrderedDict
 from datetime import datetime
 from multiprocessing import (
@@ -44,9 +43,6 @@ from slips_files.common.plotter import Plotter
 
 from slips_files.common.style import green
 from slips_files.common.input_type import InputType
-from slips_files.core.database.redis_db.timewindow_updater_thread.tw_updater import (
-    timewindow_updater,
-)
 from slips_files.core.evidence_handler import EvidenceHandler
 from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.input import Input
@@ -469,26 +465,6 @@ class ProcessManager:
             self.main.conf,
             self.main.pid,
         )
-
-    def start_timewindow_updater(self):
-        """
-        Starts a thread that keeps track of the current timewindow if
-        running on an interface
-
-        why is this not started by the redis db? because each module
-        has a db insteance, and we don't want a thread per module,
-        so starting this thread once in main is enough
-        """
-        if not self.main.args.interface:
-            return
-        tw_width: float = self.main.conf.get_tw_width_in_seconds()
-        t = threading.Thread(
-            target=timewindow_updater,
-            name="timewindow_updater",
-            args=(self.main.db, tw_width, self.termination_event),
-            daemon=True,
-        )
-        utils.start_thread(t, self.main.db)
 
     def start_update_manager(self, local_files=False, ti_feeds=False):
         """

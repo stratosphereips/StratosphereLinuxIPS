@@ -1147,17 +1147,6 @@ class ProfileHandler:
                 pipe = self.delete_past_timewindows(profile_tw_to_close, pipe)
         pipe.execute()
 
-    def get_current_timewindow(self) -> Optional[str]:
-        """returns the current timewindow if slips is running real-time (
-        not pcap/log files)"""
-        if not self.args.interface:
-            return
-
-        return self.r.get(self.constants.CURRENT_TIMEWINDOW)
-
-    def set_current_timewindow(self, timewindow: str) -> Optional[str]:
-        self.r.set(self.constants.CURRENT_TIMEWINDOW, timewindow)
-
     def mark_profile_tw_as_modified(self, modified_tw_details: dict):
         """
         PS: this function should be as optimized as possible, it's the main
