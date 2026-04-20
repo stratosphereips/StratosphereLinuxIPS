@@ -150,7 +150,10 @@ class UpdateManager:
         # else:
         #     # prep for handover. old version to the new one.
         #     ...
-        # self.is_slips_live_updating.set()
+
+        # this event signals input.py to save the current zeek offsets in
+        # the db
+        self.is_slips_live_updating.set()
         ...
 
     def _did_1d_pass_since_last_update(self) -> bool:

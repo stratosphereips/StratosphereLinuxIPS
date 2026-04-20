@@ -97,6 +97,7 @@ class ZeekInputUtils:
             try:
                 # First time opening this file.
                 file_handle = open(filename, "r")
+                self.restore_file_offset(filename, file_handle)
                 self.open_file_handles[filename] = file_handle
                 # now that we replaced the old handle with the newly created file handle
                 # delete the old .log file, that has a timestamp in its name.
@@ -112,6 +113,48 @@ class ZeekInputUtils:
                 # created and added to the zeek_files list
                 return False
         return file_handle
+
+    def restore_zeek_files_offsets_from_db(self):
+        """
+        Restore previously stored Zeek logfile offsets from the database.
+
+        :return: Mapping of Zeek logfile paths to integer offsets.
+        """
+        restored_offsets = {}
+        stored_offsets = self.input.db.get_open_zeek_files_offsets()
+
+        for filename, offset in stored_offsets.items():
+            try:
+                restored_offsets[filename] = int(offset)
+            except (TypeError, ValueError):
+                self.input.print(
+                    f"Ignoring invalid stored Zeek offset for {filename}: "
+                    f"{offset}",
+                    log_to_logfiles_only=True,
+                )
+
+        self.last_consumed_offsets = restored_offsets
+        self.zeek_logs_offsets = {}
+        return restored_offsets
+
+    def restore_file_offset(self, filename: str, file_handle):
+        """
+        Move a newly opened Zeek logfile handle to its restored offset.
+        This is useful when slips auto updates, to start reading from where
+        slips left off before updating
+
+        :param filename: Zeek logfile path.
+        :param file_handle: Open file handle for the Zeek logfile.
+        :return: None
+        """
+        offset = self.last_consumed_offsets.get(filename)
+        if offset is None:
+            return
+
+        if offset > os.path.getsize(filename):
+            return
+
+        file_handle.seek(offset)
 
     def get_ts_from_line(self, zeek_line: str):
         """
@@ -278,10 +321,7 @@ class ZeekInputUtils:
         newest_offset = self._get_newest_known_offset(file)
         self.last_consumed_offsets[file] = newest_offset
 
-        if (
-            self.input.is_slips_live_updating is not None
-            and self.input.is_slips_live_updating.is_set()
-        ):
+        if self.args.is_slips_started_by_an_update:
             self.store_current_open_zeek_files_offsets_in_db()
 
     def read_zeek_files(self) -> int:
@@ -298,6 +338,8 @@ class ZeekInputUtils:
             self.cache_lines = {}
             self.zeek_logs_offsets = {}
             self.last_consumed_offsets = {}
+            if self.args.is_slips_live_updating:
+                self.restore_zeek_files_offsets_from_db()
             # Try to keep track of when was the last update so we stop this
             # reading
             self.last_updated_file_time = datetime.datetime.now()
@@ -375,7 +417,7 @@ class ZeekInputUtils:
         observer.start(zeek_dir, pcap_or_interface)
 
         zeek_files = os.listdir(zeek_dir)
-        if len(zeek_files) > 0:
+        if len(zeek_files) > 0 and not self.args.is_slips_live_updating:
             # First clear the zeek folder of old .log files
             for file_name in zeek_files:
                 os.remove(os.path.join(zeek_dir, file_name))
