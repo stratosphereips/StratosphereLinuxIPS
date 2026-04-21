@@ -33,6 +33,9 @@ class ZeekInputUtils:
         self.zeek_threads = []
         self.zeek_pids = []
         self.dos_protector = DoSProtector(self.input)
+        self.args = self.input.args
+        self.print = self.input.print
+        self.update_msg_printed = False
 
     def check_if_time_to_del_rotated_files(self):
         """
@@ -120,13 +123,20 @@ class ZeekInputUtils:
 
         :return: Mapping of Zeek logfile paths to integer offsets.
         """
+        self.print(
+            "Restoring zeek file offsets from the db to "
+            "continue analysis "
+            "from where the old slips version left off."
+        )
         restored_offsets = {}
         stored_offsets = self.input.db.get_open_zeek_files_offsets()
 
         for filename, offset in stored_offsets.items():
             try:
+                print(f"@@@@@@@@@@@@@@@@ restored {filename}: {offset}")
                 restored_offsets[filename] = int(offset)
             except (TypeError, ValueError):
+                print(f"@@@@@@@@@@@@@@@@ err??? {filename}")
                 self.input.print(
                     f"Ignoring invalid stored Zeek offset for {filename}: "
                     f"{offset}",
@@ -203,7 +213,7 @@ class ZeekInputUtils:
         # We don't have any waiting line for this file, so proceed
         try:
             flows_to_skip_reading_if_under_heavy_load: int = (
-                self.dos_protector.get_number_of_flows_to_skip_and_time_to_stop_sampling()
+                self.dos_protector.get_number_of_flows_to_skip()
             )
 
             # skips flows
@@ -317,11 +327,22 @@ class ZeekInputUtils:
         previously_saved_offset = self.last_consumed_offsets.get(file, 0)
         return self.zeek_logs_offsets.get(file, previously_saved_offset)
 
+    def _print_update_msg(self):
+        if not self.update_msg_printed:
+            self.print(
+                "Slips is live updating. Storing last read zeek log "
+                "files offsets in the db. "
+            )
+            self.update_msg_printed = True
+
     def _update_offsets(self, file):
         newest_offset = self._get_newest_known_offset(file)
         self.last_consumed_offsets[file] = newest_offset
-
-        if self.args.is_slips_started_by_an_update:
+        # an old version of slips is shutting down, and a new one will
+        # start soon, save the offsets in the db so the new one can restore
+        # them and continue reading from where the old one left off
+        if self.input.is_slips_live_updating_event.is_set():
+            self._print_update_msg()
             self.store_current_open_zeek_files_offsets_in_db()
 
     def read_zeek_files(self) -> int:
