@@ -20,7 +20,10 @@ from slips_files.core.database.database_manager import DBManager
 
 class UpdateManager:
     def __init__(
-        self, database: DBManager = None, is_slips_live_updating_event=None
+        self,
+        database: DBManager = None,
+        is_slips_live_updating_event=None,
+        print_func=None,
     ):
         self.db = database
         self.is_slips_live_updating_event = is_slips_live_updating_event
@@ -36,6 +39,7 @@ class UpdateManager:
         )
         self._read_configuration()
         self.last_update_time = 0
+        self.print = print_func
 
     def _read_configuration(self):
         self.auto_update_slips_enabled = self.conf.auto_update_slips()
@@ -151,8 +155,8 @@ class UpdateManager:
         #     # prep for handover. old version to the new one.
         #     ...
 
-        # this event signals input.py to save the current zeek offsets in
-        # the db
+        # this event signals input.py to stop recving input and start
+        # draining
         self.is_slips_live_updating_event.set()
         ...
 
@@ -172,7 +176,20 @@ class UpdateManager:
         should update itself
         """
         if self._did_1d_pass_since_last_update():
-            return self.should_update_slips()
+            should_update: bool = self.should_update_slips()
+            # @@@@@@@@@@@@@ ALYA DONOT COMMIT THIS
+            # should_update = True
+            if should_update:
+                self.print(
+                    "A new version of Slips is available. "
+                    "Updating slips now."
+                )
+            else:
+                self.print(
+                    "No new version of Slips is available. "
+                    "Slips will check again after 1 day."
+                )
+            return should_update
         return False
 
     def should_update_slips(self) -> bool:
