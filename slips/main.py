@@ -84,8 +84,6 @@ class Main:
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
                 self.redis_man.start_redis_cache_if_not_running()
-                # this is the zeek dir slips will be using
-                self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
                 # should be initialised after self.input_type is set
                 self.host_ip_man = HostIPManager(self)
@@ -109,15 +107,6 @@ class Main:
             return False
 
         return self.zeek_bro
-
-    def prepare_zeek_output_dir(self):
-        from pathlib import Path
-
-        without_ext = Path(self.input_information).stem
-        if self.conf.store_zeek_files_in_the_output_dir():
-            self.zeek_dir = os.path.join(self.args.output, "zeek_files")
-        else:
-            self.zeek_dir = f"zeek_files_{without_ext}/"
 
     def terminate_slips(self):
         """
@@ -169,14 +158,22 @@ class Main:
         store_a_copy_of_zeek_files = self.conf.store_a_copy_of_zeek_files()
         was_running_zeek = self.was_running_zeek()
         if store_a_copy_of_zeek_files and was_running_zeek:
+            zeek_dir = self.db.get_zeek_output_dir()
+            if not isinstance(zeek_dir, str) or not zeek_dir:
+                return
             # this is where the copy will be stored
             dest_zeek_dir = os.path.join(self.args.output, "zeek_files")
-            copy_tree(self.zeek_dir, dest_zeek_dir)
+            copy_tree(zeek_dir, dest_zeek_dir)
             print(f"[Main] Stored a copy of zeek files to {dest_zeek_dir}")
 
     def delete_zeek_files(self):
-        if self.conf.delete_zeek_files():
-            shutil.rmtree(self.zeek_dir)
+        zeek_dir = self.db.get_zeek_output_dir()
+        if (
+            self.conf.delete_zeek_files()
+            and isinstance(zeek_dir, str)
+            and zeek_dir
+        ):
+            shutil.rmtree(zeek_dir)
 
     def del_file_or_dir(self, file):
         """deletes a file or dir inside the output dir"""

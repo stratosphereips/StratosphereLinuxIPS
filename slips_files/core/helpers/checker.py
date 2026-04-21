@@ -259,7 +259,6 @@ class Checker:
         print("Deleting Cache DB in Redis.")
         self.main.redis_man.clear_redis_cache_database()
         self.main.input_information = ""
-        self.main.zeek_dir = ""
         self.main.redis_man.log_redis_server_pid(
             redis_cache_default_server_port, redis_cache_server_pid
         )

@@ -57,6 +57,7 @@ class InterfaceInput(IInputHandler):
                         }
                     }
                 )
+
         for interface, interface_info in interfaces_to_monitor.items():
             interface_dir = interface_info["dir"]
             if not os.path.exists(interface_dir):

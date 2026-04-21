@@ -103,6 +103,7 @@ class ProcessManager:
         return UpdateManager(
             database=self.main.db,
             is_slips_live_updating_event=self.is_slips_live_updating_event,
+            print_func=self.main.print,
         )
 
     def start_output_process(self, stderr, slips_logfile, stdout=""):
@@ -181,7 +182,6 @@ class ProcessManager:
             input_information=self.main.input_information,
             cli_packet_filter=self.main.args.pcapfilter,
             zeek_or_bro=self.main.zeek_bro,
-            zeek_dir=self.main.zeek_dir,
             line_type=self.main.line_type,
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
