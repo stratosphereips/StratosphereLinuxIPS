@@ -21,7 +21,7 @@ class InterfaceInput(IInputHandler):
         """
         runs when slips is given an interface with -i or 2 interfaces with -ap
         """
-        self.input.zeek_utils.ensure_zeek_dir()
+        self.input.zeek_utils.create_zeek_output_dir()
         self.input.print(f"Storing zeek log files in {self.input.zeek_dir}")
         if self.input.is_running_non_stop:
             self.file_remover.start()

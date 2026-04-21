@@ -8,6 +8,7 @@ import signal
 import subprocess
 import threading
 import time
+from pathlib import Path
 from typing import List, Tuple
 from re import split
 
@@ -417,9 +418,25 @@ class ZeekInputUtils:
 
         return self.input.lines
 
-    def ensure_zeek_dir(self):
-        if not os.path.exists(self.input.zeek_dir):
-            os.makedirs(self.input.zeek_dir)
+    def create_zeek_output_dir(self) -> str:
+        """
+        Return the Zeek output directory, create it if needed,
+        and store its path in the DB.
+
+        :return: Directory where Zeek should write log files.
+        """
+        if not self.input.zeek_dir:
+            without_ext = Path(self.input.given_path).stem
+            if self.input.conf.store_zeek_files_in_the_output_dir():
+                zeek_dir = Path(self.input.args.output) / "zeek_files"
+            else:
+                zeek_dir = Path(f"zeek_files_{without_ext}")
+
+            self.input.zeek_dir = str(zeek_dir)
+
+        Path(self.input.zeek_dir).mkdir(parents=True, exist_ok=True)
+        self.input.db.set_input_metadata({"zeek_dir": self.input.zeek_dir})
+        return self.input.zeek_dir
 
     def init_zeek(
         self,
