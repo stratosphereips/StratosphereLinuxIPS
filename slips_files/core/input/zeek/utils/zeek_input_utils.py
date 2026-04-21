@@ -37,6 +37,7 @@ class ZeekInputUtils:
         self.args = self.input.args
         self.print = self.input.print
         self.update_msg_printed = False
+        self.is_running_non_stop = self.input.db.is_running_non_stop()
 
     def check_if_time_to_del_rotated_files(self):
         """
@@ -418,6 +419,13 @@ class ZeekInputUtils:
 
         return self.input.lines
 
+    def _is_auto_update_enabled(self) -> bool:
+        """
+        returns true if slips is analyzing an interface (-i , -ap or -g)
+        and auto_update is enabled in slips.yaml
+        """
+        return self.is_running_non_stop and self.input.conf.auto_update_slips()
+
     def create_zeek_output_dir(self) -> str:
         """
         Return the Zeek output directory, create it if needed,
@@ -425,18 +433,23 @@ class ZeekInputUtils:
 
         :return: Directory where Zeek should write log files.
         """
-        if not self.input.zeek_dir:
-            without_ext = Path(self.input.given_path).stem
-            if self.input.conf.store_zeek_files_in_the_output_dir():
-                zeek_dir = Path(self.input.args.output) / "zeek_files"
-            else:
-                zeek_dir = Path(f"zeek_files_{without_ext}")
 
-            self.input.zeek_dir = str(zeek_dir)
+        without_ext = Path(self.input.given_path).stem
+        if self.input.conf.store_zeek_files_in_the_output_dir():
+            zeek_dir = Path(self.input.args.output) / "zeek_files"
+        else:
+            zeek_dir = Path(f"zeek_files_{without_ext}")
 
-        Path(self.input.zeek_dir).mkdir(parents=True, exist_ok=True)
-        self.input.db.set_input_metadata({"zeek_dir": self.input.zeek_dir})
-        return self.input.zeek_dir
+        if self._is_auto_update_enabled():
+            # slips is gonna be auto updating for each new version, we need
+            # 1 zeek dir for each started version
+            zeek_dir = Path(zeek_dir) / f"slips_v{utils.get_current_version()}"
+
+        zeek_dir = str(zeek_dir)
+
+        Path(zeek_dir).mkdir(parents=True, exist_ok=True)
+        self.input.db.set_input_metadata({"zeek_dir": zeek_dir})
+        return zeek_dir
 
     def init_zeek(
         self,

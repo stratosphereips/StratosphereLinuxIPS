@@ -55,7 +55,6 @@ class Input(ICore):
         input_information=None,
         cli_packet_filter=None,
         zeek_or_bro=None,
-        zeek_dir=None,
         line_type=None,
         is_profiler_done_event: multiprocessing.Event = None,
         is_input_done_event: multiprocessing.Event = None,
@@ -68,7 +67,6 @@ class Input(ICore):
         self.line_type: str = line_type
         # entire path
         self.given_path: str = input_information
-        self.zeek_dir: str = zeek_dir
         self.zeek_or_bro: str = zeek_or_bro
         self.read_lines_delay = 0
         # when input is done processing, it reeleases this semaphore, that's h

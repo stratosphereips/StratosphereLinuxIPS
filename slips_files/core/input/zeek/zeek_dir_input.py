@@ -38,9 +38,7 @@ class ZeekDirInput(IInputHandler):
             # know the interface, hence the "default"
             interface = "default"
 
-        self.input.zeek_dir = self.input.given_path
-
-        self.observer.start(self.input.zeek_dir, interface)
+        self.observer.start(self.input.given_path, interface)
         if self.input.is_running_non_stop:
             self.file_remover.start()
 
