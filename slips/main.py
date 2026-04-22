@@ -566,6 +566,9 @@ class Main:
                     self.conf,
                     int(self.pid),
                     start_redis_server=start_redis_server,
+                    # if auto update is enabled, slips starts itself with
+                    # -u, and continues using the same db as the old
+                    # version without overwriting the keys there
                     flush_db=not self.args.is_slips_started_by_an_update,
                 )
 
