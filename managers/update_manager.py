@@ -15,7 +15,12 @@ from typing import Any, Dict, List, Optional
 from urllib import error, request
 
 import psutil
-from git import InvalidGitRepositoryError, NoSuchPathError, Repo
+from git import (
+    GitCommandError,
+    InvalidGitRepositoryError,
+    NoSuchPathError,
+    Repo,
+)
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
@@ -161,6 +166,62 @@ class UpdateManager:
         repo.git.checkout("origin/master")
         return repo.head.commit
 
+    def _get_checkout_overwritten_files(
+        self, git_error: GitCommandError
+    ) -> List[str]:
+        """
+        Extract files Git says would be overwritten by checkout.
+        we'll just print them to the user.
+
+        Parameters:
+            git_error: The GitPython checkout failure.
+
+        Returns:
+            The local paths reported by Git, or an empty list if this is not
+            a local-change checkout conflict.
+        """
+        stderr = getattr(git_error, "stderr", "") or str(git_error)
+        if (
+            "Your local changes to the following files would be "
+            "overwritten by checkout" not in stderr
+        ):
+            return []
+
+        files = []
+        is_file_list = False
+        for line in stderr.splitlines():
+            stripped_line = line.strip().strip("'")
+            if (
+                "Your local changes to the following files would be "
+                "overwritten by checkout" in stripped_line
+            ):
+                is_file_list = True
+                continue
+
+            if not is_file_list:
+                continue
+
+            if stripped_line.startswith(("Please commit", "Aborting")):
+                break
+
+            if stripped_line:
+                files.append(stripped_line)
+
+        return files
+
+    def _get_target_update_version(self) -> Optional[str]:
+        """
+        Get the target Slips version from cached update metadata.
+
+        Returns:
+            The update version if known, otherwise None.
+        """
+        update_data = (
+            self.cached_update_info or self._read_master_update_json()
+        )
+        version = update_data.get("version")
+        return version if isinstance(version, str) and version else None
+
     def _get_updated_slips_command(self) -> List[str]:
         """
         Build the command used to start the updated Slips process.
@@ -194,8 +255,32 @@ class UpdateManager:
             start_new_session=True,
         )
 
+    def _warn_about_aborted_update(
+        self, git_error: Optional[GitCommandError] = None
+    ):
+        overwritten_files = self._get_checkout_overwritten_files(git_error)
+        if not overwritten_files:
+            raise
+
+        target_version = self._get_target_update_version()
+        update_target = (
+            f"Slips v{target_version}"
+            if target_version
+            else "the new Slips version"
+        )
+        self.print(
+            f"Warning: Uncommitted changes to {overwritten_files} detected. "
+            f"Aborting update to {update_target}, please update Slips "
+            "manually."
+        )
+
     def update_slips(self):
-        self.git_pull_master()
+        try:
+            self.git_pull_master()
+        except GitCommandError as git_error:
+            self._warn_about_aborted_update(git_error)
+            return
+
         self.start_updated_slips_version()
         # this eventL
         # - signals input.py to stop recving input and start draining flows
@@ -219,10 +304,6 @@ class UpdateManager:
         """
         if self._did_1d_pass_since_last_update():
             should_update: bool = self.should_update_slips()
-
-            # @@@@@@@@@@@@@ ALYA DONOT COMMIT THIS
-            should_update = True
-
             if should_update:
                 self.print(
                     "A new version of Slips is available. "

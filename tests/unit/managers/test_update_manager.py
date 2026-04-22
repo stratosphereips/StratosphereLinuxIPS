@@ -4,6 +4,7 @@ import subprocess
 from unittest.mock import Mock, patch
 
 import pytest
+from git import GitCommandError
 
 from managers.update_manager import UpdateManager
 
@@ -214,3 +215,61 @@ def test_update_slips_starts_updated_process_before_stopping_current_slips():
         "start_updated_slips_verison",
         "set_update_event",
     ]
+
+
+def test_update_slips_aborts_when_local_changes_block_checkout():
+    """
+    Ensure local checkout conflicts abort the update without stopping Slips.
+
+    Returns:
+        None.
+    """
+    update_manager = create_update_manager()
+    update_manager.cached_update_info = {"version": "1.2.3"}
+    git_error = GitCommandError(
+        "git checkout origin/master",
+        1,
+        stderr=(
+            "error: Your local changes to the following files would be "
+            "overwritten by checkout:\n"
+            "\tconfig/slips.yaml\n"
+            "Please commit your changes or stash them before you switch "
+            "branches.\n"
+            "Aborting"
+        ),
+    )
+    update_manager.git_pull_master = Mock(side_effect=git_error)
+    update_manager.start_updated_slips_version = Mock()
+
+    update_manager.update_slips()
+
+    update_manager.git_pull_master.assert_called_once()
+    update_manager.start_updated_slips_version.assert_not_called()
+    update_manager.is_slips_live_updating_event.set.assert_not_called()
+    update_manager.print.assert_called_once_with(
+        "Uncommitted changes to ['config/slips.yaml'] detected. "
+        "Aborting update to Slips v1.2.3, please update Slips manually."
+    )
+
+
+def test_update_slips_reraises_unrelated_git_errors():
+    """
+    Ensure unexpected git failures are not hidden by the update manager.
+
+    Returns:
+        None.
+    """
+    update_manager = create_update_manager()
+    git_error = GitCommandError(
+        "git checkout origin/master",
+        128,
+        stderr="fatal: not a git repository",
+    )
+    update_manager.git_pull_master = Mock(side_effect=git_error)
+    update_manager.start_updated_slips_version = Mock()
+
+    with pytest.raises(GitCommandError):
+        update_manager.update_slips()
+
+    update_manager.start_updated_slips_version.assert_not_called()
+    update_manager.is_slips_live_updating_event.set.assert_not_called()
