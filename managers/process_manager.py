@@ -626,6 +626,11 @@ class ProcessManager:
         This function NEVER returns True if the input and profiler are
         still processing.
         """
+        if self.is_slips_live_updating_event.is_set():
+            # slips is auto updating this version of slips should stop and
+            # the updated one will start
+            return True
+
         if self.should_run_non_stop():
             return False
 

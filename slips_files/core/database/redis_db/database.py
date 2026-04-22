@@ -196,7 +196,11 @@ class RedisDB(
         self.call_mixins_setup()
         self._init_ttls()
         self.set_new_incoming_flows(True)
-        if self.logger and not self.flush_db:
+        if (
+            self.logger
+            and not self.flush_db
+            and self.args.is_slips_started_by_an_update
+        ):
             self.print(
                 "Continuing on previous data stored in redis.",
                 log_to_logfiles_only=True,
