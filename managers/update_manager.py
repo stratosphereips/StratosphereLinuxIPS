@@ -8,10 +8,13 @@ Handles updating of slips version
 
 import json
 import re
+import subprocess
+import sys
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib import error, request
 
+import psutil
 from git import InvalidGitRepositoryError, NoSuchPathError, Repo
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -158,8 +161,42 @@ class UpdateManager:
         repo.git.checkout("origin/master")
         return repo.head.commit
 
+    def _get_updated_slips_command(self) -> List[str]:
+        """
+        Build the command used to start the updated Slips process.
+
+        Returns:
+            The current Slips cmd plus (-u).
+        """
+        try:
+            cmd = psutil.Process().cmdline()
+        except psutil.Error:
+            cmd = []
+
+        if not cmd:
+            cmd = [sys.executable, *sys.argv]
+
+        return [*cmd, "-u"]
+
+    def start_updated_slips_version(self) -> subprocess.Popen:
+        """
+        Starts the updated Slips as an independent process.
+
+        Returns:
+            The detached process handle for the updated Slips process.
+        """
+        return subprocess.Popen(
+            self._get_updated_slips_command(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            start_new_session=True,
+        )
+
     def update_slips(self):
         self.git_pull_master()
+        self.start_updated_slips_version()
         # this eventL
         # - signals input.py to stop recving input and start draining flows
         # - and signals the process_manager() to call shutdown_gracefully()
