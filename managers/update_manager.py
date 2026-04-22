@@ -146,19 +146,24 @@ class UpdateManager:
 
         return utils.get_current_version() == latest_version
 
-    def update_slips(self):
-        # if self.is_first_run:
-        #     # we're not live updating, there isnt going to be an older
-        #     # version of slips draining in this case.
-        #     ...
-        # else:
-        #     # prep for handover. old version to the new one.
-        #     ...
+    def git_pull_master(self):
+        """
+        Pull the latest origin/master changes and check them out.
 
-        # this event signals input.py to stop recving input and start
-        # draining
+        Returns:
+            The checked out origin/master commit.
+        """
+        repo = Repo(".")
+        repo.remote("origin").fetch("master")
+        repo.git.checkout("origin/master")
+        return repo.head.commit
+
+    def update_slips(self):
+        self.git_pull_master()
+        # this eventL
+        # - signals input.py to stop recving input and start draining flows
+        # - and signals the process_manager() to call shutdown_gracefully()
         self.is_slips_live_updating_event.set()
-        ...
 
     def _did_1d_pass_since_last_update(self) -> bool:
         """
@@ -177,8 +182,10 @@ class UpdateManager:
         """
         if self._did_1d_pass_since_last_update():
             should_update: bool = self.should_update_slips()
+
             # @@@@@@@@@@@@@ ALYA DONOT COMMIT THIS
-            # should_update = True
+            should_update = True
+
             if should_update:
                 self.print(
                     "A new version of Slips is available. "
