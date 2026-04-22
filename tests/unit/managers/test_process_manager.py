@@ -11,7 +11,7 @@ from slips_files.common.input_type import InputType
 
 @pytest.mark.parametrize(
     "input_type, input_information, cli_packet_filter, "
-    "zeek_or_bro, zeek_dir, line_type",
+    "zeek_or_bro, line_type",
     [
         # Test case 1: pcap input
         (
@@ -19,13 +19,12 @@ from slips_files.common.input_type import InputType
             "test.pcap",
             "tcp port 80",
             "zeek",
-            "/opt/zeek",
             "conn",
         ),
         # Test case 2: zeek input
-        (InputType.ZEEK, "test.log", "", "bro", "/opt/bro", "dns"),
+        (InputType.ZEEK, "test.log", "", "bro", "dns"),
         # Test case 3: stdin input
-        (InputType.STDIN, "-", "", "zeek", "/opt/zeek", "http"),
+        (InputType.STDIN, "-", "", "zeek", "http"),
     ],
 )
 def test_start_input_process(
@@ -33,7 +32,6 @@ def test_start_input_process(
     input_information,
     cli_packet_filter,
     zeek_or_bro,
-    zeek_dir,
     line_type,
 ):
     process_manager = ModuleFactory().create_process_manager_obj()
@@ -41,7 +39,6 @@ def test_start_input_process(
     process_manager.main.input_information = input_information
     process_manager.main.args.pcapfilter = cli_packet_filter
     process_manager.main.zeek_bro = zeek_or_bro
-    process_manager.main.zeek_dir = zeek_dir
     process_manager.main.line_type = line_type
     process_manager.main.bloom_filters_man = Mock()
 
@@ -68,7 +65,6 @@ def test_start_input_process(
             input_information=input_information,
             cli_packet_filter=cli_packet_filter,
             zeek_or_bro=zeek_or_bro,
-            zeek_dir=zeek_dir,
             line_type=line_type,
             is_profiler_done_event=process_manager.is_profiler_done_event,
             is_input_done_event=process_manager.is_input_done_event,

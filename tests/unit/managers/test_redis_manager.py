@@ -48,7 +48,7 @@ def test_log_redis_server_pid_normal_ports(
 ):
     redis_manager = ModuleFactory().create_redis_manager_obj()
     redis_manager.main.input_information = "input_info"
-    redis_manager.main.zeek_dir = "zeek_dir"
+    redis_manager.main.db.get_zeek_output_dir.return_value = "zeek_dir"
     redis_manager.main.args.output = "output_dir"
     redis_manager.main.args.daemon = is_daemon
     redis_manager.main.args.save = save_db
@@ -171,7 +171,9 @@ def test_check_redis_database(mock_db):
     mock_db.rcache.ping.return_value = True
 
     with (
-        patch("managers.redis_manager.utils.is_port_in_use", return_value=False),
+        patch(
+            "managers.redis_manager.utils.is_port_in_use", return_value=False
+        ),
         patch("managers.redis_manager.RedisDB", return_value=mock_db),
     ):
         result = redis_manager.start_redis_cache_if_not_running()
@@ -188,7 +190,9 @@ def test_check_redis_database_failure(mock_db):
     mock_db.rcache.ping.side_effect = redis.exceptions.ConnectionError
 
     with (
-        patch("managers.redis_manager.utils.is_port_in_use", return_value=False),
+        patch(
+            "managers.redis_manager.utils.is_port_in_use", return_value=False
+        ),
         patch("managers.redis_manager.RedisDB", return_value=mock_db),
         pytest.raises(redis.exceptions.ConnectionError),
     ):
@@ -203,8 +207,12 @@ def test_check_redis_database_uses_running_cache(mock_db):
     mock_db.rcache.ping.return_value = True
 
     with (
-        patch("managers.redis_manager.utils.is_port_in_use", return_value=True),
-        patch("managers.redis_manager.RedisDB", return_value=mock_db) as mock_redis,
+        patch(
+            "managers.redis_manager.utils.is_port_in_use", return_value=True
+        ),
+        patch(
+            "managers.redis_manager.RedisDB", return_value=mock_db
+        ) as mock_redis,
     ):
         result = redis_manager.start_redis_cache_if_not_running()
 
