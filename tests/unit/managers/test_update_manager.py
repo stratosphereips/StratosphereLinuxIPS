@@ -20,7 +20,10 @@ def create_update_manager():
     db.is_running_non_stop.return_value = True
 
     conf = Mock()
-    conf.get_args.return_value = Mock(is_slips_started_by_an_update=False)
+    conf.get_args.return_value = Mock(
+        is_slips_started_by_an_update=False,
+        multiinstance=False,
+    )
     conf.auto_update_slips.return_value = True
 
     with patch("managers.update_manager.ConfigParser", return_value=conf):
@@ -169,6 +172,32 @@ def test_get_updated_slips_command_appends_update_flag():
             "-i",
             "eth0",
             "-u",
+        ]
+
+
+def test_get_updated_slips_command_passes_multiinstance_redis_port():
+    update_manager = create_update_manager()
+    update_manager.args.multiinstance = True
+    update_manager.db.get_used_redis_port.return_value = 32768
+    process = Mock()
+    process.cmdline.return_value = [
+        "python3",
+        "slips.py",
+        "-m",
+        "-i",
+        "eth0",
+    ]
+
+    with patch("managers.update_manager.psutil.Process", return_value=process):
+        assert update_manager._get_updated_slips_command() == [
+            "python3",
+            "slips.py",
+            "-m",
+            "-i",
+            "eth0",
+            "-u",
+            "-P",
+            "32768",
         ]
 
 
