@@ -900,10 +900,6 @@ class ProcessManager:
 
             self.main.db.close_all_dbs()
             if graceful_shutdown:
-                print(
-                    "[Process Manager] Slips shutdown gracefully\n",
-                    log_to_logfiles_only=True,
-                )
                 if self.is_slips_live_updating_event.is_set():
                     print(
                         "[Process Manager] Slips is live updating, "
@@ -911,6 +907,11 @@ class ProcessManager:
                         "instance now.\n",
                         log_to_logfiles_only=True,
                     )
+
+                print(
+                    "[Process Manager] Slips shutdown gracefully\n",
+                    log_to_logfiles_only=True,
+                )
             else:
                 print(
                     f"[Process Manager] Slips didn't "

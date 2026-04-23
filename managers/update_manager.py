@@ -246,14 +246,20 @@ class UpdateManager:
         Returns:
             The detached process handle for the updated Slips process.
         """
-        return subprocess.Popen(
-            self._get_updated_slips_command(),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        cmd: List[str] = self._get_updated_slips_command()
+
+        str_cmd = " ".join(cmd)
+        self.print(f"Starting updated Slips version using command: {str_cmd}")
+
+        # without dev/null redirection, the new updated slips will use the
+        # same cli as the old slips. so this is intentional.
+        process = subprocess.Popen(
+            cmd,
             close_fds=True,
-            start_new_session=True,
         )
+
+        self.print("Done starting the updated Slips version.")
+        return process
 
     def _warn_about_aborted_update(
         self, git_error: Optional[GitCommandError] = None
@@ -282,7 +288,7 @@ class UpdateManager:
             return
 
         self.start_updated_slips_version()
-        # this eventL
+        # this event
         # - signals input.py to stop recving input and start draining flows
         # - and signals the process_manager() to call shutdown_gracefully()
         self.is_slips_live_updating_event.set()
@@ -304,6 +310,9 @@ class UpdateManager:
         """
         if self._did_1d_pass_since_last_update():
             should_update: bool = self.should_update_slips()
+            # @@@@@@@@@@@@@@@@@@@@@@
+            should_update = True
+
             if should_update:
                 self.print(
                     "A new version of Slips is available. "
