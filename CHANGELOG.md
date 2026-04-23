@@ -1,3 +1,6 @@
+* Add optional live Slips auto-update support controlled by `update.auto_update_slips`.
+
+
 1.1.19 (Mar 31st, 2026)
 
 * Add SSH bruteforce detection based on Zeek SSH, software, and notice logs.

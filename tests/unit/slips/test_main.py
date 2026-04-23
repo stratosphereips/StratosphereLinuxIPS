@@ -442,6 +442,7 @@ def main_obj(tmp_path):
     main = ModuleFactory().create_main_obj()
     main.args = MagicMock()
     main.args.output = str(tmp_path / "test_output")
+    main.args.is_slips_started_by_an_update = False
     return main
 
 
@@ -485,6 +486,8 @@ def test_prepare_output_dir_without_o_flag(
 ):
     main = ModuleFactory().create_main_obj()
     main.args = MagicMock()
+    main.args.is_slips_started_by_an_update = False
+    main.args.output = None
     main.parent_output_dir = str(tmp_path)
     main.input_information = "/fake/input/wlp3s0"
     monkeypatch.setattr(sys, "argv", ["script.py"])  # No -o

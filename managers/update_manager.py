@@ -164,7 +164,9 @@ class UpdateManager:
         repo = Repo(".")
         repo.remote("origin").fetch("master")
         repo.git.checkout("origin/master")
-        return repo.head.commit
+        self.print(
+            "Done pulling new version and checking out master " "branch."
+        )
 
     def _get_checkout_overwritten_files(
         self, git_error: GitCommandError
