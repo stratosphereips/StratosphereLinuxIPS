@@ -382,6 +382,14 @@ class RedisManager:
         -m or the default port
         if all ports are unavailable, this function terminates slips
         """
+        # when slips is started by another slips during an update
+        # handover, make sure the new slips
+        # continues using the same old redis db and port.
+        if self.main.args.is_slips_started_by_an_update:
+            if self.main.args.port:
+                return int(self.main.args.port)
+            return DEFAULT_REDIS_PORT
+
         if self.main.args.port:
             redis_port = int(self.main.args.port)
             # if the default port is already in use, slips should override it

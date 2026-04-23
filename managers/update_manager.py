@@ -227,7 +227,9 @@ class UpdateManager:
         Build the command used to start the updated Slips process.
 
         Returns:
-            The current Slips cmd plus (-u).
+            The current Slips cmd plus (-u). If the current Slips was
+            started with -m, pass the current Redis port explicitly so the
+            updated process reuses it.
         """
         try:
             cmd = psutil.Process().cmdline()
@@ -237,7 +239,14 @@ class UpdateManager:
         if not cmd:
             cmd = [sys.executable, *sys.argv]
 
-        return [*cmd, "-u"]
+        cmd = [*cmd, "-u"]
+
+        if self.args.multiinstance:
+            cmd.remove("-m")
+            redis_port = self.db.get_used_redis_port()
+            cmd.extend(["-P", str(redis_port)])
+
+        return cmd
 
     def start_updated_slips_version(self) -> subprocess.Popen:
         """
