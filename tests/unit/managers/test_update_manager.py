@@ -275,9 +275,9 @@ def test_update_slips_aborts_when_local_changes_block_checkout():
     )
 
 
-def test_update_slips_reraises_unrelated_git_errors():
+def test_update_slips_aborts_on_unrelated_git_errors():
     """
-    Ensure unexpected git failures are not hidden by the update manager.
+    Ensure unexpected git failures abort the update without crashing.
 
     Returns:
         None.
@@ -291,8 +291,11 @@ def test_update_slips_reraises_unrelated_git_errors():
     update_manager.git_pull_master = Mock(side_effect=git_error)
     update_manager.start_updated_slips_version = Mock()
 
-    with pytest.raises(GitCommandError):
-        update_manager.update_slips()
+    update_manager.update_slips()
 
     update_manager.start_updated_slips_version.assert_not_called()
     update_manager.is_slips_live_updating_event.set.assert_not_called()
+    update_manager.print.assert_called_once_with(
+        "Warning: Aborting Slips update because a git error occurred: "
+        f"{git_error}"
+    )

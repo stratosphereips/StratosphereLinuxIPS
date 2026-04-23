@@ -17,6 +17,7 @@ from urllib import error, request
 import psutil
 from git import (
     GitCommandError,
+    GitError,
     InvalidGitRepositoryError,
     NoSuchPathError,
     Repo,
@@ -277,7 +278,11 @@ class UpdateManager:
     ):
         overwritten_files = self._get_checkout_overwritten_files(git_error)
         if not overwritten_files:
-            raise
+            self.print(
+                "Warning: Aborting Slips update because a git error "
+                f"occurred: {git_error}"
+            )
+            return
 
         target_version = self._get_target_update_version()
         update_target = (
@@ -294,7 +299,7 @@ class UpdateManager:
     def update_slips(self):
         try:
             self.git_pull_master()
-        except GitCommandError as git_error:
+        except GitError as git_error:
             self._warn_about_aborted_update(git_error)
             return
 
@@ -321,8 +326,6 @@ class UpdateManager:
         """
         if self._did_1d_pass_since_last_update():
             should_update: bool = self.should_update_slips()
-            # @@@@@@@@@@@@@@@@@@@@@@
-            should_update = True
 
             if should_update:
                 self.print(
