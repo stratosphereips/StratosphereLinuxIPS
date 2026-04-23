@@ -85,17 +85,18 @@ def test_read_zeek_files_drains_generated_lines_during_live_update(tmp_path):
     "store_in_output, expected_dir",
     [
         (True, "output/zeek_files"),
-        (False, "zeek_files_inputfile/"),
+        (False, "zeek_files_inputfile"),
     ],
 )
-def test_get_zeek_output_dir(store_in_output, expected_dir):
+def test_create_zeek_output_dir(store_in_output, expected_dir):
     input_process = ModuleFactory().create_input_obj(
         "pcaps/inputfile.pcap", InputType.PCAP
     )
     input_process.zeek_dir = None
     input_process.args.output = "output"
+    input_process.zeek_utils.is_running_non_stop = False
     input_process.conf.store_zeek_files_in_the_output_dir.return_value = (
         store_in_output
     )
 
-    assert input_process.zeek_utils.get_zeek_output_dir() == expected_dir
+    assert input_process.zeek_utils.create_zeek_output_dir() == expected_dir
