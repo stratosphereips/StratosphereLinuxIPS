@@ -147,12 +147,12 @@ class UpdateManager:
 
     def _is_new_version_available(self) -> bool:
         update_data = self._read_master_update_json()
-        latest_version = bool(update_data.get("version", False))
+        latest_version = update_data.get("version", False)
 
         if not latest_version:
             return False
 
-        return utils.get_current_version() == latest_version
+        return utils.get_current_version() != latest_version
 
     def git_pull_master(self):
         """
