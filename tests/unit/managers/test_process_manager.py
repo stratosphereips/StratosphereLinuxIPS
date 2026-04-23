@@ -81,13 +81,13 @@ def test_start_input_process(
 
 @pytest.mark.parametrize(
     "is_slips_started_by_an_update,expected_is_set",
-    [(True, True), (False, False)],
+    [(True, False), (False, False)],
 )
 def test_init_sets_live_update_event_for_update_start(
     is_slips_started_by_an_update,
     expected_is_set,
 ):
-    """Test that -u startup marks Slips as live-updating."""
+    """Test that ProcessManager starts with an unset live-update event."""
     main_mock = Mock()
     main_mock.args.is_slips_started_by_an_update = (
         is_slips_started_by_an_update
@@ -553,12 +553,13 @@ def test_start_update_manager(
     asyncio_called,
 ):
     process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.output = "output"
     mock_lock_instance = Mock()
     mock_lock.return_value.__enter__.return_value = mock_lock_instance
 
     mock_update_manager = Mock()
     with patch(
-        "managers.process_manager.UpdateManager",
+        "managers.process_manager.FeedsUpdateManager",
         return_value=mock_update_manager,
     ):
         process_manager.start_update_manager(

@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import shutil
+import importlib.util
+import sys
 from contextlib import contextmanager
 from unittest.mock import (
     patch,
@@ -108,7 +110,16 @@ class ModuleFactory:
         return db
 
     def create_main_obj(self):
-        from slips.main import Main
+        try:
+            from slips.main import Main
+        except ModuleNotFoundError:
+            module_spec = importlib.util.spec_from_file_location(
+                "slips_main_for_tests", os.path.join("slips", "main.py")
+            )
+            module = importlib.util.module_from_spec(module_spec)
+            sys.modules[module_spec.name] = module
+            module_spec.loader.exec_module(module)
+            Main = module.Main
 
         """returns an instance of Main() class in slips.py"""
         main = Main(testing=True)
@@ -240,14 +251,30 @@ class ModuleFactory:
 
     @patch(DB_MANAGER, name="mock_db")
     def create_daemon_object(self, mock_db):
-        from slips.daemon import Daemon
+        try:
+            from slips.daemon import Daemon
+
+            daemon_module = "slips.daemon"
+        except ModuleNotFoundError:
+            module_spec = importlib.util.spec_from_file_location(
+                "slips_daemon_for_tests", os.path.join("slips", "daemon.py")
+            )
+            module = importlib.util.module_from_spec(module_spec)
+            sys.modules[module_spec.name] = module
+            module_spec.loader.exec_module(module)
+            Daemon = module.Daemon
+            daemon_module = module_spec.name
 
         with (
-            patch("slips.daemon.Daemon.read_pidfile", return_type=None),
-            patch("slips.daemon.Daemon.read_configuration"),
+            patch(f"{daemon_module}.Daemon.read_pidfile", return_value=None),
+            patch(f"{daemon_module}.Daemon.read_configuration"),
             patch("builtins.open", mock_open(read_data=None)),
         ):
-            daemon = Daemon(MagicMock())
+            slips = MagicMock()
+            slips.args.stopdaemon = True
+            slips.args.is_slips_started_by_an_update = False
+            slips.args.output = "output"
+            daemon = Daemon(slips)
         daemon.stderr = "errors.log"
         daemon.stdout = "slips.log"
         daemon.stdin = "/dev/null"
@@ -495,13 +522,12 @@ class ModuleFactory:
         from slips_files.core.input import Input
         from slips_files.core.output import Output
 
-        zeek_tmp_dir = os.path.join(os.getcwd(), "zeek_dir_for_testing")
         input = Input(
             logger=Output(),
             output_dir="dummy_output_dir",
             redis_port=6379,
             termination_event=Mock(),
-            slips_args=Mock(),
+            slips_args=Mock(output="dummy_output_dir"),
             conf=Mock(),
             ppid=Mock(),
             bloom_filters_manager=Mock(),
@@ -511,7 +537,6 @@ class ModuleFactory:
             input_information=input_information,
             cli_packet_filter=None,
             zeek_or_bro=check_zeek_or_bro(),
-            zeek_dir=zeek_tmp_dir,
             line_type=line_type,
             is_profiler_done_event=Mock(),
         )
@@ -659,7 +684,9 @@ class ModuleFactory:
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_update_manager_obj(self, mock_db):
-        from modules.update_manager.update_manager import FeedsUpdateManager
+        from modules.feeds_update_manager.feeds_update_manager import (
+            FeedsUpdateManager,
+        )
 
         update_manager = FeedsUpdateManager(
             logger=self.logger,

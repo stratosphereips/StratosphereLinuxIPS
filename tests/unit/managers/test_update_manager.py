@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import subprocess
 from unittest.mock import Mock, patch
 
 import pytest
@@ -192,7 +191,6 @@ def test_get_updated_slips_command_passes_multiinstance_redis_port():
         assert update_manager._get_updated_slips_command() == [
             "python3",
             "slips.py",
-            "-m",
             "-i",
             "eth0",
             "-u",
@@ -213,11 +211,7 @@ def test_start_updated_slips_verison_starts_detached_process():
     assert process == popen.return_value
     popen.assert_called_once_with(
         ["python3", "slips.py", "-i", "eth0", "-u"],
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
         close_fds=True,
-        start_new_session=True,
     )
 
 
@@ -276,7 +270,7 @@ def test_update_slips_aborts_when_local_changes_block_checkout():
     update_manager.start_updated_slips_version.assert_not_called()
     update_manager.is_slips_live_updating_event.set.assert_not_called()
     update_manager.print.assert_called_once_with(
-        "Uncommitted changes to ['config/slips.yaml'] detected. "
+        "Warning: Uncommitted changes to ['config/slips.yaml'] detected. "
         "Aborting update to Slips v1.2.3, please update Slips manually."
     )
 

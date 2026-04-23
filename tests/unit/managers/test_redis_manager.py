@@ -561,6 +561,7 @@ def test_get_redis_port(
     redis_manager = ModuleFactory().create_redis_manager_obj()
     redis_manager.main.args.port = args_port
     redis_manager.main.args.multiinstance = multiinstance
+    redis_manager.main.args.is_slips_started_by_an_update = False
 
     with (
         patch.object(

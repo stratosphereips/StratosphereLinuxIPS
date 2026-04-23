@@ -5,11 +5,12 @@
 - [Overview](#overview)
 - [How Auto-Update Works](#how-auto-update-works)
   * [New version checks](#new-version-checks)
-  * [Updating](#updating)
+  * [Updating Logic](#updating-logic)
     + [Redis handling](#redis-handling)
     + [Zeek log handling](#zeek-log-handling)
-- [Draining and Shutdown](#draining-and-shutdown)
+  * [Draining and Shutdown of the old Slips](#draining-and-shutdown-of-the-old-slips)
 - [How to use it](#how-to-use-it)
+- [PR](#pr)
 
 ## Overview
 

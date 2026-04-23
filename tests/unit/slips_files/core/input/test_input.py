@@ -21,29 +21,24 @@ def test_handle_pcap_input(tmp_path, input_type, input_information):
     input_process = ModuleFactory().create_input_obj(
         input_information, input_type
     )
-    input_process.zeek_dir = tmp_path
     handler = input_process.input_handlers[input_type]
     input_process.is_running_non_stop = False
     handler.file_remover.start = Mock()
-    # Mock attributes and methods used inside the function
-    input_process.zeek_utils.ensure_zeek_dir = Mock()
+    input_process.zeek_utils.create_zeek_output_dir = Mock(
+        return_value=str(tmp_path)
+    )
     input_process.zeek_utils.init_zeek = Mock()
     input_process.zeek_utils.read_zeek_files = Mock(return_value=7)
 
     assert handler.run() is True
 
-    # Assert that the expected methods were called
-    input_process.zeek_utils.ensure_zeek_dir.assert_called_once()
+    input_process.zeek_utils.create_zeek_output_dir.assert_called_once()
     input_process.zeek_utils.init_zeek.assert_called_once_with(
-        handler.observer, input_process.zeek_dir, input_process.given_path
+        handler.observer, str(tmp_path), input_process.given_path
     )
     input_process.zeek_utils.read_zeek_files.assert_called_once()
     handler.file_remover.start.assert_not_called()
     assert input_process.lines == 7
-
-    # Clean up any directories created (safe guard)
-    if os.path.exists(input_process.zeek_dir):
-        shutil.rmtree(input_process.zeek_dir, ignore_errors=True)
 
 
 @pytest.mark.parametrize(

@@ -331,7 +331,7 @@ def test_store_zeek_dir_copy_reads_zeek_dir_from_db():
 
     with (
         patch.object(main, "was_running_zeek", return_value=True),
-        patch("slips.main.copy_tree") as mock_copy_tree,
+        patch(f"{main.__class__.__module__}.copy_tree") as mock_copy_tree,
         patch("builtins.print"),
     ):
         main.store_zeek_dir_copy()
