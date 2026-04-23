@@ -511,17 +511,23 @@ def test_get_file_handle_non_existing_file():
     assert file_handle is False
 
 
-def test_ensure_zeek_dir_creates_dir(tmp_path):
-    """Test that ensure_zeek_dir creates the directory if missing."""
+def test_create_zeek_output_dir_creates_dir(tmp_path):
+    """Test that create_zeek_output_dir creates the directory if missing."""
     input_process = ModuleFactory().create_input_obj(
         "", InputType.ZEEK_LOG_FILE
     )
-    zeek_dir = tmp_path / "zeek_logs"
-    input_process.zeek_dir = str(zeek_dir)
+    input_process.given_path = str(tmp_path / "capture.pcap")
+    input_process.args.output = str(tmp_path / "output")
+    input_process.zeek_utils.is_running_non_stop = False
+    input_process.conf.store_zeek_files_in_the_output_dir.return_value = True
 
-    assert not os.path.exists(input_process.zeek_dir)
-    input_process.zeek_utils.ensure_zeek_dir()
-    assert os.path.exists(input_process.zeek_dir)
+    zeek_dir = input_process.zeek_utils.create_zeek_output_dir()
+
+    assert zeek_dir == os.path.join(input_process.args.output, "zeek_files")
+    assert os.path.exists(zeek_dir)
+    input_process.db.set_input_metadata.assert_called_once_with(
+        {"zeek_dir": zeek_dir}
+    )
 
 
 def test_check_if_time_to_del_rotated_files_deletes_old_files():
