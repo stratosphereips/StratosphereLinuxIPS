@@ -22,7 +22,7 @@ The workflow used by this task focuses on structured security analysis rather th
 
 Same hardware constraints as [summarization workflow](DATASET_REPORT.md#2-limitations) (Raspberry Pi 5, 1.5B-3B parameter models) are considered.
 
-The current version of the dataset for finetuning LLM for cause and risk analysis can be found [here](https://github.com/stratosphereips/Slips-tools/raw/refs/heads/main/alert_summary/datasets/risk_dataset.json.gz)
+The current version of the dataset for finetuning LLM for cause and risk analysis can be found [here](https://github.com/stratosphereips/Slips-tools/raw/refs/heads/harpo_datasets/alert_summary/datasets/risk_dataset_v2.json.gz)
 
 
 ## 2. Relationship to Summarization Workflow
