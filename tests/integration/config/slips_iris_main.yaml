@@ -97,7 +97,7 @@ parameters:
   analysis_direction: out
   client_ips: []
   debug: 0
-  default_rotation_interval: 30sec
+  default_rotation_interval: 1day
   deletePrevdb: true
   delete_zeek_files: false
   export_format: json
@@ -127,6 +127,8 @@ threatintelligence:
   ssl_feeds: config/SSL_feeds.csv
   ti_files: config/TI_feeds.csv
   wait_for_TI_to_finish: false
+update:
+  auto_update_slips: false
 virustotal:
   api_key_file: config/vt_api_key
   virustotal_update_period: 259200
