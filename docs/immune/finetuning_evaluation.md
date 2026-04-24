@@ -16,9 +16,13 @@
 ---
 
 ### Overview
-After fine-tuning, the model is evaluated against a fixed set of competitors using LLM-as-judge methodology. A strong external judge model (default: `gpt-oss-120b`) acts as an experienced security analyst and scores all model outputs for each incident on a 1–10 scale. Model labels are randomized per incident to prevent position bias.
+After fine-tuning, the model is evaluated against a fixed set of competitors using LLM-as-judge methodology. A strong external judge model (default: `gpt-oss-120b`) acts as an experienced security analyst and scores all model outputs for each incident. Model labels are randomized per incident to prevent position bias.
 
 This extends the [LLM Evaluation Guide](LLM_EVALUATION_GUIDE.md) used for baseline model comparison — the judge criteria, scoring format, and analysis scripts are identical; the only change is adding the finetuned model as a fifth competitor.
+
+Scoring differs by task:
+- **Summarization:** single 1–10 quality score per incident
+- **Risk assessment:** separate cause analysis score (max 30) and risk assessment score (max 30), summed for ranking (max 60). See [LLM-as-Judge Rubric](LLM_JUDGE_RUBRIC.md) for the full scoring criteria.
 
 ---
 
@@ -40,7 +44,7 @@ python3 run_finetuned_inference.py \
 
 **Step 2 — LLM-as-judge scoring**
 
-The judge receives all five model responses simultaneously and ranks them. The task-specific judge script is used (e.g. `evaluate_summaries.py` for summarization, a parallel script for decision making).
+The judge receives all five model responses simultaneously and ranks them. The task-specific judge script is used (e.g. `evaluate_summaries.py` for summarization, `evaluate_risk.py` for cause & risk assessment).
 
 ```bash
 cd alert_summary/
@@ -122,4 +126,4 @@ The full pipeline (dataset prep → training → inference → eval → report) 
 | Task | Results Document |
 |---|---|
 | Incident Summarization | [Summarization Fine-Tuned Model: Evaluation Results](finetuning_results.md) |
-| Decision Making | *(planned)* |
+| Risk Assessment & Cause Analysis | [Risk Fine-Tuned Model: Evaluation Results](finetuning_risk_results.md) |

@@ -133,3 +133,43 @@ The 16-bit model serves as the reference; all GGUF variants are compared against
 | Low-VRAM GPU (≤4 GB) | **q8_0** | Only 2% score loss at half the size of 16-bit |
 | GPU with ≥6 GB VRAM | **16-bit** | Reference quality: 4.70 avg score, 19.1% win rate |
 | Edge / minimal storage | **q4_k_m** | Smallest footprint (0.9 GB); 9% score loss acceptable for triage-only use |
+
+---
+
+## Risk Assessment Model Quantization
+
+> **Evaluation basis:** performance numbers below were measured on the [finetuned risk model](finetuning_risk_results.md) (67 held-out incidents, judge: qwen3.5, date: 2026-04-24). Scores are cause score (max 30) and risk score (max 30); win rate is fraction of incidents ranked 1st among 5 models.
+
+### Overall Performance
+
+| Variant | Avg Position | Cause Score | Risk Score | Win Rate |
+|---------|-------------|-------------|------------|----------|
+| **fp16 (reference)** | **1.99** | **20.21** | 13.33 | **35.8%** |
+| q8_0 | 2.25 | 17.66 | **14.15** | 34.3% |
+| q4_k_m | 2.34 | 18.03 | 14.46 | 26.9% |
+| q5_k_m | 2.57 | 16.46 | 14.45 | 23.9% |
+
+### By Complexity
+
+| Tier | fp16 cause/risk/wr | q8_0 cause/risk/wr | q4_k_m cause/risk/wr | q5_k_m cause/risk/wr |
+|------|-------------------|-------------------|----------------------|----------------------|
+| Simple (<500 events) | 21.05 / 12.39 / 38.6% | 19.27 / 14.45 / 45.5% | 19.68 / 15.05 / 34.1% | 17.95 / 15.48 / 29.5% |
+| Medium (500–1999 events) | 21.38 / 15.62 / 50.0% | 16.25 / 16.62 / 37.5% | 18.25 / 15.00 / 37.5% | 15.62 / 15.38 / 37.5% |
+| Complex (≥2000 events) | 17.13 / 14.87 / 20.0% | 13.67 / 11.93 / 0.0% | 13.07 / 12.47 / 0.0% | 12.53 / 10.93 / 0.0% |
+
+**Key observations:**
+
+- **fp16 is the only variant competitive on complex incidents** (20% win rate). All quantized variants collapse to 0% wins on complex incidents — quantization significantly degrades performance on long, evidence-heavy DAGs.
+- **Quantization degrades cause analysis more than risk assessment.** Cause scores drop 2–4 points with quantization while risk scores remain roughly stable or improve slightly. Cause analysis requires precise evidence grounding from the DAG and is more sensitive to precision loss.
+- **q8_0 is the best quantized variant.** Smallest gap vs fp16: cause 17.66 (vs 20.21), win rate 34.3% (vs 35.8%). It even outperforms fp16 on risk score and simple incident win rate (45.5% vs 38.6%).
+- **q4_k_m outperforms q5_k_m** (cause 18.03 vs 16.46, win rate 26.9% vs 23.9%). q5_k_m is not a reliable quality/size middle ground for this task.
+
+### Deployment Recommendation
+
+| Use Case | Recommended Variant |
+|----------|-------------------|
+| Best accuracy (research/offline) | **fp16** |
+| Production deployment (GPU server) | **q8_0** — near-fp16 quality on simple/medium, ~2× memory saving |
+| Edge / constrained deployment | **q4_k_m** — outperforms q5_k_m on this task |
+
+For complex incident analysis specifically, only fp16 is competitive. If complex incidents are a priority deployment target, do not use quantized variants without further fine-tuning on longer DAGs.
