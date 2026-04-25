@@ -94,7 +94,7 @@ class DoSProtector:
             return True
         return False
 
-    def get_number_of_flows_to_skip_and_time_to_stop_sampling(self) -> int:
+    def get_number_of_flows_to_skip(self) -> int:
         if not self._should_run():
             return 0
 

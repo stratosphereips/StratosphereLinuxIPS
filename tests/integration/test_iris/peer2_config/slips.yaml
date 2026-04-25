@@ -43,7 +43,7 @@ cesnet:
   receive_delay: 86400
   send_alerts: false
 detection:
-  evidence_detection_threshold: 0.1
+  evidence_detection_threshold: 0.25
   popup_alerts: false
 exporting_alerts:
   TAXII_server: localhost
@@ -79,17 +79,15 @@ global_p2p:
   - fides
   - iris
   bootstrapping_node: false
-  iris_conf: config/iris_config.yaml
-  use_global_p2p: false
+  iris_conf: tests/integration/test_iris/peer2_config/iris.yaml
+  use_global_p2p: true
 local_p2p:
   create_p2p_logfile: false
   use_p2p: false
 modules:
   disable:
   - template
-  - ensembling
-  - flow_ml_detection
-  - update_manager
+  - updatemanager
   timeline_human_timestamp: true
 output:
   logs: slips.log
@@ -99,7 +97,7 @@ parameters:
   analysis_direction: out
   client_ips: []
   debug: 0
-  default_rotation_interval: 30sec
+  default_rotation_interval: 1day
   deletePrevdb: true
   delete_zeek_files: false
   export_format: json
@@ -107,12 +105,12 @@ parameters:
   export_strato_letters: false
   keep_rotated_files_for: 1 day
   label: normal
-  metadata_dir: false
+  metadata_dir: true
   pcapfilter: false
   permanent_dir: permanent
   rotation: true
   store_a_copy_of_zeek_files: false
-  store_zeek_files_in_the_output_dir: false
+  store_zeek_files_in_the_output_dir: true
   tcp_inactivity_timeout: 60
   time_window_width: 3600
   verbose: 1
@@ -129,6 +127,8 @@ threatintelligence:
   ssl_feeds: config/SSL_feeds.csv
   ti_files: config/TI_feeds.csv
   wait_for_TI_to_finish: false
+update:
+  auto_update_slips: false
 virustotal:
   api_key_file: config/vt_api_key
   virustotal_update_period: 259200

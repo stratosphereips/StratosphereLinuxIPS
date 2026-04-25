@@ -4,6 +4,7 @@
 import json
 
 from slips_files.common.abstracts.iinput_handler import IInputHandler
+from slips_files.common.slips_utils import utils
 
 
 class CystInput(IInputHandler):
@@ -30,13 +31,14 @@ class CystInput(IInputHandler):
             # todo when to break? cyst should send something like stop?
 
             msg = self.input.get_msg("new_module_flow")
-            if msg and msg["data"] == "stop_process":
+            if msg and utils.get_msg_payload(msg) == "stop_process":
                 self.input.shutdown_gracefully()
                 return True
 
             if msg := self.input.get_msg("new_module_flow"):
-                msg: str = msg["data"]
-                msg = json.loads(msg)
+                msg = utils.get_msg_payload(msg)
+                if isinstance(msg, str):
+                    msg = json.loads(msg)
                 flow = msg["flow"]
                 src_module = msg["module"]
                 line_info = {

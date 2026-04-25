@@ -24,7 +24,6 @@ import time
 from slips_files.common.abstracts.icore import ICore
 from slips_files.common.input_type import InputType
 
-# common imports for all modules
 from slips_files.common.parsers.config_parser import ConfigParser
 import multiprocessing
 
@@ -56,10 +55,10 @@ class Input(ICore):
         input_information=None,
         cli_packet_filter=None,
         zeek_or_bro=None,
-        zeek_dir=None,
         line_type=None,
         is_profiler_done_event: multiprocessing.Event = None,
         is_input_done_event: multiprocessing.Event = None,
+        is_slips_live_updating_event: multiprocessing.Event = None,
     ):
         self.input_type = input_type
         self.profiler_queue = profiler_queue
@@ -68,7 +67,6 @@ class Input(ICore):
         self.line_type: str = line_type
         # entire path
         self.given_path: str = input_information
-        self.zeek_dir: str = zeek_dir
         self.zeek_or_bro: str = zeek_or_bro
         self.read_lines_delay = 0
         # when input is done processing, it reeleases this semaphore, that's h
@@ -92,6 +90,7 @@ class Input(ICore):
         self.is_profiler_done_event = is_profiler_done_event
         # is set by this proc to indicate no more flows are coming
         self.is_input_done_event = is_input_done_event
+        self.is_slips_live_updating_event = is_slips_live_updating_event
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.input_handlers = self._build_input_handlers()
         self.active_handler = None

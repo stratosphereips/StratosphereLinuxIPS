@@ -8,6 +8,7 @@ import signal
 import subprocess
 import threading
 import time
+from pathlib import Path
 from typing import List, Tuple
 from re import split
 
@@ -29,6 +30,10 @@ class ZeekInputUtils:
         self.zeek_threads = []
         self.zeek_pids = []
         self.dos_protector = DoSProtector(self.input)
+        self.args = self.input.args
+        self.print = self.input.print
+        self.update_msg_printed = False
+        self.is_running_non_stop = self.input.db.is_running_non_stop()
 
     def check_if_time_to_del_rotated_files(self):
         """
@@ -139,8 +144,12 @@ class ZeekInputUtils:
 
     def cache_nxt_line_in_file(self, filename: str, interface: str):
         """
-        reads 1 line of the given file and stores in queue for sending to the profiler
-        :param: full path to the file. includes the .log extension
+        reads 1 line of the given file and stores in queue for sending to the
+        profiler
+
+        :param filename: full path to the file. includes the .log extension
+        :param interface: interface that generated the Zeek file
+        :return: True if a line was cached, False otherwise
         """
         file_handle = self.get_file_handle(filename)
         if not file_handle:
@@ -156,37 +165,40 @@ class ZeekInputUtils:
         # We don't have any waiting line for this file, so proceed
         try:
             flows_to_skip_reading_if_under_heavy_load: int = (
-                self.dos_protector.get_number_of_flows_to_skip_and_time_to_stop_sampling()
+                self.dos_protector.get_number_of_flows_to_skip()
             )
 
             # skips flows
             for _ in range(flows_to_skip_reading_if_under_heavy_load):
                 file_handle.readline()
 
-            zeek_line = file_handle.readline()
+            while zeek_line := file_handle.readline():
+                if zeek_line.startswith("#close"):
+                    # We reached the end of one of the files that we were
+                    # reading.
+                    return False
+
+                if zeek_line.startswith("#fields"):
+                    # this line contains the zeek fields, we want to cache it
+                    # and send it to the profiler normally
+                    nline = zeek_line
+                    # to send the line as early as possible
+                    timestamp = -1
+                    break
+
+                timestamp, nline = self.get_ts_from_line(zeek_line)
+                if timestamp:
+                    break
+            else:
+                # We reached the end of one of the files that we were reading.
+                # Wait for more lines to come from another file.
+                return False
 
         except ValueError:
             # remover thread just finished closing all old handles.
             # comes here if I/O operation failed due to a closed file.
             # to get the new dict of open handles.
             return False
-
-        # Did the file end?
-        if not zeek_line or zeek_line.startswith("#close"):
-            # We reached the end of one of the files that we were reading.
-            # Wait for more lines to come from another file
-            return False
-
-        if zeek_line.startswith("#fields"):
-            # this line contains the zeek fields, we want to cache it and
-            # send it to the profiler normally
-            nline = zeek_line
-            # to send the line as early as possible
-            timestamp = -1
-        else:
-            timestamp, nline = self.get_ts_from_line(zeek_line)
-            if not timestamp:
-                return False
 
         self.file_time[filename] = timestamp
         # Store the line in the cache
@@ -251,6 +263,15 @@ class ZeekInputUtils:
         earliest_line = self.cache_lines[file_with_earliest_flow]
         return earliest_line, file_with_earliest_flow
 
+    def _print_update_msg(self):
+        if not self.update_msg_printed:
+            self.print(
+                "Slips is live updating. Slips will stop receiving new "
+                "flows in this instance and start receiving new flows using "
+                "the updated version. "
+            )
+            self.update_msg_printed = True
+
     def read_zeek_files(self) -> int:
         """
         Runs when slips is analyzing pcaps, interface, zeek dirs, and zeek
@@ -266,8 +287,26 @@ class ZeekInputUtils:
             # Try to keep track of when was the last update so we stop this
             # reading
             self.last_updated_file_time = datetime.datetime.now()
-            while not self.input.should_stop():
+            is_draining = False
+            while True:
+                is_live_updating = (
+                    self.input.is_slips_live_updating_event is not None
+                    and self.input.is_slips_live_updating_event.is_set()
+                )
+                if is_live_updating and not is_draining:
+                    # Stop Zeek first so this instance has a finite set of
+                    # generated logs to drain before the updated instance
+                    # continues.
+                    self._print_update_msg()
+                    self.shutdown_zeek_runtime()
+                    self.zeek_files = self.input.db.get_all_zeek_files()
+                    is_draining = True
+
+                if self.input.should_stop() and not is_draining:
+                    break
+
                 self.check_if_time_to_del_rotated_files()
+
                 # implemented in icore.py
                 self.input.store_flows_read_per_second()
 
@@ -277,13 +316,27 @@ class ZeekInputUtils:
                 # PS: self.zeek_files ties each zeek file to its interface (
                 # beacause slips supports reading multiple interfaces)
 
+                if is_draining:
+                    self.zeek_files = self.input.db.get_all_zeek_files()
+
+                cached_new_line = False
                 for filename, interface in self.zeek_files.items():
                     if utils.is_ignored_zeek_log_file(filename):
                         continue
 
                     # reads 1 line from the given file and cache it
                     # from in self.cache_lines
-                    self.cache_nxt_line_in_file(filename, interface)
+                    if self.cache_nxt_line_in_file(filename, interface):
+                        self.last_updated_file_time = datetime.datetime.now()
+                        cached_new_line = True
+
+                if (
+                    is_draining
+                    and not cached_new_line
+                    and not self.cache_lines
+                ):
+                    # done draining the flows left
+                    break
 
                 if self.reached_timeout():
                     break
@@ -295,29 +348,58 @@ class ZeekInputUtils:
                     continue
 
                 # self.print('\t> Sent Line: {}'.format(earliest_line), 0, 3)
-
                 self.input.give_profiler(earliest_line)
                 self.input.lines += 1
-                # when testing, no need to read the whole file!
+
+                # when testing, no need to read the whole file! #TODO this
+                #  is bad practice, fix it
                 if self.input.lines == 10 and self.input.testing:
                     break
+
                 # Delete this line from the cache and the time list
                 del self.cache_lines[file_with_earliest_flow]
                 del self.file_time[file_with_earliest_flow]
 
-                # Get the new list of files. Since new files may have been created by
-                # Zeek while we were processing them.
+                # Get the new list of files. Since new files may have been
+                # created by Zeek while we were processing them.
                 self.zeek_files = self.input.db.get_all_zeek_files()
-
             self.close_all_handles()
         except KeyboardInterrupt:
             pass
 
         return self.input.lines
 
-    def ensure_zeek_dir(self):
-        if not os.path.exists(self.input.zeek_dir):
-            os.makedirs(self.input.zeek_dir)
+    def _is_auto_update_enabled(self) -> bool:
+        """
+        returns true if slips is analyzing an interface (-i , -ap or -g)
+        and auto_update is enabled in slips.yaml
+        """
+        return self.is_running_non_stop and self.input.conf.auto_update_slips()
+
+    def create_zeek_output_dir(self) -> str:
+        """
+        Return the Zeek output directory, create it if needed,
+        and store its path in the DB.
+
+        :return: Directory where Zeek should write log files.
+        """
+
+        without_ext = Path(self.input.given_path).stem
+        if self.input.conf.store_zeek_files_in_the_output_dir():
+            zeek_dir = Path(self.input.args.output) / "zeek_files"
+        else:
+            zeek_dir = Path(f"zeek_files_{without_ext}")
+
+        if self._is_auto_update_enabled():
+            # slips is gonna be auto updating for each new version, we need
+            # 1 zeek dir for each started version
+            zeek_dir = Path(zeek_dir) / f"slips_v{utils.get_current_version()}"
+
+        zeek_dir = str(zeek_dir)
+
+        Path(zeek_dir).mkdir(parents=True, exist_ok=True)
+        self.input.db.set_input_metadata({"zeek_dir": zeek_dir})
+        return zeek_dir
 
     def init_zeek(
         self,
@@ -336,7 +418,7 @@ class ZeekInputUtils:
         observer.start(zeek_dir, pcap_or_interface)
 
         zeek_files = os.listdir(zeek_dir)
-        if len(zeek_files) > 0:
+        if len(zeek_files) > 0 and not self.args.is_slips_started_by_an_update:
             # First clear the zeek folder of old .log files
             for file_name in zeek_files:
                 os.remove(os.path.join(zeek_dir, file_name))
@@ -403,7 +485,8 @@ class ZeekInputUtils:
             print(f"Zeek: {out}")
         if error:
             self.input.print(
-                f"Zeek error. return code: {zeek.returncode} error:{error.strip()}"
+                f"Zeek error. return code: {zeek.returncode} "
+                f"error:{error.strip()}"
             )
 
     def shutdown_zeek_runtime(self):

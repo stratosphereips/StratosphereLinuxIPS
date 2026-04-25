@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Unit test for ../slips.py"""
 
+from unittest.mock import patch
+
 from tests.module_factory import ModuleFactory
 
 
@@ -49,4 +51,9 @@ def test_load_modules():
 
 def test_clear_redis_cache_database():
     redis_manager = ModuleFactory().create_redis_manager_obj()
-    assert redis_manager.clear_redis_cache_database()
+
+    with patch("redis.StrictRedis") as mock_redis:
+        mock_redis_instance = mock_redis.return_value
+
+        assert redis_manager.clear_redis_cache_database()
+        mock_redis_instance.flushdb.assert_called_once()

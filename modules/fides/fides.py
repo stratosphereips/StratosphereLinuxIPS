@@ -221,7 +221,7 @@ class FidesModule(IModule):
             if not msg["data"]:
                 return
 
-            ip = msg["data"]
+            ip = utils.get_msg_payload(msg)
 
             if utils.detect_ioc_type(ip) != "ip":
                 return
@@ -231,6 +231,6 @@ class FidesModule(IModule):
             self.__intelligence.request_data(ip)
 
         # TODO: the code below exists for testing purposes for
-        #  tests/integration_tests/test_fides.py
+        #  tests/integration/test_fides/test_fides.py
         if msg := self.get_msg("fides2network"):
             pass

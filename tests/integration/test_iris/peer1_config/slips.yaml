@@ -1,11 +1,7 @@
-cesnet:
-  configuration_file: config/warden.conf
-  receive_alerts: false
-  receive_delay: 86400
-  send_alerts: false
+Debug:
+  generate_performance_plots: false
 DisabledAlerts:
-  disabled_detections:
-  - ConnectionWithoutDNS
+  disabled_detections: []
 Docker:
   GID: 0
   UID: 0
@@ -13,29 +9,62 @@ Profiling:
   cpu_profiler_dev_mode_entries: 500000
   cpu_profiler_enable: false
   cpu_profiler_mode: dev
-  cpu_profiler_multiprocess: false
+  cpu_profiler_multiprocess: true
   cpu_profiler_output_limit: 20
   cpu_profiler_sampling_interval: 20
   memory_profiler_enable: false
   memory_profiler_mode: live
   memory_profiler_multiprocess: true
+anomaly_detection_https:
+  adaptation_score_threshold: 2.0
+  adwin_clock: 1
+  adwin_delta: 0.01
+  adwin_grace_period: 5
+  adwin_min_window_length: 5
+  baseline_alpha: 0.5
+  drift_alpha: 0.05
+  empirical_threshold_quantile: 0.995
+  flow_zscore_threshold: 3.5
+  hourly_zscore_threshold: 3.0
+  ja3_min_variants_per_server: 3
+  log_verbosity: 3
+  max_small_flow_anomalies: 1
+  min_baseline_points: 6
+  suspicious_alpha: 0.005
+  training_alpha: 1
+  training_fit_method: welford
+  training_hours: 2
+  use_adwin_drift: true
+brute_force_detector:
+  ssh_attempt_threshold: 9
+cesnet:
+  configuration_file: config/warden.conf
+  receive_alerts: false
+  receive_delay: 86400
+  send_alerts: false
 detection:
-  evidence_detection_threshold: 0.1
+  evidence_detection_threshold: 0.25
   popup_alerts: false
 exporting_alerts:
   TAXII_server: localhost
-  collection_name: collection-a
-  discovery_path: /services/discovery-a
+  collection_name: Alerts
+  direct_export: true
+  direct_export_max_workers: 12
+  direct_export_retry_backoff: 0.5
+  direct_export_retry_max: 0
+  direct_export_retry_max_delay: 5.0
+  direct_export_workers: 4
+  discovery_path: /taxii2/
   export_to: []
-  inbox_path: /services/inbox-a
-  jwt_auth_path: /management/auth
   port: 1234
   push_delay: 3600
   sensor_name: sensor1
   slack_api_path: config/slack_bot_token_secret
   slack_channel_name: proj_slips_alerting_module
-  taxii_password: admin
+  taxii_password: changeme_before_installing_a_medallion_server
+  taxii_timeout: 10
   taxii_username: admin
+  taxii_version: 2
   use_https: false
 flow_alerts:
   data_exfiltration_threshold: 500
@@ -50,41 +79,40 @@ global_p2p:
   - fides
   - iris
   bootstrapping_node: false
-  iris_conf: config/iris_config.yaml
-  use_global_p2p: false
+  iris_conf: tests/integration/test_iris/peer1_config/iris.yaml
+  use_global_p2p: true
 local_p2p:
   create_p2p_logfile: false
   use_p2p: false
-modes:
-  logsfile: slips.log
-  stderr: errors.log
-  stdout: slips.log
 modules:
   disable:
   - template
-  - ensembling
-  - flow_ml_detection
-  - update_manager
+  - updatemanager
   timeline_human_timestamp: true
+output:
+  logs: slips.log
+  stderr: errors.log
+  stdout: slips.log
 parameters:
-  analysis_direction: all
+  analysis_direction: out
   client_ips: []
   debug: 0
+  default_rotation_interval: 1day
   deletePrevdb: true
-  delete_zeek_files: true
+  delete_zeek_files: false
   export_format: json
   export_labeled_flows: false
   export_strato_letters: false
   keep_rotated_files_for: 1 day
-  label: malicious
+  label: normal
   metadata_dir: true
   pcapfilter: false
+  permanent_dir: permanent
   rotation: true
-  rotation_period: 1day
-  store_a_copy_of_zeek_files: true
-  store_zeek_files_in_the_output_dir: false
+  store_a_copy_of_zeek_files: false
+  store_zeek_files_in_the_output_dir: true
   tcp_inactivity_timeout: 60
-  time_window_width: only_one_tw
+  time_window_width: 3600
   verbose: 1
   wait_for_modules_to_finish: 10080 mins
 threatintelligence:
@@ -99,6 +127,8 @@ threatintelligence:
   ssl_feeds: config/SSL_feeds.csv
   ti_files: config/TI_feeds.csv
   wait_for_TI_to_finish: false
+update:
+  auto_update_slips: false
 virustotal:
   api_key_file: config/vt_api_key
   virustotal_update_period: 259200

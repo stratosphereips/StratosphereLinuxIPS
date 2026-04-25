@@ -37,10 +37,10 @@ class ARPPoisoner(IModule):
         )
         self.blocking_logfile_lock = Lock()
         # clear it
-        try:
-            open(self.log_file_path, "w").close()
-        except FileNotFoundError:
-            pass
+        utils.initialize_logfile(
+            self.log_file_path,
+            getattr(self.args, "is_slips_started_by_an_update", False),
+        )
         self.unblocker = ARPUnblocker(
             self.db, self.should_stop, self.logger, self.log
         )
@@ -414,7 +414,7 @@ class ARPPoisoner(IModule):
             # if slips saw 3 ips, this channel will receive 3 msgs with tw1
             # as closed. we're not interested in the ips, we just wanna
             # know when slips advances to the next tw.
-            profileid_tw = msg["data"].split("_")
+            profileid_tw = utils.get_msg_payload(msg).split("_")
             twid = profileid_tw[-1]
             if self.last_closed_tw != twid:
                 self.last_closed_tw = twid

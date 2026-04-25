@@ -1,6 +1,15 @@
 # This configuration file controls several aspects of the working of Slips.
 
 ---
+update:
+  # Enable automatic live updates of the installed Slips version.
+  # This setting is separate from the feeds_update_manager module, which only
+  # updates TI feeds and related files during runtime.
+  # Automatic Slips updates may overwrite the default config files shipped
+  # with Slips. If you want to keep your local configuration changes intact, avoid editing the default config files.
+  # Instead, create separate config files with different names and use those.
+  auto_update_slips: false
+
 output:
   # Define the file names for the default output.
   stdout: slips.log
@@ -206,7 +215,7 @@ modules:
   # Add the names of other modules that you want to disable
   # (use module snake_case names). Example,
   # threat_intelligence, blocking, network_discovery, timeline, virustotal,
-  # rnn_cc_detection, flow_ml_detection, update_manager
+  # rnn_cc_detection, flow_ml_detection, feeds_update_manager
   disable: [template]
 
   # For each line in timeline file there is a timestamp.
@@ -302,7 +311,7 @@ virustotal:
 #############################
 threatintelligence:
 
-  # By default, slips starts without the TI files, and runs the update_manager
+  # By default, slips starts without the TI files, and runs the feeds_update_manager
   # in the background. If this option is set to true, slips will not start
   # analyzing the flows until the update manager finished and all TI files are
   # loaded successfully.

@@ -43,6 +43,7 @@ from typing import (
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 LOCALHOST = "127.0.0.1"
+VERSION = utils.get_current_version()
 
 
 class RedisDB(
@@ -154,6 +155,7 @@ class RedisDB(
         cls.flush_db = flush_db
         # start the redis server using cli if it's not started?
         cls.start_server = start_redis_server
+        cls.logger = logger
         cls.printer = Printer(logger, cls.name)
         cls.conf = ConfigParser()
         cls.args = cls.conf.get_args()
@@ -194,6 +196,15 @@ class RedisDB(
         self.call_mixins_setup()
         self._init_ttls()
         self.set_new_incoming_flows(True)
+        if (
+            self.logger
+            and not self.flush_db
+            and self.args.is_slips_started_by_an_update
+        ):
+            self.print(
+                "Continuing on previous data stored in redis.",
+                log_to_logfiles_only=True,
+            )
 
     @classmethod
     def _get_conf_file_path(cls, redis_port: Optional[int] = None) -> str:
@@ -507,10 +518,28 @@ class RedisDB(
         self.r.ping()
         self.rcache.ping()
 
+    def _add_version_to_msg(self, msg):
+        if isinstance(msg, str):
+            try:
+                msg = json.loads(msg)
+                msg.update({"version": VERSION})
+                msg = json.dumps(msg)
+            except json.decoder.JSONDecodeError:
+                # the msg is 1 str
+                msg = {
+                    "text": msg,
+                    "version": VERSION,
+                }
+                msg = json.dumps(msg)
+        elif isinstance(msg, dict):
+            msg.update({"version": VERSION})
+        return msg
+
     def publish(self, channel, msg, pipeline=None):
         """Publish a msg in the given channel.
         adds the instructions to the given pipeline if given and returns
         the pipeline"""
+        msg = self._add_version_to_msg(msg)
 
         # keeps track of how many msgs were published in the given channel
         if pipeline is not None:

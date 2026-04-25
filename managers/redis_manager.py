@@ -66,9 +66,11 @@ class RedisManager:
                         "Save the DB\n"
                     )
 
+                zeek_dir = self.main.db.get_zeek_output_dir()
+
                 f.write(
                     f"{now},{self.main.input_information},{redis_port},"
-                    f"{redis_pid},{self.main.zeek_dir},{self.main.args.output},"
+                    f"{redis_pid},{zeek_dir},{self.main.args.output},"
                     f"{os.getpid()},"
                     f"{bool(self.main.args.daemon)},{self.main.args.save}\n"
                 )
@@ -380,6 +382,14 @@ class RedisManager:
         -m or the default port
         if all ports are unavailable, this function terminates slips
         """
+        # when slips is started by another slips during an update
+        # handover, make sure the new slips
+        # continues using the same old redis db and port.
+        if self.main.args.is_slips_started_by_an_update:
+            if self.main.args.port:
+                return int(self.main.args.port)
+            return DEFAULT_REDIS_PORT
+
         if self.main.args.port:
             redis_port = int(self.main.args.port)
             # if the default port is already in use, slips should override it

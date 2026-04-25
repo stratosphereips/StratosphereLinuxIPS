@@ -840,7 +840,7 @@ class Conn(IFlowalertsAnalyzer):
             self.check_device_changing_ips(twid, flow)
 
         elif utils.is_msg_intended_for(msg, "tw_closed"):
-            profileid_tw: List[str] = msg["data"].split("_")
+            profileid_tw: List[str] = utils.get_msg_payload(msg).split("_")
             profileid = f"{profileid_tw[0]}_{profileid_tw[1]}"
             twid = profileid_tw[-1]
             self.detect_data_upload_in_twid(profileid, twid)

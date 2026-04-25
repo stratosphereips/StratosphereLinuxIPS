@@ -40,7 +40,7 @@ def test_get_confidence(pre_behavioral_model, expected_confidence):
 )
 def test_handle_tw_closed(msg_data, expected_profileid, expected_twid):
     cc_detection = ModuleFactory().create_rnn_detection_object()
-    msg = {"data": msg_data}
+    msg = {"data": json.dumps({"text": msg_data, "version": "test-version"})}
 
     with patch.object(cc_detection.letters_exporter, "export") as mock_export:
         cc_detection.handle_tw_closed(msg)

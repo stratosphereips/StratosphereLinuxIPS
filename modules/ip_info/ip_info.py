@@ -596,7 +596,7 @@ class IPInfo(AsyncModule):
                 self.get_domain_info(domain)
 
         if msg := self.get_msg("new_ip"):
-            ip = msg["data"]
+            ip = utils.get_msg_payload(msg)
             self.handle_new_ip(ip)
 
         if msg := self.get_msg("check_jarm_hash"):

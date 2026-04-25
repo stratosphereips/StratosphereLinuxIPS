@@ -17,10 +17,12 @@ class EvidenceLogger:
         logger_stop_signal: threading.Event,
         evidence_logger_q: multiprocessing.Queue,
         output_dir: str,
+        slips_args=None,
     ):
         self.logger_stop_signal = logger_stop_signal
         self.evidence_logger_q = evidence_logger_q
         self.output_dir = output_dir
+        self.args = slips_args
         self.read_configuration()
 
         # clear output/alerts.log
@@ -66,8 +68,13 @@ class EvidenceLogger:
         logfile_dir = os.path.dirname(logfile_path)
         if logfile_dir:
             os.makedirs(logfile_dir, exist_ok=True)
+
         if os.path.exists(logfile_path):
-            open(logfile_path, "w").close()
+            utils.initialize_logfile(
+                logfile_path,
+                getattr(self.args, "is_slips_started_by_an_update", False),
+                create_parent_dirs=False,
+            )
         return open(logfile_path, "a")
 
     def print_to_alerts_logfile(self, data: str):

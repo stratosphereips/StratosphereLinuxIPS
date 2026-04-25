@@ -7,7 +7,11 @@ import redis
 import pytest
 
 from tests.module_factory import ModuleFactory
-from managers.redis_manager import UserCancelledErr
+from managers.redis_manager import (
+    DEFAULT_REDIS_PORT,
+    RedisManager,
+    UserCancelledErr,
+)
 from slips_files.common.input_type import InputType
 
 
@@ -48,7 +52,7 @@ def test_log_redis_server_pid_normal_ports(
 ):
     redis_manager = ModuleFactory().create_redis_manager_obj()
     redis_manager.main.input_information = "input_info"
-    redis_manager.main.zeek_dir = "zeek_dir"
+    redis_manager.main.db.get_zeek_output_dir.return_value = "zeek_dir"
     redis_manager.main.args.output = "output_dir"
     redis_manager.main.args.daemon = is_daemon
     redis_manager.main.args.save = save_db
@@ -171,7 +175,9 @@ def test_check_redis_database(mock_db):
     mock_db.rcache.ping.return_value = True
 
     with (
-        patch("managers.redis_manager.utils.is_port_in_use", return_value=False),
+        patch(
+            "managers.redis_manager.utils.is_port_in_use", return_value=False
+        ),
         patch("managers.redis_manager.RedisDB", return_value=mock_db),
     ):
         result = redis_manager.start_redis_cache_if_not_running()
@@ -188,7 +194,9 @@ def test_check_redis_database_failure(mock_db):
     mock_db.rcache.ping.side_effect = redis.exceptions.ConnectionError
 
     with (
-        patch("managers.redis_manager.utils.is_port_in_use", return_value=False),
+        patch(
+            "managers.redis_manager.utils.is_port_in_use", return_value=False
+        ),
         patch("managers.redis_manager.RedisDB", return_value=mock_db),
         pytest.raises(redis.exceptions.ConnectionError),
     ):
@@ -203,8 +211,12 @@ def test_check_redis_database_uses_running_cache(mock_db):
     mock_db.rcache.ping.return_value = True
 
     with (
-        patch("managers.redis_manager.utils.is_port_in_use", return_value=True),
-        patch("managers.redis_manager.RedisDB", return_value=mock_db) as mock_redis,
+        patch(
+            "managers.redis_manager.utils.is_port_in_use", return_value=True
+        ),
+        patch(
+            "managers.redis_manager.RedisDB", return_value=mock_db
+        ) as mock_redis,
     ):
         result = redis_manager.start_redis_cache_if_not_running()
 
@@ -549,6 +561,7 @@ def test_get_redis_port(
     redis_manager = ModuleFactory().create_redis_manager_obj()
     redis_manager.main.args.port = args_port
     redis_manager.main.args.multiinstance = multiinstance
+    redis_manager.main.args.is_slips_started_by_an_update = False
 
     with (
         patch.object(
@@ -574,6 +587,36 @@ def test_get_redis_port(
             assert result == expected_port
         else:
             mock_terminate.assert_called()
+
+
+@pytest.mark.parametrize(
+    "args_port, expected_port",
+    [
+        ("32768", 32768),
+        (None, DEFAULT_REDIS_PORT),
+    ],
+)
+def test_get_redis_port_started_by_update(args_port, expected_port, mock_db):
+    redis_manager = RedisManager(Mock())
+    redis_manager.main.args = Mock()
+    redis_manager.main.args.is_slips_started_by_an_update = True
+    redis_manager.main.args.port = args_port
+
+    with (
+        patch.object(
+            redis_manager, "_get_dbmanager_without_starting_a_new_server"
+        ) as mock_db_mgr,
+        patch.object(redis_manager, "confirm_server_altering") as mock_confirm,
+        patch.object(
+            redis_manager, "get_random_redis_port"
+        ) as mock_random_port,
+    ):
+        result = redis_manager.get_redis_port()
+
+    assert result == expected_port
+    mock_db_mgr.assert_not_called()
+    mock_confirm.assert_not_called()
+    mock_random_port.assert_not_called()
 
 
 @pytest.mark.parametrize(

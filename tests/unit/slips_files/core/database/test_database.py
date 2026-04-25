@@ -147,11 +147,14 @@ def test_add_mac_addr_with_ipv6_association():
 
 def test_get_the_other_ip_version():
     db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
-    # profileid is ipv4
+    profileid_ipv4 = "profile_192.168.250.250"
     ipv6 = "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
-    db.set_ipv6_of_profile(profileid, ipv6)
-    # the other ip version is ipv6
-    other_ip = json.loads(db.get_the_other_ip_version(profileid))
+
+    db.rdb.get_ipv6_from_profile = Mock(return_value=json.dumps(ipv6))
+
+    other_ip = json.loads(db.get_the_other_ip_version(profileid_ipv4))
+
+    db.rdb.get_ipv6_from_profile.assert_called_once_with(profileid_ipv4)
     assert other_ip == ipv6
 
 

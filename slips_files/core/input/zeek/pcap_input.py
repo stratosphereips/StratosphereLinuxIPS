@@ -17,8 +17,8 @@ class PcapInput(IInputHandler):
         """
         runs when slips is given a pcap with -f
         """
-        self.input.zeek_utils.ensure_zeek_dir()
-        self.input.print(f"Storing zeek log files in {self.input.zeek_dir}")
+        zeek_dir: str = self.input.zeek_utils.create_zeek_output_dir()
+        self.input.print(f"Storing zeek log files in {zeek_dir}")
         if self.input.is_running_non_stop:
             self.file_remover.start()
 
@@ -26,7 +26,7 @@ class PcapInput(IInputHandler):
         # if bro does not receive any new line while reading a pcap
         self.input.bro_timeout = 30
         self.input.zeek_utils.init_zeek(
-            self.observer, self.input.zeek_dir, self.input.given_path
+            self.observer, zeek_dir, self.input.given_path
         )
 
         self.input.lines = self.input.zeek_utils.read_zeek_files()

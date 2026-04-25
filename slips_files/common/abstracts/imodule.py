@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import json
 import os
 import sys
 import traceback
@@ -69,6 +70,7 @@ class IModule(ABC, Process):
         )
         self.db.client_setname(self.name)
         self.keyboard_int_ctr = 0
+        self.slips_version: str = utils.get_slips_version()
         self.init(**kwargs)
         # should after the module's init() so the module has a chance to
         # set its own channels
@@ -198,6 +200,28 @@ class IModule(ABC, Process):
         self.channel_tracker = self.init_channel_tracker()
         return self.pre_main()
 
+    def is_msg_version_compatible(self, message: dict) -> bool:
+        """
+        Check whether the incoming pub/sub message matches this module's
+        Slips version.
+        """
+        if not message or "data" not in message:
+            return False
+
+        data = message["data"]
+        if not isinstance(data, str):
+            return False
+
+        try:
+            payload = json.loads(data)
+        except (json.decoder.JSONDecodeError, TypeError):
+            return False
+
+        if not isinstance(payload, dict):
+            return False
+
+        return payload.get("version") == self.slips_version
+
     def get_msg(self, channel: str) -> Optional[dict]:
         try:
             if channel not in self.channels:
@@ -209,6 +233,12 @@ class IModule(ABC, Process):
 
             message = self.db.get_message(self.channels[channel])
             if utils.is_msg_intended_for(message, channel):
+                # discard msgs if sent be a newer/older version of slips.
+                # may happen temporarily during handover, where the new
+                # version starts  before the old version stops.
+                if not self.is_msg_version_compatible(message):
+                    self.channel_tracker[channel]["msg_received"] = False
+                    return None
                 self.channel_tracker[channel]["msg_received"] = True
                 self.db.incr_msgs_received_in_channel(self.name, channel)
                 return message
