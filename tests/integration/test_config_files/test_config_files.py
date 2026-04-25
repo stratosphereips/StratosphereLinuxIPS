@@ -5,8 +5,6 @@ This file tests 2 different config files other than slips' default config/slips.
 test/test.yaml and tests/test2.yaml
 """
 
-from slips.main import Main
-from slips_files.common.input_type import InputType
 from tests.common_test_utils import (
     is_evidence_present,
     create_output_dir,
@@ -22,17 +20,10 @@ from tests.module_factory import ModuleFactory
 import pytest
 import shutil
 import os
+from pathlib import Path
 
 alerts_file = "alerts.log"
-
-
-def create_main_instance(input_information):
-    """returns an instance of Main() class in slips.py"""
-    main = Main(testing=True)
-    main.input_information = input_information
-    main.input_type = InputType.PCAP
-    main.line_type = False
-    return main
+TEST_DIR = Path(__file__).resolve().parent
 
 
 @pytest.mark.parametrize(
@@ -55,10 +46,10 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
         binaries=("redis-server",),
         require_zeek_or_bro=True,
     )
-    config_file = "tests/integration/test.yaml"
+    config_file = TEST_DIR / "test.yaml"
     modify_yaml_config(
-        output_filename=config_file,
-        output_dir=os.getcwd(),
+        output_filename=config_file.name,
+        output_dir=TEST_DIR,
         changes={
             "DisabledAlerts": {
                 "disabled_detections": ["ConnectionWithoutDNS"]
@@ -157,10 +148,10 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
         binaries=("redis-server",),
         require_zeek_or_bro=True,
     )
-    config_file = "tests/integration/test2.yaml"
+    config_file = TEST_DIR / "test2.yaml"
     modify_yaml_config(
-        output_filename=config_file,
-        output_dir=os.getcwd(),
+        output_filename=config_file.name,
+        output_dir=TEST_DIR,
         changes={
             "detection": {"evidence_detection_threshold": 0.1},
             "parameters": {

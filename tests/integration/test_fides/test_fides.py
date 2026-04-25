@@ -30,6 +30,7 @@ import modules.fides.model.peer_trust_data as ptd
 
 
 alerts_file = "alerts.log"
+TEST_DIR = Path(__file__).resolve().parent
 
 
 def ensure_redis_is_running(port):
@@ -166,8 +167,7 @@ def get_main_interface():
 )
 def test_conf_file2(path, output_dir, redis_port):
     """
-    In this test we're using tests/integration/config/fides_config.yaml as fides
-    config file
+    In this test we're using the local fides integration config file.
     """
     ensure_redis_is_running(redis_port)
     output_dir: PosixPath = create_output_dir(output_dir)
@@ -185,7 +185,7 @@ def test_conf_file2(path, output_dir, redis_port):
         "-o",
         str(output_dir),
         "-c",
-        "tests/integration/config/fides_config.yaml",
+        str(TEST_DIR / "fides_config.yaml"),
         "-P",
         str(redis_port),
     ]
@@ -277,7 +277,7 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
         "-o",
         str(output_dir),
         "-c",
-        "tests/integration/config/fides_config.yaml",
+        str(TEST_DIR / "fides_config.yaml"),
         "-P",
         str(redis_port),
     ]
