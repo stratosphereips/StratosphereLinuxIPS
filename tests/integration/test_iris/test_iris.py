@@ -293,7 +293,6 @@ def prepare_and_start_peer1(
         "-P",
         str(redis_port),
     ]
-    print(f"@@@@@@@@@@@@@@@@ {' '.join(command)}")
 
     process = subprocess.Popen(
         command,

@@ -1,4 +1,4 @@
-# Slips Auto Update
+# Updating Slips
 
 ## Table of Contents
 
@@ -10,6 +10,9 @@
     + [Zeek log handling](#zeek-log-handling)
   * [Draining and Shutdown of the old Slips](#draining-and-shutdown-of-the-old-slips)
 - [How to use it](#how-to-use-it)
+- [Manual update](#manual-update)
+  * [Running Slips in Docker](#running-slips-in-docker)
+  * [Running Slips natively](#running-slips-natively)
 - [PR](#pr)
 
 ## Overview
@@ -141,6 +144,60 @@ PS: the new updated slips version starts reading flows before the old one starts
 enable ```auto_update_slips``` in ```config/slips.yaml``` and run slips on your interface.
 
 now whenever a new version of Slips is available, it will update itself and the new slips will use the same CLI as the old one.
+
+## Manual update
+
+If you do not use `auto_update_slips`, update Slips manually using the method
+that matches your installation.
+
+### Running Slips in Docker
+
+If you run Slips from the published Docker image, pull the new image and start a
+new container from it:
+
+```bash
+docker pull stratosphereips/slips:latest
+docker run -it --rm --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
+```
+
+
+If you build Slips locally from `docker/Dockerfile`, first update the
+repository, then rebuild the image so the new code and dependencies are available
+into the container:
+
+```bash
+git pull --recurse-submodules && git submodule update --init --recursive
+docker build --target amd --no-cache -t slips -f docker/Dockerfile .
+```
+
+If Docker cannot access the network during the build, use:
+
+```bash
+docker build --target amd --network=host --no-cache -t slips -f docker/Dockerfile .
+```
+
+Then start a new container from the rebuilt image.
+
+### Running Slips natively
+
+For native installations, first update the repository and all submodules:
+
+```bash
+git pull --recurse-submodules && git submodule update --init --recursive
+```
+
+Then run the installer script:
+
+```bash
+sudo ./install/install.sh
+```
+
+Re-running `install.sh` is important because a new Slips version may require new
+apt packages, pip packages or rebuilt components such as Redis and `p2p4slips`.
+
+After the update finishes, start Slips again normally. As with a fresh install,
+the first run may spend some time updating threat intelligence files in the
+background.
 
 ## PR
 
