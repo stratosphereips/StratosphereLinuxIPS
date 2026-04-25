@@ -79,7 +79,7 @@ global_p2p:
   - fides
   - iris
   bootstrapping_node: false
-  iris_conf: config/iris_config.yaml
+  iris_conf: tests/integration/test_iris/peer2_config/iris.yaml
   use_global_p2p: true
 local_p2p:
   create_p2p_logfile: false
