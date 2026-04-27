@@ -182,3 +182,5 @@ appendonly.aof
 /slipsOut/metadata/whitelist.conf
 /p2p_db.sqlite
 old-pipeline/
+utils/immune_web_sim/runs
+databases/regex_store/
