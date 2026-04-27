@@ -184,3 +184,4 @@ appendonly.aof
 old-pipeline/
 utils/immune_web_sim/runs
 databases/regex_store/
+.vscode/
