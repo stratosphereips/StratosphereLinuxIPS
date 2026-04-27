@@ -42,7 +42,6 @@ RUN cd modules \
     && rm -rf \
         rnn_cc_detection/ \
         timeline/ \
-        kalipso/ \
         p2ptrust/ \
         flowmldetection/ \
         cyst/ \
@@ -54,8 +53,7 @@ RUN cd modules \
         virustotal/ \
     && cd .. \
     && rm -rf dataset/ docs/  tests/ \
-    && rm kalipso.sh \
-      package.json \
+    && rm package.json \
       pytest.ini \
       webinterface.sh \
       CITATION.cff \

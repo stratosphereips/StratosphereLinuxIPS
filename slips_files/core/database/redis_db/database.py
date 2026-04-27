@@ -846,7 +846,7 @@ class RedisDB(
                             'uid':...,
                             'resolved-by':.. }
         If not resolved, returns {}
-        this function is called for every IP in the timeline of kalipso
+        this function is called for every IP in the timeline view
         checks for the reolution in self.constants.DNS_RESOLUTION
         """
         if ip_info := self.r.hget(self.constants.DNS_RESOLUTION, ip):
@@ -999,7 +999,7 @@ class RedisDB(
                 ips_to_add.append(answer)
 
         # For each CNAME in the answer
-        # store it in DomainsInfo in the cache db (used for kalipso)
+        # store it in DomainsInfo in the cache db for the UI
         # and in CNAMEsInfo in the main db  (used for detecting dns
         # without resolution)
         if ips_to_add:

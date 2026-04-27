@@ -19,7 +19,7 @@ class Timeline(IModule):
     # Name: short name of the module. Do not use spaces
     name = "timeline"
     description = (
-        "Creates kalipso timeline of what happened in the"
+        "Creates a timeline of what happened in the"
         " network based on flows and available data"
     )
     authors = ["Sebastian Garcia", "Alya Gomaa"]

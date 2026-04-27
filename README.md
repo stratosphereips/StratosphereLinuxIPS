@@ -110,8 +110,7 @@ cat output_dir/alerts.log
 
 # Graphical User Interface
 
-To check Slips output using a GUI you can use the web interface
-or our command-line based interface Kalipso
+To check Slips output using a GUI you can use the web interface.
 
 ##### Web interface
 
@@ -122,18 +121,6 @@ Then navigate to ```http://localhost:55000/``` from your browser.
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px">
 
 For more info about the web interface, check the docs: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#the-web-interface
-
-
-##### Kalipso (CLI-Interface)
-
-    ./kalipso.sh
-
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/kalipso.png" width="850px">
-
-
-For more info about the Kalipso interface, check the docs: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#kalipso
-
----
 
 
 # Requirements

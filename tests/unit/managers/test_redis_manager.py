@@ -105,7 +105,7 @@ def test_load_redis_db(redis_port, redis_pid, db_path, mock_db):
         mock_remove.assert_called_once_with(redis_port)
         mock_print.assert_called_once_with(
             f"{db_path} loaded successfully.\n"
-            f"Run ./kalipso.sh and choose port {redis_port}"
+            f"Run ./webinterface.sh and choose port {redis_port}"
         )
 
 

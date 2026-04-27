@@ -96,7 +96,7 @@ class RedisManager:
 
         print(
             f"{self.main.args.db} loaded successfully.\n"
-            f"Run ./kalipso.sh and choose port {redis_port}"
+            f"Run ./webinterface.sh and choose port {redis_port}"
         )
 
     def load_db(self):

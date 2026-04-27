@@ -23,9 +23,6 @@ ENV IS_IN_A_DOCKER_CONTAINER=True
 # destionation dir for slips inside the container
 ENV SLIPS_DIR=/StratosphereLinuxIPS
 
-ENV NODE_VERSION=22.5.0
-ENV NVM_DIR=/root/.nvm
-
 # use bash instead of sh
 SHELL ["/bin/bash", "-c"]
 
@@ -50,14 +47,9 @@ RUN apt-get update -o Acquire::Retries=5 -o Acquire::https::No-Cache=True \
     && apt update \
     && apt-get install -y --no-install-recommends --fix-missing \
     zeek-8.0 \
-    npm \
     && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro \
     && apt clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
-    && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash - \
-    && export NVM_DIR="$HOME/.nvm" \
-    && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  \
-    && nvm install 22
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 
 WORKDIR ${SLIPS_DIR}
@@ -70,8 +62,6 @@ RUN  pip3 install --no-cache-dir --upgrade pip \
     && chmod 774 slips.py \
     && git init \
     && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
-    && cd modules/kalipso \
-    && npm install \
     && cd ../../p2p4slips \
     && go build
 

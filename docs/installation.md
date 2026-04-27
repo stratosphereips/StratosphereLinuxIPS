@@ -80,7 +80,6 @@ In addition to the full stratosphereips/slips:latest image, there is now a minim
 
 * rnn_cc_detection/
 * timeline/
-* kalipso/
 * p2p_trust/
 * flow_ml_detection/
 * cyst/
@@ -223,7 +222,7 @@ You can install it using [install.sh](https://github.com/stratosphereips/Stratos
 	sudo ./install.sh
 
 ### Installing Slips manually
-#### Installing Python, Redis, NodeJs, and required python and npm libraries.
+#### Installing Python, Redis, and required python libraries.
 
 Update the repository of packages so you see the latest versions:
 
@@ -243,11 +242,6 @@ Now that pip3 is upgraded, we can proceed to install all required packages via p
 
 _Note: for those using a different base image, you need to also install tensorflow==2.16.1r via pip3._
 
-
-As we mentioned before, the GUI of Slips known as Kalipso relies on NodeJs v19. Make sure to use NodeJs greater than version 12. For Kalipso to work, we will install the following npm packages:
-
-    curl -fsSL https://deb.nodesource.com/setup_21.x |  sudo -E bash - && sudo apt install -y --no-install-recommends nodejs
-    cd modules/kalipso && npm install
 
 ####  Installing Zeek
 
