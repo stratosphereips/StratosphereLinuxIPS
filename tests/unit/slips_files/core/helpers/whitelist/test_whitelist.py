@@ -33,29 +33,27 @@ def test_load_org_asn(
     assert asn in parsed_asn
 
 
-@patch(
-    "slips_files.core.helpers.whitelist."
-    "whitelist_parser.WhitelistParser.load_org_ips"
-)
-def test_load_org_ips(
-    mock_load_org_ips,
-):
+def test_load_org_ips():
     """
-    Test load_org_IPs without modifying real files.
+    Test load_org_ips reads org IP ranges from the expected file.
     """
     whitelist = ModuleFactory().create_whitelist_obj()
-    mock_load_org_ips.return_value = {
-        "34": ["34.64.0.0/10"],
-        "216": ["216.58.192.0/19"],
-    }
-    org_subnets = whitelist.parser.load_org_ips("google")  # Call the method
+    whitelist.db.set_org_cidrs = MagicMock()
+    file_content = "34.64.0.0/10\n216.58.192.0/19\ninvalid\n"
+
+    with patch(
+        "builtins.open", mock_open(read_data=file_content)
+    ) as mock_file:
+        org_subnets = whitelist.parser.load_org_ips("google")
 
     assert "34" in org_subnets
     assert "216" in org_subnets
     assert "34.64.0.0/10" in org_subnets["34"]
     assert "216.58.192.0/19" in org_subnets["216"]
-
-    mock_load_org_ips.assert_called_once_with("google")
+    mock_file.assert_called_once_with(
+        "slips_files/organizations_info/google_ip_ranges"
+    )
+    whitelist.db.set_org_cidrs.assert_called_once_with("google", org_subnets)
 
 
 @pytest.mark.parametrize(
