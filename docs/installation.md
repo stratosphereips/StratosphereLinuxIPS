@@ -209,7 +209,7 @@ Slips depends on three major elements:
 - Redis database v8
 
 
-To install these elements, the script will use the APT package manager. After that, it will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node JS and several npm packages.
+To install these elements, the script will use the APT package manager. After that, it will install python packages required for Slips to run and its modules to work.
 
 
 **Instructions to download everything for Slips are below.**
@@ -220,6 +220,9 @@ You can install it using [install.sh](https://github.com/stratosphereips/Stratos
 
 	sudo chmod +x install.sh
 	sudo ./install.sh
+
+The script installs Slips core dependencies and builds `p2p4slips`. It does
+not install Kalipso.
 
 ### Installing Slips manually
 #### Installing Python, Redis, and required python libraries.
@@ -241,6 +244,28 @@ Now that pip3 is upgraded, we can proceed to install all required packages via p
 	python3 -m pip3 install -r install/requirements.txt
 
 _Note: for those using a different base image, you need to also install tensorflow==2.16.1r via pip3._
+
+#### Optional Kalipso submodule
+
+Kalipso is maintained in a separate repository and checked out as the
+`modules/kalipso` submodule.
+
+If you cloned Slips without submodules, initialize it with:
+
+```bash
+git submodule update --init --recursive modules/kalipso
+```
+
+If you are cloning Slips for the first time and want all optional components,
+use:
+
+```bash
+git clone --recurse-submodules --remote-submodules https://github.com/stratosphereips/StratosphereLinuxIPS -j4
+```
+
+Kalipso has its own installation instructions in
+`modules/kalipso/README.md`. It is optional and not required for Docker, CI, or
+core Slips execution.
 
 
 ####  Installing Zeek
@@ -321,7 +346,9 @@ You can kill this redis database by running:
 ```
 then choosing 1.
 
-After these steps, if you need the submodules, you will need to clone them as done in the `install.sh` script.
+After these steps, if you need optional submodules, initialize them with
+`git submodule update --init --recursive` and then follow the instructions in
+their own READMEs.
 
 
 ## Installing Slips on a Raspberry PI

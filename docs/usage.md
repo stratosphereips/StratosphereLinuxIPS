@@ -14,7 +14,7 @@ It's recommended to use PCAPs.
 
 All the input flows are converted to an internal format. So once read, Slips works the same with all of them.
 
-After Slips runs on the given traffic, the output can be analyzed with the web interface.
+After Slips runs on the given traffic, the output can be analyzed with the web interface. If the `modules/kalipso` submodule is checked out and installed separately, you can also use the Kalipso terminal interface.
 
 In this section, we will explain how to execute each type of file in Slips.
 

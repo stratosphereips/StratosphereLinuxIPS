@@ -13,7 +13,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Installation**. Instructions to install Slips in a Docker and in a computer. See :doc:`Installation <installation>`.
 
-- **Usage**. Instructions and examples how to run Slips with different type of files and analyze the traffic using Slips and its web interface. See :doc:`Usage <usage>`.
+- **Usage**. Instructions and examples how to run Slips with different type of files and analyze the traffic using Slips and its web interface or the optional Kalipso submodule. See :doc:`Usage <usage>`.
 
 - **Detection modules**. Explanation of detection modules in Slips, types of input and output. See :doc:`Detection modules <detection_modules>`.
 
