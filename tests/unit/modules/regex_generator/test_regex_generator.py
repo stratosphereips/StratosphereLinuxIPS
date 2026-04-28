@@ -53,6 +53,8 @@ def test_regex_generator_config_defaults():
     parser = ConfigParser.__new__(ConfigParser)
     parser.config = {}
 
+    assert parser.rotation_period() == "1 day"
+    assert parser.default_rotation_interval() == "1 day"
     assert parser.regex_generator_enabled() is False
     assert parser.regex_generator_create_log_file() is False
     assert parser.regex_generator_generation_interval_seconds() == 5
@@ -75,6 +77,9 @@ def test_regex_generator_config_defaults():
 def test_regex_generator_config_sanitization():
     parser = ConfigParser.__new__(ConfigParser)
     parser.config = {
+        "parameters": {
+            "rotation_period": " 30min; ",
+        },
         "regex_generator": {
             "generation_interval_seconds": "bad",
             "create_log_file": "true",
@@ -101,6 +106,8 @@ def test_regex_generator_config_sanitization():
         }
     }
 
+    assert parser.rotation_period() == "30min"
+    assert parser.default_rotation_interval() == "30min"
     assert parser.regex_generator_generation_interval_seconds() == 5
     assert parser.regex_generator_create_log_file() is True
     assert parser.regex_generator_allowed_backends() == []
@@ -124,6 +131,18 @@ def test_regex_generator_config_sanitization():
     assert parser.regex_generator_max_stored_rejected_regexes() == 10000
     assert parser.regex_generator_seed_benign_samples() is False
     assert parser.tranco_top_benign_limit() == 1000
+
+
+def test_rotation_period_falls_back_to_legacy_key():
+    parser = ConfigParser.__new__(ConfigParser)
+    parser.config = {
+        "parameters": {
+            "default_rotation_interval": "2hr",
+        }
+    }
+
+    assert parser.rotation_period() == "2hr"
+    assert parser.default_rotation_interval() == "2hr"
 
 
 def test_regex_generator_generation_interval_allows_zero():
