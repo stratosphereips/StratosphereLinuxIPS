@@ -23,6 +23,59 @@ def test__is_time_to_repoison(poisoner):
     assert not poisoner._is_time_to_repoison(target)
 
 
+@pytest.mark.parametrize(
+    "arp_scan_available, expected",
+    [(False, True), (True, False)],
+)
+def test_pre_main_stops_when_arp_scan_is_missing(
+    poisoner, arp_scan_available, expected
+):
+    poisoner.arp_scan_bin_available = arp_scan_available
+    poisoner.print = MagicMock()
+
+    assert poisoner.pre_main() is expected
+
+    if expected:
+        poisoner.print.assert_called_once_with(
+            "The arp-scan tool is not installed. ARP poisoner module is "
+            "stopping.",
+            log_to_logfiles_only=True,
+        )
+    else:
+        poisoner.print.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "arp_scan_available, expected_channels",
+    [
+        (False, {}),
+        (
+            True,
+            {
+                "new_blocking": "new_blocking_subscription",
+                "tw_closed": "tw_closed_subscription",
+            },
+        ),
+    ],
+)
+def test_subscribe_to_channels_depends_on_arp_scan(
+    poisoner, arp_scan_available, expected_channels
+):
+    poisoner.arp_scan_bin_available = arp_scan_available
+    poisoner.db.subscribe = MagicMock(
+        side_effect=["new_blocking_subscription", "tw_closed_subscription"]
+    )
+
+    poisoner.subscribe_to_channels()
+
+    assert poisoner.channels == expected_channels
+
+    if arp_scan_available:
+        assert poisoner.db.subscribe.call_count == 2
+    else:
+        poisoner.db.subscribe.assert_not_called()
+
+
 def test_is_broadcast_true(poisoner):
     assert poisoner.is_broadcast("192.168.1.255", "192.168.1.0/24")
 

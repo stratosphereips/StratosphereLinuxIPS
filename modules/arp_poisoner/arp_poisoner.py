@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import logging
+import shutil
 import subprocess
 import time
 from threading import Lock
@@ -30,6 +31,8 @@ class ARPPoisoner(IModule):
     authors = ["Alya Gomaa"]
 
     def init(self):
+        self.arp_scan_path = shutil.which("arp-scan")
+        self.arp_scan_bin_available = self.arp_scan_path is not None
         self._time_since_last_repoison = {}
         self._time_since_last_internet_cut = {}
         self.log_file_path = self.get_module_specific_output_path(
@@ -56,12 +59,31 @@ class ARPPoisoner(IModule):
         self.ip_interface_map = {}
 
     def subscribe_to_channels(self):
+        if not self.arp_scan_bin_available:
+            self.channels = {}
+            return
         self.c1 = self.db.subscribe("new_blocking")
         self.c2 = self.db.subscribe("tw_closed")
         self.channels = {
             "new_blocking": self.c1,
             "tw_closed": self.c2,
         }
+
+    def pre_main(self) -> bool:
+        """
+        Stop the module before entering the main loop when arp-scan is
+        unavailable.
+
+        :return: True when the module should shut down, otherwise False.
+        """
+        if self.arp_scan_bin_available:
+            return False
+
+        self.print(
+            "The arp-scan tool is not installed. ARP poisoner module is "
+            "stopping.",
+        )
+        return True
 
     def log(self, text):
         """Logs the given text to the blocking log file"""
