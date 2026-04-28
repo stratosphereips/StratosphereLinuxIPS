@@ -1235,3 +1235,51 @@ def test_check_connection_to_local_ip(
     )
     conn.check_connection_to_local_ip(twid, flow)
     assert conn.set_evidence.conn_to_private_ip.call_count == expected_calls
+
+
+@pytest.mark.parametrize(
+    "msg, expected_result",
+    [
+        (
+            {
+                "channel": "tw_closed",
+                "data": json.dumps(
+                    {
+                        "text": "profile_192.168.1.1_timewindow3",
+                        "version": "test-version",
+                    }
+                ),
+            },
+            ("profile_192.168.1.1", "timewindow3"),
+        ),
+        (
+            {
+                "channel": "tw_closed",
+                "data": json.dumps(
+                    {
+                        "text": json.dumps(
+                            {
+                                "text": "profile_192.168.1.1_timewindow3",
+                                "version": "test-version",
+                            }
+                        ),
+                        "version": "test-version",
+                    }
+                ),
+            },
+            ("profile_192.168.1.1", "timewindow3"),
+        ),
+        (
+            {
+                "channel": "tw_closed",
+                "data": json.dumps(
+                    {"text": "invalid_payload", "version": "test-version"}
+                ),
+            },
+            None,
+        ),
+    ],
+)
+def test_parse_closed_tw_message(msg, expected_result):
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    assert conn._parse_closed_tw_message(msg) == expected_result

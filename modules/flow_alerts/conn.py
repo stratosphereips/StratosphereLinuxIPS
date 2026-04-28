@@ -369,6 +369,46 @@ class Conn(IFlowalertsAnalyzer):
                 ip, mbs_uploaded, profileid, twid, uids, ts
             )
 
+    def _parse_closed_tw_message(self, msg: dict) -> Tuple[str, str] | None:
+        """
+        Extract the profileid and twid from a tw_closed pub/sub message.
+
+        Parameters:
+        msg: Redis pub/sub message for the tw_closed channel.
+
+        Return:
+        Tuple[str, str] | None: Normalized (profileid, twid) or None if the
+        payload is invalid.
+        """
+        payload = utils.get_msg_payload(msg)
+
+        if isinstance(payload, dict):
+            payload = payload.get("text")
+
+        if isinstance(payload, str):
+            payload = payload.strip()
+
+            # Some callers may accidentally pass the serialized pub/sub
+            # envelope instead of its text payload.
+            if payload.startswith("{"):
+                with contextlib.suppress(
+                    json.decoder.JSONDecodeError, TypeError
+                ):
+                    decoded_payload = json.loads(payload)
+                    if isinstance(decoded_payload, dict):
+                        payload = decoded_payload.get("text", payload)
+
+        if not isinstance(payload, str):
+            return None
+
+        profileid, _, twid = payload.rpartition("_")
+        if not profileid.startswith("profile_") or not twid.startswith(
+            "timewindow"
+        ):
+            return None
+
+        return profileid, twid
+
     @staticmethod
     def _is_it_ok_for_ip_to_change(ip) -> bool:
         """Devices send flow as/to these ips all the time, the're not
@@ -840,8 +880,12 @@ class Conn(IFlowalertsAnalyzer):
             self.check_device_changing_ips(twid, flow)
 
         elif utils.is_msg_intended_for(msg, "tw_closed"):
-            profileid_tw: List[str] = utils.get_msg_payload(msg).split("_")
-            profileid = f"{profileid_tw[0]}_{profileid_tw[1]}"
-            twid = profileid_tw[-1]
+            closed_tw = self._parse_closed_tw_message(msg)
+            if not closed_tw:
+                return
+
+            profileid, twid = closed_tw
             self.detect_data_upload_in_twid(profileid, twid)
-            self.cleanup_conn_to_multiple_ports_tracker(profileid_tw)
+            self.cleanup_conn_to_multiple_ports_tracker(
+                [*profileid.split("_"), twid]
+            )
