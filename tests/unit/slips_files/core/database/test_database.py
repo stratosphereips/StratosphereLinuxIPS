@@ -157,6 +157,102 @@ def test_get_generated_regexes_and_count(tmp_path):
     assert db.get_generated_regexes_count("dns_domain") == 1
 
 
+def test_get_available_llm_backends_returns_empty_dict_when_unset():
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    db.r.delete(db.rdb.constants.AVAILABLE_LLM_BACKENDS)
+
+    assert db.get_available_llm_backends() == {
+        "default_backend": "",
+        "backends": {},
+    }
+
+
+def test_set_and_get_available_llm_backends():
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+
+    db.set_available_llm_backends(
+        {
+            "default_backend": "local_qwen",
+            "backends": {
+                "local_qwen": {
+                    "provider": "ollama",
+                    "model": "qwen2.5:3b",
+                },
+                "openai_default": {
+                    "provider": "openai",
+                    "model": "gpt-4o-mini",
+                },
+            },
+        }
+    )
+
+    assert db.get_available_llm_backends() == {
+        "default_backend": "local_qwen",
+        "backends": {
+            "local_qwen": {
+                "provider": "ollama",
+                "model": "qwen2.5:3b",
+            },
+            "openai_default": {
+                "provider": "openai",
+                "model": "gpt-4o-mini",
+            },
+        },
+    }
+
+
+def test_get_generated_regexes_and_count(tmp_path):
+    db = ModuleFactory().create_db_manager_obj(
+        6379,
+        output_dir=str(tmp_path / "output"),
+        flush_db=True,
+    )
+    db.conf.regex_generator_store_dir = Mock(
+        return_value=str(tmp_path / "regex_generator")
+    )
+    db.conf.regex_generator_seed_benign_samples = Mock(return_value=False)
+
+    storage = db._get_regex_generator_storage()
+    storage.store_generated_regex(
+        {
+            "regex_type": "dns_domain",
+            "regex": r"^xqz[a-z0-9]{8,12}\.invalid$",
+            "regex_hash": "hash-1",
+            "status": "accepted",
+            "rejection_reason": None,
+            "matched_benign_value": None,
+            "backend_alias": "local_qwen",
+            "provider": "ollama",
+            "model": "qwen2.5:3b",
+            "temperature": 1.2,
+            "prompt_version": "regex-generator-v1",
+            "request_id": "req-1",
+            "created_at": 1.0,
+        }
+    )
+
+    regexes = db.get_generated_regexes("dns_domain")
+    assert regexes == [
+        {
+            "id": regexes[0]["id"],
+            "regex_type": "dns_domain",
+            "regex": r"^xqz[a-z0-9]{8,12}\.invalid$",
+            "regex_hash": "hash-1",
+            "status": "accepted",
+            "rejection_reason": None,
+            "matched_benign_value": None,
+            "backend_alias": "local_qwen",
+            "provider": "ollama",
+            "model": "qwen2.5:3b",
+            "temperature": 1.2,
+            "prompt_version": "regex-generator-v1",
+            "request_id": "req-1",
+            "created_at": 1.0,
+        }
+    ]
+    assert db.get_generated_regexes_count("dns_domain") == 1
+
+
 def test_profile_moddule_labels():
     """tests set and get_profile_module_label"""
     db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
