@@ -3,7 +3,11 @@
 
 from unittest.mock import Mock
 
-from slips_files.core.input_profilers.zeek import ZeekJSON
+from tests.module_factory import ModuleFactory
+from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
+from slips_files.core.input_profilers.zeek_to_slips_maps import (
+    notice_fields_to_slips_fields_map,
+)
 
 
 def test_zeek_json_maps_software_type_and_banner_fields():
@@ -31,6 +35,17 @@ def test_zeek_json_maps_software_type_and_banner_fields():
     assert flow.software == "SSH::CLIENT"
     assert flow.software_name == "libssh"
     assert flow.unparsed_version == "libssh2_1.11.0"
+
+
+def test_zeek_tabs_normalizes_labeled_notice_log_type():
+    module_factory = ModuleFactory()
+    parser = ZeekTabs(module_factory.get_default_db())
+
+    line_processor = parser.get_line_processor(
+        {"type": "notice.log.labeled", "data": "#fields\tts"}
+    )
+
+    assert line_processor == notice_fields_to_slips_fields_map
 
 
 def test_zeek_json_maps_ssh_ports_and_auth_attempts():
