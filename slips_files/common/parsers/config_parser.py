@@ -1047,6 +1047,54 @@ class ConfigParser(object):
             return value
         return str(value).strip().lower() in ("true", "1", "yes", "on")
 
+    def alert_summary_enabled(self) -> bool:
+        value = self.read_configuration("alert_summary", "enabled", False)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def alert_summary_allowed_backends(self) -> list:
+        value = self.read_configuration(
+            "alert_summary", "allowed_backends", []
+        )
+        if not isinstance(value, list):
+            return []
+        return [
+            str(backend).strip()
+            for backend in value
+            if str(backend).strip()
+        ]
+
+    def alert_summary_llm_temperature(self) -> float:
+        value = self.read_configuration(
+            "alert_summary", "llm_temperature", 0.2
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 0.2
+        return max(0.0, value)
+
+    def alert_summary_llm_max_tokens(self) -> int:
+        value = self.read_configuration(
+            "alert_summary", "llm_max_tokens", 220
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 220
+        return max(1, value)
+
+    def alert_summary_llm_response_timeout_seconds(self) -> int:
+        value = self.read_configuration(
+            "alert_summary", "llm_response_timeout_seconds", 120
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 120
+        return max(0, value)
+
     def t_cell_enabled(self) -> bool:
         value = self.read_configuration("t_cell", "enabled", True)
         if isinstance(value, bool):
@@ -1409,11 +1457,32 @@ class ConfigParser(object):
     def delete_prev_db(self):
         return self.read_configuration("parameters", "deletePrevdb", True)
 
-    def default_rotation_interval(self):
-        default_rotation_interval = self.read_configuration(
-            "parameters", "default_rotation_interval", "1 day"
+    def rotation_period(self):
+        """
+        Read the configured log rotation interval.
+
+        Returns:
+            Sanitized interval string from `parameters.rotation_period` or the
+            legacy `parameters.default_rotation_interval` key.
+        """
+        rotation_period = self.read_configuration(
+            "parameters", "rotation_period", ""
         )
-        return utils.sanitize(default_rotation_interval)
+        if rotation_period in ("", None):
+            rotation_period = self.read_configuration(
+                "parameters", "default_rotation_interval", "1 day"
+            )
+        return utils.sanitize(str(rotation_period))
+
+    def default_rotation_interval(self):
+        """
+        Read the legacy Zeek rotation interval setting.
+
+        Returns:
+            Sanitized interval string using the modern `rotation_period`
+            accessor with backward-compatible key lookup.
+        """
+        return self.rotation_period()
 
     def parse_ip(self, ip: str):
         """converts the given IP address or CIDR to an obj"""
