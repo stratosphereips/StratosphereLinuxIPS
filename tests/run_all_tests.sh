@@ -8,9 +8,6 @@ printf "0" | ./slips.py -k
 # -s to see print statements as they are executed
 python3  -m pytest tests/unit/ --ignore="tests/integration" -n 7 -p no:warnings -vvvv -s
 
-# Close all redis-servers opened by the unit tests
-python3 tests/unit/destrctor.py
-
 # clear cache before running the integration tests
 ./slips.py -cc
 
