@@ -974,11 +974,36 @@ class ModuleFactory:
     def create_evidence_loggr_obj(self):
         from slips_files.core.evidence_logger import EvidenceLogger
 
-        handler = EvidenceLogger(
-            logger_stop_signal=Mock(),
-            evidence_logger_q=Mock(),
-            output_dir="/tmp",
-        )
+        conf = Mock()
+        conf.get_GID = Mock(return_value=0)
+        conf.get_UID = Mock(return_value=0)
+        conf.generate_performance_plots = Mock(return_value=False)
+
+        logfile = Mock()
+        logfile.name = "alerts.log"
+        jsonfile = Mock()
+        jsonfile.name = "alerts.json"
+
+        with (
+            patch(
+                "slips_files.core.evidence_logger.ConfigParser",
+                return_value=conf,
+            ),
+            patch(
+                "slips_files.core.evidence_logger."
+                "utils.change_logfiles_ownership"
+            ),
+            patch.object(
+                EvidenceLogger,
+                "clean_file",
+                side_effect=[logfile, jsonfile],
+            ),
+        ):
+            handler = EvidenceLogger(
+                logger_stop_signal=Mock(),
+                evidence_logger_q=Mock(),
+                output_dir="/tmp",
+            )
         return handler
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
