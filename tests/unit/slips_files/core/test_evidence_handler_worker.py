@@ -205,8 +205,8 @@ def test_add_alert_to_json_log_file(
 @pytest.mark.parametrize(
     "confidence, expected_output",
     [
-        (0.80, "high"),
-        (0.55, "medium"),
+        (0.80, "High"),
+        (0.55, "Medium"),
         (0.54, "low"),
     ],
 )

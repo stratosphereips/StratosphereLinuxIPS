@@ -6,6 +6,7 @@ Python has None, SQLite has NULL, conversion is automatic in both ways.
 
 import os
 import sqlite3
+from pathlib import Path
 from typing import List, Any, Optional
 
 from slips_files.core.output import Output
@@ -32,6 +33,7 @@ class FidesSQLiteDB:
         self.logger = logger
         self.db_path = db_path
         if not self.__is_in_memory_database():
+            Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
             with open(self.db_path, "a") as f:
                 f.close()
             sqlite3.connect(self.db_path).close()

@@ -19,8 +19,7 @@ def db():
     # Create an in-memory SQLite database for testing
     logger = MagicMock()  # Mock the logger for testing purposes
     db_instance = FidesSQLiteDB(logger, ":memory:")  # Using in-memory DB
-    yield db_instance
-    db_instance.close()
+    return db_instance
 
 
 def test_db_connection_and_creation(db):

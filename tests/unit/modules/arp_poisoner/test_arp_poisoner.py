@@ -39,7 +39,6 @@ def test_pre_main_stops_when_arp_scan_is_missing(
         poisoner.print.assert_called_once_with(
             "The arp-scan tool is not installed. ARP poisoner module is "
             "stopping.",
-            log_to_logfiles_only=True,
         )
     else:
         poisoner.print.assert_not_called()

@@ -236,10 +236,10 @@ def test_calculate_confidence(input_value, expected_output):
 @pytest.mark.parametrize(
     "score, expected_output",
     [
-        (0.80, "high"),
-        (0.95, "high"),
-        (0.55, "medium"),
-        (0.79, "medium"),
+        (0.80, "High"),
+        (0.95, "High"),
+        (0.55, "Medium"),
+        (0.79, "Medium"),
         (0.54, "low"),
         (0.0, "low"),
     ],

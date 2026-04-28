@@ -220,6 +220,20 @@ def prepare_peer_config_paths(
     return slips_config, iris_config, iris_config_path
 
 
+def get_runtime_config_dir(output_dir_name: str, peer_name: str) -> Path:
+    """
+    Return the runtime config directory for an Iris integration-test peer.
+
+    Parameters:
+        output_dir_name: Name of the peer output directory.
+        peer_name: Peer-specific prefix used by the test.
+
+    Returns:
+        Path: Directory where generated runtime configs should be stored.
+    """
+    return TEST_DIR / "runtime_configs" / output_dir_name / peer_name
+
+
 def get_iris_relative_key_path(key_path: Path) -> str:
     """
     Build a key path relative to the Iris module working directory.
@@ -286,7 +300,7 @@ def prepare_and_start_peer1(
     Returns:
         tuple: Peer1 process, Iris log path, and Slips config path.
     """
-    config_dir = output_dir / "peer1_config"
+    config_dir = get_runtime_config_dir(output_dir.name, "peer1")
     (
         peer1_slips_config,
         peer1_iris_config,
@@ -375,7 +389,7 @@ def prepare_and_start_peer2(
     Returns:
         tuple: Peer2 process, Iris log path, Slips config path, and Iris config path.
     """
-    config_dir = output_dir_peer / "peer2_config"
+    config_dir = get_runtime_config_dir(output_dir_peer.name, "peer2")
     (
         peer2_slips_config,
         peer2_iris_config,
@@ -587,6 +601,13 @@ def test_messaging(
         close_test_redis_server(peer_redis_port)
         if peer2_key_path is not None and peer2_key_path.exists():
             peer2_key_path.unlink()
+        shutil.rmtree(
+            TEST_DIR / "runtime_configs" / output_dir.name, ignore_errors=True
+        )
+        shutil.rmtree(
+            TEST_DIR / "runtime_configs" / output_dir_peer.name,
+            ignore_errors=True,
+        )
         if success:
             print("Deleting the output directories")
             shutil.rmtree(output_dir)
