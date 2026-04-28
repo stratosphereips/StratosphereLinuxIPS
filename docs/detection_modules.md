@@ -134,6 +134,11 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
+    <td>Alert Summary</td>
+    <td>analyst-facing module that summarizes each alert and its correlated evidence into one human-readable paragraph using the shared LLM service</td>
+    <td>✅</td>
+  </tr>
+  <tr>
     <td>RegexGenerator</td>
     <td>shared service module that continuously generates pseudo-random regexes, rejects those matching benign corpora, and stores accepted regexes for later modules</td>
     <td>✅</td>
@@ -170,6 +175,22 @@ configured backend, and publishes the result on `llm_response`.
 
 For the full request and response format, backend configuration, and examples,
 see [LLM Module](llm_module.md).
+
+## Alert Summary Module
+
+The Alert Summary module is an analyst-facing consumer of the shared LLM
+service.
+
+It listens on `new_alert`, loads the evidence records referenced by the alert,
+sends that structured context to the shared `LLM` module, and writes one
+paragraph per alert to `output/alerts/alerts-summary.log`.
+
+The generated paragraph is meant to help a human analyst quickly judge whether
+the alert looks real, how strong the evidence is, and what operational risk it
+implies.
+
+For the full configuration, prompt behavior, and output format, see
+[Alert Summary Module](alert_summary_module.md).
 
 ## Regex Generator Module
 
