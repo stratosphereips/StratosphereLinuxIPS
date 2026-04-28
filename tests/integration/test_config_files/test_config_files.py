@@ -10,6 +10,7 @@ from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
     check_for_text,
+    close_test_redis_server,
     get_label_count_from_output_db,
     run_slips,
     get_slips_test_command,
@@ -74,58 +75,65 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
         },
     )
     output_dir = create_output_dir(output_dir)
-    output_file = os.path.join(output_dir, "slips_output.txt")
-    command = get_slips_test_command(
-        f"-t -e 1 -f {pcap_path} -o {output_dir} -c {config_file} "
-        f"-P {redis_port}"
-    )
-    command = f"{command} > {output_file} 2>&1"
-    print("running slips ...")
-    # this function returns when slips is done
-    run_slips(command)
-    print("Slip is done, checking for errors in the output dir.")
-    assert_no_errors(output_dir)
-    print("Comparing profiles with expected profiles")
-    database = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir, start_redis_server=False
-    )
-    profiles = database.get_profiles_len()
-    # expected_profiles is more than 50 because we're using direction = all
-    assert profiles > expected_profiles
-    print("Checking for a random evidence")
-    log_file = output_dir / "alerts" / alerts_file
+    success = False
+    try:
+        output_file = os.path.join(output_dir, "slips_output.txt")
+        command = get_slips_test_command(
+            f"-t -e 1 -f {pcap_path} -o {output_dir} -c {config_file} "
+            f"-P {redis_port}"
+        )
+        command = f"{command} > {output_file} 2>&1"
+        print("running slips ...")
+        # this function returns when slips is done
+        run_slips(command)
+        print("Slip is done, checking for errors in the output dir.")
+        assert_no_errors(output_dir)
+        print("Comparing profiles with expected profiles")
+        database = ModuleFactory().create_db_manager_obj(
+            redis_port, output_dir=output_dir, start_redis_server=False
+        )
+        profiles = database.get_profiles_len()
+        # expected_profiles is more than 50 because we're using direction = all
+        assert profiles > expected_profiles
+        print("Checking for a random evidence")
+        log_file = output_dir / "alerts" / alerts_file
 
-    # testing disabled_detections param in the configuration file
-    disabled_evidence = "a connection without DNS resolution"
-    assert is_evidence_present(log_file, disabled_evidence) is False
-    print("Testing time_window_width param.")
-    # testing time_window_width param in the configuration file
-    assert check_for_text("115740 days 17 hrs 46 mins 39 seconds", output_dir)
+        # testing disabled_detections param in the configuration file
+        disabled_evidence = "a connection without DNS resolution"
+        assert is_evidence_present(log_file, disabled_evidence) is False
+        print("Testing time_window_width param.")
+        # testing time_window_width param in the configuration file
+        assert check_for_text(
+            "115740 days 17 hrs 46 mins 39 seconds", output_dir
+        )
 
-    print("Make sure slips didn't delete zeek files.")
-    # test delete_zeek_files param
-    assert "zeek_files_test7-malicious" not in os.listdir()
-    print("Test storing a copy of zeek files.")
-    # test store_a_copy_of_zeek_files
-    assert "zeek_files" in os.listdir(output_dir)
-    print("Checking metadata directory")
-    # test metadata_dir
-    assert "metadata" in os.listdir(output_dir)
-    metadata_path = os.path.join(output_dir, "metadata")
-    for file in ("test.yaml", "whitelist.conf", "info.txt"):
-        print(f"checking if {file} in the metadata path {metadata_path}")
-        assert file in os.listdir(metadata_path)
+        print("Make sure slips didn't delete zeek files.")
+        # test delete_zeek_files param
+        assert "zeek_files_test7-malicious" not in os.listdir()
+        print("Test storing a copy of zeek files.")
+        # test store_a_copy_of_zeek_files
+        assert "zeek_files" in os.listdir(output_dir)
+        print("Checking metadata directory")
+        # test metadata_dir
+        assert "metadata" in os.listdir(output_dir)
+        metadata_path = os.path.join(output_dir, "metadata")
+        for file in ("test.yaml", "whitelist.conf", "info.txt"):
+            print(f"checking if {file} in the metadata path {metadata_path}")
+            assert file in os.listdir(metadata_path)
 
-    print("Checking malicious label count")
-    # test label=malicious
-    assert get_label_count_from_output_db(output_dir, "malicious") > 370
-    # test disable
-    for module in ["template", "flow_ml_detection"]:
-        print(f"Checking if {module} is disabled")
-        assert check_for_text(module, output_dir)
-    print("Deleting the output directory")
-    shutil.rmtree(output_dir)
-    os.remove(config_file)
+        print("Checking malicious label count")
+        # test label=malicious
+        assert get_label_count_from_output_db(output_dir, "malicious") > 370
+        # test disable
+        for module in ["template", "flow_ml_detection"]:
+            print(f"Checking if {module} is disabled")
+            assert check_for_text(module, output_dir)
+        success = True
+    finally:
+        if success:
+            close_test_redis_server(redis_port)
+            shutil.rmtree(output_dir)
+        os.remove(config_file)
 
 
 @pytest.mark.parametrize(
@@ -170,16 +178,21 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
     )
 
     output_dir = create_output_dir(output_dir)
-    output_file = os.path.join(output_dir, "slips_output.txt")
-    command = get_slips_test_command(
-        f"-t -e 1 -f {pcap_path} -o {output_dir} -c {config_file} "
-        f"-P {redis_port}"
-    )
-    command = f"{command} > {output_file} 2>&1"
-    print("running slips ...")
-    run_slips(command)
-    print("Slip is done, checking for errors in the output dir.")
-    assert_no_errors(output_dir)
-    print("Deleting the output directory")
-    shutil.rmtree(output_dir)
-    os.remove(config_file)
+    success = False
+    try:
+        output_file = os.path.join(output_dir, "slips_output.txt")
+        command = get_slips_test_command(
+            f"-t -e 1 -f {pcap_path} -o {output_dir} -c {config_file} "
+            f"-P {redis_port}"
+        )
+        command = f"{command} > {output_file} 2>&1"
+        print("running slips ...")
+        run_slips(command)
+        print("Slip is done, checking for errors in the output dir.")
+        assert_no_errors(output_dir)
+        success = True
+    finally:
+        if success:
+            close_test_redis_server(redis_port)
+            shutil.rmtree(output_dir)
+        os.remove(config_file)

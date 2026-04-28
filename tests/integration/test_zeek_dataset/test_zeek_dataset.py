@@ -5,6 +5,7 @@ from tests.common_test_utils import (
     is_evidence_present,
     create_output_dir,
     assert_no_errors,
+    close_test_redis_server,
 )
 from tests.module_factory import ModuleFactory
 import pytest
@@ -146,22 +147,27 @@ def test_zeek_conn_log(
     redis_port,
 ):
     output_dir = create_output_dir(output_dir)
+    success = False
+    try:
+        output_file = os.path.join(output_dir, "slips_output.txt")
+        command = (
+            f"./slips.py -e 1 -t -f {conn_log_path} -o {output_dir} "
+            f"-P {redis_port} > {output_file} 2>&1"
+        )
+        # this function returns when slips is done
+        run_slips(command)
+        assert_no_errors(output_dir)
 
-    output_file = os.path.join(output_dir, "slips_output.txt")
-    command = (
-        f"./slips.py -e 1 -t -f {conn_log_path} -o {output_dir} "
-        f"-P {redis_port} > {output_file} 2>&1"
-    )
-    # this function returns when slips is done
-    run_slips(command)
-    assert_no_errors(output_dir)
+        database = ModuleFactory().create_db_manager_obj(
+            redis_port, output_dir=output_dir
+        )
+        profiles = database.get_profiles_len()
+        assert profiles > expected_profiles
 
-    database = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir
-    )
-    profiles = database.get_profiles_len()
-    assert profiles > expected_profiles
-
-    log_file = output_dir / "alerts" / alerts_file
-    assert is_evidence_present(log_file, expected_evidence) is True
-    shutil.rmtree(output_dir)
+        log_file = output_dir / "alerts" / alerts_file
+        assert is_evidence_present(log_file, expected_evidence) is True
+        success = True
+    finally:
+        if success:
+            close_test_redis_server(redis_port)
+            shutil.rmtree(output_dir)

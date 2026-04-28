@@ -13,6 +13,7 @@ from modules.fides.persistence.fides_sqlite_db import FidesSQLiteDB
 from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
+    close_test_redis_server,
 )
 from tests.module_factory import ModuleFactory
 import pytest
@@ -189,44 +190,48 @@ def test_conf_file2(path, output_dir, redis_port):
         "-P",
         str(redis_port),
     ]
+    success = False
+    try:
+        print("running slips ...")
+        print(output_dir)
 
-    print("running slips ...")
-    print(output_dir)
+        # Open the log file in write mode
+        with open(output_file, "w") as log_file:
+            # Start the subprocess, redirecting stdout and stderr to the same file
+            process = subprocess.Popen(
+                command,  # Replace with your command
+                stdout=log_file,
+                stderr=log_file,
+            )
 
-    # Open the log file in write mode
-    with open(output_file, "w") as log_file:
-        # Start the subprocess, redirecting stdout and stderr to the same file
-        process = subprocess.Popen(
-            command,  # Replace with your command
-            stdout=log_file,
-            stderr=log_file,
+            print(f"Output and errors are logged in {output_file}")
+            countdown(40, "sigterm")
+            # send a SIGTERM to the process
+            os.kill(process.pid, 15)
+            print("SIGTERM sent. killing slips")
+            os.kill(process.pid, 9)
+
+        message_receive(redis_port)
+
+        print(f"Slips with PID {process.pid} was killed.")
+
+        print("Slip is done, checking for errors in the output dir.")
+        assert_no_errors(output_dir)
+        print("Checking database")
+        db = ModuleFactory().create_db_manager_obj(
+            redis_port, output_dir=output_dir, start_redis_server=False
         )
-
-        print(f"Output and errors are logged in {output_file}")
-        countdown(40, "sigterm")
-        # send a SIGTERM to the process
-        os.kill(process.pid, 15)
-        print("SIGTERM sent. killing slips")
-        os.kill(process.pid, 9)
-
-    message_receive(redis_port)
-
-    print(f"Slips with PID {process.pid} was killed.")
-
-    print("Slip is done, checking for errors in the output dir.")
-    assert_no_errors(output_dir)
-    print("Checking database")
-    db = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir, start_redis_server=False
-    )
-    # iris is supposed to be receiving this msg, that last thing fides does
-    # is send a msg to this channel for iris to receive it
-    assert db.get_msgs_received_at_runtime("fides")["fides2network"] == "1"
-    assert db.get_msgs_received_at_runtime("fides")["new_alert"] == "1"
-    print(db.get_msgs_received_at_runtime("fides"))
-
-    print("Deleting the output directory")
-    shutil.rmtree(output_dir, ignore_errors=True)
+        # iris is supposed to be receiving this msg, that last thing fides does
+        # is send a msg to this channel for iris to receive it
+        assert db.get_msgs_received_at_runtime("fides")["fides2network"] == "1"
+        assert db.get_msgs_received_at_runtime("fides")["new_alert"] == "1"
+        print(db.get_msgs_received_at_runtime("fides"))
+        success = True
+    finally:
+        if success:
+            close_test_redis_server(redis_port)
+            print("Deleting the output directory")
+            shutil.rmtree(output_dir, ignore_errors=True)
 
 
 @pytest.mark.parametrize(
@@ -287,6 +292,7 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
     shutil.copy(config_file_path, config_temp_path)
     test_db = Path("permanent") / "fides_test_database.sqlite"
     test_db.parent.mkdir(parents=True, exist_ok=True)
+    success = False
 
     try:
         # Append the new line to the config
@@ -369,10 +375,12 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
             "score": "0.0",
             "confidence": "0.0",
         }
-
-        print("Deleting the output directory")
-        shutil.rmtree(output_dir)
+        success = True
     finally:
+        if success:
+            close_test_redis_server(redis_port)
+            print("Deleting the output directory")
+            shutil.rmtree(output_dir)
         # Restore the original file
         os.remove(test_db)
         shutil.move(config_temp_path, config_file_path)

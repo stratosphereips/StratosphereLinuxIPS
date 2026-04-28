@@ -12,6 +12,7 @@ import redis
 from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
+    close_test_redis_server,
     modify_yaml_config,
 )
 import pytest
@@ -425,103 +426,110 @@ def test_messaging(
     # Prepare output dir for the peer2
     output_dir_peer: PosixPath = create_output_dir(peer_output_dir)
     output_file_peer = os.path.join(output_dir_peer, "slips_output.txt")
-
-    print("running slips ...")
-    with open(output_file, "w") as log_file:
-        with open(output_file_peer, "w") as iris_log_file:
-            process, log_file_first_iris, peer1_slips_config = (
-                prepare_and_start_peer1(
-                    zeek_dir_path=zeek_dir_path,
-                    output_dir=output_dir,
-                    redis_port=redis_port,
-                    default_interface=default_interface,
-                    log_file=log_file,
+    peer2_iris_config = PEER2_CONFIG_DIR / "iris.yaml"
+    success = False
+    try:
+        print("running slips ...")
+        with open(output_file, "w") as log_file:
+            with open(output_file_peer, "w") as iris_log_file:
+                process, log_file_first_iris, peer1_slips_config = (
+                    prepare_and_start_peer1(
+                        zeek_dir_path=zeek_dir_path,
+                        output_dir=output_dir,
+                        redis_port=redis_port,
+                        default_interface=default_interface,
+                        log_file=log_file,
+                    )
                 )
-            )
-            assert_peer1_setup(peer1_slips_config)
+                assert_peer1_setup(peer1_slips_config)
 
-            # First peer (its Iris) needs to be ready and available for
-            # connections when the second peer tries to reach out to it.
-            countdown(20, "second peer")
-            # get the connection string from the first peer and give it
-            # to the second one so it is reachable
-            assert wait_for_file(
-                log_file_first_iris, 30
-            ), f"Expected Iris log file was not created: {log_file_first_iris}"
-            original_conn_string = extract_connection_string(
-                log_file_first_iris
-            )
+                # First peer (its Iris) needs to be ready and available for
+                # connections when the second peer tries to reach out to it.
+                countdown(20, "second peer")
+                # get the connection string from the first peer and give it
+                # to the second one so it is reachable
+                assert wait_for_file(log_file_first_iris, 30), (
+                    "Expected Iris log file was not created: "
+                    f"{log_file_first_iris}"
+                )
+                original_conn_string = extract_connection_string(
+                    log_file_first_iris
+                )
 
-            (
-                peer_process,
-                log_file_second_iris,
-                peer2_slips_config,
-                peer2_iris_config,
-            ) = prepare_and_start_peer2(
-                zeek_dir_path=zeek_dir_path,
-                output_dir_peer=output_dir_peer,
-                peer_redis_port=peer_redis_port,
-                default_interface=default_interface,
-                connection_string=original_conn_string,
-                log_file=iris_log_file,
-            )
-            assert_peer2_setup(
-                peer2_slips_config=peer2_slips_config,
-                peer2_iris_config=peer2_iris_config,
-                connection_string=original_conn_string,
-                peer_redis_port=peer_redis_port,
-            )
+                (
+                    peer_process,
+                    log_file_second_iris,
+                    peer2_slips_config,
+                    peer2_iris_config,
+                ) = prepare_and_start_peer2(
+                    zeek_dir_path=zeek_dir_path,
+                    output_dir_peer=output_dir_peer,
+                    peer_redis_port=peer_redis_port,
+                    default_interface=default_interface,
+                    connection_string=original_conn_string,
+                    log_file=iris_log_file,
+                )
+                assert_peer2_setup(
+                    peer2_slips_config=peer2_slips_config,
+                    peer2_iris_config=peer2_iris_config,
+                    connection_string=original_conn_string,
+                    peer_redis_port=peer_redis_port,
+                )
 
-            print(
-                f"Output and errors of first peer are logged in"
-                f" {output_file}"
-            )
+                print(
+                    f"Output and errors of first peer are logged in"
+                    f" {output_file}"
+                )
 
-            # let Slips properly and fully star with all of its parts and modules.
-            countdown(80, "Sending msg in fides2network")
-            # Sending a manual message to make sure there is an alert generated, because
-            # is is highly probable that both slips have covered their network captures
-            # before the infrastructure of P2P network was fully up and running
-            message_send(
-                redis_port,
-                message=message_alert_TL_NL,
-                channel="fides2network",
-            )
+                # let Slips properly and fully star with all of its parts and modules.
+                countdown(80, "Sending msg in fides2network")
+                # Sending a manual message to make sure there is an alert generated, because
+                # is is highly probable that both slips have covered their network captures
+                # before the infrastructure of P2P network was fully up and running
+                message_send(
+                    redis_port,
+                    message=message_alert_TL_NL,
+                    channel="fides2network",
+                )
 
-            # these seconds are the time we give slips to process the msg
-            countdown(30, "Sending SIGTERM to the 2 peers")
-            # Kill em with kindness.
-            os.kill(process.pid, 15)
-            os.kill(peer_process.pid, 15)
-            print("SIGTERM sent.")
+                # these seconds are the time we give slips to process the msg
+                countdown(30, "Sending SIGTERM to the 2 peers")
+                # Kill em with kindness.
+                os.kill(process.pid, 15)
+                os.kill(peer_process.pid, 15)
+                print("SIGTERM sent.")
 
-            print("Sending SIGKILL to the 2 instances of Slips + iris")
-            # Kill em. Without kindness.
-            os.kill(process.pid, 9)
-            print(f"Slips with PID {process.pid} was killed.")
+                print("Sending SIGKILL to the 2 instances of Slips + iris")
+                # Kill em. Without kindness.
+                os.kill(process.pid, 9)
+                print(f"Slips with PID {process.pid} was killed.")
 
-            os.kill(peer_process.pid, 9)
-            print(f"Slips peer with PID {peer_process.pid} was killed.")
+                os.kill(peer_process.pid, 9)
+                print(f"Slips peer with PID {peer_process.pid} was killed.")
 
-    print("Slips is done, checking for errors in the 2 output dirs.")
-    assert_peer1_results(output_dir)
-    assert_peer2_results(output_dir_peer, log_file_second_iris)
+        print("Slips is done, checking for errors in the 2 output dirs.")
+        assert_peer1_results(output_dir)
+        assert_peer2_results(output_dir_peer, log_file_second_iris)
+        success = True
+    finally:
+        if success:
+            close_test_redis_server(redis_port)
+            close_test_redis_server(peer_redis_port)
+            print("Deleting the output directories")
+            shutil.rmtree(output_dir)
+            shutil.rmtree(output_dir_peer)
+            os.remove("modules/iris/second.priv")
 
-    print("Deleting the output directories")
-    shutil.rmtree(output_dir)
-    shutil.rmtree(output_dir_peer)
-    os.remove("modules/iris/second.priv")
-
-    # reset the generated peer2 Iris config back to its default values
-    # after the test finishes.
-    modify_yaml_config(
-        input_path="config/iris_config.yaml",
-        output_dir=PEER2_CONFIG_DIR,
-        output_filename=peer2_iris_config.name,
-        changes={
-            "Redis": {"Port": 6644},
-            "Server": {"Port": 9010},
-            "PeerDiscovery": {},
-            "Identity": {"KeyFile": "private.key"},
-        },
-    )
+        # reset the generated peer2 Iris config back to its default values
+        # after the test finishes.
+        modify_yaml_config(
+            input_path="config/iris_config.yaml",
+            output_dir=PEER2_CONFIG_DIR,
+            output_filename=peer2_iris_config.name,
+            changes={
+                "Redis": {"Port": 6644},
+                "Server": {"Port": 9010},
+                "PeerDiscovery": {},
+                "Identity": {"KeyFile": "private.key"},
+            },
+        )

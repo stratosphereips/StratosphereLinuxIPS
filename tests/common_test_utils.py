@@ -16,6 +16,7 @@ from typing import (
 from pathlib import PosixPath
 from unittest.mock import Mock
 import yaml
+import redis
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
@@ -94,6 +95,32 @@ def run_slips(cmd):
     _, _ = slips.communicate(input=b"y\n")
     return_code = slips.returncode
     return return_code
+
+
+def close_test_redis_server(redis_port: int) -> bool:
+    """
+    Flush and stop the Redis server used by an integration test.
+
+    :param redis_port: Redis port used by the test
+    :return: True when a Redis server was reached and shutdown was attempted
+    """
+    client = redis.StrictRedis(host="localhost", port=redis_port, db=0)
+    try:
+        client.ping()
+    except redis.exceptions.ConnectionError:
+        return False
+
+    try:
+        client.flushall()
+        client.flushdb()
+        client.script_flush()
+        client.shutdown(save=False)
+    except redis.exceptions.ConnectionError:
+        return True
+    finally:
+        client.connection_pool.disconnect()
+
+    return True
 
 
 def get_slips_test_command(arguments):
