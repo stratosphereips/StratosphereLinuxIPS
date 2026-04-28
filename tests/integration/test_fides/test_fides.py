@@ -37,17 +37,6 @@ FIDES_CONFIG_FILENAME = "fides_runtime.conf.yml"
 SLIPS_CONFIG_FILENAME = "fides_runtime_slips.yaml"
 
 
-def ensure_redis_is_running(port):
-    redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
-    try:
-        redis_client.ping()
-        return
-    except redis.exceptions.ConnectionError:
-        subprocess.check_call(
-            ["redis-server", "--port", str(port), "--daemonize", "yes"]
-        )
-
-
 def delete_file_if_exists(file_path):
     if os.path.exists(file_path):
         os.remove(file_path)
@@ -209,7 +198,6 @@ def test_conf_file2(path, output_dir, integration_port_factory):
     In this test we're using the local fides integration config file.
     """
     redis_port = integration_port_factory("redis")
-    ensure_redis_is_running(redis_port)
     output_dir: PosixPath = create_output_dir(output_dir)
     db_name = f"{output_dir.name}_fides_p2p_db.sqlite"
     slips_config, test_db = create_runtime_fides_configs(output_dir, db_name)
@@ -310,7 +298,6 @@ def test_trust_recommendation_response(
          modules to start
     """
     redis_port = integration_port_factory("redis")
-    ensure_redis_is_running(redis_port)
     output_dir: PosixPath = create_output_dir(output_dir)
     db_name = f"{output_dir.name}_fides_test_database.sqlite"
     slips_config, test_db = create_runtime_fides_configs(output_dir, db_name)

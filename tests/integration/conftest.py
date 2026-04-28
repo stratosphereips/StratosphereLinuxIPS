@@ -2,7 +2,10 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import importlib.util
 import pytest
-from tests.common_test_utils import allocate_integration_test_port
+from tests.common_test_utils import (
+    allocate_integration_test_port,
+    start_test_redis_server,
+)
 
 
 if importlib.util.find_spec("termcolor") is None:
@@ -28,6 +31,9 @@ def integration_port_factory(request):
         :param port_label: Label describing the allocated port
         :return: Allocated TCP port
         """
-        return allocate_integration_test_port(request.node.nodeid, port_label)
+        port = allocate_integration_test_port(request.node.nodeid, port_label)
+        if "redis" in port_label.lower():
+            start_test_redis_server(port)
+        return port
 
     return allocate

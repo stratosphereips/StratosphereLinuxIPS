@@ -9,6 +9,7 @@ import binascii
 import subprocess
 import base64
 import sys
+import time
 import socket
 import threading
 from typing import (
@@ -145,6 +146,47 @@ def allocate_integration_test_port(test_name: str, port_label: str) -> int:
     port = get_available_integration_test_port()
     print(f"[integration-test] {test_name} using {port_label} port {port}")
     return port
+
+
+def start_test_redis_server(redis_port: int) -> None:
+    """
+    Ensure a Redis server is running for an integration test.
+
+    :param redis_port: Redis port required by the integration test
+    :return: None
+    """
+    client = redis.StrictRedis(host="localhost", port=redis_port, db=0)
+    try:
+        client.ping()
+        return
+    except redis.exceptions.ConnectionError:
+        pass
+    finally:
+        client.connection_pool.disconnect()
+
+    if shutil.which("redis-server") is None:
+        import pytest
+
+        pytest.skip("Missing integration runtime dependencies: redis-server")
+
+    subprocess.check_call(
+        ["redis-server", "--port", str(redis_port), "--daemonize", "yes"]
+    )
+
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        client = redis.StrictRedis(host="localhost", port=redis_port, db=0)
+        try:
+            client.ping()
+            return
+        except redis.exceptions.ConnectionError:
+            time.sleep(0.1)
+        finally:
+            client.connection_pool.disconnect()
+
+    raise RuntimeError(
+        f"Redis server did not become ready on integration test port {redis_port}."
+    )
 
 
 def close_test_redis_server(redis_port: int) -> bool:
