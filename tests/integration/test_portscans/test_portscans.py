@@ -19,22 +19,22 @@ alerts_file = "alerts.log"
 
 
 @pytest.mark.parametrize(
-    "path,  output_dir, redis_port",
+    "path,  output_dir",
     [
         (
             "dataset/port-scans/horizontal/conn.log",
             "testing_horizontal_ps/",
-            7894,
         )
     ],
 )
-def test_horizontal(path, output_dir, redis_port):
+def test_horizontal(path, output_dir, integration_port_factory):
     """
     checks that slips is detecting horizontal ps no issue,
     """
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",), binaries=("redis-server",)
     )
+    redis_port = integration_port_factory("redis")
     output_dir = create_output_dir(output_dir)
     success = False
     try:
@@ -67,16 +67,17 @@ def test_horizontal(path, output_dir, redis_port):
 
 
 @pytest.mark.parametrize(
-    "path, output_dir, redis_port",
-    [("dataset/port-scans/vertical/conn.log", "testing_vertical_ps/", 7895)],
+    "path, output_dir",
+    [("dataset/port-scans/vertical/conn.log", "testing_vertical_ps/")],
 )
-def test_vertical(path, output_dir, redis_port):
+def test_vertical(path, output_dir, integration_port_factory):
     """
     checks that slips is detecting horizontal ps no issue,
     """
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",), binaries=("redis-server",)
     )
+    redis_port = integration_port_factory("redis")
     output_dir = create_output_dir(output_dir)
     success = False
     try:

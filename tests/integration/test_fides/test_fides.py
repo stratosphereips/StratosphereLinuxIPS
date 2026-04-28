@@ -157,19 +157,19 @@ def get_main_interface():
 
 
 @pytest.mark.parametrize(
-    "path, output_dir, redis_port",
+    "path, output_dir",
     [
         (
             "dataset/test13-malicious-dhcpscan-zeek-dir",
             "fides_test_conf_file2/",
-            6644,
         )
     ],
 )
-def test_conf_file2(path, output_dir, redis_port):
+def test_conf_file2(path, output_dir, integration_port_factory):
     """
     In this test we're using the local fides integration config file.
     """
+    redis_port = integration_port_factory("redis")
     ensure_redis_is_running(redis_port)
     output_dir: PosixPath = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")
@@ -235,16 +235,17 @@ def test_conf_file2(path, output_dir, redis_port):
 
 
 @pytest.mark.parametrize(
-    "path, output_dir, redis_port",
+    "path, output_dir",
     [
         (
             "dataset/test15-malicious-zeek-dir",
             "fides_test_trust_recommendation_response/",
-            6645,
         )
     ],
 )
-def test_trust_recommendation_response(path, output_dir, redis_port):
+def test_trust_recommendation_response(
+    path, output_dir, integration_port_factory
+):
     """
     This test simulates a common situation in the global P2P system, where
      Fides Module wanted to evaluate trust in an unknown peer and asked for
@@ -264,8 +265,8 @@ def test_trust_recommendation_response(path, output_dir, redis_port):
          peers
         - Run Slips (includes Fides Module) in a thread and wait for all
          modules to start
-
     """
+    redis_port = integration_port_factory("redis")
     ensure_redis_is_running(redis_port)
     output_dir: PosixPath = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, "slips_output.txt")

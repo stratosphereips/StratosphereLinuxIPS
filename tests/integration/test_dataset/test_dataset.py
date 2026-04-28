@@ -23,35 +23,31 @@ alerts_file = "alerts.log"
 
 
 @pytest.mark.parametrize(
-    "binetflow_path, expected_profiles, expected_evidence, output_dir, redis_port",
+    "binetflow_path, expected_profiles, expected_evidence, output_dir",
     [
         (
             "dataset/test4-malicious.binetflow",
             2,
             "Horizontal port scan to port http-alt 81/tcp. From 192.168.2.12",
             "test4/",
-            6662,
         ),
         (
             "dataset/test3-mixed.binetflow",
             20,
             "Horizontal port scan to port rdp 3389/tcp. From 46.166.151.160",
             "test3/",
-            6663,
         ),
         (
             "dataset/test2-malicious.binetflow",
             1,
             "Long Connection.",
             "test2/",
-            6664,
         ),
         (
             "dataset/test5-mixed.binetflow",
             4,
             "Long Connection",
             "test5/",
-            6655,
         ),
         # (
         #     'dataset/test11-portscan.binetflow',
@@ -67,11 +63,12 @@ def test_binetflow(
     expected_profiles,
     expected_evidence,
     output_dir,
-    redis_port,
+    integration_port_factory,
 ):
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",), binaries=("redis-server",)
     )
+    redis_port = integration_port_factory("redis")
     output_dir = create_output_dir(output_dir)
     success = False
     try:
@@ -101,12 +98,11 @@ def test_binetflow(
 
 
 @pytest.mark.parametrize(
-    "suricata_path, output_dir, redis_port, expected_evidence",
+    "suricata_path, output_dir, expected_evidence",
     [
         (
             "dataset/test6-malicious.suricata.json",
             "test6/",
-            6657,
             [
                 "Connection to unknown destination port",
                 "vertical port scan",
@@ -115,10 +111,16 @@ def test_binetflow(
         )
     ],
 )
-def test_suricata(suricata_path, output_dir, redis_port, expected_evidence):
+def test_suricata(
+    suricata_path,
+    output_dir,
+    expected_evidence,
+    integration_port_factory,
+):
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",), binaries=("redis-server",)
     )
+    redis_port = integration_port_factory("redis")
     output_dir = create_output_dir(output_dir)
     success = False
     try:
@@ -155,10 +157,10 @@ def test_suricata(suricata_path, output_dir, redis_port, expected_evidence):
     "nfdump" not in shutil.which("nfdump"), reason="nfdump is not installed"
 )
 @pytest.mark.parametrize(
-    "nfdump_path,  output_dir, redis_port",
-    [("dataset/test1-malicious.nfdump", "test1/", 6656)],
+    "nfdump_path,  output_dir",
+    [("dataset/test1-malicious.nfdump", "test1/")],
 )
-def test_nfdump(nfdump_path, output_dir, redis_port):
+def test_nfdump(nfdump_path, output_dir, integration_port_factory):
     """
     checks that slips is reading nfdump no issue,
      the file is not malicious so there's no evidence that should be present
@@ -166,6 +168,7 @@ def test_nfdump(nfdump_path, output_dir, redis_port):
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",), binaries=("redis-server",)
     )
+    redis_port = integration_port_factory("redis")
     output_dir = create_output_dir(output_dir)
     success = False
     try:

@@ -119,7 +119,7 @@ alerts_file = "alerts.log"
 
 
 @pytest.mark.parametrize(
-    "conn_log_path, expected_profiles, expected_evidence,  output_dir, redis_port",
+    "conn_log_path, expected_profiles, expected_evidence,  output_dir",
     [
         (
             "dataset/test9-mixed-zeek-dir/conn.log",
@@ -128,14 +128,12 @@ alerts_file = "alerts.log"
             "destination IP: 194.132.197.198",  # the flow with uid
             # CAwUdr34dVnyOwbUuj should trigger this
             "test9-conn_log_only/",
-            6659,
         ),
         (
             "dataset/test10-mixed-zeek-dir/conn.log",
             5,
             "non-SSL established connection",
             "test10-conn_log_only/",
-            6658,
         ),
     ],
 )
@@ -144,8 +142,9 @@ def test_zeek_conn_log(
     expected_profiles,
     expected_evidence,
     output_dir,
-    redis_port,
+    integration_port_factory,
 ):
+    redis_port = integration_port_factory("redis")
     output_dir = create_output_dir(output_dir)
     success = False
     try:

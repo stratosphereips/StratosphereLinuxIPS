@@ -28,17 +28,18 @@ TEST_DIR = Path(__file__).resolve().parent
 
 
 @pytest.mark.parametrize(
-    "pcap_path, expected_profiles, output_dir, redis_port",
+    "pcap_path, expected_profiles, output_dir",
     [
         (
             "dataset/test7-malicious.pcap",
             290,
             "test_configuration_file/",
-            6667,
         )
     ],
 )
-def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
+def test_conf_file(
+    pcap_path, expected_profiles, output_dir, integration_port_factory
+):
     """
     In this test we're using tests/test.conf
     """
@@ -47,6 +48,7 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
         binaries=("redis-server",),
         require_zeek_or_bro=True,
     )
+    redis_port = integration_port_factory("redis")
     config_file = TEST_DIR / "test.yaml"
     modify_yaml_config(
         output_filename=config_file.name,
@@ -137,17 +139,18 @@ def test_conf_file(pcap_path, expected_profiles, output_dir, redis_port):
 
 
 @pytest.mark.parametrize(
-    "pcap_path, expected_profiles, output_dir, redis_port",
+    "pcap_path, expected_profiles, output_dir",
     [
         (
             "dataset/test8-malicious.pcap ",
             1,
             "pcap_test_conf2/",
-            6668,
         )
     ],
 )
-def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
+def test_conf_file2(
+    pcap_path, expected_profiles, output_dir, integration_port_factory
+):
     """
     In this test we're using tests/test2.conf
     """
@@ -156,6 +159,7 @@ def test_conf_file2(pcap_path, expected_profiles, output_dir, redis_port):
         binaries=("redis-server",),
         require_zeek_or_bro=True,
     )
+    redis_port = integration_port_factory("redis")
     config_file = TEST_DIR / "test2.yaml"
     modify_yaml_config(
         output_filename=config_file.name,

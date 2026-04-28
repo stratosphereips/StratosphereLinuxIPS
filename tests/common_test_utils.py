@@ -9,6 +9,8 @@ import binascii
 import subprocess
 import base64
 import sys
+import socket
+import threading
 from typing import (
     Dict,
     Optional,
@@ -22,6 +24,10 @@ IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 integration_tests_dir = "output/integration_tests/"
 alerts_file = "alerts.log"
+INTEGRATION_TEST_PORT_START = 65000
+INTEGRATION_TEST_PORT_END = 65535
+_port_lock = threading.Lock()
+_next_integration_test_port = INTEGRATION_TEST_PORT_START
 
 # create the integration tests dir
 if not os.path.exists(integration_tests_dir):
@@ -95,6 +101,50 @@ def run_slips(cmd):
     _, _ = slips.communicate(input=b"y\n")
     return_code = slips.returncode
     return return_code
+
+
+def get_available_integration_test_port() -> int:
+    """
+    Return a free TCP port reserved from the integration test range.
+
+    The allocator walks ports from 65000 upwards and verifies each candidate
+    by binding to it before returning it.
+
+    :return: Available TCP port for an integration test
+    :raises RuntimeError: When the configured integration test port range is exhausted
+    """
+    global _next_integration_test_port
+
+    with _port_lock:
+        candidate = _next_integration_test_port
+        while candidate <= INTEGRATION_TEST_PORT_END:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                try:
+                    sock.bind(("127.0.0.1", candidate))
+                except OSError:
+                    candidate += 1
+                    continue
+
+            _next_integration_test_port = candidate + 1
+            return candidate
+
+    raise RuntimeError(
+        "No free integration test ports remain in the 65000-65535 range."
+    )
+
+
+def allocate_integration_test_port(test_name: str, port_label: str) -> int:
+    """
+    Allocate and announce a free TCP port for an integration test.
+
+    :param test_name: Pytest node id or other human-readable test identifier
+    :param port_label: Label describing how the port will be used
+    :return: Allocated TCP port
+    """
+    port = get_available_integration_test_port()
+    print(f"[integration-test] {test_name} using {port_label} port {port}")
+    return port
 
 
 def close_test_redis_server(redis_port: int) -> bool:

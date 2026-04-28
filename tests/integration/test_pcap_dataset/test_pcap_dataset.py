@@ -16,20 +16,24 @@ alerts_file = "alerts.log"
 
 
 @pytest.mark.parametrize(
-    "pcap_path, expected_profiles, output_dir, expected_evidence, redis_port",
+    "pcap_path, expected_profiles, output_dir, expected_evidence",
     [
         (
             "dataset/test8-malicious.pcap",
             3,
             "test8/",
             "performing an arp scan",
-            6665,
         ),
     ],
 )
 def test_pcap(
-    pcap_path, expected_profiles, output_dir, expected_evidence, redis_port
+    pcap_path,
+    expected_profiles,
+    output_dir,
+    expected_evidence,
+    integration_port_factory,
 ):
+    redis_port = integration_port_factory("redis")
     output_dir = create_output_dir(output_dir)
     success = False
     try:
