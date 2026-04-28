@@ -6,6 +6,7 @@ import redis
 import os
 import psutil
 import socket
+import sys
 import time
 import subprocess
 from typing import Dict, Union
@@ -598,9 +599,13 @@ class RedisManager:
                 f"being used.\nAre you sure you want to {alter} it? ["
                 f"y/n]\n> "
             )
+            if not sys.stdin.isatty():
+                return True
             answer = input(msg)
             if answer.lower() == "y":
                 return True
+        except EOFError:
+            return True
         except KeyboardInterrupt:
             pass
 
@@ -794,8 +799,16 @@ class RedisManager:
             if not open_servers:
                 self.main.terminate_slips()
 
+            if sys.stdin.isatty():
+                try:
+                    selection = input()
+                except EOFError:
+                    selection = "0"
+            else:
+                selection = "0"
+
             try:
-                server_to_close: int = int(input())
+                server_to_close: int = int(selection)
             except ValueError:
                 print("Invalid input.")
                 self.main.terminate_slips()
