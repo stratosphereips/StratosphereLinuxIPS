@@ -1492,7 +1492,7 @@ class FeedsUpdateManager(IModule):
         and initializes the bloom filters
         """
         for org in utils.supported_orgs:
-            org_ips = os.path.join(self.org_info_path, org)
+            org_ips = os.path.join(self.org_info_path, f"{org}_ip_ranges")
             org_asn = os.path.join(self.org_info_path, f"{org}_asn")
             org_domains = os.path.join(self.org_info_path, f"{org}_domains")
 

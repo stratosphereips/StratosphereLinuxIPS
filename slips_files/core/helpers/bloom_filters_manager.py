@@ -67,9 +67,9 @@ class BFManager:
         """
         err_rate = 0.01
         for org in utils.supported_orgs:
-            domains_bloom = BloomFilter(capacity=10000, error_rate=err_rate)
+            domains_bloom = BloomFilter(capacity=20000, error_rate=err_rate)
             asns_bloom = BloomFilter(capacity=10000, error_rate=err_rate)
-            cidrs_bloom = BloomFilter(capacity=100, error_rate=err_rate)
+            cidrs_bloom = BloomFilter(capacity=200, error_rate=err_rate)
 
             domains: List[str] = self.db.get_org_info(org, "domains")
             _ = [domains_bloom.add(domain) for domain in domains]
