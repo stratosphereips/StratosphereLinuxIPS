@@ -142,7 +142,7 @@ def test_suricata(suricata_path, output_dir, redis_port, expected_evidence):
 )
 @pytest.mark.parametrize(
     "nfdump_path,  output_dir, redis_port",
-    [("dataset/test1-normal.nfdump", "test1/", 6656)],
+    [("dataset/test1-malicious.nfdump", "test1/", 6656)],
 )
 def test_nfdump(nfdump_path, output_dir, redis_port):
     """

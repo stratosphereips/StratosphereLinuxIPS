@@ -219,7 +219,7 @@ def test_reached_timeout(
 @pytest.mark.skipif(
     "nfdump" not in shutil.which("nfdump"), reason="nfdump is not installed"
 )
-@pytest.mark.parametrize("path", ["dataset/test1-normal.nfdump"])
+@pytest.mark.parametrize("path", ["dataset/test1-malicious.nfdump"])
 def test_handle_nfdump(path):
     input = ModuleFactory().create_input_obj(path, InputType.NFDUMP)
     handler = input.input_handlers[InputType.NFDUMP]
