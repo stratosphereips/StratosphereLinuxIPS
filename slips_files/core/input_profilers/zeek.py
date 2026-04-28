@@ -83,20 +83,14 @@ class Zeek:
 
     def remove_subsuffix(self, file_name: str) -> str:
         """
-        turns any x.log.y to x.log
-        turns any x.<something>.log to x.log
+        Normalize Zeek filenames to their base ``<name>.log`` form.
+
+        This collapses rotated logs such as ``notice.13:00:00-14:00:00.log``
+        and labeled logs such as ``notice.log.labeled``.
         """
-
-        # is it something like notice.13:00:00-14:00:00.log?
         splitted_filename = file_name.split(".")
-        if len(splitted_filename) == 3:
-            if splitted_filename[-1] == "log":
-                return splitted_filename[0] + ".log"
-
-        # its something.log
-        elif len(splitted_filename) == 2 and ".log" in file_name:
-            return file_name.split(".log")[0] + ".log"
-
+        if len(splitted_filename) > 1 and "log" in splitted_filename[1:]:
+            return splitted_filename[0] + ".log"
         return file_name
 
     def get_file_type(self, new_line: dict) -> str:
