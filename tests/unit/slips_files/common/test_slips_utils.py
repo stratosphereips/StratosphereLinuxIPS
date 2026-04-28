@@ -129,6 +129,27 @@ def test_sanitize(input_string, expected_output):
     assert utils.sanitize(input_string) == expected_output
 
 
+def test_get_ip_identification_as_str_skips_timestamp():
+    utils = ModuleFactory().create_utils_obj()
+    ip_identification = {
+        "DNS_resolution": ["example.com"],
+        "SNI": "service.example.com",
+        "13.0.0.0/8": {
+            "AS": "Example ASN",
+            "timestamp": 1775911069.6800127,
+        },
+        "timestamp": 1775911069.6800127,
+    }
+
+    result = utils.get_ip_identification_as_str(ip_identification)
+
+    assert result == (
+        "example.com, SNI: service.example.com, 13.0.0.0/8: "
+        "AS: Example ASN, , "
+    )
+    assert "timestamp" not in result
+
+
 @pytest.mark.parametrize(
     "ip, expected_val",
     [

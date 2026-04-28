@@ -669,6 +669,10 @@ def test_conn_without_dns(time_difference_hours, expected_confidence):
     args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.confidence == expected_confidence
+    assert (
+        evidence.description
+        == "A connection without DNS resolution to Destination IP: 10.0.0.1"
+    )
 
 
 @pytest.mark.parametrize(

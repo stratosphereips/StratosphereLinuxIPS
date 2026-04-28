@@ -132,7 +132,7 @@ class EvidenceFormatter:
         self, evidence: Evidence
     ) -> Evidence:
         evidence.description += (
-            f" threat level: " f"{evidence.threat_level.name.lower()}."
+            f" Threat level: " f"{evidence.threat_level.name.lower()}."
         )
         return evidence
 

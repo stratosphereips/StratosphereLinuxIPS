@@ -872,6 +872,9 @@ class Utils(object):
             ip_identification.pop("DNS_resolution")
 
         for key, piece_of_info in ip_identification.items():
+            if key == "timestamp":
+                continue
+
             if not piece_of_info:
                 continue
 

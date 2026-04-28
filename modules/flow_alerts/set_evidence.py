@@ -497,7 +497,8 @@ class SetEvidenceHelper:
                 confidence = 0.1
 
         description: str = (
-            f"A connection without DNS resolution to IP: " f"{flow.daddr}"
+            f"A connection without DNS resolution to Destination IP: "
+            f"{flow.daddr}"
         )
 
         twid_number: int = int(twid.replace("timewindow", ""))
