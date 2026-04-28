@@ -125,8 +125,8 @@ class TCell(IModule):
     authors = ["OpenAI Codex"]
 
     def init(self):
-        self.c_evidence = self.db.subscribe("evidence_added")
-        self.channels = {"evidence_added": self.c_evidence}
+        self.channels = {}
+        self.subscribe_to_channels()
         self.enabled = False
         self.create_log_file = True
         self.log_colors = True
@@ -160,6 +160,19 @@ class TCell(IModule):
         self.memory_min_related_count = 3
         self.simulate_effector_without_blocking = True
         self.read_configuration()
+
+    def subscribe_to_channels(self):
+        """
+        Subscribe to the evidence stream consumed by the T Cell module.
+
+        Returns:
+            None
+        """
+        if self.channels:
+            return
+
+        self.c_evidence = self.db.subscribe("evidence_added")
+        self.channels = {"evidence_added": self.c_evidence}
 
     def read_configuration(self):
         conf = self.conf if hasattr(self.conf, "t_cell_enabled") else ConfigParser()
@@ -508,6 +521,7 @@ class TCell(IModule):
             "last_evidence_id": evidence.id,
             "anergic_until": None,
         }
+        newly_recognized = False
         if cell["state"] == STATE_MATURE:
             priming_profile = self._build_effective_priming_profile(signal_name)
             cell = self._transition_cell(
@@ -583,6 +597,7 @@ class TCell(IModule):
                 now,
                 observation_id,
             )
+            newly_recognized = True
             cell = self._remember_priming_context(
                 cell,
                 now,
@@ -603,7 +618,7 @@ class TCell(IModule):
             evidence.id,
             match,
         )
-        if cell["state"] == STATE_ANTIGEN_RECOGNIZED:
+        if newly_recognized:
             cell = self._set_waiting_context(
                 cell,
                 now,
@@ -2704,7 +2719,7 @@ class TCell(IModule):
 
     @staticmethod
     def _clamp01(value: float) -> float:
-        return max(0.0, min(1.0, float(value)))
+        return round(max(0.0, min(1.0, float(value))), 10)
 
     @staticmethod
     def _get_state_wait_elapsed(cell: dict, now: float) -> float:
@@ -2868,7 +2883,11 @@ class TCell(IModule):
             f"action={action}",
         ]
         if state is not None:
-            parts.append(f"state={self._colorize_state(state, cell=cell)}")
+            parts.append(f"state={self._format_state_label(state, cell=cell)}")
+            if self.log_colors:
+                parts.append(
+                    f"state_display={self._colorize_state(state, cell=cell)}"
+                )
         if evidence:
             parts.append(f"evidence={evidence.evidence_type.name}")
             parts.append(f"eid={evidence.id}")
