@@ -186,3 +186,4 @@ databases/regex_store/
 utils/immune_web_sim/runs/
 config/redis.conf
 .vscode/launch.json
+permanent/fides_p2p_db.sqlite
