@@ -117,12 +117,8 @@ class RegexGenerator(IModule):
     authors = ["OpenAI Codex"]
 
     def init(self):
-        self.c_llm = self.db.subscribe(self.db.channels.LLM_RESPONSE)
-        self.c_tw_closed = self.db.subscribe("tw_closed")
-        self.channels = {
-            self.db.channels.LLM_RESPONSE: self.c_llm,
-            "tw_closed": self.c_tw_closed,
-        }
+        self.channels = {}
+        self.subscribe_to_channels()
         self.storage = None
         self.enabled = False
         self.create_log_file = False
@@ -145,17 +141,37 @@ class RegexGenerator(IModule):
         self._rng = random.Random()
         self.read_configuration()
 
+    def subscribe_to_channels(self):
+        """
+        Subscribe to the Redis channels used by the regex generator.
+
+        Returns:
+            None
+        """
+        if self.channels:
+            return
+
+        self.c_llm = self.db.subscribe(self.db.channels.LLM_RESPONSE)
+        self.c_tw_closed = self.db.subscribe("tw_closed")
+        self.channels = {
+            self.db.channels.LLM_RESPONSE: self.c_llm,
+            "tw_closed": self.c_tw_closed,
+        }
+
     def read_configuration(self):
         conf = (
             self.conf
             if hasattr(self.conf, "regex_generator_enabled")
             else ConfigParser()
         )
+        rotation_period_getter = getattr(
+            conf, "default_rotation_interval", None
+        ) or getattr(conf, "rotation_period")
         self.enabled = conf.regex_generator_enabled()
         self.create_log_file = conf.regex_generator_create_log_file()
         self.enable_log_rotation = conf.rotation()
         self.log_rotation_period = self._parse_rotation_period_seconds(
-            conf.rotation_period()
+            rotation_period_getter()
         )
         self.generation_interval_seconds = (
             conf.regex_generator_generation_interval_seconds()
