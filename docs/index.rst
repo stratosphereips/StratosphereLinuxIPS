@@ -19,6 +19,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **brute_force_detector**. Dedicated documentation for the SSH brute force detector module. See :doc:`brute_force_detector <brute_force_detector>`.
 - **LLM module**. Shared access to configured LLM backends from other Slips modules. See :doc:`LLM module <llm_module>`.
+- **Alert Summary module**. Analyst-facing one-paragraph summaries for alerts using the shared LLM service. See :doc:`Alert Summary module <alert_summary_module>`.
 
 - **Regex Generator module**. Shared service that generates and validates pseudo-random regexes for later Zeek-side use. See :doc:`Regex Generator module <regex_generator_module>`.
 
@@ -62,6 +63,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    detection_modules
    brute_force_detector
    llm_module
+   alert_summary_module
    regex_generator_module
    t_cell_module
    https_anomaly_detection
