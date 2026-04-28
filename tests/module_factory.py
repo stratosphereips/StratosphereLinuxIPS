@@ -241,6 +241,7 @@ class ModuleFactory:
         conf.regex_generator_seed_benign_samples = Mock(return_value=True)
         conf.tranco_top_benign_limit = Mock(return_value=1000)
         conf.rotation = Mock(return_value=True)
+        conf.default_rotation_interval = Mock(return_value="1day")
         conf.rotation_period = Mock(return_value="1day")
 
         regex_generator = RegexGenerator(
@@ -261,6 +262,53 @@ class ModuleFactory:
         }
         regex_generator.print = Mock()
         return regex_generator
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_alert_summary_obj(self, mock_db):
+        from modules.alert_summary.alert_summary import AlertSummary
+
+        conf = Mock()
+        conf.alert_summary_enabled = Mock(return_value=True)
+        conf.alert_summary_allowed_backends = Mock(
+            return_value=["local_qwen"]
+        )
+        conf.alert_summary_llm_temperature = Mock(return_value=0.2)
+        conf.alert_summary_llm_max_tokens = Mock(return_value=220)
+        conf.alert_summary_llm_response_timeout_seconds = Mock(
+            return_value=120
+        )
+
+        args = Mock()
+        args.is_slips_started_by_an_update = False
+
+        alert_summary = AlertSummary(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=args,
+            conf=conf,
+            ppid=12345,
+            bloom_filters_manager=Mock(),
+        )
+        alert_summary.db.channels.LLM_REQUEST = "llm_request"
+        alert_summary.db.channels.LLM_RESPONSE = "llm_response"
+        alert_summary.subscribe_to_channels()
+        alert_summary.db.get_available_llm_backends = Mock(
+            return_value={
+                "default_backend": "local_qwen",
+                "backends": {
+                    "local_qwen": {
+                        "provider": "ollama",
+                        "model": "qwen2.5:3b",
+                    }
+                },
+            }
+        )
+        alert_summary.db.get_twid_evidence = Mock(return_value={})
+        alert_summary.db.get_hostname_from_profile = Mock(return_value="")
+        alert_summary.print = Mock()
+        return alert_summary
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_t_cell_obj(self, mock_db):
@@ -350,7 +398,11 @@ class ModuleFactory:
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_fides_module_obj(self, mock_db):
-        from modules.fidesModule.fidesModule import FidesModule
+        from modules.fides.fides import FidesModule
+
+        return self.create_fides_obj()
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_fides_obj(self, mock_db):
         from modules.fides.fides import FidesModule
 
