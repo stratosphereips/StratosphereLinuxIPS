@@ -1383,9 +1383,6 @@ def build_cell_histories(
             last_ts_candidates.append(float(cell.get("updated_at")))
         first_seen = min(first_ts_candidates) if first_ts_candidates else None
         last_seen = max(last_ts_candidates) if last_ts_candidates else None
-        current_state_display = current_state_label or "unknown"
-        if waiting_label:
-            current_state_display += f" ({waiting_label})"
         priming = extract_history_priming(cell, cell_transitions, report_config)
 
         histories.append(
@@ -1415,7 +1412,7 @@ def build_cell_histories(
                     if cell_transitions
                     else ((cell_traces[-1].get("match") or {}).get("value", ""))
                 ),
-                "current_state": current_state_display,
+                "current_state": current_state_label or "unknown",
                 "current_state_class": state_class(cell.get("state"))
                 if cell
                 else "state-unknown",
@@ -3229,7 +3226,14 @@ def render_cell_histories(report: dict) -> str:
             f"transitions={item.get('transition_count') or 0}",
             f"trace rows={item.get('trace_count') or 0}",
         ]
+        if item.get("waiting_label"):
+            meta_bits.insert(1, f"waiting={item['waiting_label']}")
         table_html = render_history_event_table(item.get("events") or [])
+        waiting_html = ""
+        if item.get("waiting_label"):
+            waiting_html = (
+                f"<div class='cell-substate'>{escape(item['waiting_label'])}</div>"
+            )
         history_cards.append(
             f"""
             <details class="history-card" {'open' if index == 0 else ''}>
@@ -3241,7 +3245,10 @@ def render_cell_histories(report: dict) -> str:
                     <p class="meta">{escape(' | '.join(meta_bits))}</p>
                   </div>
                   <div class="history-summary-side">
-                    {render_badge(item.get("current_state") or "unknown", item.get("current_state_class") or "state-unknown")}
+                    <div class="cell-state-stack">
+                      {render_badge(item.get("current_state") or "unknown", item.get("current_state_class") or "state-unknown")}
+                      {waiting_html}
+                    </div>
                   </div>
                 </div>
               </summary>
