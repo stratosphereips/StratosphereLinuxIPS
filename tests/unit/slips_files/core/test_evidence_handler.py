@@ -1,9 +1,11 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch, call
+from datetime import datetime
 import json
+
+import pytest
+from unittest.mock import Mock, patch, call
 
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.evidence_handler import DEFAULT_EVIDENCE_HANDLER_WORKERS
@@ -163,6 +165,14 @@ def test_main_queues_received_messages():
                 "message": {"data": "blame"},
             }
         ),
+    ]
+
+
+@pytest.mark.parametrize(
+    "all_uids, timewindow, accumulated_threat_level",
+    [
+        (["uid1", "uid2"], 1, 0.5),
+        ([], 10, 1.0),
     ],
 )
 def test_add_alert_to_json_log_file(
@@ -293,6 +303,7 @@ def test_send_to_exporting_module():
         ),
     }
 
+    evidence_handler.exporting_modules_enabled = True
     evidence_handler.db.publish = Mock()
     evidence_handler.send_to_exporting_module(tw_evidence)
     assert evidence_handler.db.publish.call_count == 2
