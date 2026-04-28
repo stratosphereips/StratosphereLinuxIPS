@@ -311,10 +311,8 @@ class LLM(IModule):
     authors = ["OpenAI Codex"]
 
     def init(self):
-        self.c1 = self.db.subscribe(self.db.channels.LLM_REQUEST)
-        self.channels = {
-            self.db.channels.LLM_REQUEST: self.c1,
-        }
+        self.channels = {}
+        self.subscribe_to_channels()
         self.request_queue: queue.Queue = queue.Queue()
         self.worker_stop_event = threading.Event()
         self.workers: List[threading.Thread] = []
@@ -324,6 +322,21 @@ class LLM(IModule):
         self.worker_threads = 2
         self.queue_size = 100
         self.read_configuration()
+
+    def subscribe_to_channels(self):
+        """
+        Subscribe to the Redis channels used by the shared LLM service.
+
+        Returns:
+            None
+        """
+        if self.channels:
+            return
+
+        self.c1 = self.db.subscribe(self.db.channels.LLM_REQUEST)
+        self.channels = {
+            self.db.channels.LLM_REQUEST: self.c1,
+        }
 
     def read_configuration(self):
         conf = (
