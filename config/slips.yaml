@@ -35,7 +35,6 @@ output:
   logs: slips.log
 
 #############################
-
 parameters:
   # The verbosity is related to how much data you want to see about the
   # detections.
@@ -373,7 +372,7 @@ regex_generator:
 #############################
 t_cell:
   # Enable the immune-inspired T Cell responder module.
-  enabled: true
+  enabled: false
 
   # Create output/t_cell.log with human-readable transition logs.
   create_log_file: true
@@ -862,10 +861,6 @@ EvidenceSignals:
     MULTIPLE_USER_AGENT: DAMP
     NON_HTTP_PORT_80_CONNECTION: DAMP
     SSH_SUCCESSFUL: DAMP
-
-
-
-
 
 #############################
 Docker:
