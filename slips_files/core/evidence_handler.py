@@ -20,21 +20,28 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz,
 # stratosphere@aic.fel.cvut.cz
 
-import threading
+import json
 import multiprocessing
-from typing import List
+import threading
 import time
+from typing import List
 
 from multiprocessing import Process
 
+from slips_files.common.idmefv2 import IDMEFv2
+from slips_files.common.abstracts.icore import ICore
 from slips_files.common.output_paths import get_alerts_path_inside_output_dir
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import IS_IN_A_DOCKER_CONTAINER, utils
 from slips_files.common.style import (
     green,
 )
-from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_logger import EvidenceLogger
-from slips_files.common.abstracts.icore import ICore
+from slips_files.core.helpers.notify import Notify
+from slips_files.core.structures.alerts import Alert
+from slips_files.core.text_formatters.evidence_formatter import (
+    EvidenceFormatter,
+)
 from slips_files.core.evidence_handler_worker import EvidenceHandlerWorker
 
 
@@ -44,9 +51,24 @@ DEFAULT_EVIDENCE_HANDLER_WORKERS = 3
 # Evidence Process
 class EvidenceHandler(ICore):
     name = "evidence_handler"
+    is_evidence_done_by_others = (
+        EvidenceHandlerWorker.is_evidence_done_by_others
+    )
+    is_filtered_evidence = EvidenceHandlerWorker.is_filtered_evidence
+    get_threat_level = EvidenceHandlerWorker.get_threat_level
+    send_to_exporting_module = (
+        EvidenceHandlerWorker.send_to_exporting_module
+    )
+    is_blocking_modules_supported = (
+        EvidenceHandlerWorker.is_blocking_modules_supported
+    )
+    show_popup = EvidenceHandlerWorker.show_popup
 
     def init(self):
         self.read_configuration()
+        self.idmefv2 = IDMEFv2(self.logger, self.db)
+        self.formatter = EvidenceFormatter(self.db, self.args)
+        self.is_running_non_stop = self.db.is_running_non_stop()
         # to keep track of the number of generated evidence
         self.db.init_evidence_number()
         # thats just a tmp value, this variable will be set and used when
@@ -76,6 +98,17 @@ class EvidenceHandler(ICore):
             name="thread_that_handles_evidence_logging_to_disk",
         )
         utils.start_thread(self.logger_thread, self.db)
+
+        conf = ConfigParser()
+        self.exporting_modules_enabled = (
+            conf.export_to() or conf.send_to_warden()
+        )
+        if self.popup_alerts:
+            self.notify = Notify()
+            if self.notify.bin_found:
+                self.notify.setup_notifications()
+            else:
+                self.popup_alerts = False
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("evidence_added")
