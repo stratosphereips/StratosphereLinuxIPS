@@ -14,6 +14,7 @@ from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
     close_test_redis_server,
+    modify_yaml_config,
 )
 from tests.module_factory import ModuleFactory
 import pytest
@@ -32,6 +33,8 @@ import modules.fides.model.peer_trust_data as ptd
 
 alerts_file = "alerts.log"
 TEST_DIR = Path(__file__).resolve().parent
+FIDES_CONFIG_FILENAME = "fides_runtime.conf.yml"
+SLIPS_CONFIG_FILENAME = "fides_runtime_slips.yaml"
 
 
 def ensure_redis_is_running(port):
@@ -156,6 +159,42 @@ def get_main_interface():
         return None
 
 
+def create_runtime_fides_configs(
+    output_dir: Path, db_name: str
+) -> tuple[Path, Path]:
+    """
+    Create isolated Slips and Fides config files for an integration test.
+
+    Parameters:
+        output_dir: Test output directory that will hold the generated configs.
+        db_name: Database filename to be created under the permanent directory.
+
+    Returns:
+        tuple: Generated Slips config path and permanent DB path.
+    """
+    config_dir = output_dir / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    runtime_fides_config = modify_yaml_config(
+        input_path="modules/fides/config/fides.conf.yml",
+        output_dir=config_dir,
+        output_filename=FIDES_CONFIG_FILENAME,
+        changes={"database": db_name},
+    )
+    runtime_slips_config = modify_yaml_config(
+        input_path=str(TEST_DIR / "fides_config.yaml"),
+        output_dir=config_dir,
+        output_filename=SLIPS_CONFIG_FILENAME,
+        changes={
+            "global_p2p": {
+                "fides_conf": str(runtime_fides_config),
+            }
+        },
+    )
+
+    return runtime_slips_config, Path("permanent") / db_name
+
+
 @pytest.mark.parametrize(
     "path, output_dir",
     [
@@ -172,6 +211,8 @@ def test_conf_file2(path, output_dir, integration_port_factory):
     redis_port = integration_port_factory("redis")
     ensure_redis_is_running(redis_port)
     output_dir: PosixPath = create_output_dir(output_dir)
+    db_name = f"{output_dir.name}_fides_p2p_db.sqlite"
+    slips_config, test_db = create_runtime_fides_configs(output_dir, db_name)
     output_file = os.path.join(output_dir, "slips_output.txt")
     command = [
         "./slips.py",
@@ -186,7 +227,7 @@ def test_conf_file2(path, output_dir, integration_port_factory):
         "-o",
         str(output_dir),
         "-c",
-        str(TEST_DIR / "fides_config.yaml"),
+        str(slips_config),
         "-P",
         str(redis_port),
     ]
@@ -228,8 +269,10 @@ def test_conf_file2(path, output_dir, integration_port_factory):
         print(db.get_msgs_received_at_runtime("fides"))
         success = True
     finally:
+        close_test_redis_server(redis_port)
+        if test_db.exists():
+            test_db.unlink()
         if success:
-            close_test_redis_server(redis_port)
             print("Deleting the output directory")
             shutil.rmtree(output_dir, ignore_errors=True)
 
@@ -269,6 +312,8 @@ def test_trust_recommendation_response(
     redis_port = integration_port_factory("redis")
     ensure_redis_is_running(redis_port)
     output_dir: PosixPath = create_output_dir(output_dir)
+    db_name = f"{output_dir.name}_fides_test_database.sqlite"
+    slips_config, test_db = create_runtime_fides_configs(output_dir, db_name)
     output_file = os.path.join(output_dir, "slips_output.txt")
     command = [
         "./slips.py",
@@ -283,23 +328,13 @@ def test_trust_recommendation_response(
         "-o",
         str(output_dir),
         "-c",
-        str(TEST_DIR / "fides_config.yaml"),
+        str(slips_config),
         "-P",
         str(redis_port),
     ]
-    config_file_path = "modules/fides/config/fides.conf.yml"
-    config_temp_path = "modules/fides/config/fides.conf.yml.bak"
-    config_line = "database: 'fides_test_database.sqlite'\n"
-    shutil.copy(config_file_path, config_temp_path)
-    test_db = Path("permanent") / "fides_test_database.sqlite"
-    test_db.parent.mkdir(parents=True, exist_ok=True)
     success = False
 
     try:
-        # Append the new line to the config
-        with open(config_file_path, "a") as file:
-            file.write(config_line)
-
         print("running slips ...")
         print(output_dir)
 
@@ -378,11 +413,9 @@ def test_trust_recommendation_response(
         }
         success = True
     finally:
+        close_test_redis_server(redis_port)
+        if test_db.exists():
+            test_db.unlink()
         if success:
-            close_test_redis_server(redis_port)
             print("Deleting the output directory")
             shutil.rmtree(output_dir)
-        # Restore the original file
-        os.remove(test_db)
-        shutil.move(config_temp_path, config_file_path)
-        print("Config file restored to original state.")
