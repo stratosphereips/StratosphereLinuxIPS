@@ -234,6 +234,22 @@ def test_calculate_confidence(input_value, expected_output):
 
 
 @pytest.mark.parametrize(
+    "score, expected_output",
+    [
+        (0.80, "high"),
+        (0.95, "high"),
+        (0.55, "medium"),
+        (0.79, "medium"),
+        (0.54, "low"),
+        (0.0, "low"),
+    ],
+)
+def test_evidence_confidence_to_string(score, expected_output):
+    utils = ModuleFactory().create_utils_obj()
+    assert utils.evidence_confidence_to_string(score) == expected_output
+
+
+@pytest.mark.parametrize(
     "input_value, input_format, expected_output",
     [
         # testcase1: ISO format to custom format

@@ -125,6 +125,9 @@ class EvidenceHandlerWorker(IModule):
                             "uids": evidence.uid,
                             "accumulated_threat_level": accumulated_threat_level,
                             "threat_level": str(evidence.threat_level),
+                            "confidence": utils.evidence_confidence_to_string(
+                                evidence.confidence
+                            ),
                             "timewindow": evidence.timewindow.number,
                         }
                     )
