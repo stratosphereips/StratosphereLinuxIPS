@@ -251,7 +251,7 @@ llm:
       #base_url: http://127.0.0.1:11434
       base_url: http://147.32.83.61:11434
       # Optional HTTP timeout in seconds.
-      timeout: 120
+      timeout: 300
 
     openai_default:
       provider: openai
@@ -281,8 +281,8 @@ alert_summary:
   # log_verbosity levels:
   # 0 = only create the file
   # 1 = startup, shutdown, and failures
-  # 2 = per-alert queueing, requests, and writes
-  # 3 = debug details
+  # 2 = per-alert queueing, requests, writes, and reduction progress
+  # 3 = debug details such as prompt-budget decisions
   log_verbosity: 3
 
   # Preferred LLM backend aliases for alert summaries. If empty, the module
@@ -293,18 +293,19 @@ alert_summary:
   # summary paragraph per alert.
   llm_temperature: 0.2
 
-  # Token budget for the summary paragraph.
+  # Token budget for the final analyst summary paragraph.
   llm_max_tokens: 220
 
-  # Hard timeout in seconds for one alert summary request.
-  # If the timeout is reached, the module writes a failure note for that alert
-  # and continues with the next one. Set to 0 to wait indefinitely.
+  # Hard timeout in seconds for one in-flight shared-LLM request.
+  # Large alerts may require several internal reduction requests before the
+  # final summary request. If a request times out, the module writes a
+  # heuristic fallback summary for that alert. Set to 0 to wait indefinitely.
   llm_response_timeout_seconds: 300
 
 #############################
 regex_generator:
   # Enable the shared regex generator module.
-  enabled: true
+  enabled: false
 
   # Create output/regex_generator.log with detailed internal progress logs.
   # This file follows the global parameters.rotation / rotation_period policy.
