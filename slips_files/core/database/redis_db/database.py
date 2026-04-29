@@ -751,6 +751,68 @@ class RedisDB(
 
         return self._empty_available_llm_backends()
 
+    def reset_pending_llm_request_counts(self):
+        """
+        Clear requester-level in-flight LLM request counters.
+
+        The shared LLM service owns this key and resets it on startup and
+        shutdown so stale counts from earlier runs do not block modules.
+        """
+        self.r.delete(self.constants.PENDING_LLM_REQUESTS_BY_REQUESTER)
+
+    def increment_pending_llm_request_count(self, requester: str):
+        """
+        Increment the in-flight shared-LLM request count for one requester.
+
+        :param requester: Caller module name.
+        :return: New counter value or 0 when requester is empty.
+        """
+        requester = str(requester or "").strip()
+        if not requester:
+            return 0
+        return self.r.hincrby(
+            self.constants.PENDING_LLM_REQUESTS_BY_REQUESTER,
+            requester,
+            1,
+        )
+
+    def decrement_pending_llm_request_count(self, requester: str):
+        """
+        Decrement the in-flight shared-LLM request count for one requester.
+
+        :param requester: Caller module name.
+        :return: Updated non-negative counter value.
+        """
+        requester = str(requester or "").strip()
+        if not requester:
+            return 0
+
+        key = self.constants.PENDING_LLM_REQUESTS_BY_REQUESTER
+        value = self.r.hincrby(key, requester, -1)
+        if value <= 0:
+            self.r.hdel(key, requester)
+            return 0
+        return value
+
+    def get_pending_llm_request_count(self, requester: str) -> int:
+        """
+        Return the in-flight shared-LLM request count for one requester.
+
+        :param requester: Caller module name.
+        :return: Non-negative count.
+        """
+        requester = str(requester or "").strip()
+        if not requester:
+            return 0
+        value = self.r.hget(
+            self.constants.PENDING_LLM_REQUESTS_BY_REQUESTER,
+            requester,
+        )
+        try:
+            return max(0, int(value or 0))
+        except (TypeError, ValueError):
+            return 0
+
     def _normalize_available_llm_backends_registry(self, registry: dict) -> dict:
         if not isinstance(registry, dict):
             return self._empty_available_llm_backends()
