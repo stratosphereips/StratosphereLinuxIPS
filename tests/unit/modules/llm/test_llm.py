@@ -295,3 +295,35 @@ def test_llm_backend_pool_size_scales_with_worker_threads():
         llm._create_backend(config)
 
     assert mock_pool.call_args.kwargs["maxsize"] == 6
+
+
+def test_should_stop_waits_for_pending_requests_during_shutdown():
+    llm = ModuleFactory().create_llm_obj()
+    llm.termination_event.is_set.return_value = True
+    llm.request_queue.put_nowait({"request_id": "req-1"})
+
+    assert llm.should_stop() is False
+
+
+def test_should_stop_waits_for_shutdown_grace_period(mocker):
+    llm = ModuleFactory().create_llm_obj()
+    llm.termination_event.is_set.return_value = True
+    llm.last_request_activity = 100
+
+    mocker.patch("modules.llm.llm.time.time", return_value=104)
+    assert llm.should_stop() is False
+
+    mocker.patch("modules.llm.llm.time.time", return_value=105)
+    assert llm.should_stop() is True
+
+
+def test_shutdown_gracefully_clears_available_backend_registry():
+    llm = ModuleFactory().create_llm_obj()
+
+    assert llm.shutdown_gracefully() is True
+    llm.db.set_available_llm_backends.assert_called_once_with(
+        {
+            "default_backend": "",
+            "backends": {},
+        }
+    )
