@@ -413,6 +413,16 @@ def test_should_stop_ignores_stale_llm_response_channel_after_work_finishes():
     assert alert_summary.should_stop() is True
 
 
+def test_should_stop_waits_for_pending_shared_llm_request_count():
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    alert_summary.channel_tracker = alert_summary.init_channel_tracker()
+    alert_summary.termination_event.is_set.return_value = True
+    alert_summary.channel_tracker["new_alert"]["msg_received"] = False
+    alert_summary.db.get_pending_llm_request_count.return_value = 2
+
+    assert alert_summary.should_stop() is False
+
+
 def test_get_alert_evidence_handles_mixed_timestamp_types_without_crashing():
     alert_summary = ModuleFactory().create_alert_summary_obj()
     first_evidence = _build_evidence()
