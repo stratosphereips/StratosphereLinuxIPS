@@ -200,6 +200,9 @@ class ModuleFactory:
         llm.db.channels.LLM_REQUEST = "llm_request"
         llm.db.channels.LLM_RESPONSE = "llm_response"
         llm.channels = {"llm_request": llm.c1}
+        llm.db.reset_pending_llm_request_counts = Mock()
+        llm.db.increment_pending_llm_request_count = Mock(return_value=1)
+        llm.db.decrement_pending_llm_request_count = Mock(return_value=0)
         llm.print = Mock()
         return llm
 
@@ -306,6 +309,7 @@ class ModuleFactory:
                 },
             }
         )
+        alert_summary.db.get_pending_llm_request_count = Mock(return_value=0)
         alert_summary.db.get_twid_evidence = Mock(return_value={})
         alert_summary.db.get_hostname_from_profile = Mock(return_value="")
         alert_summary.print = Mock()
