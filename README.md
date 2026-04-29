@@ -189,6 +189,7 @@ Slips key features are:
 * **Integration with External Platforms**: Modules in Slips can look up IP addresses on external platforms such as VirusTotal and RiskIQ.
 * **Graphical User Interface**: Slips provides a web interface and an optional Kalipso terminal interface through the `modules/kalipso` submodule.
 * **Shared LLM Access**: Slips can expose configured LLM backends such as Ollama, OpenAI, and Anthropic to other modules through Redis channels.
+* **Hierarchical Alert Summaries**: Slips can turn correlated alert evidence into analyst-facing one-paragraph incident summaries, recursively reducing oversized evidence sets instead of truncating them.
 * **Pseudo-Random Regex Generation**: Slips can generate and validate pseudo-random regexes for DNS domains, URIs, filenames, TLS SNI, and certificate CN fields for later Zeek-side use.
 * **Immune-Style T Cell Response**: Slips can consume centrally tagged `PAMP` and `DAMP` evidence, correlate extracted antigens with accepted regexes, and use signal-specific T-cell priming plus mixed `PAMP`/`DAMP` danger pressure to decide whether to stay tolerant, activate, contain, or store long-term memory.
 * **Peer-to-Peer (P2P) Module**: Slips includes a complex automatic system to find other peers in the network and share IoC data automatically in a balanced, trusted manner. The P2P module can be enabled as needed.
