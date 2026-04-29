@@ -272,6 +272,7 @@ class ModuleFactory:
         conf.alert_summary_allowed_backends = Mock(
             return_value=["local_qwen"]
         )
+        conf.alert_summary_log_verbosity = Mock(return_value=2)
         conf.alert_summary_llm_temperature = Mock(return_value=0.2)
         conf.alert_summary_llm_max_tokens = Mock(return_value=220)
         conf.alert_summary_llm_response_timeout_seconds = Mock(
