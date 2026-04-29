@@ -1095,6 +1095,16 @@ class ConfigParser(object):
             value = 120
         return max(0, value)
 
+    def alert_summary_log_verbosity(self) -> int:
+        value = self.read_configuration(
+            "alert_summary", "log_verbosity", 2
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 2
+        return min(max(value, 0), 3)
+
     def t_cell_enabled(self) -> bool:
         value = self.read_configuration("t_cell", "enabled", True)
         if isinstance(value, bool):
