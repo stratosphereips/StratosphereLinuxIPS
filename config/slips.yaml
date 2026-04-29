@@ -242,6 +242,17 @@ llm:
   # Each backend is a named connection that other modules select by alias
   # through the request field backend.
   backends:
+    slips-goldilock:
+      # Supported providers: ollama, openai, anthropic
+      provider: ollama
+      # Default model for this backend alias. Caller modules may override the
+      # model in an individual request while still using this connection.
+      model: stratosphere/qwen2.5-1.5b-slips-immune-risk:q5_k_m
+      #base_url: http://127.0.0.1:11434
+      base_url: http://147.32.83.61:11434
+      # Optional HTTP timeout in seconds.
+      timeout: 300
+
     local_qwen:
       # Supported providers: ollama, openai, anthropic
       provider: ollama
@@ -287,7 +298,8 @@ alert_summary:
 
   # Preferred LLM backend aliases for alert summaries. If empty, the module
   # falls back to the runtime-ready LLM default backend.
-  allowed_backends: [local_qwen]
+  #allowed_backends: [local_qwen]
+  allowed_backends: [slips-goldilock]
 
   # Keep the sampling conservative because this module writes one analyst
   # summary paragraph per alert.
