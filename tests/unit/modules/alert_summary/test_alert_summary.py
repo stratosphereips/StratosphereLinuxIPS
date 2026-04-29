@@ -19,6 +19,7 @@ from slips_files.core.structures.evidence import (
     ProfileID,
     ThreatLevel,
     TimeWindow,
+    dict_to_evidence,
 )
 from tests.module_factory import ModuleFactory
 
@@ -63,6 +64,7 @@ def test_alert_summary_config_defaults():
 
     assert parser.alert_summary_enabled() is False
     assert parser.alert_summary_allowed_backends() == []
+    assert parser.alert_summary_log_verbosity() == 2
     assert parser.alert_summary_llm_temperature() == 0.2
     assert parser.alert_summary_llm_max_tokens() == 220
     assert parser.alert_summary_llm_response_timeout_seconds() == 120
@@ -74,6 +76,7 @@ def test_alert_summary_config_sanitization():
         "alert_summary": {
             "enabled": "true",
             "allowed_backends": "local_qwen",
+            "log_verbosity": 99,
             "llm_temperature": "bad",
             "llm_max_tokens": "bad",
             "llm_response_timeout_seconds": -10,
@@ -82,6 +85,7 @@ def test_alert_summary_config_sanitization():
 
     assert parser.alert_summary_enabled() is True
     assert parser.alert_summary_allowed_backends() == []
+    assert parser.alert_summary_log_verbosity() == 3
     assert parser.alert_summary_llm_temperature() == 0.2
     assert parser.alert_summary_llm_max_tokens() == 220
     assert parser.alert_summary_llm_response_timeout_seconds() == 0
@@ -119,6 +123,9 @@ def test_handle_pending_response_writes_one_paragraph_summary(tmp_path, mocker):
     alert_summary.summary_log_path = str(
         tmp_path / "alerts" / "alerts-summary.log"
     )
+    alert_summary.operation_log_path = str(
+        tmp_path / "llm-summary" / "alert_summary.log"
+    )
     mocker.patch(
         "modules.alert_summary.alert_summary.utils.drop_root_privs_permanently"
     )
@@ -147,9 +154,12 @@ def test_handle_pending_response_writes_one_paragraph_summary(tmp_path, mocker):
 
     with open(alert_summary.summary_log_path, "r", encoding="utf-8") as handle:
         content = handle.read()
+    with open(alert_summary.operation_log_path, "r", encoding="utf-8") as handle:
+        operation_content = handle.read()
 
     assert "Likely true positive. Repeated outbound behavior suggests beaconing." in content
     assert "\n\n" not in content
+    assert "Received successful llm_response" in operation_content
     assert alert_summary.pending_request is None
     alert_summary.shutdown_gracefully()
 
@@ -161,6 +171,9 @@ def test_main_flushes_pending_alerts_without_backend_on_shutdown(
     alert_summary.parent_output_dir = str(tmp_path)
     alert_summary.summary_log_path = str(
         tmp_path / "alerts" / "alerts-summary.log"
+    )
+    alert_summary.operation_log_path = str(
+        tmp_path / "llm-summary" / "alert_summary.log"
     )
     mocker.patch(
         "modules.alert_summary.alert_summary.utils.drop_root_privs_permanently"
@@ -187,3 +200,101 @@ def test_main_flushes_pending_alerts_without_backend_on_shutdown(
     assert "LLM summary unavailable: No runtime-ready LLM backend available." in content
     assert not alert_summary.pending_alerts
     alert_summary.shutdown_gracefully()
+
+
+def test_should_stop_waits_for_pending_alerts_during_shutdown():
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    alert_summary.pending_alerts.append({"alert": _build_alert(_build_evidence())})
+    alert_summary.termination_event.is_set.return_value = True
+
+    assert alert_summary.should_stop() is False
+
+
+def test_get_alert_evidence_handles_mixed_timestamp_types_without_crashing():
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    first_evidence = _build_evidence()
+    second_evidence = _build_evidence()
+    second_evidence.id = "evidence-2"
+    second_evidence.timestamp = 1714299000.0
+    alert = _build_alert(first_evidence)
+    alert.correl_id = [first_evidence.id, second_evidence.id]
+
+    first_payload = utils.to_dict(first_evidence)
+    second_payload = utils.to_dict(second_evidence)
+    second_payload["timestamp"] = 1714299000.0
+    alert_summary.db.get_twid_evidence.return_value = {
+        first_evidence.id: json.dumps(first_payload),
+        second_evidence.id: json.dumps(second_payload),
+    }
+
+    evidences = alert_summary._get_alert_evidence(alert)
+
+    assert len(evidences) == 2
+    assert {evidence.id for evidence in evidences} == {
+        first_evidence.id,
+        second_evidence.id,
+    }
+
+
+def test_build_evidence_payload_accepts_string_enum_fields():
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    evidence = _build_evidence()
+    payload = utils.to_dict(evidence)
+    payload["attacker"]["direction"] = "src"
+    payload["attacker"]["ioc_type"] = "ip"
+    payload["proto"] = "tcp"
+
+    normalized = dict_to_evidence(payload)
+    evidence_payload = alert_summary._build_evidence_payload(normalized)
+
+    assert evidence_payload["attacker"]["direction"] == "src"
+    assert evidence_payload["attacker"]["ioc_type"] == "ip"
+    assert evidence_payload["proto"] == "tcp"
+
+
+def test_operation_log_respects_configured_verbosity(tmp_path, mocker):
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    alert_summary.log_verbosity = 1
+    alert_summary.parent_output_dir = str(tmp_path)
+    alert_summary.summary_log_path = str(
+        tmp_path / "alerts" / "alerts-summary.log"
+    )
+    alert_summary.operation_log_path = str(
+        tmp_path / "llm-summary" / "alert_summary.log"
+    )
+    mocker.patch(
+        "modules.alert_summary.alert_summary.utils.drop_root_privs_permanently"
+    )
+
+    alert_summary.pre_main()
+    alert_summary._log_operation("summary line", verbosity=1)
+    alert_summary._log_operation("debug line", verbosity=3)
+
+    with open(alert_summary.operation_log_path, "r", encoding="utf-8") as handle:
+        content = handle.read()
+
+    assert "summary line" in content
+    assert "debug line" not in content
+    alert_summary.shutdown_gracefully()
+
+
+def test_shutdown_gracefully_logs_stop_message(tmp_path, mocker):
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    alert_summary.parent_output_dir = str(tmp_path)
+    alert_summary.summary_log_path = str(
+        tmp_path / "alerts" / "alerts-summary.log"
+    )
+    alert_summary.operation_log_path = str(
+        tmp_path / "llm-summary" / "alert_summary.log"
+    )
+    mocker.patch(
+        "modules.alert_summary.alert_summary.utils.drop_root_privs_permanently"
+    )
+
+    alert_summary.pre_main()
+    alert_summary.shutdown_gracefully()
+
+    with open(alert_summary.operation_log_path, "r", encoding="utf-8") as handle:
+        content = handle.read()
+
+    assert "AlertSummary module stopped." in content
