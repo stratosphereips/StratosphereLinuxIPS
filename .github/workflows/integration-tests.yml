@@ -58,7 +58,7 @@ jobs:
         id: artifact-name
         run: |
           sanitized_test_file="${{ matrix.test_file }}"
-          sanitized_test_file="${sanitized_test_file//\//_}"
+          sanitized_test_file=$(printf '%s\n' "$sanitized_test_file" | tr '/' '_')
           echo "name=${sanitized_test_file}-integration-output" >> "$GITHUB_OUTPUT"
 
       - name: Upload Artifacts
