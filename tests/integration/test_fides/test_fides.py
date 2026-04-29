@@ -5,6 +5,7 @@ test/test.yaml and tests/test2.yaml
 
 import shutil
 from pathlib import PosixPath, Path
+import signal
 
 import redis
 
@@ -138,6 +139,80 @@ def message_receive(port):
         break  # exit after processing one message
 
 
+def stop_process_group(process, process_name, timeout_seconds=15):
+    """
+    Stop a spawned process group and wait for it to exit.
+
+    Parameters:
+        process: subprocess.Popen instance to stop.
+        process_name: Human-readable name used in log messages.
+        timeout_seconds: Maximum number of seconds to wait after SIGTERM.
+
+    Returns:
+        None
+    """
+    if process.poll() is not None:
+        return
+
+    process_group_id = os.getpgid(process.pid)
+    os.killpg(process_group_id, signal.SIGTERM)
+    print(f"SIGTERM sent to {process_name} process group {process_group_id}.")
+
+    try:
+        process.wait(timeout=timeout_seconds)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+
+    if process.poll() is not None:
+        return
+
+    os.killpg(process_group_id, signal.SIGKILL)
+    process.wait()
+    print(f"SIGKILL sent to {process_name} process group {process_group_id}.")
+
+
+def wait_for_runtime_message_count(
+    redis_port: int,
+    output_dir: Path,
+    module_name: str,
+    channel: str,
+    expected_count: str,
+    timeout_seconds: int = 30,
+) -> dict:
+    """
+    Wait for a module runtime message counter to reach an expected value.
+
+    Parameters:
+        redis_port: Redis port used by the running Slips instance.
+        output_dir: Output directory associated with the running test.
+        module_name: Module whose runtime counters are being checked.
+        channel: Runtime counter key to wait for.
+        expected_count: Expected counter value stored in Redis.
+        timeout_seconds: Maximum time to wait before failing.
+
+    Returns:
+        dict: Latest runtime counters for the module.
+    """
+    deadline = time.time() + timeout_seconds
+    latest_counters = {}
+
+    while time.time() < deadline:
+        db = ModuleFactory().create_db_manager_obj(
+            redis_port, output_dir=output_dir, start_redis_server=False
+        )
+        latest_counters = db.get_msgs_received_at_runtime(module_name) or {}
+        if latest_counters.get(channel) == expected_count:
+            return latest_counters
+        time.sleep(1)
+
+    raise AssertionError(
+        f"Timed out waiting for {module_name} runtime counter "
+        f"{channel} to reach {expected_count}. Latest counters: "
+        f"{latest_counters}"
+    )
+
+
 def get_main_interface():
     try:
         out = subprocess.check_output(
@@ -217,6 +292,7 @@ def test_conf_file2(path, output_dir, integration_port_factory):
     slips_config, test_db = create_runtime_fides_configs(output_dir, db_name)
     output_file = os.path.join(output_dir, "slips_output.txt")
     command = [
+        sys.executable,
         "./slips.py",
         "-t",
         "-g",
@@ -234,6 +310,7 @@ def test_conf_file2(path, output_dir, integration_port_factory):
         str(redis_port),
     ]
     success = False
+    process = None
     try:
         print("running slips ...")
         print(output_dir)
@@ -245,32 +322,37 @@ def test_conf_file2(path, output_dir, integration_port_factory):
                 command,  # Replace with your command
                 stdout=log_file,
                 stderr=log_file,
+                start_new_session=True,
             )
 
             print(f"Output and errors are logged in {output_file}")
             countdown(40, "sigterm")
-            # send a SIGTERM to the process
-            os.kill(process.pid, 15)
-            print("SIGTERM sent. killing slips")
-            os.kill(process.pid, 9)
-
-        message_receive(redis_port)
+            runtime_counters = wait_for_runtime_message_count(
+                redis_port,
+                output_dir,
+                "fides",
+                "fides2network",
+                "1",
+            )
+            stop_process_group(process, "fides slips")
 
         print(f"Slips with PID {process.pid} was killed.")
 
         print("Slip is done, checking for errors in the output dir.")
         assert_no_errors(output_dir)
         print("Checking database")
-        db = ModuleFactory().create_db_manager_obj(
-            redis_port, output_dir=output_dir, start_redis_server=False
-        )
+        # db = ModuleFactory().create_db_manager_obj(
+        #     redis_port, output_dir=output_dir, start_redis_server=False
+        # )
         # iris is supposed to be receiving this msg, that last thing fides does
         # is send a msg to this channel for iris to receive it
-        assert db.get_msgs_received_at_runtime("fides")["fides2network"] == "1"
-        assert db.get_msgs_received_at_runtime("fides")["new_alert"] == "1"
-        print(db.get_msgs_received_at_runtime("fides"))
+        assert runtime_counters["fides2network"] == "1"
+        assert runtime_counters["new_alert"] == "1"
+        print(runtime_counters)
         success = True
     finally:
+        if process is not None and process.poll() is None:
+            stop_process_group(process, "fides slips")
         close_test_redis_server(redis_port)
         if test_db.exists():
             test_db.unlink()
@@ -320,6 +402,7 @@ def test_trust_recommendation_response(
     slips_config, test_db = create_runtime_fides_configs(output_dir, db_name)
     output_file = os.path.join(output_dir, "slips_output.txt")
     command = [
+        sys.executable,
         "./slips.py",
         "-t",
         "-g",
@@ -337,6 +420,7 @@ def test_trust_recommendation_response(
         str(redis_port),
     ]
     success = False
+    process = None
 
     try:
         print("running slips ...")
@@ -371,6 +455,7 @@ def test_trust_recommendation_response(
                 command,
                 stdout=log_file,
                 stderr=log_file,
+                start_new_session=True,
             )
 
             print(f"Output and errors are logged in {output_file}")
@@ -385,11 +470,7 @@ def test_trust_recommendation_response(
 
             # these 30s are the time we give slips to process the msg
             countdown(30, "sigterm")
-
-            # send a SIGTERM to the process
-            os.kill(process.pid, 15)
-            print("SIGTERM sent. killing slips")
-            os.kill(process.pid, 15)
+            stop_process_group(process, "fides slips")
 
         print(f"Slips with PID {process.pid} was killed.")
 
@@ -417,6 +498,8 @@ def test_trust_recommendation_response(
         }
         success = True
     finally:
+        if process is not None and process.poll() is None:
+            stop_process_group(process, "fides slips")
         close_test_redis_server(redis_port)
         if test_db.exists():
             test_db.unlink()
