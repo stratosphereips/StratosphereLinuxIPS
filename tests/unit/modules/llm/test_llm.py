@@ -4,6 +4,8 @@
 import json
 from unittest.mock import Mock, patch
 
+import urllib3
+
 from modules.llm.llm import (
     AnthropicBackend,
     LLMBackendConfig,
@@ -279,6 +281,31 @@ def test_ollama_backend_parses_response():
     assert response["usage"]["total_tokens"] == 20
 
 
+def test_backend_request_json_uses_explicit_connect_and_read_timeouts():
+    config = LLMBackendConfig.from_dict(
+        "local_qwen",
+        {
+            "provider": "ollama",
+            "model": "qwen2.5:3b",
+            "base_url": "http://127.0.0.1:11434",
+            "timeout": 42,
+        },
+    )
+    backend = OllamaBackend(config)
+    backend.http = Mock()
+    backend.http.request.return_value = Mock(
+        status=200,
+        data=b'{"message": {"content": "ok"}}',
+    )
+
+    backend._request_json("POST", "http://127.0.0.1:11434/api/chat", {})
+
+    timeout = backend.http.request.call_args.kwargs["timeout"]
+    assert isinstance(timeout, urllib3.Timeout)
+    assert timeout.connect_timeout == 42
+    assert timeout.read_timeout == 42
+
+
 def test_llm_backend_pool_size_scales_with_worker_threads():
     llm = ModuleFactory().create_llm_obj()
     llm.worker_threads = 3
@@ -327,3 +354,20 @@ def test_shutdown_gracefully_clears_available_backend_registry():
             "backends": {},
         }
     )
+
+
+def test_pre_main_creates_module_specific_llm_log(tmp_path, mocker):
+    llm = ModuleFactory().create_llm_obj()
+    llm.parent_output_dir = str(tmp_path)
+    llm.output_dir = str(tmp_path / llm.name)
+    llm.operation_log_path = llm.get_module_specific_output_path("llm.log")
+    mocker.patch("modules.llm.llm.utils.drop_root_privs_permanently")
+
+    llm.pre_main()
+    llm.shutdown_gracefully()
+
+    with open(llm.operation_log_path, "r", encoding="utf-8") as handle:
+        content = handle.read()
+
+    assert "LLM module ready." in content
+    assert "LLM module stopped." in content
