@@ -35,6 +35,7 @@ Example section in `config/slips.yaml`:
 ```yaml
 alert_summary:
   enabled: false
+  log_verbosity: 2
   allowed_backends: []
   llm_temperature: 0.2
   llm_max_tokens: 220
@@ -44,6 +45,10 @@ alert_summary:
 Configuration reference:
 
 - `enabled`: enables or disables the module.
+- `log_verbosity`: controls how much operational detail is written to
+  `<output-dir>/llm-summary/alert_summary.log`. Use `0` for an empty file,
+  `1` for startup/failure summaries, `2` for per-alert request flow, and `3`
+  for debug details.
 - `allowed_backends`: preferred runtime-ready LLM backend aliases for this
   module. If empty, the module falls back to the shared LLM default backend.
 - `llm_temperature`: low-temperature setting used to keep summaries stable and
@@ -105,6 +110,12 @@ Summaries are written to:
 
 ```text
 output/alerts/alerts-summary.log
+```
+
+Operational logs are written to:
+
+```text
+<output-dir>/llm-summary/alert_summary.log
 ```
 
 Each alert produces one line containing:
