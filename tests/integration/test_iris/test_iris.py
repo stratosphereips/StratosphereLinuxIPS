@@ -4,6 +4,7 @@ test/test.yaml and tests/test2.yaml
 """
 
 import re
+import signal
 import shutil
 from pathlib import PosixPath
 
@@ -355,6 +356,7 @@ def prepare_and_start_peer1(
         command,
         stdout=log_file,
         stderr=log_file,
+        start_new_session=True,
     )
     log_file_first_iris = output_dir / "iris/iris_logs.txt"
     return (
@@ -443,7 +445,10 @@ def prepare_and_start_peer2(
         str(peer_redis_port),
     ]
     peer_process = subprocess.Popen(
-        peer_command, stdout=log_file, stderr=log_file
+        peer_command,
+        stdout=log_file,
+        stderr=log_file,
+        start_new_session=True,
     )
     log_file_second_iris = output_dir_peer / "iris/iris_logs.txt"
     return (
@@ -455,6 +460,39 @@ def prepare_and_start_peer2(
         peer2_key_path,
         peer2_key_path_for_iris,
     )
+
+
+def stop_process_group(process, process_name, timeout_seconds=15):
+    """
+    Stop a spawned process group and wait for it to exit.
+
+    Parameters:
+        process: subprocess.Popen instance to stop.
+        process_name: Human-readable name used in log messages.
+        timeout_seconds: Maximum number of seconds to wait after SIGTERM.
+
+    Returns:
+        None
+    """
+    if process.poll() is not None:
+        return
+
+    process_group_id = os.getpgid(process.pid)
+    os.killpg(process_group_id, signal.SIGTERM)
+    print(f"SIGTERM sent to {process_name} process group {process_group_id}.")
+
+    try:
+        process.wait(timeout=timeout_seconds)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+
+    if process.poll() is not None:
+        return
+
+    os.killpg(process_group_id, signal.SIGKILL)
+    process.wait()
+    print(f"SIGKILL sent to {process_name} process group {process_group_id}.")
 
 
 @pytest.mark.parametrize(
@@ -579,18 +617,9 @@ def test_messaging(
 
                 # these seconds are the time we give slips to process the msg
                 countdown(30, "Sending SIGTERM to the 2 peers")
-                # Kill em with kindness.
-                os.kill(process.pid, 15)
-                os.kill(peer_process.pid, 15)
-                print("SIGTERM sent.")
-
-                print("Sending SIGKILL to the 2 instances of Slips + iris")
-                # Kill em. Without kindness.
-                os.kill(process.pid, 9)
-                print(f"Slips with PID {process.pid} was killed.")
-
-                os.kill(peer_process.pid, 9)
-                print(f"Slips peer with PID {peer_process.pid} was killed.")
+                print("Stopping the 2 instances of Slips and waiting for exit")
+                stop_process_group(process, "peer1 slips")
+                stop_process_group(peer_process, "peer2 slips")
 
         print("Slips is done, checking for errors in the 2 output dirs.")
         assert_peer1_results(output_dir)
