@@ -309,6 +309,7 @@ class LLM(IModule):
     name = "LLM"
     description = "Shared LLM access service for other Slips modules"
     authors = ["OpenAI Codex"]
+    shutdown_grace_period_seconds = 5
 
     def init(self):
         self.channels = {}
@@ -321,6 +322,7 @@ class LLM(IModule):
         self.default_backend = ""
         self.worker_threads = 2
         self.queue_size = 100
+        self.last_request_activity = time.time()
         self.read_configuration()
 
     def subscribe_to_channels(self):
@@ -448,11 +450,26 @@ class LLM(IModule):
             0,
         )
 
+    def should_stop(self) -> bool:
+        """Wait for in-flight and follow-on LLM requests before stopping."""
+        if not self.termination_event.is_set():
+            return False
+
+        if self.is_msg_received_in_any_channel() or self._has_pending_work():
+            self._record_request_activity()
+            return False
+
+        return (
+            time.time() - self.last_request_activity
+            >= self.shutdown_grace_period_seconds
+        )
+
     def main(self):
         if msg := self.get_msg(self.db.channels.LLM_REQUEST):
             self._enqueue_request(msg)
 
     def shutdown_gracefully(self):
+        self._store_empty_available_backends_registry()
         self.worker_stop_event.set()
         for _ in self.workers:
             try:
@@ -483,6 +500,7 @@ class LLM(IModule):
 
         try:
             self.request_queue.put_nowait(payload)
+            self._record_request_activity()
         except queue.Full:
             self._publish_response(
                 {
@@ -504,9 +522,15 @@ class LLM(IModule):
                 continue
 
             if payload is None:
+                self.request_queue.task_done()
                 return
 
-            self._handle_request(payload)
+            self._record_request_activity()
+            try:
+                self._handle_request(payload)
+            finally:
+                self.request_queue.task_done()
+                self._record_request_activity()
 
     def _handle_request(self, payload: dict):
         request_id = payload["request_id"]
@@ -628,3 +652,11 @@ class LLM(IModule):
             self.db.channels.LLM_RESPONSE,
             json.dumps(payload),
         )
+
+    def _has_pending_work(self) -> bool:
+        """Return True while the request queue or workers still have work."""
+        return self.request_queue.unfinished_tasks > 0
+
+    def _record_request_activity(self):
+        """Update the timestamp used to keep the LLM service alive."""
+        self.last_request_activity = time.time()
