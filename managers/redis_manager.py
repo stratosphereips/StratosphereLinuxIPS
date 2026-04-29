@@ -516,8 +516,14 @@ class RedisManager:
         return False
 
     def _get_dbmanager_without_starting_a_new_server(self, port):
+        logger = getattr(self.main, "logger", None)
+        if logger is None:
+            logger = Output(
+                create_logfiles=False,
+                slips_args=getattr(self.main, "args", None),
+            )
         return DBManager(
-            Output(),
+            logger,
             self.main.args.output,
             port,
             self.main.conf,
