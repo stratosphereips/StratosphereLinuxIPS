@@ -109,6 +109,46 @@ def test_load_redis_db(redis_port, redis_pid, db_path, mock_db):
         )
 
 
+def test_get_dbmanager_without_starting_a_new_server_reuses_main_logger():
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    redis_manager.main.logger = Mock(name="existing_logger")
+    redis_manager.main.args.output = "output_dir"
+    redis_manager.main.conf = Mock()
+    redis_manager.main.pid = 1234
+
+    with (
+        patch("managers.redis_manager.DBManager") as mock_dbmanager,
+        patch("managers.redis_manager.Output") as mock_output,
+    ):
+        redis_manager._get_dbmanager_without_starting_a_new_server(22222)
+
+    mock_output.assert_not_called()
+    assert mock_dbmanager.call_args.args[0] is redis_manager.main.logger
+
+
+def test_get_dbmanager_without_starting_a_new_server_uses_no_log_fallback():
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    redis_manager.main.logger = None
+    redis_manager.main.args.output = "output_dir"
+    redis_manager.main.conf = Mock()
+    redis_manager.main.pid = 1234
+
+    with (
+        patch("managers.redis_manager.DBManager") as mock_dbmanager,
+        patch("managers.redis_manager.Output") as mock_output,
+    ):
+        fallback_logger = Mock(name="fallback_logger")
+        mock_output.return_value = fallback_logger
+
+        redis_manager._get_dbmanager_without_starting_a_new_server(22222)
+
+    mock_output.assert_called_once_with(
+        create_logfiles=False,
+        slips_args=redis_manager.main.args,
+    )
+    assert mock_dbmanager.call_args.args[0] is fallback_logger
+
+
 def test_load_db_success(mock_db):
     redis_manager = ModuleFactory().create_redis_manager_obj()
     redis_manager.main.args.db = "/path/to/db.rdb"
@@ -711,6 +751,7 @@ def test_close_open_redis_servers_interactive(mock_db):
     # Mocking user choosing server #1
     with (
         patch("builtins.input", return_value="1"),
+        patch("sys.stdin.isatty", return_value=True),
         patch.object(
             redis_manager,
             "print_open_redis_servers",
