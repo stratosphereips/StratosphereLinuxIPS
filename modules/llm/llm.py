@@ -420,6 +420,7 @@ class LLM(IModule):
     def pre_main(self):
         utils.drop_root_privs_permanently()
         self._init_operation_log_file()
+        self.db.reset_pending_llm_request_counts()
 
         if not self.enabled:
             self._store_empty_available_backends_registry()
@@ -513,6 +514,7 @@ class LLM(IModule):
                 break
         for worker in self.workers:
             worker.join(timeout=1)
+        self.db.reset_pending_llm_request_counts()
         self._log_operation("LLM module stopped.")
         if self.operation_log is not None:
             self.operation_log.close()
@@ -538,6 +540,9 @@ class LLM(IModule):
 
         try:
             self.request_queue.put_nowait(payload)
+            self.db.increment_pending_llm_request_count(
+                payload.get("requester", "")
+            )
             self._record_request_activity()
             self._log_operation(
                 "Queued llm_request "
@@ -722,17 +727,26 @@ class LLM(IModule):
         return str(content).strip()
 
     def _publish_response(self, payload: dict):
-        self._log_operation(
-            "Published llm_response "
-            f"request_id={payload.get('request_id')} "
-            f"requester={payload.get('requester', '')} "
-            f"backend={payload.get('backend')} "
-            f"success={payload.get('success')}"
-        )
-        self.db.publish(
-            self.db.channels.LLM_RESPONSE,
-            json.dumps(payload),
-        )
+        requester = str(payload.get("requester") or "").strip()
+        try:
+            self._log_operation(
+                "Published llm_response "
+                f"request_id={payload.get('request_id')} "
+                f"requester={requester} "
+                f"backend={payload.get('backend')} "
+                f"success={payload.get('success')}"
+            )
+            self.db.publish(
+                self.db.channels.LLM_RESPONSE,
+                json.dumps(payload),
+            )
+        finally:
+            remaining = self.db.decrement_pending_llm_request_count(requester)
+            if requester:
+                self._log_operation(
+                    "Updated requester inflight count "
+                    f"requester={requester} remaining={remaining}"
+                )
 
     def _has_pending_work(self) -> bool:
         """Return True while the request queue or workers still have work."""
