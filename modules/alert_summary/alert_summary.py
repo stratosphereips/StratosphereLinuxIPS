@@ -64,6 +64,7 @@ class AlertSummary(IModule):
         self.pending_request = None
         self.summary_log = None
         self.operation_log = None
+        self.last_logged_pending_llm_requests = None
         self.operation_log_path = os.path.join(
             self.parent_output_dir,
             "llm-summary",
@@ -122,17 +123,29 @@ class AlertSummary(IModule):
         """
         Stop once shutdown starts and this module has no actionable work left.
 
-        We intentionally ignore stale `llm_response` channel activity after the
-        matching response has already been consumed. This module only polls that
-        channel while a request is in flight, so relying on the base channel
-        tracker would keep the process alive indefinitely after a successful
-        final reply.
+        We wait for both local work and the shared LLM service's requester-level
+        in-flight counter. That keeps the module alive until every
+        `requester=alert_summary` response has been published, even if local
+        channel-tracker state is stale or replies were produced out of order.
         """
         if not self.termination_event.is_set():
             return False
 
         if self._has_pending_work():
             return False
+
+        pending_llm_requests = self.db.get_pending_llm_request_count(self.name)
+        if pending_llm_requests > 0:
+            if self.last_logged_pending_llm_requests != pending_llm_requests:
+                self._log_operation(
+                    "Waiting for shared LLM responses before shutdown "
+                    f"requester={self.name} pending_requests={pending_llm_requests}",
+                    verbosity=LOG_VERBOSITY_SUMMARY,
+                )
+                self.last_logged_pending_llm_requests = pending_llm_requests
+            return False
+
+        self.last_logged_pending_llm_requests = None
 
         return not self.channel_tracker.get("new_alert", {}).get(
             "msg_received", False
