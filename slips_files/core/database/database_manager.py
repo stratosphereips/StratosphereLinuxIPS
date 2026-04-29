@@ -220,6 +220,22 @@ class DBManager:
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
 
+    def reset_pending_llm_request_counts(self):
+        """Clear requester-level in-flight shared-LLM request counters."""
+        return self.rdb.reset_pending_llm_request_counts()
+
+    def increment_pending_llm_request_count(self, requester: str):
+        """Increment the in-flight shared-LLM request count for one requester."""
+        return self.rdb.increment_pending_llm_request_count(requester)
+
+    def decrement_pending_llm_request_count(self, requester: str):
+        """Decrement the in-flight shared-LLM request count for one requester."""
+        return self.rdb.decrement_pending_llm_request_count(requester)
+
+    def get_pending_llm_request_count(self, requester: str) -> int:
+        """Return the in-flight shared-LLM request count for one requester."""
+        return self.rdb.get_pending_llm_request_count(requester)
+
     @classmethod
     def read_configuration(cls):
         conf = ConfigParser()
