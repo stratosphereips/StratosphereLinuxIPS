@@ -133,14 +133,26 @@ class LLMBackend:
         headers: dict | None = None,
     ) -> dict:
         encoded_payload = json.dumps(payload).encode()
-        response = self.http.request(
-            method,
-            url,
-            body=encoded_payload,
-            headers=headers
-            or {"Content-Type": "application/json"},
-            timeout=self.config.timeout,
-        )
+        try:
+            response = self.http.request(
+                method,
+                url,
+                body=encoded_payload,
+                headers=headers
+                or {"Content-Type": "application/json"},
+                timeout=urllib3.Timeout(
+                    connect=self.config.timeout,
+                    read=self.config.timeout,
+                ),
+            )
+        except urllib3.exceptions.HTTPError as exc:
+            raise LLMRequestError(
+                f"{self.config.alias} request failed: {exc}"
+            ) from exc
+        except OSError as exc:
+            raise LLMRequestError(
+                f"{self.config.alias} request failed: {exc}"
+            ) from exc
 
         try:
             decoded = response.data.decode("utf-8")
@@ -323,6 +335,10 @@ class LLM(IModule):
         self.worker_threads = 2
         self.queue_size = 100
         self.last_request_activity = time.time()
+        self.operation_log = None
+        self.operation_log_path = self.get_module_specific_output_path(
+            "llm.log"
+        )
         self.read_configuration()
 
     def subscribe_to_channels(self):
@@ -403,14 +419,19 @@ class LLM(IModule):
 
     def pre_main(self):
         utils.drop_root_privs_permanently()
+        self._init_operation_log_file()
 
         if not self.enabled:
             self._store_empty_available_backends_registry()
+            self._log_operation("LLM module disabled in config.")
             self.print("LLM module disabled in config.", 2, 0)
             return True
 
         if self.failed_backends:
             for alias, error in self.failed_backends.items():
+                self._log_operation(
+                    f"Skipping backend alias={alias}: {error}"
+                )
                 self.print(
                     f"Skipping LLM backend {alias}: {error}",
                     0,
@@ -419,6 +440,7 @@ class LLM(IModule):
 
         if not self.backends:
             self._store_empty_available_backends_registry()
+            self._log_operation("No valid LLM backends configured.")
             self.print(
                 "No valid LLM backends configured. Stopping LLM module.",
                 0,
@@ -427,6 +449,9 @@ class LLM(IModule):
             return True
 
         if self.default_backend and self.default_backend not in self.backends:
+            self._log_operation(
+                f"Configured default backend {self.default_backend} is unavailable."
+            )
             self.print(
                 f"Default LLM backend {self.default_backend} is not available.",
                 0,
@@ -442,8 +467,18 @@ class LLM(IModule):
             )
             worker.start()
             self.workers.append(worker)
+            self._log_operation(
+                f"Started worker thread name={worker.name}"
+            )
 
         self._store_available_backends_registry()
+        self._log_operation(
+            "LLM module ready. "
+            f"default_backend={self.default_backend or 'none'} "
+            f"available_backends={sorted(self.backends)} "
+            f"queue_size={self.queue_size} "
+            f"worker_threads={self.worker_threads}"
+        )
         self.print(
             f"LLM module ready with backends: {list(self.backends)}",
             2,
@@ -478,6 +513,9 @@ class LLM(IModule):
                 break
         for worker in self.workers:
             worker.join(timeout=1)
+        self._log_operation("LLM module stopped.")
+        if self.operation_log is not None:
+            self.operation_log.close()
         return True
 
     def _enqueue_request(self, msg: dict):
@@ -501,7 +539,18 @@ class LLM(IModule):
         try:
             self.request_queue.put_nowait(payload)
             self._record_request_activity()
+            self._log_operation(
+                "Queued llm_request "
+                f"request_id={payload['request_id']} "
+                f"requester={payload.get('requester', '')} "
+                f"backend={payload.get('backend') or self.default_backend} "
+                f"queue_size={self.request_queue.qsize()}"
+            )
         except queue.Full:
+            self._log_operation(
+                "Rejected llm_request because the queue is full "
+                f"request_id={payload['request_id']}"
+            )
             self._publish_response(
                 {
                     "request_id": payload["request_id"],
@@ -536,6 +585,12 @@ class LLM(IModule):
         request_id = payload["request_id"]
         requester = payload.get("requester")
         metadata = payload.get("metadata", {})
+        self._log_operation(
+            "Handling llm_request "
+            f"request_id={request_id} "
+            f"requester={requester or ''} "
+            f"backend={payload.get('backend') or self.default_backend}"
+        )
 
         try:
             request = self._prepare_request(payload)
@@ -553,6 +608,13 @@ class LLM(IModule):
                 "metadata": metadata,
                 "ts": time.time(),
             }
+            self._log_operation(
+                "Completed llm_request "
+                f"request_id={request_id} "
+                f"backend={request['backend']} "
+                f"success=True "
+                f"output_chars={len(response['text'])}"
+            )
         except (LLMRequestError, KeyError, ValueError) as exc:
             response = {
                 "request_id": request_id,
@@ -564,6 +626,12 @@ class LLM(IModule):
                 "metadata": metadata,
                 "ts": time.time(),
             }
+            self._log_operation(
+                "Completed llm_request "
+                f"request_id={request_id} "
+                f"backend={payload.get('backend')} "
+                f"success=False error={exc}"
+            )
         except Exception as exc:
             response = {
                 "request_id": request_id,
@@ -575,6 +643,12 @@ class LLM(IModule):
                 "metadata": metadata,
                 "ts": time.time(),
             }
+            self._log_operation(
+                "Completed llm_request "
+                f"request_id={request_id} "
+                f"backend={payload.get('backend')} "
+                f"success=False error=Unexpected LLM error: {exc}"
+            )
 
         self._publish_response(response)
 
@@ -648,6 +722,13 @@ class LLM(IModule):
         return str(content).strip()
 
     def _publish_response(self, payload: dict):
+        self._log_operation(
+            "Published llm_response "
+            f"request_id={payload.get('request_id')} "
+            f"requester={payload.get('requester', '')} "
+            f"backend={payload.get('backend')} "
+            f"success={payload.get('success')}"
+        )
         self.db.publish(
             self.db.channels.LLM_RESPONSE,
             json.dumps(payload),
@@ -660,3 +741,41 @@ class LLM(IModule):
     def _record_request_activity(self):
         """Update the timestamp used to keep the LLM service alive."""
         self.last_request_activity = time.time()
+
+    def _init_operation_log_file(self):
+        """
+        Create the per-run LLM operation log inside the module output dir.
+
+        :return: None
+        """
+        utils.initialize_logfile(
+            self.operation_log_path,
+            getattr(self.args, "is_slips_started_by_an_update", False),
+        )
+        self.operation_log = open(
+            self.operation_log_path,
+            "a",
+            encoding="utf-8",
+        )
+
+        conf = ConfigParser()
+        utils.change_logfiles_ownership(
+            self.operation_log_path,
+            conf.get_UID(),
+            conf.get_GID(),
+        )
+
+    def _log_operation(self, message: str):
+        """
+        Append one line to the LLM module operation log.
+
+        :param message: Log message to append.
+        :return: None
+        """
+        if self.operation_log is None:
+            return
+
+        timestamp = utils.get_human_readable_datetime()
+        self.operation_log.write(f"{timestamp} {message}\n")
+        self.operation_log.flush()
+        os.fsync(self.operation_log.fileno())
