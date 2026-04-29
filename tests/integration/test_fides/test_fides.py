@@ -148,6 +148,19 @@ def get_main_interface():
         return None
 
 
+def get_runtime_config_dir(output_dir_name: str) -> Path:
+    """
+    Return the runtime config directory for a Fides integration test.
+
+    Parameters:
+        output_dir_name: Name of the Slips output directory for the test.
+
+    Returns:
+        Path: Directory where generated runtime configs should be stored.
+    """
+    return TEST_DIR / "runtime_configs" / output_dir_name
+
+
 def create_runtime_fides_configs(
     output_dir: Path, db_name: str
 ) -> tuple[Path, Path]:
@@ -155,13 +168,14 @@ def create_runtime_fides_configs(
     Create isolated Slips and Fides config files for an integration test.
 
     Parameters:
-        output_dir: Test output directory that will hold the generated configs.
+        output_dir: Test output directory used to derive the runtime config
+            location.
         db_name: Database filename to be created under the permanent directory.
 
     Returns:
         tuple: Generated Slips config path and permanent DB path.
     """
-    config_dir = output_dir / "config"
+    config_dir = get_runtime_config_dir(output_dir.name)
     config_dir.mkdir(parents=True, exist_ok=True)
 
     runtime_fides_config = modify_yaml_config(
@@ -260,6 +274,9 @@ def test_conf_file2(path, output_dir, integration_port_factory):
         close_test_redis_server(redis_port)
         if test_db.exists():
             test_db.unlink()
+        shutil.rmtree(
+            get_runtime_config_dir(output_dir.name), ignore_errors=True
+        )
         if success:
             print("Deleting the output directory")
             shutil.rmtree(output_dir, ignore_errors=True)
@@ -403,6 +420,9 @@ def test_trust_recommendation_response(
         close_test_redis_server(redis_port)
         if test_db.exists():
             test_db.unlink()
+        shutil.rmtree(
+            get_runtime_config_dir(output_dir.name), ignore_errors=True
+        )
         if success:
             print("Deleting the output directory")
             shutil.rmtree(output_dir)
