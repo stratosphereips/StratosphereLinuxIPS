@@ -33,27 +33,43 @@ class BFManager:
         )
         self.org_filters = {}
 
+    @staticmethod
+    def _create_bloom_filter(
+        values, minimum_capacity: int, error_rate: float
+    ) -> BloomFilter:
+        """
+        Create and populate a bloom filter sized for the given values.
+
+        :param values: Iterable of values that will be inserted.
+        :param minimum_capacity: Lower bound used for small datasets.
+        :param error_rate: Bloom filter false-positive rate.
+        :return: A populated BloomFilter.
+        """
+        items = tuple(values)
+        capacity = max(minimum_capacity, len(items) + 1)
+        bloom_filter = BloomFilter(capacity=capacity, error_rate=error_rate)
+        for item in items:
+            bloom_filter.add(item)
+        return bloom_filter
+
     def initialize_filter(self):
         self._init_whitelisted_iocs_bf()
         self._init_whitelisted_orgs_bf()
 
     def _init_whitelisted_iocs_bf(self):
-        self.domains = BloomFilter(capacity=10000, error_rate=0.001)
-        self.ips = BloomFilter(capacity=10000, error_rate=0.001)
-        self.mac_addrs = BloomFilter(capacity=10000, error_rate=0.001)
-        self.orgs = BloomFilter(capacity=100, error_rate=0.001)
-
-        for ip in self.db.get_whitelist("IPs"):
-            self.ips.add(ip)
-
-        for domain in self.db.get_whitelist("domains"):
-            self.domains.add(domain)
-
-        for org in self.db.get_whitelist("organizations"):
-            self.orgs.add(org)
-
-        for mac in self.db.get_whitelist("macs"):
-            self.mac_addrs.add(mac)
+        err_rate = 0.001
+        self.ips = self._create_bloom_filter(
+            self.db.get_whitelist("IPs"), 10000, err_rate
+        )
+        self.domains = self._create_bloom_filter(
+            self.db.get_whitelist("domains"), 10000, err_rate
+        )
+        self.orgs = self._create_bloom_filter(
+            self.db.get_whitelist("organizations"), 100, err_rate
+        )
+        self.mac_addrs = self._create_bloom_filter(
+            self.db.get_whitelist("macs"), 10000, err_rate
+        )
 
     def _init_whitelisted_orgs_bf(self):
         """
@@ -67,21 +83,18 @@ class BFManager:
         """
         err_rate = 0.01
         for org in utils.supported_orgs:
-            domains_bloom = BloomFilter(capacity=10000, error_rate=err_rate)
-            asns_bloom = BloomFilter(capacity=10000, error_rate=err_rate)
-            cidrs_bloom = BloomFilter(capacity=100, error_rate=err_rate)
-
             domains: List[str] = self.db.get_org_info(org, "domains")
-            _ = [domains_bloom.add(domain) for domain in domains]
+            domains_bloom = self._create_bloom_filter(
+                domains, 10000, err_rate
+            )
 
             asns: List[str] = self.db.get_org_info(org, "asn")
-            _ = [asns_bloom.add(asn) for asn in asns]
+            asns_bloom = self._create_bloom_filter(asns, 10000, err_rate)
 
             org_subnets: Dict[str, str] = self.db.get_org_ips(org)
-            _ = [
-                cidrs_bloom.add(first_octet)
-                for first_octet in org_subnets.keys()
-            ]
+            cidrs_bloom = self._create_bloom_filter(
+                org_subnets.keys(), 100, err_rate
+            )
 
             self.org_filters[org] = {
                 "domains": domains_bloom,
