@@ -78,6 +78,7 @@ def test_pre_main_publishes_runtime_ready_registry():
 
     llm.pre_main()
 
+    llm.db.reset_pending_llm_request_counts.assert_called_once()
     llm.db.set_available_llm_backends.assert_called_once_with(
         {
             "default_backend": "local_qwen",
@@ -96,6 +97,7 @@ def test_pre_main_publishes_empty_registry_when_disabled():
     llm.enabled = False
 
     assert llm.pre_main() is True
+    llm.db.reset_pending_llm_request_counts.assert_called_once()
     llm.db.set_available_llm_backends.assert_called_once_with(
         {
             "default_backend": "",
@@ -109,6 +111,7 @@ def test_pre_main_publishes_empty_registry_when_no_valid_backends():
     llm.backends = {}
 
     assert llm.pre_main() is True
+    llm.db.reset_pending_llm_request_counts.assert_called_once()
     llm.db.set_available_llm_backends.assert_called_once_with(
         {
             "default_backend": "",
@@ -152,6 +155,9 @@ def test_handle_request_publishes_success_response():
     assert response["request_id"] == "req-2"
     assert response["text"] == "analysis result"
     assert response["metadata"] == {"uid": "C1"}
+    llm.db.decrement_pending_llm_request_count.assert_called_once_with(
+        "HTTP Analyzer"
+    )
 
 
 def test_handle_request_publishes_error_for_unknown_backend():
@@ -170,6 +176,27 @@ def test_handle_request_publishes_error_for_unknown_backend():
     assert channel == "llm_response"
     assert response["success"] is False
     assert "Unknown LLM backend" in response["error"]
+    llm.db.decrement_pending_llm_request_count.assert_called_once_with("")
+
+
+def test_enqueue_request_increments_requester_pending_count():
+    llm = ModuleFactory().create_llm_obj()
+
+    llm._enqueue_request(
+        {
+            "data": json.dumps(
+                {
+                    "request_id": "req-enqueue",
+                    "requester": "alert_summary",
+                    "prompt": "hello",
+                }
+            )
+        }
+    )
+
+    llm.db.increment_pending_llm_request_count.assert_called_once_with(
+        "alert_summary"
+    )
 
 
 def test_openai_backend_parses_chat_completion_response():
@@ -348,6 +375,7 @@ def test_shutdown_gracefully_clears_available_backend_registry():
     llm = ModuleFactory().create_llm_obj()
 
     assert llm.shutdown_gracefully() is True
+    llm.db.reset_pending_llm_request_counts.assert_called_once()
     llm.db.set_available_llm_backends.assert_called_once_with(
         {
             "default_backend": "",
