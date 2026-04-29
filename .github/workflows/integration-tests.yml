@@ -60,4 +60,4 @@ jobs:
           # Replaces slashes with underscores for valid artifact naming
           name: ${{ github.run_id }}-${{ strategy.job-index }}-integration-output
           path: |
-            output/integration
+            output/integration_tests
