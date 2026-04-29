@@ -272,6 +272,36 @@ llm:
       timeout: 60
 
 #############################
+alert_summary:
+  # Enable the analyst-facing alert summary module.
+  enabled: true
+
+  # Write operational logs for this module to:
+  # <output-dir>/llm-summary/alert_summary.log
+  # log_verbosity levels:
+  # 0 = only create the file
+  # 1 = startup, shutdown, and failures
+  # 2 = per-alert queueing, requests, and writes
+  # 3 = debug details
+  log_verbosity: 3
+
+  # Preferred LLM backend aliases for alert summaries. If empty, the module
+  # falls back to the runtime-ready LLM default backend.
+  allowed_backends: [local_qwen]
+
+  # Keep the sampling conservative because this module writes one analyst
+  # summary paragraph per alert.
+  llm_temperature: 0.2
+
+  # Token budget for the summary paragraph.
+  llm_max_tokens: 220
+
+  # Hard timeout in seconds for one alert summary request.
+  # If the timeout is reached, the module writes a failure note for that alert
+  # and continues with the next one. Set to 0 to wait indefinitely.
+  llm_response_timeout_seconds: 300
+
+#############################
 regex_generator:
   # Enable the shared regex generator module.
   enabled: true
