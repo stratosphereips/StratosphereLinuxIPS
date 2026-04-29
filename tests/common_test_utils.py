@@ -1,8 +1,10 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import sqlite3
+from contextlib import contextmanager
 from importlib.util import find_spec
 from pathlib import Path
+import fcntl
 import os
 import shutil
 import binascii
@@ -29,6 +31,12 @@ INTEGRATION_TEST_PORT_START = 65000
 INTEGRATION_TEST_PORT_END = 65535
 _port_lock = threading.Lock()
 _next_integration_test_port = INTEGRATION_TEST_PORT_START
+_integration_test_port_counter_file = (
+    Path(integration_tests_dir) / ".next-port"
+)
+_integration_test_port_lock_file = (
+    Path(integration_tests_dir) / ".port-allocator.lock"
+)
 
 # create the integration tests dir
 if not os.path.exists(integration_tests_dir):
@@ -104,35 +112,105 @@ def run_slips(cmd):
     return return_code
 
 
-def get_available_integration_test_port() -> int:
+@contextmanager
+def integration_test_port_file_lock():
     """
-    Return a free TCP port reserved from the integration test range.
+    Lock the shared integration-test port allocator across processes.
 
-    The allocator walks ports from 65000 upwards and verifies each candidate
-    by binding to it before returning it.
+    :return: Yields while the allocator lock is held
+    """
+    _integration_test_port_lock_file.touch(exist_ok=True)
+    with _integration_test_port_lock_file.open(
+        "r", encoding="utf-8"
+    ) as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
-    :return: Available TCP port for an integration test
-    :raises RuntimeError: When the configured integration test port range is exhausted
+
+def get_next_integration_test_port_candidate() -> int:
+    """
+    Read the next shared integration-test port candidate.
+
+    :return: Next candidate port from the shared counter
+    """
+    if not _integration_test_port_counter_file.exists():
+        return max(_next_integration_test_port, INTEGRATION_TEST_PORT_START)
+
+    counter_value = _integration_test_port_counter_file.read_text(
+        encoding="utf-8"
+    ).strip()
+    return int(counter_value or INTEGRATION_TEST_PORT_START)
+
+
+def set_next_integration_test_port_candidate(next_port: int) -> None:
+    """
+    Persist the next shared integration-test port candidate.
+
+    :param next_port: Next port to hand out
+    :return: None
     """
     global _next_integration_test_port
 
-    with _port_lock:
-        candidate = _next_integration_test_port
-        while candidate <= INTEGRATION_TEST_PORT_END:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                try:
-                    sock.bind(("127.0.0.1", candidate))
-                except OSError:
-                    candidate += 1
-                    continue
+    _next_integration_test_port = next_port
+    _integration_test_port_counter_file.write_text(
+        str(next_port), encoding="utf-8"
+    )
 
-            _next_integration_test_port = candidate + 1
+
+def is_integration_test_port_available(port: int) -> bool:
+    """
+    Check whether a TCP port is currently available on localhost.
+
+    :param port: TCP port to probe
+    :return: True when the port can be bound, otherwise False
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+
+    return True
+
+
+def find_available_integration_test_port(start_port: int) -> int:
+    """
+    Find the next available integration-test port in the configured range.
+
+    :param start_port: Port number to start scanning from
+    :return: First available TCP port in the integration-test range
+    :raises RuntimeError: When the configured integration-test range is exhausted
+    """
+    for candidate in range(start_port, INTEGRATION_TEST_PORT_END + 1):
+        if is_integration_test_port_available(candidate):
             return candidate
 
     raise RuntimeError(
         "No free integration test ports remain in the 65000-65535 range."
     )
+
+
+def get_available_integration_test_port() -> int:
+    """
+    Return a free TCP port reserved from the integration test range.
+
+    The allocator walks ports from 65000 upwards and verifies each candidate
+    by binding to it before returning it. Allocation is synchronized across
+    pytest-xdist workers through a shared lock file and counter file.
+
+    :return: Available TCP port for an integration test
+    :raises RuntimeError: When the configured integration test port range is exhausted
+    """
+    with _port_lock:
+        with integration_test_port_file_lock():
+            candidate = get_next_integration_test_port_candidate()
+            port = find_available_integration_test_port(candidate)
+            set_next_integration_test_port_candidate(port + 1)
+            return port
 
 
 def allocate_integration_test_port(test_name: str, port_label: str) -> int:
