@@ -3,12 +3,14 @@ This file tests 2 different config files other than slips' default config/slips.
 test/test.yaml and tests/test2.yaml
 """
 
+import json
 import shutil
 from pathlib import PosixPath, Path
 import signal
 
 import redis
 
+from modules.fides.messaging.network_bridge import NetworkBridge
 from modules.fides.model.peer import PeerInfo
 from modules.fides.persistence.fides_sqlite_db import FidesSQLiteDB
 from tests.common_test_utils import (
@@ -67,7 +69,6 @@ def message_send(port):
     message = """
     {
         "type": "nl2tl_intelligence_response",
-        "version": 1,
         "data": [
             {
                 "sender": {
@@ -104,6 +105,11 @@ def message_send(port):
         ]
     }
     """
+    # Fides expects the network protocol version, not the Slips package version.
+    message = json.loads(message)
+    message.update({"version": NetworkBridge.version})
+    message = json.dumps(message)
+
     redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
     # publish the message to the "network2fides" channel
     redis_client.publish(channel, message)
@@ -312,7 +318,7 @@ def test_conf_file2(path, output_dir, integration_port_factory):
     success = False
     process = None
     try:
-        print("running slips ...")
+        print("running slips using output dir...")
         print(output_dir)
 
         # Open the log file in write mode
@@ -338,7 +344,7 @@ def test_conf_file2(path, output_dir, integration_port_factory):
 
         print(f"Slips with PID {process.pid} was killed.")
 
-        print("Slip is done, checking for errors in the output dir.")
+        print("Slips is done, checking for errors in the output dir.")
         assert_no_errors(output_dir)
         print("Checking database")
         # db = ModuleFactory().create_db_manager_obj(
@@ -381,6 +387,7 @@ def test_trust_recommendation_response(
      Fides Module wanted to evaluate trust in an unknown peer and asked for
       the opinion of other peers.
     The known peers responded and Fides Module is processing the response.
+
     Scenario:
         - Fides did not know a peer whose ID is 'stratosphere.org' and have
         asked for opinion of known peers: peer1 and peer2
@@ -399,8 +406,15 @@ def test_trust_recommendation_response(
     redis_port = integration_port_factory("redis")
     output_dir: PosixPath = create_output_dir(output_dir)
     db_name = f"{output_dir.name}_fides_test_database.sqlite"
-    slips_config, test_db = create_runtime_fides_configs(output_dir, db_name)
+    print(f"db_name: {db_name}")
+
+    slips_config, permanent_db = create_runtime_fides_configs(
+        output_dir, db_name
+    )
+    print(f"slips_config: {slips_config}  permanent_db: {permanent_db}")
+
     output_file = os.path.join(output_dir, "slips_output.txt")
+    print(f"output_file: {output_file}")
     command = [
         sys.executable,
         "./slips.py",
@@ -419,93 +433,104 @@ def test_trust_recommendation_response(
         "-P",
         str(redis_port),
     ]
-    success = False
+    # success = False
     process = None
 
-    try:
-        print("running slips ...")
-        print(output_dir)
+    print(f"command: {' '.join(command)}")
 
-        mock_logger = Mock()
-        mock_logger.print_line = Mock()
-        mock_logger.error = Mock()
-        print("Manipulating database")
-        fdb = FidesSQLiteDB(mock_logger, str(test_db))
-        fdb.store_peer_trust_data(
-            ptd.trust_data_prototype(
-                peer=PeerInfo(
-                    id="peer1",
-                    organisations=["org1", "org2"],
-                    ip="192.168.1.1",
-                ),
-                has_fixed_trust=False,
-            )
+    # try:
+    print("running slips with output dir: ...")
+    print(output_dir)
+
+    mock_logger = Mock()
+    mock_logger.print_line = Mock()
+    mock_logger.error = Mock()
+    print(
+        "Manipulating database: Inject peer1 and peer2 into the "
+        "database - Fides Module must know those peers"
+    )
+    fdb = FidesSQLiteDB(mock_logger, str(permanent_db))
+    fdb.store_peer_trust_data(
+        ptd.trust_data_prototype(
+            peer=PeerInfo(
+                id="peer1",
+                organisations=["org1", "org2"],
+                ip="192.168.1.1",
+            ),
+            has_fixed_trust=False,
         )
-        fdb.store_peer_trust_data(
-            ptd.trust_data_prototype(
-                peer=PeerInfo(
-                    id="peer2", organisations=["org2"], ip="192.168.1.2"
-                ),
-                has_fixed_trust=False,
-            )
+    )
+    fdb.store_peer_trust_data(
+        ptd.trust_data_prototype(
+            peer=PeerInfo(
+                id="peer2", organisations=["org2"], ip="192.168.1.2"
+            ),
+            has_fixed_trust=False,
         )
+    )
 
-        with open(output_file, "w") as log_file:
-            process = subprocess.Popen(
-                command,
-                stdout=log_file,
-                stderr=log_file,
-                start_new_session=True,
-            )
-
-            print(f"Output and errors are logged in {output_file}")
-
-            # these seconds are the time we wait for slips to start all the
-            # modules
-            countdown(60, "test message")
-
-            # this msg simulates a msg sent by peers to the started
-            # slips instance
-            message_send(redis_port)
-
-            # these 30s are the time we give slips to process the msg
-            countdown(30, "sigterm")
-            stop_process_group(process, "fides slips")
-
-        print(f"Slips with PID {process.pid} was killed.")
-
-        print("Slip is done, checking for errors in the output dir.")
-        assert_no_errors(output_dir)
-
-        print("Checking database")
-        db = ModuleFactory().create_db_manager_obj(
-            redis_port, output_dir=output_dir, start_redis_server=False
+    with open(output_file, "w") as log_file:
+        process = subprocess.Popen(
+            command,
+            stdout=log_file,
+            stderr=log_file,
+            start_new_session=True,
         )
 
-        # assert db.get_msgs_received_at_runtime("fides")["fides2network"] == "1"
+        print(f"Output and errors are logged in {output_file}")
 
-        print("Checking Fides' data outlets")
-        assert fdb.get_peer_trust_data("peer1").service_history != []
-        assert fdb.get_peer_trust_data("peer2").service_history != []
-        assert fdb.get_peer_trust_data("peer1").service_history_size == 1
-        assert fdb.get_peer_trust_data("peer2").service_history_size == 1
-        assert db.get_cached_network_opinion(
-            "stratosphere.org", 200000000000, 200000000000
-        ) == {
-            "target": "stratosphere.org",
-            "score": "0.0",
-            "confidence": "0.0",
-        }
-        success = True
-    finally:
-        if process is not None and process.poll() is None:
-            stop_process_group(process, "fides slips")
-        close_test_redis_server(redis_port)
-        if test_db.exists():
-            test_db.unlink()
-        shutil.rmtree(
-            get_runtime_config_dir(output_dir.name), ignore_errors=True
-        )
-        if success:
-            print("Deleting the output directory")
-            shutil.rmtree(output_dir)
+        # these seconds are the time we wait for slips to start all the
+        # modules
+        countdown(60, "test message")
+
+        # this msg simulates a msg sent by peers to the started
+        # slips instance
+        message_send(redis_port)
+
+        # these 30s are the time we give slips to process the msg
+        countdown(30, "sigterm")
+        stop_process_group(process, "fides slips")
+
+    print(f"Slips with PID {process.pid} was killed.")
+
+    print("Slips is done, checking for errors in the output dir.")
+    assert_no_errors(output_dir)
+
+    print("Checking database")
+    db = ModuleFactory().create_db_manager_obj(
+        redis_port, output_dir=output_dir, start_redis_server=False
+    )
+
+    # assert db.get_msgs_received_at_runtime("fides")["fides2network"] == "1"
+    print("Checking Fides' data outlets")
+    print(
+        f"@@@@@@@@@@@@@@@@ {fdb.get_peer_trust_data("peer1").service_history}"
+    )
+
+    assert fdb.get_peer_trust_data("peer1").service_history != []
+    assert fdb.get_peer_trust_data("peer2").service_history != []
+    assert fdb.get_peer_trust_data("peer1").service_history_size == 1
+    assert fdb.get_peer_trust_data("peer2").service_history_size == 1
+    assert db.get_cached_network_opinion(
+        "stratosphere.org", 200000000000, 200000000000
+    ) == {
+        "target": "stratosphere.org",
+        "score": "0.0",
+        "confidence": "0.0",
+    }
+    # success = True
+    # except:
+    #     pass
+
+    # finally:
+    #     if process is not None and process.poll() is None:
+    #         stop_process_group(process, "fides slips")
+    #     close_test_redis_server(redis_port)
+    #     if permanent_db.exists():
+    #         permanent_db.unlink()
+    #     shutil.rmtree(
+    #         get_runtime_config_dir(output_dir.name), ignore_errors=True
+    #     )
+    #     if success:
+    #         print("Deleting the output directory")
+    #         shutil.rmtree(output_dir)
