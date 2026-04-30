@@ -317,7 +317,7 @@ alert_summary:
 #############################
 regex_generator:
   # Enable the shared regex generator module.
-  enabled: false
+  enabled: true
 
   # Create output/regex_generator.log with detailed internal progress logs.
   # This file follows the global parameters.rotation / rotation_period policy.
