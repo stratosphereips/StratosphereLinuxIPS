@@ -243,15 +243,35 @@ llm:
   # through the request field backend.
   backends:
     slips-goldilock:
-      # Supported providers: ollama, openai, anthropic
+      # slips-goldilock is the fine-tunned model in Slips for general summary and detection. It is fast enough and good enough
       provider: ollama
       # Default model for this backend alias. Caller modules may override the
       # model in an individual request while still using this connection.
       model: stratosphere/qwen2.5-1.5b-slips-immune-risk:q5_k_m
-      #base_url: http://127.0.0.1:11434
-      base_url: http://147.32.83.61:11434
+      base_url: http://127.0.0.1:11434
       # Optional HTTP timeout in seconds.
       timeout: 300
+
+    slips-fast:
+      # slips-fast is the fine-tunned model in Slips for fast summary and detection. It has lower quality
+      provider: ollama
+      # Default model for this backend alias. Caller modules may override the
+      # model in an individual request while still using this connection.
+      model: stratosphere/qwen2.5-1.5b-slips-immune-risk:q4_k_m
+      base_url: http://127.0.0.1:11434
+      # Optional HTTP timeout in seconds.
+      timeout: 300
+
+    slips-high:
+      # slips-high is the fine-tunned model in Slips for high quality. It is slower 
+      provider: ollama
+      # Default model for this backend alias. Caller modules may override the
+      # model in an individual request while still using this connection.
+      model: stratosphere/qwen2.5-1.5b-slips-immune-risk:q8_0
+      base_url: http://127.0.0.1:11434
+      # Optional HTTP timeout in seconds.
+      timeout: 300
+
 
     local_qwen:
       # Supported providers: ollama, openai, anthropic
@@ -259,8 +279,7 @@ llm:
       # Default model for this backend alias. Caller modules may override the
       # model in an individual request while still using this connection.
       model: qwen2.5:3b
-      #base_url: http://127.0.0.1:11434
-      base_url: http://147.32.83.61:11434
+      base_url: http://127.0.0.1:11434
       # Optional HTTP timeout in seconds.
       timeout: 300
 
@@ -317,7 +336,7 @@ alert_summary:
 #############################
 regex_generator:
   # Enable the shared regex generator module.
-  enabled: true
+  enabled: false
 
   # Create output/regex_generator.log with detailed internal progress logs.
   # This file follows the global parameters.rotation / rotation_period policy.
