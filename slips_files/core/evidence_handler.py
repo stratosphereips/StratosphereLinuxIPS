@@ -261,7 +261,16 @@ class EvidenceHandler(ICore):
 
         for process in self.evidence_worker_child_processes:
             try:
-                process.join()
+                process.join(timeout=5)
+                if process.is_alive():
+                    self.print(
+                        f"Evidence worker {process.pid} did not stop in time. "
+                        "Killing it.",
+                        0,
+                        1,
+                    )
+                    process.kill()
+                    process.join(timeout=1)
             except (OSError, ChildProcessError):
                 pass
 
