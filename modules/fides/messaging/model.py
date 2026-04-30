@@ -13,7 +13,7 @@ from ..model.threat_intelligence import ThreatIntelligence
 @dataclass
 class NetworkMessage:
     type: str
-    version: int
+    version: str
     data: Any
 
 

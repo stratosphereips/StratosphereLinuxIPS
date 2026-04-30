@@ -2,6 +2,7 @@ import json
 from dataclasses import asdict
 from typing import Dict, List
 
+from slips_files.common.slips_utils import utils
 from .dacite import from_dict
 
 from .message_handler import MessageHandler
@@ -24,7 +25,7 @@ class NetworkBridge:
     execute "listen" method.
     """
 
-    version = 1
+    version = utils.get_current_version()
 
     def __init__(self, queue: Queue):
         self.__queue = queue
