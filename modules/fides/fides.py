@@ -53,8 +53,11 @@ class FidesModule(IModule):
 
         # load trust model configuration
         current_dir = Path(__file__).resolve().parent
-        config_path = current_dir / "config" / "fides.conf.yml"
-        self.__trust_model_config = load_configuration(config_path.__str__())
+        default_config_path = current_dir / "config" / "fides.conf.yml"
+        config_path = self.conf.read_configuration(
+            "global_p2p", "fides_conf", str(default_config_path)
+        )
+        self.__trust_model_config = load_configuration(config_path)
 
         # prepare variables for global protocols
         self.__bridge: NetworkBridge

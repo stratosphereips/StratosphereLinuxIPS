@@ -10,6 +10,7 @@ from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
     get_slips_test_command,
+    close_test_redis_server,
     skip_if_missing_runtime_dependencies,
 )
 from tests.module_factory import ModuleFactory
@@ -18,83 +19,92 @@ alerts_file = "alerts.log"
 
 
 @pytest.mark.parametrize(
-    "path,  output_dir, redis_port",
+    "path,  output_dir",
     [
         (
             "dataset/port-scans/horizontal/conn.log",
             "testing_horizontal_ps/",
-            7894,
         )
     ],
 )
-def test_horizontal(path, output_dir, redis_port):
+def test_horizontal(path, output_dir, integration_port_factory):
     """
     checks that slips is detecting horizontal ps no issue,
     """
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",), binaries=("redis-server",)
     )
+    redis_port = integration_port_factory("redis")
     output_dir = create_output_dir(output_dir)
+    success = False
+    try:
+        expected_evidence = (
+            "Horizontal port scan to port http 80/tcp. From 10.0.2.112"
+        )
 
-    expected_evidence = (
-        "Horizontal port scan to port http 80/tcp. From 10.0.2.112"
-    )
+        output_file = os.path.join(output_dir, "slips_output.txt")
+        command = get_slips_test_command(
+            f"-e 1 -t -f {path} -o {output_dir} -P {redis_port}"
+        )
+        command = f"{command} > {output_file} 2>&1"
+        # this function returns when slips is done
+        run_slips(command)
 
-    output_file = os.path.join(output_dir, "slips_output.txt")
-    command = get_slips_test_command(
-        f"-e 1 -t -f {path} -o {output_dir} -P {redis_port}"
-    )
-    command = f"{command} > {output_file} 2>&1"
-    # this function returns when slips is done
-    run_slips(command)
+        assert_no_errors(output_dir)
+        database = ModuleFactory().create_db_manager_obj(
+            redis_port, output_dir=output_dir, start_redis_server=False
+        )
+        profiles = database.get_profiles_len()
+        assert profiles > 0
 
-    assert_no_errors(output_dir)
-    database = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir, start_redis_server=False
-    )
-    profiles = database.get_profiles_len()
-    assert profiles > 0
-
-    log_file = output_dir / "alerts" / alerts_file
-    assert is_evidence_present(log_file, expected_evidence)
-
-    shutil.rmtree(output_dir)
+        log_file = output_dir / "alerts" / alerts_file
+        assert is_evidence_present(log_file, expected_evidence)
+        success = True
+    finally:
+        if success:
+            close_test_redis_server(redis_port)
+            shutil.rmtree(output_dir)
 
 
 @pytest.mark.parametrize(
-    "path, output_dir, redis_port",
-    [("dataset/port-scans/vertical/conn.log", "testing_vertical_ps/", 7895)],
+    "path, output_dir",
+    [("dataset/port-scans/vertical/conn.log", "testing_vertical_ps/")],
 )
-def test_vertical(path, output_dir, redis_port):
+def test_vertical(path, output_dir, integration_port_factory):
     """
     checks that slips is detecting horizontal ps no issue,
     """
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",), binaries=("redis-server",)
     )
+    redis_port = integration_port_factory("redis")
     output_dir = create_output_dir(output_dir)
+    success = False
+    try:
+        expected_evidence = (
+            "vertical port scan to IP 45.33.32.156 from 192.168.1.9."
+        )
 
-    expected_evidence = (
-        "vertical port scan to IP 45.33.32.156 from 192.168.1.9."
-    )
+        output_file = os.path.join(output_dir, "slips_output.txt")
+        command = get_slips_test_command(
+            f"-e 1 -t -f {path} -o {output_dir} -P {redis_port}"
+        )
+        command = f"{command} > {output_file} 2>&1"
+        # this function returns when slips is done
+        run_slips(command)
 
-    output_file = os.path.join(output_dir, "slips_output.txt")
-    command = get_slips_test_command(
-        f"-e 1 -t -f {path} -o {output_dir} -P {redis_port}"
-    )
-    command = f"{command} > {output_file} 2>&1"
-    # this function returns when slips is done
-    run_slips(command)
+        assert_no_errors(output_dir)
 
-    assert_no_errors(output_dir)
+        database = ModuleFactory().create_db_manager_obj(
+            redis_port, output_dir=output_dir, start_redis_server=False
+        )
+        profiles = database.get_profiles_len()
+        assert profiles > 0
 
-    database = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir, start_redis_server=False
-    )
-    profiles = database.get_profiles_len()
-    assert profiles > 0
-
-    log_file = output_dir / "alerts" / alerts_file
-    assert is_evidence_present(log_file, expected_evidence)
-
-    shutil.rmtree(output_dir)
+        log_file = output_dir / "alerts" / alerts_file
+        assert is_evidence_present(log_file, expected_evidence)
+        success = True
+    finally:
+        if success:
+            close_test_redis_server(redis_port)
+            shutil.rmtree(output_dir)

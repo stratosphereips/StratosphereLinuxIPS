@@ -150,11 +150,11 @@ def test_get_the_other_ip_version():
     profileid_ipv4 = "profile_192.168.250.250"
     ipv6 = "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
 
-    db.rdb.get_ipv6_from_profile = Mock(return_value=json.dumps(ipv6))
+    db.rdb.get_the_other_ip_version = Mock(return_value=ipv6)
 
-    other_ip = json.loads(db.get_the_other_ip_version(profileid_ipv4))
+    other_ip = db.get_the_other_ip_version(profileid_ipv4)
 
-    db.rdb.get_ipv6_from_profile.assert_called_once_with(profileid_ipv4)
+    db.rdb.get_the_other_ip_version.assert_called_once_with(profileid_ipv4)
     assert other_ip == ipv6
 
 

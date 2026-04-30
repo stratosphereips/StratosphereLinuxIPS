@@ -1,14 +1,19 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import sqlite3
+from contextlib import contextmanager
 from importlib.util import find_spec
 from pathlib import Path
+import fcntl
 import os
 import shutil
 import binascii
 import subprocess
 import base64
 import sys
+import time
+import socket
+import threading
 from typing import (
     Dict,
     Optional,
@@ -16,11 +21,22 @@ from typing import (
 from pathlib import PosixPath
 from unittest.mock import Mock
 import yaml
+import redis
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 integration_tests_dir = "output/integration_tests/"
 alerts_file = "alerts.log"
+INTEGRATION_TEST_PORT_START = 65000
+INTEGRATION_TEST_PORT_END = 65535
+_port_lock = threading.Lock()
+_next_integration_test_port = INTEGRATION_TEST_PORT_START
+_integration_test_port_counter_file = (
+    Path(integration_tests_dir) / ".next-port"
+)
+_integration_test_port_lock_file = (
+    Path(integration_tests_dir) / ".port-allocator.lock"
+)
 
 # create the integration tests dir
 if not os.path.exists(integration_tests_dir):
@@ -59,10 +75,14 @@ def modify_yaml_config(
 
     if changes:
         for key, value in changes.items():
-            key: str
-            value: dict
-            if key in config:
+            if (
+                key in config
+                and isinstance(config[key], dict)
+                and isinstance(value, dict)
+            ):
                 config[key].update(value)
+            else:
+                config[key] = value
 
     with output_file.open("w", encoding="utf-8") as f:
         yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
@@ -94,6 +114,187 @@ def run_slips(cmd):
     _, _ = slips.communicate(input=b"y\n")
     return_code = slips.returncode
     return return_code
+
+
+@contextmanager
+def integration_test_port_file_lock():
+    """
+    Lock the shared integration-test port allocator across processes.
+
+    :return: Yields while the allocator lock is held
+    """
+    _integration_test_port_lock_file.touch(exist_ok=True)
+    with _integration_test_port_lock_file.open(
+        "r", encoding="utf-8"
+    ) as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def get_next_integration_test_port_candidate() -> int:
+    """
+    Read the next shared integration-test port candidate.
+
+    :return: Next candidate port from the shared counter
+    """
+    if not _integration_test_port_counter_file.exists():
+        return max(_next_integration_test_port, INTEGRATION_TEST_PORT_START)
+
+    counter_value = _integration_test_port_counter_file.read_text(
+        encoding="utf-8"
+    ).strip()
+    return int(counter_value or INTEGRATION_TEST_PORT_START)
+
+
+def set_next_integration_test_port_candidate(next_port: int) -> None:
+    """
+    Persist the next shared integration-test port candidate.
+
+    :param next_port: Next port to hand out
+    :return: None
+    """
+    global _next_integration_test_port
+
+    _next_integration_test_port = next_port
+    _integration_test_port_counter_file.write_text(
+        str(next_port), encoding="utf-8"
+    )
+
+
+def is_integration_test_port_available(port: int) -> bool:
+    """
+    Check whether a TCP port is currently available on localhost.
+
+    :param port: TCP port to probe
+    :return: True when the port can be bound, otherwise False
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+
+    return True
+
+
+def find_available_integration_test_port(start_port: int) -> int:
+    """
+    Find the next available integration-test port in the configured range.
+
+    :param start_port: Port number to start scanning from
+    :return: First available TCP port in the integration-test range
+    :raises RuntimeError: When the configured integration-test range is exhausted
+    """
+    for candidate in range(start_port, INTEGRATION_TEST_PORT_END + 1):
+        if is_integration_test_port_available(candidate):
+            return candidate
+
+    raise RuntimeError(
+        "No free integration test ports remain in the 65000-65535 range."
+    )
+
+
+def get_available_integration_test_port() -> int:
+    """
+    Return a free TCP port reserved from the integration test range.
+
+    The allocator walks ports from 65000 upwards and verifies each candidate
+    by binding to it before returning it. Allocation is synchronized across
+    pytest-xdist workers through a shared lock file and counter file.
+
+    :return: Available TCP port for an integration test
+    :raises RuntimeError: When the configured integration test port range is exhausted
+    """
+    with _port_lock:
+        with integration_test_port_file_lock():
+            candidate = get_next_integration_test_port_candidate()
+            port = find_available_integration_test_port(candidate)
+            set_next_integration_test_port_candidate(port + 1)
+            return port
+
+
+def allocate_integration_test_port(test_name: str, port_label: str) -> int:
+    """
+    Allocate and announce a free TCP port for an integration test.
+
+    :param test_name: Pytest node id or other human-readable test identifier
+    :param port_label: Label describing how the port will be used
+    :return: Allocated TCP port
+    """
+    port = get_available_integration_test_port()
+    print(f"[integration-test] {test_name} using {port_label} port {port}")
+    return port
+
+
+def start_test_redis_server(redis_port: int) -> None:
+    """
+    Ensure a Redis server is running for an integration test.
+
+    :param redis_port: Redis port required by the integration test
+    :return: None
+    """
+    client = redis.StrictRedis(host="localhost", port=redis_port, db=0)
+    try:
+        client.ping()
+        return
+    except redis.exceptions.ConnectionError:
+        pass
+    finally:
+        client.connection_pool.disconnect()
+
+    if shutil.which("redis-server") is None:
+        import pytest
+
+        pytest.skip("Missing integration runtime dependencies: redis-server")
+
+    subprocess.check_call(
+        ["redis-server", "--port", str(redis_port), "--daemonize", "yes"]
+    )
+
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        client = redis.StrictRedis(host="localhost", port=redis_port, db=0)
+        try:
+            client.ping()
+            return
+        except redis.exceptions.ConnectionError:
+            time.sleep(0.1)
+        finally:
+            client.connection_pool.disconnect()
+
+    raise RuntimeError(
+        f"Redis server did not become ready on integration test port {redis_port}."
+    )
+
+
+def close_test_redis_server(redis_port: int) -> bool:
+    """
+    Flush and stop the Redis server used by an integration test.
+
+    :param redis_port: Redis port used by the test
+    :return: True when a Redis server was reached and shutdown was attempted
+    """
+    client = redis.StrictRedis(host="localhost", port=redis_port, db=0)
+    try:
+        client.ping()
+    except redis.exceptions.ConnectionError:
+        return False
+
+    try:
+        client.flushall()
+        client.flushdb()
+        client.script_flush()
+        client.shutdown(save=False)
+    except redis.exceptions.ConnectionError:
+        return True
+    finally:
+        client.connection_pool.disconnect()
+
+    return True
 
 
 def get_slips_test_command(arguments):

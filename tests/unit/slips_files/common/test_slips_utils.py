@@ -129,6 +129,27 @@ def test_sanitize(input_string, expected_output):
     assert utils.sanitize(input_string) == expected_output
 
 
+def test_get_ip_identification_as_str_skips_timestamp():
+    utils = ModuleFactory().create_utils_obj()
+    ip_identification = {
+        "DNS_resolution": ["example.com"],
+        "SNI": "service.example.com",
+        "13.0.0.0/8": {
+            "AS": "Example ASN",
+            "timestamp": 1775911069.6800127,
+        },
+        "timestamp": 1775911069.6800127,
+    }
+
+    result = utils.get_ip_identification_as_str(ip_identification)
+
+    assert result == (
+        "example.com, SNI: service.example.com, 13.0.0.0/8: "
+        "AS: Example ASN, , "
+    )
+    assert "timestamp" not in result
+
+
 @pytest.mark.parametrize(
     "ip, expected_val",
     [
@@ -210,6 +231,22 @@ def test_get_first_octet(ip_address, expected_first_octet):
 def test_calculate_confidence(input_value, expected_output):
     utils = ModuleFactory().create_utils_obj()
     assert utils.calculate_confidence(input_value) == expected_output
+
+
+@pytest.mark.parametrize(
+    "score, expected_output",
+    [
+        (0.80, "High"),
+        (0.95, "High"),
+        (0.55, "Medium"),
+        (0.79, "Medium"),
+        (0.54, "low"),
+        (0.0, "low"),
+    ],
+)
+def test_evidence_confidence_to_string(score, expected_output):
+    utils = ModuleFactory().create_utils_obj()
+    assert utils.evidence_confidence_to_string(score) == expected_output
 
 
 @pytest.mark.parametrize(

@@ -689,7 +689,7 @@ class Main:
                     self.print("SIGTERM received, shutting down slips.")
                     self.print(
                         "SIGTERM received, likely due to "
-                        "out of memory errors. Slips is stopping "
+                        "OOM kill. Slips is stopping "
                         "without completing the analysis.",
                         0,
                         1,

@@ -134,6 +134,20 @@ class Utils(object):
                 return str_lvl
 
     @staticmethod
+    def evidence_confidence_to_string(score: float) -> str:
+        """
+        Convert an evidence confidence score to a string label.
+
+        :param score: Evidence confidence score between 0 and 1.
+        :return: "high", "medium", or "low" based on the score.
+        """
+        if score >= 0.80:
+            return "High"
+        if score >= 0.55:
+            return "Medium"
+        return "low"
+
+    @staticmethod
     def log10(n: int) -> int:
         if n <= 0:
             return 0
@@ -872,6 +886,9 @@ class Utils(object):
             ip_identification.pop("DNS_resolution")
 
         for key, piece_of_info in ip_identification.items():
+            if key == "timestamp":
+                continue
+
             if not piece_of_info:
                 continue
 

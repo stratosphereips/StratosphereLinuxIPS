@@ -151,6 +151,9 @@ class ModuleFactory:
         from modules.fides.fides import FidesModule
 
         db_path = os.path.join("permanent", "databases", "fides_p2p_db.sqlite")
+        config_path = os.path.join(
+            "modules", "fides", "config", "fides.conf.yml"
+        )
 
         def get_permanent_database_path(_filename):
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -159,6 +162,8 @@ class ModuleFactory:
         mock_db.return_value.get_permanent_database_path.side_effect = (
             get_permanent_database_path
         )
+        conf = Mock()
+        conf.read_configuration = Mock(return_value=config_path)
 
         fm = FidesModule(
             logger=self.logger,
@@ -166,7 +171,7 @@ class ModuleFactory:
             redis_port=6379,
             termination_event=Mock(),
             slips_args=Mock(),
-            conf=Mock(),
+            conf=conf,
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
@@ -974,11 +979,36 @@ class ModuleFactory:
     def create_evidence_loggr_obj(self):
         from slips_files.core.evidence_logger import EvidenceLogger
 
-        handler = EvidenceLogger(
-            logger_stop_signal=Mock(),
-            evidence_logger_q=Mock(),
-            output_dir="/tmp",
-        )
+        conf = Mock()
+        conf.get_GID = Mock(return_value=0)
+        conf.get_UID = Mock(return_value=0)
+        conf.generate_performance_plots = Mock(return_value=False)
+
+        logfile = Mock()
+        logfile.name = "alerts.log"
+        jsonfile = Mock()
+        jsonfile.name = "alerts.json"
+
+        with (
+            patch(
+                "slips_files.core.evidence_logger.ConfigParser",
+                return_value=conf,
+            ),
+            patch(
+                "slips_files.core.evidence_logger."
+                "utils.change_logfiles_ownership"
+            ),
+            patch.object(
+                EvidenceLogger,
+                "clean_file",
+                side_effect=[logfile, jsonfile],
+            ),
+        ):
+            handler = EvidenceLogger(
+                logger_stop_signal=Mock(),
+                evidence_logger_q=Mock(),
+                output_dir="/tmp",
+            )
         return handler
 
     @patch(MODULE_DB_MANAGER, name="mock_db")

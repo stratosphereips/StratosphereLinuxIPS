@@ -6,6 +6,7 @@ from modules.fides.messaging.message_handler import MessageHandler
 from modules.fides.messaging.network_bridge import NetworkMessage
 from modules.fides.model.aliases import PeerId, Target
 from modules.fides.model.threat_intelligence import ThreatIntelligence
+from slips_files.common.slips_utils import utils
 
 
 @pytest.fixture
@@ -25,7 +26,7 @@ def mock_handler():
 
 def test_initialization(network_bridge, mock_queue):
     assert network_bridge._NetworkBridge__queue == mock_queue
-    assert network_bridge.version == 1
+    assert network_bridge.version == utils.get_current_version()
 
 
 def test_listen_success(network_bridge, mock_handler, mock_queue):
@@ -36,7 +37,11 @@ def test_listen_success(network_bridge, mock_handler, mock_queue):
 
     mock_queue.listen.assert_called_once()
     # Simulate a valid message being received
-    message = '{"type": "test", "version": 1, "data": {}}'
+    message = (
+        '{"type": "test", '
+        f'"version": "{utils.get_current_version()}", '
+        '"data": {}}'
+    )
     callback = mock_queue.listen.call_args[0][0]
     callback(message)
 
@@ -83,5 +88,9 @@ def test_send_exception_handling(network_bridge, mock_queue):
     mock_queue.send = MagicMock(side_effect=Exception("send failed"))
     with pytest.raises(Exception, match="send failed"):
         network_bridge._NetworkBridge__send(
-            NetworkMessage(type="test", version=1, data={})
+            NetworkMessage(
+                type="test",
+                version=utils.get_current_version(),
+                data={},
+            )
         )

@@ -254,7 +254,9 @@ class ArgumentParser(argparse.ArgumentParser):
             "--multiinstance",
             action="store_true",
             required=False,
-            help="Run multiple instances of slips, don't overwrite the old one",
+            help="Run multiple instances of slips, don't overwrite the old "
+            "one. This option run redis using a random unused port "
+            "instead of the default one (6379).",
         )
         self.add_argument(
             "-P",
