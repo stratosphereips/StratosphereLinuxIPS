@@ -4,6 +4,7 @@
 
 from tests.module_factory import ModuleFactory
 import pytest
+import dns.resolver
 from unittest.mock import Mock, patch, call
 import time
 import json
@@ -82,6 +83,14 @@ def test_cache_ip_range(ip_address, expected_whois_info, expected_cached_data):
         mock_lookup_rdap.return_value = expected_whois_info
         result = asn_info.cache_ip_range(ip_address)
         assert result == expected_cached_data
+
+
+def test_cache_ip_range_without_resolver_configuration():
+    asn_info = ModuleFactory().create_asn_obj()
+
+    with patch("ipwhois.IPWhois.lookup_rdap") as mock_lookup_rdap:
+        mock_lookup_rdap.side_effect = dns.resolver.NoResolverConfiguration
+        assert asn_info.cache_ip_range("8.8.8.8") is False
 
 
 @pytest.mark.parametrize(
