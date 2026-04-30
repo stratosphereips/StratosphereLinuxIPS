@@ -1,5 +1,4 @@
 import json
-import threading
 from dataclasses import is_dataclass, asdict
 from typing import Optional, List, Callable
 
@@ -15,7 +14,7 @@ LoggerPrintCallbacks: List[
 ]
 
 # Set this to custom callback that should be executed when there's new log message.
-# First parameter is level ('DEBUG', 'INFO', 'WARN', 'ERROR'), second is message to be logged.
+# First parameter is message, second is level ('DEBUG', 'INFO', 'WARN', 'ERROR')
 
 
 class Logger:
@@ -54,20 +53,23 @@ class Logger:
         return name
 
     def debug(self, message: str, params=None):
-        return self.__print("DEBUG", message)
+        return self.__print("DEBUG", message, params)
 
     def info(self, message: str, params=None):
-        return self.__print("INFO", message)
+        return self.__print("INFO", message, params)
 
+    def warning(self, message: str, params=None):
+        return self.__print("WARN", message, params)
+
+    # keep for backward compatibility
     def warn(self, message: str, params=None):
-        return self.__print("WARN", message)
+        return self.warning(message, params)
 
     def error(self, message: str, params=None):
-        return self.__print("ERROR", message)
+        return self.__print("ERROR", message, params)
 
     def __format(self, message: str, params=None):
-        thread = threading.get_ident()
-        formatted_message = f"T{thread}: {self.__name} -  {message}"
+        formatted_message = f"{self.__name} - {message}"
         if params:
             params = asdict(params) if is_dataclass(params) else params
             formatted_message = f"{formatted_message} {json.dumps(params)}"
@@ -81,6 +83,4 @@ class Logger:
                     formatted_message, verbose=0
                 )  # automatically verbose = 1 - print, debug = 0 - do not print
             else:
-                print_callback(
-                    formatted_message, verbose=self.log_levels[level]
-                )
+                print_callback(formatted_message, debug=1)
