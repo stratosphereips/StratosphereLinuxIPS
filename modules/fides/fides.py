@@ -52,7 +52,8 @@ class FidesModule(IModule):
         LoggerPrintCallbacks.append(self.print)
 
         # load trust model configuration
-        config_path = self._get_fides_config_path()
+        current_dir = Path(__file__).resolve().parent
+        config_path = current_dir / "config" / "fides.conf.yml"
         self.__trust_model_config = load_configuration(config_path.__str__())
 
         # prepare variables for global protocols
@@ -67,24 +68,6 @@ class FidesModule(IModule):
             self.logger,
             get_this_filepath_inside_permanent_dir(db_name),
         )
-
-    def _get_fides_config_path(self) -> Path:
-        """
-        Get the Fides trust-model configuration path for this Slips run.
-
-        Returns:
-            Path: Relative or absolute path to the Fides configuration file.
-        """
-        current_dir = Path(__file__).resolve().parent
-        default_config_path = current_dir / "config" / "fides.conf.yml"
-
-        conf = ConfigParser()
-        configured_path = conf.read_configuration(
-            "global_p2p",
-            "fides_conf",
-            str(default_config_path),
-        )
-        return Path(configured_path)
 
     def subscribe_to_channels(self):
         self.f2n = self.db.subscribe("fides2network")
