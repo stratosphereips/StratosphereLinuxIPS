@@ -81,9 +81,17 @@ class ThreatIntelligenceProtocol(Protocol):
         self, responses: List[PeerIntelligenceResponse]
     ):
         """Handles intelligence responses."""
-        trust_matrix = self._trust_db.get_peers_trust_data(
-            [r.sender.id for r in responses]
-        )
+        trust_matrix = {}
+        for response in responses:
+            peer_trust = self._trust_db.get_peer_trust_data(response.sender.id)
+            if peer_trust is None:
+                peer_trust = (
+                    self.__trust_protocol.determine_and_store_initial_trust(
+                        response.sender
+                    )
+                )
+            trust_matrix[response.sender.id] = peer_trust
+
         assert len(trust_matrix) == len(
             responses
         ), "We need to have trust data for all peers that sent the response."

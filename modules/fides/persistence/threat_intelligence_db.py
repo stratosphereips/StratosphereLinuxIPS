@@ -33,7 +33,12 @@ class SlipsThreatIntelligenceDatabase(ThreatIntelligenceDatabase):
         out = self.db.get_fides_ti(target)  # returns str containing dumped
         # dict of STI or None
         if out:
-            out = SlipsThreatIntelligence(**json.loads(out))
+            try:
+                out = SlipsThreatIntelligence(**json.loads(out))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                out = self.sqldb.get_slips_threat_intelligence_by_target(
+                    target
+                )
         else:
             out = self.sqldb.get_slips_threat_intelligence_by_target(target)
         return out

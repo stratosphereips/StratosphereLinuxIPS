@@ -75,10 +75,14 @@ def modify_yaml_config(
 
     if changes:
         for key, value in changes.items():
-            key: str
-            value: dict
-            if key in config:
+            if (
+                key in config
+                and isinstance(config[key], dict)
+                and isinstance(value, dict)
+            ):
                 config[key].update(value)
+            else:
+                config[key] = value
 
     with output_file.open("w", encoding="utf-8") as f:
         yaml.dump(config, f, default_flow_style=False, allow_unicode=True)

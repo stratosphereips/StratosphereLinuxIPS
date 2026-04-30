@@ -120,7 +120,7 @@ class SlipsTrustDatabase(TrustDatabase):
 
         td_json = self.db.get_peer_trust_data(peer_id)
         if td_json:  # Redis has available data
-            out = PeerTrustData(**json.loads(td_json))
+            out = PeerTrustData.from_dict(json.loads(td_json))
         else:  # if redis is empty, try SQLite
             out = self.sqldb.get_peer_trust_data(peer_id)
         return out
@@ -130,7 +130,6 @@ class SlipsTrustDatabase(TrustDatabase):
     ) -> TrustMatrix:
         """Return trust data for each peer from peer_ids."""
         out = {}
-        peer_id = None
 
         for peer in peer_ids:
             # get PeerID to properly create TrustMatrix
@@ -138,9 +137,13 @@ class SlipsTrustDatabase(TrustDatabase):
                 peer_id = peer
             elif isinstance(peer, PeerInfo):
                 peer_id = peer.id
+            else:
+                continue
 
             # TrustMatrix = Dict[PeerId, PeerTrustData]; here - peer_id: PeerId
-            out[peer_id] = self.get_peer_trust_data(peer_id)
+            trust_data = self.get_peer_trust_data(peer_id)
+            if trust_data is not None:
+                out[peer_id] = trust_data
         return out
 
     def cache_network_opinion(self, ti: SlipsThreatIntelligence):

@@ -72,7 +72,11 @@ class Logger:
         formatted_message = f"{self.__name} - {message}"
         if params:
             params = asdict(params) if is_dataclass(params) else params
-            formatted_message = f"{formatted_message} {json.dumps(params)}"
+            try:
+                serialized_params = json.dumps(params)
+            except TypeError:
+                serialized_params = json.dumps(str(params))
+            formatted_message = f"{formatted_message} {serialized_params}"
         return formatted_message
 
     def __print(self, level: str, message: str, params=None):

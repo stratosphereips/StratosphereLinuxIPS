@@ -37,20 +37,28 @@ class NetworkBridge:
         """
 
         def message_received(message: str):
+            """this is the callback that executes every new msg"""
             try:
-                # with open("fides_nb.txt", "a") as f:
-                #     f.write(message)
+                with open("/tmp/fides_nb.txt", "a") as f:
+                    f.write(f"message: {message}\n")
+
                 logger.debug("New message received! Trying to parse.")
                 parsed = json.loads(message)
                 network_message = from_dict(
                     data_class=NetworkMessage, data=parsed
                 )
+
+                with open("/tmp/fides_nb.txt", "a") as f:
+                    f.write(f"network_message: {network_message}\n")
+
                 logger.debug("Message parsed. Executing handler.")
                 handler.on_message(network_message)
             except Exception as e:
                 logger.error(
                     f"There was an error processing message, Exception: {e}."
                 )
+                with open("/tmp/fides_nb.txt", "a") as f:
+                    f.write(f"there was an error processing message | {e}\n")
                 handler.on_error(message, e)
 
         logger.debug("Starts listening...")
