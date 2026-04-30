@@ -325,6 +325,8 @@ class IPInfo(AsyncModule):
             self.db.set_info_for_domains(domain, {"Org": sld_res.registrant})
 
     async def shutdown_gracefully(self):
+        self.pending_mac_queries.cancel_join_thread()
+        self.pending_mac_queries.close()
         if hasattr(self, "asn_db"):
             self.asn_db.close()
         if hasattr(self, "country_db"):
