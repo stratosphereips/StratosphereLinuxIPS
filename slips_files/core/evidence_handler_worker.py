@@ -405,6 +405,22 @@ class EvidenceHandlerWorker(IModule):
     def should_stop(self) -> bool:
         return False
 
+    def shutdown_gracefully(self):
+        """
+        Release queue handles so the worker does not hang during process
+        finalization while waiting on queue feeder threads.
+        """
+        for q in (self.evidence_queue, self.evidence_logger_q):
+            try:
+                q.cancel_join_thread()
+            except (AttributeError, OSError, ValueError):
+                pass
+
+            try:
+                q.close()
+            except (AttributeError, OSError, ValueError):
+                pass
+
     def handle_evidence_added_message(self, msg: dict):
         evidence = json.loads(msg["data"])
         try:
