@@ -244,9 +244,63 @@ def test_is_running(pid, lock_side_effect, expected_result):
     daemon = ModuleFactory().create_daemon_object()
     daemon.pid = pid
 
-    with patch("exclusiveprocess.Lock") as mock_lock:
+    with patch.object(daemon, "is_pid_running", return_value=bool(pid)), patch(
+        "exclusiveprocess.Lock"
+    ) as mock_lock:
         mock_lock.return_value.__enter__.side_effect = lock_side_effect
 
         result = daemon._is_running()
 
     assert result == expected_result
+
+
+@pytest.mark.parametrize(
+    "pid, expected_result",
+    [
+        (12345, True),
+        (None, False),
+    ],
+)
+def test_is_pid_running(pid, expected_result):
+    daemon = ModuleFactory().create_daemon_object()
+    daemon.pid = pid
+
+    with patch("os.kill") as mock_kill:
+        result = daemon.is_pid_running()
+
+    assert result == expected_result
+    if expected_result:
+        mock_kill.assert_called_once_with(pid, 0)
+    else:
+        mock_kill.assert_not_called()
+
+
+def test_is_running_removes_stale_pidfile():
+    daemon = ModuleFactory().create_daemon_object()
+    daemon.pid = 12345
+
+    with patch.object(
+        daemon, "is_pid_running", return_value=False
+    ), patch.object(daemon, "delete_pidfile") as mock_delete_pidfile:
+        result = daemon._is_running()
+
+    assert result is False
+    mock_delete_pidfile.assert_called_once()
+
+
+def test_start_updates_slips_pid():
+    daemon = ModuleFactory().create_daemon_object()
+    daemon.pid = None
+
+    def mock_daemonize():
+        daemon.pid = "23456"
+
+    with patch.object(
+        daemon, "daemonize", side_effect=mock_daemonize
+    ), patch.object(daemon, "print"), patch("builtins.print"), patch(
+        "os.getpid", return_value=23456
+    ):
+        daemon.start()
+
+    assert daemon.slips.pid == 23456
+    daemon.slips.start.assert_called_once()
