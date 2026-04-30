@@ -93,15 +93,9 @@ class FlowAlerts(AsyncModule):
             for analyzer in analyzers:
                 # some analyzers are async functions
                 if inspect.iscoroutinefunction(analyzer.analyze):
-                    # analyzer will run normally, until it finishes.
-                    # tasks inside this analyzer will run asynchrously,
-                    # and finish whenever they finish, we'll not wait for them
-                    loop = asyncio.get_event_loop()
-                    task = loop.create_task(analyzer.analyze(msg))
-                    # because Async Tasks swallow exceptions.
-                    task.add_done_callback(self.handle_task_exception)
-                    # to wait for these functions before flow_alerts shuts down
-                    self.tasks.append(task)
+                    # Track async analyzer tasks through create_task so
+                    # completed tasks are removed from self.tasks.
+                    self.create_task(analyzer.analyze, msg)
                     # Allow the event loop to run the scheduled task
                     await asyncio.sleep(0)
                 else:
