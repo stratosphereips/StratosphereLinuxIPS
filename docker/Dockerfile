@@ -62,7 +62,7 @@ RUN  pip3 install --no-cache-dir --upgrade pip \
     && chmod 774 slips.py \
     && git init \
     && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
-    && cd ../../p2p4slips \
+    && cd p2p4slips \
     && go build
 
 ENV PATH="$PATH:/StratosphereLinuxIPS/p2p4slips/"
