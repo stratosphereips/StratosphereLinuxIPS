@@ -503,9 +503,6 @@ def test_trust_recommendation_response(
 
     # assert db.get_msgs_received_at_runtime("fides")["fides2network"] == "1"
     print("Checking Fides' data outlets")
-    print(
-        f"@@@@@@@@@@@@@@@@ {fdb.get_peer_trust_data("peer1").service_history}"
-    )
 
     assert fdb.get_peer_trust_data("peer1").service_history != []
     assert fdb.get_peer_trust_data("peer2").service_history != []
