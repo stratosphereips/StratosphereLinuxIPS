@@ -151,6 +151,9 @@ class ModuleFactory:
         from modules.fides.fides import FidesModule
 
         db_path = os.path.join("permanent", "databases", "fides_p2p_db.sqlite")
+        config_path = os.path.join(
+            "modules", "fides", "config", "fides.conf.yml"
+        )
 
         def get_permanent_database_path(_filename):
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -159,6 +162,8 @@ class ModuleFactory:
         mock_db.return_value.get_permanent_database_path.side_effect = (
             get_permanent_database_path
         )
+        conf = Mock()
+        conf.read_configuration = Mock(return_value=config_path)
 
         fm = FidesModule(
             logger=self.logger,
@@ -166,7 +171,7 @@ class ModuleFactory:
             redis_port=6379,
             termination_event=Mock(),
             slips_args=Mock(),
-            conf=Mock(),
+            conf=conf,
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
