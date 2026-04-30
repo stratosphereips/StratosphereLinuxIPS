@@ -1,8 +1,7 @@
 ### Fine-Tuning Frameworks for GGUF Deployment on Raspberry Pi 5
 
-**Keywords:** Local Inference, GGUF Format, Raspberry Pi 5
 
-**TL;DR:** Among the evaluated frameworks, Unsloth stands out as the best fit due to its integrated GGUF export capabilities, minimal workflow complexity, and hardware-optimized quantization support, aligning perfectly with the IMMUNE project's goals and the Raspberry Pi 5’s limitations.
+**Summary:** Among the evaluated frameworks, Unsloth stands out as the best fit due to its integrated GGUF export capabilities, minimal workflow complexity, and hardware-optimized quantization support, aligning perfectly with the IMMUNE project's goals and the Raspberry Pi 5’s limitations.
 
 
 ### Index

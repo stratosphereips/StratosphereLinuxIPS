@@ -21,8 +21,8 @@ class InterfaceInput(IInputHandler):
         """
         runs when slips is given an interface with -i or 2 interfaces with -ap
         """
-        self.input.zeek_utils.ensure_zeek_dir()
-        self.input.print(f"Storing zeek log files in {self.input.zeek_dir}")
+        zeek_dir: str = self.input.zeek_utils.create_zeek_output_dir()
+        self.input.print(f"Storing zeek log files in {zeek_dir}")
         if self.input.is_running_non_stop:
             self.file_remover.start()
 
@@ -35,7 +35,7 @@ class InterfaceInput(IInputHandler):
             interfaces_to_monitor.update(
                 {
                     self.input.args.interface: {
-                        "dir": self.input.zeek_dir,
+                        "dir": zeek_dir,
                         "type": "main_interface",
                     }
                 }
@@ -46,9 +46,7 @@ class InterfaceInput(IInputHandler):
             # interfaces, wifi and eth.
             for _type, interface in self.db.get_ap_info().items():
                 # _type can be 'wifi_interface' or "ethernet_interface"
-                dir_to_store_interface_logs = os.path.join(
-                    self.input.zeek_dir, interface
-                )
+                dir_to_store_interface_logs = os.path.join(zeek_dir, interface)
                 interfaces_to_monitor.update(
                     {
                         interface: {
@@ -57,6 +55,7 @@ class InterfaceInput(IInputHandler):
                         }
                     }
                 )
+
         for interface, interface_info in interfaces_to_monitor.items():
             interface_dir = interface_info["dir"]
             if not os.path.exists(interface_dir):

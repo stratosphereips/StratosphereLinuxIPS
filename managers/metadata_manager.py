@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
-import subprocess
-
 # SPDX-License-Identifier: GPL-2.0-only
+import subprocess
 import psutil
 import sys
 import os
@@ -121,8 +120,9 @@ class MetadataManager:
         if self.main.args.interface:
             info.update({"interface": self.main.args.interface})
 
-        if hasattr(self.main, "zeek_dir"):
-            info.update({"zeek_dir": self.main.zeek_dir})
+        zeek_dir = self.main.db.get_zeek_output_dir()
+        if isinstance(zeek_dir, str) and zeek_dir:
+            info.update({"zeek_dir": zeek_dir})
 
         if hasattr(self.main, "zeek_bro") and self.main.zeek_bro:
             info.update({"zeek_version": self.get_zeek_version()})

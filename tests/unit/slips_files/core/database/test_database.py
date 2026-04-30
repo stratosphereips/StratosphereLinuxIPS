@@ -10,6 +10,7 @@ import json
 import os
 
 from slips_files.core.flows.zeek import Conn
+from slips_files.core.database.database_manager import DBManager
 from slips_files.core.database.redis_db.database import RedisDB
 from tests.module_factory import ModuleFactory
 
@@ -146,11 +147,14 @@ def test_add_mac_addr_with_ipv6_association():
 
 def test_get_the_other_ip_version():
     db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
-    # profileid is ipv4
+    profileid_ipv4 = "profile_192.168.250.250"
     ipv6 = "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
-    db.set_ipv6_of_profile(profileid, ipv6)
-    # the other ip version is ipv6
-    other_ip = json.loads(db.get_the_other_ip_version(profileid))
+
+    db.rdb.get_the_other_ip_version = Mock(return_value=ipv6)
+
+    other_ip = db.get_the_other_ip_version(profileid_ipv4)
+
+    db.rdb.get_the_other_ip_version.assert_called_once_with(profileid_ipv4)
     assert other_ip == ipv6
 
 
@@ -163,20 +167,37 @@ def test_setup_config_file_uses_isolated_path_and_preserves_save(
     )
 
     monkeypatch.setattr(RedisDB, "_conf_file_template", str(template))
-    monkeypatch.setattr(RedisDB, "output_dir", tmp_path)
-    monkeypatch.setattr(RedisDB, "redis_port", 6379)
-    monkeypatch.setattr(RedisDB, "args", Mock(save=False))
+    monkeypatch.setattr(RedisDB, "output_dir", tmp_path, raising=False)
+    monkeypatch.setattr(RedisDB, "redis_port", 6379, raising=False)
+    monkeypatch.setattr(RedisDB, "args", Mock(save=False), raising=False)
 
     RedisDB._setup_config_file()
 
     expected_conf = (
-        tmp_path / f"redis-server-port-{RedisDB.redis_port}-{os.getpid()}.conf"
+        tmp_path / "redis" / f"redis-server-port-{RedisDB.redis_port}.conf"
     )
     assert RedisDB._conf_file == str(expected_conf)
 
     conf_contents = expected_conf.read_text(encoding="utf-8").splitlines()
     assert 'save ""' in conf_contents
     assert (
-        f"logfile {tmp_path / f'redis-server-port-{RedisDB.redis_port}.log'}"
+        f"logfile {tmp_path / 'redis' / f'redis-server-port-{RedisDB.redis_port}.log'}"
         in conf_contents
     )
+
+
+def test_init_p2p_trust_db_uses_permanent_dir(tmp_path, monkeypatch):
+    db = ModuleFactory().create_db_manager_obj(6379)
+    monkeypatch.chdir(tmp_path)
+    db.init_p2p_trust_db = DBManager.init_p2p_trust_db.__get__(db, DBManager)
+    monkeypatch.setattr(
+        "slips_files.core.database.database_manager.get_this_filepath_inside_permanent_dir",
+        lambda filename: os.path.join("persistent_state", filename),
+    )
+
+    db_path = db.init_p2p_trust_db()
+
+    assert db_path == os.path.join(
+        "persistent_state", "p2p_trust_runtime", "trustdb.db"
+    )
+    assert os.path.isdir(os.path.join("persistent_state", "p2p_trust_runtime"))

@@ -112,7 +112,7 @@ development of new trust models and modelling behavior of the P2P network.
 
 To use the experiments, clone
 the https://github.com/stratosphereips/p2p4slips-experiments repository into
-`modules/p2ptrust/testing/experiments`.
+`modules/p2p_trust/testing/experiments`.
 
 The experiments run independently (outside of Slips) and start all processes that are needed, including relevant parts
 of Slips.
@@ -147,6 +147,8 @@ The network then replies with a score and confidence for the IP. The higher the 
 
 Once we get the score of the IP, we store it in the database,
 and we alert if the score of this IP is more than 0 (threat level=info).
+
+The persistent local P2P runtime directory is stored under the directory configured by ```parameters.permanent_dir``` in ```config/slips.yaml```. By default, this is ```permanent/p2p_trust_runtime/```.
 
 
 ### Answering the network's request about an IP

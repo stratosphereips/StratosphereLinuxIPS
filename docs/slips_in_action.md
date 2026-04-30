@@ -31,7 +31,7 @@ First, Slips will start by updating all the remote TI feeds added in slips.yaml
 
 To make sure Slips is up to date with the most recent IoCs in all feeds,
 all feeds are loaded, parsed and updated periodically and automatically by
-Slips every 24 hours by our [Update Manager](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#update-manager-module), which requires no user interaction.
+Slips every 24 hours by our [update_manager](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#update-manager-module), which requires no user interaction.
 
 
 Afetr updating, slips modules start and print the PID of every successfully started module.
@@ -48,22 +48,22 @@ Slips splits does detections in timewindows, each time window is 1 hour long by 
 So if an IP behaves maliciously at 4 PM, it will be marked as infected only during that hour, the next hour if no malicious behaviour occurs, slips will treat the traffic as normal.
 This explains the start and stop timestamps in the alert `start 2021-04-10T16:44:43.285478+02:00, stop 2021-04-10T17:44:43.285478+0200`. This is the period (timewindow) in which this IP was behaving maliciously.
 
-The difference between infected and normal timewindows is shown better in [kalispo](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#reading-the-output),  our user interface.
+The difference between infected and normal timewindows is shown better in the web interface.
 
-You can start it in another terminal using `./kalipso.sh`
+You can inspect the results in another terminal using `./webinterface.sh`
 
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/kalispo_infected_tw.png" title="Kalipso infected timewindow">
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" title="Slips web interface">
 <p> Figure 3 </p>
 
 We can see that IP 2001:718:2:903:b877:48ae:9531:fbfc is infected only in timewindow1 as it's marked in red and is behaving normally in timewindow0 as it's colored in green.
 
-We can see all the flows done by this IP in the infected timewindow in kalipso by pressing enter on timewindow1.
+We can see all the flows done by this IP in the infected timewindow in the web interface by opening timewindow1.
 
 
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/expanding_infected_timewindow.png" title="Kalipso expanding infected timewindow">
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/expanding_infected_timewindow.png" title="Expanding infected timewindow">
 
 
-At the bottom box in kalipso we can scroll though the evidence and se what slips detected, this is the same evidence printed in Figure 3.
+In the interface evidence view we can inspect what slips detected, this is the same evidence printed in Figure 3.
 
 We can see the following detections in the evidence:
 

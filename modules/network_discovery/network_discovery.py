@@ -26,7 +26,7 @@ class NetworkDiscovery(IModule):
     This should be converted into a module that wakesup alone when a new alert arrives
     """
 
-    name = "Network Discovery"
+    name = "network_discovery"
     description = "Detect Horizonal, Vertical, and DHCP Scans."
     authors = ["Sebastian Garcia", "Alya Gomaa"]
 
@@ -244,5 +244,5 @@ class NetworkDiscovery(IModule):
             self.check_dhcp_scan(profileid, twid, flow)
 
         if msg := self.get_msg("tw_closed"):
-            profileid_tw: List[str] = msg["data"].split("_")
+            profileid_tw: List[str] = utils.get_msg_payload(msg).split("_")
             self.cleanup_cache_dicts(profileid_tw)

@@ -53,7 +53,7 @@ class ProfileHandler:
     _is_gw_mac: Callable[..., Any]
     _last_sit: Callable[..., Any]
 
-    name = "DB"
+    name = "profile_handler_db"
 
     def set_profileid_field(self, profileid, field, value, pipe=None):
         """Set a single field in the profileid hash."""
@@ -1146,17 +1146,6 @@ class ProfileHandler:
                 # cleanup/expiring of the past
                 pipe = self.delete_past_timewindows(profile_tw_to_close, pipe)
         pipe.execute()
-
-    def get_current_timewindow(self) -> Optional[str]:
-        """returns the current timewindow if slips is running real-time (
-        not pcap/log files)"""
-        if not self.args.interface:
-            return
-
-        return self.r.get(self.constants.CURRENT_TIMEWINDOW)
-
-    def set_current_timewindow(self, timewindow: str) -> Optional[str]:
-        self.r.set(self.constants.CURRENT_TIMEWINDOW, timewindow)
 
     def mark_profile_tw_as_modified(self, modified_tw_details: dict):
         """

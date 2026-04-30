@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import os
 import sys
-from signal import SIGTERM
+import time
+from signal import SIGKILL, SIGTERM
 from typing import Tuple, Optional
 from exclusiveprocess import (
     Lock,
@@ -16,7 +17,7 @@ from slips_files.core.database.database_manager import DBManager
 
 class Daemon:
     description = "This module runs when slips is in daemonized mode"
-    name = "Daemon"
+    name = "daemon"
 
     def __init__(self, slips):
         # to use read_configurations defined in Main
@@ -42,6 +43,28 @@ class Daemon:
         except (IOError, FileNotFoundError):
             return None
 
+    def is_pid_running(self, pid: Optional[int] = None) -> bool:
+        """
+        Check whether a daemon PID is still running.
+
+        Parameters:
+            pid: PID to validate. Uses the current daemon PID when omitted.
+
+        Returns:
+            True when the PID exists, otherwise False.
+        """
+        pid = self.pid if pid is None else pid
+        if pid is None:
+            return False
+
+        try:
+            os.kill(int(pid), 0)
+        except (ProcessLookupError, TypeError, ValueError):
+            return False
+        except PermissionError:
+            return True
+        return True
+
     def print(self, text, **kwargs):
         """Prints output to logsfile specified in slips.yaml"""
         with open(self.logsfile, "a") as f:
@@ -49,6 +72,8 @@ class Daemon:
 
     def create_std_streams(self):
         """Create standard steam files and dirs and clear them"""
+        if self.slips.args.is_slips_started_by_an_update:
+            return
 
         std_streams = [self.stderr, self.stdout, self.logsfile]
         for file in std_streams:
@@ -73,7 +98,7 @@ class Daemon:
 
     def read_configuration(self):
         conf = ConfigParser()
-        self.logsfile = conf.logsfile()
+        self.logsfile = conf.logs_file()
         self.stdout = conf.stdout()
         self.stderr = conf.stderr()
         # we don't use it anyway
@@ -203,18 +228,23 @@ class Daemon:
         try:
             with Lock(name=self.daemon_start_lock):
                 if self.pid is not None:
-                    to_print = (
-                        f"pidfile {self.pidfile} already exists. "
-                        f"Daemon already running?"
-                    )
-                    # to cli and to log file
-                    self.print(to_print)
-                    print(to_print)
-                    return
+                    if not self.is_pid_running():
+                        self.delete_pidfile()
+                        self.pid = None
+                    else:
+                        to_print = (
+                            f"pidfile {self.pidfile} already exists. "
+                            f"Daemon already running?"
+                        )
+                        # to cli and to log file
+                        self.print(to_print)
+                        print(to_print)
+                        return
 
                 self.print("Daemon starting...")
                 # Starts the daemon
                 self.daemonize()
+                self.slips.pid = os.getpid()
 
                 # any code run after daemonizing will be run inside
                 # the daemon and have the same PID as slips.py
@@ -273,10 +303,16 @@ class Daemon:
         returns true if the daemon lock is released
          and the daemon pidfile is deleted
         """
+        if not self.pid:
+            return False
+
+        if not self.is_pid_running():
+            self.delete_pidfile()
+            return False
+
         try:
             with Lock(name=self.daemon_start_lock):
-                if not self.pid:
-                    return False
+                pass
         except CannotAcquireLock:
             # another instance of slips daemon is running
             pass
@@ -336,9 +372,47 @@ class Daemon:
                 self.slips.db = self.db
                 self.slips.proc_man.slips_logfile = self.logsfile
 
+                deadline = time.time() + 15
+                while time.time() < deadline:
+                    remaining_children = [
+                        pid
+                        for module_name, pid in self.db.get_pids().items()
+                        if "thread" not in module_name.lower()
+                        and self.is_pid_running(pid)
+                    ]
+                    if (
+                        not self.is_pid_running(self.pid)
+                        and not remaining_children
+                    ):
+                        break
+                    time.sleep(1)
+
+                remaining_children = [
+                    pid
+                    for module_name, pid in self.db.get_pids().items()
+                    if "thread" not in module_name.lower()
+                    and self.is_pid_running(pid)
+                ]
+                if remaining_children:
+                    self.slips.proc_man.kill_daemon_children()
+
+                if self.is_pid_running(self.pid):
+                    try:
+                        os.kill(int(self.pid), SIGKILL)
+                    except ProcessLookupError:
+                        pass
+
+                if os.path.exists(self.pidfile):
+                    self.delete_pidfile()
+
+                stopped = not self.is_pid_running(self.pid) and not any(
+                    self.is_pid_running(pid)
+                    for module_name, pid in self.db.get_pids().items()
+                    if "thread" not in module_name.lower()
+                )
                 return {
-                    "stopped": True,
-                    "error": None,
+                    "stopped": stopped,
+                    "error": None if stopped else "Daemon shutdown timed out.",
                 }
         except CannotAcquireLock:
             # another instance of slips daemon is running

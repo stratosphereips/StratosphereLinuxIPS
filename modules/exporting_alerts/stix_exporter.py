@@ -89,9 +89,7 @@ class StixExporter(IExporter):
                         name="stix_exporter_to_taxii_thread",
                     )
         else:
-            self._log_export(
-                f"Export disabled export_to={self.export_to}"
-            )
+            self._log_export(f"Export disabled export_to={self.export_to}")
 
     def start_exporting_thread(self):
         # This thread is responsible for waiting n seconds before
@@ -126,11 +124,7 @@ class StixExporter(IExporter):
         return urljoin(self._base_url(), adjusted)
 
     def _log_export(self, message: str) -> None:
-        timestamp = (
-            datetime.utcnow()
-            .replace(tzinfo=timezone.utc)
-            .isoformat()
-        )
+        timestamp = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
         line = f"{timestamp} {message}\n"
         try:
             with open(self.export_log_path, "a", encoding="utf-8") as log_file:
@@ -148,11 +142,7 @@ class StixExporter(IExporter):
         Falls back to the current working directory if the DB does not
         have an output directory set yet.
         """
-        output_dir = getattr(self.db, "output_dir", None)
-        if not output_dir:
-            output_dir = self.db.get_output_dir()
-        if isinstance(output_dir, bytes):
-            output_dir = output_dir.decode("utf-8")
+        output_dir = self.get_output_path(module_name="exporting_alerts")
         if not output_dir:
             output_dir = os.getcwd()
         output_dir = os.path.abspath(output_dir)
@@ -312,9 +302,7 @@ class StixExporter(IExporter):
                 timeout=self.taxii_timeout,
             )
         except Exception as err:
-            self._log_export(
-                f"Direct export failed: discovery error {err}"
-            )
+            self._log_export(f"Direct export failed: discovery error {err}")
             return None
         if not response.ok:
             self._log_export(
@@ -341,7 +329,9 @@ class StixExporter(IExporter):
             root_url = (
                 root if str(root).startswith("http") else self._build_url(root)
             )
-            collections_url = urljoin(root_url.rstrip("/") + "/", "collections/")
+            collections_url = urljoin(
+                root_url.rstrip("/") + "/", "collections/"
+            )
             try:
                 resp = requests.get(
                     collections_url,
@@ -412,9 +402,7 @@ class StixExporter(IExporter):
         STIX_data.json bundle as a TAXII envelope.
         """
         if self.taxii_version == 1:
-            self._log_export(
-                "Export skipped: TAXII 1 requires direct_export."
-            )
+            self._log_export("Export skipped: TAXII 1 requires direct_export.")
             return False
         if not self.should_export():
             self._log_export("Export skipped: stix not enabled.")
@@ -472,7 +460,9 @@ class StixExporter(IExporter):
         try:
             status = collection.add_objects(envelope)
         except Exception as err:
-            self.print(f"Failed to push bundle to TAXII collection: {err}", 0, 3)
+            self.print(
+                f"Failed to push bundle to TAXII collection: {err}", 0, 3
+            )
             response = getattr(err, "response", None)
             if response is not None:
                 self._log_export(
@@ -527,7 +517,6 @@ class StixExporter(IExporter):
         return "stix" in self.export_to
 
     def read_configuration(self) -> bool:
-        """Reads configuration"""
         conf = ConfigParser()
         # Available options ['slack','stix']
         self.export_to = conf.export_to()
@@ -544,20 +533,22 @@ class StixExporter(IExporter):
         self.collection_name = conf.collection_name()
         self.taxii_username = conf.taxii_username()
         self.taxii_password = conf.taxii_password()
-        self.taxii_version = self._normalize_taxii_version(conf.taxii_version())
+        self.taxii_version = self._normalize_taxii_version(
+            conf.taxii_version()
+        )
         self.taxii_timeout = conf.taxii_timeout()
         self.direct_export = bool(conf.taxii_direct_export())
         self.direct_export_workers = conf.taxii_direct_export_workers()
         self.direct_export_max_workers = conf.taxii_direct_export_max_workers()
         self.direct_export_retry_max = conf.taxii_direct_export_retry_max()
-        self.direct_export_retry_backoff = conf.taxii_direct_export_retry_backoff()
+        self.direct_export_retry_backoff = (
+            conf.taxii_direct_export_retry_backoff()
+        )
         self.direct_export_retry_max_delay = (
             conf.taxii_direct_export_retry_max_delay()
         )
         if self.taxii_version == 1 and not self.direct_export:
-            self._log_export(
-                "TAXII 1 selected; forcing direct_export=true."
-            )
+            self._log_export("TAXII 1 selected; forcing direct_export=true.")
             self.direct_export = True
         # push delay exists -> create a thread that waits
         # push delay doesn't exist -> running using file not interface
@@ -772,7 +763,9 @@ class StixExporter(IExporter):
     def _build_taxii1_package(
         self, evidence: dict, attacker: str, ioc_type: str
     ) -> Optional[str]:
-        properties_xml = self._build_taxii1_cybox_properties(attacker, ioc_type)
+        properties_xml = self._build_taxii1_cybox_properties(
+            attacker, ioc_type
+        )
         if not properties_xml:
             return None
 
@@ -927,11 +920,11 @@ class StixExporter(IExporter):
             )
         except Exception as err:
             self.direct_export_fail += 1
-            self._log_export(f"Direct export failed: TAXII 1 request error {err}")
-            duration = time.time() - start_ts
             self._log_export(
-                f"Direct export duration_seconds={duration:.3f}"
+                f"Direct export failed: TAXII 1 request error {err}"
             )
+            duration = time.time() - start_ts
+            self._log_export(f"Direct export duration_seconds={duration:.3f}")
             return False
 
         if not response.ok or 'status_type="FAILURE"' in response.text:
@@ -941,9 +934,7 @@ class StixExporter(IExporter):
                 f"response={response.text[:2000]}"
             )
             duration = time.time() - start_ts
-            self._log_export(
-                f"Direct export duration_seconds={duration:.3f}"
-            )
+            self._log_export(f"Direct export duration_seconds={duration:.3f}")
             return False
 
         self.direct_export_success += 1
@@ -1042,9 +1033,7 @@ class StixExporter(IExporter):
             self.direct_export_fail += 1
             self._log_export(f"Direct export failed: request error {err}")
             duration = time.time() - start
-            self._log_export(
-                f"Direct export duration_seconds={duration:.3f}"
-            )
+            self._log_export(f"Direct export duration_seconds={duration:.3f}")
             return False
 
         if not response.ok:
@@ -1054,9 +1043,7 @@ class StixExporter(IExporter):
                 f"response={response.text[:2000]}"
             )
             duration = time.time() - start
-            self._log_export(
-                f"Direct export duration_seconds={duration:.3f}"
-            )
+            self._log_export(f"Direct export duration_seconds={duration:.3f}")
             return False
 
         success_count = None
@@ -1074,9 +1061,7 @@ class StixExporter(IExporter):
                 f"Direct export failed: status failures={failure_count}"
             )
             duration = time.time() - start
-            self._log_export(
-                f"Direct export duration_seconds={duration:.3f}"
-            )
+            self._log_export(f"Direct export duration_seconds={duration:.3f}")
             return False
 
         self.direct_export_success += 1
@@ -1098,9 +1083,7 @@ class StixExporter(IExporter):
         self.push_delay seconds when running on an interface only
         """
         if self.direct_export:
-            self._log_export(
-                "Scheduler disabled: direct_export enabled."
-            )
+            self._log_export("Scheduler disabled: direct_export enabled.")
             return
         while True:
             # on an interface, we use the push delay from slips.yaml

@@ -188,18 +188,6 @@ python3 -m pip install --upgrade pip \
 exit_on_cmd_failure
 
 
-# For Kalipso
-print_green "Installing nodejs and npm dependencies"
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | sudo bash - \
-    && export NVM_DIR="$HOME/.nvm" \
-    && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" \
-    && nvm install 22 \
-    && cd modules/kalipso && npm install \
-    && cd ../..
-
-exit_on_cmd_failure
-
-
 print_green "Installing p2p4slips"
 # build the pigeon and Add pigeon to path
 git submodule init && git submodule update && cd p2p4slips && go build && export PATH=$PATH:$(pwd) >> ~/.bashrc && cd ..

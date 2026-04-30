@@ -53,11 +53,18 @@ jobs:
         run: |
           python3 -m pytest tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 3
 
+      - name: Build Artifact Name
+        # otherwise we get numeric names for the artifacts and we dont know which is which
+        id: artifact-name
+        run: |
+          sanitized_test_file="${{ matrix.test_file }}"
+          sanitized_test_file=$(printf '%s\n' "$sanitized_test_file" | tr '/' '_')
+          echo "name=${sanitized_test_file}-integration-output" >> "$GITHUB_OUTPUT"
+
       - name: Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          # Replaces slashes with underscores for valid artifact naming
-          name: ${{ github.run_id }}-${{ strategy.job-index }}-integration-output
+          name: ${{ steps.artifact-name.outputs.name }}
           path: |
-            output/integration
+            output/integration_tests

@@ -10,7 +10,7 @@ def test_interface_input_runs_for_single_interface(tmp_path):
     input_process.args.interface = "eth0"
     input_process.args.access_point = False
     input_process.is_running_non_stop = False
-    input_process.zeek_utils.ensure_zeek_dir = MagicMock()
+    input_process.zeek_utils.create_zeek_output_dir = MagicMock()
     input_process.zeek_utils.init_zeek = MagicMock()
     input_process.zeek_utils.read_zeek_files = MagicMock(return_value=4)
 
@@ -18,7 +18,7 @@ def test_interface_input_runs_for_single_interface(tmp_path):
     with patch("os.path.exists", return_value=True):
         assert handler.run() is True
 
-    input_process.zeek_utils.ensure_zeek_dir.assert_called_once()
+    input_process.zeek_utils.create_zeek_output_dir.assert_called_once()
     input_process.zeek_utils.init_zeek.assert_called_once()
     input_process.zeek_utils.read_zeek_files.assert_called_once()
     assert input_process.lines == 4

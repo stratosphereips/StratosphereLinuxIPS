@@ -32,7 +32,7 @@ IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 
 class EvidenceHandlerWorker(IModule):
-    name = "EvidenceHandlerWorker"
+    name = "evidence_handler_worker"
 
     def init(
         self,
@@ -125,6 +125,9 @@ class EvidenceHandlerWorker(IModule):
                             "uids": evidence.uid,
                             "accumulated_threat_level": accumulated_threat_level,
                             "threat_level": str(evidence.threat_level),
+                            "confidence": utils.evidence_confidence_to_string(
+                                evidence.confidence
+                            ),
                             "timewindow": evidence.timewindow.number,
                         }
                     )
@@ -477,7 +480,7 @@ class EvidenceHandlerWorker(IModule):
         try:
             data = json.loads(data)
         except json.decoder.JSONDecodeError:
-            self.print("Error in the report received from p2ptrust module")
+            self.print("Error in the report received from p2p_trust module")
             return
 
         key = data["key"]

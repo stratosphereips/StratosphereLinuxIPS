@@ -29,7 +29,7 @@ from slips_files.core.structures.evidence import (
 
 class ARP(IModule):
 
-    name = "ARP"
+    name = "arp"
     description = "Detect ARP attacks"
     authors = ["Alya Gomaa"]
 
@@ -566,7 +566,7 @@ class ARP(IModule):
 
         # if the tw is closed, remove all its entries from the cache dict
         if msg := self.get_msg("tw_closed"):
-            profileid_tw = msg["data"]
+            profileid_tw = utils.get_msg_payload(msg)
             # when a tw is closed, this means that it's too
             # old so we don't check for arp scan in this time
             # range anymore

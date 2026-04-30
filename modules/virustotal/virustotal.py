@@ -17,7 +17,7 @@ from slips_files.common.slips_utils import utils
 
 
 class VT(IModule):
-    name = "Virustotal"
+    name = "virustotal"
     description = "IP, domain and file hash lookup on Virustotal"
     authors = [
         "Dita Hollmannova",

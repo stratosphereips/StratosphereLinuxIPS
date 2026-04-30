@@ -202,6 +202,45 @@ def test_add_alert_to_json_log_file(
     )
 
 
+@pytest.mark.parametrize(
+    "confidence, expected_output",
+    [
+        (0.80, "High"),
+        (0.55, "Medium"),
+        (0.54, "low"),
+    ],
+)
+def test_add_evidence_to_json_log_file_maps_confidence_to_string(
+    confidence, expected_output
+):
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    worker.idmefv2.convert_to_idmef_event = Mock(return_value={"ID": "e1"})
+    worker.evidence_logger_q.put = Mock()
+    worker.add_latency_to_csv = Mock()
+    evidence = Evidence(
+        evidence_type=EvidenceType.ARP_SCAN,
+        description="ARP scan detected",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="192.168.1.20",
+        ),
+        threat_level=ThreatLevel.INFO,
+        confidence=confidence,
+        profile=ProfileID("192.168.1.20"),
+        timewindow=TimeWindow(1),
+        uid=["uid1"],
+        timestamp="2024/10/04 15:45:30.123456+0000",
+    )
+
+    worker.add_evidence_to_json_log_file(evidence)
+
+    logged_evidence = worker.evidence_logger_q.put.call_args[0][0]["to_log"]
+    note = logged_evidence["Note"]
+    assert '"confidence":' in note
+    assert f'"confidence": "{expected_output}"' in note
+
+
 def test_show_popup():
     worker = ModuleFactory().create_evidence_handler_worker_obj()
     worker.notify = Mock()

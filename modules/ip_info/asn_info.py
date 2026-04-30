@@ -4,6 +4,7 @@ import time
 import ipaddress
 from typing import Dict
 
+import dns.resolver
 import ipwhois
 import json
 import requests
@@ -127,6 +128,7 @@ class ASN:
             ipwhois.exceptions.ASNRegistryError,
             ipwhois.exceptions.ASNParseError,
             ipwhois.exceptions.HTTPRateLimitError,
+            dns.resolver.NoResolverConfiguration,
         ):
             # private ip or RDAP lookup failed. don't cache
             # or ASN lookup failed with no more methods to try

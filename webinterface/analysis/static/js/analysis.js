@@ -224,9 +224,16 @@ function initProfileTwListeners() {
             }
             if (childRowsProfile != null) {
                 childRowsProfile.every(function ( rowIdx, tableLoop, rowLoop ) {
-                    let profile_id = this.data().profile;
+                    let rowData = this.data();
+                    if (!rowData || !rowData.profile) {
+                        return;
+                    }
+
+                    let profile_id = rowData.profile;
                     let profile_id_dash = convertDotToDash(profile_id)
-                    $("#" + profile_id_dash).DataTable().clear().destroy();
+                    if ($.fn.DataTable.isDataTable("#" + profile_id_dash)) {
+                        $("#" + profile_id_dash).DataTable().clear().destroy();
+                    }
                     this.child(addTableTWs(profile_id_dash)).show();
                     let table_tws = $("#" + profile_id_dash).DataTable(analysisSubTableDefs["tw"]);
                     table_tws.ajax.url('/analysis/tws/' + profile_id).load();
@@ -234,7 +241,12 @@ function initProfileTwListeners() {
                     this.nodes().to$().addClass('shown');
                 });
             }
-            $($(active_tw_id).DataTable().row(active_timewindow_index).node()).addClass('row_selected');
+            if (active_tw_id && $.fn.DataTable.isDataTable(active_tw_id)) {
+                let activeRow = $(active_tw_id).DataTable().row(active_timewindow_index).node();
+                if (activeRow) {
+                    $(activeRow).addClass('row_selected');
+                }
+            }
             childRowsProfile = null;
         });
     });

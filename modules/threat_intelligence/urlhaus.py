@@ -20,7 +20,7 @@ from slips_files.core.structures.evidence import (
 
 
 class URLhaus:
-    name = "URLhaus"
+    name = "urlhaus"
     description = "URLhaus lookups of URLs and hashes"
     authors = ["Alya Gomaa"]
 

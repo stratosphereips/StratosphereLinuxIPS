@@ -37,7 +37,7 @@ class ARPEvidenceFilter:
         return (
             ip in self.our_ips
             and self.args.blocking
-            and "ARP Poisoner" in loaded_modules
+            and "arp_poisoner" in loaded_modules
         )
 
     def is_slips_peer(self, ip: str) -> bool:

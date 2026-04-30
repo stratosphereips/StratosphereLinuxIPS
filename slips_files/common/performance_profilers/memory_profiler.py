@@ -19,6 +19,8 @@ import psutil
 import random
 from abc import ABCMeta
 
+from slips_files.common.slips_utils import utils
+
 
 class MemoryProfiler(IPerformanceProfiler):
     profiler = None
@@ -214,7 +216,7 @@ class LiveMultiprocessProfiler(IPerformanceProfiler):
                 # print(f"Msg {msg}")
                 pid: int = None
                 try:
-                    pid = int(msg["data"])
+                    pid = int(utils.get_msg_payload(msg))
                 except ValueError:
                     msg = self.pid_channel.get_message(timeout=timeout)
                     continue

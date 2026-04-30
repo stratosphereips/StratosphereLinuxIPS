@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import json
 import pytest
 from unittest.mock import Mock, patch
 from managers.process_manager import ProcessManager
@@ -10,7 +11,7 @@ from slips_files.common.input_type import InputType
 
 @pytest.mark.parametrize(
     "input_type, input_information, cli_packet_filter, "
-    "zeek_or_bro, zeek_dir, line_type",
+    "zeek_or_bro, line_type",
     [
         # Test case 1: pcap input
         (
@@ -18,13 +19,12 @@ from slips_files.common.input_type import InputType
             "test.pcap",
             "tcp port 80",
             "zeek",
-            "/opt/zeek",
             "conn",
         ),
         # Test case 2: zeek input
-        (InputType.ZEEK, "test.log", "", "bro", "/opt/bro", "dns"),
+        (InputType.ZEEK, "test.log", "", "bro", "dns"),
         # Test case 3: stdin input
-        (InputType.STDIN, "-", "", "zeek", "/opt/zeek", "http"),
+        (InputType.STDIN, "-", "", "zeek", "http"),
     ],
 )
 def test_start_input_process(
@@ -32,7 +32,6 @@ def test_start_input_process(
     input_information,
     cli_packet_filter,
     zeek_or_bro,
-    zeek_dir,
     line_type,
 ):
     process_manager = ModuleFactory().create_process_manager_obj()
@@ -40,7 +39,6 @@ def test_start_input_process(
     process_manager.main.input_information = input_information
     process_manager.main.args.pcapfilter = cli_packet_filter
     process_manager.main.zeek_bro = zeek_or_bro
-    process_manager.main.zeek_dir = zeek_dir
     process_manager.main.line_type = line_type
     process_manager.main.bloom_filters_man = Mock()
 
@@ -67,16 +65,42 @@ def test_start_input_process(
             input_information=input_information,
             cli_packet_filter=cli_packet_filter,
             zeek_or_bro=zeek_or_bro,
-            zeek_dir=zeek_dir,
             line_type=line_type,
             is_profiler_done_event=process_manager.is_profiler_done_event,
             is_input_done_event=process_manager.is_input_done_event,
+            is_slips_live_updating_event=(
+                process_manager.is_slips_live_updating_event
+            ),
         )
         mock_input_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()
         process_manager.main.db.store_pid.assert_called_once_with(
             "Input", 54321
         )
+
+
+@pytest.mark.parametrize(
+    "is_slips_started_by_an_update,expected_is_set",
+    [(True, False), (False, False)],
+)
+def test_init_sets_live_update_event_for_update_start(
+    is_slips_started_by_an_update,
+    expected_is_set,
+):
+    """Test that ProcessManager starts with an unset live-update event."""
+    main_mock = Mock()
+    main_mock.args.is_slips_started_by_an_update = (
+        is_slips_started_by_an_update
+    )
+    main_mock.conf.get_disabled_modules.return_value = []
+    main_mock.conf.is_bootstrapping_node.return_value = False
+    main_mock.conf.get_bootstrapping_modules.return_value = []
+
+    process_manager = ProcessManager(main_mock)
+
+    assert process_manager.is_slips_live_updating_event.is_set() is (
+        expected_is_set
+    )
 
 
 @pytest.mark.parametrize(
@@ -115,7 +139,7 @@ def test_print_disabled_modules():
     [
         # Test case 1: No pending modules, no additional print calls
         ([], 1),
-        # Test case 2: Pending modules without Update Manager, one additional print call
+        # Test case 2: Pending modules without feeds_update_manager, one additional print call
         ([Mock(name="Module1"), Mock(name="Module2")], 1),
     ],
 )
@@ -139,13 +163,13 @@ def test_warn_about_pending_modules(pending_modules, expected_print_calls):
 @pytest.mark.parametrize(
     "blocking_enabled, exporting_alerts_disabled, "
     "expected_kill_first, expected_kill_last",
-    [  # Testcase1: blocking enabled, Exporting Alerts enabled
+    [  # Testcase1: blocking enabled, exporting_alerts enabled
         (True, False, [1, 2], [3, 4, 5]),
-        # Testcase2: Blocking disabled, Exporting Alerts enabled
+        # Testcase2: blocking disabled, exporting_alerts enabled
         (False, False, [1, 2, 4], [3, 5]),
-        # Testcase3: Blocking enabled, Exporting Alerts disabled
+        # Testcase3: blocking enabled, exporting_alerts disabled
         (True, True, [1, 2, 5], [3, 4]),
-        # Testcase4: Blocking disabled, Exporting Alerts disabled
+        # Testcase4: blocking disabled, exporting_alerts disabled
         (False, True, [1, 2, 4, 5], [3]),
         # Testcase5: All enabled, some PIDs are None
         (True, False, [1, 2], [3, 4, 5]),
@@ -161,15 +185,15 @@ def test_get_hitlist_in_order(
     process_manager.children = [
         Mock(pid=1, name="Process1"),
         Mock(pid=2, name="Process2"),
-        Mock(pid=3, name="EvidenceHandler"),
-        Mock(pid=4, name="Blocking"),
-        Mock(pid=5, name="Exporting Alerts"),
+        Mock(pid=3, name="evidence_handler"),
+        Mock(pid=4, name="blocking"),
+        Mock(pid=5, name="exporting_alerts"),
     ]
 
     process_manager.main.db.get_pid_of = lambda x: {
-        "EvidenceHandler": 3,
-        "Blocking": 4,
-        "Exporting Alerts": 5,
+        "evidence_handler": 3,
+        "blocking": 4,
+        "exporting_alerts": 5,
     }.get(x)
     process_manager.main.args.blocking = blocking_enabled
     process_manager.main.db.get_disabled_modules = lambda: (
@@ -270,6 +294,16 @@ def test_get_analysis_time(
         (None, True, False),
         # Test case 2: Message doesn't contain "stop_slips"
         ({"data": "some_other_message"}, True, False),
+        # Test case 3: Wrapped plain-text messages should be decoded first
+        (
+            {
+                "data": json.dumps(
+                    {"text": "stop_slips", "version": "test-version"}
+                )
+            },
+            True,
+            True,
+        ),
         # Test case 3: Message contains
         # "stop_slips" but not intended for control channel
         ({"data": "stop_slips"}, False, False),
@@ -471,7 +505,7 @@ def test_start_evidence_process(output_dir, redis_port):
         mock_evidence_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()
         process_manager.main.db.store_pid.assert_called_once_with(
-            "EvidenceHandler", 13579
+            "evidence_handler", 13579
         )
 
 
@@ -485,7 +519,7 @@ def test_print_started_module():
         )
 
         mock_print.assert_called_once_with(
-            "\t\tStarting the module green_module_name "
+            "\t\tStarting green_module_name module "
             "(Test description) [PID green_module_name]",
             1,
             0,
@@ -519,12 +553,13 @@ def test_start_update_manager(
     asyncio_called,
 ):
     process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.output = "output"
     mock_lock_instance = Mock()
     mock_lock.return_value.__enter__.return_value = mock_lock_instance
 
     mock_update_manager = Mock()
     with patch(
-        "managers.process_manager.UpdateManager",
+        "managers.process_manager.FeedsUpdateManager",
         return_value=mock_update_manager,
     ):
         process_manager.start_update_manager(

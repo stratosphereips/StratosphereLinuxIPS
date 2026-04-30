@@ -134,6 +134,20 @@ class Utils(object):
                 return str_lvl
 
     @staticmethod
+    def evidence_confidence_to_string(score: float) -> str:
+        """
+        Convert an evidence confidence score to a string label.
+
+        :param score: Evidence confidence score between 0 and 1.
+        :return: "high", "medium", or "low" based on the score.
+        """
+        if score >= 0.80:
+            return "High"
+        if score >= 0.55:
+            return "Medium"
+        return "low"
+
+    @staticmethod
     def log10(n: int) -> int:
         if n <= 0:
             return 0
@@ -784,6 +798,36 @@ class Utils(object):
             and message["channel"] == channel
         )
 
+    def get_msg_payload(self, message: dict) -> Any:
+        """
+        Return the actual payload stored in the given message. discards
+        metadata like "version" and returns the text only.
+
+        Parameters:
+        message: Pub/sub message returned by Redis.
+
+        Return:
+        The decoded payload. Wrapped plain-string messages return their text.
+        """
+        data = message["data"]
+        if not isinstance(data, str):
+            return data
+
+        try:
+            decoded = json.loads(data)
+        except (json.decoder.JSONDecodeError, TypeError):
+            return data
+
+        if (
+            isinstance(decoded, dict)
+            and "text" in decoded
+            and "version" in decoded
+            and len(decoded) == 2
+        ):
+            return decoded["text"]
+
+        return decoded
+
     def get_slips_version(self) -> str:
         version_file = "VERSION"
         with open(version_file, "r") as f:
@@ -805,6 +849,34 @@ class Utils(object):
 
         os.system(f"chown {UID}:{GID} {file}")
 
+    def initialize_logfile(
+        self,
+        logfile_path: str,
+        started_by_update: bool,
+        mode: str = "w",
+        create_parent_dirs: bool = True,
+    ) -> bool:
+        """
+        Initialize a log file unless Slips was started by an update.
+        when slips is being updated , we dont want the new version to clear
+        the used logfiles, instead it will append to them
+
+        :param logfile_path: path to the log file to initialize.
+        :param started_by_update: whether Slips was started by an update.
+        :param mode: file mode used to initialize the log file.
+        :param create_parent_dirs: whether to create missing parent dirs.
+        :return: True if the file was initialized, False otherwise.
+        """
+        if started_by_update:
+            return False
+
+        logfile_dir = os.path.dirname(logfile_path)
+        if create_parent_dirs and logfile_dir:
+            os.makedirs(logfile_dir, exist_ok=True)
+        # clear the logfile
+        open(logfile_path, mode).close()
+        return True
+
     def get_ip_identification_as_str(self, ip_identification: dict) -> str:
         id = ""
         if "DNS_resolution" in ip_identification:
@@ -814,6 +886,9 @@ class Utils(object):
             ip_identification.pop("DNS_resolution")
 
         for key, piece_of_info in ip_identification.items():
+            if key == "timestamp":
+                continue
+
             if not piece_of_info:
                 continue
 
@@ -919,6 +994,11 @@ class Utils(object):
             # 6 is the decimals we need after the . in the unix ts
             ts = ts + "0" * (6 - len(ts.split(".")[-1]))
         return ts
+
+    def get_current_version(self) -> str:
+        with open("VERSION", "r") as version_file:
+            current_version = version_file.read().strip()
+        return current_version
 
     def _convert_str_port_to_int(self, port) -> int:
         if isinstance(port, str):

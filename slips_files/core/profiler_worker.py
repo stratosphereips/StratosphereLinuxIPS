@@ -33,7 +33,7 @@ from slips_files.core.structures.flow_attributes import Role
 
 
 class ProfilerWorker(IModule):
-    name = "ProfilerWorker"
+    name = "profiler_worker"
 
     def init(
         self,
@@ -147,7 +147,7 @@ class ProfilerWorker(IModule):
             return time.time()
 
     def _get_latency_filename_prefix(self) -> str:
-        if self.name.startswith("ProfilerWorker_Process_"):
+        if self.name.startswith("profiler_worker_process_"):
             worker_id = self.name.split("_")[-1]
             return f"profiler_worker_{worker_id}"
         return self.name.lower()
@@ -555,7 +555,7 @@ class ProfilerWorker(IModule):
         """
         worker_number = self.name.split("_")[-1]
         self.print(
-            f"Started Profiler Worker {green(worker_number)} [PID"
+            f"Started {green('Profiler Worker')} {green(worker_number)} [PID"
             f" {green(os.getpid())}]"
         )
 

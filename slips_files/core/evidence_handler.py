@@ -26,6 +26,8 @@ from typing import List
 import time
 
 from multiprocessing import Process
+
+from slips_files.common.output_paths import get_alerts_path_inside_output_dir
 from slips_files.common.style import (
     green,
 )
@@ -41,7 +43,7 @@ DEFAULT_EVIDENCE_HANDLER_WORKERS = 3
 
 # Evidence Process
 class EvidenceHandler(ICore):
-    name = "EvidenceHandler"
+    name = "evidence_handler"
 
     def init(self):
         self.read_configuration()
@@ -63,7 +65,10 @@ class EvidenceHandler(ICore):
         self.evidence_logger = EvidenceLogger(
             logger_stop_signal=self.logger_stop_signal,
             evidence_logger_q=self.evidence_logger_q,
-            output_dir=self.output_dir,
+            output_dir=get_alerts_path_inside_output_dir(
+                self.parent_output_dir
+            ),
+            slips_args=self.args,
         )
         self.logger_thread = threading.Thread(
             target=self.evidence_logger.run_logger_thread,
@@ -121,10 +126,10 @@ class EvidenceHandler(ICore):
                 pass
 
     def start_evidence_worker(self, worker_id: int = None):
-        worker_name = f"EvidenceHandlerWorker_Process_{worker_id}"
+        worker_name = f"evidence_handler_worker_process_{worker_id}"
         worker = EvidenceHandlerWorker(
             logger=self.logger,
-            output_dir=self.output_dir,
+            output_dir=self.parent_output_dir,
             redis_port=self.redis_port,
             termination_event=self.termination_event,
             conf=self.conf,

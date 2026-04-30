@@ -21,7 +21,7 @@ ESTAB = "Established"
 
 class HTTPAnalyzer(AsyncModule):
     # Name: short name of the module. Do not use spaces
-    name = "HTTP Analyzer"
+    name = "http_analyzer"
     description = "Analyze HTTP flows"
     authors = ["Alya Gomaa"]
 

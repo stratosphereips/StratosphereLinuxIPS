@@ -5,6 +5,7 @@ from slips_files.common.style import green
 
 import subprocess
 import os
+import sys
 import threading
 from multiprocessing import Queue
 
@@ -60,7 +61,7 @@ class UIManager:
             # in slips not being able to
             # get the PID of the python proc started by the .sh script
             # so we'll start it with python instead
-            command = ["python3", "-m", "webinterface.app"]
+            command = [sys.executable, "-m", "webinterface.app"]
 
             webinterface = subprocess.Popen(
                 command,

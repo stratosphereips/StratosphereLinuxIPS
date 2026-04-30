@@ -3,6 +3,9 @@
 import shutil
 import socket
 
+from slips_files.common.output_paths import (
+    get_redis_logs_path_inside_output_dir,
+)
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -40,6 +43,7 @@ from typing import (
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 LOCALHOST = "127.0.0.1"
+VERSION = utils.get_current_version()
 
 
 class RedisDB(
@@ -151,6 +155,7 @@ class RedisDB(
         cls.flush_db = flush_db
         # start the redis server using cli if it's not started?
         cls.start_server = start_redis_server
+        cls.logger = logger
         cls.printer = Printer(logger, cls.name)
         cls.conf = ConfigParser()
         cls.args = cls.conf.get_args()
@@ -191,15 +196,26 @@ class RedisDB(
         self.call_mixins_setup()
         self._init_ttls()
         self.set_new_incoming_flows(True)
+        if (
+            self.logger
+            and not self.flush_db
+            and self.args.is_slips_started_by_an_update
+        ):
+            self.print(
+                "Continuing on previous data stored in redis.",
+                log_to_logfiles_only=True,
+            )
 
     @classmethod
     def _get_conf_file_path(cls, redis_port: Optional[int] = None) -> str:
-        """Return a per-run redis config path to avoid parallel overwrite."""
+        """
+        Return a per-run redis config path to avoid parallel overwrite.
+        """
         redis_port = redis_port or cls.redis_port
         output_dir = os.fspath(cls.output_dir or "output")
         os.makedirs(output_dir, exist_ok=True)
-        return os.path.join(
-            output_dir, f"redis-server-port-{redis_port}-{os.getpid()}.conf"
+        return get_redis_logs_path_inside_output_dir(
+            cls.output_dir, f"redis-server-port-{redis_port}.conf"
         )
 
     def _init_ttls(self):
@@ -256,7 +272,7 @@ class RedisDB(
 
         # because slips may use different redis ports at the same time,
         # logs should be port specific
-        logfile = os.path.join(
+        logfile = get_redis_logs_path_inside_output_dir(
             cls.output_dir, f"redis-server-port-{cls.redis_port}.log"
         )
         cls._options.update({"logfile": logfile})
@@ -502,10 +518,28 @@ class RedisDB(
         self.r.ping()
         self.rcache.ping()
 
+    def _add_version_to_msg(self, msg):
+        if isinstance(msg, str):
+            try:
+                msg = json.loads(msg)
+                msg.update({"version": VERSION})
+                msg = json.dumps(msg)
+            except json.decoder.JSONDecodeError:
+                # the msg is 1 str
+                msg = {
+                    "text": msg,
+                    "version": VERSION,
+                }
+                msg = json.dumps(msg)
+        elif isinstance(msg, dict):
+            msg.update({"version": VERSION})
+        return msg
+
     def publish(self, channel, msg, pipeline=None):
         """Publish a msg in the given channel.
         adds the instructions to the given pipeline if given and returns
         the pipeline"""
+        msg = self._add_version_to_msg(msg)
 
         # keeps track of how many msgs were published in the given channel
         if pipeline is not None:
@@ -812,7 +846,7 @@ class RedisDB(
                             'uid':...,
                             'resolved-by':.. }
         If not resolved, returns {}
-        this function is called for every IP in the timeline of kalipso
+        this function is called for every IP in the timeline view
         checks for the reolution in self.constants.DNS_RESOLUTION
         """
         if ip_info := self.r.hget(self.constants.DNS_RESOLUTION, ip):
@@ -965,7 +999,7 @@ class RedisDB(
                 ips_to_add.append(answer)
 
         # For each CNAME in the answer
-        # store it in DomainsInfo in the cache db (used for kalipso)
+        # store it in DomainsInfo in the cache db for the UI
         # and in CNAMEsInfo in the main db  (used for detecting dns
         # without resolution)
         if ips_to_add:
@@ -1494,11 +1528,18 @@ class RedisDB(
         pid = self.r.hget(self.constants.PIDS, module_name)
         return int(pid) if pid else None
 
-    def store_module_flows_per_second(self, module, fps):
-        self.r.hset(self.constants.MODULES_FLOWS_PER_SECOND, module, fps)
+    def store_core_module_flows_per_second(self, module, fps):
+        self.r.hset(
+            self.constants.CORE_MODULE_NUMBER_OF_PROCESSED_FLOWS_PER_SECOND,
+            module,
+            fps,
+        )
 
-    def get_module_flows_per_second(self, module):
-        return self.r.hget(self.constants.MODULES_FLOWS_PER_SECOND, module)
+    def get_core_module_flows_per_second(self, module):
+        return self.r.hget(
+            self.constants.CORE_MODULE_NUMBER_OF_PROCESSED_FLOWS_PER_SECOND,
+            module,
+        )
 
     def increment_flows_per_minute(self, module: str, minute_ts: int) -> int:
         key = f"{self.constants.FLOWS_PER_MINUTE}:{module}"

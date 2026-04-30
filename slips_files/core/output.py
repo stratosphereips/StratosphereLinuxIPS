@@ -34,7 +34,7 @@ class Output(IObserver):
      or logs, it should use The printer that uses this process.
     """
 
-    name = "Output"
+    name = "output"
     slips_logfile_lock = Lock()
     errors_logfile_lock = Lock()
     cli_lock = Lock()
@@ -43,11 +43,12 @@ class Output(IObserver):
         self,
         verbose=1,
         debug=0,
-        stderr="output/errors.log",
-        slips_logfile="output/slips.log",
+        stderr="errors.log",
+        slips_logfile="slips.log",
         input_type=False,
         create_logfiles: bool = True,
         stdout="",
+        slips_args=None,
     ):
         super().__init__()
         # when running slips using -e , this var is set and we only
@@ -58,6 +59,7 @@ class Output(IObserver):
         self.input_type = input_type
         self.errors_logfile = stderr
         self.slips_logfile = slips_logfile
+        self.args = slips_args
 
         if self.verbose > 2:
             print(f"Verbosity: {self.verbose}. Debugging: {self.debug}")
@@ -71,10 +73,10 @@ class Output(IObserver):
             # root (if slips was started by root)
             os.umask(0)
             self._read_configuration()
-            self.create_logfile(self.errors_logfile)
-            self.log_branch_info(self.errors_logfile)
-            self.create_logfile(self.slips_logfile)
-            self.log_branch_info(self.slips_logfile)
+            if self.create_logfile(self.errors_logfile):
+                self.log_branch_info(self.errors_logfile)
+            if self.create_logfile(self.slips_logfile):
+                self.log_branch_info(self.slips_logfile)
 
             utils.change_logfiles_ownership(
                 self.errors_logfile, self.UID, self.GID
@@ -112,13 +114,20 @@ class Output(IObserver):
     def create_logfile(self, path):
         """
         creates slips.log and errors.log if they don't exist
+        :return: True if the file was initialized, False otherwise.
         """
+        if getattr(self.args, "is_slips_started_by_an_update", False) is True:
+            return False
+
         try:
             open(path, "a").close()
+            return True
         except FileNotFoundError:
             p = Path(os.path.dirname(path))
             p.mkdir(parents=True, exist_ok=True)
-            open(path, "w").close()
+            return utils.initialize_logfile(
+                path, False, create_parent_dirs=False
+            )
 
     def log_line(self, msg: dict):
         """

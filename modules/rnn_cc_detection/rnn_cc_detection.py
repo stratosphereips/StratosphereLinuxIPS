@@ -33,7 +33,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 class CCDetection(IModule):
     # Name: short name of the module. Do not use spaces
-    name = "RNN C&C Detection"
+    name = "rnn_cc_detection"
     description = "Detect C&C channels based on behavioral letters"
     authors = ["Sebastian Garcia", "Kamila Babayeva", "Ondrej Lukas"]
 
@@ -245,7 +245,7 @@ class CCDetection(IModule):
 
     def handle_tw_closed(self, msg: Dict):
         """handles msgs from the tw_closed channel"""
-        profileid_tw = msg["data"].split("_")
+        profileid_tw = utils.get_msg_payload(msg).split("_")
         profileid = f"{profileid_tw[0]}_{profileid_tw[1]}"
         twid = profileid_tw[-1]
         self.letters_exporter.export(profileid, twid)

@@ -1,5 +1,5 @@
 <h1 align="center">
-Slips v1.1.19
+Slips v1.1.20
 </h1>
 
 
@@ -110,8 +110,9 @@ cat output_dir/alerts.log
 
 # Graphical User Interface
 
-To check Slips output using a GUI you can use the web interface
-or our command-line based interface Kalipso
+To check Slips output using a GUI you can use the web interface. An optional
+Kalipso checkout is also available as the `modules/kalipso` submodule for the
+terminal interface.
 
 ##### Web interface
 
@@ -123,17 +124,16 @@ Then navigate to ```http://localhost:55000/``` from your browser.
 
 For more info about the web interface, check the docs: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#the-web-interface
 
+##### Kalipso submodule
 
-##### Kalipso (CLI-Interface)
+Kalipso is maintained in a separate repository and included here as an optional
+submodule:
 
-    ./kalipso.sh
+```bash
+git submodule update --init --recursive modules/kalipso
+```
 
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/kalipso.png" width="850px">
-
-
-For more info about the Kalipso interface, check the docs: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#kalipso
-
----
+See the installation docs for native setup details.
 
 
 # Requirements
@@ -186,7 +186,7 @@ Slips key features are:
 * **Threat Intelligence Updates**: Slips continuously updates threat intelligence files and databases, providing relevant detections as updates occur.
 * **HTTPS Anomaly Detection**: Adaptive TLS/HTTPS anomaly detection with drift handling and a local HTML report generator for deep dives.
 * **Integration with External Platforms**: Modules in Slips can look up IP addresses on external platforms such as VirusTotal and RiskIQ.
-* **Graphical User Interface**: Slips provides a console graphical user interface (Kalipso) and a web interface for displaying detection with graphs and tables.
+* **Graphical User Interface**: Slips provides a web interface and an optional Kalipso terminal interface through the `modules/kalipso` submodule.
 * **Peer-to-Peer (P2P) Module**: Slips includes a complex automatic system to find other peers in the network and share IoC data automatically in a balanced, trusted manner. The P2P module can be enabled as needed.
 * **Docker Implementation**: Running Slips through Docker on Linux systems is simplified, allowing real-time traffic analysis.
 * **Detailed Documentation**: Slips provides detailed documentation guiding users through usage instructions for efficient utilization of its features.

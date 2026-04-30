@@ -61,6 +61,7 @@ cp -a modules/template modules/local_connection_detector
 ### Changing the Name of the Module
 
 Each module in Slips should have a name, author and description.
+Use a snake_case module package and main file name in the `x_y_doer` style already used in the repository, for example `http_analyzer` or `local_connection_detector`.
 
 We should change the name inside the python file by finding the lines with the name and description in the class 'Module'
 and changing them:

@@ -11,14 +11,14 @@ def test_pcap_input_runs_through_zeek_utils(tmp_path):
     )
     input_process.zeek_dir = str(tmp_path)
     input_process.is_running_non_stop = False
-    input_process.zeek_utils.ensure_zeek_dir = MagicMock()
+    input_process.zeek_utils.create_zeek_output_dir = MagicMock()
     input_process.zeek_utils.init_zeek = MagicMock()
     input_process.zeek_utils.read_zeek_files = MagicMock(return_value=3)
 
     handler = input_process.input_handlers[InputType.PCAP]
     assert handler.run() is True
 
-    input_process.zeek_utils.ensure_zeek_dir.assert_called_once()
+    input_process.zeek_utils.create_zeek_output_dir.assert_called_once()
     input_process.zeek_utils.init_zeek.assert_called_once()
     input_process.zeek_utils.read_zeek_files.assert_called_once()
     assert input_process.lines == 3

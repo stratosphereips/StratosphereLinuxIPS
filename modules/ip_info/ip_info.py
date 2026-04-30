@@ -44,7 +44,7 @@ from slips_files.core.structures.evidence import (
 
 class IPInfo(AsyncModule):
     # Name: short name of the module. Do not use spaces
-    name = "IP Info"
+    name = "ip_info"
     description = "Get different info about an IP/MAC address"
     authors = ["Alya Gomaa", "Sebastian Garcia"]
 
@@ -596,7 +596,7 @@ class IPInfo(AsyncModule):
                 self.get_domain_info(domain)
 
         if msg := self.get_msg("new_ip"):
-            ip = msg["data"]
+            ip = utils.get_msg_payload(msg)
             self.handle_new_ip(ip)
 
         if msg := self.get_msg("check_jarm_hash"):

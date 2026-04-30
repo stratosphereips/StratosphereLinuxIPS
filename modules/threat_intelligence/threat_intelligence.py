@@ -37,7 +37,7 @@ from slips_files.core.structures.evidence import (
 
 
 class ThreatIntel(IModule, URLhaus, Spamhaus):
-    name = "Threat Intelligence"
+    name = "threat_intelligence"
     description = (
         "Check if the source IP or destination IP"
         " are in a malicious list of IPs"
@@ -1891,7 +1891,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         utils.drop_root_privs_permanently()
         # Load the local Threat Intelligence files that are
         # stored in the local folder self.path_to_local_ti_files
-        # The remote files are being loaded by the update_manager
+        # The remote files are being loaded by the feeds_update_manager
         local_files = (
             "own_malicious_iocs.csv",
             "own_malicious_JA3.csv",

@@ -44,7 +44,7 @@ class FileEventHandler(RegexMatchingEventHandler):
         """
         this will be triggered everytime zeek renames all log files
         """
-        # tell inputProcess to change open handles
+        # tell input.py to change open handles
         if event.dest_path != "True":
             to_send = {"old_file": event.dest_path, "new_file": event.src_path}
             to_send = json.dumps(to_send)

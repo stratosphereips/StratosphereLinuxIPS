@@ -20,6 +20,9 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.output_paths import (
+    get_this_filepath_inside_permanent_dir,
+)
 from slips_files.common.performance_paths import get_performance_csv_path
 from slips_files.core.structures.evidence import Evidence
 from slips_files.core.structures.alerts import Alert
@@ -33,7 +36,7 @@ class DBManager:
     handler in here.
     """
 
-    name = "DBManager"
+    name = "db_manager"
 
     def __init__(
         self,
@@ -46,11 +49,27 @@ class DBManager:
         start_redis_server=True,
         **kwargs,
     ):
+        """
+        Initialize Redis and SQLite database handlers.
+
+        :param logger: output logger used by database handlers.
+        :param output_dir: directory where database files and logs are stored.
+        :param redis_port: port used to connect to Redis.
+        :param conf: loaded Slips configuration parser.
+        :param main_pid: PID of the main Slips process.
+        :param start_sqlite: whether to initialize the SQLite handler.
+        :param start_redis_server: whether to start Redis before connecting.
+
+        :param kwargs: additional RedisDB options. Supported keys are:
+            flush_db: whether this manager may flush Redis on startup when
+                the configuration also allows deleting previous DB contents.
+        """
         self.conf = conf
         self.output_dir = output_dir
         self.redis_port = redis_port
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
+
         # only the main process should ever flush the Redis DB. to avoid
         # children overwriting values set at the very start of slips
         if os.getpid() != main_pid:
@@ -66,9 +85,9 @@ class DBManager:
         if self.conf.use_local_p2p():
             # import this on demand because slips light version doesn't
             # include the P2P dir
-            from modules.p2ptrust.trust.trustdb import TrustDB
+            from modules.p2p_trust.trust.trustdb import TrustDB
 
-            self.trust_db_path: str = self.init_p2ptrust_db()
+            self.trust_db_path: str = self.init_p2p_trust_db()
             self.trust_db = TrustDB(
                 self.logger,
                 self.trust_db_path,
@@ -123,12 +142,21 @@ class DBManager:
                 f"restart Slips."
             )
 
-    def init_p2ptrust_db(self) -> str:
-        """Initializes and returns the path to a valid trustdb inside p2ptrust_runtime_dir."""
-        p2ptrust_runtime_dir = os.path.join(os.getcwd(), "p2ptrust_runtime/")
-        Path(p2ptrust_runtime_dir).mkdir(parents=True, exist_ok=True)
-        db_path = os.path.join(p2ptrust_runtime_dir, "trustdb.db")
-        self.p2ptrust_runtime_dir = p2ptrust_runtime_dir
+    def init_p2p_trust_db(self) -> str:
+        """
+        Initialize and return the path to the persistent local P2P trust DB.
+
+        Returns:
+            Path to the local P2P trust SQLite database.
+        """
+        p2p_trust_runtime_dir = get_this_filepath_inside_permanent_dir(
+            "p2p_trust_runtime"
+        )
+
+        Path(p2p_trust_runtime_dir).mkdir(parents=True, exist_ok=True)
+
+        db_path = os.path.join(p2p_trust_runtime_dir, "trustdb.db")
+        self.p2p_trust_runtime_dir = p2p_trust_runtime_dir
 
         if os.path.exists(db_path):
             if self.is_db_malformed(db_path):
@@ -181,10 +209,10 @@ class DBManager:
         ):
             return False
 
-    def get_p2ptrust_dir(self) -> str:
-        return self.p2ptrust_runtime_dir
+    def get_p2p_trust_dir(self) -> str:
+        return self.p2p_trust_runtime_dir
 
-    def get_p2ptrust_db_path(self) -> str:
+    def get_p2p_trust_db_path(self) -> str:
         return self.trust_db_path
 
     def print(self, *args, **kwargs):
@@ -300,11 +328,11 @@ class DBManager:
     def get_input_file(self, *args, **kwargs):
         return self.rdb.get_input_file(*args, **kwargs)
 
-    def store_module_flows_per_second(self, *args, **kwargs):
-        return self.rdb.store_module_flows_per_second(*args, **kwargs)
+    def store_core_module_flows_per_second(self, *args, **kwargs):
+        return self.rdb.store_core_module_flows_per_second(*args, **kwargs)
 
-    def get_module_flows_per_second(self, *args, **kwargs):
-        return self.rdb.get_module_flows_per_second(*args, **kwargs)
+    def get_core_module_flows_per_second(self, *args, **kwargs):
+        return self.rdb.get_core_module_flows_per_second(*args, **kwargs)
 
     def record_flow_per_minute(self, module: str, now: Optional[float] = None):
         if not self.conf.generate_performance_plots():

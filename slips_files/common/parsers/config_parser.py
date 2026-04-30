@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from datetime import timedelta
+import os
 import sys
 from slips_files.common.input_type import InputType
 import ipaddress
@@ -74,6 +75,26 @@ class ConfigParser(object):
             # or no section or no configuration file specified
             return default_value
 
+    def read_module_configuration(
+        self, section: str, legacy_section: str, name: str, default_value
+    ):
+        """
+        Read a module configuration value with support for a legacy section.
+
+        Parameters:
+            section: Preferred module section name.
+            legacy_section: Backward-compatible section name.
+            name: Configuration key to read.
+            default_value: Value returned when neither section defines the key.
+
+        Returns:
+            The configured value from the preferred or legacy section.
+        """
+        value = self.read_configuration(section, name, default_value)
+        if value != default_value:
+            return value
+        return self.read_configuration(legacy_section, name, default_value)
+
     @property
     def web_interface_port(self) -> int:
         port = self.read_configuration("web_interface", "port", 55000)
@@ -86,8 +107,8 @@ class ConfigParser(object):
         """
         gets the shannon entropy used in detecting C&C over DNS TXT records from slips.conf/slips.yaml
         """
-        threshold = self.read_configuration(
-            "flowalerts", "entropy_threshold", 5
+        threshold = self.read_module_configuration(
+            "flow_alerts", "flowalerts", "entropy_threshold", 5
         )
 
         try:
@@ -96,8 +117,8 @@ class ConfigParser(object):
             return 5
 
     def get_pastebin_download_threshold(self):
-        threshold = self.read_configuration(
-            "flowalerts", "pastebin_download_threshold", 700
+        threshold = self.read_module_configuration(
+            "flow_alerts", "flowalerts", "pastebin_download_threshold", 700
         )
 
         try:
@@ -121,6 +142,15 @@ class ConfigParser(object):
 
     def packet_filter(self):
         return self.read_configuration("parameters", "pcapfilter", False)
+
+    def auto_update_slips(self) -> bool:
+        """
+        Read whether live Slips version auto-updates are enabled.
+
+        Returns:
+            True when automatic live updates are enabled, otherwise False.
+        """
+        return self.read_configuration("update", "auto_update_slips", False)
 
     def online_whitelist(self):
         return self.read_configuration("whitelists", "online_whitelist", False)
@@ -186,14 +216,26 @@ class ConfigParser(object):
             "whitelists", "enable_local_whitelist", True
         )
 
-    def logsfile(self):
-        return self.read_configuration("modes", "logsfile", "slips.log")
+    def logs_file(self):
+        return self.read_configuration(
+            "output",
+            "logs",
+            self.read_configuration("modes", "logs", "slips.log"),
+        )
 
     def stdout(self):
-        return self.read_configuration("modes", "stdout", "slips.log")
+        return self.read_configuration(
+            "output",
+            "stdout",
+            self.read_configuration("modes", "stdout", "slips.log"),
+        )
 
     def stderr(self):
-        return self.read_configuration("modes", "stderr", "errors.log")
+        return self.read_configuration(
+            "output",
+            "stderr",
+            self.read_configuration("modes", "stderr", "errors.log"),
+        )
 
     def create_p2p_logfile(self):
         return self.read_configuration(
@@ -260,6 +302,21 @@ class ConfigParser(object):
     def enable_metadata(self):
         return self.read_configuration("parameters", "metadata_dir", False)
 
+    def permanent_dir(self) -> str:
+        """
+        Return the directory used for persistent runtime data.
+
+        Returns:
+            Relative path where databases and runtime-generated files that
+            must persist across different Slips runs are stored.
+        """
+        permanent_dir = self.read_configuration(
+            "parameters", "permanent_dir", "permanent"
+        )
+        if not permanent_dir:
+            permanent_dir = "permanent"
+        return os.path.normpath(permanent_dir)
+
     def use_local_p2p(self):
         return self.read_configuration("local_p2p", "use_p2p", False)
 
@@ -267,10 +324,10 @@ class ConfigParser(object):
         return self.read_configuration("global_p2p", "use_global_p2p", False)
 
     def cesnet_conf_file(self):
-        return self.read_configuration("CESNET", "configuration_file", False)
+        return self.read_configuration("cesnet", "configuration_file", False)
 
     def poll_delay(self):
-        poll_delay = self.read_configuration("CESNET", "receive_delay", 86400)
+        poll_delay = self.read_configuration("cesnet", "receive_delay", 86400)
         try:
             poll_delay = int(poll_delay)
         except ValueError:
@@ -280,10 +337,10 @@ class ConfigParser(object):
         return poll_delay
 
     def send_to_warden(self):
-        return self.read_configuration("CESNET", "send_alerts", False)
+        return self.read_configuration("cesnet", "send_alerts", False)
 
     def receive_from_warden(self):
-        return self.read_configuration("CESNET", "receive_alerts", False)
+        return self.read_configuration("cesnet", "receive_alerts", False)
 
     def verbose(self):
         verbose = self.read_configuration("parameters", "verbose", 1)
@@ -444,8 +501,8 @@ class ConfigParser(object):
         returns threshold in seconds
         """
         # 1500 is in seconds, =25 mins
-        threshold = self.read_configuration(
-            "flowalerts", "long_connection_threshold", 1500
+        threshold = self.read_module_configuration(
+            "flow_alerts", "flowalerts", "long_connection_threshold", 1500
         )
         try:
             threshold = int(threshold)
@@ -457,8 +514,11 @@ class ConfigParser(object):
         """
         returns threshold in seconds
         """
-        threshold = self.read_configuration(
-            "flowalerts", "ssh_succesful_detection_threshold", 4290
+        threshold = self.read_module_configuration(
+            "flow_alerts",
+            "flowalerts",
+            "ssh_succesful_detection_threshold",
+            4290,
         )
         try:
             threshold = int(threshold)
@@ -467,9 +527,9 @@ class ConfigParser(object):
 
         return threshold
 
-    def ssh_bruteforcing_threshold(self):
+    def ssh_brute_force_detector_threshold(self):
         threshold = self.read_configuration(
-            "bruteforcing", "ssh_attempt_threshold", 9
+            "brute_force_detector", "ssh_attempt_threshold", 9
         )
         try:
             threshold = int(threshold)
@@ -482,8 +542,8 @@ class ConfigParser(object):
         returns threshold in MBs
         """
         # threshold in MBs
-        threshold = self.read_configuration(
-            "flowalerts", "data_exfiltration_threshold", 500
+        threshold = self.read_module_configuration(
+            "flow_alerts", "flowalerts", "data_exfiltration_threshold", 500
         )
         try:
             threshold = int(threshold)
@@ -492,7 +552,9 @@ class ConfigParser(object):
         return threshold
 
     def get_ml_mode(self):
-        return self.read_configuration("flowmldetection", "mode", "test")
+        return self.read_module_configuration(
+            "flow_ml_detection", "flowmldetection", "mode", "test"
+        )
 
     def https_anomaly_training_hours(self) -> int:
         training_hours = self.read_configuration(
@@ -801,11 +863,11 @@ class ConfigParser(object):
     def delete_prev_db(self):
         return self.read_configuration("parameters", "deletePrevdb", True)
 
-    def rotation_period(self):
-        rotation_period = self.read_configuration(
-            "parameters", "rotation_period", "1 day"
+    def default_rotation_interval(self):
+        default_rotation_interval = self.read_configuration(
+            "parameters", "default_rotation_interval", "1 day"
         )
-        return utils.sanitize(rotation_period)
+        return utils.sanitize(default_rotation_interval)
 
     def parse_ip(self, ip: str):
         """converts the given IP address or CIDR to an obj"""
@@ -920,12 +982,12 @@ class ConfigParser(object):
 
         use_p2p = self.use_local_p2p()
         if not (use_p2p and "-i" in sys.argv):
-            to_ignore.append("p2ptrust")
+            to_ignore.append("p2p_trust")
 
         use_global_p2p = self.use_global_p2p()
         if not (use_global_p2p and ("-i" in sys.argv)):
-            to_ignore.append("fidesModule")
-            to_ignore.append("irisModule")
+            to_ignore.append("fides")
+            to_ignore.append("iris")
 
         # ignore CESNET sharing module if send and receive are
         # disabled in slips.yaml
@@ -1008,7 +1070,7 @@ class ConfigParser(object):
             self.read_configuration("global_p2p", "bootstrapping_node", False)
             and self.read_configuration("global_p2p", "use_global_p2p", False)
             and ("-i" in sys.argv or "-g" in sys.argv),
-            ["fidesModule", "irisModule"],
+            ["fides", "iris"],
         )
 
     def is_bootstrapping_node(self) -> bool:
@@ -1022,5 +1084,5 @@ class ConfigParser(object):
         return self.read_configuration(
             "global_p2p",
             "bootstrapping_modules",
-            ["fidesModule", "irisModule"],
+            ["fides", "iris"],
         )

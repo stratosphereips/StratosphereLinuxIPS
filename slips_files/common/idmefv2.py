@@ -45,7 +45,7 @@ class IDMEFv2:
     https://www.ietf.org/id/draft-lehmann-idmefv2-03.html#name-the-alert-class
     """
 
-    name = "IDMEFv2"
+    name = "idmefv2"
 
     def __init__(self, logger: Output, db):
         self.printer = Printer(logger, self.name)

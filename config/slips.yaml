@@ -1,14 +1,22 @@
 # This configuration file controls several aspects of the working of Slips.
 
 ---
-modes:
+update:
+  # Enable automatic live updates of the installed Slips version.
+  # This setting is separate from the feeds_update_manager module, which only
+  # updates TI feeds and related files during runtime.
+  # Automatic Slips updates may overwrite the default config files shipped
+  # with Slips. If you want to keep your local configuration changes intact, avoid editing the default config files.
+  # Instead, create separate config files with different names and use those.
+  auto_update_slips: false
+
+output:
   # Define the file names for the default output.
   stdout: slips.log
   stderr: errors.log
-  logsfile: slips.log
+  logs: slips.log
 
 #############################
-# Parameters that can be also specified with modifiers in the command line
 
 parameters:
   # The verbosity is related to how much data you want to see about the
@@ -77,6 +85,11 @@ parameters:
   # whitelist file, current commit and date
   metadata_dir: true
 
+  # This directory stores databases and runtime-generated files that must
+  # persist across different slips runs and should not be overwritten.
+  # this dir is inside slips root dir.
+  permanent_dir: permanent
+
   # Default pcap packet filter. Used with zeek pcapfilter : 'ip or not ip'
   # If you want more important traffic and forget the multicast and broadcast
   # traffic, you can use
@@ -112,7 +125,7 @@ parameters:
   # label: malicious
   # label: unknown
   label: normal
-  # If Zeek files are rotated or not to avoid running out of disk.
+  # determines if Zeek files are rotated or not to avoid running out of disk.
   # Zeek rotation is enabled by default when using an interface,
   # which means Slips will delete all Zeek log files after 1 day
   # of running
@@ -126,17 +139,16 @@ parameters:
   # Whitespace between the numeric constant and time unit is optional.
   # Appending the letter s to the time unit in order to
   # pluralize it is also optional
-  # rotation_period = 30min
-  # rotation_period = 2hr
-  # rotation_period = 30sec
-  rotation_period: 1day
+  # default_rotation_interval: 30min
+  # default_rotation_interval: 2hr
+  #default_rotation_interval: 30sec
+  default_rotation_interval: 1day
 
   # How many days Slips keeps the rotated Zeek files before deleting them.
   # Value should be in days
   # set it to 0 day if you want to delete them immediately
-  # keep_rotated_files_for : 1 day
+  # keep_rotated_files_for : 0 day
   # keep_rotated_files_for : 2 day
-  # keep_rotated_files_for : 3 day
   keep_rotated_files_for: 1 day
 
   # How many minutes to wait for all modules to finish before killing them
@@ -201,9 +213,9 @@ modules:
   # List of modules to ignore. By default we always ignore the template,
   # do not remove it from the list
   # Add the names of other modules that you want to disable
-  # (they all should be lowercase with no special characters). Example,
-  # threatintelligence, blocking, networkdiscovery, timeline, virustotal,
-  # rnnccdetection, flowmldetection, updatemanager
+  # (use module snake_case names). Example,
+  # threat_intelligence, blocking, network_discovery, timeline, virustotal,
+  # rnn_cc_detection, flow_ml_detection, feeds_update_manager
   disable: [template]
 
   # For each line in timeline file there is a timestamp.
@@ -212,10 +224,10 @@ modules:
   timeline_human_timestamp: true
 
 #############################
-flowmldetection:
+flow_ml_detection:
   # This is a module that uses machine learning for detection.
   # It can be used in train mode or test mode.
-  # The mode 'train' should be used to tell the flowmldetection module
+  # The mode 'train' should be used to tell the flow_ml_detection module
   # that the flows received are all for training.
   # A label should be provided in the [Parameters] section
   # mode : train
@@ -226,7 +238,7 @@ flowmldetection:
   mode: test
 
 #############################
-bruteforcing:
+brute_force_detector:
   # Minimum number of SSH attempts from one source to one destination
   # before Slips considers it brute forcing.
   ssh_attempt_threshold: 9
@@ -299,7 +311,7 @@ virustotal:
 #############################
 threatintelligence:
 
-  # By default, slips starts without the TI files, and runs the Update Manager
+  # By default, slips starts without the TI files, and runs the feeds_update_manager
   # in the background. If this option is set to true, slips will not start
   # analyzing the flows until the update manager finished and all TI files are
   # loaded successfully.
@@ -325,7 +337,7 @@ threatintelligence:
   # The remote TI files will be temporaly stored in this directory
   download_path_for_remote_threat_intelligence: modules/threat_intelligence/remote_data_files/
 
-  # Update period of Threat Intelligence files. How often should Slips update
+  # Update period of threat_intelligence files. How often should Slips update
   # the IoCs.
   # The expected value is in seconds.
   # 1 day = 86400 seconds
@@ -389,8 +401,8 @@ whitelists:
   local_whitelist_path: config/whitelist.conf
 
 #############################
-flowalerts:
-  # For the flowalerts module
+flow_alerts:
+  # For the flow_alerts module
   # We need a thrshold to determine a long connection in seconds.
   # In Slips by default is 25 minutes
   long_connection_threshold: 1500
@@ -487,7 +499,7 @@ exporting_alerts:
   taxii_timeout: 10
 
 #############################
-CESNET:
+cesnet:
   # Slips also supports exporting and importing evidence in the IDEA format to/from
   # warden servers of CESNET organization in Czech Republic.
   send_alerts: false
@@ -597,7 +609,7 @@ global_p2p:
    use_global_p2p: False
    iris_conf: config/iris_config.yaml
    bootstrapping_node: False
-   bootstrapping_modules: ["fidesModule", "irisModule"]
+   bootstrapping_modules: ["fides", "iris"]
 
 #############################
 local_p2p:

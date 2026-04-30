@@ -55,14 +55,14 @@ def test_start_evidence_worker(mock_worker_cls):
 
     mock_worker_cls.assert_called_once_with(
         logger=handler.logger,
-        output_dir=handler.output_dir,
+        output_dir=handler.parent_output_dir,
         redis_port=handler.redis_port,
         termination_event=handler.termination_event,
         conf=handler.conf,
         ppid=handler.ppid,
         slips_args=handler.args,
         bloom_filters_manager=handler.bloom_filters,
-        name="EvidenceHandlerWorker_Process_7",
+        name="evidence_handler_worker_process_7",
         evidence_queue=handler.evidence_worker_queue,
         evidence_logger_q=handler.evidence_logger_q,
     )
