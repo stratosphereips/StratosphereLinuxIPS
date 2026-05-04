@@ -335,6 +335,21 @@ request to the DNS server 1.2.3.4 asking for slack.com will still be shown.
 
 This whitelist can be enabled or disabled by changing the ```enable_local_whitelist``` key in `config/slips.yaml`.
 
+Do not modify the default ```config/whitelist.conf``` in place. Create a copy, update your copy, and set ```whitelists.local_whitelist_path``` in the Slips config file you are using to point to that copy.
+
+Example:
+
+```bash
+cp config/whitelist.conf config/my_whitelist.conf
+cp config/slips.yaml config/my_slips.yaml
+```
+
+Then set ```local_whitelist_path: config/my_whitelist.conf``` in ```config/my_slips.yaml``` and run Slips with:
+
+```bash
+./slips.py -c config/my_slips.yaml -f dataset/test7-malicious.pcap
+```
+
 The attacker and victim of every evidence are checked against the whitelist. In addition to all the related IPs, DNS resolutions, SNI, and CNAMEs of the attacker and teh victim. If any of them are whitelisted, the flow/evidence is discarded.
 
 Whitelists now use bloom filters to speed up the process of checking if an IoC is whitelisted or not.
@@ -393,7 +408,9 @@ The tranco list is updated daily by default in Slips, but you can change how oft
 Tranco whitelist can be enabled or disabled by changing the ```enable_online_whitelist``` key in `config/slips.yaml`.
 
 ### Whitelisting Example
-You can modify the file ```config/whitelist.conf``` file with this content:
+Do not edit the default ```config/whitelist.conf``` directly. Copy it, set ```local_whitelist_path``` in your copied Slips config file to the copied whitelist file, and modify that copied whitelist instead.
+
+For example, your copied whitelist file can contain:
 
 
     "IoCType","IoCValue","Direction","IgnoreType"
