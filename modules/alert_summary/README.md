@@ -132,6 +132,25 @@ historical pattern. To avoid recursive contamination, the prompt renders
 structured historical patterns and metrics rather than past free-text LLM
 summaries.
 
+## Recent alert history
+
+When `history_enabled` is on, the module stores a small in-memory history of
+completed alert summaries per source/profile. Each stored entry contains:
+
+- time window and compact time range
+- accumulated threat level
+- alert confidence
+- a few dominant grouped evidence patterns
+- the final summary text
+
+That history is added only to the final analyst-summary prompt, not to
+intermediate reduction prompts. The current alert evidence remains the primary
+source of truth, but repeated aligned alerts are meant to be treated as
+cumulative supporting context. In other words, recurrence should not replace
+the current alert evidence, but it can strengthen the assessment of risk,
+urgency, and likely true-positive status when the current alert matches the
+historical pattern.
+
 ## Shared LLM integration
 
 The module uses the shared LLM contract:
