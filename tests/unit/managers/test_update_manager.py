@@ -79,7 +79,7 @@ def test_get_update_json_link(configured_branch, remote_url, expected_link):
     "configured_channel, configured_testing_branch, expected_branch, expected_channel",
     [
         ("stable", "origin/feature/test", "origin/master", "stable"),
-        (" unstable ", "origin/feature/test", "origin/develop", "unstable"),
+        ("unstable", "origin/feature/test", "origin/develop", "unstable"),
         ("testing", "origin/feature/test", "origin/feature/test", "testing"),
     ],
 )
@@ -114,40 +114,42 @@ def test_read_configuration_resolves_update_branch(
     assert update_manager.update_channel == expected_channel
 
 
+def test_invalid_update_channel_raises_key_error():
+    db = Mock()
+    db.is_running_non_stop.return_value = True
+
+    conf = Mock()
+    conf.get_args.return_value = Mock(
+        is_slips_started_by_an_update=False,
+        multiinstance=False,
+    )
+    conf.auto_update_slips.return_value = True
+    conf.channel_to_update_slips_from.return_value = "branch with spaces"
+    conf.testing_branch_to_update_slips_from.return_value = (
+        "origin/feature/test"
+    )
+
+    with (
+        patch("managers.update_manager.ConfigParser", return_value=conf),
+        pytest.raises(KeyError, match="branch with spaces"),
+    ):
+        UpdateManager(
+            database=db,
+            is_slips_live_updating_event=Mock(),
+            print_func=Mock(),
+        )
+
+
 @pytest.mark.parametrize(
-    "configured_channel, configured_testing_branch, expected_message",
+    "configured_testing_branch",
     [
-        (
-            "branch with spaces",
-            "origin/feature/test",
-            "Warning: Invalid update.channel_to_update_slips_from "
-            "value 'branch with spaces'. Falling back to stable.",
-        ),
-        (
-            "testing",
-            "origin/../master",
-            "Warning: Invalid "
-            "update.testing_branch_to_update_slips_from value "
-            "'origin/../master'. Falling back to stable.",
-        ),
-        (
-            "testing",
-            "origin/@{bad}",
-            "Warning: Invalid "
-            "update.testing_branch_to_update_slips_from value "
-            "'origin/@{bad}'. Falling back to stable.",
-        ),
-        (
-            "testing",
-            "origin/-bad",
-            "Warning: Invalid "
-            "update.testing_branch_to_update_slips_from value "
-            "'origin/-bad'. Falling back to stable.",
-        ),
+        "origin/../master",
+        "origin/@{bad}",
+        "origin/-bad",
     ],
 )
-def test_invalid_update_config_falls_back_to_stable(
-    configured_channel, configured_testing_branch, expected_message
+def test_testing_update_channel_uses_configured_branch_as_is(
+    configured_testing_branch,
 ):
     db = Mock()
     db.is_running_non_stop.return_value = True
@@ -158,10 +160,34 @@ def test_invalid_update_config_falls_back_to_stable(
         multiinstance=False,
     )
     conf.auto_update_slips.return_value = True
-    conf.channel_to_update_slips_from.return_value = configured_channel
+    conf.channel_to_update_slips_from.return_value = "testing"
     conf.testing_branch_to_update_slips_from.return_value = (
         configured_testing_branch
     )
+
+    with patch("managers.update_manager.ConfigParser", return_value=conf):
+        update_manager = UpdateManager(
+            database=db,
+            is_slips_live_updating_event=Mock(),
+            print_func=Mock(),
+        )
+
+    assert update_manager.update_branch == configured_testing_branch
+    assert update_manager.update_channel == "testing"
+
+
+def test_testing_update_channel_without_branch_falls_back_to_stable():
+    db = Mock()
+    db.is_running_non_stop.return_value = True
+
+    conf = Mock()
+    conf.get_args.return_value = Mock(
+        is_slips_started_by_an_update=False,
+        multiinstance=False,
+    )
+    conf.auto_update_slips.return_value = True
+    conf.channel_to_update_slips_from.return_value = "testing"
+    conf.testing_branch_to_update_slips_from.return_value = ""
     print_func = Mock()
 
     with patch("managers.update_manager.ConfigParser", return_value=conf):
@@ -173,7 +199,10 @@ def test_invalid_update_config_falls_back_to_stable(
 
     assert update_manager.update_branch == "origin/master"
     assert update_manager.update_channel == "stable"
-    print_func.assert_called_once_with(expected_message)
+    print_func.assert_called_once_with(
+        "Warning: Invalid update.testing_branch_to_update_slips_from "
+        "value ''. Falling back to stable."
+    )
 
 
 @pytest.mark.parametrize(

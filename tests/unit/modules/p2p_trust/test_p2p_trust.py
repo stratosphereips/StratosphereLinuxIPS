@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import pytest
 
@@ -79,8 +79,11 @@ def test_rebuild_pigeon_binary_after_slips_update_runs_go_build():
         text=True,
     )
     assert trust.print.call_args_list == [
-        (("Rebuilding p2p4slips after Slips update.",), {}),
-        (("Done rebuilding p2p4slips after Slips update.",), {}),
+        call(
+            "Rebuilding p2p4slips after Slips update. This can take "
+            "some time."
+        ),
+        call("Done rebuilding p2p4slips after Slips update."),
     ]
 
 
@@ -102,12 +105,12 @@ def test_rebuild_pigeon_binary_after_slips_update_stops_on_build_error():
         assert trust._rebuild_pigeon_binary_after_slips_update() is False
 
     assert trust.print.call_args_list == [
-        (("Rebuilding p2p4slips after Slips update.",), {}),
-        (
-            (
-                "Warning: Failed to rebuild p2p4slips after Slips update. "
-                "Error: go not found",
-            ),
-            {},
+        call(
+            "Rebuilding p2p4slips after Slips update. This can take "
+            "some time."
+        ),
+        call(
+            "Warning: Failed to rebuild p2p4slips after Slips update. "
+            "Error: go not found"
         ),
     ]
