@@ -79,8 +79,14 @@ This file includes metadata about the new version such as:
 The compatibility parser was added so we avoid updating to incompatible new releases.
 
 `update.json` now supports either a single object or a list of objects. When a
-list is used, each entry should define a `branch` field so Slips can pick the
-metadata that matches the configured update channel.
+list is used, each entry should define both:
+
+- `branch`: the git branch name without the `origin/` prefix
+- `channel`: the Slips update channel name (`stable`, `unstable`, `testing`)
+
+Slips first tries to match the configured branch, then falls back to the
+configured channel. For backward compatibility, older list entries that only
+use `branch` with channel aliases are still accepted.
 
 Example:
 
@@ -91,21 +97,24 @@ Example:
     "release_date": "2026-04-30T14:39:56+03:00",
     "backwards_compatible": true,
     "has_new_dependencies": false,
-    "branch": "stable"
+    "branch": "master",
+    "channel": "stable"
   },
   {
     "version": "1.1.19",
     "release_date": "2026-04-30T14:39:56+03:00",
     "backwards_compatible": true,
     "has_new_dependencies": false,
-    "branch": "unstable"
+    "branch": "develop",
+    "channel": "unstable"
   },
   {
     "version": "1.1.19",
     "release_date": "2026-04-30T14:39:56+03:00",
     "backwards_compatible": true,
     "has_new_dependencies": true,
-    "branch": "testing"
+    "branch": "feature/your_branch_here",
+    "channel": "testing"
   }
 ]
 ```

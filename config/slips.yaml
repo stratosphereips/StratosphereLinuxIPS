@@ -16,8 +16,8 @@ update:
   auto_update_slips: false
   # Select which update channel Slips should auto-update from.
   # Available update channels:
-  # - stable:   origin/master
-  # - unstable: origin/develop
+  # - stable:  uses origin/master
+  # - unstable: uses origin/develop
   # - testing:  specify your branch name in the testing_branch_to_update_slips_from parameter below.
   channel_to_update_slips_from: stable
   # This branch is used only when channel_to_update_slips_from is set to

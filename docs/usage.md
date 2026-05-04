@@ -523,6 +523,12 @@ This setting is separate from the runtime ```feeds_update_manager``` module, whi
 
 Automatic Slips updates may overwrite the default config files shipped with Slips. If you want to keep local config changes safe, do not modify the default config files. Create and use your own config files with different names instead.
 
+Use ```update.channel_to_update_slips_from``` in slips.yaml to choose the update channel:
+
+- ```stable``` -> ```origin/master```
+- ```unstable``` -> ```origin/develop```
+- ```testing``` -> uses the branch specified in ```update.testing_branch_to_update_slips_from```
+
 
 
 <div class="zoom">
