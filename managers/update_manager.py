@@ -324,6 +324,9 @@ class UpdateManager:
         return sTrue if a new compatible version is available and slips
         should update itself
         """
+        if not self.auto_update_slips_enabled:
+            return False
+
         if self._did_1d_pass_since_last_update():
             should_update: bool = self.should_update_slips()
 
