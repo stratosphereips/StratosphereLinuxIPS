@@ -485,34 +485,47 @@ def test_get_gateway_ip_if_interface_args_interface(
 
 
 @pytest.mark.parametrize(
-    "ip, is_multicast, cached_info, expected_calls",
+    "ip, is_multicast, cached_info, cached_rdns, expected_calls",
     [
         # Testcase 1: Valid IP, not multicast, no cached info
         (
             "192.168.1.1",
             False,
             {},
+            None,
             {"get_geocountry": 1, "get_asn": 1, "get_rdns": 1},
         ),
         # Testcase 2: Valid IP, multicast
-        ("224.0.0.1", True, {}, {}),
+        ("224.0.0.1", True, {}, None, {}),
         # Testcase 3: Valid IP, not multicast,
         # with cached geocountry
         (
             "10.0.0.1",
             False,
             {"geocountry": "USA"},
+            None,
             {"get_asn": 1, "get_rdns": 1},
+        ),
+        # Testcase 4: Valid IP with cached rDNS
+        (
+            "10.0.0.2",
+            False,
+            {},
+            "cached.example.com",
+            {"get_geocountry": 1, "get_asn": 1},
         ),
     ],
 )
-def test_handle_new_ip(mocker, ip, is_multicast, cached_info, expected_calls):
+def test_handle_new_ip(
+    mocker, ip, is_multicast, cached_info, cached_rdns, expected_calls
+):
     ip_info = ModuleFactory().create_ip_info_obj()
 
     mock_ip_address = mocker.patch("ipaddress.ip_address")
     mock_ip_address.return_value.is_multicast = is_multicast
 
     ip_info.db.get_ip_info.return_value = cached_info
+    ip_info.db.get_rdns_info.return_value = cached_rdns
 
     mock_get_geocountry = mocker.patch.object(ip_info, "get_geocountry")
     mock_get_asn = mocker.patch.object(ip_info.asn, "get_asn")

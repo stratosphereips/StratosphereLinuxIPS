@@ -649,7 +649,8 @@ class IPInfo(AsyncModule):
         if self.asn.should_update_asn(asn):
             await self.asn.get_asn_async(ip, self.run_lookup)
 
-        await self.get_rdns_async(ip)
+        if not self.db.get_rdns_info(ip):
+            await self.get_rdns_async(ip)
 
     async def handle_new_mac_async(self, mac_addr: str, profileid: str):
         """
@@ -783,7 +784,8 @@ class IPInfo(AsyncModule):
         if self.asn.should_update_asn(asn):
             self.asn.get_asn(ip)
 
-        self.get_rdns(ip)
+        if not self.db.get_rdns_info(ip):
+            self.get_rdns(ip)
 
     async def main(self):
         if msg := self.get_msg("new_MAC"):
