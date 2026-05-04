@@ -145,6 +145,8 @@ enable ```auto_update_slips``` in ```config/slips.yaml``` and run slips on your 
 
 now whenever a new version of Slips is available, it will update itself and the new slips will use the same CLI as the old one.
 
+During this live update, Slips also updates its git submodules. If local P2P is enabled, the restarted updated process rebuilds the `p2p4slips` binary before the P2P module starts.
+
 ## Manual update
 
 If you do not use `auto_update_slips`, update Slips manually using the method

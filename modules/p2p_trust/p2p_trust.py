@@ -80,7 +80,8 @@ class Trust(IModule):
     pygo_channel_raw = "p2p_pygo"
     start_pigeon = True
     # or make sure the binary is in $PATH
-    pigeon_binary = os.path.join(os.getcwd(), "p2p4slips/p2p4slips")
+    pigeon_binary_dir = "p2p4slips"
+    pigeon_binary = os.path.join(pigeon_binary_dir, "p2p4slips")
     pigeon_key_file = "pigeon.keys"
     rename_redis_ip_info = False
     override_p2p = False
@@ -200,6 +201,9 @@ class Trust(IModule):
 
         self.pigeon = None
         if self.start_pigeon:
+            if not self._rebuild_pigeon_binary_after_slips_update():
+                return
+
             if not shutil.which(self.pigeon_binary):
                 self.print(
                     f"Warning: P2p4slips binary not found in "
@@ -229,6 +233,60 @@ class Trust(IModule):
             self.pigeon = subprocess.Popen(
                 executable, cwd=self.p2p_trust_runtime_dir, stdout=outfile
             )
+
+    def _should_rebuild_pigeon_binary(self) -> bool:
+        """
+        Check whether the p2p binary should be rebuilt after a Slips update.
+
+        Returns:
+            True when Slips was started by the update manager and local p2p
+            is enabled, otherwise False.
+        """
+        return bool(
+            self.start_pigeon
+            and getattr(self.args, "is_slips_started_by_an_update", False)
+            and self.conf.use_local_p2p()
+        )
+
+    def _rebuild_pigeon_binary_after_slips_update(self) -> bool:
+        """
+        Rebuild the p2p4slips binary after a live Slips update when needed.
+
+        Returns:
+            True when no rebuild is needed or the rebuild succeeds,
+            otherwise False.
+        """
+        if not self._should_rebuild_pigeon_binary():
+            return True
+
+        self.print(
+            "Rebuilding p2p4slips after Slips update. This can take "
+            "some time."
+        )
+        try:
+            subprocess.run(
+                ["go", "build"],
+                cwd=self.pigeon_binary_dir,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except OSError as error:
+            self.print(
+                "Warning: Failed to rebuild p2p4slips after Slips update. "
+                f"Error: {error}"
+            )
+            return False
+        except subprocess.CalledProcessError as error:
+            error_output = (error.stderr or error.stdout or str(error)).strip()
+            self.print(
+                "Warning: Failed to rebuild p2p4slips after Slips update. "
+                f"Error: {error_output}"
+            )
+            return False
+
+        self.print("Done rebuilding p2p4slips after Slips update.")
+        return True
 
     def extract_confidence(self, evidence: Evidence) -> Optional[float]:
         """
