@@ -164,15 +164,15 @@ def test_warn_about_pending_modules(pending_modules, expected_print_calls):
     "blocking_enabled, exporting_alerts_disabled, "
     "expected_kill_first, expected_kill_last",
     [  # Testcase1: blocking enabled, exporting_alerts enabled
-        (True, False, [1, 2], [3, 4, 5]),
+        (True, False, [1, 2], [3, 4, 5, 6, 7]),
         # Testcase2: blocking disabled, exporting_alerts enabled
-        (False, False, [1, 2, 4], [3, 5]),
+        (False, False, [1, 2, 4], [3, 5, 6, 7]),
         # Testcase3: blocking enabled, exporting_alerts disabled
-        (True, True, [1, 2, 5], [3, 4]),
+        (True, True, [1, 2, 5], [3, 4, 6, 7]),
         # Testcase4: blocking disabled, exporting_alerts disabled
-        (False, True, [1, 2, 4, 5], [3]),
+        (False, True, [1, 2, 4, 5], [3, 6, 7]),
         # Testcase5: All enabled, some PIDs are None
-        (True, False, [1, 2], [3, 4, 5]),
+        (True, False, [1, 2], [3, 4, 5, 6, 7]),
     ],
 )
 def test_get_hitlist_in_order(
@@ -188,12 +188,16 @@ def test_get_hitlist_in_order(
         Mock(pid=3, name="evidence_handler"),
         Mock(pid=4, name="blocking"),
         Mock(pid=5, name="exporting_alerts"),
+        Mock(pid=6, name="alert_summary"),
+        Mock(pid=7, name="LLM"),
     ]
 
     process_manager.main.db.get_pid_of = lambda x: {
         "evidence_handler": 3,
         "blocking": 4,
         "exporting_alerts": 5,
+        "alert_summary": 6,
+        "LLM": 7,
     }.get(x)
     process_manager.main.args.blocking = blocking_enabled
     process_manager.main.db.get_disabled_modules = lambda: (
