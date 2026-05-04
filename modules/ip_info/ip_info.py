@@ -17,7 +17,6 @@ import json
 from contextlib import redirect_stdout, redirect_stderr
 import subprocess
 import netifaces
-import time
 import asyncio
 import multiprocessing
 
@@ -123,7 +122,7 @@ class IPInfo(AsyncModule):
             except OSError:
                 # update manager hasn't downloaded it yet
                 try:
-                    time.sleep(10)
+                    await asyncio.sleep(10)
                     trials += 1
                 except KeyboardInterrupt:
                     return False
