@@ -17,10 +17,11 @@ import json
 from contextlib import redirect_stdout, redirect_stderr
 import subprocess
 import netifaces
-import time
 import asyncio
 import multiprocessing
-from functools import lru_cache
+import time
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache, partial
 
 
 from modules.ip_info.jarm import JARM
@@ -52,12 +53,23 @@ class IPInfo(AsyncModule):
         """This will be called when initializing this module"""
         # 30MBs max size of this queue to avoid growing forever in mem
         self.pending_mac_queries = multiprocessing.Queue(maxsize=30000000)
+        self.lookup_executor = ThreadPoolExecutor(
+            max_workers=4, thread_name_prefix="ip-info"
+        )
+        self.lookup_semaphore = asyncio.Semaphore(4)
+        # to avoid repeated failed rdns and whois lookups. we wait 300s
+        # before retries.
+        self.negative_cache_ttl = 300
+        self.failed_rdns_lookups = {}
+        self.failed_whois_lookups = {}
+        self.failed_mac_vendor_lookups = {}
         self.asn = ASN(self.db)
         self.JARM = JARM()
         self.classifier = FlowClassifier()
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
-        self.valid_tlds = whois.validTlds()
+        self.valid_tlds = frozenset(whois.validTlds())
+        self.domain_validity_cache = {}
         self.is_running_in_ap_mode: bool = (
             True if self.args.access_point else False
         )
@@ -117,15 +129,40 @@ class IPInfo(AsyncModule):
                 return
 
             try:
-                self.mac_db = open("databases/macaddress-db.json", "r")
+                self.mac_vendor_index = self._load_mac_vendor_index(
+                    "databases/macaddress-db.json"
+                )
                 return True
             except OSError:
                 # update manager hasn't downloaded it yet
                 try:
-                    time.sleep(10)
+                    await asyncio.sleep(10)
                     trials += 1
                 except KeyboardInterrupt:
                     return False
+
+    @staticmethod
+    def _load_mac_vendor_index(db_path: str) -> dict[str, str]:
+        """
+        Load the MAC vendor database into a dictionary keyed by OUI.
+
+        :param db_path: Relative path to the JSON lines MAC vendor database.
+        :return: Mapping of OUI prefixes to vendor names.
+        """
+        vendor_index = {}
+        with open(db_path, "r") as mac_db:
+            for line in mac_db:
+                try:
+                    mac_entry = json.loads(line)
+                except json.decoder.JSONDecodeError:
+                    continue
+
+                assignment = mac_entry.get("macPrefix")
+                vendor_name = mac_entry.get("vendorName")
+                if assignment and vendor_name:
+                    vendor_index[assignment.upper()] = vendor_name
+
+        return vendor_index
 
     # GeoInfo functions
     def get_geocountry(self, ip) -> dict:
@@ -158,6 +195,17 @@ class IPInfo(AsyncModule):
         returns the family of the IP, AF_INET or AF_INET6
         :param ip: str
         """
+        return self._get_ip_family_cached(ip)
+
+    @staticmethod
+    @lru_cache(maxsize=1024)
+    def _get_ip_family_cached(ip: str):
+        """
+        Return the socket address family for an IP-like string.
+
+        :param ip: IP address or IP-like string.
+        :return: AF_INET6 when the value contains ':', otherwise AF_INET.
+        """
         return socket.AF_INET6 if ":" in ip else socket.AF_INET
 
     def get_rdns(self, ip: str) -> dict:
@@ -167,6 +215,8 @@ class IPInfo(AsyncModule):
         :param ip: str
         """
         data = {}
+        if self._is_negative_cache_hit(self.failed_rdns_lookups, ip):
+            return False
         try:
             # works with both ipv4 and ipv6
             reverse_dns: str = socket.gethostbyaddr(ip)[0]
@@ -175,15 +225,27 @@ class IPInfo(AsyncModule):
                 # check if the reverse_dns value is a valid IP address
                 socket.inet_pton(self.get_ip_family(reverse_dns), reverse_dns)
                 # reverse_dns is an ip. there's no reverse dns. don't store
+                self._store_negative_cache(self.failed_rdns_lookups, ip)
                 return False
             except socket.error:
                 # reverse_dns is a valid hostname, store it
                 data["reverse_dns"] = reverse_dns
+                self.failed_rdns_lookups.pop(ip, None)
                 self.db.set_ip_info(ip, data)
         except (socket.gaierror, socket.herror, OSError):
             # not an ip or multicast, can't get the reverse dns record of it
+            self._store_negative_cache(self.failed_rdns_lookups, ip)
             return False
         return data
+
+    async def get_rdns_async(self, ip: str) -> dict:
+        """
+        Resolve reverse DNS without blocking the event loop.
+
+        :param ip: IP address to resolve.
+        :return: Reverse DNS mapping or False if not found.
+        """
+        return await self.run_lookup(self.get_rdns, ip)
 
     # MAC functions
     def get_vendor_online(self, mac_addr):
@@ -193,48 +255,47 @@ class IPInfo(AsyncModule):
         # you will receive an empty response with a status code
         # of HTTP/1.1 204 No Content
         url = "https://api.macvendors.com"
+        if self._is_negative_cache_hit(
+            self.failed_mac_vendor_lookups, mac_addr
+        ):
+            return False
         try:
             response = requests.get(f"{url}/{mac_addr}", timeout=2)
             if response.status_code == 200:
                 # this online db returns results in an array like str [{results}],
                 # make it json
                 if vendor := response.text:
+                    self.failed_mac_vendor_lookups.pop(mac_addr, None)
                     return vendor
+            self._store_negative_cache(
+                self.failed_mac_vendor_lookups, mac_addr
+            )
             return False
         except (
             requests.exceptions.ReadTimeout,
             requests.exceptions.ConnectionError,
             json.decoder.JSONDecodeError,
         ):
+            self._store_negative_cache(
+                self.failed_mac_vendor_lookups, mac_addr
+            )
             return False
-
-    @staticmethod
-    @lru_cache(maxsize=700)
-    def _get_vendor_offline_cached(oui, mac_db_content):
-        """
-        Static helper to perform the actual lookup based on OUI and cached content.
-        """
-        for line in mac_db_content:
-            if oui in line:
-                line = json.loads(line)
-                return line["vendorName"]
-        return False
 
     def get_vendor_offline(self, mac_addr, profileid):
         """
         Gets vendor from Slips' offline database at databases/macaddr-db.json.
         """
-        if not hasattr(self, "mac_db") or self.mac_db is None:
+        if (
+            not hasattr(self, "mac_vendor_index")
+            or self.mac_vendor_index is None
+        ):
             # when update manager is done updating the mac db, we should ask
             # the db for all these pending queries
             self.pending_mac_queries.put((mac_addr, profileid))
             return False
 
         oui = mac_addr[:8].upper()
-        self.mac_db.seek(0)
-        mac_db_content = self.mac_db.readlines()
-
-        return self._get_vendor_offline_cached(oui, tuple(mac_db_content))
+        return self.mac_vendor_index.get(oui, False)
 
     def get_vendor(self, mac_addr: str, profileid: str) -> dict:
         """
@@ -270,6 +331,39 @@ class IPInfo(AsyncModule):
 
         return mac_info
 
+    async def get_vendor_async(self, mac_addr: str, profileid: str) -> dict:
+        """
+        Resolve MAC vendor information without blocking the event loop.
+
+        :param mac_addr: MAC address to enrich.
+        :param profileid: Profile identifier associated with the MAC.
+        :return: Vendor information dict or False.
+        """
+        if not utils.is_ignored_ip(profileid.split("_")[-1]):
+            return False
+
+        if (
+            "ff:ff:ff:ff:ff:ff" in mac_addr.lower()
+            or "00:00:00:00:00:00" in mac_addr.lower()
+        ):
+            return False
+
+        if self.db.get_mac_vendor_from_profile(profileid):
+            return True
+
+        mac_info: dict = {"MAC": mac_addr}
+
+        if vendor := self.get_vendor_offline(mac_addr, profileid):
+            mac_info["Vendor"] = vendor
+            self.db.set_mac_vendor_to_profile(profileid, mac_addr, vendor)
+        elif vendor := await self.run_lookup(self.get_vendor_online, mac_addr):
+            mac_info["Vendor"] = vendor
+            self.db.set_mac_vendor_to_profile(profileid, mac_addr, vendor)
+        else:
+            mac_info["Vendor"] = "Unknown"
+
+        return mac_info
+
     def has_cached_info(self, domain) -> bool:
         cached_data = self.db.get_domain_data(domain)
         if cached_data and ("Age" in cached_data and "Org" in cached_data):
@@ -278,23 +372,38 @@ class IPInfo(AsyncModule):
         return False
 
     def is_valid_domain(self, domain: str) -> bool:
+        cached_result = self.domain_validity_cache.get(domain)
+        if cached_result is not None:
+            return cached_result
+
         if domain.endswith(".arpa") or domain.endswith(".local"):
+            self.domain_validity_cache[domain] = False
             return False
 
         domain_tld: str = self.whitelist.domain_analyzer.get_tld(domain)
         if domain_tld not in self.valid_tlds:
+            self.domain_validity_cache[domain] = False
             return False
+        self.domain_validity_cache[domain] = True
         return True
 
     def query_whois(self, domain: str):
+        if self._is_negative_cache_hit(self.failed_whois_lookups, domain):
+            return None
         try:
             with (
                 open("/dev/null", "w") as f,
                 redirect_stdout(f),
                 redirect_stderr(f),
             ):
-                return whois.query(domain, timeout=2.0)
+                result = whois.query(domain, timeout=2.0)
+                if result:
+                    self.failed_whois_lookups.pop(domain, None)
+                    return result
+                self._store_negative_cache(self.failed_whois_lookups, domain)
+                return None
         except Exception:
+            self._store_negative_cache(self.failed_whois_lookups, domain)
             return None
 
     def get_domain_info(self, domain):
@@ -324,13 +433,47 @@ class IPInfo(AsyncModule):
         if sld_res and hasattr(res, "registrant") and sld_res.registrant:
             self.db.set_info_for_domains(domain, {"Org": sld_res.registrant})
 
+    async def get_domain_info_async(self, domain: str):
+        """
+        Get domain age and organization without blocking the event loop.
+
+        :param domain: Domain to enrich.
+        :return: None.
+        """
+        if not self.is_valid_domain(domain) or self.has_cached_info(domain):
+            return
+
+        res = await self.run_lookup(self.query_whois, domain)
+        if res:
+            if res.creation_date:
+                age = utils.get_time_diff(
+                    res.creation_date,
+                    datetime.datetime.now(),
+                    return_type="days",
+                )
+                self.db.set_info_for_domains(domain, {"Age": age})
+            if hasattr(res, "registrant") and res.registrant:
+                self.db.set_info_for_domains(domain, {"Org": res.registrant})
+                return
+
+        sld = utils.extract_hostname(domain)
+        sld_res = await self.run_lookup(self.query_whois, sld)
+        if sld_res and hasattr(res, "registrant") and sld_res.registrant:
+            self.db.set_info_for_domains(domain, {"Org": sld_res.registrant})
+
     async def shutdown_gracefully(self):
         if hasattr(self, "asn_db"):
             self.asn_db.close()
         if hasattr(self, "country_db"):
             self.country_db.close()
-        if hasattr(self, "mac_db"):
-            self.mac_db.close()
+        if hasattr(self, "pending_mac_queries"):
+            self.pending_mac_queries.close()
+            self.pending_mac_queries.join_thread()
+        if hasattr(self, "lookup_executor"):
+            self.lookup_executor.shutdown(wait=True, cancel_futures=True)
+        if hasattr(self, "domain_validity_cache"):
+            self.domain_validity_cache.clear()
+        self._get_ip_family_cached.cache_clear()
 
     # GW
     @staticmethod
@@ -451,7 +594,7 @@ class IPInfo(AsyncModule):
         downloaded it yet for whatever reason.
         queries are taken from the pending_mac_queries queue.
         """
-        if not hasattr(self, "mac_db"):
+        if not hasattr(self, "mac_vendor_index"):
             return
 
         if self.pending_mac_queries.empty():
@@ -465,6 +608,93 @@ class IPInfo(AsyncModule):
             except Exception:
                 # queue is empty
                 return
+
+    async def run_lookup(self, func, *args):
+        """
+        Run a blocking lookup in the bounded thread pool.
+
+        :param func: Callable to execute.
+        :param args: Positional arguments for the callable.
+        :return: Callable result.
+        """
+        async with self.lookup_semaphore:
+            loop = asyncio.get_running_loop()
+            bound_func = partial(func, *args)
+            return await loop.run_in_executor(self.lookup_executor, bound_func)
+
+    def _is_negative_cache_hit(self, cache: dict, key: str) -> bool:
+        """
+        Check whether a negative cache entry is still valid.
+
+        :param cache: Cache mapping keys to monotonic timestamps.
+        :param key: Cache key to evaluate.
+        :return: True if the negative cache entry is active.
+        """
+        timestamp = cache.get(key)
+        if timestamp is None:
+            return False
+
+        if (time.monotonic() - timestamp) > self.negative_cache_ttl:
+            cache.pop(key, None)
+            return False
+
+        return True
+
+    def _store_negative_cache(self, cache: dict, key: str):
+        """
+        Store a negative cache entry.
+
+        :param cache: Cache mapping keys to monotonic timestamps.
+        :param key: Cache key to store.
+        :return: None.
+        """
+        cache[key] = time.monotonic()
+
+    async def handle_new_ip_async(self, ip: str):
+        """
+        Enrich a newly seen IP without blocking the event loop.
+
+        :param ip: IP address to enrich.
+        :return: None.
+        """
+        try:
+            ip_addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return
+
+        if ip_addr.is_multicast:
+            return
+
+        geocountry = self.db.get_ip_info(ip, "geocountry")
+        if not geocountry:
+            self.get_geocountry(ip)
+
+        asn = self.db.get_asn_info(ip)
+        if self.asn.should_update_asn(asn):
+            await self.asn.get_asn_async(ip, self.run_lookup)
+
+        if not self.db.get_rdns_info(ip):
+            await self.get_rdns_async(ip)
+
+    async def handle_new_mac_async(self, mac_addr: str, profileid: str):
+        """
+        Enrich a newly seen MAC without blocking the event loop.
+
+        :param mac_addr: MAC address to enrich.
+        :param profileid: Profile associated with the MAC.
+        :return: None.
+        """
+        await self.get_vendor_async(mac_addr, profileid)
+        self.check_if_we_have_pending_offline_mac_queries()
+
+    async def handle_new_dns_async(self, domain: str):
+        """
+        Enrich a newly seen domain without blocking the event loop.
+
+        :param domain: Domain to enrich.
+        :return: None.
+        """
+        await self.get_domain_info_async(domain)
 
     def wait_for_dbs(self):
         """
@@ -578,7 +808,8 @@ class IPInfo(AsyncModule):
         if self.asn.should_update_asn(asn):
             self.asn.get_asn(ip)
 
-        self.get_rdns(ip)
+        if not self.db.get_rdns_info(ip):
+            self.get_rdns(ip)
 
     async def main(self):
         if msg := self.get_msg("new_MAC"):
@@ -586,18 +817,17 @@ class IPInfo(AsyncModule):
             mac_addr: str = data["MAC"]
             profileid: str = data["profileid"]
 
-            self.get_vendor(mac_addr, profileid)
-            self.check_if_we_have_pending_offline_mac_queries()
+            self.create_task(self.handle_new_mac_async, mac_addr, profileid)
 
         if msg := self.get_msg("new_dns"):
             msg = json.loads(msg["data"])
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
             if domain := flow.query:
-                self.get_domain_info(domain)
+                self.create_task(self.handle_new_dns_async, domain)
 
         if msg := self.get_msg("new_ip"):
             ip = utils.get_msg_payload(msg)
-            self.handle_new_ip(ip)
+            self.create_task(self.handle_new_ip_async, ip)
 
         if msg := self.get_msg("check_jarm_hash"):
             # example of a msg
