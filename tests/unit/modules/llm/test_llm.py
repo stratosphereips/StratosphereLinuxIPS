@@ -371,6 +371,22 @@ def test_should_stop_waits_for_shutdown_grace_period(mocker):
     assert llm.should_stop() is True
 
 
+def test_should_stop_waits_for_upstream_modules_that_can_publish_late_requests(
+    mocker,
+):
+    llm = ModuleFactory().create_llm_obj()
+    llm.termination_event.is_set.return_value = True
+    llm.last_request_activity = 100
+    llm.db.get_pid_of.side_effect = lambda name: {
+        "alert_summary": 12345,
+        "evidence_handler": None,
+    }.get(name)
+    mocker.patch("modules.llm.llm.time.time", return_value=999)
+    mocker.patch.object(llm, "_is_process_alive", return_value=True)
+
+    assert llm.should_stop() is False
+
+
 def test_shutdown_gracefully_clears_available_backend_registry():
     llm = ModuleFactory().create_llm_obj()
 
