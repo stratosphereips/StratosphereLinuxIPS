@@ -247,16 +247,15 @@ class ASN:
             # either search for the ASN in our offline db, or online
             # either way we need to cache the asn of this ip's range so we
             # don't search for ips in the same range
+            # we don't have it cached in our db, get it from geolite
+            if asn := self.get_asn_info_from_geolite(ip):
+                self.update_ip_info_in_the_db(ip, asn)
+                return
+
             # cache this range in our redis db
             if asn := self.cache_ip_range(ip):
                 # range is cached and we managed to get the number and org of
                 # the given ip using whois
-                # no need to search online or offline
-                self.update_ip_info_in_the_db(ip, asn)
-                return
-
-            # we don't have it cached in our db, get it from geolite
-            if asn := self.get_asn_info_from_geolite(ip):
                 self.update_ip_info_in_the_db(ip, asn)
                 return
 
@@ -283,11 +282,11 @@ class ASN:
             self.update_ip_info_in_the_db(ip, cached_asn)
             return
 
-        if asn := await run_in_executor(self.cache_ip_range, ip):
+        if asn := self.get_asn_info_from_geolite(ip):
             self.update_ip_info_in_the_db(ip, asn)
             return
 
-        if asn := self.get_asn_info_from_geolite(ip):
+        if asn := await run_in_executor(self.cache_ip_range, ip):
             self.update_ip_info_in_the_db(ip, asn)
             return
 

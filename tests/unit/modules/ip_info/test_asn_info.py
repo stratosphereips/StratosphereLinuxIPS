@@ -318,7 +318,11 @@ def test_update_ip_info_in_the_db(ip, asn, expected_call):
             None,
             None,
             {"asn": {"number": "AS15169", "org": "Google LLC"}},
-            [call.get_cached_asn("8.8.8.8"), call.cache_ip_range("8.8.8.8")],
+            [
+                call.get_cached_asn("8.8.8.8"),
+                call.get_asn_info_from_geolite("8.8.8.8"),
+                call.cache_ip_range("8.8.8.8"),
+            ],
         ),
         # ASN found in GeoLite database
         (
@@ -330,7 +334,6 @@ def test_update_ip_info_in_the_db(ip, asn, expected_call):
             {"asn": {"number": "AS13335", "org": "Cloudflare, Inc."}},
             [
                 call.get_cached_asn("1.1.1.1"),
-                call.cache_ip_range("1.1.1.1"),
                 call.get_asn_info_from_geolite("1.1.1.1"),
             ],
         ),
@@ -344,8 +347,8 @@ def test_update_ip_info_in_the_db(ip, asn, expected_call):
             {"asn": {"number": "AS64496", "org": "Example ISP"}},
             [
                 call.get_cached_asn("203.0.113.1"),
-                call.cache_ip_range("203.0.113.1"),
                 call.get_asn_info_from_geolite("203.0.113.1"),
+                call.cache_ip_range("203.0.113.1"),
                 call.get_asn_online("203.0.113.1"),
             ],
         ),
@@ -373,15 +376,15 @@ def test_get_asn_with_result(
     ) as mock_get_online, patch.object(
         asn_info, "update_ip_info_in_the_db"
     ) as mock_update_ip_info:
+        tracker = Mock()
+        tracker.attach_mock(mock_get_cached_asn, "get_cached_asn")
+        tracker.attach_mock(mock_get_geolite, "get_asn_info_from_geolite")
+        tracker.attach_mock(mock_cache_ip_range, "cache_ip_range")
+        tracker.attach_mock(mock_get_online, "get_asn_online")
 
         asn_info.get_asn(ip)
 
-        actual_calls = (
-            mock_get_cached_asn.mock_calls
-            + mock_cache_ip_range.mock_calls
-            + mock_get_geolite.mock_calls
-            + mock_get_online.mock_calls
-        )
+        actual_calls = tracker.mock_calls
         assert actual_calls == expected_calls
         mock_update_ip_info.assert_called_once_with(ip, expected_result)
 
@@ -391,8 +394,8 @@ def test_get_asn_without_result():
     ip = "10.0.0.1"
     expected_calls = [
         call.get_cached_asn("10.0.0.1"),
-        call.cache_ip_range("10.0.0.1"),
         call.get_asn_info_from_geolite("10.0.0.1"),
+        call.cache_ip_range("10.0.0.1"),
         call.get_asn_online("10.0.0.1"),
     ]
 
@@ -409,15 +412,15 @@ def test_get_asn_without_result():
     ) as mock_get_online, patch.object(
         asn_info, "update_ip_info_in_the_db"
     ) as mock_update_ip_info:
+        tracker = Mock()
+        tracker.attach_mock(mock_get_cached_asn, "get_cached_asn")
+        tracker.attach_mock(mock_get_geolite, "get_asn_info_from_geolite")
+        tracker.attach_mock(mock_cache_ip_range, "cache_ip_range")
+        tracker.attach_mock(mock_get_online, "get_asn_online")
 
         asn_info.get_asn(ip)
 
-        actual_calls = (
-            mock_get_cached_asn.mock_calls
-            + mock_cache_ip_range.mock_calls
-            + mock_get_geolite.mock_calls
-            + mock_get_online.mock_calls
-        )
+        actual_calls = tracker.mock_calls
         assert actual_calls == expected_calls
 
         mock_update_ip_info.assert_not_called()
