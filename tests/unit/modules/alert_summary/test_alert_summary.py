@@ -68,6 +68,10 @@ def test_alert_summary_config_defaults():
     assert parser.alert_summary_llm_temperature() == 0.2
     assert parser.alert_summary_llm_max_tokens() == 220
     assert parser.alert_summary_llm_response_timeout_seconds() == 120
+    assert parser.alert_summary_history_enabled() is False
+    assert parser.alert_summary_history_max_alerts() == 3
+    assert parser.alert_summary_history_max_tokens() == 700
+    assert parser.alert_summary_history_patterns_per_alert() == 2
 
 
 def test_alert_summary_config_sanitization():
@@ -80,6 +84,10 @@ def test_alert_summary_config_sanitization():
             "llm_temperature": "bad",
             "llm_max_tokens": "bad",
             "llm_response_timeout_seconds": -10,
+            "history_enabled": "true",
+            "history_max_alerts": "bad",
+            "history_max_tokens": -10,
+            "history_patterns_per_alert": "bad",
         }
     }
 
@@ -89,6 +97,10 @@ def test_alert_summary_config_sanitization():
     assert parser.alert_summary_llm_temperature() == 0.2
     assert parser.alert_summary_llm_max_tokens() == 220
     assert parser.alert_summary_llm_response_timeout_seconds() == 0
+    assert parser.alert_summary_history_enabled() is True
+    assert parser.alert_summary_history_max_alerts() == 3
+    assert parser.alert_summary_history_max_tokens() == 0
+    assert parser.alert_summary_history_patterns_per_alert() == 2
 
 
 def test_build_prompt_messages_uses_incident_metadata_and_digest():
@@ -106,9 +118,109 @@ def test_build_prompt_messages_uses_incident_metadata_and_digest():
 
     assert messages[0]["content"] == SYSTEM_PROMPT
     assert "INCIDENT METADATA:" in messages[1]["content"]
-    assert "EVIDENCE DIGEST:" in messages[1]["content"]
+    assert "CURRENT ALERT EVIDENCE DIGEST:" in messages[1]["content"]
     assert "Grouped Evidence Patterns: 1" in messages[1]["content"]
     assert "Prompt version: alert-summary-v2" in messages[1]["content"]
+    assert "RECENT ALERT HISTORY" not in messages[1]["content"]
+
+
+def test_build_prompt_messages_includes_recent_history_for_same_profile():
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    prior_alert = _build_alert(_build_evidence())
+    prior_alert.timewindow = TimeWindow(
+        6,
+        start_time="2026-04-28T08:00:00+00:00",
+        end_time="2026-04-28T09:00:00+00:00",
+    )
+    alert_summary._remember_alert_summary(
+        prior_alert,
+        "Earlier scanning activity suggests reconnaissance.",
+        [
+            "08:10 | Horizontal port scan to port 443/TCP",
+            "08:15 | Repeated unknown-port traffic to 198.51.100.10",
+        ],
+    )
+
+    current_alert = _build_alert(_build_evidence())
+    messages = alert_summary._build_prompt_messages(
+        current_alert,
+        ["10:00 | Connection to 203.0.113.10 without a preceding DNS lookup."],
+        1,
+        1,
+        0,
+    )
+
+    assert "RECENT ALERT HISTORY" in messages[1]["content"]
+    assert "HISTORICAL PROGRESSION" in messages[1]["content"]
+    assert "Earlier scanning activity suggests reconnaissance." in messages[1]["content"]
+    assert "Horizontal port scan to port 443/TCP" in messages[1]["content"]
+    assert "continuation, escalation, repetition, diversification, or a different pattern" in messages[1]["content"]
+    assert "recurrence raises, lowers, or does not materially change confidence and urgency" in messages[1]["content"]
+
+
+def test_analyze_recent_history_counts_repeated_pattern_overlap():
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    prior_alert = _build_alert(_build_evidence())
+    prior_alert.timewindow = TimeWindow(6)
+    alert_summary._remember_alert_summary(
+        prior_alert,
+        "Earlier scan summary.",
+        [
+            "09:15 | Connection to 203.0.113.10 without a preceding DNS lookup.",
+            "09:20 | Horizontal port scan to port 443/TCP",
+        ],
+    )
+    alert = _build_alert(_build_evidence())
+
+    history_analysis = alert_summary._analyze_recent_history(
+        alert,
+        alert_summary._get_recent_alert_history(alert),
+        [
+            "10:00 | Connection to 203.0.113.10 without a preceding DNS lookup.",
+            "10:05 | Connection to 203.0.113.11 without a preceding DNS lookup.",
+        ],
+    )
+
+    assert history_analysis["prior_alert_count"] == 1
+    assert history_analysis["matching_alert_count"] == 1
+    assert history_analysis["repeated_pattern_count"] >= 1
+    assert history_analysis["same_timewindow_alert_count"] == 0
+
+
+def test_remember_alert_summary_keeps_only_recent_entries_per_profile():
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    alert_summary.history_max_alerts = 2
+
+    first_alert = _build_alert(_build_evidence())
+    first_alert.timewindow = TimeWindow(5)
+    second_alert = _build_alert(_build_evidence())
+    second_alert.timewindow = TimeWindow(6)
+    third_alert = _build_alert(_build_evidence())
+    third_alert.timewindow = TimeWindow(7)
+
+    alert_summary._remember_alert_summary(
+        first_alert,
+        "first summary",
+        ["05:00 | first pattern"],
+    )
+    alert_summary._remember_alert_summary(
+        second_alert,
+        "second summary",
+        ["06:00 | second pattern"],
+    )
+    alert_summary._remember_alert_summary(
+        third_alert,
+        "third summary",
+        ["07:00 | third pattern"],
+    )
+
+    stored_history = list(
+        alert_summary.alert_history_by_profile[str(third_alert.profile)]
+    )
+
+    assert len(stored_history) == 2
+    assert stored_history[0]["summary_text"] == "second summary"
+    assert stored_history[1]["summary_text"] == "third summary"
 
 
 def test_build_grouped_evidence_items_merges_similar_descriptions():
@@ -423,6 +535,21 @@ def test_should_stop_waits_for_pending_shared_llm_request_count():
     assert alert_summary.should_stop() is False
 
 
+def test_should_stop_waits_for_alive_evidence_handler_on_shutdown(mocker):
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    alert_summary.channel_tracker = alert_summary.init_channel_tracker()
+    alert_summary.termination_event.is_set.return_value = True
+    alert_summary.channel_tracker["new_alert"]["msg_received"] = False
+    alert_summary.db.get_pid_of.return_value = 43210
+    mocker.patch.object(
+        alert_summary,
+        "_is_process_alive",
+        return_value=True,
+    )
+
+    assert alert_summary.should_stop() is False
+
+
 def test_get_alert_evidence_handles_mixed_timestamp_types_without_crashing():
     alert_summary = ModuleFactory().create_alert_summary_obj()
     first_evidence = _build_evidence()
@@ -463,6 +590,62 @@ def test_fallback_summary_contains_local_heuristic_context():
     assert "LLM summary unavailable (LLM request timed out.)." in summary
     assert "Local heuristic summary:" in summary
     assert "Connection to 203.0.113.10 without a preceding DNS lookup." in summary
+
+
+def test_fallback_summary_mentions_recent_history_when_available():
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    prior_alert = _build_alert(_build_evidence())
+    prior_alert.timewindow = TimeWindow(6)
+    alert_summary._remember_alert_summary(
+        prior_alert,
+        "Earlier scan summary.",
+        ["09:15 | Horizontal port scan to port 443/TCP"],
+    )
+    alert = _build_alert(_build_evidence())
+
+    summary = alert_summary._build_fallback_summary(
+        alert,
+        [_build_evidence()],
+        "LLM request timed out.",
+    )
+
+    assert "Recent related alert history for this source includes 1 prior summarized alerts" in summary
+    assert "Horizontal port scan to port 443/TCP" in summary
+
+
+def test_fallback_summary_raises_risk_when_same_pattern_repeats_across_history():
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    prior_alert_one = _build_alert(_build_evidence())
+    prior_alert_one.timewindow = TimeWindow(5)
+    prior_alert_one.accumulated_threat_level = 6.0
+    prior_alert_two = _build_alert(_build_evidence())
+    prior_alert_two.timewindow = TimeWindow(6)
+    prior_alert_two.accumulated_threat_level = 7.0
+    current_evidence = _build_evidence()
+    alert = _build_alert(current_evidence)
+    alert.accumulated_threat_level = 6.5
+    alert.confidence = 0.55
+
+    alert_summary._remember_alert_summary(
+        prior_alert_one,
+        "Earlier repeated DNSless connection alert.",
+        ["09:00 | Connection to 203.0.113.10 without a preceding DNS lookup."],
+    )
+    alert_summary._remember_alert_summary(
+        prior_alert_two,
+        "Another repeated DNSless connection alert.",
+        ["09:30 | Connection to 203.0.113.11 without a preceding DNS lookup."],
+    )
+
+    summary = alert_summary._build_fallback_summary(
+        alert,
+        [current_evidence],
+        "LLM request timed out.",
+    )
+
+    assert "repeated current-pattern matches" in summary
+    assert "increasingly like a likely true positive" in summary
+    assert "operational risk appears high" in summary
 
 
 def test_operation_log_respects_configured_verbosity(tmp_path, mocker):
