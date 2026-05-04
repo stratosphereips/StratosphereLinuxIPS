@@ -203,6 +203,7 @@ class ModuleFactory:
         llm.db.reset_pending_llm_request_counts = Mock()
         llm.db.increment_pending_llm_request_count = Mock(return_value=1)
         llm.db.decrement_pending_llm_request_count = Mock(return_value=0)
+        llm.db.get_pid_of = Mock(return_value=None)
         llm.print = Mock()
         return llm
 
@@ -281,6 +282,10 @@ class ModuleFactory:
         conf.alert_summary_llm_response_timeout_seconds = Mock(
             return_value=120
         )
+        conf.alert_summary_history_enabled = Mock(return_value=True)
+        conf.alert_summary_history_max_alerts = Mock(return_value=3)
+        conf.alert_summary_history_max_tokens = Mock(return_value=700)
+        conf.alert_summary_history_patterns_per_alert = Mock(return_value=2)
 
         args = Mock()
         args.is_slips_started_by_an_update = False
@@ -312,6 +317,7 @@ class ModuleFactory:
         alert_summary.db.get_pending_llm_request_count = Mock(return_value=0)
         alert_summary.db.get_twid_evidence = Mock(return_value={})
         alert_summary.db.get_hostname_from_profile = Mock(return_value="")
+        alert_summary.db.get_pid_of = Mock(return_value=None)
         alert_summary.print = Mock()
         return alert_summary
 
