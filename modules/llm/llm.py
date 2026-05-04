@@ -339,6 +339,7 @@ class LLM(IModule):
         self.operation_log_path = self.get_module_specific_output_path(
             "llm.log"
         )
+        self.waiting_for_upstream_modules_logged = False
         self.read_configuration()
 
     def subscribe_to_channels(self):
@@ -494,6 +495,18 @@ class LLM(IModule):
         if self.is_msg_received_in_any_channel() or self._has_pending_work():
             self._record_request_activity()
             return False
+
+        if self._should_wait_for_upstream_modules():
+            if not self.waiting_for_upstream_modules_logged:
+                self._log_operation(
+                    "Waiting for upstream modules that may still publish "
+                    "late llm_request messages before shutdown."
+                )
+                self.waiting_for_upstream_modules_logged = True
+            self._record_request_activity()
+            return False
+
+        self.waiting_for_upstream_modules_logged = False
 
         return (
             time.time() - self.last_request_activity
@@ -751,6 +764,36 @@ class LLM(IModule):
     def _has_pending_work(self) -> bool:
         """Return True while the request queue or workers still have work."""
         return self.request_queue.unfinished_tasks > 0
+
+    def _should_wait_for_upstream_modules(self) -> bool:
+        """
+        Keep the LLM service alive while upstream producers are still running.
+
+        :return: True when late llm_request publishers may still be alive.
+        """
+        for module_name in ("alert_summary", "evidence_handler"):
+            module_pid = self.db.get_pid_of(module_name)
+            if module_pid and self._is_process_alive(module_pid):
+                return True
+        return False
+
+    @staticmethod
+    def _is_process_alive(pid: int) -> bool:
+        """
+        Check whether a process PID is still alive.
+
+        :param pid: Process ID.
+        :return: True when the PID is alive.
+        """
+        try:
+            os.kill(int(pid), 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+        return True
 
     def _record_request_activity(self):
         """Update the timestamp used to keep the LLM service alive."""
