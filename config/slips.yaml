@@ -1,6 +1,11 @@
 # This configuration file controls several aspects of the working of Slips.
+################ 🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨 #########################
+##                DO NOT MODIFY THIS FILE. EVER.                                                      #
+##      IF YOU NEED TO CHANGE ANYTHING, MAKE A COPY AND USE THAT COPY WITH slips.py -c                #
+################ 🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨 #########################
 
 ---
+
 update:
   # Enable automatic live updates of the installed Slips version.
   # This setting is separate from the feeds_update_manager module, which only

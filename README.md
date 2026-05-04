@@ -165,6 +165,9 @@ Slips can be run on different platforms, the easiest and most recommended way if
 # Configuration
 Slips has a [config/slips.yaml](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/config/slips.yaml) that contains user configurations for different modules and general execution.
 
+Do not edit the default `config/slips.yaml` directly. Create a copy for your local configuration changes and run Slips with `-c`, for example `./slips.py -c config/my_slips.yaml -f dataset/test7-malicious.pcap`.
+Slips aborts updating to new versions when there are changes to Slips local config files.
+
 * You can change the timewindow width by modifying the ```time_window_width``` parameter
 * You can change the analysis direction to ```all```  if you want to see the attacks from and to your computer
 * You can also specify whether to ```train``` or ```test``` the ML models

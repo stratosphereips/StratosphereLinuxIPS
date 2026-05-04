@@ -179,7 +179,8 @@ If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker i
 	cd ~/StratosphereLinuxIPS
 	docker build --target amd --no-cache -t slips -f docker/Dockerfile .
 	docker run -it --rm --net=host slips
-	./slips.py -c config/slips.yaml -f dataset/test3-mixed.binetflow
+	cp config/slips.yaml config/my_slips.yaml
+	./slips.py -c config/my_slips.yaml -f dataset/test3-mixed.binetflow
 
 If you don't have Internet connection from inside your Docker image while building, you may have another set of networks
 defined in your Docker. For that try:

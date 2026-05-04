@@ -458,6 +458,15 @@ Even when Slips is run using sudo, it drops root privileges  in modules that don
 
 Slips has a ```config/slips.yaml``` the contains user configurations for different modules and general execution. Below are some of Slips features that can be modifie with respect to the user preferences.
 
+Do not modify the default ```config/slips.yaml``` in place. Keep it as the shipped baseline, create a copy for your local changes, and run Slips with that copy using ```-c```.
+
+Example:
+
+```bash
+cp config/slips.yaml config/my_slips.yaml
+./slips.py -c config/my_slips.yaml -f dataset/test7-malicious.pcap
+```
+
 ### Generic configuration
 
 **Time window width.**
@@ -746,7 +755,7 @@ this file can be used for training Slips RNN module.
 
 ## Slips parameters
 
-- ```-c``` or  ```--config``` Used for changing then path to the Slips config file. default is config/slips.yaml
+- ```-c``` or  ```--config``` Used for changing then path to the Slips config file. default is config/slips.yaml. It is recommended to copy ```config/slips.yaml``` and pass your copy with ```-c``` instead of editing the default file.
 - ```-v``` or  ```--verbose``` Verbosity level. This logs more info about Slips.
 - ```-e``` or  ```--debug``` Debugging level. This shows more detailed errors.
 - ```-f``` or  ```--filepath``` Read and automatically recognize a Zeek dir, a Zeek conn.log file, a Suricata JSON file, Argus, PCAP.
