@@ -1,6 +1,26 @@
-{
-"version": "1.1.20",
-"release_date": "2026-04-30T14:39:56+03:00",
-"backwards_compatible": true,
-"has_new_dependencies": false,
-}
+[
+  {
+    "version": "1.1.20",
+    "release_date": "2026-04-30T14:39:56+03:00",
+    "backwards_compatible": true,
+    "has_new_dependencies": false,
+    "branch": "master",
+    "channel": "stable"
+  },
+  {
+    "version": "1.1.20",
+    "release_date": "2026-04-30T14:39:56+03:00",
+    "backwards_compatible": true,
+    "has_new_dependencies": false,
+    "branch": "develop",
+    "channel": "unstable"
+  },
+  {
+    "version": "1.1.22",
+    "release_date": "2026-05-04T14:39:56+03:00",
+    "backwards_compatible": true,
+    "has_new_dependencies": false,
+    "branch": "alya/tmp_branch_to_test_auto_update",
+    "channel": "testing"
+  }
+]
