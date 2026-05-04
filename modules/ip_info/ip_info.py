@@ -21,7 +21,7 @@ import asyncio
 import multiprocessing
 import time
 from concurrent.futures import ThreadPoolExecutor
-from functools import partial
+from functools import lru_cache, partial
 
 
 from modules.ip_info.jarm import JARM
@@ -66,7 +66,8 @@ class IPInfo(AsyncModule):
         self.classifier = FlowClassifier()
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
-        self.valid_tlds = whois.validTlds()
+        self.valid_tlds = frozenset(whois.validTlds())
+        self.domain_validity_cache = {}
         self.is_running_in_ap_mode: bool = (
             True if self.args.access_point else False
         )
@@ -191,6 +192,17 @@ class IPInfo(AsyncModule):
         """
         returns the family of the IP, AF_INET or AF_INET6
         :param ip: str
+        """
+        return self._get_ip_family_cached(ip)
+
+    @staticmethod
+    @lru_cache(maxsize=1024)
+    def _get_ip_family_cached(ip: str):
+        """
+        Return the socket address family for an IP-like string.
+
+        :param ip: IP address or IP-like string.
+        :return: AF_INET6 when the value contains ':', otherwise AF_INET.
         """
         return socket.AF_INET6 if ":" in ip else socket.AF_INET
 
@@ -358,12 +370,19 @@ class IPInfo(AsyncModule):
         return False
 
     def is_valid_domain(self, domain: str) -> bool:
+        cached_result = self.domain_validity_cache.get(domain)
+        if cached_result is not None:
+            return cached_result
+
         if domain.endswith(".arpa") or domain.endswith(".local"):
+            self.domain_validity_cache[domain] = False
             return False
 
         domain_tld: str = self.whitelist.domain_analyzer.get_tld(domain)
         if domain_tld not in self.valid_tlds:
+            self.domain_validity_cache[domain] = False
             return False
+        self.domain_validity_cache[domain] = True
         return True
 
     def query_whois(self, domain: str):
@@ -450,6 +469,9 @@ class IPInfo(AsyncModule):
             self.pending_mac_queries.join_thread()
         if hasattr(self, "lookup_executor"):
             self.lookup_executor.shutdown(wait=True, cancel_futures=True)
+        if hasattr(self, "domain_validity_cache"):
+            self.domain_validity_cache.clear()
+        self._get_ip_family_cached.cache_clear()
 
     # GW
     @staticmethod
