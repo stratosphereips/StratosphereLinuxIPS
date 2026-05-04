@@ -57,6 +57,8 @@ class IPInfo(AsyncModule):
             max_workers=4, thread_name_prefix="ip-info"
         )
         self.lookup_semaphore = asyncio.Semaphore(4)
+        # to avoid repeated failed rdns and whois lookups. we wait 300s
+        # before retries.
         self.negative_cache_ttl = 300
         self.failed_rdns_lookups = {}
         self.failed_whois_lookups = {}
@@ -155,7 +157,7 @@ class IPInfo(AsyncModule):
                 except json.decoder.JSONDecodeError:
                     continue
 
-                assignment = mac_entry.get("assignmentBlock")
+                assignment = mac_entry.get("macPrefix")
                 vendor_name = mac_entry.get("vendorName")
                 if assignment and vendor_name:
                     vendor_index[assignment.upper()] = vendor_name
