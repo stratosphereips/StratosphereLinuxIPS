@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import time
 import ipaddress
-from typing import Dict
+from typing import Awaitable, Callable, Dict
 
 import dns.resolver
 import ipwhois
@@ -221,3 +221,31 @@ class ASN:
                 # found it online
                 self.update_ip_info_in_the_db(ip, asn)
                 return
+
+    async def get_asn_async(
+        self,
+        ip: str,
+        run_in_executor: Callable[..., Awaitable[dict]],
+    ):
+        """
+        Get ASN info without blocking the event loop.
+
+        :param ip: IP address to enrich.
+        :param run_in_executor: Async helper that runs blocking callables in
+         a bounded executor.
+        :return: None.
+        """
+        if cached_asn := self.get_cached_asn(ip):
+            self.update_ip_info_in_the_db(ip, cached_asn)
+            return
+
+        if asn := await run_in_executor(self.cache_ip_range, ip):
+            self.update_ip_info_in_the_db(ip, asn)
+            return
+
+        if asn := self.get_asn_info_from_geolite(ip):
+            self.update_ip_info_in_the_db(ip, asn)
+            return
+
+        if asn := await run_in_executor(self.get_asn_online, ip):
+            self.update_ip_info_in_the_db(ip, asn)
