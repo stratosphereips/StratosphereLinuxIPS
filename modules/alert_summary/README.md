@@ -24,6 +24,13 @@ For each alert, the module:
 If the LLM pipeline fails, the module writes a local heuristic fallback summary
 instead of leaving the alert without analyst context.
 
+The module can also keep a bounded recent-history memory per source/profile.
+When enabled, that history is added to the final analyst-summary prompt as
+extra context so the current alert can be explained relative to recent past
+activity instead of being summarized in isolation. When the current alert
+matches repeated prior alerts, that recurrence is intended to act as
+cumulative supporting context that can raise confidence and urgency.
+
 ## Recursive reduction
 
 The module now follows the incident-style prompt design used in
@@ -54,6 +61,10 @@ alert_summary:
   llm_temperature: 0.2
   llm_max_tokens: 220
   llm_response_timeout_seconds: 120
+  history_enabled: false
+  history_max_alerts: 3
+  history_max_tokens: 700
+  history_patterns_per_alert: 2
 ```
 
 Configuration reference:
@@ -70,20 +81,50 @@ Configuration reference:
 - `llm_max_tokens`: output budget for the final analyst paragraph.
 - `llm_response_timeout_seconds`: hard timeout for one in-flight shared-LLM
   request. If set to `0`, the module waits indefinitely.
+- `history_enabled`: keeps recent prior alert summaries in memory and adds
+  them to the final prompt for the same source/profile.
+- `history_max_alerts`: maximum number of prior summarized alerts kept per
+  source/profile.
+- `history_max_tokens`: approximate token budget reserved for recent-history
+  context inside the final prompt.
+- `history_patterns_per_alert`: number of dominant grouped evidence patterns
+  stored from each prior alert.
 
 ## Prompt design
 
 The final prompt is built around:
 
 - incident metadata
+- recent alert history for the same source/profile when enabled
 - grouped evidence patterns with time ranges, counts, severities, and samples
 - instructions to explain the suspicious behavior, strongest supporting or
-  weakening evidence, likely true-positive or false-positive status, and
-  operational risk
+  weakening evidence, likely true-positive or false-positive status,
+  operational risk, and whether the current alert looks like a continuation,
+  escalation, repetition, diversification, or a different pattern relative to
+  recent past activity
 
 Intermediate reduction prompts use the same incident metadata but ask the model
 to compress one evidence chunk into a shorter digest for the next reduction
 layer or the final summary.
+
+## Recent alert history
+
+When `history_enabled` is on, the module stores a small in-memory history of
+completed alert summaries per source/profile. Each stored entry contains:
+
+- time window and compact time range
+- accumulated threat level
+- alert confidence
+- a few dominant grouped evidence patterns
+- the final summary text
+
+That history is added only to the final analyst-summary prompt, not to
+intermediate reduction prompts. The current alert evidence remains the primary
+source of truth, but repeated aligned alerts are meant to be treated as
+cumulative supporting context. In other words, recurrence should not replace
+the current alert evidence, but it can strengthen the assessment of risk,
+urgency, and likely true-positive status when the current alert matches the
+historical pattern.
 
 ## Shared LLM integration
 
