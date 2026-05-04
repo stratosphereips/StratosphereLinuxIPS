@@ -216,10 +216,19 @@ def test_start_updated_slips_verison_starts_detached_process():
 
 
 def test_update_slips_starts_updated_process_before_stopping_current_slips():
+    """
+    Ensure Slips updates submodules before starting the new process.
+
+    Returns:
+        None.
+    """
     update_manager = create_update_manager()
     calls = []
     update_manager.git_pull_master = Mock(
         side_effect=lambda: calls.append("git_pull_master")
+    )
+    update_manager.update_submodules = Mock(
+        side_effect=lambda: calls.append("update_submodules")
     )
     update_manager.start_updated_slips_version = Mock(
         side_effect=lambda: calls.append("start_updated_slips_verison")
@@ -231,13 +240,44 @@ def test_update_slips_starts_updated_process_before_stopping_current_slips():
     update_manager.update_slips()
 
     update_manager.git_pull_master.assert_called_once()
+    update_manager.update_submodules.assert_called_once()
     update_manager.start_updated_slips_version.assert_called_once()
     update_manager.is_slips_live_updating_event.set.assert_called_once()
     assert calls == [
         "git_pull_master",
+        "update_submodules",
         "start_updated_slips_verison",
         "set_update_event",
     ]
+
+
+def test_update_slips_aborts_when_submodule_update_fails():
+    """
+    Ensure submodule update errors abort the live update.
+
+    Returns:
+        None.
+    """
+    update_manager = create_update_manager()
+    git_error = GitCommandError(
+        "git submodule update --init --recursive",
+        1,
+        stderr="fatal: unable to update submodule",
+    )
+    update_manager.git_pull_master = Mock()
+    update_manager.update_submodules = Mock(side_effect=git_error)
+    update_manager.start_updated_slips_version = Mock()
+
+    update_manager.update_slips()
+
+    update_manager.git_pull_master.assert_called_once()
+    update_manager.update_submodules.assert_called_once()
+    update_manager.start_updated_slips_version.assert_not_called()
+    update_manager.is_slips_live_updating_event.set.assert_not_called()
+    update_manager.print.assert_called_once_with(
+        "Warning: Aborting Slips update because a git error occurred: "
+        f"{git_error}"
+    )
 
 
 def test_update_slips_aborts_when_local_changes_block_checkout():

@@ -169,6 +169,18 @@ class UpdateManager:
             "Done pulling new version and checking out master " "branch."
         )
 
+    def update_submodules(self):
+        """
+        Sync and update git submodules after the main repository update.
+
+        Returns:
+            None.
+        """
+        repo = Repo(".")
+        repo.git.submodule("sync", "--recursive")
+        repo.git.submodule("update", "--init", "--recursive")
+        self.print("Done updating Slips submodules.")
+
     def _get_checkout_overwritten_files(
         self, git_error: GitCommandError
     ) -> List[str]:
@@ -299,6 +311,7 @@ class UpdateManager:
     def update_slips(self):
         try:
             self.git_pull_master()
+            self.update_submodules()
         except GitError as git_error:
             self._warn_about_aborted_update(git_error)
             return
