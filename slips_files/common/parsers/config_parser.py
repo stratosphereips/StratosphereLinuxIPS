@@ -1105,6 +1105,44 @@ class ConfigParser(object):
             value = 2
         return min(max(value, 0), 3)
 
+    def alert_summary_history_enabled(self) -> bool:
+        value = self.read_configuration(
+            "alert_summary", "history_enabled", False
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def alert_summary_history_max_alerts(self) -> int:
+        value = self.read_configuration(
+            "alert_summary", "history_max_alerts", 3
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 3
+        return max(0, value)
+
+    def alert_summary_history_max_tokens(self) -> int:
+        value = self.read_configuration(
+            "alert_summary", "history_max_tokens", 700
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 700
+        return max(0, value)
+
+    def alert_summary_history_patterns_per_alert(self) -> int:
+        value = self.read_configuration(
+            "alert_summary", "history_patterns_per_alert", 2
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 2
+        return max(0, value)
+
     def t_cell_enabled(self) -> bool:
         value = self.read_configuration("t_cell", "enabled", True)
         if isinstance(value, bool):
