@@ -24,7 +24,7 @@ from slips_files.common.input_type import InputType
             1234,
             False,
             False,
-            "Date,input_info,32768,1234,zeek_dir,"
+            "Date,input_info,32768,1234,output_dir,"
             "output_dir,os_pid,False,False\n",
         ),
         # Testcase 2: Daemon mode
@@ -33,7 +33,7 @@ from slips_files.common.input_type import InputType
             9101,
             True,
             False,
-            "Date,input_info,32769,9101,zeek_dir,"
+            "Date,input_info,32769,9101,output_dir,"
             "output_dir,os_pid,True,False\n",
         ),
         # Testcase 3: Save DB
@@ -42,7 +42,7 @@ from slips_files.common.input_type import InputType
             1122,
             False,
             True,
-            "Date,input_info,32770,1122,zeek_dir,"
+            "Date,input_info,32770,1122,output_dir,"
             "output_dir,os_pid,False,True\n",
         ),
     ],
@@ -52,7 +52,6 @@ def test_log_redis_server_pid_normal_ports(
 ):
     redis_manager = ModuleFactory().create_redis_manager_obj()
     redis_manager.main.input_information = "input_info"
-    redis_manager.main.db.get_zeek_output_dir.return_value = "zeek_dir"
     redis_manager.main.args.output = "output_dir"
     redis_manager.main.args.daemon = is_daemon
     redis_manager.main.args.save = save_db

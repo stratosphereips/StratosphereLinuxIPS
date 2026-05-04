@@ -62,6 +62,36 @@ Here's a very simple beginner-level steps on how to create your PR in Slips
 11. Open a PR in Slips, remember to set the base branch as develop.
 12. List your changes in the PR description
 
+## How to test the auto update functionality
+
+To test Slips auto update using the `testing` channel, follow these steps:
+
+1. Create a new temporary branch from the branch you want to test, for example `origin/yourname-autoupdate-test`.
+2. Edit [update.json] in your new branch and update the `testing` channel entry:
+   - increase the `version` value so this branch appears newer than the version currently available
+   - keep `"backwards_compatible": true`
+   - keep `"has_new_dependencies": false`
+   - set the testing branch entry to your new branch name e.g `origin/yourname-autoupdate-test`
+3. Commit the `update.json` change in that temporary branch and push the branch to your remote.
+4. Check out your original old branch again. Before continuing, make sure there are no merge conflicts and no modified Slips files in this branch.
+5. Create a copy of [config/slips.yaml](config/slips.yaml) .
+6. In your copied config file, enable auto update and configure the testing channel:
+
+   ```yaml
+   update:
+     auto_update_slips: true
+     channel_to_update_slips_from: testing
+     testing_branch_to_update_slips_from: origin/<yourname-autoupdate-test>
+   ```
+
+7. Run Slips on an interface and point it to your copied config file using `-c`, for example:
+
+   ```bash
+   ./slips.py -i <interface_name> -c config/<your_test_config>.yaml
+   ```
+
+8. While Slips is running, it should detect the higher version in the `testing` channel and auto update to the branch you pushed in step 3.
+
 
 ## Rejected PRs
 

@@ -66,7 +66,7 @@ class RedisManager:
                         "Save the DB\n"
                     )
 
-                zeek_dir = self.main.db.get_zeek_output_dir()
+                zeek_dir = self.main.args.output
 
                 f.write(
                     f"{now},{self.main.input_information},{redis_port},"

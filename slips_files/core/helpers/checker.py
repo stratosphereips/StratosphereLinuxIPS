@@ -256,12 +256,16 @@ class Checker:
         redis_cache_server_pid = self.main.redis_man.get_pid_of_redis_server(
             redis_cache_default_server_port
         )
-        print("Deleting Cache DB in Redis.")
+        print(
+            f"\nDeleting the cache database in the Redis server running on "
+            f"port {redis_cache_default_server_port}."
+        )
         self.main.redis_man.clear_redis_cache_database()
         self.main.input_information = ""
         self.main.redis_man.log_redis_server_pid(
             redis_cache_default_server_port, redis_cache_server_pid
         )
+        print("Done deleting the cache database.")
         self.main.terminate_slips()
 
     def input_module_exists(self, module):
