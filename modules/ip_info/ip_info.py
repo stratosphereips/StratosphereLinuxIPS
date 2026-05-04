@@ -20,7 +20,6 @@ import netifaces
 import time
 import asyncio
 import multiprocessing
-from functools import lru_cache
 
 
 from modules.ip_info.jarm import JARM
@@ -117,7 +116,9 @@ class IPInfo(AsyncModule):
                 return
 
             try:
-                self.mac_db = open("databases/macaddress-db.json", "r")
+                self.mac_vendor_index = self._load_mac_vendor_index(
+                    "databases/macaddress-db.json"
+                )
                 return True
             except OSError:
                 # update manager hasn't downloaded it yet
@@ -126,6 +127,29 @@ class IPInfo(AsyncModule):
                     trials += 1
                 except KeyboardInterrupt:
                     return False
+
+    @staticmethod
+    def _load_mac_vendor_index(db_path: str) -> dict[str, str]:
+        """
+        Load the MAC vendor database into a dictionary keyed by OUI.
+
+        :param db_path: Relative path to the JSON lines MAC vendor database.
+        :return: Mapping of OUI prefixes to vendor names.
+        """
+        vendor_index = {}
+        with open(db_path, "r") as mac_db:
+            for line in mac_db:
+                try:
+                    mac_entry = json.loads(line)
+                except json.decoder.JSONDecodeError:
+                    continue
+
+                assignment = mac_entry.get("assignmentBlock")
+                vendor_name = mac_entry.get("vendorName")
+                if assignment and vendor_name:
+                    vendor_index[assignment.upper()] = vendor_name
+
+        return vendor_index
 
     # GeoInfo functions
     def get_geocountry(self, ip) -> dict:
@@ -208,33 +232,21 @@ class IPInfo(AsyncModule):
         ):
             return False
 
-    @staticmethod
-    @lru_cache(maxsize=700)
-    def _get_vendor_offline_cached(oui, mac_db_content):
-        """
-        Static helper to perform the actual lookup based on OUI and cached content.
-        """
-        for line in mac_db_content:
-            if oui in line:
-                line = json.loads(line)
-                return line["vendorName"]
-        return False
-
     def get_vendor_offline(self, mac_addr, profileid):
         """
         Gets vendor from Slips' offline database at databases/macaddr-db.json.
         """
-        if not hasattr(self, "mac_db") or self.mac_db is None:
+        if (
+            not hasattr(self, "mac_vendor_index")
+            or self.mac_vendor_index is None
+        ):
             # when update manager is done updating the mac db, we should ask
             # the db for all these pending queries
             self.pending_mac_queries.put((mac_addr, profileid))
             return False
 
         oui = mac_addr[:8].upper()
-        self.mac_db.seek(0)
-        mac_db_content = self.mac_db.readlines()
-
-        return self._get_vendor_offline_cached(oui, tuple(mac_db_content))
+        return self.mac_vendor_index.get(oui, False)
 
     def get_vendor(self, mac_addr: str, profileid: str) -> dict:
         """
@@ -329,8 +341,6 @@ class IPInfo(AsyncModule):
             self.asn_db.close()
         if hasattr(self, "country_db"):
             self.country_db.close()
-        if hasattr(self, "mac_db"):
-            self.mac_db.close()
 
     # GW
     @staticmethod
@@ -451,7 +461,7 @@ class IPInfo(AsyncModule):
         downloaded it yet for whatever reason.
         queries are taken from the pending_mac_queries queue.
         """
-        if not hasattr(self, "mac_db"):
+        if not hasattr(self, "mac_vendor_index"):
             return
 
         if self.pending_mac_queries.empty():

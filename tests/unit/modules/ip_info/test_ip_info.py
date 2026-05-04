@@ -391,17 +391,14 @@ async def test_shutdown_gracefully(
 
     mock_asn_db = mocker.Mock()
     mock_country_db = mocker.Mock()
-    mock_mac_db = mocker.Mock()
 
     ip_info.asn_db = mock_asn_db
     ip_info.country_db = mock_country_db
-    ip_info.mac_db = mock_mac_db
 
     await ip_info.shutdown_gracefully()
 
     mock_asn_db.close.assert_called_once()
     mock_country_db.close.assert_called_once()
-    mock_mac_db.close.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -505,7 +502,7 @@ def test_check_if_we_have_pending_mac_queries_with_mac_db(
     mocker,
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.mac_db = Mock()
+    ip_info.mac_vendor_index = {}
     ip_info.pending_mac_queries = Mock()
     ip_info.pending_mac_queries.empty.side_effect = [False, False, True]
     ip_info.pending_mac_queries.get.side_effect = [
@@ -526,7 +523,7 @@ def test_check_if_we_have_pending_mac_queries_empty_queue(
     mocker,
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.mac_db = Mock()
+    ip_info.mac_vendor_index = {}
     ip_info.pending_mac_queries = Mock()
     ip_info.pending_mac_queries.empty.return_value = True
     mock_get_vendor = mocker.patch.object(ip_info, "get_vendor")
