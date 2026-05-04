@@ -543,8 +543,8 @@ class ProcessManager:
         returns a list of PIDs that slips should terminate first,
          and pids that should be killed last
         """
-        # all modules that deal with evidence, blocking and alerts should
-        # be killed last
+        # all modules that deal with evidence, alert post-processing,
+        # and blocking should be killed last
         # so we don't miss exporting or blocking any malicious IoC
         # input and profiler are not in this list because they
         # indicate that they're done processing using a semaphore
@@ -552,6 +552,8 @@ class ProcessManager:
         # so no need to kill them last
         pids_to_kill_last = [
             self.main.db.get_pid_of("evidence_handler"),
+            self.main.db.get_pid_of("alert_summary"),
+            self.main.db.get_pid_of("LLM"),
         ]
 
         if self.main.args.blocking:
