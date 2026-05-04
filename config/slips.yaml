@@ -14,6 +14,17 @@ update:
   # with Slips. If you want to keep your local configuration changes intact, avoid editing the default config files.
   # Instead, create separate config files with different names and use those.
   auto_update_slips: false
+  # Select which update channel Slips should auto-update from.
+  # Available update channels:
+  # - stable:   origin/master
+  # - unstable: origin/develop
+  # - testing:  specify your branch name in the testing_branch_to_update_slips_from parameter below.
+  channel_to_update_slips_from: stable
+  # This branch is used only when channel_to_update_slips_from is set to
+  # testing.
+  # Must be a remote origin/<branch> ref.
+  # Example: origin/your_branch_here
+  testing_branch_to_update_slips_from: origin/your_branch_here
 
 output:
   # Define the file names for the default output.

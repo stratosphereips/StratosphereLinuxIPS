@@ -40,7 +40,7 @@ Old Slips running
         ↓
 Check for compatible update
         ↓
-git pull origin master
+git fetch <configured branch> && git checkout <configured branch>
         ↓
 Start new Slips with -u
         ↓
@@ -61,6 +61,8 @@ Slips checks for updates once per day.
 This is handled by the UpdateManager, which:
 
 - checks whether auto-update is enabled in the config file
+- resolves the configured update channel
+- resolves the configured testing branch when the channel is `testing`
 - checks whether a new version exists
 - checks compatibility before attempting update.
 
@@ -72,9 +74,41 @@ This file includes metadata about the new version such as:
 - latest version,
 - backwards compatibility,
 - whether new dependencies are needed.
-
+- update branch/channel metadata.
 
 The compatibility parser was added so we avoid updating to incompatible new releases.
+
+`update.json` now supports either a single object or a list of objects. When a
+list is used, each entry should define a `branch` field so Slips can pick the
+metadata that matches the configured update channel.
+
+Example:
+
+```json
+[
+  {
+    "version": "1.1.20",
+    "release_date": "2026-04-30T14:39:56+03:00",
+    "backwards_compatible": true,
+    "has_new_dependencies": false,
+    "branch": "stable"
+  },
+  {
+    "version": "1.1.19",
+    "release_date": "2026-04-30T14:39:56+03:00",
+    "backwards_compatible": true,
+    "has_new_dependencies": false,
+    "branch": "unstable"
+  },
+  {
+    "version": "1.1.19",
+    "release_date": "2026-04-30T14:39:56+03:00",
+    "backwards_compatible": true,
+    "has_new_dependencies": true,
+    "branch": "testing"
+  }
+]
+```
 
 
 **The update is aborted if:**
@@ -141,7 +175,33 @@ PS: the new updated slips version starts reading flows before the old one starts
 
 ## How to use it
 
-enable ```auto_update_slips``` in ```config/slips.yaml``` and run slips on your interface.
+Enable `auto_update_slips` in `config/slips.yaml`, set
+`channel_to_update_slips_from`, and run slips on your interface.
+
+Available channel mappings:
+
+- `stable` -> `origin/master`
+- `unstable` -> `origin/develop`
+- `testing` -> use `testing_branch_to_update_slips_from`
+
+Examples:
+
+```yaml
+update:
+  auto_update_slips: true
+  channel_to_update_slips_from: stable
+```
+
+```yaml
+update:
+  auto_update_slips: true
+  channel_to_update_slips_from: testing
+  testing_branch_to_update_slips_from: origin/feature_branch
+```
+
+When the channel is `testing`, Slips sanitizes
+`testing_branch_to_update_slips_from` before using it in git operations. If the
+channel or testing branch is invalid, it falls back to `stable`.
 
 now whenever a new version of Slips is available, it will update itself and the new slips will use the same CLI as the old one.
 
@@ -168,7 +228,7 @@ repository, then rebuild the image so the new code and dependencies are availabl
 into the container:
 
 ```bash
-git pull --recurse-submodules && git submodule update --init --recursive
+git pull --recurse-submodules origin <branch> && git submodule update --init --recursive
 docker build --target amd --no-cache -t slips -f docker/Dockerfile .
 ```
 
@@ -185,7 +245,7 @@ Then start a new container from the rebuilt image.
 For native installations, first update the repository and all submodules:
 
 ```bash
-git pull --recurse-submodules && git submodule update --init --recursive
+git pull --recurse-submodules origin <branch> && git submodule update --init --recursive
 ```
 
 Then run the installer script:
