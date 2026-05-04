@@ -27,9 +27,15 @@ REDUCTION_PROMPT_INPUT_TOKEN_BUDGET = 2400
 REDUCTION_MAX_TOKENS = 180
 MAX_REDUCTION_DEPTH = 6
 MAX_SAMPLE_VALUES = 5
+DEFAULT_HISTORY_MAX_ALERTS = 3
+DEFAULT_HISTORY_MAX_TOKENS = 700
+DEFAULT_HISTORY_PATTERNS_PER_ALERT = 2
 SYSTEM_PROMPT = """
 You are a very professional and senior cybersecurity researcher and incident analyst.
 Use only the provided alert and evidence data.
+If recent alert history is provided, use it as cumulative context for the current alert.
+If the current alert evidence aligns with repeated historical alerts, treat that recurrence as additional support that can increase confidence and urgency.
+Do not treat historical activity as proof of the current alert when the current alert evidence conflicts with it.
 Write exactly one paragraph of plain text for a human analyst.
 Explain the main suspicious behavior, what evidence most strongly supports or weakens the alert,
 whether it looks like a likely true positive, likely false positive, or uncertain, and how risky it appears.
@@ -59,12 +65,20 @@ class AlertSummary(IModule):
         self.llm_max_tokens = 220
         self.llm_response_timeout_seconds = 120
         self.log_verbosity = LOG_VERBOSITY_REQUESTS
+        self.history_enabled = False
+        self.history_max_alerts = DEFAULT_HISTORY_MAX_ALERTS
+        self.history_max_tokens = DEFAULT_HISTORY_MAX_TOKENS
+        self.history_patterns_per_alert = (
+            DEFAULT_HISTORY_PATTERNS_PER_ALERT
+        )
         self.pending_alerts = deque()
         self.active_job = None
         self.pending_request = None
         self.summary_log = None
         self.operation_log = None
         self.last_logged_pending_llm_requests = None
+        self.waiting_for_evidence_handler_logged = False
+        self.alert_history_by_profile = defaultdict(deque)
         self.operation_log_path = os.path.join(
             self.parent_output_dir,
             "llm-summary",
@@ -100,6 +114,12 @@ class AlertSummary(IModule):
             conf.alert_summary_llm_response_timeout_seconds()
         )
         self.log_verbosity = conf.alert_summary_log_verbosity()
+        self.history_enabled = conf.alert_summary_history_enabled()
+        self.history_max_alerts = conf.alert_summary_history_max_alerts()
+        self.history_max_tokens = conf.alert_summary_history_max_tokens()
+        self.history_patterns_per_alert = (
+            conf.alert_summary_history_patterns_per_alert()
+        )
 
     def pre_main(self):
         """Drop privileges and initialize the output files if enabled."""
@@ -134,6 +154,19 @@ class AlertSummary(IModule):
         if self._has_pending_work():
             return False
 
+        if self._should_wait_for_evidence_handler():
+            if not self.waiting_for_evidence_handler_logged:
+                evidence_handler_pid = self.db.get_pid_of("evidence_handler")
+                self._log_operation(
+                    "Waiting for evidence_handler to finish generating alerts "
+                    f"before shutdown pid={evidence_handler_pid}",
+                    verbosity=LOG_VERBOSITY_SUMMARY,
+                )
+                self.waiting_for_evidence_handler_logged = True
+            return False
+
+        self.waiting_for_evidence_handler_logged = False
+
         pending_llm_requests = self.db.get_pending_llm_request_count(self.name)
         if pending_llm_requests > 0:
             if self.last_logged_pending_llm_requests != pending_llm_requests:
@@ -150,6 +183,35 @@ class AlertSummary(IModule):
         return not self.channel_tracker.get("new_alert", {}).get(
             "msg_received", False
         )
+
+    def _should_wait_for_evidence_handler(self) -> bool:
+        """
+        Keep alert_summary alive while evidence_handler may still emit alerts.
+
+        :return: True when evidence_handler is still alive during shutdown.
+        """
+        evidence_handler_pid = self.db.get_pid_of("evidence_handler")
+        if not evidence_handler_pid:
+            return False
+        return self._is_process_alive(evidence_handler_pid)
+
+    @staticmethod
+    def _is_process_alive(pid: int) -> bool:
+        """
+        Check whether a process PID is still alive.
+
+        :param pid: Process ID.
+        :return: True when the PID is alive.
+        """
+        try:
+            os.kill(int(pid), 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+        return True
 
     def shutdown_gracefully(self):
         """Flush unresolved work to the summary file and close log handles."""
@@ -355,6 +417,7 @@ class AlertSummary(IModule):
             "evidences": evidences,
             "backend": backend,
             "grouped_item_count": len(grouped_items),
+            "initial_grouped_items": list(grouped_items),
             "current_items": grouped_items,
             "reduction_layer": 0,
             "current_chunks": [],
@@ -536,21 +599,30 @@ class AlertSummary(IModule):
         :param reduction_layer: Number of prior reduction layers applied.
         :return: Chat messages for the shared LLM module.
         """
+        history_context = self._build_recent_history_text(
+            alert, evidence_items
+        )
         user_prompt = (
             "You are a security analyst. Translate this Slips alert into one "
             "clear, concise paragraph for a human analyst.\n\n"
             f"{self._build_alert_metadata_text(alert, evidence_count, grouped_item_count, reduction_layer)}\n\n"
-            "EVIDENCE DIGEST:\n"
+            f"{history_context}"
+            "CURRENT ALERT EVIDENCE DIGEST:\n"
             f"{self._format_digest_items(evidence_items)}\n\n"
             "YOUR TASK:\n"
             "1. Explain the main suspicious behavior in plain language.\n"
             "2. Identify the strongest evidence that supports or weakens the alert.\n"
             "3. State whether it looks like a likely true positive, likely false positive, or uncertain.\n"
-            "4. State the likely operational risk or urgency.\n\n"
+            "4. State the likely operational risk or urgency.\n"
+            "5. If recent alert history is present, explicitly explain whether the current alert looks like a continuation, escalation, repetition, diversification, or a different pattern.\n"
+            "6. If recent alert history shows repeated aligned alerts, explicitly state whether that recurrence raises, lowers, or does not materially change confidence and urgency.\n\n"
             "OUTPUT RULES:\n"
             "- Write exactly one paragraph.\n"
             "- Use plain text only.\n"
             "- Base the assessment only on the provided data.\n"
+            "- Use recent alert history as cumulative context when it aligns with the current alert evidence.\n"
+            "- Do not use recent alert history as replacement evidence when the current alert evidence is weak or conflicting.\n"
+            "- When recent alert history is present, include one explicit clause about how recurrence affects confidence or risk.\n"
             "- If the evidence is repetitive, weak, incomplete, or contradictory, say so clearly.\n"
             f"- Prompt version: {PROMPT_VERSION}"
         )
@@ -657,6 +729,214 @@ class AlertSummary(IModule):
         if not evidence_items:
             return "- No evidence details were available."
         return "\n".join(f"- {item}" for item in evidence_items)
+
+    def _build_recent_history_text(
+        self, alert, current_items: list[str]
+    ) -> str:
+        """
+        Render bounded recent alert history for the same profile.
+
+        :param alert: Alert being summarized.
+        :param current_items: Current grouped digest items.
+        :return: Prompt section or an empty string when history is unavailable.
+        """
+        recent_history = self._get_recent_alert_history(alert)
+        if not recent_history:
+            return ""
+
+        history_analysis = self._analyze_recent_history(
+            alert, recent_history, current_items
+        )
+        lines = []
+        remaining_tokens = self.history_max_tokens
+        header_lines = [
+            "HISTORICAL PROGRESSION (same source/profile, context for the current alert):",
+            f"- Prior summarized alerts: {history_analysis['prior_alert_count']}",
+            f"- Prior alerts with overlapping dominant patterns: {history_analysis['matching_alert_count']}",
+            f"- Repeated dominant current patterns seen before: {history_analysis['repeated_pattern_count']}",
+            f"- Same-timewindow prior alerts: {history_analysis['same_timewindow_alert_count']}",
+            f"- Threat trend versus recent history: {history_analysis['threat_trend']}",
+            f"- Confidence trend versus recent history: {history_analysis['confidence_trend']}",
+            "- Guidance: if the current alert matches the repeated prior pattern, treat recurrence as cumulative supporting context that can raise confidence and urgency.",
+        ]
+        header_text = "\n".join(header_lines)
+        header_tokens = self._estimate_text_tokens(header_text)
+        if header_tokens >= remaining_tokens:
+            return ""
+        remaining_tokens -= header_tokens
+
+        for entry in recent_history:
+            line = self._format_history_entry(entry)
+            line_tokens = self._estimate_text_tokens(line)
+            if line_tokens > remaining_tokens:
+                if lines:
+                    break
+                line = self._truncate_text_to_budget(line, remaining_tokens)
+                line_tokens = self._estimate_text_tokens(line)
+            lines.append(f"- {line}")
+            remaining_tokens -= line_tokens
+            if remaining_tokens <= 0:
+                break
+
+        if not lines:
+            return ""
+
+        return header_text + "\nRECENT ALERT HISTORY (most recent first):\n" + "\n".join(lines) + "\n\n"
+
+    def _get_recent_alert_history(self, alert) -> list[dict]:
+        """
+        Return recent stored summaries for the same profile, newest first.
+
+        :param alert: Alert being summarized.
+        :return: List of history entries.
+        """
+        if (
+            not self.history_enabled
+            or self.history_max_alerts <= 0
+            or self.history_max_tokens <= 0
+        ):
+            return []
+
+        profileid = str(alert.profile)
+        history = list(self.alert_history_by_profile.get(profileid, []))
+        if not history:
+            return []
+        return list(reversed(history[-self.history_max_alerts :]))
+
+    def _format_history_entry(self, entry: dict) -> str:
+        """
+        Convert one stored history entry into prompt text.
+
+        :param entry: Stored history entry.
+        :return: Single-line history description.
+        """
+        top_patterns = entry.get("top_patterns") or []
+        pattern_text = "; ".join(top_patterns) or "No dominant patterns stored."
+        return (
+            f"TW {entry.get('timewindow', '?')} | "
+            f"{entry.get('time_range', 'Unknown')} | "
+            f"threat={entry.get('accumulated_threat_level', 0.0):.2f} | "
+            f"conf={entry.get('confidence', 0.0):.2f} | "
+            f"top patterns: {pattern_text} | "
+            f"prior summary: {entry.get('summary_text', '')}"
+        )
+
+    def _analyze_recent_history(
+        self,
+        alert,
+        recent_history: list[dict],
+        current_items: list[str],
+    ) -> dict:
+        """
+        Summarize how recent history aligns with the current alert.
+
+        :param alert: Alert being summarized.
+        :param recent_history: Stored recent alert history entries.
+        :param current_items: Current grouped digest items.
+        :return: History alignment metrics.
+        """
+        current_signatures = set(self._build_pattern_signatures(current_items))
+        matching_alert_count = 0
+        repeated_signatures = set()
+        same_timewindow_alert_count = 0
+        prior_threat_values = []
+        prior_confidence_values = []
+        current_timewindow = str(getattr(alert.timewindow, "number", "?"))
+
+        for entry in recent_history:
+            prior_threat_values.append(
+                float(entry.get("accumulated_threat_level", 0.0) or 0.0)
+            )
+            prior_confidence_values.append(
+                float(entry.get("confidence", 0.0) or 0.0)
+            )
+            if str(entry.get("timewindow", "?")) == current_timewindow:
+                same_timewindow_alert_count += 1
+
+            entry_signatures = set(entry.get("pattern_signatures") or [])
+            overlap = current_signatures & entry_signatures
+            if overlap:
+                matching_alert_count += 1
+                repeated_signatures.update(overlap)
+
+        average_prior_threat = (
+            sum(prior_threat_values) / len(prior_threat_values)
+            if prior_threat_values
+            else 0.0
+        )
+        average_prior_confidence = (
+            sum(prior_confidence_values) / len(prior_confidence_values)
+            if prior_confidence_values
+            else 0.0
+        )
+
+        return {
+            "prior_alert_count": len(recent_history),
+            "matching_alert_count": matching_alert_count,
+            "repeated_pattern_count": len(repeated_signatures),
+            "same_timewindow_alert_count": same_timewindow_alert_count,
+            "threat_trend": self._classify_history_trend(
+                float(getattr(alert, "accumulated_threat_level", 0.0) or 0.0),
+                average_prior_threat,
+                0.75,
+            ),
+            "confidence_trend": self._classify_history_trend(
+                float(getattr(alert, "confidence", 0.0) or 0.0),
+                average_prior_confidence,
+                0.05,
+            ),
+        }
+
+    def _build_pattern_signatures(self, grouped_items: list[str]) -> list[str]:
+        """
+        Derive normalized pattern signatures from grouped digest items.
+
+        :param grouped_items: Grouped digest items.
+        :return: Deduplicated normalized signatures.
+        """
+        signatures = []
+        seen = set()
+        for item in grouped_items or []:
+            signature = self._extract_pattern_signature(item)
+            if not signature or signature in seen:
+                continue
+            seen.add(signature)
+            signatures.append(signature)
+        return signatures
+
+    def _extract_pattern_signature(self, grouped_item: str) -> str:
+        """
+        Strip timing and examples from one grouped item for overlap matching.
+
+        :param grouped_item: One grouped digest item.
+        :return: Normalized signature.
+        """
+        normalized = self._normalize_summary_text(grouped_item)
+        if "|" in normalized:
+            normalized = normalized.split("|", 1)[1].strip()
+        normalized = re.sub(r"\s+\([^)]*\)$", "", normalized)
+        normalized = self._normalize_pattern(normalized)
+        return self._normalize_summary_text(normalized).lower()
+
+    def _classify_history_trend(
+        self,
+        current_value: float,
+        average_prior_value: float,
+        tolerance: float,
+    ) -> str:
+        """
+        Compare the current value against recent history.
+
+        :param current_value: Current alert value.
+        :param average_prior_value: Average prior value.
+        :param tolerance: Minimum delta to call the trend changed.
+        :return: rising, falling, or stable.
+        """
+        if current_value > average_prior_value + tolerance:
+            return "rising"
+        if current_value < average_prior_value - tolerance:
+            return "falling"
+        return "stable"
 
     def _build_grouped_evidence_items(self, evidences: list) -> list[str]:
         """
@@ -1106,6 +1386,33 @@ class AlertSummary(IModule):
         normalized = str(text or "")
         return max(1, (len(normalized) + APPROX_CHARS_PER_TOKEN - 1) // APPROX_CHARS_PER_TOKEN)
 
+    def _truncate_text_to_budget(self, text: str, token_budget: int) -> str:
+        """
+        Trim text to an approximate token budget without splitting mid-word.
+
+        :param text: Text to trim.
+        :param token_budget: Approximate token budget.
+        :return: Trimmed text.
+        """
+        normalized = self._normalize_summary_text(text)
+        if token_budget <= 0:
+            return ""
+        if self._estimate_text_tokens(normalized) <= token_budget:
+            return normalized
+
+        words = normalized.split()
+        kept_words = []
+        for word in words:
+            candidate = " ".join(kept_words + [word])
+            if self._estimate_text_tokens(candidate) >= token_budget:
+                break
+            kept_words.append(word)
+
+        trimmed = " ".join(kept_words).strip()
+        if not trimmed:
+            return normalized[: max(1, token_budget * APPROX_CHARS_PER_TOKEN)]
+        return f"{trimmed} ..."
+
     def _messages_fit(self, messages: list[dict], budget: int) -> bool:
         """
         Return True when the prompt estimate fits the chosen budget.
@@ -1192,6 +1499,13 @@ class AlertSummary(IModule):
             text = self._normalize_summary_text(response["text"])
             if phase == "final_summary":
                 self._write_summary_entry(job["alert"], f"LLM summary: {text}")
+                self._remember_alert_summary(
+                    job["alert"],
+                    text,
+                    job.get("initial_grouped_items")
+                    or job.get("current_items")
+                    or [],
+                )
                 self._log_operation(
                     f"Received successful llm_response request_id={request['request_id']} "
                     f"alert_id={job['alert'].id} phase={phase}{usage_suffix}",
@@ -1267,13 +1581,17 @@ class AlertSummary(IModule):
             return
 
         alert = self.active_job["alert"]
-        self._write_summary_entry(
+        summary_text = self._build_fallback_summary(
             alert,
-            self._build_fallback_summary(
-                alert,
-                self.active_job["evidences"],
-                reason,
-            ),
+            self.active_job["evidences"],
+            reason,
+        )
+        self._write_summary_entry(alert, summary_text)
+        self._remember_alert_summary(
+            alert,
+            summary_text,
+            self.active_job.get("initial_grouped_items")
+            or self._build_grouped_evidence_items(self.active_job["evidences"]),
         )
         self.pending_request = None
         self.active_job = None
@@ -1282,13 +1600,16 @@ class AlertSummary(IModule):
         """Write failure notes for queued alerts when shutdown happens first."""
         while self.pending_alerts:
             queued_alert = self.pending_alerts.popleft()
-            self._write_summary_entry(
+            summary_text = self._build_fallback_summary(
                 queued_alert["alert"],
-                self._build_fallback_summary(
-                    queued_alert["alert"],
-                    queued_alert["evidences"],
-                    reason,
-                ),
+                queued_alert["evidences"],
+                reason,
+            )
+            self._write_summary_entry(queued_alert["alert"], summary_text)
+            self._remember_alert_summary(
+                queued_alert["alert"],
+                summary_text,
+                self._build_grouped_evidence_items(queued_alert["evidences"]),
             )
             self._log_operation(
                 f"Flushed alert_id={queued_alert['alert'].id}: {reason}",
@@ -1365,18 +1686,30 @@ class AlertSummary(IModule):
         strongest_indicators = "; ".join(grouped_items[:3]) or (
             "the correlated evidence set"
         )
+        history_analysis = self._analyze_recent_history(
+            alert,
+            self._get_recent_alert_history(alert),
+            grouped_items,
+        )
 
         verdict = self._classify_alert_verdict(
             alert,
             evidences,
             severity_counts,
+            history_analysis,
         )
-        risk = self._classify_alert_risk(alert, severity_counts)
+        risk = self._classify_alert_risk(
+            alert, severity_counts, history_analysis
+        )
+        history_context = self._build_fallback_history_clause(
+            alert, history_analysis
+        )
         return (
             f"LLM summary unavailable ({reason}). "
             f"Local heuristic summary: this alert correlates {len(evidences)} "
             f"evidence records for source IP {alert.profile.ip}, with the "
             f"strongest indicators being {strongest_indicators}. "
+            f"{history_context}"
             f"The evidence mix includes {severity_counts.get('high', 0)} high, "
             f"{severity_counts.get('medium', 0)} medium, "
             f"{severity_counts.get('low', 0)} low, and "
@@ -1392,6 +1725,7 @@ class AlertSummary(IModule):
         alert,
         evidences: list,
         severity_counts: dict,
+        history_analysis: dict,
     ) -> str:
         """
         Estimate the analyst verdict for a fallback summary.
@@ -1399,8 +1733,14 @@ class AlertSummary(IModule):
         :param alert: Alert being summarized.
         :param evidences: Evidence records correlated with the alert.
         :param severity_counts: Count of evidence severities.
+        :param history_analysis: Recent-history alignment metrics.
         :return: Human-readable verdict label.
         """
+        if (
+            history_analysis.get("matching_alert_count", 0) >= 2
+            and history_analysis.get("repeated_pattern_count", 0) >= 1
+        ):
+            return "increasingly like a likely true positive because the same pattern has repeated across prior alerts"
         if severity_counts.get("high", 0) >= 3 or alert.confidence >= 0.8:
             return "like a likely true positive"
         if (
@@ -1413,20 +1753,139 @@ class AlertSummary(IModule):
             return "concerning but still somewhat uncertain"
         return "uncertain"
 
+    def _build_fallback_history_clause(
+        self, alert, history_analysis: dict
+    ) -> str:
+        """
+        Build one short history sentence for heuristic summaries.
+
+        :param alert: Alert being summarized.
+        :param history_analysis: Recent-history alignment metrics.
+        :return: Short history clause or an empty string.
+        """
+        recent_history = self._get_recent_alert_history(alert)
+        if not recent_history:
+            return ""
+
+        top_history_patterns = []
+        for entry in recent_history[:2]:
+            for pattern in entry.get("top_patterns") or []:
+                normalized = self._normalize_summary_text(pattern)
+                if normalized in top_history_patterns:
+                    continue
+                top_history_patterns.append(normalized)
+                if len(top_history_patterns) >= 2:
+                    break
+            if len(top_history_patterns) >= 2:
+                break
+
+        if top_history_patterns:
+            pattern_text = "; ".join(top_history_patterns)
+            return (
+                f"Recent related alert history for this source includes "
+                f"{len(recent_history)} prior summarized alerts, with "
+                f"{history_analysis.get('matching_alert_count', 0)} prior alerts "
+                f"showing overlapping dominant patterns and "
+                f"{history_analysis.get('repeated_pattern_count', 0)} repeated "
+                f"current-pattern matches. The repeated history most recently "
+                f"showed {pattern_text}, so recurrence should be treated as "
+                f"additional supporting context when the current evidence aligns. "
+            )
+
+        return (
+            f"Recent related alert history for this source includes "
+            f"{len(recent_history)} prior summarized alerts, which should be "
+            f"treated as cumulative context for the current assessment. "
+        )
+
     def _classify_alert_risk(
         self,
         alert,
         severity_counts: dict,
+        history_analysis: dict,
     ) -> str:
         """
         Estimate operational risk for a fallback summary.
 
         :param alert: Alert being summarized.
         :param severity_counts: Count of evidence severities.
+        :param history_analysis: Recent-history alignment metrics.
         :return: Risk label for the summary paragraph.
         """
+        if (
+            history_analysis.get("matching_alert_count", 0) >= 2
+            and history_analysis.get("repeated_pattern_count", 0) >= 1
+        ):
+            if (
+                history_analysis.get("threat_trend") == "rising"
+                or severity_counts.get("high", 0) >= 1
+                or alert.accumulated_threat_level >= 5
+            ):
+                return "high"
+            return "medium-to-high"
         if severity_counts.get("high", 0) >= 3 or alert.accumulated_threat_level >= 10:
             return "high"
         if severity_counts.get("medium", 0) >= 2 or alert.accumulated_threat_level >= 5:
             return "medium"
         return "low"
+
+    def _remember_alert_summary(
+        self,
+        alert,
+        summary_text: str,
+        grouped_items: list[str],
+    ):
+        """
+        Store one completed alert summary for later prompt context.
+
+        :param alert: Alert that was summarized.
+        :param summary_text: Final summary text without file-log prefix handling.
+        :param grouped_items: Original grouped patterns for this alert.
+        :return: None
+        """
+        if not self.history_enabled or self.history_max_alerts <= 0:
+            return
+
+        profileid = str(alert.profile)
+        history = self.alert_history_by_profile[profileid]
+        top_patterns = [
+            self._normalize_summary_text(item)
+            for item in (grouped_items or [])[: self.history_patterns_per_alert]
+        ]
+        pattern_signatures = self._build_pattern_signatures(top_patterns)
+        history.append(
+            {
+                "timewindow": getattr(alert.timewindow, "number", "?"),
+                "time_range": self._build_history_time_range(alert),
+                "accumulated_threat_level": float(
+                    getattr(alert, "accumulated_threat_level", 0.0) or 0.0
+                ),
+                "confidence": float(getattr(alert, "confidence", 0.0) or 0.0),
+                "top_patterns": top_patterns,
+                "pattern_signatures": pattern_signatures,
+                "summary_text": self._normalize_summary_text(summary_text),
+            }
+        )
+        while len(history) > self.history_max_alerts:
+            history.popleft()
+
+    def _build_history_time_range(self, alert) -> str:
+        """
+        Format one compact time-range label for stored alert history.
+
+        :param alert: Alert being summarized.
+        :return: Compact time range.
+        """
+        start_time = self._format_short_time(
+            getattr(alert.timewindow, "start_time", "")
+        )
+        end_time = self._format_short_time(
+            getattr(alert.timewindow, "end_time", "")
+        )
+        if start_time and end_time:
+            return (
+                f"{start_time}-{end_time}"
+                if start_time != end_time
+                else start_time
+            )
+        return start_time or end_time or "time-unknown"
