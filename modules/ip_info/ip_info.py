@@ -19,6 +19,7 @@ import subprocess
 import netifaces
 import asyncio
 import multiprocessing
+import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
@@ -56,6 +57,10 @@ class IPInfo(AsyncModule):
             max_workers=4, thread_name_prefix="ip-info"
         )
         self.lookup_semaphore = asyncio.Semaphore(4)
+        self.negative_cache_ttl = 300
+        self.failed_rdns_lookups = {}
+        self.failed_whois_lookups = {}
+        self.failed_mac_vendor_lookups = {}
         self.asn = ASN(self.db)
         self.JARM = JARM()
         self.classifier = FlowClassifier()
@@ -196,6 +201,8 @@ class IPInfo(AsyncModule):
         :param ip: str
         """
         data = {}
+        if self._is_negative_cache_hit(self.failed_rdns_lookups, ip):
+            return False
         try:
             # works with both ipv4 and ipv6
             reverse_dns: str = socket.gethostbyaddr(ip)[0]
@@ -204,13 +211,16 @@ class IPInfo(AsyncModule):
                 # check if the reverse_dns value is a valid IP address
                 socket.inet_pton(self.get_ip_family(reverse_dns), reverse_dns)
                 # reverse_dns is an ip. there's no reverse dns. don't store
+                self._store_negative_cache(self.failed_rdns_lookups, ip)
                 return False
             except socket.error:
                 # reverse_dns is a valid hostname, store it
                 data["reverse_dns"] = reverse_dns
+                self.failed_rdns_lookups.pop(ip, None)
                 self.db.set_ip_info(ip, data)
         except (socket.gaierror, socket.herror, OSError):
             # not an ip or multicast, can't get the reverse dns record of it
+            self._store_negative_cache(self.failed_rdns_lookups, ip)
             return False
         return data
 
@@ -231,19 +241,30 @@ class IPInfo(AsyncModule):
         # you will receive an empty response with a status code
         # of HTTP/1.1 204 No Content
         url = "https://api.macvendors.com"
+        if self._is_negative_cache_hit(
+            self.failed_mac_vendor_lookups, mac_addr
+        ):
+            return False
         try:
             response = requests.get(f"{url}/{mac_addr}", timeout=2)
             if response.status_code == 200:
                 # this online db returns results in an array like str [{results}],
                 # make it json
                 if vendor := response.text:
+                    self.failed_mac_vendor_lookups.pop(mac_addr, None)
                     return vendor
+            self._store_negative_cache(
+                self.failed_mac_vendor_lookups, mac_addr
+            )
             return False
         except (
             requests.exceptions.ReadTimeout,
             requests.exceptions.ConnectionError,
             json.decoder.JSONDecodeError,
         ):
+            self._store_negative_cache(
+                self.failed_mac_vendor_lookups, mac_addr
+            )
             return False
 
     def get_vendor_offline(self, mac_addr, profileid):
@@ -346,14 +367,22 @@ class IPInfo(AsyncModule):
         return True
 
     def query_whois(self, domain: str):
+        if self._is_negative_cache_hit(self.failed_whois_lookups, domain):
+            return None
         try:
             with (
                 open("/dev/null", "w") as f,
                 redirect_stdout(f),
                 redirect_stderr(f),
             ):
-                return whois.query(domain, timeout=2.0)
+                result = whois.query(domain, timeout=2.0)
+                if result:
+                    self.failed_whois_lookups.pop(domain, None)
+                    return result
+                self._store_negative_cache(self.failed_whois_lookups, domain)
+                return None
         except Exception:
+            self._store_negative_cache(self.failed_whois_lookups, domain)
             return None
 
     def get_domain_info(self, domain):
@@ -568,6 +597,34 @@ class IPInfo(AsyncModule):
             loop = asyncio.get_running_loop()
             bound_func = partial(func, *args)
             return await loop.run_in_executor(self.lookup_executor, bound_func)
+
+    def _is_negative_cache_hit(self, cache: dict, key: str) -> bool:
+        """
+        Check whether a negative cache entry is still valid.
+
+        :param cache: Cache mapping keys to monotonic timestamps.
+        :param key: Cache key to evaluate.
+        :return: True if the negative cache entry is active.
+        """
+        timestamp = cache.get(key)
+        if timestamp is None:
+            return False
+
+        if (time.monotonic() - timestamp) > self.negative_cache_ttl:
+            cache.pop(key, None)
+            return False
+
+        return True
+
+    def _store_negative_cache(self, cache: dict, key: str):
+        """
+        Store a negative cache entry.
+
+        :param cache: Cache mapping keys to monotonic timestamps.
+        :param key: Cache key to store.
+        :return: None.
+        """
+        cache[key] = time.monotonic()
 
     async def handle_new_ip_async(self, ip: str):
         """

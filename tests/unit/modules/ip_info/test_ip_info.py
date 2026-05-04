@@ -227,6 +227,19 @@ def test_get_rdns_invalid_ip():
         mock_gethostbyaddr.assert_called_once_with(ip_address)
 
 
+def test_get_rdns_negative_cache_skips_second_lookup():
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_address = "invalid_ip"
+
+    with patch("socket.gethostbyaddr") as mock_gethostbyaddr:
+        mock_gethostbyaddr.side_effect = socket.gaierror
+
+        assert ip_info.get_rdns(ip_address) is False
+        assert ip_info.get_rdns(ip_address) is False
+
+        mock_gethostbyaddr.assert_called_once_with(ip_address)
+
+
 def test_get_rdns_no_reverse_dns():
     ip_info = ModuleFactory().create_ip_info_obj()
     ip_address = "1.1.1.1"
@@ -373,6 +386,21 @@ def test_get_vendor_online(
     vendor = ip_info.get_vendor_online("00:11:22:33:44:55")
 
     assert vendor == expected_vendor
+    mock_requests.assert_called_once_with(
+        "https://api.macvendors.com/00:11:22:33:44:55", timeout=2
+    )
+
+
+def test_get_vendor_online_negative_cache_skips_second_lookup(mocker):
+    ip_info = ModuleFactory().create_ip_info_obj()
+    mock_requests = mocker.patch(
+        "requests.get",
+        side_effect=requests.exceptions.ConnectionError(),
+    )
+
+    assert ip_info.get_vendor_online("00:11:22:33:44:55") is False
+    assert ip_info.get_vendor_online("00:11:22:33:44:55") is False
+
     mock_requests.assert_called_once_with(
         "https://api.macvendors.com/00:11:22:33:44:55", timeout=2
     )
