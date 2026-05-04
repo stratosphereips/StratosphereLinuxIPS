@@ -333,6 +333,20 @@ alert_summary:
   # heuristic fallback summary for that alert. Set to 0 to wait indefinitely.
   llm_response_timeout_seconds: 300
 
+  # Include recent alert history for the same source/profile as extra context
+  # in the final analyst-summary prompt.
+  history_enabled: true
+
+  # Number of prior summarized alerts kept in memory per profile.
+  history_max_alerts: 3
+
+  # Approximate token budget reserved for recent alert history in the final
+  # analyst-summary prompt.
+  history_max_tokens: 700
+
+  # Number of dominant grouped patterns stored from each prior alert.
+  history_patterns_per_alert: 2
+
 #############################
 regex_generator:
   # Enable the shared regex generator module.
