@@ -22,6 +22,10 @@ class ConfigParser(object):
     name = "ConfigParser"
     description = "Parse and sanitize slips.yaml values. used by all modules"
     authors = ["Alya Gomaa"]
+    UPDATE_BRANCH_ALIASES = {
+        "stable": "origin/master",
+        "unstable": "origin/develop",
+    }
 
     def __init__(self):
         configfile: str = self.get_config_file()
@@ -182,6 +186,7 @@ class ConfigParser(object):
             return None
 
         normalized_branch_name = branch_name.strip()
+        # is it master or develop??
         branch_alias = self.UPDATE_BRANCH_ALIASES.get(
             normalized_branch_name.lower()
         )
