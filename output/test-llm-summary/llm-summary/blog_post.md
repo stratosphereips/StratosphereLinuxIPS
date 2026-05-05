@@ -28,9 +28,10 @@ The alert summary process has five stages:
 
 1. reconstruct the full correlated evidence set behind the alert
 2. collapse repetitive evidence into a compact incident digest
-3. build a constrained analyst-oriented prompt
-4. reduce oversized alerts recursively when needed
-5. generate one plain-text summary with a local fine-tuned model
+3. retrieve recent alert history for the same source as extra context
+4. build a constrained analyst-oriented prompt
+5. reduce oversized alerts recursively when needed
+6. generate one plain-text summary with a local fine-tuned model
 
 That is the method.
 
@@ -153,6 +154,45 @@ removes repetition without removing the shape of the incident.
 
 ## 3. Build a Constrained Analyst Prompt
 
+The current alert is no longer summarized in isolation.
+
+Before the final prompt is built, the method can retrieve a bounded memory of
+recent prior alerts for the same source or profile. That history is not the new
+evidence itself. It is supporting context that helps answer questions such as:
+
+- is this a continuation of the same activity?
+- is the behavior escalating?
+- is the source expanding into new patterns?
+- does the current alert look isolated or part of a sequence?
+
+The history kept for each prior alert is compact. It includes:
+
+- the time window and time range
+- the accumulated threat level
+- the alert confidence
+- a few dominant grouped patterns
+- the final summary text of that earlier alert
+
+Example of recent history context:
+
+```text
+Recent alert history:
+- TW 6 | 08:00-09:00 | threat=9.20 | conf=0.76 |
+  top patterns: Horizontal port scan to port 443/TCP;
+  repeated unknown-port traffic |
+  prior summary: Earlier scanning activity suggests reconnaissance.
+
+- TW 7 | 09:00-10:00 | threat=12.40 | conf=0.81 |
+  top patterns: Repeated connections to unknown destination port 449/TCP |
+  prior summary: The source continued unusual outbound probing across multiple
+  external IPs.
+```
+
+That history is then added to the final prompt as context only. The current
+alert evidence remains the primary source of truth.
+
+## 4. Build a Constrained Analyst Prompt
+
 Once the incident digest exists, the method builds a prompt that is narrow,
 structured, and conservative.
 
@@ -169,7 +209,10 @@ First, it provides metadata about the alert:
 - number of grouped evidence patterns
 - number of reduction layers already applied
 
-Second, it provides the evidence digest itself: the grouped incident patterns
+Second, when available, it provides the recent alert history for the same
+source/profile.
+
+Third, it provides the evidence digest itself: the grouped incident patterns
 described above.
 
 Then it asks for a very specific output:
@@ -179,6 +222,8 @@ Then it asks for a very specific output:
 - say whether the alert looks likely true positive, likely false positive, or
   uncertain
 - state the likely operational risk or urgency
+- explain whether the current alert looks like a continuation, escalation,
+  diversification, or a different pattern relative to recent activity
 
 The output is constrained to one paragraph of plain text.
 
@@ -190,16 +235,20 @@ So if the question is "what exactly is the context and what exactly is the
 question?", the answer is:
 
 The context is the alert metadata plus the grouped digest of all evidence
-linked to that alert.
+linked to that alert, plus recent prior summarized alerts for the same source
+when history is available.
 
 The question is essentially:
 
 ```text
 Here is one Slips alert with its correlated evidence.
+Here is recent alert history for the same source, if available.
 Explain the main suspicious behavior.
 Identify what evidence most strongly supports or weakens the alert.
 Say whether it looks likely true positive, likely false positive, or uncertain.
 State the likely operational risk.
+Explain whether this looks like a continuation, escalation, diversification, or
+a different pattern relative to recent activity.
 Write exactly one plain-text paragraph.
 Use only the provided data.
 Do not invent missing facts.
@@ -220,6 +269,11 @@ Incident metadata:
 Evidence digest:
 - 07:02-07:22 | Connection to unknown destination port 449/TCP (21x similar)
 - 07:00-07:03 | Horizontal port scan to port 443/TCP (2x similar)
+
+Recent alert history:
+- TW 7 | 06:00-07:00 | threat=8.70 | conf=0.71 | top patterns: repeated
+  unknown-port traffic | prior summary: Earlier unusual outbound probing was
+  already observed from the same source.
 ```
 
 Example of the kind of answer the method is trying to produce:
@@ -229,12 +283,14 @@ This alert shows repeated connections from 192.168.1.113 to an unusual
 destination port 449/TCP across multiple external IPs, together with a
 horizontal scan to port 443/TCP, which makes the activity look more consistent
 with reconnaissance than with a single benign connection. The repeated pattern
-and high-severity scan evidence strengthen the alert, although the absence of
-host-side context leaves some uncertainty. Overall, this looks like a likely
-true positive and should be treated as medium-to-high operational risk.
+and high-severity scan evidence strengthen the alert, and the recent alert
+history suggests this is a continuation and escalation of earlier probing from
+the same source. Although the absence of host-side context leaves some
+uncertainty, this looks like a likely true positive and should be treated as
+medium-to-high operational risk.
 ```
 
-## 4. Guard the Model Against Hallucinations
+## 5. Guard the Model Against Hallucinations
 
 Using an LLM inside an IDS only makes sense if the output is grounded.
 
@@ -257,13 +313,14 @@ random free-form responses. They were trained on selected, higher-quality
 security summaries derived from real Slips incidents. That gives the model a
 much tighter target behavior.
 
-## 5. Control the Context Budget Explicitly
+## 6. Control the Context Budget Explicitly
 
 Small local models are useful only if the input stays under control.
 
 The method therefore estimates prompt size explicitly and uses separate budgets
 for:
 
+- recent alert history
 - the final analyst summary prompt
 - intermediate reduction prompts
 - the final answer length
@@ -276,7 +333,12 @@ called directly.
 If it does not fit, the method does not simply cut the alert in half and hope
 for the best. Instead, it performs recursive evidence reduction.
 
-## 6. Use Recursive Reduction Instead of Blind Truncation
+The history itself is also bounded. Only a small number of recent alerts are
+kept per source/profile, and only a bounded token budget is reserved for that
+history in the final prompt. This prevents memory from growing into prompt
+pollution.
+
+## 7. Use Recursive Reduction Instead of Blind Truncation
 
 When an alert is too large, the evidence digest is split into smaller chunks.
 Each chunk is summarized into a shorter intermediate digest, and those
@@ -320,7 +382,7 @@ Final prompt:
 
 That is a much stronger design for security alerts than naive truncation.
 
-## 7. Use a Shared Local Model Service
+## 8. Use a Shared Local Model Service
 
 The alert summary layer does not hard-code one model API into the summarization
 logic.
@@ -349,7 +411,7 @@ while the model service handles transport and backend management.
 It also means Slips can expose several local model variants with different
 speed and quality tradeoffs without changing the summary method itself.
 
-## 8. Prefer Local Fine-Tuned Models
+## 9. Prefer Local Fine-Tuned Models
 
 For this use case, local models are the right default.
 
@@ -379,7 +441,7 @@ best-of-N supervision, and judge-based selection to create higher-quality
 training targets. The result is a family of local models specialized for alert
 summary and risk-oriented security analysis.
 
-## 9. Match Replies Strictly
+## 10. Match Replies Strictly
 
 In a shared model architecture, many requests may be in flight at once. The
 summary method therefore tracks each request with its own unique identifier and
@@ -393,7 +455,7 @@ module's response. In a security system, that would be unacceptable.
 By keeping one active summary request at a time and matching replies
 explicitly, the method stays deterministic and auditable.
 
-## 10. Fail Safely When the Model Is Unavailable
+## 11. Fail Safely When the Model Is Unavailable
 
 An IDS cannot simply return nothing because a model times out.
 
@@ -405,6 +467,7 @@ If the model request fails, the method still produces one paragraph based on:
 - the severity distribution
 - the alert confidence
 - the accumulated threat level
+- recent alert history when available
 
 This fallback is intentionally simpler than the model output, but it preserves
 an essential property: every alert still gets an explanation.
@@ -422,7 +485,7 @@ positive and the operational risk appears medium to high.
 
 That is the correct design choice for an operational security tool.
 
-## 11. Shut Down Without Dropping Explanations
+## 12. Shut Down Without Dropping Explanations
 
 Another subtle part of the method is shutdown behavior.
 
@@ -439,7 +502,7 @@ finishes, but the caller has already exited, so the answer is lost.
 For an IDS, losing the explanation even though the alert exists is a real
 operational bug. The method is designed to avoid that.
 
-## 12. Why This Improves Explainability
+## 13. Why This Improves Explainability
 
 The real value of the summary layer is not that it adds AI to an IDS.
 
@@ -458,7 +521,7 @@ That improves:
 Instead of forcing the human to read a large correlated evidence set, the
 system provides one evidence-bound explanation that can be read in seconds.
 
-## 13. Why This Matters Beyond Slips
+## 14. Why This Matters Beyond Slips
 
 To our knowledge, Slips is the first IDS deployed with a local model
 fine-tuned specifically for security analysis of alerts.
@@ -483,8 +546,8 @@ The alert summary layer is a narrow, technical, and carefully engineered piece
 of Slips.
 
 It reconstructs the correlated evidence behind an alert, compresses repetition
-into incident patterns, controls the prompt budget, uses recursive reduction
-when needed, and generates one grounded explanation with a local fine-tuned
-model.
+into incident patterns, adds bounded recent-history context, controls the
+prompt budget, uses recursive reduction when needed, and generates one
+grounded explanation with a local fine-tuned model.
 
 That is why it works. And that is why this feature is useful.
