@@ -382,7 +382,7 @@ class SetEvidenceHelper:
         # for each non-existent domain beyond the threshold of 100,
         # the confidence score is increased linearly.
         # +1 ensures that the minimum confidence score is 1.
-        confidence: float = max(0, (1 / 100) * (nxdomains - 100) + 1)
+        confidence: float = min(1, (1 / 100) * (nxdomains - 100) + 1)
         confidence = round(confidence, 2)  # for readability
         description = (
             f"Possible DGA or domain scanning. {flow.saddr} "
