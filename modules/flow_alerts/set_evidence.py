@@ -846,6 +846,8 @@ class SetEvidenceHelper:
         # Confidence depends on how long the connection.
         # Scale the confidence from 0 to 1; 1 means 24 hours long.
         confidence: float = 1 / (3600 * 24) * (flow.dur - 3600 * 24) + 1
+        # ensure it doesnt exceed 1
+        confidence: float = min(1, confidence)
         confidence = round(confidence, 2)
         # Get the duration in minutes.
         if isinstance(flow.dur, str):
