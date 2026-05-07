@@ -1090,6 +1090,45 @@ class ModuleFactory:
         tl.db = mock_db
         return tl
 
+    def create_graph_structure_obj(self, enabled=True, output_dir="output"):
+        """
+        Create a graph_structure module object for unit tests.
+
+        Parameters:
+            enabled: Whether the module should behave as enabled.
+            output_dir: Parent output directory used by the module.
+
+        Returns:
+            Configured GraphStructure instance.
+        """
+        from modules.graph_structure.graph_structure import GraphStructure
+
+        module_conf = Mock()
+        module_conf.client_ips.return_value = []
+        with (
+            patch(MODULE_DB_MANAGER, name="mock_db") as mock_db,
+            patch(
+                "modules.graph_structure.graph_structure.ConfigParser"
+            ) as mock_config_parser,
+        ):
+            config = Mock()
+            config.graph_structure_enabled.return_value = enabled
+            mock_config_parser.return_value = config
+            graph_structure = GraphStructure(
+                logger=Mock(),
+                output_dir=output_dir,
+                redis_port=6379,
+                termination_event=Mock(),
+                slips_args=Mock(),
+                conf=module_conf,
+                ppid=Mock(),
+                bloom_filters_manager=Mock(),
+            )
+            graph_structure.db = mock_db.return_value
+
+        graph_structure.print = Mock()
+        return graph_structure
+
     def create_alert_handler_obj(self):
         from slips_files.core.database.redis_db.alert_handler import (
             AlertHandler,
