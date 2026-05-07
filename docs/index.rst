@@ -21,6 +21,8 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **HTTPS anomaly detection**. Detailed design and behavior of the HTTPS anomaly detector. See :doc:`HTTPS anomaly detection <https_anomaly_detection>`.
 
+- **Graph structure**. Sparse alert-bounded graph output for later analysis and GNN learning. See :doc:`Graph structure <graph_structure>`.
+
 - **Architecture**. Internal architecture of Slips (profiles, timewindows), the use of Zeek and connection to Redis. See :doc:`Architecture <architecture>`.
 
 - **Training with your own data**. Explanation on how to re-train the machine learning system of Slips with your own traffic (normal or malicious).See :doc:`Training <training>`.
@@ -55,6 +57,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    detection_modules
    brute_force_detector
    https_anomaly_detection
+   graph_structure
    flow_alerts
    features
    training
