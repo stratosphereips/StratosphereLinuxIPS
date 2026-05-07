@@ -242,6 +242,13 @@ modules:
   timeline_human_timestamp: true
 
 #############################
+graph_structure:
+  # Build sparse heterogeneous graph tables for each alert-bounded window.
+  # Disabled by default because graph generation adds runtime memory use and
+  # writes one set of node/edge tables for every generated alert.
+  enabled: true
+
+#############################
 flow_ml_detection:
   # This is a module that uses machine learning for detection.
   # It can be used in train mode or test mode.
