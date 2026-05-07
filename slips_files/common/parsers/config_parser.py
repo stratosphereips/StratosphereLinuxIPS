@@ -472,6 +472,18 @@ class ConfigParser(object):
             "Debug", "generate_performance_plots", False
         )
 
+    def graph_structure_enabled(self) -> bool:
+        """
+        Return whether alert-bounded graph generation is enabled.
+
+        Returns:
+            True when graph_structure.enabled is configured as true.
+        """
+        value = self.read_configuration("graph_structure", "enabled", False)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
     def export_to(self):
         return self.read_configuration("exporting_alerts", "export_to", [])
 
