@@ -97,4 +97,4 @@ if __name__ == "__main__":
     app.register_blueprint(analysis, url_prefix="/analysis")
     app.register_blueprint(general, url_prefix="/general")
     app.register_blueprint(documentation, url_prefix="/documentation")
-    app.run(host="0.0.0.0", port=ConfigParser().web_interface_port)
+    app.run(host="127.0.0.1", port=ConfigParser().web_interface_port)
