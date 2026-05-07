@@ -7,6 +7,7 @@ import {update} from '../analysis/analysis/static/js/analysis.js';
 const headers2 = {
     headers: { 'Content-Type': 'application/json' }
 }
+const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
 function round(value, precision) {
     var multiplier = Math.pow(10, precision || 0);
@@ -32,7 +33,33 @@ function fetchDetailedInfo() {
         });
 }
 
+async function switchRedisDb(port) {
+    /*
+        Switch the active Redis DB using a CSRF-protected POST request.
+    */
+    const response = await fetch(`/db/${port}`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": csrfToken
+        },
+        credentials: "same-origin"
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to switch Redis DB: ${response.status}`);
+    }
+
+    return response.json();
+}
+
 function initializeWidgetsAndListeners() {
+    const redisModalElement = document.getElementById("modal_choose_redis");
+    const redisModal = new bootstrap.Modal(redisModalElement, {
+        backdrop: "static",
+        keyboard: false
+    });
+
     // Table with the list of databases. TODO: change it to dropdown?
     $("#table_choose_redis").DataTable({
         destroy: true,
@@ -51,22 +78,29 @@ function initializeWidgetsAndListeners() {
         update(); // This one is imported from analysis.js
     })
 
-    $('#modal_choose_redis').modal({
-        show: false,
-        backdrop: 'static',
-        keyboard: false
+    $('#changedb_button').click(function (event) {
+        event.preventDefault();
+        redisModal.show();
     })
 
-    $('#modal_choose_redis').on('show.bs.modal', function (e) {
+    redisModalElement.addEventListener('show.bs.modal', function () {
         $('#table_choose_redis').DataTable().ajax.reload();
     })
 
-    $('#button_choose_db').click(function () {
+    $('#button_choose_db').click(async function () {
         let chosen_db = $('#table_choose_redis').DataTable().row({ selected: true }).data()
-        $('#modal_choose_redis .close').click() // close modal by imitating the close button click. $('#myModal').hide() does not work
-        let link = "/db/" + chosen_db['redis_port']
-        $.get(link);
-        window.location.reload();
+        if (!chosen_db) {
+            return;
+        }
+
+        try {
+            await switchRedisDb(chosen_db['redis_port']);
+            redisModal.hide();
+            window.location.reload();
+        } catch (error) {
+            console.error(error);
+            window.alert("Failed to switch DB. Reload the page and try again.");
+        }
     });
 
 }
