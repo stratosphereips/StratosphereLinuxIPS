@@ -177,7 +177,11 @@ class GraphStructureDataStore:
                 "Hover a node or edge to inspect its type and main features. "
                 "Click to pin details. Use the connection controls to hide, "
                 "expand, or restore local neighborhoods without changing the "
-                "stored graph."
+                "stored graph. Use the layout sliders to increase link "
+                "length, node gap, repulsion, component spacing, and label "
+                "size for dense windows. Slider values update while dragged; "
+                "the layout is recalculated after release so the graph does "
+                "not rotate on every small adjustment."
             ),
             "node_types": schema.get("node_types", []),
             "edge_types": schema.get("edge_types", []),
