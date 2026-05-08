@@ -91,6 +91,10 @@ label {
   text-transform: uppercase;
 }
 
+.secondary-label {
+  margin-top: 10px;
+}
+
 select,
 input[type="search"] {
   width: 100%;
@@ -120,6 +124,16 @@ button {
 
 button:hover {
   border-color: var(--accent);
+}
+
+.notice {
+  margin-top: 10px;
+  border: 1px solid #3a4c5f;
+  border-radius: 6px;
+  background: #15202a;
+  color: #c8d6e2;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
 }
 
 .layout-controls {
