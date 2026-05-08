@@ -246,7 +246,7 @@ graph_structure:
   # Build sparse heterogeneous graph tables for each alert-bounded window.
   # Disabled by default because graph generation adds runtime memory use and
   # writes one set of node/edge tables for every generated alert.
-  enabled: true
+  enabled: false
 
 #############################
 flow_ml_detection:
