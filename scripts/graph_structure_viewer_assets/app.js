@@ -5,6 +5,8 @@ const state = {
   index: null,
   graph: null,
   cy: null,
+  currentSelector: "all",
+  viewMode: "smart",
   selectedElement: null,
   hiddenNodeTypes: new Set(),
   hiddenEdgeTypes: new Set(),
@@ -82,6 +84,7 @@ const layoutControlDefinitions = [
 ];
 
 const nodeColors = {
+  alert_window: "#f4d35e",
   profile: "#7cc7ff",
   ip: "#64d58a",
   network: "#9ca3af",
@@ -98,6 +101,9 @@ const nodeColors = {
 };
 
 const edgeColors = {
+  aggregated_evidence_about_entity: "#fb7185",
+  aggregated_flow_to_ip: "#2dd4bf",
+  aggregated_flow_to_port: "#a78bfa",
   graph_transition: "#ffffff",
   alert_contains_evidence: "#e46e8e",
   evidence_refs_flow: "#f0b35a",
@@ -125,6 +131,7 @@ function bestNodeLabel(node) {
   /** Pick the most readable label for a graph node row. */
   const features = node.features || {};
   const preferred = [
+    "window_index",
     "ip",
     "domain",
     "url",
@@ -137,7 +144,10 @@ function bestNodeLabel(node) {
     "user_agent",
   ];
   for (const key of preferred) {
-    if (features[key]) return valueLabel(features[key]);
+    if (features[key] !== undefined && features[key] !== "") {
+      if (key === "window_index") return `window ${features[key]}`;
+      return valueLabel(features[key]);
+    }
   }
   return node.node_id;
 }
@@ -552,11 +562,13 @@ function featureTable(features) {
 
 function renderStats(payload) {
   /** Render basic graph metrics. */
+  const metadata = payload.metadata || {};
   const stats = [
+    ["View", metadata.view_mode || state.viewMode],
     ["Nodes", payload.summary.node_count],
     ["Edges", payload.summary.edge_count],
-    ["Node types", Object.keys(payload.summary.node_types).length],
-    ["Edge types", Object.keys(payload.summary.edge_types).length],
+    ["Raw nodes", metadata.raw_node_count || payload.summary.node_count],
+    ["Raw edges", metadata.raw_edge_count || payload.summary.edge_count],
   ];
   qs("#graph-stats").innerHTML = stats
     .map(
@@ -568,6 +580,27 @@ function renderStats(payload) {
       `
     )
     .join("");
+  renderGraphNotice(metadata);
+}
+
+function renderGraphNotice(metadata) {
+  /** Render smart-view notices and warnings.
+   *
+   * Parameters:
+   *   metadata: Graph metadata from the API payload.
+   *
+   * Return value:
+   *   None.
+   */
+  const notice = qs("#graph-notice");
+  const message = metadata.notice || "";
+  if (!message) {
+    notice.classList.add("hidden");
+    notice.textContent = "";
+    return;
+  }
+  notice.textContent = message;
+  notice.classList.remove("hidden");
 }
 
 function renderTypeFilters(payload) {
@@ -746,9 +779,15 @@ function renderDocumentation(index) {
     <h2>Interaction</h2>
     <p>${escapeHtml(doc.interaction || "")}</p>
     <h2>Node Types</h2>
-    ${simpleList(schema.node_types || [])}
+    ${simpleList([...(schema.node_types || []), "alert_window"])}
     <h2>Edge Types</h2>
-    ${simpleList([...(schema.edge_types || []), "graph_transition"])}
+    ${simpleList([
+      ...(schema.edge_types || []),
+      "aggregated_evidence_about_entity",
+      "aggregated_flow_to_ip",
+      "aggregated_flow_to_port",
+      "graph_transition",
+    ])}
     <h2>Feature Allowlists</h2>
     <pre>${escapeHtml(JSON.stringify(schema.feature_allowlists || {}, null, 2))}</pre>
   `;
@@ -777,7 +816,11 @@ function populateGraphSelect(index) {
 
 async function loadGraph(selector) {
   /** Load and render a graph payload. */
-  state.graph = await fetchJson(`/api/graph/${encodeURIComponent(selector)}`);
+  state.currentSelector = selector;
+  const query = new URLSearchParams({ view: state.viewMode });
+  state.graph = await fetchJson(
+    `/api/graph/${encodeURIComponent(selector)}?${query.toString()}`
+  );
   state.selectedElement = null;
   state.hiddenNodeTypes.clear();
   state.hiddenEdgeTypes.clear();
@@ -802,6 +845,10 @@ function bindControls() {
   bindLayoutControls();
   qs("#graph-select").addEventListener("change", (event) => {
     loadGraph(event.target.value);
+  });
+  qs("#view-select").addEventListener("change", (event) => {
+    state.viewMode = event.target.value;
+    loadGraph(state.currentSelector);
   });
   qs("#layout-button").addEventListener("click", () => {
     runLayout({ fit: false, randomize: false });
