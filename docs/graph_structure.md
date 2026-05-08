@@ -122,8 +122,12 @@ opens a browser page with:
 - Hover and click inspection for every node, edge, feature dictionary, graph
   metadata row, and transition row.
 - Node-type and edge-type filters.
-- Controls to relayout, focus a node, toggle a node's visible connections,
-  expand one hop, hide leaves, and restore the full graph.
+- Controls to relayout, tune link length, node gap, repulsion, gravity,
+  component spacing, iteration count, and label size.
+- Layout sliders update their values while dragged and recalculate the layout
+  when released, preserving the current graph orientation and viewport.
+- Controls to focus a node, toggle a node's visible connections, expand one
+  hop, hide leaves, and restore the full graph.
 - Built-in documentation for the stored schema and feature allowlists.
 
 The webpage uses Cytoscape.js in the browser so the graph stays interactive
