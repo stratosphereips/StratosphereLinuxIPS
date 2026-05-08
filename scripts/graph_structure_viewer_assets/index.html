@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Slips Graph Structure Viewer</title>
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <header class="app-header">
+          <div>
+            <h1>Graph Structure</h1>
+            <p id="graph-root">Loading graph output...</p>
+          </div>
+        </header>
+
+        <section class="panel">
+          <label for="graph-select">Window</label>
+          <select id="graph-select"></select>
+          <div id="graph-stats" class="stats-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">Controls</div>
+          <div class="button-grid">
+            <button id="layout-button" type="button">Relayout</button>
+            <button id="show-all-button" type="button">Show all</button>
+            <button id="focus-button" type="button">Focus node</button>
+            <button id="toggle-connections-button" type="button">Toggle links</button>
+            <button id="expand-button" type="button">Expand one hop</button>
+            <button id="hide-leaves-button" type="button">Hide leaves</button>
+          </div>
+          <input id="search-input" type="search" placeholder="Find node, feature, or edge">
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">Node Types</div>
+          <div id="node-type-filters" class="chip-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">Edge Types</div>
+          <div id="edge-type-filters" class="chip-list"></div>
+        </section>
+
+        <section class="panel scroll-panel">
+          <div class="panel-title">Transitions</div>
+          <div id="transition-list" class="transition-list"></div>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <div id="graph"></div>
+        <div id="tooltip" class="tooltip hidden"></div>
+      </main>
+
+      <aside class="details">
+        <section class="panel detail-panel">
+          <div class="panel-title">Selection</div>
+          <div id="selection-details" class="details-content">
+            Hover or click a node, edge, or transition.
+          </div>
+        </section>
+
+        <section class="panel doc-panel">
+          <div class="panel-title">Documentation</div>
+          <div id="documentation"></div>
+        </section>
+      </aside>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/cytoscape/dist/cytoscape.min.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>
