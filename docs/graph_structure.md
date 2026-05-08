@@ -119,6 +119,12 @@ opens a browser page with:
 - An `All windows` graph that combines every alert-bounded graph and adds
   synthetic `graph_transition` edges between alert nodes.
 - A selector for individual alert windows.
+- A view selector with `Smart overview`, `Overview`, `Entity overview`, and
+  `Raw graph`. Smart mode keeps huge runs browser-safe by showing one node per
+  alert window for the all-windows view, by collapsing raw flow nodes into
+  counted entity relations for large single windows, and by also collapsing
+  evidence nodes into counted alert-to-entity relations in all-windows entity
+  views.
 - Hover and click inspection for every node, edge, feature dictionary, graph
   metadata row, and transition row.
 - Node-type and edge-type filters.
@@ -132,6 +138,14 @@ opens a browser page with:
 
 The webpage uses Cytoscape.js in the browser so the graph stays interactive
 without adding a Python runtime dependency.
+
+For large captures, avoid starting from `Raw graph`. The raw graph is the
+canonical data and remains available, but tens of thousands of nodes and edges
+are not a useful browser visualization. Start with Smart overview, select the
+window with the interesting alert, then use Entity overview to inspect IPs,
+ports, domains, evidence, and aggregated flow relations. Aggregated edges keep
+a `count`, representative IDs, protocol sets, and byte/packet totals in their
+feature dictionaries.
 
 ## Partial Observability
 
