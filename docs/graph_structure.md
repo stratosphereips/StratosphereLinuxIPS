@@ -104,6 +104,31 @@ consecutive graphs as `from_graph_id -> to_graph_id` and stores actions
 observed between the two alert-closing events. Rewards are present as nullable
 metadata for future producers; the module does not infer rewards.
 
+## Local Graph Viewer
+
+The graph tables can be explored with the local web viewer:
+
+```bash
+python3 scripts/graph_structure_viewer.py output/test-graph-4
+```
+
+The argument may be either the Slips output directory or the
+`graph-structure/` directory itself. The tool starts a local HTTP server and
+opens a browser page with:
+
+- An `All windows` graph that combines every alert-bounded graph and adds
+  synthetic `graph_transition` edges between alert nodes.
+- A selector for individual alert windows.
+- Hover and click inspection for every node, edge, feature dictionary, graph
+  metadata row, and transition row.
+- Node-type and edge-type filters.
+- Controls to relayout, focus a node, toggle a node's visible connections,
+  expand one hop, hide leaves, and restore the full graph.
+- Built-in documentation for the stored schema and feature allowlists.
+
+The webpage uses Cytoscape.js in the browser so the graph stays interactive
+without adding a Python runtime dependency.
+
 ## Partial Observability
 
 The stored graph is the canonical centralized view. Agent-specific observations
