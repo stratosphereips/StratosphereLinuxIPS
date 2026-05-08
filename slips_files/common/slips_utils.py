@@ -651,7 +651,7 @@ class Utils(object):
         returns either an IPv4 or IPv6 address as a string, or None if unavailable
         """
         try:
-            response = requests.get("http://ipinfo.io/json", timeout=5)
+            response = requests.get("https://ipinfo.io/json", timeout=5)
             if response.status_code == 200:
                 data = json.loads(response.text)
                 if "ip" in data:
