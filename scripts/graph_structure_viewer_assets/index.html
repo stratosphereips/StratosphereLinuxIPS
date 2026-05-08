@@ -33,6 +33,43 @@
             <button id="hide-leaves-button" type="button">Hide leaves</button>
           </div>
           <input id="search-input" type="search" placeholder="Find node, feature, or edge">
+          <div class="layout-controls">
+            <div class="range-row">
+              <label for="edge-length-slider">Link length</label>
+              <output id="edge-length-value" for="edge-length-slider">150 px</output>
+              <input id="edge-length-slider" type="range" min="20" max="1000" step="10" value="150">
+            </div>
+            <div class="range-row">
+              <label for="node-repulsion-slider">Repulsion</label>
+              <output id="node-repulsion-value" for="node-repulsion-slider">18000</output>
+              <input id="node-repulsion-slider" type="range" min="1000" max="300000" step="1000" value="18000">
+            </div>
+            <div class="range-row">
+              <label for="node-gap-slider">Node gap</label>
+              <output id="node-gap-value" for="node-gap-slider">30</output>
+              <input id="node-gap-slider" type="range" min="0" max="240" step="2" value="30">
+            </div>
+            <div class="range-row">
+              <label for="gravity-slider">Gravity</label>
+              <output id="gravity-value" for="gravity-slider">0.08</output>
+              <input id="gravity-slider" type="range" min="0" max="2" step="0.01" value="0.08">
+            </div>
+            <div class="range-row">
+              <label for="spacing-slider">Component spacing</label>
+              <output id="spacing-value" for="spacing-slider">130 px</output>
+              <input id="spacing-slider" type="range" min="0" max="1000" step="10" value="130">
+            </div>
+            <div class="range-row">
+              <label for="iterations-slider">Iterations</label>
+              <output id="iterations-value" for="iterations-slider">1200</output>
+              <input id="iterations-slider" type="range" min="100" max="8000" step="100" value="1200">
+            </div>
+            <div class="range-row">
+              <label for="label-size-slider">Label size</label>
+              <output id="label-size-value" for="label-size-slider">10 px</output>
+              <input id="label-size-slider" type="range" min="6" max="28" step="1" value="10">
+            </div>
+          </div>
         </section>
 
         <section class="panel">
