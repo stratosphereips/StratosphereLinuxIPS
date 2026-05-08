@@ -122,6 +122,37 @@ button:hover {
   border-color: var(--accent);
 }
 
+.layout-controls {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.range-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(58px, auto);
+  gap: 6px 10px;
+  align-items: center;
+}
+
+.range-row label {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.range-row output {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.range-row input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: var(--accent);
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -192,6 +223,7 @@ button:hover {
 .kv-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .kv-table th,
@@ -200,6 +232,8 @@ button:hover {
   padding: 6px 0;
   vertical-align: top;
   text-align: left;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .kv-table th {
@@ -222,13 +256,22 @@ pre {
 .tooltip {
   position: fixed;
   z-index: 5;
-  max-width: 360px;
+  max-width: min(560px, calc(100vw - 24px));
+  max-height: min(480px, calc(100vh - 24px));
+  overflow: auto;
+  overflow-wrap: anywhere;
   pointer-events: none;
   background: #f8fbfd;
   color: #111820;
   border-radius: 6px;
   padding: 8px 10px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.tooltip div {
+  overflow-wrap: anywhere;
 }
 
 .hidden {
