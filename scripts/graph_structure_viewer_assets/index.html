@@ -19,6 +19,14 @@
         <section class="panel">
           <label for="graph-select">Window</label>
           <select id="graph-select"></select>
+          <label for="view-select" class="secondary-label">View</label>
+          <select id="view-select">
+            <option value="smart">Smart overview</option>
+            <option value="overview">Overview</option>
+            <option value="entity">Entity overview</option>
+            <option value="raw">Raw graph</option>
+          </select>
+          <div id="graph-notice" class="notice hidden"></div>
           <div id="graph-stats" class="stats-grid"></div>
         </section>
 
