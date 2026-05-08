@@ -9,7 +9,77 @@ const state = {
   hiddenNodeTypes: new Set(),
   hiddenEdgeTypes: new Set(),
   collapsedNodes: new Set(),
+  layoutSettings: {
+    edgeLength: 150,
+    nodeRepulsion: 18000,
+    nodeOverlap: 30,
+    gravity: 0.08,
+    componentSpacing: 130,
+    iterations: 1200,
+    labelSize: 10,
+  },
 };
+
+let layoutTimer = null;
+
+const layoutControlDefinitions = [
+  {
+    inputId: "edge-length-slider",
+    outputId: "edge-length-value",
+    key: "edgeLength",
+    suffix: " px",
+    decimals: 0,
+    relayout: true,
+  },
+  {
+    inputId: "node-repulsion-slider",
+    outputId: "node-repulsion-value",
+    key: "nodeRepulsion",
+    suffix: "",
+    decimals: 0,
+    relayout: true,
+  },
+  {
+    inputId: "node-gap-slider",
+    outputId: "node-gap-value",
+    key: "nodeOverlap",
+    suffix: "",
+    decimals: 0,
+    relayout: true,
+  },
+  {
+    inputId: "gravity-slider",
+    outputId: "gravity-value",
+    key: "gravity",
+    suffix: "",
+    decimals: 2,
+    relayout: true,
+  },
+  {
+    inputId: "spacing-slider",
+    outputId: "spacing-value",
+    key: "componentSpacing",
+    suffix: " px",
+    decimals: 0,
+    relayout: true,
+  },
+  {
+    inputId: "iterations-slider",
+    outputId: "iterations-value",
+    key: "iterations",
+    suffix: "",
+    decimals: 0,
+    relayout: true,
+  },
+  {
+    inputId: "label-size-slider",
+    outputId: "label-size-value",
+    key: "labelSize",
+    suffix: " px",
+    decimals: 0,
+    relayout: false,
+  },
+];
 
 const nodeColors = {
   profile: "#7cc7ff",
@@ -171,11 +241,13 @@ function createCy(payload) {
           color: "#dbe7ef",
           height: "data(size)",
           label: "data(label)",
-          "font-size": 10,
+          "font-size": `${state.layoutSettings.labelSize}px`,
           "overlay-opacity": 0,
           "text-background-color": "#0c0f12",
           "text-background-opacity": 0.82,
           "text-background-padding": 2,
+          "text-max-width": 120,
+          "text-wrap": "wrap",
           "text-outline-width": 0,
           "text-valign": "bottom",
           width: "data(size)",
@@ -221,24 +293,163 @@ function createCy(payload) {
   });
 
   bindGraphEvents();
-  runLayout();
+  runLayout({ fit: true, randomize: true });
 }
 
-function runLayout() {
-  /** Run a layout appropriate for the current graph size. */
+function runLayout(options = {}) {
+  /** Run a layout appropriate for the current graph size.
+   *
+   * Parameters:
+   *   options: Layout options for fitting and randomizing.
+   *
+   * Return value:
+   *   None.
+   */
   if (!state.cy) return;
+  applyLabelSize();
   const nodeCount = state.cy.nodes().length;
   const layoutName = nodeCount > 1200 ? "grid" : "cose";
-  state.cy.layout({
+  const settings = state.layoutSettings;
+  const shouldFit = options.fit === true;
+  const shouldRandomize = options.randomize === true;
+  const viewport = shouldFit
+    ? null
+    : { zoom: state.cy.zoom(), pan: { ...state.cy.pan() } };
+  const anchor = shouldFit ? null : graphCenter(state.cy.nodes());
+  const commonOptions = {
     name: layoutName,
     animate: false,
-    fit: true,
+    fit: shouldFit,
     padding: 40,
-    idealEdgeLength: 85,
-    nodeRepulsion: 9000,
-    gravity: 0.22,
-    numIter: 900,
-  }).run();
+  };
+  const sparseOptions = {
+    idealEdgeLength: settings.edgeLength,
+    nodeRepulsion: settings.nodeRepulsion,
+    gravity: settings.gravity,
+    componentSpacing: settings.componentSpacing,
+    nodeOverlap: settings.nodeOverlap,
+    numIter: settings.iterations,
+    randomize: shouldRandomize,
+  };
+  const gridOptions = {
+    avoidOverlap: true,
+    avoidOverlapPadding: Math.max(8, settings.nodeOverlap),
+    spacingFactor: Math.max(1, settings.edgeLength / 90),
+  };
+  const layout = state.cy.layout({
+    ...commonOptions,
+    ...(layoutName === "grid" ? gridOptions : sparseOptions),
+  });
+  if (!shouldFit) {
+    layout.on("layoutstop", () => preserveViewport(anchor, viewport));
+  }
+  layout.run();
+}
+
+function scheduleLayout() {
+  /** Debounce layout recalculation after slider changes. */
+  if (layoutTimer) window.clearTimeout(layoutTimer);
+  layoutTimer = window.setTimeout(
+    () => runLayout({ fit: false, randomize: false }),
+    220
+  );
+}
+
+function graphCenter(nodes) {
+  /** Return the geometric center of a node collection.
+   *
+   * Parameters:
+   *   nodes: Cytoscape node collection.
+   *
+   * Return value:
+   *   Center point, or null when no nodes exist.
+   */
+  if (!nodes || !nodes.length) return null;
+  const box = nodes.boundingBox({ includeLabels: false });
+  return {
+    x: (box.x1 + box.x2) / 2,
+    y: (box.y1 + box.y2) / 2,
+  };
+}
+
+function preserveViewport(anchor, viewport) {
+  /** Preserve graph center and camera after a non-fitting layout.
+   *
+   * Parameters:
+   *   anchor: Previous graph center point.
+   *   viewport: Previous zoom and pan values.
+   *
+   * Return value:
+   *   None.
+   */
+  if (!state.cy || !anchor || !viewport) return;
+  const nextCenter = graphCenter(state.cy.nodes());
+  if (nextCenter) {
+    const dx = anchor.x - nextCenter.x;
+    const dy = anchor.y - nextCenter.y;
+    state.cy.nodes().positions((node) => {
+      const position = node.position();
+      return { x: position.x + dx, y: position.y + dy };
+    });
+  }
+  state.cy.zoom(viewport.zoom);
+  state.cy.pan(viewport.pan);
+}
+
+function formatLayoutValue(value, decimals, suffix) {
+  /** Format one layout control value for display.
+   *
+   * Parameters:
+   *   value: Numeric slider value.
+   *   decimals: Number of decimals to keep.
+   *   suffix: Unit suffix to append.
+   *
+   * Return value:
+   *   Formatted value label.
+   */
+  return `${Number(value).toFixed(decimals)}${suffix}`;
+}
+
+function syncLayoutSettings() {
+  /** Read layout sliders into state and update their visible values. */
+  for (const definition of layoutControlDefinitions) {
+    const input = qs(`#${definition.inputId}`);
+    const output = qs(`#${definition.outputId}`);
+    if (!input || !output) continue;
+    const value = Number(input.value);
+    state.layoutSettings[definition.key] = value;
+    const displayValue = formatLayoutValue(
+      value,
+      definition.decimals,
+      definition.suffix
+    );
+    output.value = displayValue;
+    output.textContent = displayValue;
+  }
+}
+
+function applyLabelSize() {
+  /** Apply the label-size slider to the active graph. */
+  if (!state.cy) return;
+  state.cy.nodes().style("font-size", `${state.layoutSettings.labelSize}px`);
+}
+
+function bindLayoutControls() {
+  /** Attach dynamic layout sliders. */
+  syncLayoutSettings();
+  for (const definition of layoutControlDefinitions) {
+    const input = qs(`#${definition.inputId}`);
+    if (!input) continue;
+    input.addEventListener("input", () => {
+      syncLayoutSettings();
+      applyLabelSize();
+    });
+    input.addEventListener("change", () => {
+      syncLayoutSettings();
+      applyLabelSize();
+      if (definition.relayout) scheduleLayout();
+    });
+  }
 }
 
 function bindGraphEvents() {
@@ -273,14 +484,42 @@ function showTooltip(mouseEvent, element) {
     <div>${escapeHtml(shortId(id))}</div>
     ${lines}
   `;
-  tooltip.style.left = `${mouseEvent.clientX + 14}px`;
-  tooltip.style.top = `${mouseEvent.clientY + 14}px`;
   tooltip.classList.remove("hidden");
+  positionTooltip(mouseEvent, tooltip);
 }
 
 function hideTooltip() {
   /** Hide the hover tooltip. */
   qs("#tooltip").classList.add("hidden");
+}
+
+function positionTooltip(mouseEvent, tooltip) {
+  /** Keep the hover tooltip inside the browser viewport.
+   *
+   * Parameters:
+   *   mouseEvent: Browser mouse event from Cytoscape.
+   *   tooltip: Tooltip element to position.
+   *
+   * Return value:
+   *   None.
+   */
+  const margin = 12;
+  const offset = 14;
+  const eventX = mouseEvent ? mouseEvent.clientX : window.innerWidth / 2;
+  const eventY = mouseEvent ? mouseEvent.clientY : window.innerHeight / 2;
+  const rect = tooltip.getBoundingClientRect();
+  let left = eventX + offset;
+  let top = eventY + offset;
+
+  if (left + rect.width + margin > window.innerWidth) {
+    left = eventX - rect.width - offset;
+  }
+  if (top + rect.height + margin > window.innerHeight) {
+    top = window.innerHeight - rect.height - margin;
+  }
+
+  tooltip.style.left = `${Math.max(margin, left)}px`;
+  tooltip.style.top = `${Math.max(margin, top)}px`;
 }
 
 function renderElementDetails(element) {
@@ -560,10 +799,13 @@ function metadataDetails(metadata) {
 
 function bindControls() {
   /** Bind sidebar controls. */
+  bindLayoutControls();
   qs("#graph-select").addEventListener("change", (event) => {
     loadGraph(event.target.value);
   });
-  qs("#layout-button").addEventListener("click", runLayout);
+  qs("#layout-button").addEventListener("click", () => {
+    runLayout({ fit: false, randomize: false });
+  });
   qs("#show-all-button").addEventListener("click", showAll);
   qs("#focus-button").addEventListener("click", focusSelectedNode);
   qs("#toggle-connections-button").addEventListener(
