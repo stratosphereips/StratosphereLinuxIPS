@@ -1,5 +1,6 @@
 import fcntl
 import os
+import re
 import sqlite3
 from abc import ABC
 from contextlib import contextmanager
@@ -25,6 +26,7 @@ class ISQLite(ABC):
     # the same sqlite db at the same time this lock must be used because
     # we're using check_same_thread=False in sqlite3.connect()
     conn_lock = Lock()
+    _identifier_pattern = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
     def __init__(self, name: str, main_pid: int, db_file: str):
         """
@@ -121,6 +123,37 @@ class ISQLite(ABC):
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
 
+    def _validate_identifier(self, identifier: str, kind: str = "identifier"):
+        """
+        Validate a SQL identifier before interpolating it into a query.
+
+        :param identifier: Identifier to validate.
+        :param kind: Human-readable identifier type for error messages.
+        :return: The validated identifier.
+        """
+        if not isinstance(
+            identifier, str
+        ) or not self._identifier_pattern.fullmatch(identifier):
+            raise ValueError(f"Invalid SQL {kind}: {identifier}")
+        return identifier
+
+    def _validate_identifier_list(
+        self, identifiers: str, kind: str = "identifier list"
+    ) -> str:
+        """
+        Validate a comma-separated list of SQL identifiers.
+
+        :param identifiers: Comma-separated identifiers.
+        :param kind: Human-readable identifier type for error messages.
+        :return: The normalized identifier list.
+        """
+        validated_identifiers = []
+        for identifier in identifiers.split(","):
+            validated_identifiers.append(
+                self._validate_identifier(identifier.strip(), kind)
+            )
+        return ", ".join(validated_identifiers)
+
     def get_number_of_tables(self):
         """
         returns the number of tables in the current db
@@ -132,11 +165,14 @@ class ISQLite(ABC):
         return res[0]
 
     def create_table(self, table_name, schema):
+        table_name = self._validate_identifier(table_name, "table name")
         query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
         self.execute(query)
 
     def insert(self, table_name, values: tuple, columns: str = None):
+        table_name = self._validate_identifier(table_name, "table name")
         if columns:
+            columns = self._validate_identifier_list(columns, "column name")
             placeholders = ", ".join(["?"] * len(values))
             query = (
                 f"INSERT INTO {table_name} ({columns}) "
@@ -147,13 +183,15 @@ class ISQLite(ABC):
             query = f"INSERT INTO {table_name} VALUES {values}"  # fallback
             self.execute(query)
 
-    def update(self, table_name, set_clause, condition):
+    def update(self, table_name, set_clause, condition, params=None):
+        table_name = self._validate_identifier(table_name, "table name")
         query = f"UPDATE {table_name} SET {set_clause} WHERE {condition}"
-        self.execute(query)
+        self.execute(query, params)
 
-    def delete(self, table_name, condition):
+    def delete(self, table_name, condition, params=None):
+        table_name = self._validate_identifier(table_name, "table name")
         query = f"DELETE FROM {table_name} WHERE {condition}"
-        self.execute(query)
+        self.execute(query, params)
 
     def select(
         self,
@@ -164,6 +202,7 @@ class ISQLite(ABC):
         order_by=None,
         limit: int = None,
     ):
+        table_name = self._validate_identifier(table_name, "table name")
         query = f"SELECT {columns} FROM {table_name} "
         if condition:
             query += f" WHERE {condition}"
@@ -183,13 +222,17 @@ class ISQLite(ABC):
             result = self.fetchall(cursor)
         return result
 
-    def get_count(self, table, condition=None):
+    def get_count(self, table, condition=None, params=()):
         """
         returns th enumber of matching rows in the given table
         based on a specific contioins
         """
         count = self.select(
-            table, columns="COUNT(*)", condition=condition, limit=1
+            table,
+            columns="COUNT(*)",
+            condition=condition,
+            params=params,
+            limit=1,
         )
         return count[0] if count else None
 
