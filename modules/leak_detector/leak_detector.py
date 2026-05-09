@@ -117,7 +117,17 @@ class LeakDetector(IModule):
                 # this offset is exactly when the packet ends
                 end_offset = f.tell()
                 if offset <= end_offset and offset >= start_offset:
-                    # print(f"Found a match. Packet number in wireshark: {packet_number+1}")
+                    # sanitize tshark params
+                    self.pcap = utils.sanitize(self.pcap)
+                    try:
+                        int(packet_number)
+                    except ValueError:
+                        self.print(
+                            f"Invalid packet number: {packet_number} "
+                            f"for offset: {offset} for {self.pcap}"
+                        )
+                        return
+
                     # use tshark to get packet info
                     cmd = f'tshark -r "{self.pcap}" -T json -Y frame.number=={packet_number}'
                     tshark_proc = subprocess.Popen(
@@ -291,6 +301,9 @@ class LeakDetector(IModule):
 
             # get the complete path of the .yara rule
             rule_path = os.path.join(self.yara_rules_path, yara_rule)
+
+            rule_path = utils.sanitize(rule_path)
+            compiled_rule_path = utils.sanitize(compiled_rule_path)
             # compile
             cmd = f"yarac {rule_path} {compiled_rule_path} >/dev/null 2>&1"
             return_code = os.system(cmd)
