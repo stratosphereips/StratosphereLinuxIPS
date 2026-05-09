@@ -100,3 +100,19 @@ def test_create_zeek_output_dir(store_in_output, expected_dir):
     )
 
     assert input_process.zeek_utils.create_zeek_output_dir() == expected_dir
+
+
+def test_sanitize_packet_filter_rejects_newlines():
+    input_process = ModuleFactory().create_input_obj(
+        "", InputType.ZEEK_LOG_FILE
+    )
+
+    with pytest.raises(ValueError):
+        input_process.zeek_utils._sanitize_packet_filter("tcp\nport 80")
+
+
+def test_sanitize_zeek_target_rejects_unsafe_interface():
+    input_process = ModuleFactory().create_input_obj("", InputType.INTERFACE)
+
+    with pytest.raises(ValueError):
+        input_process.zeek_utils._sanitize_zeek_target("eth0;rm -rf /")

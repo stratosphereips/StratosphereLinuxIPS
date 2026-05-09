@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import List, Tuple
 from re import split
 
+from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
 from slips_files.core.input.zeek.utils.dos_protector import DoSProtector
 from slips_files.core.zeek_cmd_builder import ZeekCommandBuilder
@@ -447,17 +448,59 @@ class ZeekInputUtils:
         constructs the zeek command based on the user given
         pcap/interface/packet filter/etc.
         """
+        safe_target = self._sanitize_zeek_target(pcap_or_interface)
+        safe_filter = self._sanitize_packet_filter(tcpdump_filter)
         builder = ZeekCommandBuilder(
-            zeek_or_bro=self.input.zeek_or_bro,
+            zeek_or_bro=utils.sanitize(self.input.zeek_or_bro),
             input_type=self.input.input_type,
-            default_rotation_interval=self.input.default_rotation_interval,
+            default_rotation_interval=utils.sanitize(
+                self.input.default_rotation_interval
+            ),
             enable_rotation=self.input.enable_rotation,
-            tcp_inactivity_timeout=self.input.tcp_inactivity_timeout,
-            packet_filter=self.input.packet_filter,
+            tcp_inactivity_timeout=int(self.input.tcp_inactivity_timeout),
+            packet_filter=self._sanitize_packet_filter(
+                self.input.packet_filter
+            ),
         )
 
-        cmd = builder.build(pcap_or_interface, tcpdump_filter=tcpdump_filter)
+        cmd = builder.build(safe_target, tcpdump_filter=safe_filter)
         return cmd
+
+    def _sanitize_zeek_target(self, pcap_or_interface: str) -> str:
+        """
+        Validate the Zeek target before building the command.
+
+        Parameters:
+        pcap_or_interface: PCAP path or interface name given by the user.
+
+        Return:
+        The validated PCAP path or interface name.
+        """
+        if self.input.input_type == InputType.PCAP:
+            return utils.validate_safe_path(pcap_or_interface, must_exist=True)
+
+        safe_interface = utils.sanitize(str(pcap_or_interface).strip())
+        if safe_interface != str(pcap_or_interface).strip():
+            raise ValueError(f"Unsafe interface argument: {pcap_or_interface}")
+        return safe_interface
+
+    def _sanitize_packet_filter(self, packet_filter: str = None) -> str:
+        """
+        Validate a packet filter passed to Zeek.
+
+        Parameters:
+        packet_filter: Packet filter text to validate.
+
+        Return:
+        The validated packet filter or None.
+        """
+        if packet_filter is None:
+            return None
+
+        packet_filter = str(packet_filter).strip()
+        if any(char in packet_filter for char in ("\x00", "\n", "\r")):
+            raise ValueError(f"Unsafe packet filter: {packet_filter}")
+        return packet_filter
 
     def run_zeek(self, zeek_logs_dir, pcap_or_interface, tcpdump_filter=None):
         """
@@ -466,6 +509,9 @@ class ZeekInputUtils:
         starting zeek with -f
         """
         command = self._construct_zeek_cmd(pcap_or_interface, tcpdump_filter)
+        safe_zeek_logs_dir = utils.validate_safe_path(
+            zeek_logs_dir, must_exist=True
+        )
         str_cmd = " ".join(command)
         self.input.print(f"Zeek command: {str_cmd}", 3, 0)
 
@@ -474,7 +520,7 @@ class ZeekInputUtils:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             stdin=subprocess.PIPE,
-            cwd=zeek_logs_dir,
+            cwd=safe_zeek_logs_dir,
             start_new_session=True,
         )
         # you have to get the pid before communicate()

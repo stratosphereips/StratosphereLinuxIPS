@@ -225,6 +225,11 @@ class Iris(IModule):
 
     def send_sigterm(self, pid):
         current_platform = platform.system()
+        # sanitize pid
+        try:
+            int(pid)
+        except ValueError:
+            self.print(f"Invalid PID: {pid}. PID must be an integer.")
 
         if current_platform == "Windows":
             # Windows: Using taskkill to terminate a process

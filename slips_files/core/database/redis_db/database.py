@@ -431,16 +431,23 @@ class RedisDB(
 
     @classmethod
     def _start_redis_server(cls) -> bool:
-        cmd = (
-            f"redis-server {cls._conf_file} "
-            f"--port {cls.redis_port} "
-            f"--bind {LOCALHOST} "
-            f"--daemonize yes"
+        safe_conf_file = utils.validate_safe_path(
+            cls._conf_file, must_exist=True
         )
+        safe_port = utils.validate_port(cls.redis_port)
+        cmd = [
+            "redis-server",
+            safe_conf_file,
+            "--port",
+            str(safe_port),
+            "--bind",
+            LOCALHOST,
+            "--daemonize",
+            "yes",
+        ]
         process = subprocess.Popen(
             cmd,
             cwd=os.getcwd(),
-            shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
@@ -1763,12 +1770,12 @@ class RedisDB(
 
         # gets the db saved to dump.rdb in the cwd
         redis_db_path = os.path.join(os.getcwd(), "dump.rdb")
+        safe_backup_file = utils.validate_safe_path(backup_file)
 
         if os.path.exists(redis_db_path):
-            command = f"{self.sudo} cp {redis_db_path} {backup_file}.rdb"
-            os.system(command)
+            shutil.copy2(redis_db_path, f"{safe_backup_file}.rdb")
             os.remove(redis_db_path)
-            print(f"[Main] Database saved to {backup_file}.rdb")
+            print(f"[Main] Database saved to {safe_backup_file}.rdb")
             return True
 
         print(
@@ -1785,16 +1792,22 @@ class RedisDB(
 
         # do not use self.print here! the output queue isn't initialized yet
         def is_valid_rdb_file():
-            if not os.path.exists(backup_file):
-                print("{} doesn't exist.".format(backup_file))
+            safe_backup_file = utils.validate_safe_path(
+                backup_file, must_exist=True
+            )
+            if not os.path.exists(safe_backup_file):
+                print("{} doesn't exist.".format(safe_backup_file))
                 return False
 
             # Check if valid .rdb file
-            command = f"file {backup_file}"
-            result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+            result = subprocess.run(
+                ["file", safe_backup_file], stdout=subprocess.PIPE
+            )
             file_type = result.stdout.decode("utf-8")
             if "Redis" not in file_type:
-                print(f"{backup_file} is not a valid redis database file.")
+                print(
+                    f"{safe_backup_file} is not a valid redis database file."
+                )
                 return False
             return True
 
@@ -1802,11 +1815,14 @@ class RedisDB(
             return False
 
         try:
+            safe_backup_file = utils.validate_safe_path(
+                backup_file, must_exist=True
+            )
             RedisDB._conf_file = RedisDB._get_conf_file_path(32850)
             RedisDB._options.update(
                 {
-                    "dbfilename": os.path.basename(backup_file),
-                    "dir": os.path.dirname(backup_file),
+                    "dbfilename": os.path.basename(safe_backup_file),
+                    "dir": os.path.dirname(safe_backup_file),
                     "port": 32850,
                 }
             )

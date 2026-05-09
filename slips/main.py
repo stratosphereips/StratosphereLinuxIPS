@@ -287,7 +287,7 @@ class Main:
         input_type = InputType.FILE
         # Get the type of file
         cmd_result = subprocess.run(
-            ["file", given_path], stdout=subprocess.PIPE
+            ["file", utils.sanitize(given_path)], stdout=subprocess.PIPE
         )
         # Get command output
         cmd_result = cmd_result.stdout.decode("utf-8")

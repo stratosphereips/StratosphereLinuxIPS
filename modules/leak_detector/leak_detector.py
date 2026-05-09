@@ -325,6 +325,9 @@ class LeakDetector(IModule):
             compiled_rule_path = os.path.join(
                 self.compiled_yara_rules_path, compiled_rule
             )
+            compiled_rule_path = utils.validate_safe_path(compiled_rule_path)
+            self.pcap = utils.sanitize(self.pcap)
+
             # -p 7 means use 7 threads for faster analysis
             # -f to stop searching for strings when they were already found
             # -s prints the found string

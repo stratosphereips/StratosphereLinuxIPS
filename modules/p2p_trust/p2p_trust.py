@@ -221,8 +221,10 @@ class Trust(IModule):
                 "-redis-channel-gopy": self.gopy_channel_raw,
             }
             self.print(f"P2P is listening on {self.host} port {self.port}.")
-            executable = [self.pigeon_binary] + [
-                item for pair in params.items() for item in pair
+            executable = [utils.sanitize(self.pigeon_binary)] + [
+                utils.sanitize(item)
+                for pair in params.items()
+                for item in pair
             ]
 
             if self.create_p2p_logfile:

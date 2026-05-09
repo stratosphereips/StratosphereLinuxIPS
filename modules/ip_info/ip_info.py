@@ -525,6 +525,9 @@ class IPInfo(AsyncModule):
 
     def _get_mac_using_ip_neigh(self, gw_ip) -> str | None:
         try:
+            if not ipaddress.ip_address(gw_ip):
+                return
+
             ip_output = subprocess.run(
                 ["ip", "neigh", "show", gw_ip],
                 capture_output=True,
