@@ -18,6 +18,7 @@ import requests
 import json
 import platform
 import os
+import subprocess
 import sys
 import ipaddress
 import aid_hash
@@ -202,6 +203,50 @@ class Utils(object):
         sanitized_string = input_string.translate(remove_characters)
 
         return sanitized_string
+
+    @staticmethod
+    def validate_safe_path(path: str, must_exist: bool = False) -> str:
+        """
+        Validate that a filesystem path is safe to pass as a command argument.
+
+        Parameters:
+        path: Path value to validate.
+        must_exist: Whether the path must already exist on disk.
+
+        Return:
+        The normalized path string.
+        """
+        if path is None:
+            raise ValueError("Path cannot be None.")
+
+        stripped_path = str(path).strip()
+        if not stripped_path:
+            raise ValueError("Path cannot be empty.")
+        normalized_path = os.path.normpath(stripped_path)
+
+        if Utils.sanitize(normalized_path) != normalized_path:
+            raise ValueError(f"Unsafe path argument: {path}")
+
+        if must_exist and not os.path.exists(normalized_path):
+            raise ValueError(f"Path does not exist: {normalized_path}")
+
+        return normalized_path
+
+    @staticmethod
+    def validate_port(port: Any) -> int:
+        """
+        Validate that a value is a TCP/UDP port number.
+
+        Parameters:
+        port: Port value to validate.
+
+        Return:
+        The validated port as an integer.
+        """
+        port = int(port)
+        if not 1 <= port <= 65535:
+            raise ValueError(f"Invalid port: {port}")
+        return port
 
     def to_dict(self, obj):
         """
@@ -847,7 +892,12 @@ class Utils(object):
             # they should be anything other than 0
             return
 
-        os.system(f"chown {UID}:{GID} {file}")
+        safe_file = self.validate_safe_path(file, must_exist=True)
+        safe_uid = int(UID)
+        safe_gid = int(GID)
+        subprocess.run(
+            ["chown", f"{safe_uid}:{safe_gid}", safe_file], check=True
+        )
 
     def initialize_logfile(
         self,
