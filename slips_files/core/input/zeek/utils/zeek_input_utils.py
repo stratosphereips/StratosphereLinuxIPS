@@ -578,49 +578,14 @@ class ZeekInputUtils:
         None.
         """
         try:
-            command = self._construct_zeek_cmd(
-                pcap_or_interface, tcpdump_filter
+            command, safe_zeek_logs_dir = self._prepare_zeek_run(
+                zeek_logs_dir, pcap_or_interface, tcpdump_filter
             )
-            safe_zeek_logs_dir = utils.validate_safe_path(
-                zeek_logs_dir, must_exist=True
-            )
-            str_cmd = " ".join(command)
-            self.input.print(f"Zeek command: {str_cmd}", 3, 0)
-
-            zeek = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                stdin=subprocess.PIPE,
-                cwd=safe_zeek_logs_dir,
-                start_new_session=True,
-            )
-            # you have to get the pid before communicate()
-            self.zeek_pids.append(zeek.pid)
-
+            zeek = self._start_zeek_process(command, safe_zeek_logs_dir)
             out, error = zeek.communicate()
-            if out:
-                print(f"Zeek: {out}")
-
-            if error:
-                decoded_error = error.decode("utf-8", errors="replace").strip()
-                if startup_status is not None:
-                    startup_status["error"] = decoded_error
-                self.input.print(
-                    f"Zeek error. return code: {zeek.returncode} "
-                    f"\n{decoded_error}"
-                )
-                self.input.db.publish_stop()
-                return
-
-            if zeek.returncode not in (0, None):
-                error_message = (
-                    f"Zeek exited with return code {zeek.returncode}."
-                )
-                if startup_status is not None:
-                    startup_status["error"] = error_message
-                self.input.print(error_message)
-                self.input.db.publish_stop()
+            if not self._handle_zeek_process_result(
+                zeek, out, error, startup_status
+            ):
                 return
         except Exception as error:
             if startup_status is not None:
@@ -632,6 +597,106 @@ class ZeekInputUtils:
             # declare that startup was successfull
             if startup_finished_event is not None:
                 startup_finished_event.set()
+
+    def _prepare_zeek_run(
+        self, zeek_logs_dir, pcap_or_interface, tcpdump_filter=None
+    ):
+        """
+        Build the Zeek command and validate the working directory.
+
+        Parameters:
+        zeek_logs_dir: Directory where Zeek writes logs.
+        pcap_or_interface: PCAP path or interface name for Zeek input.
+        tcpdump_filter: Optional packet filter to apply.
+
+        Return:
+        Tuple containing the Zeek command and validated logs directory.
+        """
+        command = self._construct_zeek_cmd(pcap_or_interface, tcpdump_filter)
+        safe_zeek_logs_dir = utils.validate_safe_path(
+            zeek_logs_dir, must_exist=True
+        )
+        str_cmd = " ".join(command)
+        self.input.print(f"Zeek command: {str_cmd}", 3, 0)
+        return command, safe_zeek_logs_dir
+
+    def _start_zeek_process(self, command, zeek_logs_dir):
+        """
+        Start Zeek and store its PID for shutdown handling.
+
+        Parameters:
+        command: Zeek command arguments.
+        zeek_logs_dir: Validated working directory for Zeek.
+
+        Return:
+        The started subprocess.Popen instance.
+        """
+        zeek = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+            cwd=zeek_logs_dir,
+            start_new_session=True,
+        )
+        # you have to get the pid before communicate()
+        self.zeek_pids.append(zeek.pid)
+        return zeek
+
+    def _handle_zeek_process_result(
+        self, zeek, out, error, startup_status=None
+    ) -> bool:
+        """
+        Process Zeek startup output and stop SLIPS when Zeek fails.
+
+        Parameters:
+        zeek: Started Zeek subprocess.
+        out: Zeek stdout bytes.
+        error: Zeek stderr bytes.
+        startup_status: Optional dict used to report startup errors.
+
+        Return:
+        True when Zeek exits cleanly, False when startup failed.
+        """
+        if out:
+            print(f"Zeek: {out}")
+
+        if error:
+            decoded_error = error.decode("utf-8", errors="replace").strip()
+            error_message = (
+                f"Zeek error. return code: {zeek.returncode} "
+                f"\n{decoded_error}"
+            )
+            self._report_zeek_startup_failure(
+                error_message, startup_status, decoded_error
+            )
+            return False
+
+        if zeek.returncode not in (0, None):
+            error_message = f"Zeek exited with return code {zeek.returncode}."
+            self._report_zeek_startup_failure(error_message, startup_status)
+            return False
+
+        return True
+
+    def _report_zeek_startup_failure(
+        self, error_message: str, startup_status=None, status_error: str = None
+    ):
+        """
+        Store and report a Zeek startup failure.
+
+        Parameters:
+        error_message: Human-readable error message to print.
+        startup_status: Optional dict used to report startup errors.
+        status_error: Optional error string stored in startup_status.
+
+        Return:
+        None.
+        """
+        if startup_status is not None:
+            startup_status["error"] = status_error or error_message
+        self.input.print(error_message)
+        self.input.db.publish_stop()
 
     def shutdown_zeek_runtime(self):
         try:
