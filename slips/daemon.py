@@ -176,7 +176,13 @@ class Daemon:
         # os.chdir("/")
         # dissociate the daemon from its controlling terminal.
         # calling setsid means that this child will be the session leader of the new session
+        # aka detaches this process from the terminal.
         os.setsid()
+        # a daemon should not keep whatever restrictive mask the launching
+        # shell or service manager happened to have
+        #  after umask(0), files and directories the daemon creates later get
+        #  the permissions requested by the code, instead of being silently
+        #  reduced by the parent process’s umask
         os.umask(0)
 
         # If you want to prevent a process from acquiring a tty, the process shouldn't be the session leader

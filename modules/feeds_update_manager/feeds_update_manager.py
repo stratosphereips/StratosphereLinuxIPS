@@ -110,14 +110,11 @@ class FeedsUpdateManager(IModule):
 
         self.update_period = conf.update_period()
 
-        self.path_to_remote_ti_files = conf.remote_ti_data_path()
-        if not os.path.exists(self.path_to_remote_ti_files):
-            os.makedirs(self.path_to_remote_ti_files, exist_ok=True)
-            # make it accessible to root and non-root users, because when
-            # slips is started using sudo, it drops privs from modules that
-            # don't need them, and without this line, these modules wont be
-            # able to access the path_to_remote_ti_files
-            os.chmod(self.path_to_remote_ti_files, 0o777)
+        self.path_to_remote_ti_files_dir = conf.remote_ti_data_path()
+        if not os.path.exists(self.path_to_remote_ti_files_dir):
+            os.makedirs(self.path_to_remote_ti_files_dir, exist_ok=True)
+            # only owner can r/w/x
+            os.chmod(self.path_to_remote_ti_files_dir, 0o700)
 
         self.ti_feeds_path = conf.ti_files()
         self.url_feeds = self.get_feed_details(self.ti_feeds_path)
@@ -634,7 +631,7 @@ class FeedsUpdateManager(IModule):
 
             # first download the file and save it locally
             full_path = os.path.join(
-                self.path_to_remote_ti_files, file_name_to_download
+                self.path_to_remote_ti_files_dir, file_name_to_download
             )
             self.write_file_to_disk(response, full_path)
 

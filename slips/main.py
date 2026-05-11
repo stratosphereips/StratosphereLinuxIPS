@@ -511,15 +511,19 @@ class Main:
 
     def prepare_locks_dir(self):
         """
-        sets the correct permissions for the /tmp/slips directory to be
-        used by root and non-root users
+        Set secure shared permissions for the lock directory.
+
+        The directory must remain writable by root and non-root processes
+        because Slips may create lock files before and after dropping
+        privileges. Use the sticky bit so other users cannot remove or
+        replace lock files they do not own.
         """
         locks_dir = utils.slips_locks_dir
         # Create the directory if it doesn't exist
         if not os.path.exists(locks_dir):
             os.makedirs(locks_dir, exist_ok=True)
         try:
-            os.chmod(locks_dir, 0o777)  # World-writable, no sticky bit
+            os.chmod(locks_dir, 0o1777)
         except PermissionError:
             # this dir was created by root, so we can't change the permissions
             # but probably root has already set the permissions
