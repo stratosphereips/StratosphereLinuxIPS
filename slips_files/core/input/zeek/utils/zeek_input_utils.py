@@ -402,7 +402,7 @@ class ZeekInputUtils:
         self.input.db.set_input_metadata({"zeek_dir": zeek_dir})
         return zeek_dir
 
-    def init_zeek(
+    def init_zeek_and_start_the_zeek_thread(
         self,
         observer,
         zeek_dir: str,
@@ -410,11 +410,18 @@ class ZeekInputUtils:
         tcpdump_filter=None,
     ):
         """
+        Start Zeek and return whether startup succeeded.
+
+        Parameters:
+        observer: Observer that tracks generated Zeek logs.
+        zeek_dir: Directory where Zeek will write logs.
         :param pcap_or_interface: name of the pcap or interface zeek
         is going to run on
+        tcpdump_filter: Optional packet filter passed to Zeek.
 
-        PS: this function contains a call to self.run_zeek that
-        keeps running until slips stops
+        Return:
+        True if Zeek starts without hitting the immediate error path,
+        False otherwise.
         """
         observer.start(zeek_dir, pcap_or_interface)
 
@@ -424,17 +431,35 @@ class ZeekInputUtils:
             for file_name in zeek_files:
                 os.remove(os.path.join(zeek_dir, file_name))
 
+        # the zeek thread fills this error if it runs into one.
+        startup_status = {"error": None}
+        # the zeek thread is gonna set this event if starting of zeek was
+        # successfull
+        startup_finished_event = threading.Event()
+
         zeek_thread = threading.Thread(
             target=self.run_zeek,
             args=(zeek_dir, pcap_or_interface),
-            kwargs={"tcpdump_filter": tcpdump_filter},
+            kwargs={
+                "tcpdump_filter": tcpdump_filter,
+                "startup_status": startup_status,
+                "startup_finished_event": startup_finished_event,
+            },
             daemon=True,
             name="run_zeek_thread",
         )
         zeek_thread.start()
         self.zeek_threads.append(zeek_thread)
         # Give Zeek some time to generate at least 1 file.
-        time.sleep(3)
+        startup_finished = startup_finished_event.wait(timeout=3)
+
+        if not startup_finished:
+            self.input.print("Zeek startup timed out after 3 seconds.")
+            self.input.db.publish_stop()
+            return False
+
+        if startup_status["error"]:
+            return False
 
         if self.zeek_pids:
             self.input.db.store_pid(
@@ -442,6 +467,33 @@ class ZeekInputUtils:
             )
         if not hasattr(self.input, "is_zeek_tabs"):
             self.input.is_zeek_tabs = False
+        return True
+
+    def init_zeek(
+        self,
+        observer,
+        zeek_dir: str,
+        pcap_or_interface: str,
+        tcpdump_filter=None,
+    ):
+        """
+        Backward-compatible wrapper for Zeek initialization.
+
+        Parameters:
+        observer: Observer that tracks generated Zeek logs.
+        zeek_dir: Directory where Zeek will write logs.
+        pcap_or_interface: name of the pcap or interface zeek is going to run on
+        tcpdump_filter: Optional packet filter passed to Zeek.
+
+        Return:
+        True if Zeek startup succeeded, False otherwise.
+        """
+        return self.init_zeek_and_start_the_zeek_thread(
+            observer,
+            zeek_dir,
+            pcap_or_interface,
+            tcpdump_filter=tcpdump_filter,
+        )
 
     def _construct_zeek_cmd(self, pcap_or_interface: str, tcpdump_filter=None):
         """
@@ -502,38 +554,84 @@ class ZeekInputUtils:
             raise ValueError(f"Unsafe packet filter: {packet_filter}")
         return packet_filter
 
-    def run_zeek(self, zeek_logs_dir, pcap_or_interface, tcpdump_filter=None):
+    def run_zeek(
+        self,
+        zeek_logs_dir,
+        pcap_or_interface,
+        tcpdump_filter=None,
+        startup_status=None,
+        startup_finished_event=None,
+    ):
         """
         This thread sets the correct zeek parameters and starts zeek
         :kwarg tcpdump_filter: optional tcp filter to use when
         starting zeek with -f
+
+        Parameters:
+        zeek_logs_dir: Directory where Zeek writes logs.
+        pcap_or_interface: PCAP path or interface name for Zeek input.
+        tcpdump_filter: Optional packet filter to apply.
+        startup_finished_event: Optional threading.Event to signal when
+        startup is finished successfully.
+
+        Return:
+        None.
         """
-        command = self._construct_zeek_cmd(pcap_or_interface, tcpdump_filter)
-        safe_zeek_logs_dir = utils.validate_safe_path(
-            zeek_logs_dir, must_exist=True
-        )
-        str_cmd = " ".join(command)
-        self.input.print(f"Zeek command: {str_cmd}", 3, 0)
-
-        zeek = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.PIPE,
-            cwd=safe_zeek_logs_dir,
-            start_new_session=True,
-        )
-        # you have to get the pid before communicate()
-        self.zeek_pids.append(zeek.pid)
-
-        out, error = zeek.communicate()
-        if out:
-            print(f"Zeek: {out}")
-        if error:
-            self.input.print(
-                f"Zeek error. return code: {zeek.returncode} "
-                f"error:{error.strip()}"
+        try:
+            command = self._construct_zeek_cmd(
+                pcap_or_interface, tcpdump_filter
             )
+            safe_zeek_logs_dir = utils.validate_safe_path(
+                zeek_logs_dir, must_exist=True
+            )
+            str_cmd = " ".join(command)
+            self.input.print(f"Zeek command: {str_cmd}", 3, 0)
+
+            zeek = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.PIPE,
+                cwd=safe_zeek_logs_dir,
+                start_new_session=True,
+            )
+            # you have to get the pid before communicate()
+            self.zeek_pids.append(zeek.pid)
+
+            out, error = zeek.communicate()
+            if out:
+                print(f"Zeek: {out}")
+
+            if error:
+                decoded_error = error.decode("utf-8", errors="replace").strip()
+                if startup_status is not None:
+                    startup_status["error"] = decoded_error
+                self.input.print(
+                    f"Zeek error. return code: {zeek.returncode} "
+                    f"\n{decoded_error}"
+                )
+                self.input.db.publish_stop()
+                return
+
+            if zeek.returncode not in (0, None):
+                error_message = (
+                    f"Zeek exited with return code {zeek.returncode}."
+                )
+                if startup_status is not None:
+                    startup_status["error"] = error_message
+                self.input.print(error_message)
+                self.input.db.publish_stop()
+                return
+        except Exception as error:
+            if startup_status is not None:
+                startup_status["error"] = str(error)
+            self.input.print(f"Zeek startup failed.\n{error}\n")
+            self.input.db.publish_stop()
+            return
+        finally:
+            # declare that startup was successfull
+            if startup_finished_event is not None:
+                startup_finished_event.set()
 
     def shutdown_zeek_runtime(self):
         try:
