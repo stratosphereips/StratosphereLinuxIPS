@@ -66,7 +66,6 @@ class Utils(object):
         }
         # why are we not using /var/lock? bc we need it to be r/w/x by
         # everyone
-        self.slips_locks_dir = "/tmp/slips"
         self.time_formats = (
             "%Y-%m-%dT%H:%M:%S.%f%z",
             "%Y-%m-%d %H:%M:%S.%f",

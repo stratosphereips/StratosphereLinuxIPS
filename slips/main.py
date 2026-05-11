@@ -24,6 +24,7 @@ from managers.ui_manager import UIManager
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_paths import get_performance_plots_dir
 from slips_files.common.printer import Printer
+from slips_files.common.sqlite_flock import SQLiteFlock
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green, yellow
 from slips_files.common.input_type import InputType
@@ -518,16 +519,7 @@ class Main:
         privileges. Use the sticky bit so other users cannot remove or
         replace lock files they do not own.
         """
-        locks_dir = utils.slips_locks_dir
-        # Create the directory if it doesn't exist
-        if not os.path.exists(locks_dir):
-            os.makedirs(locks_dir, exist_ok=True)
-        try:
-            os.chmod(locks_dir, 0o1777)
-        except PermissionError:
-            # this dir was created by root, so we can't change the permissions
-            # but probably root has already set the permissions
-            pass
+        SQLiteFlock.prepare_locks_dir()
 
     def start(self):
         """Main Slips Function"""
