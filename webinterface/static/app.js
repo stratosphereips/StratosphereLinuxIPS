@@ -105,13 +105,29 @@ function initializeWidgetsAndListeners() {
 
 }
 
+function setChangeDbButtonLabel(name) {
+    /*
+        Render the change-db button label without parsing user-controlled HTML.
+
+        Parameters:
+            name: Database name to display in the button.
+
+        Return value:
+            None.
+    */
+    const changeDbButton = document.getElementById("changedb_button");
+    const icon = document.createElement("i");
+    icon.className = "fa fa-database";
+    changeDbButton.replaceChildren(icon, document.createTextNode(` ${name}`));
+}
+
 function fetchDataDB() {
     fetch("/info", {
         method: "GET",
         headers: headers2
     }).then(response => response.json())
         .then(data => {
-            document.getElementById("changedb_button").innerHTML = '<i class="fa fa-database"></i> ' + data['name'];
+            setChangeDbButtonLabel(data['name']);
         });
 }
 
