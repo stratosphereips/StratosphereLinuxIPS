@@ -248,7 +248,9 @@ class Input(ICore):
     def main(self):
         try:
             self.active_handler = self.input_handlers[self.input_type]
-            self.active_handler.run()
+            if self.active_handler.run() is False:
+                self.db.publish_stop()
+                return False
         except KeyError:
             self.print(
                 f'Error: Unrecognized file type "{self.input_type}". '
@@ -257,7 +259,6 @@ class Input(ICore):
                 1,
             )
             return False
-
         # no logic should be put here
         # because some of the above handlers never return
         # e.g. interface, stdin, cyst etc.

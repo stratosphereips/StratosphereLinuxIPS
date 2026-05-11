@@ -25,9 +25,10 @@ class PcapInput(IInputHandler):
         # This is for stopping the inputprocess
         # if bro does not receive any new line while reading a pcap
         self.input.bro_timeout = 30
-        self.input.zeek_utils.init_zeek(
+        if not self.input.zeek_utils.init_zeek_and_start_the_zeek_thread(
             self.observer, zeek_dir, self.input.given_path
-        )
+        ):
+            return False
 
         self.input.lines = self.input.zeek_utils.read_zeek_files()
 

@@ -631,12 +631,10 @@ class ProcessManager:
             # the updated one will start
             return True
 
-        if self.should_run_non_stop():
-            return False
+        if self.is_stop_msg_received() or self.is_done_receiving_new_flows():
+            return True
 
-        return (
-            self.is_stop_msg_received() or self.is_done_receiving_new_flows()
-        )
+        return self.should_run_non_stop()
 
     def is_stop_msg_received(self) -> bool:
         """

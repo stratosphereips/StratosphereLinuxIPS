@@ -371,7 +371,8 @@ class Profiler(ICore, IObservable):
 
     def _run_profiler_monitor_loop(self):
         """
-        Does necessary monitoring for the profiler while the workers are
+        Does necessary monitoring and stats updating for the profiler while
+        the workers are
         running.
         """
         while not self.did_all_workers_stop.is_set():
@@ -380,12 +381,24 @@ class Profiler(ICore, IObservable):
             self.store_flows_read_per_second()
             self._check_if_high_throughput_and_add_workers()
 
+    def _is_input_done(self) -> bool:
+        return (
+            self.is_input_done_event is not None
+            and self.is_input_done_event.is_set()
+        )
+
     def main(self):
         # process the first msg only here, to determine what kind of input
         # slips is given, then the workers will use the determined type.
         # wait as long as needed for it
         msg = None
         while not msg:
+            if self._is_input_done():
+                self.print(
+                    "Stopping profiler, no more msgs are coming.",
+                    log_to_logfiles_only=True,
+                )
+                return 1
             msg = self.get_msg_from_queue(self.profiler_queue)
             time.sleep(0.1)
 
