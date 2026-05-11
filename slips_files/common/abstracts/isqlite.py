@@ -1,5 +1,3 @@
-import fcntl
-import os
 import re
 import sqlite3
 from abc import ABC
@@ -7,7 +5,7 @@ from contextlib import contextmanager
 from threading import Lock
 from time import sleep
 
-
+from slips_files.common.sqlite_flock import SQLiteFlock
 from slips_files.common.slips_utils import utils
 
 
@@ -58,30 +56,21 @@ class ISQLite(ABC):
             )
 
     def _init_flock(self, name: str, main_pid: int, current_user_uid: int):
-        # to avoid multi processing errors where multiple processes
-        # try to write to the same sqlite db at the same time
-        # this name needs to change per sqlite db, meaning trustb should have
-        # its own lock file that is different from slips' main sqlite db
-        # lockfile
-        username = os.getenv("USER") or "unknown"
-        # we're using the username and pid to create a unique lock file per
-        # slips run, so that multiple instances of slips can run at the
-        # same time
-        self.lockfile_path = os.path.join(
-            utils.slips_locks_dir, f"{username}_{main_pid}_{name}.lock"
-        )
-        try:
-            file_owner_uid = os.stat(self.lockfile_path).st_uid
-            lock_file_exists = True
-        except FileNotFoundError:
-            file_owner_uid = None
-            lock_file_exists = False
+        """
+        Initialize the lock file used for inter-process SQLite access.
 
-        # check if the lock file was created by another subprocess of
-        # the current slips run
-        if not lock_file_exists or file_owner_uid != current_user_uid:
-            open(self.lockfile_path, "w").close()
-            os.chmod(self.lockfile_path, 0o666)
+        Parameters:
+        name: Logical database name used in the lock file name.
+        main_pid: Main Slips process PID used to namespace the lock file.
+        current_user_uid: Effective uid after temporarily dropping root
+            privileges, or None when no privilege drop happened.
+        """
+        self.sqlite_flock = SQLiteFlock(
+            name=name,
+            main_pid=main_pid,
+            current_user_uid=current_user_uid,
+        )
+        self.lockfile_path = self.sqlite_flock.lockfile_path
 
     def _enable_wal_mode(self):
         """
@@ -100,25 +89,8 @@ class ISQLite(ABC):
     @contextmanager
     def _acquire_flock(self):
         """Context manager for acquiring and releasing the file lock."""
-        if getattr(self, "_lock_acquired", False):
-            yield  # already held
-            return
-
-        # to avoid multiprocess issues with sqlite,
-        # we use a lock file, if the lock file is acquired by a different
-        # proc, the current proc will wait until the lock is released
-        self.lockfile_fd = open(self.lockfile_path, "w")
-        try:
-            fcntl.flock(self.lockfile_fd, fcntl.LOCK_EX)
-            self._lock_acquired = True
+        with self.sqlite_flock.acquire():
             yield
-        finally:
-            self._lock_acquired = False
-            try:
-                fcntl.flock(self.lockfile_fd, fcntl.LOCK_UN)
-                self.lockfile_fd.close()
-            except ValueError:
-                pass
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
@@ -239,6 +211,7 @@ class ISQLite(ABC):
     def close(self):
         with self.conn_lock:
             self.conn.close()
+        self.sqlite_flock.delete_lockfile()
 
     def fetchall(self, cursor):
         """
