@@ -168,6 +168,7 @@ class IModule(ABC, Process):
         threads, queue,
         log lines to indicate the module is done, etc.
         """
+
         if hasattr(self, "shutdown_gracefully"):
             # module-specific cleanup.
             # should be implemented in the module
@@ -177,6 +178,10 @@ class IModule(ABC, Process):
         if self.channels:
             for channel_obj in self.channels.values():
                 self.db.unsubscribe(channel_obj)
+
+        # each module has its own sqlite db connection. once this module is
+        # done the connection should be closed
+        self.db.close_sqlite()
 
     @abstractmethod
     def main(self):
@@ -290,8 +295,3 @@ class IModule(ABC, Process):
             except Exception:
                 self.print_traceback()
                 return
-
-    def __del__(self):
-        # each module has its own sqlite db connection. once this module is
-        # done the connection should be closed
-        self.db.close_sqlite()
