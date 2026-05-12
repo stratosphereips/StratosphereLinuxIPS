@@ -1,0 +1,146 @@
+## Security remediation pass - 2026-05-13
+
+Source report: `docs/immune/security_audit_reports/trivy.json`.
+Follow-up report: `docs/immune/security_audit_reports/trivy_after_security_hardening.json`.
+
+### Summary
+
+The starting Trivy report contained 18 CRITICAL and 167 HIGH findings. The
+highest-risk findings were concentrated in the p2p4slips Go binary, the IRIS Go
+binary, a stale duplicate IRIS binary target, vulnerable Python packages, and
+the Ubuntu `linux-libc-dev` runtime package.
+
+After remediation, the final image scan reports 8 CRITICAL, 63 HIGH, 427
+MEDIUM, and 127 LOW findings. The MEDIUM/LOW totals are newly visible because
+the follow-up scan covers the rebuilt full image; the original report only
+contained HIGH/CRITICAL findings. Compared with the original HIGH/CRITICAL
+set, 115 findings were removed: 10 CRITICAL and 105 HIGH.
+
+Remaining HIGH/CRITICAL findings are:
+
+- `modules/iris/iris`: 6 CRITICAL, 46 HIGH.
+- `p2p4slips/p2p4slips`: 2 CRITICAL, 16 HIGH.
+- `Python`: 1 HIGH, Keras in the Docker image only.
+
+### Mitigations applied
+
+Python dependency hardening:
+
+- Updated `urllib3` from 2.6.3 to 2.7.0.
+- Updated `tensorflow` from 2.16.1 to 2.19.1.
+- Updated `GitPython` from 3.1.45 to 3.1.50.
+- Updated `protobuf` from 4.25.8 to 5.29.6.
+- Pinned Keras by Python version: 3.13.2 on Python 3.11+, 3.12.2 on Python
+  3.10.
+- Updated `ipwhois` from 1.2.0 to 1.3.0 and pinned `dnspython` to 2.8.0.
+- Applied the same direct security pins to `docker/light/requirements.txt`.
+
+Docker hardening:
+
+- Reworked the Dockerfile into separate build stages for IRIS, p2p4slips, and
+  Redis.
+- Built p2p4slips with Go 1.26.3, removing the p2p stdlib findings that came
+  from the older build toolchain.
+- Kept IRIS on Go 1.17 because the current IRIS dependency stack does not
+  compile on modern Go without a larger libp2p/quic-go migration.
+- Built Redis in a builder stage and copied only the built Redis tree into the
+  final image.
+- Removed apt `golang` from the final image and copied the Go 1.26.3 toolchain
+  from the builder so existing p2p rebuild behavior still works.
+- Removed unnecessary `software-properties-common`.
+- Purged runtime-unneeded build packages and headers from the final image:
+  `build-essential`, `python3-dev`, `gcc`, `g++`, `make`, `dpkg-dev`,
+  `libc6-dev`, and `linux-libc-dev`.
+- Preserved Zeek runtime functionality with `zeek-8.0-core`; Zeek dev/meta
+  packages are removed with the build toolchain.
+- Tightened `.dockerignore` so local virtualenvs, output directories, local
+  wheels, stale scan JSON, p2p runtime data, and local IRIS artifacts are not
+  copied into the image.
+
+Removed or no longer present in the final image:
+
+- Runtime `linux-libc-dev`, which was only needed as a build header package.
+- Runtime apt `golang`; replaced by the Go 1.26.3 builder toolchain copy.
+- Runtime build toolchain packages listed above.
+- Stale local virtualenv package metadata that previously caused false Python
+  findings in the image scan.
+- Stale duplicate `modules/irisModule` scan target from the old image layout.
+
+### Unresolved findings and rationale
+
+IRIS findings are currently blocked by dependency constraints. IRIS depends on
+an older libp2p/quic-go stack that fails to compile with modern Go. Keeping Go
+1.17 preserves IRIS functionality but leaves Go stdlib and old third-party
+library findings in `modules/iris/iris`. Fixing these requires a larger IRIS
+network-stack migration, not a safe patch-level dependency update.
+
+p2p4slips stdlib findings were mitigated by building with Go 1.26.3. Remaining
+p2p4slips findings are in old third-party dependencies such as `btcd`,
+`go-libp2p`, `golang.org/x/crypto`, `golang.org/x/net`, `golang.org/x/text`,
+`gogo/protobuf`, and `flynn/noise`. Test upgrades in temporary workspaces
+cascaded into incompatible libp2p API changes, so these are blocked by the
+legacy p2p dependency graph.
+
+Docker still reports Keras CVE-2026-1462 because Ubuntu 22.04 uses Python 3.10
+and Keras 3.13.2 requires Python 3.11+. The fresh local Python 3.12 environment
+uses Keras 3.13.2 and is not affected. Fixing the Docker Keras finding requires
+moving the Docker Python runtime to 3.11+ or waiting for an upstream-compatible
+Keras fix for Python 3.10.
+
+Scapy GHSA-cq46-m9x9-j8w2 remains MEDIUM with no fixed version reported by
+Trivy. This is an upstream-unfixed issue and is tracked as residual risk.
+
+Ubuntu MEDIUM/LOW findings remain due to distro package lag in the Ubuntu 22.04
+base image and installed runtime packages. No Ubuntu HIGH/CRITICAL findings
+remain in the final scan, and the original `linux-libc-dev` HIGH findings were
+removed by purging the package from the final image.
+
+### Validation results
+
+Fresh local virtual environment:
+
+- Recreated `.venv` from scratch with `python3 -m venv .venv`.
+- Installed `install/requirements.txt` without using global packages.
+- `pip check` passed.
+- Import/version check passed for `urllib3 2.7.0`, `GitPython 3.1.50`,
+  `protobuf 5.29.6`, `Keras 3.13.2`, `tensorflow 2.19.1`,
+  `dnspython 2.8.0`, `ipwhois 1.3.0`, `modules.iris.iris`, and
+  `modules.p2p_trust.p2p_trust`.
+- Slips started from the fresh venv with `--multiinstance` and processed
+  `dataset/test3-mixed.binetflow` to 100% with 28 analyzed IPs and 13 evidence
+  items before the timeout-driven shutdown.
+- A PCAP startup attempt exposed an existing config issue: `pcapfilter: false`
+  is passed to Zeek as `False`, which Zeek rejects as a BPF filter. This was
+  not introduced by the dependency changes.
+
+Docker:
+
+- Rebuilt the image from scratch with `docker build --no-cache -t
+  slips-security-hardening -f docker/Dockerfile .`.
+- Container `pip check` passed.
+- Container import/version check passed for `urllib3 2.7.0`, `GitPython
+  3.1.50`, `protobuf 5.29.6`, `Keras 3.12.2`, `tensorflow 2.19.1`,
+  `dnspython 2.8.0`, `ipwhois 1.3.0`, `modules.iris.iris`, and
+  `modules.p2p_trust.p2p_trust`.
+- Verified Zeek runtime: `/opt/zeek/bin/zeek version 8.0.8`.
+- Verified p2p4slips CLI starts with `p2p4slips -h`.
+- Verified IRIS CLI starts with `./modules/iris/iris --help`.
+- Verified Redis runtime: `redis-server v=8.6.3`.
+- Verified `linux-libc-dev` is absent from the final image.
+- Docker Slips startup processed `dataset/test3-mixed.binetflow` to 100% with
+  28 analyzed IPs and 13 evidence items before the timeout-driven shutdown.
+
+Targeted tests:
+
+- `pytest tests/unit/modules/p2p_trust/test_p2p_trust.py -q` passed: 6 tests.
+
+Compatibility notes:
+
+- Slips startup and module loading continue to work in both the fresh local venv
+  and Docker image.
+- p2p4slips remains available in the image and retains the Go toolchain needed
+  for existing rebuild/update workflows.
+- IRIS remains available and starts, but its dependency CVEs remain blocked by
+  the legacy libp2p/quic-go stack.
+- The Docker image keeps Zeek runtime functionality while removing Zeek dev/meta
+  packages that are not needed for Slips runtime validation.
