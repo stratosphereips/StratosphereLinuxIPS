@@ -477,6 +477,20 @@ def test_prepare_output_dir_with_o_flag_creates_dir(
     assert oct(os.stat(non_existent).st_mode & 0o777) == "0o777"
 
 
+def test_prepare_locks_dir_sets_sticky_permissions(main_obj, tmp_path):
+    locks_dir = tmp_path / "slips-locks"
+
+    with patch.object(
+        main_obj.__class__.prepare_locks_dir.__globals__["utils"],
+        "slips_locks_dir",
+        str(locks_dir),
+    ):
+        main_obj.prepare_locks_dir()
+
+    assert locks_dir.exists()
+    assert oct(locks_dir.stat().st_mode & 0o1777) == "0o1777"
+
+
 @patch(
     "slips_files.common.slips_utils.utils.convert_ts_format",
     return_value="2025-07-15_12:00:00",

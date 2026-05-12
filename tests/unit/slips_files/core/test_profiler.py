@@ -85,6 +85,28 @@ def test_main(
         assert profiler.start_profiler_worker.call_count == 0
 
 
+def test_main_stops_when_input_is_done_before_first_message():
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.last_worker_id = 0
+    profiler.get_msg_from_queue = Mock(return_value=None)
+    profiler.get_handler_obj = Mock()
+    profiler.start_profiler_worker = Mock()
+    profiler.profiler_queue = Mock()
+    profiler.print = Mock()
+    profiler.is_input_done_event = Mock()
+    profiler.is_input_done_event.is_set.side_effect = [False, True]
+
+    with patch("time.sleep"):
+        assert profiler.main() == 1
+
+    profiler.get_handler_obj.assert_not_called()
+    profiler.start_profiler_worker.assert_not_called()
+    profiler.print.assert_called_once_with(
+        "Profiler stopping before startup because input is done.",
+        log_to_logfiles_only=True,
+    )
+
+
 def test_shutdown_gracefully(monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
     profiler.workers = [
