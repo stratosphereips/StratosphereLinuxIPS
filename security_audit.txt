@@ -144,3 +144,33 @@ Compatibility notes:
   the legacy libp2p/quic-go stack.
 - The Docker image keeps Zeek runtime functionality while removing Zeek dev/meta
   packages that are not needed for Slips runtime validation.
+
+## Follow-up Docker TensorFlow Runtime Mitigation - 2026-05-13
+
+After the initial hardening pass, Docker startup emitted TensorFlow CUDA plugin
+registration errors for cuFFT, cuDNN, and cuBLAS when Slips loaded the RNN
+module in a CPU-only container. The affected requirement was changed from
+`tensorflow==2.19.1` to `tensorflow-cpu==2.19.1`.
+
+This keeps the TensorFlow Python import path and version compatible with the
+existing Slips code while removing the unused GPU-enabled wheel from the Docker
+runtime. Slips does not require CUDA for the validated Docker workflows.
+
+Validation:
+
+- Rebuilt the Docker image from scratch with `docker build --no-cache -t
+  slips-security-hardening -f docker/Dockerfile .`.
+- Verified `import tensorflow as tf` reports version `2.19.1` inside Docker
+  without the cuFFT, cuDNN, or cuBLAS registration errors.
+- Verified `pip check` passes inside Docker.
+- Verified Slips starts inside Docker and processes
+  `dataset/test3-mixed.binetflow` to 100% analysis with 28 analyzed IPs and 13
+  evidence items before timeout-driven shutdown.
+- Re-ran Trivy against the rebuilt image. The follow-up scan has the same
+  severity counts as the prior post-hardening scan: 8 CRITICAL, 63 HIGH, 427
+  MEDIUM, and 127 LOW. The remaining HIGH Python finding is still Keras
+  CVE-2026-1462 on Python 3.10; no new TensorFlow finding was introduced by the
+  CPU-wheel change.
+
+Remaining TensorFlow startup messages are informational CPU feature and oneDNN
+notices from the CPU wheel, not unresolved CUDA initialization failures.
