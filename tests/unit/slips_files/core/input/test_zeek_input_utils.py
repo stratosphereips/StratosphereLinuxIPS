@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+import threading
 import pytest
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -173,9 +174,9 @@ def test_init_zeek_and_start_the_zeek_thread_returns_false_on_error(
     observer = Mock()
     input_process.args.is_slips_started_by_an_update = False
 
-    def mock_run_zeek(*_args, **kwargs):
+    def mock_run_zeek(*args, **kwargs):
         kwargs["startup_status"]["error"] = "zeek failed"
-        kwargs["startup_finished_event"].set()
+        args[2].set()
 
     monkeypatch.setattr(
         input_process.zeek_utils,
@@ -227,3 +228,101 @@ def test_init_zeek_and_start_the_zeek_thread_returns_false_on_timeout(
         "Zeek startup timed out after 3 seconds."
     )
     input_process.db.publish_stop.assert_called_once_with()
+
+
+def test_check_zeek_startup_accepts_running_process(monkeypatch):
+    input_process = ModuleFactory().create_input_obj(
+        "pcaps/inputfile.pcap", InputType.PCAP
+    )
+    startup_finished_event = threading.Event()
+    zeek = Mock()
+    zeek.poll.return_value = None
+
+    monkeypatch.setattr(
+        "slips_files.core.input.zeek.utils.zeek_input_utils.time.sleep",
+        Mock(),
+    )
+    monkeypatch.setattr(
+        "slips_files.core.input.zeek.utils.zeek_input_utils.time.time",
+        Mock(side_effect=[0, 1, 3]),
+    )
+
+    assert (
+        input_process.zeek_utils._did_zeek_startup_successfully(
+            zeek,
+            startup_status={},
+            startup_finished_event=startup_finished_event,
+        )
+        is True
+    )
+    assert startup_finished_event.is_set()
+    zeek.communicate.assert_not_called()
+
+
+def test_check_zeek_startup_reports_immediate_error(monkeypatch):
+    input_process = ModuleFactory().create_input_obj(
+        "pcaps/inputfile.pcap", InputType.PCAP
+    )
+    startup_status = {}
+    startup_finished_event = threading.Event()
+    zeek = Mock()
+    zeek.poll.return_value = 1
+    zeek.returncode = 1
+    zeek.communicate.return_value = (b"", b"startup failed")
+
+    monkeypatch.setattr(
+        "slips_files.core.input.zeek.utils.zeek_input_utils.time.time",
+        Mock(return_value=0),
+    )
+
+    assert (
+        input_process.zeek_utils._did_zeek_startup_successfully(
+            zeek,
+            startup_status=startup_status,
+            startup_finished_event=startup_finished_event,
+        )
+        is False
+    )
+    assert startup_status["error"] == "startup failed"
+    input_process.db.publish_stop.assert_called_once_with()
+
+
+def test_run_zeek_skips_runtime_output_after_startup_exit(tmp_path):
+    input_process = ModuleFactory().create_input_obj(
+        "pcaps/inputfile.pcap", InputType.PCAP
+    )
+    input_process.zeek_utils._start_zeek_runtime = Mock()
+    input_process.zeek_utils._did_zeek_startup_successfully = Mock(
+        return_value=False
+    )
+    input_process.zeek_utils._check_running_zeek_output = Mock()
+
+    input_process.zeek_utils.run_zeek(
+        str(tmp_path),
+        "pcaps/inputfile.pcap",
+        startup_status={},
+        startup_finished_event=threading.Event(),
+    )
+
+    input_process.zeek_utils._check_running_zeek_output.assert_not_called()
+
+
+def test_handle_zeek_process_result_suppresses_expected_shutdown_stderr():
+    input_process = ModuleFactory().create_input_obj(
+        "pcaps/inputfile.pcap", InputType.PCAP
+    )
+    zeek = Mock()
+    zeek.returncode = -9
+    input_process.zeek_utils.zeek_shutdown_requested = True
+
+    assert (
+        input_process.zeek_utils._handle_zeek_process_result(
+            zeek,
+            b"",
+            b"<command line>, line 3: listening on eth0",
+            startup_status={},
+        )
+        is True
+    )
+    input_process.print.assert_not_called()
+    input_process.db.publish_stop.assert_not_called()
