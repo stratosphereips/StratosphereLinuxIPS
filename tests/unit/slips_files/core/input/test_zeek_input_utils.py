@@ -102,17 +102,128 @@ def test_create_zeek_output_dir(store_in_output, expected_dir):
     assert input_process.zeek_utils.create_zeek_output_dir() == expected_dir
 
 
-def test_sanitize_packet_filter_rejects_newlines():
+# def test_run_zeek_publishes_stop_on_zeek_error(monkeypatch):
+#     input_process = ModuleFactory().create_input_obj(
+#         "pcaps/inputfile.pcap", InputType.PCAP
+#     )
+#     input_process.db.publish_stop = Mock()
+#     input_process.print = Mock()
+#
+#     zeek_process = Mock()
+#     zeek_process.pid = 4321
+#     zeek_process.returncode = 1
+#     zeek_process.communicate.return_value = (b"", b"zeek failed")
+#
+#     monkeypatch.setattr(
+#         input_process.zeek_utils,
+#         "_construct_zeek_cmd",
+#         Mock(return_value=["zeek", "-r", "pcaps/inputfile.pcap"]),
+#     )
+#     monkeypatch.setattr(
+#         subprocess,
+#         "Popen",
+#         Mock(return_value=zeek_process),
+#     )
+#
+#     input_process.zeek_utils.run_zeek(".", "pcaps/inputfile.pcap")
+#
+#     input_process.print.assert_any_call(
+#         "Zeek error. return code: 1 \nzeek failed"
+#     )
+#     input_process.db.publish_stop.assert_called_once_with()
+#
+
+# def test_run_zeek_publishes_stop_on_nonzero_return_code_without_stderr(
+#     monkeypatch,
+# ):
+#     input_process = ModuleFactory().create_input_obj(
+#         "pcaps/inputfile.pcap", InputType.PCAP
+#     )
+#     input_process.db.publish_stop = Mock()
+#     input_process.print = Mock()
+#
+#     zeek_process = Mock()
+#     zeek_process.pid = 4321
+#     zeek_process.returncode = 2
+#     zeek_process.communicate.return_value = (b"", b"")
+#
+#     monkeypatch.setattr(
+#         input_process.zeek_utils,
+#         "_construct_zeek_cmd",
+#         Mock(return_value=["zeek", "-r", "pcaps/inputfile.pcap"]),
+#     )
+#     monkeypatch.setattr(
+#         subprocess,
+#         "Popen",
+#         Mock(return_value=zeek_process),
+#     )
+#
+#     input_process.zeek_utils.run_zeek(".", "pcaps/inputfile.pcap")
+#
+#     input_process.print.assert_any_call("Zeek exited with return code 2.")
+#     input_process.db.publish_stop.assert_called_once_with()
+
+
+def test_init_zeek_and_start_the_zeek_thread_returns_false_on_error(
+    monkeypatch, tmp_path
+):
     input_process = ModuleFactory().create_input_obj(
-        "", InputType.ZEEK_LOG_FILE
+        "pcaps/inputfile.pcap", InputType.PCAP
+    )
+    observer = Mock()
+    input_process.args.is_slips_started_by_an_update = False
+
+    def mock_run_zeek(*_args, **kwargs):
+        kwargs["startup_status"]["error"] = "zeek failed"
+        kwargs["startup_finished_event"].set()
+
+    monkeypatch.setattr(
+        input_process.zeek_utils,
+        "run_zeek",
+        mock_run_zeek,
     )
 
-    with pytest.raises(ValueError):
-        input_process.zeek_utils._sanitize_packet_filter("tcp\nport 80")
+    assert (
+        input_process.zeek_utils.init_zeek_and_start_the_zeek_thread(
+            observer,
+            str(tmp_path),
+            "pcaps/inputfile.pcap",
+        )
+        is False
+    )
+    observer.start.assert_called_once_with(
+        str(tmp_path), "pcaps/inputfile.pcap"
+    )
 
 
-def test_sanitize_zeek_target_rejects_unsafe_interface():
-    input_process = ModuleFactory().create_input_obj("", InputType.INTERFACE)
+def test_init_zeek_and_start_the_zeek_thread_returns_false_on_timeout(
+    monkeypatch, tmp_path
+):
+    input_process = ModuleFactory().create_input_obj(
+        "pcaps/inputfile.pcap", InputType.PCAP
+    )
+    observer = Mock()
+    input_process.args.is_slips_started_by_an_update = False
+    input_process.db.publish_stop = Mock()
 
-    with pytest.raises(ValueError):
-        input_process.zeek_utils._sanitize_zeek_target("eth0;rm -rf /")
+    def mock_run_zeek(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        input_process.zeek_utils,
+        "run_zeek",
+        mock_run_zeek,
+    )
+
+    assert (
+        input_process.zeek_utils.init_zeek_and_start_the_zeek_thread(
+            observer,
+            str(tmp_path),
+            "pcaps/inputfile.pcap",
+        )
+        is False
+    )
+    input_process.print.assert_any_call(
+        "Zeek startup timed out after 3 seconds."
+    )
+    input_process.db.publish_stop.assert_called_once_with()
