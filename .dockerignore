@@ -5,7 +5,6 @@ output_dir*/
 **/alerts.json
 **/.git
 *.whl
-docs/immune/security_audit_reports/*.json
 iris/orgsig
 
 #node modules
