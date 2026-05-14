@@ -89,6 +89,7 @@ class ProcessManager:
         self.is_input_done_event = Event()
         self.is_slips_live_updating_event = Event()
         self.read_config()
+        self.all_children_started = False
 
     def read_config(self):
         self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
@@ -98,6 +99,9 @@ class ProcessManager:
         self.bootstrapping_modules = self.main.conf.get_bootstrapping_modules()
         # self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.
         # get_bootstrapping_setting()
+
+    def declare_that_slips_done_starting_all_children(self):
+        self.all_children_started = True
 
     def start_slips_update_manager(self):
         return UpdateManager(
@@ -620,7 +624,7 @@ class ProcessManager:
         based on the following:
         1. is slips still receiving new flows? (checks input.py and
         profiler.py)
-        2. did slips the control channel recv the stop_slips
+        2. did the control channel recv the stop_slips
         3. is a debugger present?
 
         This function NEVER returns True if the input and profiler are
@@ -628,8 +632,15 @@ class ProcessManager:
         """
         if self.is_slips_live_updating_event.is_set():
             # slips is auto updating this version of slips should stop and
-            # the updated one will start
+            # the updated one will start soon
             return True
+
+        if not self.all_children_started:
+            # to avoid race conditions that happen when the input file is
+            # very fast, that slips decides to stop before even all the
+            # modules are up and running.
+            # happens in dataset/test4-malicious.binetflow
+            return False
 
         if self.is_stop_msg_received() or self.is_done_receiving_new_flows():
             return True

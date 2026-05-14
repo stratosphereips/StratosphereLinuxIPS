@@ -697,7 +697,8 @@ class Main:
 
             self.proc_man.start_evidence_process()
             self.proc_man.start_profiler_process()
-            # give the profiler process time to start and subscribe to the db before we start sending data to it
+            # give the profiler process time to start and subscribe to the db
+            # before we start sending data to it
             time.sleep(1)
 
             self.c1 = self.db.subscribe("control_channel")
@@ -706,6 +707,9 @@ class Main:
             self.input_process = self.proc_man.start_input_process()
 
             self.db.store_pid("main", int(self.pid))
+
+            self.proc_man.declare_that_slips_done_starting_all_children()
+
             self.metadata_man.set_input_metadata()
 
             # warn about unused open redis servers
