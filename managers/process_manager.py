@@ -51,6 +51,39 @@ from slips_files.core.profiler import Profiler
 
 
 class ProcessManager:
+    """
+    Responsible for starting and stopping all the slips processes and modules.
+    Here's how the stopping of input.py and profiler.py works
+
+    input.py
+      -> profiler_queue: "stop" x started_workers
+      -> is_input_done_event.set()
+      -> waits on is_profiler_done_event
+
+    profiler.py
+      <- is_input_done_event
+      -> waits/join() profiler workers
+
+    profiler workers
+      <- profiler_queue: "stop"
+      -> exit
+
+    profiler.py
+      <- all workers exited
+      -> is_profiler_done_semaphore.release()
+      -> is_profiler_done_event.set()
+
+    input.py
+      <- is_profiler_done_event
+      -> is_input_done.release()
+
+    process_manager
+      <- is_input_done
+      <- is_profiler_done_semaphore
+      -> Slips can finish shutdown
+
+    """
+
     def __init__(self, main):
         self.main = main
         # Can be used by signal handlers before startup finishes.
@@ -76,7 +109,8 @@ class ProcessManager:
         # release the semaphore. Once having the semaphore, then slips.py can
         # terminate slips.
         self.is_input_done = Semaphore(0)
-        self.is_profiler_done = Semaphore(0)
+        # when profiler is done processing, it releases this semaphore,
+        self.is_profiler_done_semaphore = Semaphore(0)
         # is set by the profiler process to indicate that it's done so
         # input can shutdown no issue
         # now without this event, input process doesn't know that profiler
@@ -134,7 +168,7 @@ class ProcessManager:
             self.main.conf,
             self.main.pid,
             self.main.bloom_filters_man,
-            is_profiler_done=self.is_profiler_done,
+            is_profiler_done=self.is_profiler_done_semaphore,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
@@ -751,7 +785,7 @@ class ProcessManager:
             self.is_input_done
         )
         profiler_done_processing: bool = self.can_acquire_semaphore(
-            self.is_profiler_done
+            self.is_profiler_done_semaphore
         )
         return input_done_processing and profiler_done_processing
 

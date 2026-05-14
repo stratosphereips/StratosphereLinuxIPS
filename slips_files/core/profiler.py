@@ -67,7 +67,7 @@ class Profiler(ICore, IObservable):
 
     def init(
         self,
-        is_profiler_done: multiprocessing.Semaphore = None,
+        is_profiler_done_semaphore: multiprocessing.Semaphore = None,
         profiler_queue=None,
         is_profiler_done_event: multiprocessing.Event = None,
         is_input_done_event: multiprocessing.Event = None,
@@ -78,7 +78,9 @@ class Profiler(ICore, IObservable):
         # that's how the process_manager knows it's done
         # when both the input and the profiler are done,
         # the input process signals the rest of the modules to stop
-        self.done_processing: multiprocessing.Semaphore = is_profiler_done
+        self.is_profiler_done_semaphore: multiprocessing.Semaphore = (
+            is_profiler_done_semaphore
+        )
         # every line put in this queue should be profiled
         self.profiler_queue: multiprocessing.Queue = profiler_queue
 
@@ -87,12 +89,9 @@ class Profiler(ICore, IObservable):
         self.rec_lines = 0
         self.read_configuration()
         self.symbol = SymbolHandler(self.logger, self.db)
-        # there has to be a timeout or it will wait forever and never
-        # receive a new line
-        self.timeout = 0.0000001
         self.channels = {}
         # is set by this proc to tell input proc that we are done
-        # processing and it can exit no issue
+        # processing and it can shutdown now
         self.is_profiler_done_event = is_profiler_done_event
         # is set by input to indicate no more flows are coming
         self.is_input_done_event = is_input_done_event
@@ -192,7 +191,7 @@ class Profiler(ICore, IObservable):
         self.print(
             "Marking Profiler as done processing.", log_to_logfiles_only=True
         )
-        self.done_processing.release()
+        self.is_profiler_done_semaphore.release()
         self.print("Profiler is done processing.", log_to_logfiles_only=True)
         self.is_profiler_done_event.set()
         self.print(

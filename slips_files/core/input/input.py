@@ -83,7 +83,6 @@ class Input(ICore):
         self.testing = False
         # number of lines read
         self.lines = 0
-        self.timeout = None
         self.zeek_utils = ZeekInputUtils(self)
         # is set by the profiler to tell this proc that we it is done processing
         # the input process and shut down and close the profiler queue no issue
