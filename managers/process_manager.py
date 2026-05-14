@@ -54,22 +54,22 @@ class ProcessManager:
     """
     Responsible for starting and stopping all the slips processes and modules.
     Here's how the stopping of input.py and profiler.py works
-
     input.py
-      -> profiler_queue: "stop" x started_workers
+      -> realizes that no more flows are arriving
+      -> puts "stop" in the profiler_queue
       -> is_input_done_event.set()
       -> waits on is_profiler_done_event
 
     profiler.py
-      <- is_input_done_event
+      <- recvs is_input_done_event
       -> waits/join() profiler workers
 
     profiler workers
-      <- profiler_queue: "stop"
+      <- recvs the "stop" from the  profiler_queue
       -> exit
 
     profiler.py
-      <- all workers exited
+      <- realizes that all workers exited
       -> is_profiler_done_semaphore.release()
       -> is_profiler_done_event.set()
 
@@ -116,8 +116,9 @@ class ProcessManager:
         # now without this event, input process doesn't know that profiler
         # is still waiting for the queue to stop
         # and inout stops and renders the profiler queue useless and profiler
-        # cant get more lines anymore!
+        # cant get more lines any more!
         self.is_profiler_done_event = Event()
+        self.is_profiler_done_starting_initial_workers_event = Event()
         # is set by the input process to indicate no more flows are coming
         # so profiler can safely begin shutdown/joins.
         self.is_input_done_event = Event()
@@ -168,10 +169,11 @@ class ProcessManager:
             self.main.conf,
             self.main.pid,
             self.main.bloom_filters_man,
-            is_profiler_done=self.is_profiler_done_semaphore,
+            is_profiler_done_semaphore=self.is_profiler_done_semaphore,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
+            is_profiler_done_starting_initial_workers_event=self.is_profiler_done_starting_initial_workers_event,
         )
         profiler_process.start()
         self.main.print(
@@ -181,6 +183,9 @@ class ProcessManager:
             0,
         )
         self.main.db.store_pid("Profiler", int(profiler_process.pid))
+        # give this function extra time to start the profiler workers. to
+        # avoid race conditions.
+        self.is_profiler_done_starting_initial_workers_event.wait(30)
         return profiler_process
 
     def start_evidence_process(self):
