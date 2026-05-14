@@ -458,14 +458,16 @@ class ZeekInputUtils:
 
         # Give Zeek some time to generate at least 1 file.
         startup_finished = startup_finished_event.wait(timeout=3)
-        if not startup_finished:
-            self.input.print("Zeek startup timed out after 3 seconds.")
-            self.input.db.publish_stop()
-            return False
 
         error = startup_status["error"]
         if error:
             self.input.print(f"Zeek startup failed.\n{error}\n")
+            self.input.db.publish_stop()
+            return False
+
+        if not startup_finished:
+            # no errors, just startup timeout.
+            self.input.print("Zeek startup timed out after 3 seconds.")
             self.input.db.publish_stop()
             return False
 

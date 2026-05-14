@@ -150,5 +150,4 @@ class ZeekCommandBuilder:
             zeek_scripts_dir,
             *packet_filter,
         ]
-        print(f"@@@@@@@@@@@@@@@@ {' '.join(command)}")
         return command
