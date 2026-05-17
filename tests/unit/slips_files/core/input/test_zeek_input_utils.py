@@ -174,8 +174,8 @@ def test_init_zeek_and_start_the_zeek_thread_returns_false_on_error(
     observer = Mock()
     input_process.args.is_slips_started_by_an_update = False
 
-    def mock_run_zeek(*args, **kwargs):
-        kwargs["startup_status"]["error"] = "zeek failed"
+    def mock_run_zeek(*args, **_kwargs):
+        args[3]["error"] = "zeek failed"
         args[2].set()
 
     monkeypatch.setattr(
@@ -224,9 +224,7 @@ def test_init_zeek_and_start_the_zeek_thread_returns_false_on_timeout(
         )
         is False
     )
-    input_process.print.assert_any_call(
-        "Zeek startup timed out after 3 seconds."
-    )
+    input_process.print.assert_any_call("Zeek startup timed out.")
     input_process.db.publish_stop.assert_called_once_with()
 
 
@@ -234,7 +232,6 @@ def test_check_zeek_startup_accepts_running_process(monkeypatch):
     input_process = ModuleFactory().create_input_obj(
         "pcaps/inputfile.pcap", InputType.PCAP
     )
-    startup_finished_event = threading.Event()
     zeek = Mock()
     zeek.poll.return_value = None
 
@@ -250,21 +247,16 @@ def test_check_zeek_startup_accepts_running_process(monkeypatch):
     assert (
         input_process.zeek_utils._did_zeek_startup_successfully(
             zeek,
-            startup_status={},
-            startup_finished_event=startup_finished_event,
         )
         is True
     )
-    assert startup_finished_event.is_set()
     zeek.communicate.assert_not_called()
 
 
-def test_check_zeek_startup_reports_immediate_error(monkeypatch):
+def test_check_zeek_startup_rejects_immediate_exit(monkeypatch):
     input_process = ModuleFactory().create_input_obj(
         "pcaps/inputfile.pcap", InputType.PCAP
     )
-    startup_status = {}
-    startup_finished_event = threading.Event()
     zeek = Mock()
     zeek.poll.return_value = 1
     zeek.returncode = 1
@@ -278,13 +270,11 @@ def test_check_zeek_startup_reports_immediate_error(monkeypatch):
     assert (
         input_process.zeek_utils._did_zeek_startup_successfully(
             zeek,
-            startup_status=startup_status,
-            startup_finished_event=startup_finished_event,
         )
         is False
     )
-    assert startup_status["error"] == "startup failed"
-    input_process.db.publish_stop.assert_called_once_with()
+    zeek.communicate.assert_not_called()
+    input_process.db.publish_stop.assert_not_called()
 
 
 def test_run_zeek_skips_runtime_output_after_startup_exit(tmp_path):

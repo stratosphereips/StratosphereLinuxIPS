@@ -480,10 +480,8 @@ def test_prepare_output_dir_with_o_flag_creates_dir(
 def test_prepare_locks_dir_sets_sticky_permissions(main_obj, tmp_path):
     locks_dir = tmp_path / "slips-locks"
 
-    with patch.object(
-        main_obj.__class__.prepare_locks_dir.__globals__["utils"],
-        "slips_locks_dir",
-        str(locks_dir),
+    with patch(
+        "slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(locks_dir)
     ):
         main_obj.prepare_locks_dir()
 

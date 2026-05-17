@@ -4,8 +4,7 @@ import os
 
 import pytest
 
-from slips_files.common.sqlite_flock import SQLiteFlock
-from slips_files.common.slips_utils import utils
+from slips_files.common import sqlite_flock
 from tests.module_factory import ModuleFactory
 
 
@@ -18,15 +17,15 @@ def test_sqlite_flock_creates_owner_only_lockfile(tmp_path):
     locks_dir.mkdir()
     current_user_uid = os.getuid()
 
-    original_locks_dir = utils.slips_locks_dir
-    utils.slips_locks_dir = str(locks_dir)
+    original_locks_dir = sqlite_flock.SLIPS_LOCKS_DIR
+    sqlite_flock.SLIPS_LOCKS_DIR = str(locks_dir)
     try:
-        sqlite_flock = SQLiteFlock("sqlite_db", 12345, current_user_uid)
+        flock = sqlite_flock.SQLiteFlock("sqlite_db", 12345, current_user_uid)
     finally:
-        utils.slips_locks_dir = original_locks_dir
+        sqlite_flock.SLIPS_LOCKS_DIR = original_locks_dir
 
-    assert sqlite_flock.lockfile_path.endswith("sqlite_db.lock")
-    assert oct(os.stat(sqlite_flock.lockfile_path).st_mode & 0o777) == "0o600"
+    assert flock.lockfile_path.endswith("sqlite_db.lock")
+    assert oct(os.stat(flock.lockfile_path).st_mode & 0o777) == "0o600"
 
 
 def test_sqlite_flock_prepare_locks_dir_sets_sticky_permissions(tmp_path):
@@ -36,12 +35,12 @@ def test_sqlite_flock_prepare_locks_dir_sets_sticky_permissions(tmp_path):
 
     locks_dir = tmp_path / "slips-locks"
 
-    original_locks_dir = utils.slips_locks_dir
-    utils.slips_locks_dir = str(locks_dir)
+    original_locks_dir = sqlite_flock.SLIPS_LOCKS_DIR
+    sqlite_flock.SLIPS_LOCKS_DIR = str(locks_dir)
     try:
-        SQLiteFlock.prepare_locks_dir()
+        sqlite_flock.SQLiteFlock.prepare_locks_dir()
     finally:
-        utils.slips_locks_dir = original_locks_dir
+        sqlite_flock.SLIPS_LOCKS_DIR = original_locks_dir
 
     assert locks_dir.exists()
     assert oct(locks_dir.stat().st_mode & 0o1777) == "0o1777"
@@ -57,17 +56,17 @@ def test_sqlite_flock_acquire_supports_reentrant_usage(tmp_path, nest_context):
     locks_dir.mkdir()
     current_user_uid = os.getuid()
 
-    original_locks_dir = utils.slips_locks_dir
-    utils.slips_locks_dir = str(locks_dir)
+    original_locks_dir = sqlite_flock.SLIPS_LOCKS_DIR
+    sqlite_flock.SLIPS_LOCKS_DIR = str(locks_dir)
     try:
-        sqlite_flock = SQLiteFlock("sqlite_db", 12345, current_user_uid)
+        flock = sqlite_flock.SQLiteFlock("sqlite_db", 12345, current_user_uid)
     finally:
-        utils.slips_locks_dir = original_locks_dir
+        sqlite_flock.SLIPS_LOCKS_DIR = original_locks_dir
 
-    with sqlite_flock.acquire():
-        assert sqlite_flock._lock_acquired is True
+    with flock.acquire():
+        assert flock._lock_acquired is True
         if nest_context:
-            with sqlite_flock.acquire():
-                assert sqlite_flock._lock_acquired is True
+            with flock.acquire():
+                assert flock._lock_acquired is True
 
-    assert sqlite_flock._lock_acquired is False
+    assert flock._lock_acquired is False

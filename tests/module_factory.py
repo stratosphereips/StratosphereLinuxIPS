@@ -590,18 +590,24 @@ class ModuleFactory:
     def create_profiler_obj(self, mock_db):
         from slips_files.core.profiler import Profiler
 
+        slips_args = Mock()
+        slips_args.interface = False
+        is_input_done_event = Mock()
+        is_input_done_event.is_set.return_value = False
         profiler = Profiler(
             logger=self.logger,
             output_dir="output",
             redis_port=6379,
             termination_event=Mock(),
-            slips_args=Mock(),
+            slips_args=slips_args,
             conf=Mock(),
             ppid=Mock(),
             bloom_filters_manager=Mock(),
-            is_profiler_done=Mock(),
+            is_profiler_done_semaphore=Mock(),
             profiler_queue=self.input_queue,
             is_profiler_done_event=Mock(),
+            is_input_done_event=is_input_done_event,
+            is_profiler_done_starting_initial_workers_event=Mock(),
         )
         profiler.print = Mock()
         profiler.local_whitelist_path = "tests/unit/test_whitelist.conf"

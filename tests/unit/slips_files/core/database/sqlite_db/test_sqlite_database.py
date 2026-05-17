@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 import pytest
 
-from slips_files.common.slips_utils import utils
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.core.flows.zeek import (
     Conn,
@@ -26,7 +25,9 @@ def test_sqlite_lockfile_is_owner_only_writable(tmp_path):
     locks_dir = tmp_path / "locks"
     locks_dir.mkdir()
 
-    with patch.object(utils, "slips_locks_dir", str(locks_dir)):
+    with patch(
+        "slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(locks_dir)
+    ):
         db = SQLiteDB(logger, str(tmp_path), 12345)
 
     assert locks_dir.exists()

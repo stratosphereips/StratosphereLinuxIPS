@@ -14,14 +14,14 @@ def mock_print(*args, **kwargs):
 
 def test_mark_process_as_done_processing(monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.done_processing = Mock()
+    profiler.is_profiler_done_semaphore = Mock()
     profiler.is_profiler_done_event = Mock()
 
     monkeypatch.setattr(profiler, "print", mock_print)
 
     profiler.mark_self_as_done_processing()
 
-    profiler.done_processing.release.assert_called_once()
+    profiler.is_profiler_done_semaphore.release.assert_called_once()
     profiler.is_profiler_done_event.set.assert_called_once()
 
 
@@ -102,8 +102,7 @@ def test_main_stops_when_input_is_done_before_first_message():
     profiler.get_handler_obj.assert_not_called()
     profiler.start_profiler_worker.assert_not_called()
     profiler.print.assert_called_once_with(
-        "Profiler stopping before startup because input is done.",
-        log_to_logfiles_only=True,
+        "Stopping profiler, no more msgs are coming.",
     )
 
 

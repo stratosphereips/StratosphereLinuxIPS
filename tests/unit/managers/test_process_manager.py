@@ -392,6 +392,43 @@ def test_is_done_receiving_new_flows(
 
 
 @pytest.mark.parametrize(
+    "live_update, stop_received, done_receiving, expected_result",
+    [
+        (True, False, False, True),
+        (False, True, False, True),
+        (False, False, True, True),
+        (False, False, False, False),
+    ],
+)
+def test_should_stop_slips(
+    live_update, stop_received, done_receiving, expected_result
+):
+    """
+    Test whether Slips should stop for live updates, stop messages, or done input.
+
+    Parameters:
+    live_update: Whether a live update is in progress.
+    stop_received: Whether a stop message was received.
+    done_receiving: Whether input and profiler finished processing.
+    expected_result: Expected stop decision.
+
+    Return:
+    None.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.is_slips_live_updating_event.is_set = Mock(
+        return_value=live_update
+    )
+    process_manager.is_stop_msg_received = Mock(return_value=stop_received)
+    process_manager.is_done_receiving_new_flows = Mock(
+        return_value=done_receiving
+    )
+    process_manager.all_children_started = True
+
+    assert process_manager.should_stop_slips() == expected_result
+
+
+@pytest.mark.parametrize(
     "mode, expected_print_function",
     [  # Test case 1: Daemonized mode
         ("daemonized", "main.daemon.print"),
@@ -457,7 +494,9 @@ def test_start_profiler_process():
             process_manager.main.conf,
             process_manager.main.pid,
             process_manager.main.bloom_filters_man,
-            is_profiler_done=process_manager.is_profiler_done,
+            is_profiler_done_semaphore=(
+                process_manager.is_profiler_done_semaphore
+            ),
             profiler_queue=process_manager.profiler_queue,
             is_profiler_done_event=process_manager.is_profiler_done_event,
             is_input_done_event=process_manager.is_input_done_event,
