@@ -457,7 +457,7 @@ class ZeekInputUtils:
         self.zeek_threads.append(zeek_thread)
 
         # Give Zeek some time to generate at least 1 file.
-        startup_finished = startup_finished_event.wait(timeout=3)
+        startup_finished = startup_finished_event.wait(timeout=5)
 
         error = startup_status["error"]
         if error:
@@ -467,7 +467,7 @@ class ZeekInputUtils:
 
         if not startup_finished:
             # no errors, just startup timeout.
-            self.input.print("Zeek startup timed out after 3 seconds.")
+            self.input.print("Zeek startup timed out.")
             self.input.db.publish_stop()
             return False
 
@@ -550,13 +550,11 @@ class ZeekInputUtils:
             zeek: subprocess.Popen = self._start_zeek_runtime(
                 zeek_logs_dir, pcap_or_interface, tcpdump_filter
             )
-            is_zeek_running = self._did_zeek_startup_successfully(
-                zeek, startup_status
-            )
-            if not is_zeek_running:
-                return
-            else:
+            is_zeek_running = self._did_zeek_startup_successfully(zeek)
+            if is_zeek_running:
                 startup_finished_event.set()
+            else:
+                return
 
             # if your debugger reached here, this means startup went fine,
             # zeek is running, and the following communicate() is just to
@@ -591,25 +589,28 @@ class ZeekInputUtils:
     def _did_zeek_startup_successfully(
         self,
         zeek: subprocess.Popen,
-        startup_status: dict,
     ) -> bool:
         """
         Check whether Zeek fails immediately during startup.
 
         Parameters:
         zeek: Started Zeek subprocess.
-        startup_status: Optional dict used to report startup errors.
 
         Return:
-        True when Zeek is still running after the startup window, False when
-        Zeek already exited and its output was handled.
+        Zeek exits anytime during the 2.5s window -> False
+        Zeek is still running after 2.5s -> True
         """
         startup_deadline = time.time() + 2.5
         while time.time() < startup_deadline:
-            if zeek.poll() is not None:
-                self._check_finished_zeek_output(zeek, startup_status)
+            # poll returns None if the proc is running
+            is_zeek_running = zeek.poll() is None
+            if not is_zeek_running:
+                # zeek exited.
                 return False
+            # zeek is running, but wait some more time to ensure zeek is
+            # still running and doesn't crash
             time.sleep(0.1)
+
         return True
 
     def _prepare_zeek_run(
