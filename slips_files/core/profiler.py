@@ -73,6 +73,7 @@ class Profiler(ICore, IObservable):
         profiler_queue=None,
         is_profiler_done_event: Optional[Event] = None,
         is_input_done_event: Optional[Event] = None,
+        is_input_failed_event: Optional[Event] = None,
         is_profiler_done_starting_initial_workers_event: Optional[
             Event
         ] = None,
@@ -103,6 +104,8 @@ class Profiler(ICore, IObservable):
         self.is_profiler_done_event: Optional[Event] = is_profiler_done_event
         # is set by input to indicate no more flows are coming
         self.is_input_done_event: Optional[Event] = is_input_done_event
+        # is set by input to indicate it stopped because of a failure
+        self.is_input_failed_event: Optional[Event] = is_input_failed_event
         self.input_handler_obj = None
         # to close them on shutdown
         self.profiler_child_processes: List[Process] = []
@@ -396,15 +399,27 @@ class Profiler(ICore, IObservable):
             and self.is_input_done_event.is_set()
         )
 
+    def _did_input_fail(self) -> bool:
+        """
+        Return whether input stopped because of a failure.
+
+        Return:
+        True when the input failure event is set.
+        """
+        return (
+            self.is_input_failed_event is not None
+            and self.is_input_failed_event.is_set()
+        )
+
     def main(self):
         # process the first msg only here, to determine what kind of input
         # slips is given, then the workers will use the determined type.
         # wait as long as needed for it
         msg = None
         while not msg:
-            if self._is_input_done():
+            if self._did_input_fail():
                 self.print(
-                    "Stopping profiler, no more msgs are coming.",
+                    "Stopping profiler, input stopped before profiling began.",
                 )
                 self.is_profiler_done_starting_initial_workers_event.set()
                 return 1
@@ -415,6 +430,12 @@ class Profiler(ICore, IObservable):
                 break
 
             msg = self.get_msg_from_queue(self.profiler_queue)
+            if not msg and self._is_input_done():
+                self.print(
+                    "Stopping profiler, no more msgs are coming.",
+                )
+                self.is_profiler_done_starting_initial_workers_event.set()
+                return 1
             time.sleep(0.1)
 
         if self.args.interface:

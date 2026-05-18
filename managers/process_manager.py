@@ -61,7 +61,8 @@ class ProcessManager:
       -> waits on is_profiler_done_event
 
     profiler.py
-      <- recvs is_input_done_event
+      <- recvs is_input_done_event for normal input completion
+      <- recvs is_input_failed_event for abnormal input failure
       -> waits/join() profiler workers
 
     profiler workers
@@ -122,6 +123,8 @@ class ProcessManager:
         # is set by the input process to indicate no more flows are coming
         # so profiler can safely begin shutdown/joins.
         self.is_input_done_event = Event()
+        # is set by the input process when it stops because of a failure.
+        self.is_input_failed_event = Event()
         self.is_slips_live_updating_event = Event()
         self.read_config()
         self.all_children_started = False
@@ -173,6 +176,7 @@ class ProcessManager:
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
+            is_input_failed_event=self.is_input_failed_event,
             is_profiler_done_starting_initial_workers_event=self.is_profiler_done_starting_initial_workers_event,
         )
         profiler_process.start()
@@ -185,6 +189,7 @@ class ProcessManager:
         self.main.db.store_pid("Profiler", int(profiler_process.pid))
         # give this function extra time to start the profiler workers. to
         # avoid race conditions.
+        print("@@@@@@@@@@@@@@@@ waiting here?")
         self.is_profiler_done_starting_initial_workers_event.wait(30)
         return profiler_process
 
@@ -228,6 +233,7 @@ class ProcessManager:
             line_type=self.main.line_type,
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
+            is_input_failed_event=self.is_input_failed_event,
             is_slips_live_updating_event=self.is_slips_live_updating_event,
         )
         input_process.start()

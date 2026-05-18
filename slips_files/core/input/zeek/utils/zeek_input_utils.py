@@ -457,17 +457,19 @@ class ZeekInputUtils:
         self.zeek_threads.append(zeek_thread)
 
         # Give Zeek some time to generate at least 1 file.
-        startup_finished = startup_finished_event.wait(timeout=5)
+        startup_finished = startup_finished_event.wait(timeout=60)
 
         error = startup_status["error"]
         if error:
             self.input.print(f"Zeek startup failed.\n{error}\n")
+            self.input.mark_input_as_failed()
             self.input.db.publish_stop()
             return False
 
         if not startup_finished:
             # no errors, just startup timeout.
-            self.input.print("Zeek startup timed out.")
+            self.input.print("Zeek startup timed out. Stopping Slips.")
+            self.input.mark_input_as_failed()
             self.input.db.publish_stop()
             return False
 
@@ -547,9 +549,21 @@ class ZeekInputUtils:
         None.
         """
         try:
-            zeek: subprocess.Popen = self._start_zeek_runtime(
+            zeek: subprocess.Popen = self._prep_and_start_the_zeek_proc(
                 zeek_logs_dir, pcap_or_interface, tcpdump_filter
             )
+            if zeek and not self.args.interface:
+                # zeek is very fast, it can start and finish analyzing
+                # files in seconds, by the time slips checks
+                # _did_zeek_startup_successfully zeek would have alreadu finished!
+                # this is why we only check successfull startup when
+                # analyzing interface.
+                # when analyzing pcaps, we just start zeek and wait for it
+                # to finish or wait for slips to timeout if zeek didn't
+                # finish (check bro_timeout in pcap_input for more details)
+                startup_finished_event.set()
+                return
+
             is_zeek_running = self._did_zeek_startup_successfully(zeek)
             if is_zeek_running:
                 startup_finished_event.set()
@@ -567,7 +581,7 @@ class ZeekInputUtils:
             startup_status["error"] = str(error)
             return
 
-    def _start_zeek_runtime(
+    def _prep_and_start_the_zeek_proc(
         self, zeek_logs_dir, pcap_or_interface, tcpdump_filter=None
     ) -> subprocess.Popen:
         """
@@ -581,7 +595,7 @@ class ZeekInputUtils:
         Return:
         The started Zeek subprocess.
         """
-        command, safe_zeek_logs_dir = self._prepare_zeek_run(
+        command, safe_zeek_logs_dir = self._get_zeek_cmd_and_logs_dir(
             zeek_logs_dir, pcap_or_interface, tcpdump_filter
         )
         return self._start_zeek_process(command, safe_zeek_logs_dir)
@@ -613,9 +627,9 @@ class ZeekInputUtils:
 
         return True
 
-    def _prepare_zeek_run(
+    def _get_zeek_cmd_and_logs_dir(
         self, zeek_logs_dir, pcap_or_interface, tcpdump_filter=None
-    ):
+    ) -> Tuple[List[str], str]:
         """
         Build the Zeek command and validate the working directory.
 
@@ -726,6 +740,7 @@ class ZeekInputUtils:
         if startup_status is not None:
             startup_status["error"] = error_message
         self.input.print(error_message)
+        self.input.mark_input_as_failed()
         self.input.db.publish_stop()
 
     def shutdown_zeek_runtime(self):
