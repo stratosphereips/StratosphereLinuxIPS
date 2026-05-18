@@ -109,11 +109,25 @@ def test_can_poison_ip(
 
 
 def test__arp_scan(poisoner):
+    interface = "test_interface"
+    host_ip = "192.168.1.2"
     fake_output = (
         "192.168.1.10 aa:bb:cc:dd:ee:01\n192.168.1.11 aa:bb:cc:dd:ee:02"
     )
-    with patch("subprocess.check_output", return_value=fake_output):
-        pairs = poisoner._arp_scan("eth0")
+    poisoner.db.get_host_ip = MagicMock(return_value=host_ip)
+
+    with patch("subprocess.check_output", return_value=fake_output) as scan:
+        pairs = poisoner._arp_scan(interface)
+
+    scan.assert_called_once_with(
+        [
+            "arp-scan",
+            f"--interface={interface}",
+            "--localnet",
+            f"--arpspa={host_ip}",
+        ],
+        text=True,
+    )
     assert ("192.168.1.10", "aa:bb:cc:dd:ee:01") in pairs
     assert ("192.168.1.11", "aa:bb:cc:dd:ee:02") in pairs
 

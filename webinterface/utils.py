@@ -1,15 +1,26 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import os
+import socket
 from typing import (
     Dict,
     List,
 )
 
 
+def is_port_open(port: int) -> bool:
+    """
+    Check whether a TCP port is accepting connections on localhost.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.2)
+        return sock.connect_ex(("127.0.0.1", port)) == 0
+
+
 def get_open_redis_ports_in_order() -> List[Dict[str, str]]:
     available_db = []
     file_path = "running_slips_info.txt"
+    seen_ports = set()
 
     if os.path.exists(file_path):
         with open(file_path) as file:
@@ -21,9 +32,17 @@ def get_open_redis_ports_in_order() -> List[Dict[str, str]]:
                 ):
                     continue
                 line = line.split(",")
+                redis_port = line[2]
+                try:
+                    port = int(redis_port)
+                except ValueError:
+                    continue
+                if port in seen_ports or not is_port_open(port):
+                    continue
                 available_db.append(
-                    {"filename": line[1], "redis_port": line[2]}
+                    {"filename": line[1], "redis_port": redis_port}
                 )
+                seen_ports.add(port)
 
     return available_db
 

@@ -244,7 +244,7 @@ Now that pip3 is upgraded, we can proceed to install all required packages via p
 
 	python3 -m pip3 install -r install/requirements.txt
 
-_Note: for those using a different base image, you need to also install tensorflow==2.16.1r via pip3._
+_Note: for those using a different base image, install the TensorFlow version pinned in `install/requirements.txt` via pip3._
 
 #### Optional Kalipso submodule
 

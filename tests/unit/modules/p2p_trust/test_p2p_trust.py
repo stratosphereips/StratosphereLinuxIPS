@@ -23,7 +23,9 @@ def create_trust():
     trust.conf.use_local_p2p.return_value = False
     trust.db = Mock()
     trust.print = Mock()
+    trust.parent_output_dir = "output"
     trust.pigeon_binary_dir = "p2p4slips"
+    trust.pigeon_binary = "p2p4slips/p2p4slips"
     return trust
 
 
@@ -114,3 +116,35 @@ def test_rebuild_pigeon_binary_after_slips_update_stops_on_build_error():
             "Error: go not found"
         ),
     ]
+
+
+def test_start_pigeon_passes_runtime_arguments_to_go():
+    """
+    Ensure the Go Pigeon process receives the configured runtime arguments.
+
+    Returns:
+        None.
+    """
+    trust = create_trust()
+    trust.port = 32769
+    trust.host = "172.16.2.4"
+    trust.redis_port = 32768
+    trust.pygo_channel_raw = "p2p_pygo"
+    trust.gopy_channel_raw = "p2p_gopy"
+    trust.create_p2p_logfile = False
+    trust.p2p_trust_runtime_dir = "permanent/p2p_trust_runtime"
+    trust.pigeon_key_file = "pigeon;peer1.keys"
+    trust._rebuild_pigeon_binary_after_slips_update = Mock(return_value=True)
+
+    with (
+        patch("modules.p2p_trust.p2p_trust.shutil.which", return_value=True),
+        patch("modules.p2p_trust.p2p_trust.subprocess.Popen") as mock_popen,
+    ):
+        trust._start_pigeon()
+
+    executable = mock_popen.call_args.args[0]
+    key_index = executable.index("-key-file")
+    assert executable[key_index + 1] == "pigeonpeer1.keys"
+    assert "--redis-db" in executable
+    assert f"localhost:{trust.redis_port}" in executable
+    assert mock_popen.call_args.kwargs["cwd"] == "permanent/p2p_trust_runtime"

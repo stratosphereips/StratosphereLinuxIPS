@@ -232,9 +232,8 @@ class HTTPAnalyzer(AsyncModule):
     def get_ua_info_online(self, user_agent):
         """
         Get OS and browser info about a use agent from an online database
-         http://useragentstring.com
         """
-        url = "http://useragentstring.com/"
+        url = "https://useragentstring.com/"
         params = {"uas": user_agent, "getJSON": "all"}
         params = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
         try:

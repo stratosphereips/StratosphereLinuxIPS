@@ -4,6 +4,7 @@
 import subprocess
 
 from slips_files.common.abstracts.iinput_handler import IInputHandler
+from slips_files.common.slips_utils import utils
 
 
 class NfdumpInput(IInputHandler):
@@ -34,9 +35,12 @@ class NfdumpInput(IInputHandler):
         return self.input.total_flows
 
     def run(self):
-        command = f"nfdump -b -N -o csv -q -r {self.input.given_path}"
+        safe_path = utils.validate_safe_path(
+            self.input.given_path, must_exist=True
+        )
+        command = ["nfdump", "-b", "-N", "-o", "csv", "-q", "-r", safe_path]
         # Execute command
-        result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+        result = subprocess.run(command, stdout=subprocess.PIPE)
         # Get command output
         self.nfdump_output = result.stdout.decode("utf-8")
         self.input.lines = self.read_nfdump_output()

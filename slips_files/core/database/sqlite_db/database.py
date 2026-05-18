@@ -23,6 +23,7 @@ class SQLiteDB(ISQLite):
     """
 
     name = "sqlite_db"
+    _valid_table_names = frozenset({"flows", "altflows", "alerts"})
 
     def __init__(self, logger: Output, output_dir: str, main_pid: int):
         self.printer = Printer(logger, self.name)
@@ -76,8 +77,7 @@ class SQLiteDB(ISQLite):
 
     def get_altflow_from_uid(self, uid) -> dict:
         """Given a uid, get the alternative flow associated with it"""
-        condition = f'uid = "{uid}"'
-        altflow = self.select("altflows", condition=condition)
+        altflow = self.select("altflows", condition="uid = ?", params=(uid,))
         if altflow:
             flow: str = altflow[0][1]
             return json.loads(flow)
@@ -97,8 +97,11 @@ class SQLiteDB(ISQLite):
         return contacted_ips
 
     def get_all_flows_in_profileid_twid(self, profileid, twid):
-        condition = f'profileid = "{profileid}" ' f'AND twid = "{twid}"'
-        all_flows: list = self.select("flows", condition=condition)
+        all_flows: list = self.select(
+            "flows",
+            condition="profileid = ? AND twid = ?",
+            params=(profileid, twid),
+        )
         if not all_flows:
             return False
         res = {}
@@ -113,8 +116,9 @@ class SQLiteDB(ISQLite):
         Return a list of all the flows in this profileid
         [{'uid':flow},...]
         """
-        condition = f'profileid = "{profileid}"'
-        flows = self.select("flows", condition=condition)
+        flows = self.select(
+            "flows", condition="profileid = ?", params=(profileid,)
+        )
         all_flows: Dict[str, dict] = {}
         if flows:
             for flow in flows:
@@ -142,13 +146,19 @@ class SQLiteDB(ISQLite):
         """
         for uid in uids:
             # add the label to the flow (conn.log flow)
-            query = f'UPDATE flows SET label="{new_label}" WHERE uid="{uid}"'
-            self.execute(query)
-            # add the label to the altflow (dns, http, whatever it is)
-            query = (
-                f'UPDATE altflows SET label="{new_label}" WHERE uid="{uid}"'
+            self.update(
+                "flows",
+                "label = ?",
+                "uid = ?",
+                params=(new_label, uid),
             )
-            self.execute(query)
+            # add the label to the altflow (dns, http, whatever it is)
+            self.update(
+                "altflows",
+                "label = ?",
+                "uid = ?",
+                params=(new_label, uid),
+            )
 
     def export_labeled_flows(self, output_dir, format):
         if "tsv" in format:
@@ -183,8 +193,9 @@ class SQLiteDB(ISQLite):
 
     def get_columns(self, table) -> list:
         """returns a list with column names in the given table"""
-        self.execute(f"PRAGMA table_info({table})")
-        columns = self.fetchall()
+        table = self._validate_table_name(table)
+        cursor = self.execute(f"PRAGMA table_info({table})")
+        columns = self.fetchall(cursor)
         return [column[1] for column in columns]
 
     def iterate_flows(self):
@@ -193,13 +204,13 @@ class SQLiteDB(ISQLite):
         # generator function to iterate over the rows
         def row_generator():
             # select all flows and altflows
-            self.execute(
+            cursor = self.execute(
                 "SELECT * FROM flows UNION SELECT uid, flow, label, profileid,"
                 " twid FROM altflows"
             )
 
             while True:
-                row = self.fetchone()
+                row = self.fetchone(cursor)
                 if row is None:
                     break
                 yield row
@@ -212,11 +223,13 @@ class SQLiteDB(ISQLite):
         Returns the flow with the given uid
         the flow returned is read from conn.log
         """
-        condition = f'uid = "{uid}"'
+        params = [uid]
+        condition = "uid = ?"
         if twid:
-            condition += f'AND twid = "{twid}"'
+            condition += " AND twid = ?"
+            params.append(twid)
 
-        res = self.select("flows", condition=condition)
+        res = self.select("flows", condition=condition, params=tuple(params))
         res = res[0][1] if res else {}
         return {uid: res}
 
@@ -255,17 +268,33 @@ class SQLiteDB(ISQLite):
         returns the total number of flows
          in the db for this profileid and twid if given
         """
-        condition = ""
+        condition_parts = []
+        params = []
         if profileid:
-            condition = f'profileid="{profileid}"'
-        elif twid and not profileid:
-            condition += f'twid= "{twid}"'
-        elif profileid and twid:
-            condition += f'AND twid= "{twid}"'
+            condition_parts.append("profileid = ?")
+            params.append(profileid)
+        if twid:
+            condition_parts.append("twid = ?")
+            params.append(twid)
 
-        flows = self.get_count("flows", condition=condition)
+        condition = " AND ".join(condition_parts) if condition_parts else None
+
+        flows = self.get_count(
+            "flows", condition=condition, params=tuple(params)
+        )
         # flows += self.get_count('altflows', condition=condition)
         return flows
+
+    def _validate_table_name(self, table: str) -> str:
+        """
+        Validate table names used in SQLiteDB metadata queries.
+
+        :param table: Table name to validate.
+        :return: The validated table name.
+        """
+        if table not in self._valid_table_names:
+            raise ValueError(f"Invalid SQLiteDB table name: {table}")
+        return table
 
     def add_altflow(self, flow, profileid: str, twid: str, label="benign"):
         parameters = (

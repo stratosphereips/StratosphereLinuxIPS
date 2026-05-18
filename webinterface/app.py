@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-from flask import Flask, render_template, redirect, url_for
+import secrets
+
+from flask import Flask, abort, jsonify, render_template, request
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from .database.database import db
@@ -18,6 +20,25 @@ def create_app():
 
 
 app = create_app()
+CSRF_TOKEN = secrets.token_hex(32)
+
+
+def get_csrf_token():
+    """
+    Return the in-memory CSRF token for the DB switch action.
+    """
+    return CSRF_TOKEN
+
+
+def get_available_redis_ports():
+    """
+    Return the list of available Redis ports exposed by Slips.
+    """
+    return {
+        int(entry["redis_port"])
+        for entry in get_open_redis_ports_in_order()
+        if entry.get("redis_port")
+    }
 
 
 @app.route("/redis")
@@ -32,18 +53,28 @@ def read_redis_port():
 
 @app.route("/")
 def index():
-    return render_template("app.html", title="Slips")
+    return render_template(
+        "app.html", title="Slips", csrf_token=get_csrf_token()
+    )
 
 
-@app.route("/db/<new_port>")
+@app.route("/db/<int:new_port>", methods=["POST"])
 def get_post_javascript_data(new_port):
     """
     is called when the user chooses another db to connect to from the
     button at the top right (from /redis)
     should send a msg to update_db() in database.py
     """
-    message_sent.send(int(new_port))
-    return redirect(url_for("index"))
+    csrf_token = request.headers.get("X-CSRF-Token")
+    if csrf_token != CSRF_TOKEN:
+        abort(403)
+
+    if new_port not in get_available_redis_ports():
+        abort(404)
+
+    if not message_sent.send(new_port):
+        abort(503)
+    return jsonify({"ok": True, "redis_port": new_port})
 
 
 @app.route("/info")
@@ -66,4 +97,4 @@ if __name__ == "__main__":
     app.register_blueprint(analysis, url_prefix="/analysis")
     app.register_blueprint(general, url_prefix="/general")
     app.register_blueprint(documentation, url_prefix="/documentation")
-    app.run(host="0.0.0.0", port=ConfigParser().web_interface_port)
+    app.run(host="127.0.0.1", port=ConfigParser().web_interface_port)

@@ -199,9 +199,20 @@ class ARPPoisoner(IModule):
         # we are explicitly giving arp-scan the ip to avoid giving docker
         # RAW_SOCKET permissions for arp-scan to be able to auto detect the ip
         host_ip = self.db.get_host_ip(interface)
+        # sanitize host ip
+        if not ipaddress.ip_address(host_ip):
+            self.print(
+                f"arp-scan failed: {host_ip} is not a valid IP."
+                f"Using the last cached scan output.",
+                0,
+                1,
+            )
+            return self.last_arp_scan_output
+
+        sanitized_interface = utils.sanitize(interface)
         cmd = [
             "arp-scan",
-            f"--interface={interface}",
+            f"--interface={sanitized_interface}",
             "--localnet",
             f"--arpspa={host_ip}",
         ]

@@ -442,6 +442,7 @@ def has_ignored_errors(line):
         "while downloading",
         "Error while reading the TI file",
         "Error parsing feed",
+        "failed call to cuInit",
         "SIGTERM",
     )
     for ignored_keyword in ignored_error_keywords:

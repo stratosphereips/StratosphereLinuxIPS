@@ -68,6 +68,7 @@ def test_start_input_process(
             line_type=line_type,
             is_profiler_done_event=process_manager.is_profiler_done_event,
             is_input_done_event=process_manager.is_input_done_event,
+            is_input_failed_event=process_manager.is_input_failed_event,
             is_slips_live_updating_event=(
                 process_manager.is_slips_live_updating_event
             ),
@@ -392,6 +393,43 @@ def test_is_done_receiving_new_flows(
 
 
 @pytest.mark.parametrize(
+    "live_update, stop_received, done_receiving, expected_result",
+    [
+        (True, False, False, True),
+        (False, True, False, True),
+        (False, False, True, True),
+        (False, False, False, False),
+    ],
+)
+def test_should_stop_slips(
+    live_update, stop_received, done_receiving, expected_result
+):
+    """
+    Test whether Slips should stop for live updates, stop messages, or done input.
+
+    Parameters:
+    live_update: Whether a live update is in progress.
+    stop_received: Whether a stop message was received.
+    done_receiving: Whether input and profiler finished processing.
+    expected_result: Expected stop decision.
+
+    Return:
+    None.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.is_slips_live_updating_event.is_set = Mock(
+        return_value=live_update
+    )
+    process_manager.is_stop_msg_received = Mock(return_value=stop_received)
+    process_manager.is_done_receiving_new_flows = Mock(
+        return_value=done_receiving
+    )
+    process_manager.all_children_started = True
+
+    assert process_manager.should_stop_slips() == expected_result
+
+
+@pytest.mark.parametrize(
     "mode, expected_print_function",
     [  # Test case 1: Daemonized mode
         ("daemonized", "main.daemon.print"),
@@ -440,7 +478,12 @@ def test_print_stopped_module():
 def test_start_profiler_process():
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.bloom_filters_man = Mock()
-    with patch("managers.process_manager.Profiler") as mock_profiler:
+    with patch(
+        "managers.process_manager.Profiler"
+    ) as mock_profiler, patch.object(
+        process_manager.is_profiler_done_starting_initial_workers_event,
+        "wait",
+    ):
         mock_profiler_process = Mock()
         mock_profiler.return_value = mock_profiler_process
         mock_profiler_process.pid = 67890
@@ -457,16 +500,64 @@ def test_start_profiler_process():
             process_manager.main.conf,
             process_manager.main.pid,
             process_manager.main.bloom_filters_man,
-            is_profiler_done=process_manager.is_profiler_done,
+            is_profiler_done_semaphore=(
+                process_manager.is_profiler_done_semaphore
+            ),
             profiler_queue=process_manager.profiler_queue,
             is_profiler_done_event=process_manager.is_profiler_done_event,
             is_input_done_event=process_manager.is_input_done_event,
+            is_input_failed_event=process_manager.is_input_failed_event,
+            is_profiler_done_starting_initial_workers_event=(
+                process_manager.is_profiler_done_starting_initial_workers_event
+            ),
         )
         mock_profiler_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()
         process_manager.main.db.store_pid.assert_called_once_with(
             "Profiler", 67890
         )
+
+
+@pytest.mark.parametrize(
+    "input_type, should_wait",
+    [
+        (InputType.INTERFACE, True),
+        (InputType.PCAP, False),
+    ],
+)
+def test_start_profiler_process_waits_for_initial_workers(
+    input_type, should_wait
+):
+    """
+    Test that only interface profiler startup waits for initial workers.
+
+    Parameters:
+    input_type: Input type used for the run.
+    should_wait: Whether profiler startup should wait for initial workers.
+
+    Return:
+    None.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.bloom_filters_man = Mock()
+    process_manager.main.input_type = input_type
+    wait_event = (
+        process_manager.is_profiler_done_starting_initial_workers_event
+    )
+
+    with patch(
+        "managers.process_manager.Profiler"
+    ) as mock_profiler, patch.object(wait_event, "wait") as mock_wait:
+        mock_profiler_process = Mock()
+        mock_profiler.return_value = mock_profiler_process
+        mock_profiler_process.pid = 67890
+
+        process_manager.start_profiler_process()
+
+    if should_wait:
+        mock_wait.assert_called_once_with(30)
+    else:
+        mock_wait.assert_not_called()
 
 
 @pytest.mark.parametrize(

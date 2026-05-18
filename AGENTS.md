@@ -62,6 +62,7 @@ These rules MUST be followed:
 - File must end with a newline
 - Docstring must be the first statement in a file (if present)
 - Avoid using environment variables, use variables from slips/config.yaml instead.
+- Use type annotations for all functions and methods parameters and return types.
 
 ### Paths:
 - NEVER use absolute paths

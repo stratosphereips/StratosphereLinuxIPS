@@ -51,6 +51,40 @@ from slips_files.core.profiler import Profiler
 
 
 class ProcessManager:
+    """
+    Responsible for starting and stopping all the slips processes and modules.
+    Here's how the stopping of input.py and profiler.py works
+    input.py
+      -> realizes that no more flows are arriving
+      -> puts "stop" in the profiler_queue
+      -> is_input_done_event.set()
+      -> waits on is_profiler_done_event
+
+    profiler.py
+      <- recvs is_input_done_event for normal input completion
+      <- recvs is_input_failed_event for abnormal input failure
+      -> waits/join() profiler workers
+
+    profiler workers
+      <- recvs the "stop" from the  profiler_queue
+      -> exit
+
+    profiler.py
+      <- realizes that all workers exited
+      -> is_profiler_done_semaphore.release()
+      -> is_profiler_done_event.set()
+
+    input.py
+      <- is_profiler_done_event
+      -> is_input_done.release()
+
+    process_manager
+      <- is_input_done
+      <- is_profiler_done_semaphore
+      -> Slips can finish shutdown
+
+    """
+
     def __init__(self, main):
         self.main = main
         # Can be used by signal handlers before startup finishes.
@@ -76,19 +110,24 @@ class ProcessManager:
         # release the semaphore. Once having the semaphore, then slips.py can
         # terminate slips.
         self.is_input_done = Semaphore(0)
-        self.is_profiler_done = Semaphore(0)
+        # when profiler is done processing, it releases this semaphore,
+        self.is_profiler_done_semaphore = Semaphore(0)
         # is set by the profiler process to indicate that it's done so
         # input can shutdown no issue
         # now without this event, input process doesn't know that profiler
         # is still waiting for the queue to stop
         # and inout stops and renders the profiler queue useless and profiler
-        # cant get more lines anymore!
+        # cant get more lines any more!
         self.is_profiler_done_event = Event()
+        self.is_profiler_done_starting_initial_workers_event = Event()
         # is set by the input process to indicate no more flows are coming
         # so profiler can safely begin shutdown/joins.
         self.is_input_done_event = Event()
+        # is set by the input process when it stops because of a failure.
+        self.is_input_failed_event = Event()
         self.is_slips_live_updating_event = Event()
         self.read_config()
+        self.all_children_started = False
 
     def read_config(self):
         self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
@@ -98,6 +137,9 @@ class ProcessManager:
         self.bootstrapping_modules = self.main.conf.get_bootstrapping_modules()
         # self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.
         # get_bootstrapping_setting()
+
+    def declare_that_slips_done_starting_all_children(self):
+        self.all_children_started = True
 
     def start_slips_update_manager(self):
         return UpdateManager(
@@ -130,10 +172,12 @@ class ProcessManager:
             self.main.conf,
             self.main.pid,
             self.main.bloom_filters_man,
-            is_profiler_done=self.is_profiler_done,
+            is_profiler_done_semaphore=self.is_profiler_done_semaphore,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
+            is_input_failed_event=self.is_input_failed_event,
+            is_profiler_done_starting_initial_workers_event=self.is_profiler_done_starting_initial_workers_event,
         )
         profiler_process.start()
         self.main.print(
@@ -143,6 +187,11 @@ class ProcessManager:
             0,
         )
         self.main.db.store_pid("Profiler", int(profiler_process.pid))
+        # Interface input starts profiler workers before the input process
+        # sends any flows. File-like inputs need the input process to send the
+        # first message before the profiler can choose the input handler.
+        if self.main.input_type == InputType.INTERFACE:
+            self.is_profiler_done_starting_initial_workers_event.wait(30)
         return profiler_process
 
     def start_evidence_process(self):
@@ -185,6 +234,7 @@ class ProcessManager:
             line_type=self.main.line_type,
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
+            is_input_failed_event=self.is_input_failed_event,
             is_slips_live_updating_event=self.is_slips_live_updating_event,
         )
         input_process.start()
@@ -620,7 +670,7 @@ class ProcessManager:
         based on the following:
         1. is slips still receiving new flows? (checks input.py and
         profiler.py)
-        2. did slips the control channel recv the stop_slips
+        2. did the control channel recv the stop_slips
         3. is a debugger present?
 
         This function NEVER returns True if the input and profiler are
@@ -628,15 +678,20 @@ class ProcessManager:
         """
         if self.is_slips_live_updating_event.is_set():
             # slips is auto updating this version of slips should stop and
-            # the updated one will start
+            # the updated one will start soon
             return True
 
-        if self.should_run_non_stop():
+        if not self.all_children_started:
+            # to avoid race conditions that happen when the input file is
+            # very fast, that slips decides to stop before even all the
+            # modules are up and running.
+            # happens in dataset/test4-malicious.binetflow
             return False
 
-        return (
-            self.is_stop_msg_received() or self.is_done_receiving_new_flows()
-        )
+        if self.is_stop_msg_received() or self.is_done_receiving_new_flows():
+            return True
+
+        return False
 
     def is_stop_msg_received(self) -> bool:
         """
@@ -742,7 +797,7 @@ class ProcessManager:
             self.is_input_done
         )
         profiler_done_processing: bool = self.can_acquire_semaphore(
-            self.is_profiler_done
+            self.is_profiler_done_semaphore
         )
         return input_done_processing and profiler_done_processing
 

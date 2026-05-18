@@ -24,6 +24,7 @@ from managers.ui_manager import UIManager
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_paths import get_performance_plots_dir
 from slips_files.common.printer import Printer
+from slips_files.common.sqlite_flock import SQLiteFlock
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green, yellow
 from slips_files.common.input_type import InputType
@@ -287,7 +288,7 @@ class Main:
         input_type = InputType.FILE
         # Get the type of file
         cmd_result = subprocess.run(
-            ["file", given_path], stdout=subprocess.PIPE
+            ["file", utils.sanitize(given_path)], stdout=subprocess.PIPE
         )
         # Get command output
         cmd_result = cmd_result.stdout.decode("utf-8")
@@ -511,19 +512,14 @@ class Main:
 
     def prepare_locks_dir(self):
         """
-        sets the correct permissions for the /tmp/slips directory to be
-        used by root and non-root users
+        Set secure shared permissions for the lock directory.
+
+        The directory must remain writable by root and non-root processes
+        because Slips may create lock files before and after dropping
+        privileges. Use the sticky bit so other users cannot remove or
+        replace lock files they do not own.
         """
-        locks_dir = utils.slips_locks_dir
-        # Create the directory if it doesn't exist
-        if not os.path.exists(locks_dir):
-            os.makedirs(locks_dir, exist_ok=True)
-        try:
-            os.chmod(locks_dir, 0o777)  # World-writable, no sticky bit
-        except PermissionError:
-            # this dir was created by root, so we can't change the permissions
-            # but probably root has already set the permissions
-            pass
+        SQLiteFlock.prepare_locks_dir()
 
     def start(self):
         """Main Slips Function"""
@@ -701,7 +697,8 @@ class Main:
 
             self.proc_man.start_evidence_process()
             self.proc_man.start_profiler_process()
-            # give the profiler process time to start and subscribe to the db before we start sending data to it
+            # give the profiler process time to start and subscribe to the db
+            # before we start sending data to it
             time.sleep(1)
 
             self.c1 = self.db.subscribe("control_channel")
@@ -710,6 +707,9 @@ class Main:
             self.input_process = self.proc_man.start_input_process()
 
             self.db.store_pid("main", int(self.pid))
+
+            self.proc_man.declare_that_slips_done_starting_all_children()
+
             self.metadata_man.set_input_metadata()
 
             # warn about unused open redis servers

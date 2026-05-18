@@ -86,6 +86,11 @@ class ModuleFactory:
                 return_value=Mock(),
             ),
             patch(
+                "slips_files.core.database.redis_db.database."
+                "RedisDB._conf_file",
+                "config/redis.conf.template",
+            ),
+            patch(
                 "slips_files.core.database.redis_db.database.ConfigParser",
                 return_value=conf,
             ),
@@ -544,6 +549,7 @@ class ModuleFactory:
             zeek_or_bro=check_zeek_or_bro(),
             line_type=line_type,
             is_profiler_done_event=Mock(),
+            is_input_failed_event=Mock(),
         )
         input.db = mock_db
         input.mark_self_as_done_processing = Mock()
@@ -590,18 +596,27 @@ class ModuleFactory:
     def create_profiler_obj(self, mock_db):
         from slips_files.core.profiler import Profiler
 
+        slips_args = Mock()
+        slips_args.interface = False
+        is_input_done_event = Mock()
+        is_input_done_event.is_set.return_value = False
+        is_input_failed_event = Mock()
+        is_input_failed_event.is_set.return_value = False
         profiler = Profiler(
             logger=self.logger,
             output_dir="output",
             redis_port=6379,
             termination_event=Mock(),
-            slips_args=Mock(),
+            slips_args=slips_args,
             conf=Mock(),
             ppid=Mock(),
             bloom_filters_manager=Mock(),
-            is_profiler_done=Mock(),
+            is_profiler_done_semaphore=Mock(),
             profiler_queue=self.input_queue,
             is_profiler_done_event=Mock(),
+            is_input_done_event=is_input_done_event,
+            is_input_failed_event=is_input_failed_event,
+            is_profiler_done_starting_initial_workers_event=Mock(),
         )
         profiler.print = Mock()
         profiler.local_whitelist_path = "tests/unit/test_whitelist.conf"

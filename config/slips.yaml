@@ -113,7 +113,7 @@ parameters:
   # traffic, you can use
   # pcapfilter: 'not icmp and not multicast and not broadcast and not arp and
   # not port 5353 and not port 67'
-  pcapfilter: false
+  pcapfilter: ''
 
   # Defines for Zeek how much is the TCP inactivity timeout.
   # This means when will Zeek consider a TCP connection timeout after no

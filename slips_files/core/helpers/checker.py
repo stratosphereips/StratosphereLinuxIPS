@@ -6,6 +6,7 @@ import sys
 import psutil
 
 from slips_files.common.input_type import InputType
+from slips_files.common.slips_utils import utils
 
 
 class Checker:
@@ -198,9 +199,14 @@ class Checker:
             self.main.terminate_slips()
             return
 
-        if self.main.args.config and not os.path.exists(self.main.args.config):
-            print(f"{self.main.args.config} doesn't exist. Stopping Slips")
-            self.main.terminate_slips()
+        if self.main.args.config:
+            if not os.path.exists(self.main.args.config):
+                print(f"{self.main.args.config} doesn't exist. Stopping Slips")
+                self.main.terminate_slips()
+            else:
+                self.main.args.config = utils.validate_safe_path(
+                    self.main.args.config
+                )
 
         if self.main.conf.use_local_p2p() and not self.main.args.interface:
             print(

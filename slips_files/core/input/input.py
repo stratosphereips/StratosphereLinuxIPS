@@ -58,6 +58,7 @@ class Input(ICore):
         line_type=None,
         is_profiler_done_event: multiprocessing.Event = None,
         is_input_done_event: multiprocessing.Event = None,
+        is_input_failed_event: multiprocessing.Event = None,
         is_slips_live_updating_event: multiprocessing.Event = None,
     ):
         self.input_type = input_type
@@ -83,13 +84,14 @@ class Input(ICore):
         self.testing = False
         # number of lines read
         self.lines = 0
-        self.timeout = None
         self.zeek_utils = ZeekInputUtils(self)
         # is set by the profiler to tell this proc that we it is done processing
         # the input process and shut down and close the profiler queue no issue
         self.is_profiler_done_event = is_profiler_done_event
         # is set by this proc to indicate no more flows are coming
         self.is_input_done_event = is_input_done_event
+        # is set by this proc to indicate it stopped because of a failure.
+        self.is_input_failed_event = is_input_failed_event
         self.is_slips_live_updating_event = is_slips_live_updating_event
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.input_handlers = self._build_input_handlers()
@@ -168,6 +170,16 @@ class Input(ICore):
         # reaching here means the wait() is over and profiler did stop.
         self.print("Input is done processing.", log_to_logfiles_only=True)
         self.done_processing.release()
+
+    def mark_input_as_failed(self) -> None:
+        """
+        Signal that input stopped before normal completion.
+
+        Return:
+        None.
+        """
+        if self.is_input_failed_event is not None:
+            self.is_input_failed_event.set()
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -248,7 +260,10 @@ class Input(ICore):
     def main(self):
         try:
             self.active_handler = self.input_handlers[self.input_type]
-            self.active_handler.run()
+            if self.active_handler.run() is False:
+                self.mark_input_as_failed()
+                self.db.publish_stop()
+                return False
         except KeyError:
             self.print(
                 f'Error: Unrecognized file type "{self.input_type}". '
@@ -256,8 +271,8 @@ class Input(ICore):
                 0,
                 1,
             )
+            self.mark_input_as_failed()
             return False
-
         # no logic should be put here
         # because some of the above handlers never return
         # e.g. interface, stdin, cyst etc.

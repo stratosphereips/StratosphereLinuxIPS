@@ -6,6 +6,8 @@ from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
     close_test_redis_server,
+    get_slips_test_command,
+    skip_if_missing_runtime_dependencies,
 )
 from tests.module_factory import ModuleFactory
 import pytest
@@ -144,21 +146,24 @@ def test_zeek_conn_log(
     output_dir,
     integration_port_factory,
 ):
+    skip_if_missing_runtime_dependencies(
+        python_modules=("termcolor",), binaries=("redis-server",)
+    )
     redis_port = integration_port_factory("redis")
     output_dir = create_output_dir(output_dir)
     success = False
     try:
         output_file = os.path.join(output_dir, "slips_output.txt")
-        command = (
-            f"./slips.py -e 1 -t -f {conn_log_path} -o {output_dir} "
-            f"-P {redis_port} > {output_file} 2>&1"
+        command = get_slips_test_command(
+            f"-e 1 -t -f {conn_log_path} -o {output_dir} -P {redis_port}"
         )
+        command = f"{command} > {output_file} 2>&1"
         # this function returns when slips is done
         run_slips(command)
         assert_no_errors(output_dir)
 
         database = ModuleFactory().create_db_manager_obj(
-            redis_port, output_dir=output_dir
+            redis_port, output_dir=output_dir, start_redis_server=False
         )
         profiles = database.get_profiles_len()
         assert profiles > expected_profiles

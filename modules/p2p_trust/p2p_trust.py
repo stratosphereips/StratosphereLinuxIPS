@@ -5,6 +5,7 @@ import shutil
 import signal
 import subprocess
 import time
+from pathlib import Path
 from typing import Dict, Optional, Tuple
 import json
 import socket
@@ -80,8 +81,8 @@ class Trust(IModule):
     pygo_channel_raw = "p2p_pygo"
     start_pigeon = True
     # or make sure the binary is in $PATH
-    pigeon_binary_dir = "p2p4slips"
-    pigeon_binary = os.path.join(pigeon_binary_dir, "p2p4slips")
+    pigeon_binary_dir = Path.cwd() / "p2p4slips"
+    pigeon_binary = pigeon_binary_dir / "p2p4slips"
     pigeon_key_file = "pigeon.keys"
     rename_redis_ip_info = False
     override_p2p = False
@@ -198,41 +199,6 @@ class Trust(IModule):
                 self.args, "is_slips_started_by_an_update", False
             ),
         )
-
-        self.pigeon = None
-        if self.start_pigeon:
-            if not self._rebuild_pigeon_binary_after_slips_update():
-                return
-
-            if not shutil.which(self.pigeon_binary):
-                self.print(
-                    f"Warning: P2p4slips binary not found in "
-                    f'"{self.pigeon_binary}". '
-                    f"Did you include it in PATH?. Exiting process."
-                )
-                return
-
-            params = {
-                "-port": str(self.port),
-                "-host": self.host,
-                "-key-file": self.pigeon_key_file,
-                "--redis-db": f"localhost:{self.redis_port}",
-                "-redis-channel-pygo": self.pygo_channel_raw,
-                "-redis-channel-gopy": self.gopy_channel_raw,
-            }
-            self.print(f"P2P is listening on {self.host} port {self.port}.")
-            executable = [self.pigeon_binary] + [
-                item for pair in params.items() for item in pair
-            ]
-
-            if self.create_p2p_logfile:
-                outfile = open(self.pigeon_logfile, "+w")
-            else:
-                outfile = open(os.devnull, "+w")
-
-            self.pigeon = subprocess.Popen(
-                executable, cwd=self.p2p_trust_runtime_dir, stdout=outfile
-            )
 
     def _should_rebuild_pigeon_binary(self) -> bool:
         """
@@ -654,6 +620,44 @@ class Trust(IModule):
         # give the report to evidenceProcess to decide whether to block or not
         self.db.publish("new_blame", data)
 
+    def _start_pigeon(self):
+        self.pigeon = None
+        if not self.start_pigeon:
+            return
+
+        if not self._rebuild_pigeon_binary_after_slips_update():
+            return
+
+        if not shutil.which(self.pigeon_binary):
+            self.print(
+                f"Warning: P2p4slips binary not found in "
+                f'"{self.pigeon_binary}". '
+                f"Did you include it in PATH?. Exiting process."
+            )
+            return
+
+        params = {
+            "-port": str(self.port),
+            "-host": self.host,
+            "-key-file": self.pigeon_key_file,
+            "--redis-db": f"localhost:{self.redis_port}",
+            "-redis-channel-pygo": self.pygo_channel_raw,
+            "-redis-channel-gopy": self.gopy_channel_raw,
+        }
+        self.print(f"P2P is listening on {self.host} port {self.port}.")
+        executable = [self.pigeon_binary] + [
+            utils.sanitize(item) for pair in params.items() for item in pair
+        ]
+
+        if self.create_p2p_logfile:
+            outfile = open(self.pigeon_logfile, "+w")
+        else:
+            outfile = open(os.devnull, "+w")
+
+        self.pigeon = subprocess.Popen(
+            executable, cwd=self.p2p_trust_runtime_dir, stdout=outfile
+        )
+
     def shutdown_gracefully(self):
         if hasattr(self, "pigeon") and self.pigeon is not None:
             self.pigeon.send_signal(signal.SIGINT)
@@ -663,8 +667,8 @@ class Trust(IModule):
     def pre_main(self):
         utils.drop_root_privs_permanently()
         self._init_log_files()
-        # configure process
         self._configure()
+        self._start_pigeon()
         # check if it was possible to start up pigeon
         if self.start_pigeon and self.pigeon is None:
             self.print(
