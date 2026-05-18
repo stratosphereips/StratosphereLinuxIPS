@@ -27,7 +27,7 @@ warnings.warn = warn
 class MLLinearModel(ml_base.MLBaseDetection):
     name = "ml_linear_model"
     description = "Standalone linear sklearn-based ML flow detector"
-    authors = ["Jan Svoboda"]
+    authors = ["Jan Svoboda, Sebastian Garcia"]
     module_key = "ml_linear_model"
     module_config_section = "ml_linear_model"
     malicious_flow_evidence_type = (
@@ -223,6 +223,7 @@ class MLLinearModel(ml_base.MLBaseDetection):
                 col for col in label_cols if col in dataset.columns
             ]
             dataset = dataset[feature_order + existing_label_cols]
+            print(dataset.head())
             return dataset
 
         except Exception:

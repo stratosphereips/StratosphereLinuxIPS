@@ -39,7 +39,7 @@ class _FallbackRiverModel:
 class MLOnlineModel(ml_base.MLBaseDetection):
     name = "ml_online_model"
     description = "Standalone online ML flow detector"
-    authors = ["Jan Svoboda"]
+    authors = ["Jan Svoboda, Sebastian Garcia"]
     module_key = "ml_online_model"
     module_config_section = "ml_online_model"
     malicious_flow_evidence_type = (
