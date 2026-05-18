@@ -195,6 +195,7 @@ def test_init_zeek_and_start_the_zeek_thread_returns_false_on_error(
     observer.start.assert_called_once_with(
         str(tmp_path), "pcaps/inputfile.pcap"
     )
+    input_process.is_input_failed_event.set.assert_called_once_with()
 
 
 def test_init_zeek_and_start_the_zeek_thread_returns_false_on_timeout(
@@ -224,7 +225,10 @@ def test_init_zeek_and_start_the_zeek_thread_returns_false_on_timeout(
         )
         is False
     )
-    input_process.print.assert_any_call("Zeek startup timed out.")
+    input_process.print.assert_any_call(
+        "Zeek startup timed out. Stopping Slips."
+    )
+    input_process.is_input_failed_event.set.assert_called_once_with()
     input_process.db.publish_stop.assert_called_once_with()
 
 
@@ -281,7 +285,7 @@ def test_run_zeek_skips_runtime_output_after_startup_exit(tmp_path):
     input_process = ModuleFactory().create_input_obj(
         "pcaps/inputfile.pcap", InputType.PCAP
     )
-    input_process.zeek_utils._start_zeek_runtime = Mock()
+    input_process.zeek_utils._prep_and_start_the_zeek_proc = Mock()
     input_process.zeek_utils._did_zeek_startup_successfully = Mock(
         return_value=False
     )

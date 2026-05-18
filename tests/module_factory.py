@@ -544,6 +544,7 @@ class ModuleFactory:
             zeek_or_bro=check_zeek_or_bro(),
             line_type=line_type,
             is_profiler_done_event=Mock(),
+            is_input_failed_event=Mock(),
         )
         input.db = mock_db
         input.mark_self_as_done_processing = Mock()
@@ -594,6 +595,8 @@ class ModuleFactory:
         slips_args.interface = False
         is_input_done_event = Mock()
         is_input_done_event.is_set.return_value = False
+        is_input_failed_event = Mock()
+        is_input_failed_event.is_set.return_value = False
         profiler = Profiler(
             logger=self.logger,
             output_dir="output",
@@ -607,6 +610,7 @@ class ModuleFactory:
             profiler_queue=self.input_queue,
             is_profiler_done_event=Mock(),
             is_input_done_event=is_input_done_event,
+            is_input_failed_event=is_input_failed_event,
             is_profiler_done_starting_initial_workers_event=Mock(),
         )
         profiler.print = Mock()

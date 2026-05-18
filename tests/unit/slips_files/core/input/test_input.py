@@ -50,6 +50,7 @@ def test_main_publishes_stop_when_handler_returns_false():
 
     assert input_process.main() is False
 
+    input_process.is_input_failed_event.set.assert_called_once_with()
     input_process.db.publish_stop.assert_called_once_with()
 
 

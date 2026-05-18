@@ -106,6 +106,72 @@ def test_main_stops_when_input_is_done_before_first_message():
     )
 
 
+def test_main_stops_when_input_fails_before_first_message():
+    """
+    Test that profiler exits before startup when input reports a failure.
+
+    Return:
+    None.
+    """
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.last_worker_id = 0
+    profiler.get_msg_from_queue = Mock(return_value=None)
+    profiler.get_handler_obj = Mock()
+    profiler.start_profiler_worker = Mock()
+    profiler.profiler_queue = Mock()
+    profiler.print = Mock()
+    profiler.is_input_done_event = Mock()
+    profiler.is_input_done_event.is_set.return_value = False
+    profiler.is_input_failed_event = Mock()
+    profiler.is_input_failed_event.is_set.return_value = True
+
+    assert profiler.main() == 1
+
+    profiler.get_msg_from_queue.assert_not_called()
+    profiler.get_handler_obj.assert_not_called()
+    profiler.start_profiler_worker.assert_not_called()
+    profiler.print.assert_called_once_with(
+        "Stopping profiler, input stopped before profiling began.",
+    )
+
+
+def test_main_starts_workers_when_input_done_but_first_message_is_queued():
+    """
+    Test that normal input completion does not hide queued work.
+
+    Return:
+    None.
+    """
+    profiler = ModuleFactory().create_profiler_obj()
+    handler_obj = Mock()
+    msg_from_queue = {"line": {"f1": "v1"}}
+    profiler.last_worker_id = 0
+    profiler._check_if_high_throughput_and_add_workers = Mock()
+    profiler.start_profiler_worker = Mock()
+    profiler.store_flows_read_per_second = Mock()
+    profiler._update_lines_read_by_all_workers = Mock()
+    profiler.print = Mock()
+    profiler.profiler_monitor_thread = Mock()
+    profiler.get_msg_from_queue = Mock(return_value=msg_from_queue)
+    profiler.get_handler_obj = Mock(return_value=handler_obj)
+    profiler.profiler_queue = Mock()
+    profiler.workers = []
+    profiler.is_input_done_event = Mock()
+    profiler.is_input_done_event.is_set.return_value = True
+    profiler.is_input_failed_event = Mock()
+    profiler.is_input_failed_event.is_set.return_value = False
+
+    with patch("slips_files.core.profiler.utils.start_thread") as start_thread:
+        profiler.main()
+
+    handler_obj.process_line.assert_called_once_with({"f1": "v1"})
+    start_thread.assert_called_once_with(
+        profiler.profiler_monitor_thread, profiler.db
+    )
+    assert profiler.start_profiler_worker.call_count == 3
+    profiler.print.assert_not_called()
+
+
 def test_shutdown_gracefully(monkeypatch):
     profiler = ModuleFactory().create_profiler_obj()
     profiler.workers = [

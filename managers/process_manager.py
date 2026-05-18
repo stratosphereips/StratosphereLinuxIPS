@@ -187,10 +187,11 @@ class ProcessManager:
             0,
         )
         self.main.db.store_pid("Profiler", int(profiler_process.pid))
-        # give this function extra time to start the profiler workers. to
-        # avoid race conditions.
-        print("@@@@@@@@@@@@@@@@ waiting here?")
-        self.is_profiler_done_starting_initial_workers_event.wait(30)
+        # Interface input starts profiler workers before the input process
+        # sends any flows. File-like inputs need the input process to send the
+        # first message before the profiler can choose the input handler.
+        if self.main.input_type == InputType.INTERFACE:
+            self.is_profiler_done_starting_initial_workers_event.wait(30)
         return profiler_process
 
     def start_evidence_process(self):
@@ -690,7 +691,7 @@ class ProcessManager:
         if self.is_stop_msg_received() or self.is_done_receiving_new_flows():
             return True
 
-        return not self.should_run_non_stop()
+        return False
 
     def is_stop_msg_received(self) -> bool:
         """
