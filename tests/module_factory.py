@@ -86,6 +86,11 @@ class ModuleFactory:
                 return_value=Mock(),
             ),
             patch(
+                "slips_files.core.database.redis_db.database."
+                "RedisDB._conf_file",
+                "config/redis.conf.template",
+            ),
+            patch(
                 "slips_files.core.database.redis_db.database.ConfigParser",
                 return_value=conf,
             ),
