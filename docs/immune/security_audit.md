@@ -60,12 +60,20 @@ Full table sorted by severity (`Critical` first), with the `CVE` column converte
 ## Notes
 
 - Bearer and Trivy reported some false positives. We investigated and discarded them.
-
   Example of the FPs that are not an issue in Slips context: when the reported path is
   - not reachable by untrusted users
   - is only used with local Slips-controlled data
   - or is a p2p related path that is already constrained by Slips P2P trust models.
-
-- Data received and used by P2P, Fides, and Iris is intentionally not sanitized in every place. Slips relies on its local trust model there, so those values are accepted as part of the trusted local workflow.
-
+- Data received and used by P2P, Fides, and Iris is intentionally not sanitized. Slips relies on its local trust model there.
 - Some vulnerabilities are not disclosed here because the upstream maintainers of the affected dependencies have not released fixed versions yet. We are monitoring them and will update Slips once fixed versions are available.
+
+## How AI was used here
+- brainstorming, checking best practice, comparing available tools.
+- debugging and fixing of unit and integration tests.
+- suggesting mitigations for some of the reported CVEs and CWEs. e.g the multi-stage build in docker
+- The following vulnerabilities were fixed by AI:
+  - CVE-2024-35870
+  - CWE-78 and CWE-88 (sanitization of command execution paths of all modules and core code.)
+- Polishing and formatting this report.
+
+CVEs fixed by the AI were reviewed and tested manually by a human :)
