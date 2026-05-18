@@ -49,3 +49,6 @@ __pycache__/
 
 # for vscode
 .vscode/
+
+# permanent p2p dbs and encryption keys
+permanent/
