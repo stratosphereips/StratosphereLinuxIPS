@@ -55,3 +55,4 @@ vulture
 detect-secrets
 idmefv2==0.8
 httpx==0.28.1
+torch>=2.0.0
