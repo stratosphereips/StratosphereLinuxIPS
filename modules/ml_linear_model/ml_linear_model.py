@@ -223,7 +223,6 @@ class MLLinearModel(ml_base.MLBaseDetection):
                 col for col in label_cols if col in dataset.columns
             ]
             dataset = dataset[feature_order + existing_label_cols]
-            print(dataset.head())
             return dataset
 
         except Exception:
