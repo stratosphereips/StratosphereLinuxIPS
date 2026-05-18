@@ -113,6 +113,7 @@ class EvidenceType(Enum):
     THREAT_INTELLIGENCE_MALICIOUS_URL = auto()
     LOGIN = auto()
     TOR_EXIT_NODE = auto()
+    FEDERATED_NETWORK_MALICIOUS_FLOW = auto()
 
     def __str__(self):
         return self.name
