@@ -62,6 +62,36 @@ Here's a very simple beginner-level steps on how to create your PR in Slips
 11. Open a PR in Slips, remember to set the base branch as develop.
 12. List your changes in the PR description
 
+## How to test the auto update functionality
+
+To test Slips auto update using the `testing` channel, follow these steps:
+
+1. Create a new temporary branch from the branch you want to test, for example `origin/yourname-autoupdate-test`.
+2. Edit [update.json] in your new branch and update the `testing` channel entry:
+   - increase the `version` value so this branch appears newer than the version currently available
+   - keep `"backwards_compatible": true`
+   - keep `"has_new_dependencies": false`
+   - set the testing branch entry to your new branch name e.g `origin/yourname-autoupdate-test`
+3. Commit the `update.json` change in that temporary branch and push the branch to your remote.
+4. Check out your original old branch again. Before continuing, make sure there are no merge conflicts and no modified Slips files in this branch.
+5. Create a copy of [config/slips.yaml](config/slips.yaml) .
+6. In your copied config file, enable auto update and configure the testing channel:
+
+   ```yaml
+   update:
+     auto_update_slips: true
+     channel_to_update_slips_from: testing
+     testing_branch_to_update_slips_from: origin/<yourname-autoupdate-test>
+   ```
+
+7. Run Slips on an interface and point it to your copied config file using `-c`, for example:
+
+   ```bash
+   ./slips.py -i <interface_name> -c config/<your_test_config>.yaml
+   ```
+
+8. While Slips is running, it should detect the higher version in the `testing` channel and auto update to the branch you pushed in step 3.
+
 
 ## Rejected PRs
 
@@ -97,7 +127,7 @@ That's it, now you have a ready-to-merge PR!
 
 * Profiler process gives each flow to the appropriate module to deal with it. for example flows from http.log will be sent to http_analyzer.py to analyze them.
 
-* Profiler process stores the flows, profiles, etc. in slips databases for later processing. the info stored in the dbs will be used by all modules later. Slips has 2 databases, Redis and SQLite. it uses the sqlite db to store all the flows read and labeled. and uses redis for all other operations. the sqlite db is created in the output directory, meanwhite the redis database is in-memory. 7-8. using the flows stored in the db in step 6 and with the help of the timeline module, slips puts the given flows in a human-readable form which is then used by the web UI and kalipso UI.
+* Profiler process stores the flows, profiles, etc. in slips databases for later processing. the info stored in the dbs will be used by all modules later. Slips has 2 databases, Redis and SQLite. it uses the sqlite db to store all the flows read and labeled. and uses redis for all other operations. the sqlite db is created in the output directory, meanwhite the redis database is in-memory. 7-8. using the flows stored in the db in step 6 and with the help of the timeline module, slips puts the given flows in a human-readable form which is then used by the web UI.
 
 * when a module finds a detection, it sends the detection to the evidence process to deal with it (step 10) but first, this evidence is checked by the whitelist to see if it’s whitelisted in our config/whitelist.conf or not. if the evidence is whitelisted, it will be discarded and won’t go through the next steps
 

@@ -232,6 +232,8 @@ def set_timeline_flows(ip, timewindow):
             timestamp = value["starttime"]
             dt_obj = ts_to_date(timestamp, seconds=True)
             value["ts"] = dt_obj
+            value["origstate"] = value.get("origstate", "")
+            value["allbytes"] = value.get("allbytes", value.get("bytes", 0))
 
             # limit duration decimals
             duration = float(value["dur"])

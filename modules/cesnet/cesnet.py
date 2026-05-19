@@ -255,7 +255,12 @@ class CESNET(IModule):
             return 1
 
         # create the warden client
-        self.wclient = Client(**read_cfg(self.configuration_file))
+        self.wclient = Client(
+            **read_cfg(self.configuration_file),
+            is_slips_started_by_an_update=getattr(
+                self.args, "is_slips_started_by_an_update", False
+            ),
+        )
 
         # All methods return something.
         # If you want to catch possible errors (for example implement some

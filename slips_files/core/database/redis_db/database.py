@@ -43,6 +43,7 @@ from typing import (
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 LOCALHOST = "127.0.0.1"
+VERSION = utils.get_current_version()
 
 
 class RedisDB(
@@ -154,6 +155,7 @@ class RedisDB(
         cls.flush_db = flush_db
         # start the redis server using cli if it's not started?
         cls.start_server = start_redis_server
+        cls.logger = logger
         cls.printer = Printer(logger, cls.name)
         cls.conf = ConfigParser()
         cls.args = cls.conf.get_args()
@@ -194,6 +196,15 @@ class RedisDB(
         self.call_mixins_setup()
         self._init_ttls()
         self.set_new_incoming_flows(True)
+        if (
+            self.logger
+            and not self.flush_db
+            and self.args.is_slips_started_by_an_update
+        ):
+            self.print(
+                "Continuing on previous data stored in redis.",
+                log_to_logfiles_only=True,
+            )
 
     @classmethod
     def _get_conf_file_path(cls, redis_port: Optional[int] = None) -> str:
@@ -420,16 +431,23 @@ class RedisDB(
 
     @classmethod
     def _start_redis_server(cls) -> bool:
-        cmd = (
-            f"redis-server {cls._conf_file} "
-            f"--port {cls.redis_port} "
-            f"--bind {LOCALHOST} "
-            f"--daemonize yes"
+        safe_conf_file = utils.validate_safe_path(
+            cls._conf_file, must_exist=True
         )
+        safe_port = utils.validate_port(cls.redis_port)
+        cmd = [
+            "redis-server",
+            safe_conf_file,
+            "--port",
+            str(safe_port),
+            "--bind",
+            LOCALHOST,
+            "--daemonize",
+            "yes",
+        ]
         process = subprocess.Popen(
             cmd,
             cwd=os.getcwd(),
-            shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
@@ -507,10 +525,28 @@ class RedisDB(
         self.r.ping()
         self.rcache.ping()
 
+    def _add_version_to_msg(self, msg):
+        if isinstance(msg, str):
+            try:
+                msg = json.loads(msg)
+                msg.update({"version": VERSION})
+                msg = json.dumps(msg)
+            except json.decoder.JSONDecodeError:
+                # the msg is 1 str
+                msg = {
+                    "text": msg,
+                    "version": VERSION,
+                }
+                msg = json.dumps(msg)
+        elif isinstance(msg, dict):
+            msg.update({"version": VERSION})
+        return msg
+
     def publish(self, channel, msg, pipeline=None):
         """Publish a msg in the given channel.
         adds the instructions to the given pipeline if given and returns
         the pipeline"""
+        msg = self._add_version_to_msg(msg)
 
         # keeps track of how many msgs were published in the given channel
         if pipeline is not None:
@@ -817,7 +853,7 @@ class RedisDB(
                             'uid':...,
                             'resolved-by':.. }
         If not resolved, returns {}
-        this function is called for every IP in the timeline of kalipso
+        this function is called for every IP in the timeline view
         checks for the reolution in self.constants.DNS_RESOLUTION
         """
         if ip_info := self.r.hget(self.constants.DNS_RESOLUTION, ip):
@@ -970,7 +1006,7 @@ class RedisDB(
                 ips_to_add.append(answer)
 
         # For each CNAME in the answer
-        # store it in DomainsInfo in the cache db (used for kalipso)
+        # store it in DomainsInfo in the cache db for the UI
         # and in CNAMEsInfo in the main db  (used for detecting dns
         # without resolution)
         if ips_to_add:
@@ -1734,12 +1770,12 @@ class RedisDB(
 
         # gets the db saved to dump.rdb in the cwd
         redis_db_path = os.path.join(os.getcwd(), "dump.rdb")
+        safe_backup_file = utils.validate_safe_path(backup_file)
 
         if os.path.exists(redis_db_path):
-            command = f"{self.sudo} cp {redis_db_path} {backup_file}.rdb"
-            os.system(command)
+            shutil.copy2(redis_db_path, f"{safe_backup_file}.rdb")
             os.remove(redis_db_path)
-            print(f"[Main] Database saved to {backup_file}.rdb")
+            print(f"[Main] Database saved to {safe_backup_file}.rdb")
             return True
 
         print(
@@ -1756,16 +1792,22 @@ class RedisDB(
 
         # do not use self.print here! the output queue isn't initialized yet
         def is_valid_rdb_file():
-            if not os.path.exists(backup_file):
-                print("{} doesn't exist.".format(backup_file))
+            safe_backup_file = utils.validate_safe_path(
+                backup_file, must_exist=True
+            )
+            if not os.path.exists(safe_backup_file):
+                print("{} doesn't exist.".format(safe_backup_file))
                 return False
 
             # Check if valid .rdb file
-            command = f"file {backup_file}"
-            result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+            result = subprocess.run(
+                ["file", safe_backup_file], stdout=subprocess.PIPE
+            )
             file_type = result.stdout.decode("utf-8")
             if "Redis" not in file_type:
-                print(f"{backup_file} is not a valid redis database file.")
+                print(
+                    f"{safe_backup_file} is not a valid redis database file."
+                )
                 return False
             return True
 
@@ -1773,11 +1815,14 @@ class RedisDB(
             return False
 
         try:
+            safe_backup_file = utils.validate_safe_path(
+                backup_file, must_exist=True
+            )
             RedisDB._conf_file = RedisDB._get_conf_file_path(32850)
             RedisDB._options.update(
                 {
-                    "dbfilename": os.path.basename(backup_file),
-                    "dir": os.path.dirname(backup_file),
+                    "dbfilename": os.path.basename(safe_backup_file),
+                    "dir": os.path.dirname(safe_backup_file),
                     "port": 32850,
                 }
             )

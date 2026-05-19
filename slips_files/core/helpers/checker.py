@@ -6,6 +6,7 @@ import sys
 import psutil
 
 from slips_files.common.input_type import InputType
+from slips_files.common.slips_utils import utils
 
 
 class Checker:
@@ -18,7 +19,7 @@ class Checker:
         supported input_type values are:
             interface, argus, suricata, zeek, nfdump, db
         supported input_information:
-            given filepath, interface or type of line given in stdin,
+            given filepath, interface, or type of line given in stdin,
             comma separated access point interfaces like wlan0,eth0
         """
         # only defined in stdin lines
@@ -198,9 +199,14 @@ class Checker:
             self.main.terminate_slips()
             return
 
-        if self.main.args.config and not os.path.exists(self.main.args.config):
-            print(f"{self.main.args.config} doesn't exist. Stopping Slips")
-            self.main.terminate_slips()
+        if self.main.args.config:
+            if not os.path.exists(self.main.args.config):
+                print(f"{self.main.args.config} doesn't exist. Stopping Slips")
+                self.main.terminate_slips()
+            else:
+                self.main.args.config = utils.validate_safe_path(
+                    self.main.args.config
+                )
 
         if self.main.conf.use_local_p2p() and not self.main.args.interface:
             print(
@@ -256,13 +262,16 @@ class Checker:
         redis_cache_server_pid = self.main.redis_man.get_pid_of_redis_server(
             redis_cache_default_server_port
         )
-        print("Deleting Cache DB in Redis.")
+        print(
+            f"\nDeleting the cache database in the Redis server running on "
+            f"port {redis_cache_default_server_port}."
+        )
         self.main.redis_man.clear_redis_cache_database()
         self.main.input_information = ""
-        self.main.zeek_dir = ""
         self.main.redis_man.log_redis_server_pid(
             redis_cache_default_server_port, redis_cache_server_pid
         )
+        print("Done deleting the cache database.")
         self.main.terminate_slips()
 
     def input_module_exists(self, module):

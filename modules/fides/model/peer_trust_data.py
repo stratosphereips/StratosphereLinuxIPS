@@ -3,8 +3,11 @@ from typing import Dict, List
 
 from ..model.aliases import PeerId, OrganisationId
 from ..model.peer import PeerInfo
-from ..model.recommendation_history import RecommendationHistory
-from ..model.service_history import ServiceHistory
+from ..model.recommendation_history import (
+    RecommendationHistory,
+    RecommendationHistoryRecord,
+)
+from ..model.service_history import ServiceHistory, ServiceHistoryRecord
 
 
 @dataclass
@@ -121,6 +124,7 @@ class PeerTrustData:
     # Method to create an object from a dictionary
     @classmethod
     def from_dict(cls, data):
+        """Create a PeerTrustData instance from a dictionary payload."""
         return cls(
             info=PeerInfo.from_dict(
                 data["info"]
@@ -135,14 +139,13 @@ class PeerTrustData:
                 "initial_reputation_provided_by_count"
             ],
             service_history=[
-                ServiceHistory.from_dict(sh) for sh in data["service_history"]
+                ServiceHistoryRecord.from_dict(sh)
+                for sh in data["service_history"]
             ],
-            # Assuming ServiceHistory has from_dict
             recommendation_history=[
-                RecommendationHistory.from_dict(rh)
+                RecommendationHistoryRecord.from_dict(rh)
                 for rh in data["recommendation_history"]
             ],
-            # Assuming RecommendationHistory has from_dict
         )
 
 

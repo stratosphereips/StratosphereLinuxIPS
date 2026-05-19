@@ -14,10 +14,10 @@ class ArgumentParser(argparse.ArgumentParser):
         super(ArgumentParser, self).__init__(*args, **kwargs)
         self.program = {key: kwargs[key] for key in kwargs}
 
-        self.alerts_default_path = "output/"
-
     def add_argument(self, *args, **kwargs):
         super(ArgumentParser, self).add_argument(*args, **kwargs)
+        if kwargs.get("help") == argparse.SUPPRESS:
+            return
         option = {"flags": list(args)}
         for key in kwargs:
             option[key] = kwargs[key]
@@ -209,8 +209,7 @@ class ArgumentParser(argparse.ArgumentParser):
             action="store",
             metavar="<dir>",
             required=False,
-            default=self.alerts_default_path,
-            help="Store alerts.json and alerts.txt in the given folder.",
+            help="Store Slips logs in the given folder.",
         )
         self.add_argument(
             "-s",
@@ -255,7 +254,9 @@ class ArgumentParser(argparse.ArgumentParser):
             "--multiinstance",
             action="store_true",
             required=False,
-            help="Run multiple instances of slips, don't overwrite the old one",
+            help="Run multiple instances of slips, don't overwrite the old "
+            "one. This option run redis using a random unused port "
+            "instead of the default one (6379).",
         )
         self.add_argument(
             "-P",
@@ -307,6 +308,14 @@ class ArgumentParser(argparse.ArgumentParser):
             "--no-recurse",
             action="store_true",
             help="Internal use only, prevents infinite recursion for cpu profiler dev mode multiprocess tracking",
+        )
+        # Internal flag used when Slips starts a newer version of itself.
+        self.add_argument(
+            "-u",
+            dest="is_slips_started_by_an_update",
+            action="store_true",
+            default=False,
+            help=argparse.SUPPRESS,
         )
         try:
             self.add_argument(

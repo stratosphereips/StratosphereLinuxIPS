@@ -19,6 +19,8 @@ import psutil
 import random
 from abc import ABCMeta
 
+from slips_files.common.slips_utils import utils
+
 
 class MemoryProfiler(IPerformanceProfiler):
     profiler = None
@@ -76,8 +78,12 @@ class DevProfiler(IPerformanceProfiler):
         print(
             colored("Converting memory profile bin files to html...", "green")
         )
-        output_files = glob.glob(self.output + "*")
-        directory = os.path.dirname(self.output)
+        safe_output = utils.validate_safe_path(self.output)
+        output_files = [
+            utils.validate_safe_path(file, must_exist=True)
+            for file in glob.glob(safe_output + "*")
+        ]
+        directory = os.path.dirname(safe_output)
         flamegraph_dir = directory + "/flamegraph/"
         if not os.path.exists(flamegraph_dir):
             os.makedirs(flamegraph_dir)
@@ -138,14 +144,15 @@ class LiveSingleProcessProfiler(IPerformanceProfiler):
         self.profiler = self._create_profiler()
 
     def _create_profiler(self):
-        print("Memory profiling running on port " + str(self.port))
+        safe_port = utils.validate_port(self.port)
+        print("Memory profiling running on port " + str(safe_port))
         print("Connect to continue")
         with open(os.devnull, "w") as devnull:
             subprocess.Popen(
-                ["memray", "live", str(self.port)], stdout=devnull
+                ["memray", "live", str(safe_port)], stdout=devnull
             )
         dest = memray.SocketDestination(
-            server_port=self.port, address="127.0.0.1"
+            server_port=safe_port, address="127.0.0.1"
         )
         return memray.Tracker(destination=dest)
 
@@ -214,7 +221,7 @@ class LiveMultiprocessProfiler(IPerformanceProfiler):
                 # print(f"Msg {msg}")
                 pid: int = None
                 try:
-                    pid = int(msg["data"])
+                    pid = int(utils.get_msg_payload(msg))
                 except ValueError:
                     msg = self.pid_channel.get_message(timeout=timeout)
                     continue

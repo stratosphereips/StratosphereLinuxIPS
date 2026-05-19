@@ -21,29 +21,37 @@ def test_handle_pcap_input(tmp_path, input_type, input_information):
     input_process = ModuleFactory().create_input_obj(
         input_information, input_type
     )
-    input_process.zeek_dir = tmp_path
     handler = input_process.input_handlers[input_type]
     input_process.is_running_non_stop = False
     handler.file_remover.start = Mock()
-    # Mock attributes and methods used inside the function
-    input_process.zeek_utils.ensure_zeek_dir = Mock()
-    input_process.zeek_utils.init_zeek = Mock()
+    input_process.zeek_utils.create_zeek_output_dir = Mock(
+        return_value=str(tmp_path)
+    )
+    input_process.zeek_utils.init_zeek_and_start_the_zeek_thread = Mock()
     input_process.zeek_utils.read_zeek_files = Mock(return_value=7)
 
     assert handler.run() is True
 
-    # Assert that the expected methods were called
-    input_process.zeek_utils.ensure_zeek_dir.assert_called_once()
-    input_process.zeek_utils.init_zeek.assert_called_once_with(
-        handler.observer, input_process.zeek_dir, input_process.given_path
+    input_process.zeek_utils.create_zeek_output_dir.assert_called_once()
+    input_process.zeek_utils.init_zeek_and_start_the_zeek_thread.assert_called_once_with(
+        handler.observer, str(tmp_path), input_process.given_path
     )
     input_process.zeek_utils.read_zeek_files.assert_called_once()
     handler.file_remover.start.assert_not_called()
     assert input_process.lines == 7
 
-    # Clean up any directories created (safe guard)
-    if os.path.exists(input_process.zeek_dir):
-        shutil.rmtree(input_process.zeek_dir, ignore_errors=True)
+
+def test_main_publishes_stop_when_handler_returns_false():
+    input_process = ModuleFactory().create_input_obj("", InputType.INTERFACE)
+    input_process.db.publish_stop = Mock()
+    input_process.input_handlers[InputType.INTERFACE].run = Mock(
+        return_value=False
+    )
+
+    assert input_process.main() is False
+
+    input_process.is_input_failed_event.set.assert_called_once_with()
+    input_process.db.publish_stop.assert_called_once_with()
 
 
 @pytest.mark.parametrize(
@@ -224,7 +232,7 @@ def test_reached_timeout(
 @pytest.mark.skipif(
     "nfdump" not in shutil.which("nfdump"), reason="nfdump is not installed"
 )
-@pytest.mark.parametrize("path", ["dataset/test1-normal.nfdump"])
+@pytest.mark.parametrize("path", ["dataset/test1-malicious.nfdump"])
 def test_handle_nfdump(path):
     input = ModuleFactory().create_input_obj(path, InputType.NFDUMP)
     handler = input.input_handlers[InputType.NFDUMP]
@@ -533,17 +541,23 @@ def test_get_file_handle_non_existing_file():
     assert file_handle is False
 
 
-def test_ensure_zeek_dir_creates_dir(tmp_path):
-    """Test that ensure_zeek_dir creates the directory if missing."""
+def test_create_zeek_output_dir_creates_dir(tmp_path):
+    """Test that create_zeek_output_dir creates the directory if missing."""
     input_process = ModuleFactory().create_input_obj(
         "", InputType.ZEEK_LOG_FILE
     )
-    zeek_dir = tmp_path / "zeek_logs"
-    input_process.zeek_dir = str(zeek_dir)
+    input_process.given_path = str(tmp_path / "capture.pcap")
+    input_process.args.output = str(tmp_path / "output")
+    input_process.zeek_utils.is_running_non_stop = False
+    input_process.conf.store_zeek_files_in_the_output_dir.return_value = True
 
-    assert not os.path.exists(input_process.zeek_dir)
-    input_process.zeek_utils.ensure_zeek_dir()
-    assert os.path.exists(input_process.zeek_dir)
+    zeek_dir = input_process.zeek_utils.create_zeek_output_dir()
+
+    assert zeek_dir == os.path.join(input_process.args.output, "zeek_files")
+    assert os.path.exists(zeek_dir)
+    input_process.db.set_input_metadata.assert_called_once_with(
+        {"zeek_dir": zeek_dir}
+    )
 
 
 def test_check_if_time_to_del_rotated_files_deletes_old_files():

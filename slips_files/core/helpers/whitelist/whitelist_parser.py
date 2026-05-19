@@ -221,12 +221,12 @@ class WhitelistParser:
         if org not in utils.supported_orgs:
             return
 
-        # Each file is named after the organization's name
-        org_info_file = os.path.join(self.org_info_path, org)
+        org_info_file = os.path.join(self.org_info_path, f"{org}_ip_ranges")
         try:
             org_info = open(org_info_file)
         except (FileNotFoundError, IOError):
-            # there's no slips_files/organizations_info/{org} for this org
+            # there's no slips_files/organizations_info/{org}_ip_ranges
+            # for this org
             return
 
         org_subnets = {}

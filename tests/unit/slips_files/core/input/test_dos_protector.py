@@ -70,6 +70,7 @@ def test_get_number_of_flows_to_skip_updates_sampling_window_and_prints():
     protector, input_process, _ = make_protector(
         is_running_non_stop=True, flows_per_second=50
     )
+    protector.flows_per_min_threshold = 2000
     protector.sampling_time_window = 60
 
     with (
@@ -82,10 +83,7 @@ def test_get_number_of_flows_to_skip_updates_sampling_window_and_prints():
             return_value="formatted-ts",
         ),
     ):
-        assert (
-            protector.get_number_of_flows_to_skip_and_time_to_stop_sampling()
-            == 449
-        )
+        assert protector.get_number_of_flows_to_skip() == 449
 
     assert protector.flow_sampling_stop_time == 160
     assert protector._is_now_sampling is True

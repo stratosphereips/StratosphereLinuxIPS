@@ -7,9 +7,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Blocking module requirement to avoid using
 ENV IS_IN_A_DOCKER_CONTAINER=True
 
-ENV NODE_VERSION=22.5.0
-ENV NVM_DIR=/root/.nvm
-
 # use bash instead of sh
 SHELL ["/bin/bash", "-c"]
 

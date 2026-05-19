@@ -1075,7 +1075,7 @@ to one of the above alerts, slips does not detect it assuming it's a false posit
 internally by slips.
 
 
-You can change this behaviour by updating ```config/whitelist.conf```.
+You can change this behaviour by copying ```config/whitelist.conf```, updating the copy, and pointing ```whitelists.local_whitelist_path``` in your copied ```slips.yaml``` file to that copied whitelist.
 
 ## Ensembling
 

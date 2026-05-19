@@ -27,7 +27,11 @@ class Database(object):
 
     def set_db(self, port):
         """changes the redis db we're connected to"""
-        self.db = self.get_db_manager_obj(port)
+        new_db = self.get_db_manager_obj(port)
+        if new_db is None:
+            return False
+        self.db = new_db
+        return True
 
     def get_db_manager_obj(self, port: int = False) -> Optional[DBManager]:
         """
@@ -74,4 +78,4 @@ db: DBManager = db_obj.db
 def update_db(port):
     """is called when the user changes the used redis server from the web
     interface"""
-    db_obj.set_db(port)
+    return db_obj.set_db(port)

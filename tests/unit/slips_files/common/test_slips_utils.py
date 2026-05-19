@@ -27,6 +27,28 @@ def test_get_sha256_hash_from_nonexistent_file():
         utils.get_sha256_hash_of_file_contents("nonexistent_file.txt")
 
 
+def test_initialize_logfile_creates_file(tmp_path):
+    utils = ModuleFactory().create_utils_obj()
+    logfile = tmp_path / "logs" / "module.log"
+
+    initialized = utils.initialize_logfile(str(logfile), False)
+
+    assert initialized is True
+    assert logfile.exists()
+    assert logfile.read_text() == ""
+
+
+def test_initialize_logfile_skips_file_when_started_by_update(tmp_path):
+    utils = ModuleFactory().create_utils_obj()
+    logfile = tmp_path / "module.log"
+    logfile.write_text("existing\n")
+
+    initialized = utils.initialize_logfile(str(logfile), True)
+
+    assert initialized is False
+    assert logfile.read_text() == "existing\n"
+
+
 @pytest.mark.parametrize(
     "filepath, expected_result",
     [  # Testcase 1: Supported file
@@ -66,6 +88,29 @@ def test_get_sha256_hash_permission_error():
 
 
 @pytest.mark.parametrize(
+    "message, expected_payload",
+    [
+        ({"data": "plain-text"}, "plain-text"),
+        (
+            {"data": json.dumps({"text": "stop_slips", "version": "1.0"})},
+            "stop_slips",
+        ),
+        (
+            {
+                "data": json.dumps(
+                    {"flow": {"uid": "abc"}, "profileid": "profile_1"}
+                )
+            },
+            {"flow": {"uid": "abc"}, "profileid": "profile_1"},
+        ),
+    ],
+)
+def test_get_msg_payload(message, expected_payload):
+    utils = ModuleFactory().create_utils_obj()
+    assert utils.get_msg_payload(message) == expected_payload
+
+
+@pytest.mark.parametrize(
     "input_string, expected_output",
     [  # Testcase1: special chars
         ("Hello;world`& |$(this", "Helloworld this"),
@@ -82,6 +127,61 @@ def test_get_sha256_hash_permission_error():
 def test_sanitize(input_string, expected_output):
     utils = ModuleFactory().create_utils_obj()
     assert utils.sanitize(input_string) == expected_output
+
+
+def test_validate_safe_path_returns_normalized_path(tmp_path):
+    utils = ModuleFactory().create_utils_obj()
+    path = tmp_path / "nested" / ".." / "safe.txt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("data", encoding="utf-8")
+
+    assert utils.validate_safe_path(str(path), must_exist=True) == str(
+        path.resolve()
+    )
+
+
+@pytest.mark.parametrize("path", ["bad;path", "bad\npath", ""])
+def test_validate_safe_path_rejects_unsafe_values(path):
+    utils = ModuleFactory().create_utils_obj()
+
+    with pytest.raises(ValueError):
+        utils.validate_safe_path(path)
+
+
+@pytest.mark.parametrize("port, expected", [("5000", 5000), (6379, 6379)])
+def test_validate_port_returns_int(port, expected):
+    utils = ModuleFactory().create_utils_obj()
+
+    assert utils.validate_port(port) == expected
+
+
+@pytest.mark.parametrize("port", [0, -1, 65536, "not-a-port"])
+def test_validate_port_rejects_invalid_values(port):
+    utils = ModuleFactory().create_utils_obj()
+
+    with pytest.raises((TypeError, ValueError)):
+        utils.validate_port(port)
+
+
+def test_get_ip_identification_as_str_skips_timestamp():
+    utils = ModuleFactory().create_utils_obj()
+    ip_identification = {
+        "DNS_resolution": ["example.com"],
+        "SNI": "service.example.com",
+        "13.0.0.0/8": {
+            "AS": "Example ASN",
+            "timestamp": 1775911069.6800127,
+        },
+        "timestamp": 1775911069.6800127,
+    }
+
+    result = utils.get_ip_identification_as_str(ip_identification)
+
+    assert result == (
+        "example.com, SNI: service.example.com, 13.0.0.0/8: "
+        "AS: Example ASN, , "
+    )
+    assert "timestamp" not in result
 
 
 @pytest.mark.parametrize(
@@ -165,6 +265,22 @@ def test_get_first_octet(ip_address, expected_first_octet):
 def test_calculate_confidence(input_value, expected_output):
     utils = ModuleFactory().create_utils_obj()
     assert utils.calculate_confidence(input_value) == expected_output
+
+
+@pytest.mark.parametrize(
+    "score, expected_output",
+    [
+        (0.80, "High"),
+        (0.95, "High"),
+        (0.55, "Medium"),
+        (0.79, "Medium"),
+        (0.54, "low"),
+        (0.0, "low"),
+    ],
+)
+def test_evidence_confidence_to_string(score, expected_output):
+    utils = ModuleFactory().create_utils_obj()
+    assert utils.evidence_confidence_to_string(score) == expected_output
 
 
 @pytest.mark.parametrize(

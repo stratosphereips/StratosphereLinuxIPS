@@ -1,0 +1,26 @@
+[
+  {
+    "version": "1.1.20",
+    "release_date": "2026-04-30T14:39:56+03:00",
+    "backwards_compatible": true,
+    "has_new_dependencies": false,
+    "branch": "master",
+    "channel": "stable"
+  },
+  {
+    "version": "1.1.20",
+    "release_date": "2026-04-30T14:39:56+03:00",
+    "backwards_compatible": true,
+    "has_new_dependencies": false,
+    "branch": "develop",
+    "channel": "unstable"
+  },
+  {
+    "version": "1.1.19",
+    "release_date": "2026-04-30T14:39:56+03:00",
+    "backwards_compatible": true,
+    "has_new_dependencies": false,
+    "branch": "feature/your_branch_here",
+    "channel": "testing"
+  }
+]

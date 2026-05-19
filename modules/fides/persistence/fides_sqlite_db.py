@@ -6,6 +6,7 @@ Python has None, SQLite has NULL, conversion is automatic in both ways.
 
 import os
 import sqlite3
+from pathlib import Path
 from typing import List, Any, Optional
 
 from slips_files.core.output import Output
@@ -21,6 +22,38 @@ import threading
 class FidesSQLiteDB:
     _lock = threading.RLock()
     name = "fides_sqlite_db"
+    _allowed_table_columns = {
+        "Organisation": frozenset({"organisationID"}),
+        "PeerInfo": frozenset({"peerID", "ip"}),
+        "PeerOrganisation": frozenset({"peerID", "organisationID"}),
+        "PeerTrustData": frozenset(
+            {
+                "peerID",
+                "has_fixed_trust",
+                "service_trust",
+                "reputation",
+                "recommendation_trust",
+                "competence_belief",
+                "integrity_belief",
+                "initial_reputation_provided_by_count",
+            }
+        ),
+        "PeerTrustRecommendationHistory": frozenset(
+            {"peer_trust_data_id", "recommendation_history_id"}
+        ),
+        "PeerTrustServiceHistory": frozenset(
+            {"peer_trust_data_id", "service_history_id"}
+        ),
+        "RecommendationHistory": frozenset(
+            {"peerID", "satisfaction", "weight", "recommend_time"}
+        ),
+        "ServiceHistory": frozenset(
+            {"peerID", "satisfaction", "weight", "service_time"}
+        ),
+        "ThreatIntelligence": frozenset(
+            {"target", "score", "confidence", "confidentiality"}
+        ),
+    }
 
     def __init__(self, logger: Output, db_path: str) -> None:
         """
@@ -31,12 +64,22 @@ class FidesSQLiteDB:
         """
         self.logger = logger
         self.db_path = db_path
-        with open(self.db_path, "a") as f:
-            f.close()
-        sqlite3.connect(self.db_path).close()
+        if not self.__is_in_memory_database():
+            Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+            with open(self.db_path, "a") as f:
+                f.close()
+            sqlite3.connect(self.db_path).close()
         self.connection: Optional[sqlite3.Connection] = None
         self.__connect()
         self.__create_tables()
+
+    def __is_in_memory_database(self) -> bool:
+        """
+        Determines whether the configured database path targets SQLite memory storage.
+
+        :return: True when the database should live only in memory, otherwise False.
+        """
+        return self.db_path == ":memory:"
 
     def __slips_log(self, txt: str) -> None:
         self.logger.output_line_to_cli_and_logfiles(
@@ -564,9 +607,18 @@ class FidesSQLiteDB:
         :param data: A dictionary where the keys are column names, and values are the values to be saved.
         :return: None
         """
+        allowed_columns = self.__get_allowed_columns(table)
+        invalid_columns = set(data.keys()) - allowed_columns
+        if invalid_columns:
+            raise ValueError(
+                f"Invalid columns for table {table}: {sorted(invalid_columns)}"
+            )
         columns = ", ".join(data.keys())
         placeholders = ", ".join("?" * len(data))
-        query = f"INSERT OR REPLACE INTO {table} ({columns}) VALUES ({placeholders})"
+        query = (
+            f"INSERT OR REPLACE INTO {table} ({columns}) "
+            f"VALUES ({placeholders})"
+        )
         self.__slips_log(f"Saving data: {data} into table: {table}")
         self.__execute_query(query, list(data.values()))
 
@@ -581,9 +633,22 @@ class FidesSQLiteDB:
         :param params: Optional list of parameters for parameterized queries.
         :return: None
         """
+        self.__get_allowed_columns(table)
         query = f"DELETE FROM {table} WHERE {condition}"
         self.__slips_log(f"Deleting from table: {table} where {condition}")
         self.__execute_query(query, params)
+
+    def __get_allowed_columns(self, table: str) -> frozenset[str]:
+        """
+        Return the allowed column set for a known internal table.
+
+        :param table: Table name to validate.
+        :return: Allowed columns for the given table.
+        """
+        try:
+            return self._allowed_table_columns[table]
+        except KeyError as error:
+            raise ValueError(f"Invalid Fides table name: {table}") from error
 
     def close(self) -> None:
         """

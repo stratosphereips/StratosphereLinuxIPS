@@ -3,7 +3,6 @@
 class Constants:
     LOADED_TI_FILES = "loaded_TI_files_number"
     TI_FILES_INFO = "TI_files_info"
-    CURRENT_TIMEWINDOW = "current_timewindow"
     # all keys starting with IoC_* are used for storing IoCs read from
     # online and offline TI feeds
     IOC_IPS = "IoC_ips"
@@ -16,7 +15,7 @@ class Constants:
     LABELED_AS_MALICIOUS = "labeled_as_malicious"
     # used to cache url info by the virustotal module only
     VT_CACHED_URL_INFO = "virustotal_cached_url_info"
-    # used for Kalipso
+    # used by the UI
     DOMAINS_INFO = "DomainsInfo"
     IPS_INFO = "IPsInfo"
     PROCESSED_FLOWS_BY_PROFILER = "processed_flows_by_profiler_so_far"
@@ -27,7 +26,7 @@ class Constants:
     WHITELISTED_EVIDENCE = "whitelisted_evidence"
     SRCIPS_SEEN_IN_CONN_LOG = "srcips_seen_in_connlog"
     PASSIVE_DNS = "passiveDNS"
-    # called for every ip in kalipso timeline
+    # called for every IP in the timeline view
     DNS_RESOLUTION = "DNSresolution"
     DOMAINS_RESOLVED = "DomainsResolved"
     CACHED_ASN = "cached_asn"

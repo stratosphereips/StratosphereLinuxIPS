@@ -53,8 +53,11 @@ class FidesModule(IModule):
 
         # load trust model configuration
         current_dir = Path(__file__).resolve().parent
-        config_path = current_dir / "config" / "fides.conf.yml"
-        self.__trust_model_config = load_configuration(config_path.__str__())
+        default_config_path = current_dir / "config" / "fides.conf.yml"
+        config_path = self.conf.read_configuration(
+            "global_p2p", "fides_conf", str(default_config_path)
+        )
+        self.__trust_model_config = load_configuration(config_path)
 
         # prepare variables for global protocols
         self.__bridge: NetworkBridge
@@ -221,7 +224,7 @@ class FidesModule(IModule):
             if not msg["data"]:
                 return
 
-            ip = msg["data"]
+            ip = utils.get_msg_payload(msg)
 
             if utils.detect_ioc_type(ip) != "ip":
                 return
@@ -231,6 +234,6 @@ class FidesModule(IModule):
             self.__intelligence.request_data(ip)
 
         # TODO: the code below exists for testing purposes for
-        #  tests/integration_tests/test_fides.py
+        #  tests/integration/test_fides/test_fides.py
         if msg := self.get_msg("fides2network"):
             pass

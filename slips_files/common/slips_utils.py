@@ -18,6 +18,7 @@ import requests
 import json
 import platform
 import os
+import subprocess
 import sys
 import ipaddress
 import aid_hash
@@ -65,7 +66,6 @@ class Utils(object):
         }
         # why are we not using /var/lock? bc we need it to be r/w/x by
         # everyone
-        self.slips_locks_dir = "/tmp/slips"
         self.time_formats = (
             "%Y-%m-%dT%H:%M:%S.%f%z",
             "%Y-%m-%d %H:%M:%S.%f",
@@ -134,6 +134,20 @@ class Utils(object):
                 return str_lvl
 
     @staticmethod
+    def evidence_confidence_to_string(score: float) -> str:
+        """
+        Convert an evidence confidence score to a string label.
+
+        :param score: Evidence confidence score between 0 and 1.
+        :return: "high", "medium", or "low" based on the score.
+        """
+        if score >= 0.80:
+            return "High"
+        if score >= 0.55:
+            return "Medium"
+        return "low"
+
+    @staticmethod
     def log10(n: int) -> int:
         if n <= 0:
             return 0
@@ -188,6 +202,50 @@ class Utils(object):
         sanitized_string = input_string.translate(remove_characters)
 
         return sanitized_string
+
+    @staticmethod
+    def validate_safe_path(path: str, must_exist: bool = False) -> str:
+        """
+        Validate that a filesystem path is safe to pass as a command argument.
+
+        Parameters:
+        path: Path value to validate.
+        must_exist: Whether the path must already exist on disk.
+
+        Return:
+        The normalized path string.
+        """
+        if path is None:
+            raise ValueError("Path cannot be None.")
+
+        stripped_path = str(path).strip()
+        if not stripped_path:
+            raise ValueError("Path cannot be empty.")
+        normalized_path = os.path.normpath(stripped_path)
+
+        if Utils.sanitize(normalized_path) != normalized_path:
+            raise ValueError(f"Unsafe path argument: {path}")
+
+        if must_exist and not os.path.exists(normalized_path):
+            raise ValueError(f"Path does not exist: {normalized_path}")
+
+        return normalized_path
+
+    @staticmethod
+    def validate_port(port: Any) -> int:
+        """
+        Validate that a value is a TCP/UDP port number.
+
+        Parameters:
+        port: Port value to validate.
+
+        Return:
+        The validated port as an integer.
+        """
+        port = int(port)
+        if not 1 <= port <= 65535:
+            raise ValueError(f"Invalid port: {port}")
+        return port
 
     def to_dict(self, obj):
         """
@@ -637,7 +695,7 @@ class Utils(object):
         returns either an IPv4 or IPv6 address as a string, or None if unavailable
         """
         try:
-            response = requests.get("http://ipinfo.io/json", timeout=5)
+            response = requests.get("https://ipinfo.io/json", timeout=5)
             if response.status_code == 200:
                 data = json.loads(response.text)
                 if "ip" in data:
@@ -784,6 +842,36 @@ class Utils(object):
             and message["channel"] == channel
         )
 
+    def get_msg_payload(self, message: dict) -> Any:
+        """
+        Return the actual payload stored in the given message. discards
+        metadata like "version" and returns the text only.
+
+        Parameters:
+        message: Pub/sub message returned by Redis.
+
+        Return:
+        The decoded payload. Wrapped plain-string messages return their text.
+        """
+        data = message["data"]
+        if not isinstance(data, str):
+            return data
+
+        try:
+            decoded = json.loads(data)
+        except (json.decoder.JSONDecodeError, TypeError):
+            return data
+
+        if (
+            isinstance(decoded, dict)
+            and "text" in decoded
+            and "version" in decoded
+            and len(decoded) == 2
+        ):
+            return decoded["text"]
+
+        return decoded
+
     def get_slips_version(self) -> str:
         version_file = "VERSION"
         with open(version_file, "r") as f:
@@ -803,7 +891,40 @@ class Utils(object):
             # they should be anything other than 0
             return
 
-        os.system(f"chown {UID}:{GID} {file}")
+        safe_file = self.validate_safe_path(file, must_exist=True)
+        safe_uid = int(UID)
+        safe_gid = int(GID)
+        subprocess.run(
+            ["chown", f"{safe_uid}:{safe_gid}", safe_file], check=True
+        )
+
+    def initialize_logfile(
+        self,
+        logfile_path: str,
+        started_by_update: bool,
+        mode: str = "w",
+        create_parent_dirs: bool = True,
+    ) -> bool:
+        """
+        Initialize a log file unless Slips was started by an update.
+        when slips is being updated , we dont want the new version to clear
+        the used logfiles, instead it will append to them
+
+        :param logfile_path: path to the log file to initialize.
+        :param started_by_update: whether Slips was started by an update.
+        :param mode: file mode used to initialize the log file.
+        :param create_parent_dirs: whether to create missing parent dirs.
+        :return: True if the file was initialized, False otherwise.
+        """
+        if started_by_update:
+            return False
+
+        logfile_dir = os.path.dirname(logfile_path)
+        if create_parent_dirs and logfile_dir:
+            os.makedirs(logfile_dir, exist_ok=True)
+        # clear the logfile
+        open(logfile_path, mode).close()
+        return True
 
     def get_ip_identification_as_str(self, ip_identification: dict) -> str:
         id = ""
@@ -814,6 +935,9 @@ class Utils(object):
             ip_identification.pop("DNS_resolution")
 
         for key, piece_of_info in ip_identification.items():
+            if key == "timestamp":
+                continue
+
             if not piece_of_info:
                 continue
 
@@ -919,6 +1043,11 @@ class Utils(object):
             # 6 is the decimals we need after the . in the unix ts
             ts = ts + "0" * (6 - len(ts.split(".")[-1]))
         return ts
+
+    def get_current_version(self) -> str:
+        with open("VERSION", "r") as version_file:
+            current_version = version_file.read().strip()
+        return current_version
 
     def _convert_str_port_to_int(self, port) -> int:
         if isinstance(port, str):

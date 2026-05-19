@@ -25,7 +25,11 @@ To be able to use the fides module, you should use ```--cap-add=NET_ADMIN```
 If you plan on using the Fides Module, please be aware that it is used only if Slips is running on an interface OR on a growing Zeek directory. The `--use_fides=True` is ignored when Slips is run on a file.
 
 ## Configuration
-The evaluation model used, the evaluation thresholds, and other configurations are located in ```fides.conf.yml``` file
+The evaluation model used, the evaluation thresholds, and other configurations are located in ```modules/fides/config/fides.conf.yml```.
+
+If you need a Slips run to use a different Fides configuration file, set
+```global_p2p.fides_conf``` in Slips config to the relative path
+of that alternate YAML file.
 
 **Possible threat intelligence evaluation models**
 

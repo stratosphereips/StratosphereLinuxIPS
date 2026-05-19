@@ -93,7 +93,7 @@ class RiskIQ(IModule):
 
     def main(self):
         if msg := self.get_msg("new_ip"):
-            ip = msg["data"]
+            ip = utils.get_msg_payload(msg)
             if utils.is_ignored_ip(ip):
                 # return here means keep looping
                 return

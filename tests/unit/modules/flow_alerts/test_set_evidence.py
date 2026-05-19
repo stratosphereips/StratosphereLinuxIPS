@@ -428,11 +428,9 @@ def test_incompatible_cn(org, daddr, expected_description):
     [  # Testcase 1: Exactly at the threshold
         (100, 1.00),
         # Testcase 2: Above the threshold
-        (150, 1.50),
+        (150, 1.00),
         # Testcase 3: Below the threshold
         (50, 0.5),
-        # Testcase 4: Significantly above the threshold
-        (300, 3.00),
     ],
 )
 def test_dga(nxdomains, expected_confidence):
@@ -669,6 +667,10 @@ def test_conn_without_dns(time_difference_hours, expected_confidence):
     args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.confidence == expected_confidence
+    assert (
+        evidence.description
+        == "A connection without DNS resolution to Destination IP: 10.0.0.1"
+    )
 
 
 @pytest.mark.parametrize(

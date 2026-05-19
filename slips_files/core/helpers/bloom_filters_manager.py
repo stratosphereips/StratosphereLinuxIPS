@@ -37,6 +37,25 @@ class BFManager:
         self._init_whitelisted_iocs_bf()
         self._init_whitelisted_orgs_bf()
 
+    def _create_bloom_filter(self, items, error_rate: float) -> BloomFilter:
+        """
+        Create a bloom filter sized for the provided items.
+
+        Parameters:
+            items: Iterable of values to store in the bloom filter.
+            error_rate: Desired bloom filter false-positive rate.
+
+        Returns:
+            BloomFilter populated with the given items.
+        """
+        unique_items = tuple(dict.fromkeys(items))
+        bloom = BloomFilter(
+            capacity=max(len(unique_items), 1), error_rate=error_rate
+        )
+        for item in unique_items:
+            bloom.add(item)
+        return bloom
+
     def _init_whitelisted_iocs_bf(self):
         self.domains = BloomFilter(capacity=10000, error_rate=0.001)
         self.ips = BloomFilter(capacity=10000, error_rate=0.001)
@@ -60,31 +79,21 @@ class BFManager:
         Updates the bloom filters with the whitelisted organization
         domains, asns, and ips
         fills the self.org_filters dict
-        is called from update_manager whether slips did update its local
+        is called from feeds_update_manager whether slips did update its local
         org files or not.
         this goal of calling this is to make sure slips has the bloom
         filters in mem at all times.
         """
         err_rate = 0.01
         for org in utils.supported_orgs:
-            domains_bloom = BloomFilter(capacity=10000, error_rate=err_rate)
-            asns_bloom = BloomFilter(capacity=10000, error_rate=err_rate)
-            cidrs_bloom = BloomFilter(capacity=100, error_rate=err_rate)
-
             domains: List[str] = self.db.get_org_info(org, "domains")
-            _ = [domains_bloom.add(domain) for domain in domains]
-
             asns: List[str] = self.db.get_org_info(org, "asn")
-            _ = [asns_bloom.add(asn) for asn in asns]
-
             org_subnets: Dict[str, str] = self.db.get_org_ips(org)
-            _ = [
-                cidrs_bloom.add(first_octet)
-                for first_octet in org_subnets.keys()
-            ]
 
             self.org_filters[org] = {
-                "domains": domains_bloom,
-                "asns": asns_bloom,
-                "first_octets": cidrs_bloom,
+                "domains": self._create_bloom_filter(domains, err_rate),
+                "asns": self._create_bloom_filter(asns, err_rate),
+                "first_octets": self._create_bloom_filter(
+                    org_subnets.keys(), err_rate
+                ),
             }

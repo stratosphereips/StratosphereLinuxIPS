@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import logging
+import shutil
 import subprocess
 import time
 from threading import Lock
@@ -30,6 +31,8 @@ class ARPPoisoner(IModule):
     authors = ["Alya Gomaa"]
 
     def init(self):
+        self.arp_scan_path = shutil.which("arp-scan")
+        self.arp_scan_bin_available = self.arp_scan_path is not None
         self._time_since_last_repoison = {}
         self._time_since_last_internet_cut = {}
         self.log_file_path = self.get_module_specific_output_path(
@@ -37,10 +40,10 @@ class ARPPoisoner(IModule):
         )
         self.blocking_logfile_lock = Lock()
         # clear it
-        try:
-            open(self.log_file_path, "w").close()
-        except FileNotFoundError:
-            pass
+        utils.initialize_logfile(
+            self.log_file_path,
+            getattr(self.args, "is_slips_started_by_an_update", False),
+        )
         self.unblocker = ARPUnblocker(
             self.db, self.should_stop, self.logger, self.log
         )
@@ -56,12 +59,31 @@ class ARPPoisoner(IModule):
         self.ip_interface_map = {}
 
     def subscribe_to_channels(self):
+        if not self.arp_scan_bin_available:
+            self.channels = {}
+            return
         self.c1 = self.db.subscribe("new_blocking")
         self.c2 = self.db.subscribe("tw_closed")
         self.channels = {
             "new_blocking": self.c1,
             "tw_closed": self.c2,
         }
+
+    def pre_main(self) -> bool:
+        """
+        Stop the module before entering the main loop when arp-scan is
+        unavailable.
+
+        :return: True when the module should shut down, otherwise False.
+        """
+        if self.arp_scan_bin_available:
+            return False
+
+        self.print(
+            "The arp-scan tool is not installed. ARP poisoner module is "
+            "stopping.",
+        )
+        return True
 
     def log(self, text):
         """Logs the given text to the blocking log file"""
@@ -177,9 +199,20 @@ class ARPPoisoner(IModule):
         # we are explicitly giving arp-scan the ip to avoid giving docker
         # RAW_SOCKET permissions for arp-scan to be able to auto detect the ip
         host_ip = self.db.get_host_ip(interface)
+        # sanitize host ip
+        if not ipaddress.ip_address(host_ip):
+            self.print(
+                f"arp-scan failed: {host_ip} is not a valid IP."
+                f"Using the last cached scan output.",
+                0,
+                1,
+            )
+            return self.last_arp_scan_output
+
+        sanitized_interface = utils.sanitize(interface)
         cmd = [
             "arp-scan",
-            f"--interface={interface}",
+            f"--interface={sanitized_interface}",
             "--localnet",
             f"--arpspa={host_ip}",
         ]
@@ -414,7 +447,7 @@ class ARPPoisoner(IModule):
             # if slips saw 3 ips, this channel will receive 3 msgs with tw1
             # as closed. we're not interested in the ips, we just wanna
             # know when slips advances to the next tw.
-            profileid_tw = msg["data"].split("_")
+            profileid_tw = utils.get_msg_payload(msg).split("_")
             twid = profileid_tw[-1]
             if self.last_closed_tw != twid:
                 self.last_closed_tw = twid

@@ -24,6 +24,7 @@ from managers.ui_manager import UIManager
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_paths import get_performance_plots_dir
 from slips_files.common.printer import Printer
+from slips_files.common.sqlite_flock import SQLiteFlock
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green, yellow
 from slips_files.common.input_type import InputType
@@ -40,7 +41,7 @@ DAEMONIZED_MODE = "daemonized"
 class Main:
     def __init__(self, testing=False):
         self.name = "main"
-        self.alerts_default_path = "output/"
+        self.parent_output_dir = "output/"
         self.mode = "interactive"
         self.sigterm_received = False
         # objects to manage various functionality
@@ -73,12 +74,17 @@ class Main:
                     self.input_information,
                     self.line_type,
                 ) = self.checker.get_input_type()
+                self.input_information = os.path.normpath(
+                    self.input_information
+                )
+                self.input_information = self.input_information.replace(
+                    ",", "_"
+                )
+
                 # If we need zeek (bro), test if we can run it.
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
                 self.redis_man.start_redis_cache_if_not_running()
-                # this is the zeek dir slips will be using
-                self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
                 # should be initialised after self.input_type is set
                 self.host_ip_man = HostIPManager(self)
@@ -102,15 +108,6 @@ class Main:
             return False
 
         return self.zeek_bro
-
-    def prepare_zeek_output_dir(self):
-        from pathlib import Path
-
-        without_ext = Path(self.input_information).stem
-        if self.conf.store_zeek_files_in_the_output_dir():
-            self.zeek_dir = os.path.join(self.args.output, "zeek_files")
-        else:
-            self.zeek_dir = f"zeek_files_{without_ext}/"
 
     def terminate_slips(self):
         """
@@ -162,14 +159,44 @@ class Main:
         store_a_copy_of_zeek_files = self.conf.store_a_copy_of_zeek_files()
         was_running_zeek = self.was_running_zeek()
         if store_a_copy_of_zeek_files and was_running_zeek:
+            zeek_dir = self.db.get_zeek_output_dir()
+            if not isinstance(zeek_dir, str) or not zeek_dir:
+                return
             # this is where the copy will be stored
             dest_zeek_dir = os.path.join(self.args.output, "zeek_files")
-            copy_tree(self.zeek_dir, dest_zeek_dir)
+            copy_tree(zeek_dir, dest_zeek_dir)
             print(f"[Main] Stored a copy of zeek files to {dest_zeek_dir}")
 
     def delete_zeek_files(self):
-        if self.conf.delete_zeek_files():
-            shutil.rmtree(self.zeek_dir)
+        zeek_dir = self.db.get_zeek_output_dir()
+        if (
+            self.conf.delete_zeek_files()
+            and isinstance(zeek_dir, str)
+            and zeek_dir
+        ):
+            shutil.rmtree(zeek_dir)
+
+    def del_file_or_dir(self, file):
+        """deletes a file or dir inside the output dir"""
+        file_path = os.path.join(self.args.output, file)
+        with contextlib.suppress(Exception):
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+
+    def construct_output_dir_name(self) -> str:
+        dir_name = os.path.join(
+            self.parent_output_dir,
+            os.path.basename(
+                self.input_information
+            ),  # get pcap name from path
+        )
+
+        # add timestamp to avoid conflicts e.g wlp3s0_2022-03-1_03:55
+        ts = utils.convert_ts_format(datetime.now(), "%Y-%m-%d_%H:%M:%S")
+        dir_name += f"_{ts}/"
+        return dir_name
 
     def prepare_output_dir(self):
         """
@@ -178,47 +205,33 @@ class Main:
         Log dirs are stored in output/<input>_%Y-%m-%d_%H:%M:%S
         @return: None
         """
-        # default output/
-        if "-o" in sys.argv:
-            # -o is given
-            # delete all old files in the output dir
-            if os.path.exists(self.args.output):
-                for file in os.listdir(self.args.output):
-                    # in integration tests, slips redirects its
-                    # output to slips_output.txt,
-                    # don't delete that file
-                    if self.args.testing and "slips_output.txt" in file:
-                        continue
+        if self.args.is_slips_started_by_an_update:
+            # we should append to existing files in the output dir,
+            # and never overwrite them.
+            return
 
-                    file_path = os.path.join(self.args.output, file)
-                    with contextlib.suppress(Exception):
-                        if os.path.isfile(file_path):
-                            os.remove(file_path)
-                        elif os.path.isdir(file_path):
-                            shutil.rmtree(file_path)
-            else:
-                os.makedirs(self.args.output)
+        if not self.args.output:
+            # the user didnt give slips an output dir to use, construct one
+            self.args.output = self.construct_output_dir_name()
+            os.makedirs(self.args.output)
+
             os.chmod(self.args.output, 0o777)
             return
 
-        # self.args.output is the same as self.alerts_default_path
-        self.input_information = os.path.normpath(self.input_information)
-        self.input_information = self.input_information.replace(",", "_")
-        # now that slips can run several instances,
-        # each created dir will be named after the instance
-        # that created it
-        # it should be output/wlp3s0
-        self.args.output = os.path.join(
-            self.alerts_default_path,
-            os.path.basename(
-                self.input_information
-            ),  # get pcap name from path
-        )
-        # add timestamp to avoid conflicts wlp3s0_2022-03-1_03:55
-        ts = utils.convert_ts_format(datetime.now(), "%Y-%m-%d_%H:%M:%S")
-        self.args.output += f"_{ts}/"
+        # -o is given
+        # delete all old files in the output dir
+        if os.path.exists(self.args.output):
+            for file in os.listdir(self.args.output):
+                # in integration tests, slips redirects its
+                # output to slips_output.txt,
+                # don't delete that file
+                if self.args.testing and "slips_output.txt" in file:
+                    continue
+                self.del_file_or_dir(file)
 
-        os.makedirs(self.args.output)
+        else:
+            os.makedirs(self.args.output)
+
         os.chmod(self.args.output, 0o777)
 
     def set_mode(self, mode, daemon=""):
@@ -275,7 +288,7 @@ class Main:
         input_type = InputType.FILE
         # Get the type of file
         cmd_result = subprocess.run(
-            ["file", given_path], stdout=subprocess.PIPE
+            ["file", utils.sanitize(given_path)], stdout=subprocess.PIPE
         )
         # Get command output
         cmd_result = cmd_result.stdout.decode("utf-8")
@@ -499,19 +512,14 @@ class Main:
 
     def prepare_locks_dir(self):
         """
-        sets the correct permissions for the /tmp/slips directory to be
-        used by root and non-root users
+        Set secure shared permissions for the lock directory.
+
+        The directory must remain writable by root and non-root processes
+        because Slips may create lock files before and after dropping
+        privileges. Use the sticky bit so other users cannot remove or
+        replace lock files they do not own.
         """
-        locks_dir = utils.slips_locks_dir
-        # Create the directory if it doesn't exist
-        if not os.path.exists(locks_dir):
-            os.makedirs(locks_dir, exist_ok=True)
-        try:
-            os.chmod(locks_dir, 0o777)  # World-writable, no sticky bit
-        except PermissionError:
-            # this dir was created by root, so we can't change the permissions
-            # but probably root has already set the permissions
-            pass
+        SQLiteFlock.prepare_locks_dir()
 
     def start(self):
         """Main Slips Function"""
@@ -519,6 +527,7 @@ class Main:
             self.print_version()
             print("https://stratosphereips.org")
             print("-" * 27)
+
             self.setup_print_levels()
             stderr: str = self.get_slips_error_file()
             slips_logfile: str = self.get_slips_logfile()
@@ -528,10 +537,22 @@ class Main:
                 stderr, slips_logfile
             )
             self.printer = Printer(self.logger, self.name)
+
             self.print(f"Storing Slips logs in {self.args.output}")
+
             self.redis_port: int = self.redis_man.get_redis_port()
-            # dont start the redis server if it's already started
-            start_redis_server = not utils.is_port_in_use(self.redis_port)
+            if self.args.is_slips_started_by_an_update:
+                # -u means slips is started by slips after it auto-updated,
+                # the redis server should already be up, this slips should
+                # just connect to it
+                start_redis_server = False
+                self.print(
+                    f"Slips is done auto updating. Currently running "
+                    f"version: {green(utils.get_current_version())}"
+                )
+            else:
+                # dont start the redis server if it's already started
+                start_redis_server = not utils.is_port_in_use(self.redis_port)
 
             try:
                 self.db = DBManager(
@@ -541,6 +562,10 @@ class Main:
                     self.conf,
                     int(self.pid),
                     start_redis_server=start_redis_server,
+                    # if auto update is enabled, slips starts itself with
+                    # -u, and continues using the same db as the old
+                    # version without overwriting the keys there
+                    flush_db=not self.args.is_slips_started_by_an_update,
                 )
 
             except RuntimeError as e:
@@ -576,6 +601,8 @@ class Main:
                 }
             )
 
+            self.update_man = self.proc_man.start_slips_update_manager()
+
             # this  func should be called as soon as we start the db,
             # before evdience proc starts.
             # to be able to use the host IP as analyzer IP in alerts.json
@@ -588,9 +615,7 @@ class Main:
                 0,
             )
             self.print(
-                f'Started {green("Main")} process '
-                f"[PID"
-                f" {green(self.pid)}]",
+                f'Started {green("Main")} process [PID {green(self.pid)}]',
                 1,
                 0,
             )
@@ -660,7 +685,7 @@ class Main:
                     self.print("SIGTERM received, shutting down slips.")
                     self.print(
                         "SIGTERM received, likely due to "
-                        "out of memory errors. Slips is stopping "
+                        "OOM kill. Slips is stopping "
                         "without completing the analysis.",
                         0,
                         1,
@@ -672,16 +697,19 @@ class Main:
 
             self.proc_man.start_evidence_process()
             self.proc_man.start_profiler_process()
-            # give the profiler process time to start and subscribe to the db before we start sending data to it
+            # give the profiler process time to start and subscribe to the db
+            # before we start sending data to it
             time.sleep(1)
 
             self.c1 = self.db.subscribe("control_channel")
 
             self.metadata_man.add_metadata_if_enabled()
-            self.proc_man.start_timewindow_updater()
             self.input_process = self.proc_man.start_input_process()
 
             self.db.store_pid("main", int(self.pid))
+
+            self.proc_man.declare_that_slips_done_starting_all_children()
+
             self.metadata_man.set_input_metadata()
 
             # warn about unused open redis servers
@@ -728,6 +756,8 @@ class Main:
                 )
 
                 self.host_ip_man.update_host_ip(host_ips, modified_profiles)
+                if self.update_man.check_for_update_every_1_day():
+                    self.update_man.update_slips()
 
         except KeyboardInterrupt:
             # the EINTR error code happens if a signal occurred while

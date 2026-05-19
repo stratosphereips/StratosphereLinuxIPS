@@ -10,6 +10,7 @@
   <link rel="stylesheet" type="text/css" href="{{url_for('analysis.static', filename='css/analysis.css')}}" />
   <link rel="stylesheet" type="text/css" href="{{url_for('general.static', filename='css/general.css')}}" />
   <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='app.css')}}" />
+  <meta name="csrf-token" content="{{ csrf_token }}">
     <title>Slips</title>
 
 </head>
@@ -62,7 +63,7 @@
       </li>
       <li class="nav-item">
         <a class="nav-link" type="button" id="nav-general-tab" data-bs-toggle="tab" data-bs-target="#nav-general" role="tab"
-          aria-controls="nav-general" aria-selected="false">                   
+          aria-controls="nav-general" aria-selected="false">
           General
           <!-- <i class="fa-solid fa-circle-info"></i>  -->
         </a>
@@ -74,7 +75,7 @@
         </a>
       </li>
       <li class="nav-item ms-auto">
-        <a type="button" id="changedb_button" class="nav-link btn-primary" data-toggle="modal" data-target="#modal_choose_redis" style=" color: #0d6efd!important">
+        <a type="button" id="changedb_button" class="nav-link btn-primary" data-bs-toggle="modal" data-bs-target="#modal_choose_redis" style=" color: #0d6efd!important">
           <i class="fa-solid fa-database"></i>
           Change DB
         </a>
@@ -99,13 +100,12 @@
         {% include 'documentation.html' %}
       </div>
     </div>
-    <div class="modal " id="modal_choose_redis" tabindex="-1" role="dialog" aria-labelledby="staticBackdropLabel">
-      <div class="modal-dialog" role="document">
+    <div class="modal" id="modal_choose_redis" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+      <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="staticBackdropLabel">Choose DB</h5>
-            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-              <span aria-hidden="true">&times;</span>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
             </button>
           </div>
           <div class="modal-body">
@@ -119,7 +119,7 @@
             </table>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             <button type="button" id="button_choose_db" class="btn btn-primary">Apply</button>
           </div>
         </div>
@@ -135,16 +135,14 @@
   src="https://cdn.datatables.net/v/bs5/jq-3.6.0/sl-1.4.0/dt-1.12.1/datatables.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.2.3/js/dataTables.buttons.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.2.3/js/buttons.colVis.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js"
-  integrity="sha384-ho+j7jyWK8fNQe+A12Hb8AhRq26LrZ/JpcUGGOn+Y7RsweNrtN/tE3MoK7ZeZDyx" crossorigin="anonymous"></script>
 <script type="module" src="{{url_for('static', filename='app.js')}}"></script>
 <script src="https://kit.fontawesome.com/88b12c5474.js" crossorigin="anonymous"></script>
 
-<script type="module" 
+<script type="module"
   src="{{url_for('analysis.static', filename='js/analysis.js')}}"></script>
-<script type="module" 
+<script type="module"
   src="{{url_for('analysis.static', filename='js/tableDefs.js')}}"></script>
-<script type="module" 
+<script type="module"
   src="{{url_for('general.static', filename='js/general.js')}}"></script>
 
 </html>

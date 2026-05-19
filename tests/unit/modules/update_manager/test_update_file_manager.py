@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-"""Unit test for modules/update_manager/update_manager.py"""
+"""Unit test for modules/feeds_update_manager/feeds_update_manager.py"""
 
 from tests.module_factory import ModuleFactory
 import json

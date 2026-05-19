@@ -76,7 +76,8 @@ To analyze your own files using slips, you can mount it to your docker using -v
 
 
 #### Minimal Slips Docker Image
-In addition to the full stratosphereips/slips:latest image, there is now a minimal Docker image available: using `docker pull stratosphereips/slips_light:latest`. This image excludes the following modules to reduce size and resource usage:
+In addition to the full stratosphereips/slips:latest image, there is now a minimal Docker image available: using `docker pull stratosphereips/slips_light:latest`.
+This image excludes the following modules to reduce size and resource usage:
 
 * rnn_cc_detection/
 * timeline/
@@ -182,7 +183,8 @@ If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker i
 	cd ~/StratosphereLinuxIPS
 	docker build --target amd --no-cache -t slips -f docker/Dockerfile .
 	docker run -it --rm --net=host slips
-	./slips.py -c config/slips.yaml -f dataset/test3-mixed.binetflow
+	cp config/slips.yaml config/my_slips.yaml
+	./slips.py -c config/my_slips.yaml -f dataset/test3-mixed.binetflow
 
 If you don't have Internet connection from inside your Docker image while building, you may have another set of networks
 defined in your Docker. For that try:
@@ -212,7 +214,7 @@ Slips depends on three major elements:
 - Redis database v8
 
 
-To install these elements, the script will use the APT package manager. After that, it will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node JS and several npm packages.
+To install these elements, the script will use the APT package manager. After that, it will install python packages required for Slips to run and its modules to work.
 
 
 **Instructions to download everything for Slips are below.**
@@ -224,8 +226,11 @@ You can install it using [install.sh](https://github.com/stratosphereips/Stratos
 	sudo chmod +x install.sh
 	sudo ./install.sh
 
+The script installs Slips core dependencies and builds `p2p4slips`. It does
+not install Kalipso.
+
 ### Installing Slips manually
-#### Installing Python, Redis, NodeJs, and required python and npm libraries.
+#### Installing Python, Redis, and required python libraries.
 
 Update the repository of packages so you see the latest versions:
 
@@ -243,13 +248,30 @@ Now that pip3 is upgraded, we can proceed to install all required packages via p
 
 	python3 -m pip3 install -r install/requirements.txt
 
-_Note: for those using a different base image, you need to also install tensorflow==2.16.1r via pip3._
+_Note: for those using a different base image, install the TensorFlow version pinned in `install/requirements.txt` via pip3._
 
+#### Optional Kalipso submodule
 
-As we mentioned before, the GUI of Slips known as Kalipso relies on NodeJs v19. Make sure to use NodeJs greater than version 12. For Kalipso to work, we will install the following npm packages:
+Kalipso is maintained in a separate repository and checked out as the
+`modules/kalipso` submodule.
 
-    curl -fsSL https://deb.nodesource.com/setup_21.x |  sudo -E bash - && sudo apt install -y --no-install-recommends nodejs
-    cd modules/kalipso && npm install
+If you cloned Slips without submodules, initialize it with:
+
+```bash
+git submodule update --init --recursive modules/kalipso
+```
+
+If you are cloning Slips for the first time and want all optional components,
+use:
+
+```bash
+git clone --recurse-submodules --remote-submodules https://github.com/stratosphereips/StratosphereLinuxIPS -j4
+```
+
+Kalipso has its own installation instructions in
+`modules/kalipso/README.md`. It is optional and not required for Docker, CI, or
+core Slips execution.
+
 
 ####  Installing Zeek
 
@@ -329,7 +351,9 @@ You can kill this redis database by running:
 ```
 then choosing 1.
 
-After these steps, if you need the submodules, you will need to clone them as done in the `install.sh` script.
+After these steps, if you need optional submodules, initialize them with
+`git submodule update --init --recursive` and then follow the instructions in
+their own READMEs.
 
 
 ## Installing Slips on a Raspberry PI

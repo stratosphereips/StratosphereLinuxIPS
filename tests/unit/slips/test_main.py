@@ -301,7 +301,8 @@ def test_delete_zeek_files_enabled():
     main = ModuleFactory().create_main_obj()
     main.conf = MagicMock()
     main.conf.delete_zeek_files.return_value = True
-    main.zeek_dir = "zeek_dir"
+    main.db = MagicMock()
+    main.db.get_zeek_output_dir.return_value = "zeek_dir"
 
     with patch("shutil.rmtree") as mock_rmtree:
         main.delete_zeek_files()
@@ -312,11 +313,30 @@ def test_delete_zeek_files_disabled():
     main = ModuleFactory().create_main_obj()
     main.conf = MagicMock()
     main.conf.delete_zeek_files.return_value = False
-    main.zeek_dir = "zeek_dir"
+    main.db = MagicMock()
+    main.db.get_zeek_output_dir.return_value = "zeek_dir"
 
     with patch("shutil.rmtree") as mock_rmtree:
         main.delete_zeek_files()
         mock_rmtree.assert_not_called()
+
+
+def test_store_zeek_dir_copy_reads_zeek_dir_from_db():
+    main = ModuleFactory().create_main_obj()
+    main.conf = MagicMock()
+    main.conf.store_a_copy_of_zeek_files.return_value = True
+    main.db = MagicMock()
+    main.db.get_zeek_output_dir.return_value = "zeek_dir"
+    main.args.output = "output"
+
+    with (
+        patch.object(main, "was_running_zeek", return_value=True),
+        patch(f"{main.__class__.__module__}.copy_tree") as mock_copy_tree,
+        patch("builtins.print"),
+    ):
+        main.store_zeek_dir_copy()
+
+    mock_copy_tree.assert_called_once_with("zeek_dir", "output/zeek_files")
 
 
 # TODO should be moved to utils unit tests after the PR is merged
@@ -379,29 +399,6 @@ def test_check_zeek_or_bro_not_found():
     mock_terminate.assert_called_once()
 
 
-@pytest.mark.parametrize(
-    "store_in_output, expected_dir",
-    [
-        # Test Case 1: Store Zeek files in the output directory
-        (True, "output/zeek_files"),
-        # Test Case 2: Use default directory for Zeek files
-        (False, "zeek_files_inputfile/"),
-    ],
-)
-def test_prepare_zeek_output_dir(store_in_output, expected_dir):
-    main = ModuleFactory().create_main_obj()
-    main.input_information = "/path/to/inputfile.pcap"
-    main.args = Mock()
-    main.args.output = "output"
-    main.conf = Mock()
-    main.conf.store_zeek_files_in_the_output_dir.return_value = store_in_output
-
-    with patch("os.path.join", lambda *args: "/".join(args)):
-        main.prepare_zeek_output_dir()
-
-    assert main.zeek_dir == expected_dir
-
-
 def test_terminate_slips_interactive():
     main = ModuleFactory().create_main_obj()
     main.mode = "interactive"
@@ -445,6 +442,7 @@ def main_obj(tmp_path):
     main = ModuleFactory().create_main_obj()
     main.args = MagicMock()
     main.args.output = str(tmp_path / "test_output")
+    main.args.is_slips_started_by_an_update = False
     return main
 
 
@@ -479,6 +477,18 @@ def test_prepare_output_dir_with_o_flag_creates_dir(
     assert oct(os.stat(non_existent).st_mode & 0o777) == "0o777"
 
 
+def test_prepare_locks_dir_sets_sticky_permissions(main_obj, tmp_path):
+    locks_dir = tmp_path / "slips-locks"
+
+    with patch(
+        "slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(locks_dir)
+    ):
+        main_obj.prepare_locks_dir()
+
+    assert locks_dir.exists()
+    assert oct(locks_dir.stat().st_mode & 0o1777) == "0o1777"
+
+
 @patch(
     "slips_files.common.slips_utils.utils.convert_ts_format",
     return_value="2025-07-15_12:00:00",
@@ -488,7 +498,9 @@ def test_prepare_output_dir_without_o_flag(
 ):
     main = ModuleFactory().create_main_obj()
     main.args = MagicMock()
-    main.alerts_default_path = str(tmp_path)
+    main.args.is_slips_started_by_an_update = False
+    main.args.output = None
+    main.parent_output_dir = str(tmp_path)
     main.input_information = "/fake/input/wlp3s0"
     monkeypatch.setattr(sys, "argv", ["script.py"])  # No -o
 

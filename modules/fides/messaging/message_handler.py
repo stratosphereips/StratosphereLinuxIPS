@@ -1,6 +1,6 @@
 from typing import Dict, List, Callable, Optional, Union
 
-
+from slips_files.common.slips_utils import utils
 from ..messaging.dacite import from_dict
 
 from ..messaging.model import (
@@ -28,7 +28,7 @@ class MessageHandler:
     # def print(self, *args, **kwargs):
     #    return self.printer.print(*args, **kwargs)
 
-    version = 1
+    version = utils.get_current_version()
 
     def __init__(
         self,

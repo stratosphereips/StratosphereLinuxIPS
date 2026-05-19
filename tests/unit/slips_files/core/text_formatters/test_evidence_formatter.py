@@ -41,7 +41,7 @@ from tests.module_factory import ModuleFactory
             "converted_time IP 192.168.1.1 detected as malicious in timewindow 1"
             " (start 2023/07/01 12:00:00, stop 2023/07/01 12:05:00) "
             "given the following evidence:\n"
-            "\t- Detected Port scan detected threat level: medium. Interface: default.\n",
+            "\t- Detected Port scan detected Threat level: medium. Interface: default.\n",
         ),
         # testcase2: Multiple evidence
         (
@@ -76,8 +76,8 @@ from tests.module_factory import ModuleFactory
             "converted_time IP 192.168.1.1 detected as malicious in timewindow 1"
             " (start 2023/07/01 12:00:00, stop 2023/07/01 12:05:00) "
             "given the following evidence:\n"
-            "\t- Detected Port scan detected threat level: medium. Interface: default.\n"
-            "\t- Detected Malicious JA3 fingerprint threat level: high. Interface: default.\n",
+            "\t- Detected Port scan detected Threat level: medium. Interface: default.\n"
+            "\t- Detected Malicious JA3 fingerprint Threat level: high. Interface: default.\n",
         ),
     ],
 )
@@ -147,15 +147,15 @@ def test_line_wrap(input_text, expected_output):
     "threat_level, expected_description",
     [
         # Testcase 1: INFO threat level
-        (ThreatLevel.INFO, "Original description threat level: info."),
+        (ThreatLevel.INFO, "Original description Threat level: info."),
         # Testcase 2: LOW threat level
-        (ThreatLevel.LOW, "Original description threat level: low."),
+        (ThreatLevel.LOW, "Original description Threat level: low."),
         # Testcase 3: MEDIUM threat level
-        (ThreatLevel.MEDIUM, "Original description threat level: medium."),
+        (ThreatLevel.MEDIUM, "Original description Threat level: medium."),
         # Testcase 4: HIGH threat level
-        (ThreatLevel.HIGH, "Original description threat level: high."),
+        (ThreatLevel.HIGH, "Original description Threat level: high."),
         # Testcase 5: CRITICAL threat level
-        (ThreatLevel.CRITICAL, "Original description threat level: critical."),
+        (ThreatLevel.CRITICAL, "Original description Threat level: critical."),
     ],
 )
 def test_add_threat_level_to_evidence_description(

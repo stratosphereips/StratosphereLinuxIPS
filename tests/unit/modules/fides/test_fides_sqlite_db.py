@@ -404,3 +404,18 @@ def test_get_peer_organisations(db):
     assert set(result) == set(
         organisations
     )  # Ensure all organisations are returned, order does not matter
+
+
+def test_private_save_rejects_invalid_table_name(db):
+    with pytest.raises(ValueError, match="Invalid Fides table name"):
+        db._FidesSQLiteDB__save(
+            "PeerInfo; DROP TABLE PeerInfo;", {"peerID": "peer"}
+        )
+
+
+def test_private_save_rejects_invalid_column_name(db):
+    with pytest.raises(ValueError, match="Invalid columns for table PeerInfo"):
+        db._FidesSQLiteDB__save(
+            "PeerInfo",
+            {"peerID": "peer", "ip); DROP TABLE PeerInfo; --": "127.0.0.1"},
+        )

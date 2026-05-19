@@ -227,6 +227,19 @@ def test_get_rdns_invalid_ip():
         mock_gethostbyaddr.assert_called_once_with(ip_address)
 
 
+def test_get_rdns_negative_cache_skips_second_lookup():
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_address = "invalid_ip"
+
+    with patch("socket.gethostbyaddr") as mock_gethostbyaddr:
+        mock_gethostbyaddr.side_effect = socket.gaierror
+
+        assert ip_info.get_rdns(ip_address) is False
+        assert ip_info.get_rdns(ip_address) is False
+
+        mock_gethostbyaddr.assert_called_once_with(ip_address)
+
+
 def test_get_rdns_no_reverse_dns():
     ip_info = ModuleFactory().create_ip_info_obj()
     ip_address = "1.1.1.1"
@@ -378,6 +391,21 @@ def test_get_vendor_online(
     )
 
 
+def test_get_vendor_online_negative_cache_skips_second_lookup(mocker):
+    ip_info = ModuleFactory().create_ip_info_obj()
+    mock_requests = mocker.patch(
+        "requests.get",
+        side_effect=requests.exceptions.ConnectionError(),
+    )
+
+    assert ip_info.get_vendor_online("00:11:22:33:44:55") is False
+    assert ip_info.get_vendor_online("00:11:22:33:44:55") is False
+
+    mock_requests.assert_called_once_with(
+        "https://api.macvendors.com/00:11:22:33:44:55", timeout=2
+    )
+
+
 async def tmp_function():
     # Simulating some asynchronous work
     await asyncio.sleep(1)
@@ -391,17 +419,14 @@ async def test_shutdown_gracefully(
 
     mock_asn_db = mocker.Mock()
     mock_country_db = mocker.Mock()
-    mock_mac_db = mocker.Mock()
 
     ip_info.asn_db = mock_asn_db
     ip_info.country_db = mock_country_db
-    ip_info.mac_db = mock_mac_db
 
     await ip_info.shutdown_gracefully()
 
     mock_asn_db.close.assert_called_once()
     mock_country_db.close.assert_called_once()
-    mock_mac_db.close.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -460,34 +485,47 @@ def test_get_gateway_ip_if_interface_args_interface(
 
 
 @pytest.mark.parametrize(
-    "ip, is_multicast, cached_info, expected_calls",
+    "ip, is_multicast, cached_info, cached_rdns, expected_calls",
     [
         # Testcase 1: Valid IP, not multicast, no cached info
         (
             "192.168.1.1",
             False,
             {},
+            None,
             {"get_geocountry": 1, "get_asn": 1, "get_rdns": 1},
         ),
         # Testcase 2: Valid IP, multicast
-        ("224.0.0.1", True, {}, {}),
+        ("224.0.0.1", True, {}, None, {}),
         # Testcase 3: Valid IP, not multicast,
         # with cached geocountry
         (
             "10.0.0.1",
             False,
             {"geocountry": "USA"},
+            None,
             {"get_asn": 1, "get_rdns": 1},
+        ),
+        # Testcase 4: Valid IP with cached rDNS
+        (
+            "10.0.0.2",
+            False,
+            {},
+            "cached.example.com",
+            {"get_geocountry": 1, "get_asn": 1},
         ),
     ],
 )
-def test_handle_new_ip(mocker, ip, is_multicast, cached_info, expected_calls):
+def test_handle_new_ip(
+    mocker, ip, is_multicast, cached_info, cached_rdns, expected_calls
+):
     ip_info = ModuleFactory().create_ip_info_obj()
 
     mock_ip_address = mocker.patch("ipaddress.ip_address")
     mock_ip_address.return_value.is_multicast = is_multicast
 
     ip_info.db.get_ip_info.return_value = cached_info
+    ip_info.db.get_rdns_info.return_value = cached_rdns
 
     mock_get_geocountry = mocker.patch.object(ip_info, "get_geocountry")
     mock_get_asn = mocker.patch.object(ip_info.asn, "get_asn")
@@ -505,7 +543,7 @@ def test_check_if_we_have_pending_mac_queries_with_mac_db(
     mocker,
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.mac_db = Mock()
+    ip_info.mac_vendor_index = {}
     ip_info.pending_mac_queries = Mock()
     ip_info.pending_mac_queries.empty.side_effect = [False, False, True]
     ip_info.pending_mac_queries.get.side_effect = [
@@ -526,7 +564,7 @@ def test_check_if_we_have_pending_mac_queries_empty_queue(
     mocker,
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.mac_db = Mock()
+    ip_info.mac_vendor_index = {}
     ip_info.pending_mac_queries = Mock()
     ip_info.pending_mac_queries.empty.return_value = True
     mock_get_vendor = mocker.patch.object(ip_info, "get_vendor")

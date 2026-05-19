@@ -1,0 +1,154 @@
+name: create a new release
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  create_release:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch --tags --force
+
+      - name: Prepare release metadata
+        id: prepare_release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 <<'PY'
+          import os
+          import pathlib
+          import re
+          import subprocess
+
+          github_output = pathlib.Path(os.environ["GITHUB_OUTPUT"])
+          release_notes_path = pathlib.Path("release_notes.md")
+
+          def write_output(name, value):
+              with github_output.open("a", encoding="utf-8") as output_file:
+                  print(f"{name}={value}", file=output_file)
+
+          def capitalize_sentences(text):
+              """Capitalize the first alphabetical character of each sentence."""
+              result = []
+              capitalize_next = True
+              for character in text:
+                  if capitalize_next and character.isalpha():
+                      result.append(character.upper())
+                      capitalize_next = False
+                  else:
+                      result.append(character)
+
+                  if character in ".!?":
+                      capitalize_next = True
+              return "".join(result)
+
+          version = pathlib.Path("VERSION").read_text(encoding="utf-8").strip()
+          if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+              raise SystemExit(f"VERSION must contain x.y.z, found: {version}")
+
+          tag_name = f"v{version}"
+
+          changelog_lines = pathlib.Path("CHANGELOG.md").read_text(
+              encoding="utf-8"
+          ).splitlines()
+
+          latest_section = []
+          started = False
+          version_heading = re.compile(r"^\d+\.\d+\.\d+\b")
+
+          for line in changelog_lines:
+              if not started:
+                  if line.strip():
+                      started = True
+                      latest_section.append(line)
+                  continue
+
+              if version_heading.match(line.strip()):
+                  break
+
+              latest_section.append(line)
+
+          while latest_section and not latest_section[-1].strip():
+              latest_section.pop()
+
+          if not latest_section:
+              raise SystemExit("Could not extract the latest release notes from CHANGELOG.md")
+
+          latest_heading = latest_section[0].strip()
+          if not latest_heading.startswith(version):
+              raise SystemExit(
+                  "The top section in CHANGELOG.md does not match the version in VERSION"
+              )
+
+          normalized_lines = [latest_section[0].strip(), ""]
+          for line in latest_section[1:]:
+              stripped = line.strip()
+              if not stripped:
+                  normalized_lines.append("")
+                  continue
+
+              bullet_match = re.match(r"^([*-]\s+)(.*)$", stripped)
+              if bullet_match:
+                  prefix, content = bullet_match.groups()
+                  normalized_lines.append(f"{prefix}{capitalize_sentences(content.strip())}")
+                  continue
+
+              normalized_lines.append(capitalize_sentences(stripped))
+
+          release_notes_path.write_text(
+              "\n".join(normalized_lines).strip() + "\n",
+              encoding="utf-8",
+          )
+
+          existing_tag = subprocess.run(
+              ["git", "tag", "--list", tag_name],
+              check=True,
+              capture_output=True,
+              text=True,
+          ).stdout.strip()
+
+          release_exists = subprocess.run(
+              ["gh", "release", "view", tag_name],
+              capture_output=True,
+              text=True,
+          ).returncode == 0
+
+          write_output("tag_name", tag_name)
+          write_output("tag_exists", "true" if existing_tag else "false")
+          write_output("release_exists", "true" if release_exists else "false")
+          PY
+
+      - name: Create and push tag
+        if: steps.prepare_release.outputs.tag_exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.prepare_release.outputs.tag_name }}"
+          git push origin "${{ steps.prepare_release.outputs.tag_name }}"
+
+      - name: Create GitHub release
+        if: steps.prepare_release.outputs.release_exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.prepare_release.outputs.tag_name }}" \
+            --title "${{ steps.prepare_release.outputs.tag_name }}" \
+            --notes-file release_notes.md \
+            --latest
+
+      - name: Skip existing tag and release
+        if: steps.prepare_release.outputs.tag_exists == 'true' && steps.prepare_release.outputs.release_exists == 'true'
+        run: |
+          echo "Tag ${{ steps.prepare_release.outputs.tag_name }} and its release already exist. Skipping."

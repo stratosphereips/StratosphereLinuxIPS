@@ -14,7 +14,6 @@ def test_clear_redis_cache():
     checker.clear_redis_cache()
     checker.main.redis_man.clear_redis_cache_database.assert_called_once()
     assert checker.main.input_information == ""
-    assert checker.main.zeek_dir == ""
     checker.main.redis_man.log_redis_server_pid.assert_called_once_with(
         6379, mock.ANY
     )

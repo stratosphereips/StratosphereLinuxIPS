@@ -13,6 +13,7 @@ from slips_files.common.performance_paths import (
     get_performance_csv_path,
     get_performance_plots_dir,
 )
+from slips_files.common.slips_utils import utils
 
 
 class Plotter:
@@ -336,21 +337,29 @@ class Plotter:
         self.write_latency_metrics(metrics_path=metrics_path)
 
     def plot_flows_from_conn_log(self):
-        conn_log = os.path.join(self.output_dir, "zeek_files", "conn.log")
+        conn_log = utils.validate_safe_path(
+            os.path.join(self.output_dir, "zeek_files", "conn.log")
+        )
         if not os.path.exists(conn_log):
             return
 
         os.makedirs(self.plots_dir, exist_ok=True)
-        output_plot = os.path.join(
-            self.plots_dir, "flows_per_second_seen_in_conn_log.png"
+        output_plot = utils.validate_safe_path(
+            os.path.join(
+                self.plots_dir, "flows_per_second_seen_in_conn_log.png"
+            )
         )
         # Assuming stress_testing_scripts is in the project root.
         # This file is in slips_files/common/plotter.py
         # So project root is 2 levels up.
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.abspath(os.path.join(current_dir, "../.."))
-        script_path = os.path.join(
-            project_root, "stress_testing_scripts", "plot_flows_over_time.py"
+        script_path = utils.validate_safe_path(
+            os.path.join(
+                project_root,
+                "stress_testing_scripts",
+                "plot_flows_over_time.py",
+            )
         )
 
         if not os.path.exists(script_path):

@@ -2,6 +2,7 @@ import os
 from typing import List, Optional
 
 from slips_files.common.input_type import InputType
+from slips_files.common.slips_utils import utils
 
 
 class ZeekCommandBuilder:
@@ -18,13 +19,51 @@ class ZeekCommandBuilder:
         tcp_inactivity_timeout: int,
         packet_filter: Optional[str] = None,
     ):
-        self.zeek_or_bro = zeek_or_bro
+        self.zeek_or_bro = utils.sanitize(zeek_or_bro)
         self.input_type = input_type
         # this represents the zeek default_rotation_interval parameter
-        self.default_rotation_interval = default_rotation_interval
+        self.default_rotation_interval = utils.sanitize(
+            default_rotation_interval
+        )
         self.enable_rotation = enable_rotation
         self.tcp_inactivity_timeout = tcp_inactivity_timeout
-        self.packet_filter = packet_filter
+        self.packet_filter = self._sanitize_packet_filter(packet_filter)
+
+    def _sanitize_zeek_target(self, pcap_or_interface: str) -> str:
+        """
+        Validate the Zeek target before building the command.
+
+        Parameters:
+        pcap_or_interface: PCAP path or interface name given by the user.
+
+        Return:
+        The validated PCAP path or interface name.
+        """
+        if self.input_type == InputType.PCAP:
+            return utils.validate_safe_path(pcap_or_interface, must_exist=True)
+
+        safe_interface = utils.sanitize(str(pcap_or_interface).strip())
+        if safe_interface != str(pcap_or_interface).strip():
+            raise ValueError(f"Unsafe interface argument: {pcap_or_interface}")
+        return safe_interface
+
+    def _sanitize_packet_filter(self, packet_filter: str = None) -> str:
+        """
+        Validate a packet filter passed to Zeek.
+
+        Parameters:
+        packet_filter: Packet filter text to validate.
+
+        Return:
+        The validated packet filter or None.
+        """
+        if packet_filter is None:
+            return None
+
+        packet_filter = str(packet_filter).strip()
+        if any(char in packet_filter for char in ("\x00", "\n", "\r")):
+            raise ValueError(f"Unsafe packet filter: {packet_filter}")
+        return packet_filter
 
     def _get_input_parameter(self, pcap_or_interface: str) -> List[str]:
         if self.input_type == InputType.INTERFACE:
@@ -88,9 +127,11 @@ class ZeekCommandBuilder:
         constructs the zeek command based on the user given
         pcap/interface/packet filter/etc.
         """
-        bro_parameter = self._get_input_parameter(pcap_or_interface)
+        safe_target = self._sanitize_zeek_target(pcap_or_interface)
+        safe_filter = self._sanitize_packet_filter(tcpdump_filter)
+        bro_parameter = self._get_input_parameter(safe_target)
         rotation = self._get_rotation_args()
-        packet_filter = self._build_packet_filter(tcpdump_filter)
+        packet_filter = self._build_packet_filter(safe_filter)
         zeek_scripts_dir = os.path.join(os.getcwd(), "zeek-scripts")
 
         # 'local' is removed from the command because it

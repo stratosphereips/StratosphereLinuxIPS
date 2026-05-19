@@ -9,7 +9,6 @@ import signal
 import sys
 import time
 import traceback
-import threading
 from collections import OrderedDict
 from datetime import datetime
 from multiprocessing import (
@@ -32,7 +31,10 @@ import multiprocessing
 
 
 import modules
-from modules.update_manager.update_manager import UpdateManager
+from managers.update_manager import UpdateManager
+from modules.feeds_update_manager.feeds_update_manager import (
+    FeedsUpdateManager,
+)
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import (
     IModule,
@@ -41,9 +43,6 @@ from slips_files.common.plotter import Plotter
 
 from slips_files.common.style import green
 from slips_files.common.input_type import InputType
-from slips_files.core.database.redis_db.timewindow_updater_thread.tw_updater import (
-    timewindow_updater,
-)
 from slips_files.core.evidence_handler import EvidenceHandler
 from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.input import Input
@@ -52,6 +51,40 @@ from slips_files.core.profiler import Profiler
 
 
 class ProcessManager:
+    """
+    Responsible for starting and stopping all the slips processes and modules.
+    Here's how the stopping of input.py and profiler.py works
+    input.py
+      -> realizes that no more flows are arriving
+      -> puts "stop" in the profiler_queue
+      -> is_input_done_event.set()
+      -> waits on is_profiler_done_event
+
+    profiler.py
+      <- recvs is_input_done_event for normal input completion
+      <- recvs is_input_failed_event for abnormal input failure
+      -> waits/join() profiler workers
+
+    profiler workers
+      <- recvs the "stop" from the  profiler_queue
+      -> exit
+
+    profiler.py
+      <- realizes that all workers exited
+      -> is_profiler_done_semaphore.release()
+      -> is_profiler_done_event.set()
+
+    input.py
+      <- is_profiler_done_event
+      -> is_input_done.release()
+
+    process_manager
+      <- is_input_done
+      <- is_profiler_done_semaphore
+      -> Slips can finish shutdown
+
+    """
+
     def __init__(self, main):
         self.main = main
         # Can be used by signal handlers before startup finishes.
@@ -77,18 +110,24 @@ class ProcessManager:
         # release the semaphore. Once having the semaphore, then slips.py can
         # terminate slips.
         self.is_input_done = Semaphore(0)
-        self.is_profiler_done = Semaphore(0)
+        # when profiler is done processing, it releases this semaphore,
+        self.is_profiler_done_semaphore = Semaphore(0)
         # is set by the profiler process to indicate that it's done so
         # input can shutdown no issue
         # now without this event, input process doesn't know that profiler
         # is still waiting for the queue to stop
         # and inout stops and renders the profiler queue useless and profiler
-        # cant get more lines anymore!
+        # cant get more lines any more!
         self.is_profiler_done_event = Event()
+        self.is_profiler_done_starting_initial_workers_event = Event()
         # is set by the input process to indicate no more flows are coming
         # so profiler can safely begin shutdown/joins.
         self.is_input_done_event = Event()
+        # is set by the input process when it stops because of a failure.
+        self.is_input_failed_event = Event()
+        self.is_slips_live_updating_event = Event()
         self.read_config()
+        self.all_children_started = False
 
     def read_config(self):
         self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
@@ -99,6 +138,16 @@ class ProcessManager:
         # self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.
         # get_bootstrapping_setting()
 
+    def declare_that_slips_done_starting_all_children(self):
+        self.all_children_started = True
+
+    def start_slips_update_manager(self):
+        return UpdateManager(
+            database=self.main.db,
+            is_slips_live_updating_event=self.is_slips_live_updating_event,
+            print_func=self.main.print,
+        )
+
     def start_output_process(self, stderr, slips_logfile, stdout=""):
         output_process = Output(
             stdout=stdout,
@@ -108,6 +157,7 @@ class ProcessManager:
             debug=self.main.args.debug,
             input_type=self.main.input_type,
             create_logfiles=False if self.main.args.stopdaemon else True,
+            slips_args=self.main.args,
         )
         self.slips_logfile = output_process.slips_logfile
         return output_process
@@ -122,10 +172,12 @@ class ProcessManager:
             self.main.conf,
             self.main.pid,
             self.main.bloom_filters_man,
-            is_profiler_done=self.is_profiler_done,
+            is_profiler_done_semaphore=self.is_profiler_done_semaphore,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
+            is_input_failed_event=self.is_input_failed_event,
+            is_profiler_done_starting_initial_workers_event=self.is_profiler_done_starting_initial_workers_event,
         )
         profiler_process.start()
         self.main.print(
@@ -135,6 +187,11 @@ class ProcessManager:
             0,
         )
         self.main.db.store_pid("Profiler", int(profiler_process.pid))
+        # Interface input starts profiler workers before the input process
+        # sends any flows. File-like inputs need the input process to send the
+        # first message before the profiler can choose the input handler.
+        if self.main.input_type == InputType.INTERFACE:
+            self.is_profiler_done_starting_initial_workers_event.wait(30)
         return profiler_process
 
     def start_evidence_process(self):
@@ -174,10 +231,11 @@ class ProcessManager:
             input_information=self.main.input_information,
             cli_packet_filter=self.main.args.pcapfilter,
             zeek_or_bro=self.main.zeek_bro,
-            zeek_dir=self.main.zeek_dir,
             line_type=self.main.line_type,
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
+            is_input_failed_event=self.is_input_failed_event,
+            is_slips_live_updating_event=self.is_slips_live_updating_event,
         )
         input_process.start()
         self.main.print(
@@ -458,26 +516,6 @@ class ProcessManager:
             self.main.pid,
         )
 
-    def start_timewindow_updater(self):
-        """
-        Starts a thread that keeps track of the current timewindow if
-        running on an interface
-
-        why is this not started in the redis db? because each module
-        has a db insteance, and we don't want a thread per module,
-        so starrting this thread once in main is enough
-        """
-        if not self.main.args.interface:
-            return
-        tw_width: float = self.main.conf.get_tw_width_in_seconds()
-        t = threading.Thread(
-            target=timewindow_updater,
-            name="timewindow_updater",
-            args=(self.main.db, tw_width, self.termination_event),
-            daemon=True,
-        )
-        utils.start_thread(t, self.main.db)
-
     def start_update_manager(self, local_files=False, ti_feeds=False):
         """
         starts the update manager process
@@ -497,7 +535,7 @@ class ProcessManager:
             with Lock(name="slips_ports_and_orgs"):
                 # pass a dummy termination event for update manager to
                 # update orgs and ports info
-                update_manager = UpdateManager(
+                update_manager = FeedsUpdateManager(
                     self.main.logger,
                     self.main.args.output,
                     self.main.redis_port,
@@ -541,9 +579,9 @@ class ProcessManager:
         )
 
         # check if update manager is still alive
-        if "update_manager" in pending_module_names:
+        if "feeds_update_manager" in pending_module_names:
             self.main.print(
-                "update_manager may take several minutes "
+                "feeds_update_manager may take several minutes "
                 "to finish updating 45+ TI files."
             )
 
@@ -633,18 +671,28 @@ class ProcessManager:
         based on the following:
         1. is slips still receiving new flows? (checks input.py and
         profiler.py)
-        2. did slips the control channel recv the stop_slips
+        2. did the control channel recv the stop_slips
         3. is a debugger present?
 
         This function NEVER returns True if the input and profiler are
         still processing.
         """
-        if self.should_run_non_stop():
+        if self.is_slips_live_updating_event.is_set():
+            # slips is auto updating this version of slips should stop and
+            # the updated one will start soon
+            return True
+
+        if not self.all_children_started:
+            # to avoid race conditions that happen when the input file is
+            # very fast, that slips decides to stop before even all the
+            # modules are up and running.
+            # happens in dataset/test4-malicious.binetflow
             return False
 
-        return (
-            self.is_stop_msg_received() or self.is_done_receiving_new_flows()
-        )
+        if self.is_stop_msg_received() or self.is_done_receiving_new_flows():
+            return True
+
+        return False
 
     def is_stop_msg_received(self) -> bool:
         """
@@ -659,7 +707,7 @@ class ProcessManager:
 
         return (
             utils.is_msg_intended_for(message, "control_channel")
-            and message["data"] == "stop_slips"
+            and utils.get_msg_payload(message) == "stop_slips"
         )
 
     def is_debugger_active(self) -> bool:
@@ -749,7 +797,7 @@ class ProcessManager:
             self.is_input_done
         )
         profiler_done_processing: bool = self.can_acquire_semaphore(
-            self.is_profiler_done
+            self.is_profiler_done_semaphore
         )
         return input_done_processing and profiler_done_processing
 
@@ -780,6 +828,21 @@ class ProcessManager:
         else:
             return self.main.print
 
+    def _generate_plots(self):
+        if self.is_slips_live_updating_event:
+            # slips is updating and will start a new instance, plots
+            # should be done when slips is actually shutting down at the
+            # very end of the analysis.
+            return
+
+        if self.main.conf.generate_performance_plots() is True:
+            self.plotter = Plotter(self.main.args.output, print)
+            self.plotter.plot_latency_csv()
+            self.plotter.plot_profiler_latency_csvs()
+            self.plotter.plot_throughput_csv()
+            self.plotter.write_throughput_metrics()
+            self.plotter.plot_flows_from_conn_log()
+
     def shutdown_gracefully(self):
         """
         Waits for all modules to confirm that they're done processing
@@ -787,13 +850,8 @@ class ProcessManager:
         """
         try:
             print = self.get_print_function()
-            if self.main.conf.generate_performance_plots() is True:
-                self.plotter = Plotter(self.main.args.output, print)
-                self.plotter.plot_latency_csv()
-                self.plotter.plot_profiler_latency_csvs()
-                self.plotter.plot_throughput_csv()
-                self.plotter.write_throughput_metrics()
-                self.plotter.plot_flows_from_conn_log()
+
+            self._generate_plots()
 
             if not self.main.args.stopdaemon:
                 print("\n" + "-" * 27)
@@ -802,17 +860,19 @@ class ProcessManager:
             self.children: List[BaseProcess] = (
                 multiprocessing.active_children()
             )
-            # by default, max 15 mins (taken from wait_for_modules_to_finish)
-            # from this time, all modules should be killed
             method_start_time = time.time()
 
-            # how long to wait for modules to finish in minutes
+            # how long to wait for modules to finish in minutes before
+            # killing them
             timeout: float = self.main.conf.wait_for_modules_to_finish()
             # convert to seconds
             timeout *= 60
 
-            # close all tws
-            self.main.db.check_tw_to_close(close_all=True)
+            # dont close tws if we're updating, the next slips will continue
+            # from where this slips left off.
+            if not self.is_slips_live_updating_event.is_set():
+                # close all tws
+                self.main.db.check_tw_to_close(close_all=True)
 
             graceful_shutdown = True
             if self.main.mode == "daemonized":
@@ -869,20 +929,19 @@ class ProcessManager:
 
                 self.kill_all_children()
 
-            if self.main.args.save:
-                self.main.save_the_db()
+            if not self.is_slips_live_updating_event.is_set():
+                if self.main.args.save:
+                    self.main.save_the_db()
+                if self.main.conf.export_labeled_flows():
+                    format_ = self.main.conf.export_labeled_flows_to().lower()
+                    self.main.db.export_labeled_flows(format_)
 
-            if self.main.conf.export_labeled_flows():
-                format_ = self.main.conf.export_labeled_flows_to().lower()
-                self.main.db.export_labeled_flows(format_)
-
-            # if store_a_copy_of_zeek_files is set to yes in slips.yaml
-            # copy the whole zeek_files dir to the output dir
-            self.main.store_zeek_dir_copy()
-
-            # if delete_zeek_files is set to yes in slips.yaml,
-            # delete zeek_files/ dir
-            self.main.delete_zeek_files()
+                # if store_a_copy_of_zeek_files is set to yes in slips.yaml
+                # copy the whole zeek_files dir to the output dir
+                self.main.store_zeek_dir_copy()
+                # if delete_zeek_files is set to yes in slips.yaml,
+                # delete zeek_files/ dir
+                self.main.delete_zeek_files()
 
             analysis_time, end_date = self.get_analysis_time()
             self.main.metadata_man.set_analysis_end_date(end_date)
@@ -897,6 +956,14 @@ class ProcessManager:
 
             self.main.db.close_all_dbs()
             if graceful_shutdown:
+                if self.is_slips_live_updating_event.is_set():
+                    print(
+                        "[Process Manager] Slips is live updating, "
+                        "Stopping this instance and starting the new "
+                        "instance now.\n",
+                        log_to_logfiles_only=True,
+                    )
+
                 print(
                     "[Process Manager] Slips shutdown gracefully\n",
                     log_to_logfiles_only=True,

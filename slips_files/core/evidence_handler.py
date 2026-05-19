@@ -68,6 +68,7 @@ class EvidenceHandler(ICore):
             output_dir=get_alerts_path_inside_output_dir(
                 self.parent_output_dir
             ),
+            slips_args=self.args,
         )
         self.logger_thread = threading.Thread(
             target=self.evidence_logger.run_logger_thread,

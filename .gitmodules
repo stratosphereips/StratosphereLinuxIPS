@@ -19,3 +19,7 @@
 	path = SlipsWeb
 	url = https://github.com/stratosphereips/SlipsWeb.git
     branch = master
+[submodule "modules/kalipso"]
+	path = modules/kalipso
+	url = https://github.com/stratosphereips/Kalipso
+	branch = main
