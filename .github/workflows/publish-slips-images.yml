@@ -24,7 +24,7 @@ jobs:
 
       # should come before buildx action
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       # Set up Docker Buildx with docker-container driver is required
       # at the moment to be able to use a subdirectory with Git context
