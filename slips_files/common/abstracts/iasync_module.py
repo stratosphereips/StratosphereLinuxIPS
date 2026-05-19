@@ -10,7 +10,7 @@ from typing import (
 from slips_files.common.abstracts.imodule import IModule
 
 
-class AsyncModule(IModule):
+class IAsyncModule(IModule):
     """
     An abstract class for asynchronous slips modules
     """
