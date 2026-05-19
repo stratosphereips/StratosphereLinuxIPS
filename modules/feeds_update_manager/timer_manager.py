@@ -62,10 +62,12 @@ class PeriodicUpdateTimer:
         :return: None.
         """
         self.target_running = True
-        asyncio.run(self.target())
-        self.target_running = False
-        self._advance_due_times()
-        self._start_next_timer()
+        try:
+            asyncio.run(self.target())
+        finally:
+            self.target_running = False
+            self._advance_due_times()
+            self._start_next_timer()
 
     def _start_next_timer(self) -> None:
         """Start a timer for the nearest due timestamp.

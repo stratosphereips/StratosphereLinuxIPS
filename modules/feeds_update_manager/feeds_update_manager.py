@@ -1720,8 +1720,10 @@ class FeedsUpdateManager(IModule):
                     )
                     task.add_done_callback(self.handle_task_exception)
             #######################################################
-            # in case of risk_iq files, we don't have a link for them in ti_files, We update these files using their API
-            # check if we have a username and api key and a week has passed since we last updated
+            # in case of risk_iq files, we don't have a link for them in
+            # ti_files, We update these files using their API
+            # check if we have a username and api key and a week has passed
+            # since we last updated
             if self.should_update("riskiq_domains", self.riskiq_update_period):
                 self.update_riskiq_feed()
 
@@ -1768,8 +1770,6 @@ class FeedsUpdateManager(IModule):
                 asyncio.run(self.update_ti_files())
                 # Starting timer to update files
                 self.update_timer.start()
-                # we have to return 1 for the process to terminate
-                return True
         except CannotAcquireLock:
             # another instance of slips is updating TI files, tranco
             # whitelists and mac db
@@ -1779,4 +1779,5 @@ class FeedsUpdateManager(IModule):
         """
         nothing should run in a loop in this module
         """
-        pass
+        # Prevent tight CPU loop, but wake immediately on shutdown.
+        self.termination_event.wait(timeout=0.1)
