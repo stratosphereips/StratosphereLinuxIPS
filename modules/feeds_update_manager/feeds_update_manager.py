@@ -22,7 +22,7 @@ from exclusiveprocess import (
     CannotAcquireLock,
 )
 
-from modules.feeds_update_manager.timer_manager import InfiniteTimer
+from modules.feeds_update_manager.timer_manager import PeriodicUpdateTimer
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.slips_utils import utils
@@ -36,26 +36,19 @@ class FeedsUpdateManager(IModule):
 
     def init(self):
         self.read_configuration()
-        # Update file manager
-        # Timer to update the ThreatIntelligence files
-        self.timer_manager = InfiniteTimer(
-            self.update_period, self.update_ti_files
+        self.update_timer = PeriodicUpdateTimer(
+            (
+                self.update_period,
+                self.mac_db_update_period,
+                self.online_whitelist_update_period,
+            ),
+            self.update_ti_files,
         )
-        # Timer to update the MAC db
-        # when update_ti_files is called, it decides what exactly to
-        # update, the mac db, online whitelist Or online ti files.
-        self.mac_db_update_manager = InfiniteTimer(
-            self.mac_db_update_period, self.update_ti_files
-        )
-        self.online_whitelist_update_timer = InfiniteTimer(
-            self.online_whitelist_update_period, self.update_ti_files
-        )
-        self.separator = self.db.get_field_separator()
+
         self.read_configuration()
-        # this will store the number of loaded ti files
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
-        self.interval = 7
+        self.max_days_to_keep_ti_files = 7
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.slips_logfile = self.db.get_stdfile("stdout")
         self.org_info_path = "slips_files/organizations_info/"
@@ -968,7 +961,7 @@ class FeedsUpdateManager(IModule):
                     now = utils.convert_ts_to_tz_aware(time.time())
                     diff = utils.get_time_diff(date, now, return_type="days")
 
-                    if diff > self.interval:
+                    if diff > self.max_days_to_keep_ti_files:
                         continue
 
                     domain = ioc["DomainAddress"]
@@ -1763,9 +1756,7 @@ class FeedsUpdateManager(IModule):
 
     def shutdown_gracefully(self):
         # terminating the timer for the process to be killed
-        self.timer_manager.cancel()
-        self.mac_db_update_manager.cancel()
-        self.online_whitelist_update_timer.cancel()
+        self.update_timer.cancel()
         return True
 
     def pre_main(self):
@@ -1773,12 +1764,10 @@ class FeedsUpdateManager(IModule):
         try:
             # only one instance of slips should be able to update TI files at a time
             # so this function will only be allowed to run from 1 slips instance.
-            with Lock(name="slips_macdb_and_whitelist_and_TI_files_update"):
+            with Lock(name="slips_feeds_update"):
                 asyncio.run(self.update_ti_files())
                 # Starting timer to update files
-                self.timer_manager.start()
-                self.mac_db_update_manager.start()
-                self.online_whitelist_update_timer.start()
+                self.update_timer.start()
                 # we have to return 1 for the process to terminate
                 return True
         except CannotAcquireLock:
