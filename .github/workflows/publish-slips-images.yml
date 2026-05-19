@@ -30,7 +30,7 @@ jobs:
       # at the moment to be able to use a subdirectory with Git context
       - name: Create and use Buildx builder
         id: create_builder
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
         with:
           driver: docker-container  #  allows multi-platform builds
           #  allows you to enable special permissions for the build environment that are normally considered insecure,
@@ -56,7 +56,7 @@ jobs:
 
     steps:
       - name: Use existing Buildx builder
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
         with:
           name: slips_multi_arch_builder
           install: true
