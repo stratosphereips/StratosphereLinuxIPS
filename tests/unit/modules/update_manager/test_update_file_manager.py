@@ -9,7 +9,7 @@ from unittest.mock import Mock, mock_open, patch
 import pytest
 import requests
 
-from modules.feeds_update_manager.timer_manager import PeriodicUpdateTimer
+from slips_files.common.timer_manager import PeriodicUpdateTimer
 from tests.module_factory import ModuleFactory
 
 
@@ -743,11 +743,11 @@ def test_periodic_update_timer_schedules_next_due_time(
     update_manager = ModuleFactory().create_update_manager_obj()
     mock_timer = mocker.Mock()
     timer_factory = mocker.patch(
-        "modules.feeds_update_manager.timer_manager.Timer",
+        "slips_files.common.timer_manager.Timer",
         return_value=mock_timer,
     )
     mocker.patch(
-        "modules.feeds_update_manager.timer_manager.time.monotonic",
+        "slips_files.common.timer_manager.time.monotonic",
         return_value=10,
     )
 
