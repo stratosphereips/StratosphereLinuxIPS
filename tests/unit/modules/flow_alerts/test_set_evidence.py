@@ -706,8 +706,10 @@ def test_tor_exit_node():
     assert evidence.victim.direction == Direction.SRC
     assert evidence.victim.value == flow.saddr
     assert evidence.threat_level == ThreatLevel.INFO
-    assert evidence.description == "Tor exit node 185.220.101.1"
-    assert evidence.profile.ip == flow.daddr
+    assert (
+        evidence.description == "A connection to TOR exit node 185.220.101.1."
+    )
+    assert evidence.profile.ip == flow.saddr
     assert evidence.timewindow.number == 1
     assert evidence.uid == [flow.uid]
     assert evidence.confidence == 1.0

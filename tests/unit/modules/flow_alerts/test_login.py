@@ -48,8 +48,8 @@ def test_get_login_status(success: bool, confused: bool, expected_status: str):
     assert login.get_login_status(flow) == expected_status
 
 
-def test_analyze_sets_info_evidence_with_victim_and_no_attacker():
-    """Test new_login messages create victim-only info evidence."""
+def test_analyze_sets_info_evidence_with_attacker_and_victim():
+    """Test new_login messages create info evidence."""
     login = ModuleFactory().create_login_analyzer_obj()
     flow = Login(
         starttime="1774173495.641272",
@@ -80,14 +80,16 @@ def test_analyze_sets_info_evidence_with_victim_and_no_attacker():
     evidence = login.db.set_evidence.call_args[0][0]
     assert evidence.evidence_type == EvidenceType.LOGIN
     assert evidence.threat_level == ThreatLevel.INFO
-    assert evidence.attacker is False
-    assert evidence.victim.direction == Direction.DST
+    assert evidence.attacker.direction == Direction.DST
+    assert evidence.attacker.ioc_type == IoCType.IP
+    assert evidence.attacker.value == "147.32.80.37"
+    assert evidence.victim.direction == Direction.SRC
     assert evidence.victim.ioc_type == IoCType.IP
-    assert evidence.victim.value == "147.32.80.37"
-    assert evidence.profile.ip == "147.32.80.37"
+    assert evidence.victim.value == "147.32.80.40"
+    assert evidence.profile.ip == "147.32.80.40"
     assert evidence.uid == ["CpUMTT6FJDsiSlCre"]
 
     serialized_evidence = utils.to_dict(evidence)
     restored_evidence = dict_to_evidence(serialized_evidence)
-    assert restored_evidence.attacker is None
-    assert restored_evidence.victim.value == "147.32.80.37"
+    assert restored_evidence.attacker.value == "147.32.80.37"
+    assert restored_evidence.victim.value == "147.32.80.40"

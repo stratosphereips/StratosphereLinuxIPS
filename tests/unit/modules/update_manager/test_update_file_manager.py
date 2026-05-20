@@ -174,14 +174,14 @@ def test_download_file(
     mocker,
 ):
     """Test download_file with a successful request."""
+    update_manager = ModuleFactory().create_update_manager_obj()
     url = "https://example.com/file.txt"
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.text = "file content"
-    update_manager = ModuleFactory().create_update_manager_obj()
     response = update_manager.download_file(url)
 
-    mock_requests.assert_called_once_with(url, timeout=5)
+    mock_requests.assert_called_once_with(url, timeout=5, verify=False)
     assert response.text == "file content"
 
 
