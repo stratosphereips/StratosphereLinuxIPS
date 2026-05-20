@@ -42,7 +42,10 @@ from slips_files.common.abstracts.imodule import (
 from slips_files.common.plotter import Plotter
 
 from slips_files.common.style import green
-from slips_files.common.input_type import InputType
+from slips_files.common.input_type import (
+    InputType,
+    FOREVER_GROWING_INPUT_TYPES,
+)
 from slips_files.core.evidence_handler import EvidenceHandler
 from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.input import Input
@@ -192,6 +195,7 @@ class ProcessManager:
         # first message before the profiler can choose the input handler.
         if self.main.input_type == InputType.INTERFACE:
             self.is_profiler_done_starting_initial_workers_event.wait(30)
+        self.profiler_process = profiler_process
         return profiler_process
 
     def start_evidence_process(self):
@@ -213,6 +217,7 @@ class ProcessManager:
             0,
         )
         self.main.db.store_pid("evidence_handler", int(evidence_process.pid))
+        self.evidence_process = evidence_process
         return evidence_process
 
     def start_input_process(self):
@@ -245,6 +250,7 @@ class ProcessManager:
             0,
         )
         self.main.db.store_pid("Input", int(input_process.pid))
+        self.input_process = input_process
         return input_process
 
     def kill_process_tree(self, pid: int):
@@ -688,10 +694,37 @@ class ProcessManager:
             # happens in dataset/test4-malicious.binetflow
             return False
 
+        if self._did_a_core_module_fail():
+            return True
+
         if self.is_stop_msg_received() or self.is_done_receiving_new_flows():
             return True
 
         return False
+
+    def _did_a_core_module_fail(self):
+        """
+        if one of the core modules crash or gets killed by the OS,
+        then slips should stop immediately
+        """
+
+        input_running = self.input_process.poll() is None
+        profiler_running = self.profiler_process.poll() is None
+        evidence_running = self.evidence_process.poll() is None
+
+        if self.main.input_type in FOREVER_GROWING_INPUT_TYPES:
+            # Slips is analyzing flows is continously recving flows,
+            # none of these modules should stop or "finish"
+            return not all((input_running, profiler_running, evidence_running))
+
+        # input can stop before the profiler  if it's done recving new
+        # flows from the file it's reading.
+        # but the profiler should never stop without the input. if it
+        # did then something went wrong.
+        profiler_stopped_before_input = not profiler_running and input_running
+        evidence_stopped = not evidence_running
+
+        return profiler_stopped_before_input or evidence_stopped
 
     def is_stop_msg_received(self) -> bool:
         """
