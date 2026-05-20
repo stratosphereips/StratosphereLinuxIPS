@@ -62,9 +62,9 @@ stateDiagram-v2
 
 Artifacts:
 
-- module log: `output/t_cell.log`
-- optional trace file: `<run_output_dir>/t_cell_trace.jsonl`
-  The configured trace path is always forced under the selected run output
+- module log: `<run_output_dir>/T Cell/t_cell.log`
+- optional trace file: `<run_output_dir>/T Cell/t_cell_trace.jsonl`
+  The configured trace path is always forced under the T Cell module output
   directory.
 - module DB: `<run_output_dir>/t_cell/t_cell.sqlite`
 - offline HTML report: `<run_output_dir>/t_cell_report.html`
