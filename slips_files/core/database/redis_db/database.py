@@ -1627,6 +1627,18 @@ class RedisDB(
 
         self.rcache.sadd(self.constants.TOR_NODES, *nodes)
 
+    def is_tor_node(self, ip: str) -> bool:
+        """
+        Check whether an IP is stored in the Tor nodes set.
+
+        Parameters:
+        ip: IP address to check.
+
+        Return:
+        bool: True if the IP is stored as a Tor node.
+        """
+        return bool(self.rcache.sismember(self.constants.TOR_NODES, ip))
+
     def get_org_info(self, org, info_type: str) -> List[str]:
         """
         Returns the ASN or domains of an org from the db

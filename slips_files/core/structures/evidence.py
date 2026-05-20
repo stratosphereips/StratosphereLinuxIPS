@@ -109,6 +109,7 @@ class EvidenceType(Enum):
     THREAT_INTELLIGENCE_ANSWER_OF_BLACKLISTED_QUERY = auto()
     MALICIOUS_DOWNLOADED_FILE = auto()
     THREAT_INTELLIGENCE_MALICIOUS_URL = auto()
+    TOR_EXIT_NODE = auto()
 
     def __str__(self):
         return self.name

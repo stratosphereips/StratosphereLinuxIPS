@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
-from typing import List
+from typing import Any, List
 from uuid import uuid4
 from datetime import datetime
 from slips_files.common.slips_utils import utils
@@ -512,6 +512,43 @@ class SetEvidenceHelper:
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=confidence,
+            src_port=flow.sport,
+            dst_port=flow.dport,
+        )
+
+        self.db.set_evidence(evidence)
+
+    def tor_exit_node(self, twid: str, flow: Any) -> None:
+        """
+        Set evidence for a connection to a Tor exit node.
+
+        Parameters:
+        twid: Time window ID.
+        flow: Connection flow whose destination is a Tor exit node.
+
+        Return:
+        None.
+        """
+        twid_number: int = int(twid.replace("timewindow", ""))
+        evidence: Evidence = Evidence(
+            evidence_type=EvidenceType.TOR_EXIT_NODE,
+            attacker=Attacker(
+                direction=Direction.DST,
+                ioc_type=IoCType.IP,
+                value=flow.daddr,
+            ),
+            victim=Victim(
+                direction=Direction.SRC,
+                ioc_type=IoCType.IP,
+                value=flow.saddr,
+            ),
+            threat_level=ThreatLevel.INFO,
+            description=f"Tor exit node {flow.daddr}.",
+            profile=ProfileID(ip=flow.saddr),
+            timewindow=TimeWindow(number=twid_number),
+            uid=[flow.uid],
+            timestamp=flow.starttime,
+            confidence=1.0,
             src_port=flow.sport,
             dst_port=flow.dport,
         )
