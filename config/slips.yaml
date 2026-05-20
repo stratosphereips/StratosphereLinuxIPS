@@ -255,7 +255,7 @@ flow_ml_detection:
   # training the models, to test in unknown data.
   # You should have trained at least once with 'Normal' data and once with
   # 'Malicious' data in order for the test to work.
-  mode: test
+  mode: train
 
   # Write training/testing metrics logs to output dir.
   # This affects only logging, not training behavior.
@@ -283,7 +283,7 @@ flow_ml_detection:
 #############################
 ml_linear_model:
   # Standalone sklearn-based ML module.
-  mode: test
+  mode: train
 
   # Training startup behavior (used only when mode: train):
   # false -> warm-start from model_load_path/preprocess_load_path (recommended default)
@@ -333,7 +333,7 @@ ml_linear_model:
 ############################ #
 ml_online_model:
   # Standalone river-based ML module.
-  mode: test
+  mode: train
 
   # Training startup behavior (used only when mode: train):
   # false -> warm-start from model_load_path/preprocess_load_path (recommended default)
@@ -387,7 +387,7 @@ ml_online_model:
 #############################
 federated_network_module:
   # Standalone federated network ML module.
-  mode: test
+  mode: train
 
   # Training startup behavior (used only when mode: train):
   # false -> warm-start from model_load_path/preprocess_load_path (recommended default)
@@ -408,6 +408,12 @@ federated_network_module:
 
   # Number of labeled flows/alerts collected before each training/retraining step.
   training_batch_size: 500
+
+  # Number of epochs for local training (full pass over batch per epoch).
+  local_training_epochs: 10
+
+  # Number of epochs for head fine-tuning after model merge.
+  merge_finetune_epochs: 5
 
   # Time window width in seconds specifically for this module.
   # Default SLIPS time_window_width is 3600 (1 hour).

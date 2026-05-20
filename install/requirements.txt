@@ -3,7 +3,7 @@ setuptools<81
 # do NOT build river from source. Only install it if a wheel exists.
 --only-binary=river
 river
-numpy==1.26.4
+numpy>=1.24.0,<3.0.0
 watchdog==5.0.0
 redis==5.2.1
 urllib3==2.7.0
@@ -13,7 +13,7 @@ cabby==0.1.23
 stix2==3.0.1
 taxii2-client==2.3.0
 certifi==2025.10.5
-tensorflow-cpu==2.19.1
+tensorflow-cpu>=2.15.0
 Keras==3.13.2; python_version >= "3.11"
 Keras==3.12.2; python_version < "3.11"
 validators==0.35.0

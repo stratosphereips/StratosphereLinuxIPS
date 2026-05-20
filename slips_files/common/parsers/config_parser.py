@@ -870,6 +870,41 @@ class ConfigParser(object):
         except (TypeError, ValueError):
             return default
 
+    def ml_module_local_training_epochs(
+        self, section: str, default: int = 10
+    ) -> int:
+        value = self.read_configuration(
+            section, "local_training_epochs", default
+        )
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    def ml_module_merge_finetune_epochs(
+        self, section: str, default: int = 5
+    ) -> int:
+        value = self.read_configuration(
+            section, "merge_finetune_epochs", default
+        )
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    def ml_module_window_offset_seconds(
+        self, section: str, default: int = None
+    ) -> int:
+        value = self.read_configuration(
+            section, "window_offset_seconds", default
+        )
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
     # Legacy flowmldetection wrappers kept for compatibility.
     def create_performance_metrics_log_files(self) -> bool:
         return self.ml_module_enable_logs("flowmldetection", default=False)
