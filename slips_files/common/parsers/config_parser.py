@@ -4,20 +4,17 @@ import re
 from datetime import timedelta
 import os
 import sys
+from slips_files.common.input_type import InputType
 import ipaddress
 from typing import (
     List,
-    Optional,
     Union,
     Optional,
 )
 import yaml
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 
-from modules.supported_module_names import Modules
-from slips_files.common.ips import LOCALHOST_HOSTNAME
 from slips_files.common.parsers.arg_parser import ArgumentParser
-from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
 
 
@@ -148,62 +145,6 @@ class ConfigParser(object):
         except ValueError:
             threshold = default_value
         return threshold
-
-    def risk_accumulated_threat_level(self) -> float:
-        default_value = 15.0
-        threshold = self.read_configuration(
-            "detection", "risk_accumulated_threat_level", default_value
-        )
-        try:
-            return float(threshold)
-        except (TypeError, ValueError):
-            return default_value
-
-    def _read_detection_float(
-        self, name: str, default_value: Optional[float]
-    ) -> Optional[float]:
-        """
-        Read a floating-point value from the detection configuration section.
-
-        Parameters:
-            name: Detection configuration key to read.
-            default_value: Value returned when the key is unset or invalid.
-
-        Return value:
-            Parsed float value, or the provided default.
-        """
-        value = self.read_configuration("detection", name, default_value)
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return default_value
-
-    def low_risk_weight(self) -> Optional[float]:
-        """
-        Read the configured low-risk weight.
-
-        Return value:
-            Parsed low-risk weight, or None when unset or invalid.
-        """
-        return self._read_detection_float("low_risk_weight", None)
-
-    def medium_risk_weight(self) -> Optional[float]:
-        """
-        Read the configured medium-risk weight.
-
-        Return value:
-            Parsed medium-risk weight, or None when unset or invalid.
-        """
-        return self._read_detection_float("medium_risk_weight", None)
-
-    def high_risk_weight(self) -> Optional[float]:
-        """
-        Read the configured high-risk weight.
-
-        Return value:
-            Parsed high-risk weight, or None when unset or invalid.
-        """
-        return self._read_detection_float("high_risk_weight", None)
 
     def packet_filter(self):
         return self.read_configuration("parameters", "pcapfilter", False)
@@ -342,16 +283,6 @@ class ConfigParser(object):
             update_period = 604800
         return update_period
 
-    def tranco_top_benign_limit(self):
-        limit = self.read_configuration(
-            "whitelists", "tranco_top_benign_limit", 1000
-        )
-        try:
-            limit = int(limit)
-        except ValueError:
-            limit = 1000
-        return max(0, limit)
-
     def popup_alerts(self):
         return self.read_configuration("detection", "popup_alerts", False)
 
@@ -455,34 +386,6 @@ class ConfigParser(object):
         return self.read_configuration(
             "DisabledAlerts", "disabled_detections", []
         )
-
-    def evidence_signal_default(self) -> str:
-        value = self.read_configuration(
-            "EvidenceSignals", "default_signal", "PAMP"
-        )
-        if not isinstance(value, str):
-            return "PAMP"
-        value = value.strip().upper()
-        if value not in ("PAMP", "DAMP"):
-            return "PAMP"
-        return value
-
-    def evidence_signal_overrides(self) -> dict:
-        overrides = self.read_configuration("EvidenceSignals", "overrides", {})
-        if not isinstance(overrides, dict):
-            return {}
-
-        sanitized = {}
-        for evidence_type, signal in overrides.items():
-            if not isinstance(evidence_type, str):
-                continue
-            if not isinstance(signal, str):
-                continue
-            normalized_signal = signal.strip().upper()
-            if normalized_signal not in ("PAMP", "DAMP"):
-                continue
-            sanitized[evidence_type.strip().upper()] = normalized_signal
-        return sanitized
 
     def get_tw_width(self) -> str:
         twid_width = self.get_tw_width_in_seconds()
@@ -591,37 +494,6 @@ class ConfigParser(object):
         return self.read_configuration(
             "exporting_alerts", "sensor_name", False
         )
-
-    def idmef_manager_config(self) -> dict:
-        """
-        Returns the nested 'idmef_manager' mapping from the exporting_alerts
-        section (url, client_certificate, client_private_key, trusted_ca,
-        timeout), or an empty dict if it's not configured.
-        """
-        conf = self.read_configuration("exporting_alerts", "idmef_manager", {})
-        return conf if isinstance(conf, dict) else {}
-
-    def idmef_manager_url(self):
-        return self.idmef_manager_config().get(
-            "url", f"https://{LOCALHOST_HOSTNAME}:8443/"
-        )
-
-    def idmef_manager_client_certificate(self):
-        return self.idmef_manager_config().get("client_certificate", "")
-
-    def idmef_manager_client_private_key(self):
-        return self.idmef_manager_config().get("client_private_key", "")
-
-    def idmef_manager_trusted_ca(self):
-        return self.idmef_manager_config().get("trusted_ca", "")
-
-    def idmef_manager_timeout(self):
-        timeout = self.idmef_manager_config().get("timeout", 10)
-        try:
-            timeout = float(timeout)
-        except (ValueError, TypeError):
-            timeout = 10
-        return max(1.0, timeout)
 
     def taxii_server(self):
         taxii_server = self.read_configuration(
@@ -787,6 +659,11 @@ class ConfigParser(object):
             threshold = 500
         return threshold
 
+    def get_ml_mode(self):
+        return self.read_module_configuration(
+            "flow_ml_detection", "flowmldetection", "mode", "test"
+        )
+
     @staticmethod
     def _to_bool(value, default: bool) -> bool:
         if isinstance(value, bool):
@@ -963,6 +840,12 @@ class ConfigParser(object):
         default: float = 0.0,
     ) -> float:
         value = self.read_configuration(section, "benign_target_value", None)
+        if value is None:
+            value = self.read_configuration(
+                "flowmldetection",
+                "benign_target_value",
+                default,
+            )
         try:
             return float(value)
         except (TypeError, ValueError):
@@ -976,328 +859,65 @@ class ConfigParser(object):
         value = self.read_configuration(
             section, "malicious_target_value", None
         )
+        if value is None:
+            value = self.read_configuration(
+                "flowmldetection",
+                "malicious_target_value",
+                default,
+            )
         try:
             return float(value)
         except (TypeError, ValueError):
             return default
 
-    @staticmethod
-    def _to_bool(value, default: bool) -> bool:
-        if isinstance(value, bool):
-            return value
+    def ml_module_local_training_epochs(
+        self, section: str, default: int = 10
+    ) -> int:
+        value = self.read_configuration(
+            section, "local_training_epochs", default
+        )
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    def ml_module_merge_finetune_epochs(
+        self, section: str, default: int = 5
+    ) -> int:
+        value = self.read_configuration(
+            section, "merge_finetune_epochs", default
+        )
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    def ml_module_window_offset_seconds(
+        self, section: str, default: int = None
+    ) -> int:
+        value = self.read_configuration(
+            section, "window_offset_seconds", default
+        )
         if value is None:
             return default
-        if isinstance(value, (int, float)):
-            return bool(value)
-        text = str(value).strip().lower()
-        if text in {"1", "true", "yes", "y", "on"}:
-            return True
-        if text in {"0", "false", "no", "n", "off"}:
-            return False
-        return default
-
-    def https_anomaly_training_fit_method(self) -> str:
-        method = self.read_configuration(
-            "anomaly_detection_https", "training_fit_method", "welford"
-        )
-        method = str(method).strip().lower()
-        if method not in ("welford", "ewma"):
-            return "welford"
-        return method
-
-    def ml_module_mode(self, section: str, default: str = "test") -> str:
-        value = self.read_configuration(section, "mode", default)
-        value = str(value).strip().lower()
-        if value not in ("train", "test"):
-            return default
-        return value
-
-    def https_anomaly_hourly_zscore_thr(self) -> float:
-        threshold = self.read_configuration(
-            "anomaly_detection_https", "hourly_zscore_threshold", 3.0
-        )
         try:
-            threshold = float(threshold)
-        except (TypeError, ValueError):
-            threshold = 3.0
-        return max(0.5, threshold)
-
-    def ml_module_enable_logs(
-        self, section: str, default: bool = False
-    ) -> bool:
-        value = self.read_configuration(
-            section,
-            "create_performance_metrics_log_files",
-            default,
-        )
-        return self._to_bool(value, default)
-
-    def https_anomaly_flow_zscore_thr(self) -> float:
-        threshold = self.read_configuration(
-            "anomaly_detection_https", "flow_zscore_threshold", 3.5
-        )
-        try:
-            threshold = float(threshold)
-        except (TypeError, ValueError):
-            threshold = 3.5
-        return max(0.5, threshold)
-
-    def ml_module_validate_on_train(
-        self,
-        section: str,
-        default: bool = True,
-    ) -> bool:
-        value = self.read_configuration(section, "validate_on_train", default)
-        return self._to_bool(value, default)
-
-    def https_anomaly_adapt_score_thr(self) -> float:
-        threshold = self.read_configuration(
-            "anomaly_detection_https", "adaptation_score_threshold", 2.0
-        )
-        try:
-            threshold = float(threshold)
-        except (TypeError, ValueError):
-            threshold = 2.0
-        return max(0.0, threshold)
-
-    def ml_module_validation_percentage(
-        self,
-        section: str,
-        default: float = 0.1,
-    ) -> float:
-        value = self.read_configuration(
-            section, "validation_percentage", default
-        )
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            value = default
-
-        if value > 1.0:
-            value = value / 100.0
-        return min(max(value, 0.0), 0.9)
-
-    def https_anomaly_baseline_alpha(self) -> float:
-        alpha = self.read_configuration(
-            "anomaly_detection_https", "baseline_alpha", 0.1
-        )
-        try:
-            alpha = float(alpha)
-        except (TypeError, ValueError):
-            alpha = 0.1
-        return min(max(alpha, 0.001), 1.0)
-
-    def https_anomaly_drift_alpha(self) -> float:
-        alpha = self.read_configuration(
-            "anomaly_detection_https", "drift_alpha", 0.05
-        )
-        try:
-            alpha = float(alpha)
-        except (TypeError, ValueError):
-            alpha = 0.05
-        return min(max(alpha, 0.001), 1.0)
-
-    def https_anomaly_suspicious_alpha(self) -> float:
-        alpha = self.read_configuration(
-            "anomaly_detection_https", "suspicious_alpha", 0.005
-        )
-        try:
-            alpha = float(alpha)
-        except (TypeError, ValueError):
-            alpha = 0.005
-        return min(max(alpha, 0.0), 1.0)
-
-    def ml_module_training_batch_size(
-        self,
-        section: str,
-        default: int = 50,
-    ) -> int:
-        value = self.read_configuration(
-            section, "training_batch_size", default
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = default
-        return max(1, value)
-
-    def https_anomaly_min_baseline_points(self) -> int:
-        points = self.read_configuration(
-            "anomaly_detection_https", "min_baseline_points", 6
-        )
-        try:
-            points = int(points)
-        except (TypeError, ValueError):
-            points = 6
-        return max(1, points)
-
-    def ml_module_seed(
-        self,
-        section: str,
-        default: int = 1111,
-    ) -> int:
-        value = self.read_configuration(section, "seed", default)
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = default
-        return value
-
-    def https_anomaly_max_small_flow_anomalies(self) -> int:
-        threshold = self.read_configuration(
-            "anomaly_detection_https", "max_small_flow_anomalies", 1
-        )
-        try:
-            threshold = int(threshold)
-        except (TypeError, ValueError):
-            threshold = 1
-        return max(0, threshold)
-
-    def ml_module_train_from_scratch(
-        self,
-        section: str,
-        default: bool = False,
-    ) -> bool:
-        value = self.read_configuration(section, "train_from_scratch", default)
-        return self._to_bool(value, default)
-
-    def https_anomaly_ja3_min_variants_per_server(self) -> int:
-        threshold = self.read_configuration(
-            "anomaly_detection_https", "ja3_min_variants_per_server", 3
-        )
-        try:
-            threshold = int(threshold)
-        except (TypeError, ValueError):
-            threshold = 3
-        return max(1, threshold)
-
-    def ml_module_log_suffix(self, section: str, default: str) -> str:
-        value = self.read_configuration(section, "log_suffix", default)
-        return str(value).strip()
-
-    def https_anomaly_use_adwin_drift(self) -> bool:
-        value = self.read_configuration(
-            "anomaly_detection_https", "use_adwin_drift", True
-        )
-        return self._to_bool(value, True)
-
-    def ml_module_test_log_batch_size(
-        self,
-        section: str,
-        default: int,
-    ) -> int:
-        value = self.read_configuration(
-            section, "test_log_batch_size", default
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = default
-        return max(1, value)
-
-    def https_anomaly_adwin_delta(self) -> float:
-        delta = self.read_configuration(
-            "anomaly_detection_https", "adwin_delta", 0.01
-        )
-        try:
-            delta = float(delta)
-        except (TypeError, ValueError):
-            delta = 0.01
-        return min(max(delta, 0.000001), 1.0)
-
-    def https_anomaly_adwin_clock(self) -> int:
-        clock = self.read_configuration(
-            "anomaly_detection_https", "adwin_clock", 1
-        )
-        try:
-            clock = int(clock)
-        except (TypeError, ValueError):
-            clock = 1
-        return max(1, clock)
-
-    def ml_module_model_load_path(self, section: str, default: str) -> str:
-        return str(
-            self.read_configuration(section, "model_load_path", default)
-        ).strip()
-
-    def ml_module_model_store_path(self, section: str, default: str) -> str:
-        return str(
-            self.read_configuration(section, "model_store_path", default)
-        ).strip()
-
-    def ml_module_preprocess_load_path(
-        self, section: str, default: str
-    ) -> str:
-        return str(
-            self.read_configuration(section, "preprocess_load_path", default)
-        ).strip()
-
-    def ml_module_preprocess_store_path(
-        self, section: str, default: str
-    ) -> str:
-        return str(
-            self.read_configuration(section, "preprocess_store_path", default)
-        ).strip()
-
-    def ml_module_pca_n_components(
-        self,
-        section: str,
-        default: Optional[int] = None,
-    ) -> Optional[int]:
-        value = self.read_configuration(section, "pca_n_components", default)
-        if value in (None, "", "null", "None"):
-            return None
-        try:
-            n_components = int(value)
-        except (TypeError, ValueError):
-            return default
-        return max(1, n_components)
-
-    def ml_module_pca_batch_size(
-        self,
-        section: str,
-        default: int,
-    ) -> int:
-        value = self.read_configuration(section, "pca_batch_size", default)
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = default
-        return max(1, value)
-
-    def ml_module_pca_load_path(self, section: str, default: str) -> str:
-        return str(
-            self.read_configuration(section, "pca_load_path", default)
-        ).strip()
-
-    def ml_module_pca_store_path(self, section: str, default: str) -> str:
-        return str(
-            self.read_configuration(section, "pca_store_path", default)
-        ).strip()
-
-    def ml_module_benign_target_value(
-        self,
-        section: str,
-        default: float = 0.0,
-    ) -> float:
-        value = self.read_configuration(section, "benign_target_value", None)
-        try:
-            return float(value)
+            return int(value)
         except (TypeError, ValueError):
             return default
 
-    def ml_module_malicious_target_value(
-        self,
-        section: str,
-        default: float = 1.0,
-    ) -> float:
-        value = self.read_configuration(
-            section, "malicious_target_value", None
+    # Legacy flowmldetection wrappers kept for compatibility.
+    def create_performance_metrics_log_files(self) -> bool:
+        return self.ml_module_enable_logs("flowmldetection", default=False)
+
+    def validate_on_train(self) -> bool:
+        return self.ml_module_validate_on_train(
+            "flowmldetection", default=True
         )
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return default
+
+    def flow_ml_detection_training_batch_size(self) -> int:
+        return self.ml_module_training_batch_size(
+            "flowmldetection", default=50
+        )
 
     def https_anomaly_training_hours(self) -> int:
         training_hours = self.read_configuration(
@@ -1545,600 +1165,6 @@ class ConfigParser(object):
             "modules", "timeline_human_timestamp", False
         )
 
-    def llm_enabled(self) -> bool:
-        value = self.read_configuration("llm_proxy", "enabled", False)
-        if isinstance(value, bool):
-            return value
-        return str(value).strip().lower() in ("true", "1", "yes", "on")
-
-    def llm_default_backend(self) -> str:
-        value = self.read_configuration("llm_proxy", "default_backend", "")
-        return str(value or "").strip()
-
-    def llm_worker_threads(self) -> int:
-        value = self.read_configuration("llm_proxy", "worker_threads", 2)
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 2
-        return max(1, value)
-
-    def llm_queue_size(self) -> int:
-        value = self.read_configuration("llm_proxy", "queue_size", 100)
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 100
-        return max(1, value)
-
-    def llm_backends(self) -> dict:
-        backends = self.read_configuration("llm_proxy", "backends", {})
-        return backends if isinstance(backends, dict) else {}
-
-    def regex_generator_enabled(self) -> bool:
-        value = self.read_configuration("regex_generator", "enabled", False)
-        if isinstance(value, bool):
-            return value
-        return str(value).strip().lower() in ("true", "1", "yes", "on")
-
-    def regex_generator_generation_interval_seconds(self) -> float:
-        value = self.read_configuration(
-            "regex_generator", "generation_interval_seconds", 5
-        )
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            value = 5
-        return max(0.0, value)
-
-    def regex_generator_create_log_file(self) -> bool:
-        value = self.read_configuration(
-            "regex_generator", "create_log_file", False
-        )
-        if isinstance(value, bool):
-            return value
-        return str(value).strip().lower() in ("true", "1", "yes", "on")
-
-    def regex_generator_allowed_backends(self) -> list:
-        value = self.read_configuration(
-            "regex_generator", "allowed_backends", []
-        )
-        if not isinstance(value, list):
-            return []
-        return [
-            str(backend).strip() for backend in value if str(backend).strip()
-        ]
-
-    def regex_generator_llm_temperature(self) -> float:
-        value = self.read_configuration(
-            "regex_generator", "llm_temperature", 1.2
-        )
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            value = 1.2
-        return max(0.0, value)
-
-    def regex_generator_llm_max_tokens(self) -> int:
-        value = self.read_configuration(
-            "regex_generator", "llm_max_tokens", 80
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 80
-        return max(1, value)
-
-    def regex_generator_llm_response_timeout_seconds(self) -> int:
-        value = self.read_configuration(
-            "regex_generator", "llm_response_timeout_seconds", 90
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 90
-        return max(0, value)
-
-    def regex_generator_recent_history_size(self) -> int:
-        value = self.read_configuration(
-            "regex_generator", "recent_history_size", 0
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 0
-        return max(0, value)
-
-    def regex_generator_max_regex_length(self) -> int:
-        value = self.read_configuration(
-            "regex_generator", "max_regex_length", 180
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 180
-        return max(1, value)
-
-    def regex_generator_regex_validation_timeout_seconds(self) -> float:
-        value = self.read_configuration(
-            "regex_generator", "regex_validation_timeout_seconds", 2
-        )
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            value = 2.0
-        return max(0.0, value)
-
-    def regex_generator_benign_match_strength_threshold(self) -> float:
-        value = self.read_configuration(
-            "regex_generator", "benign_match_strength_threshold", 75
-        )
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            value = 75.0
-        return max(0.0, min(100.0, value))
-
-    def regex_generator_type_weights(self) -> dict:
-        default_weights = {
-            "dns_domain": 1,
-            "uri": 1,
-            "filename": 1,
-            "tls_sni": 1,
-            "certificate_cn": 1,
-        }
-        value = self.read_configuration(
-            "regex_generator", "type_weights", default_weights
-        )
-        if not isinstance(value, dict):
-            return default_weights
-
-        sanitized_weights = {}
-        for regex_type, default_weight in default_weights.items():
-            raw_weight = value.get(regex_type, default_weight)
-            try:
-                raw_weight = float(raw_weight)
-            except (TypeError, ValueError):
-                raw_weight = default_weight
-            sanitized_weights[regex_type] = max(0.0, raw_weight)
-
-        if not any(sanitized_weights.values()):
-            return default_weights
-        return sanitized_weights
-
-    def regex_generator_store_dir(self) -> str:
-        value = self.read_configuration(
-            "regex_generator", "store_dir", "output/regex_generator"
-        )
-        if not isinstance(value, str) or not value.strip():
-            return "output/regex_generator"
-        return value.strip()
-
-    def regex_generator_persistent_store_dir(self) -> str:
-        value = self.read_configuration(
-            "regex_generator",
-            "persistent_store_dir",
-            "databases/regex_store",
-        )
-        if not isinstance(value, str) or not value.strip():
-            return ""
-        return value.strip()
-
-    def regex_generator_store_rejected_regexes(self) -> bool:
-        value = self.read_configuration(
-            "regex_generator", "store_rejected_regexes", False
-        )
-        if isinstance(value, bool):
-            return value
-        return str(value).strip().lower() in ("true", "1", "yes", "on")
-
-    def regex_generator_max_stored_rejected_regexes(self) -> int:
-        value = self.read_configuration(
-            "regex_generator", "max_stored_rejected_regexes", 10000
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            return 10000
-        return max(0, value)
-
-    def regex_generator_seed_benign_samples(self) -> bool:
-        value = self.read_configuration(
-            "regex_generator", "seed_benign_samples", True
-        )
-        if isinstance(value, bool):
-            return value
-        return str(value).strip().lower() in ("true", "1", "yes", "on")
-
-    def alert_summary_enabled(self) -> bool:
-        value = self.read_configuration("alert_summary", "enabled", False)
-        if isinstance(value, bool):
-            return value
-        return str(value).strip().lower() in ("true", "1", "yes", "on")
-
-    def alert_summary_allowed_backends(self) -> list:
-        value = self.read_configuration(
-            "alert_summary", "allowed_backends", []
-        )
-        if not isinstance(value, list):
-            return []
-        return [
-            str(backend).strip() for backend in value if str(backend).strip()
-        ]
-
-    def alert_summary_llm_temperature(self) -> float:
-        value = self.read_configuration(
-            "alert_summary", "llm_temperature", 0.2
-        )
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            value = 0.2
-        return max(0.0, value)
-
-    def alert_summary_llm_max_tokens(self) -> int:
-        value = self.read_configuration("alert_summary", "llm_max_tokens", 220)
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 220
-        return max(1, value)
-
-    def alert_summary_llm_response_timeout_seconds(self) -> int:
-        value = self.read_configuration(
-            "alert_summary", "llm_response_timeout_seconds", 120
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 120
-        return max(0, value)
-
-    def alert_summary_log_verbosity(self) -> int:
-        value = self.read_configuration("alert_summary", "log_verbosity", 2)
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 2
-        return min(max(value, 0), 3)
-
-    def alert_summary_history_enabled(self) -> bool:
-        value = self.read_configuration(
-            "alert_summary", "history_enabled", False
-        )
-        if isinstance(value, bool):
-            return value
-        return str(value).strip().lower() in ("true", "1", "yes", "on")
-
-    def alert_summary_history_max_alerts(self) -> int:
-        value = self.read_configuration(
-            "alert_summary", "history_max_alerts", 3
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 3
-        return max(0, value)
-
-    def alert_summary_history_max_tokens(self) -> int:
-        value = self.read_configuration(
-            "alert_summary", "history_max_tokens", 700
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 700
-        return max(0, value)
-
-    def alert_summary_history_patterns_per_alert(self) -> int:
-        value = self.read_configuration(
-            "alert_summary", "history_patterns_per_alert", 2
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 2
-        return max(0, value)
-
-    def t_cell_enabled(self) -> bool:
-        value = self.read_configuration("t_cell", "enabled", True)
-        if isinstance(value, bool):
-            return value
-        return str(value).strip().lower() in ("true", "1", "yes", "on")
-
-    def t_cell_create_log_file(self) -> bool:
-        value = self.read_configuration("t_cell", "create_log_file", True)
-        if isinstance(value, bool):
-            return value
-        return str(value).strip().lower() in ("true", "1", "yes", "on")
-
-    def t_cell_log_colors(self) -> bool:
-        value = self.read_configuration("t_cell", "log_colors", True)
-        if isinstance(value, bool):
-            return value
-        return str(value).strip().lower() in ("true", "1", "yes", "on")
-
-    def t_cell_log_verbosity(self) -> int:
-        value = self.read_configuration("t_cell", "log_verbosity", 1)
-        if isinstance(value, bool):
-            return 1
-        if isinstance(value, (int, float)):
-            value = int(value)
-        else:
-            normalized = str(value).strip().lower()
-            named_levels = {
-                "summary": 1,
-                "decision": 2,
-                "decisions": 2,
-                "debug": 3,
-            }
-            if normalized in named_levels:
-                value = named_levels[normalized]
-            else:
-                try:
-                    value = int(normalized)
-                except (TypeError, ValueError):
-                    value = 1
-        return max(1, min(3, int(value)))
-
-    def t_cell_decision_trace_mode(self) -> int:
-        value = self.read_configuration("t_cell", "decision_trace_mode", "off")
-        if isinstance(value, bool):
-            return 1 if value else 0
-        if isinstance(value, (int, float)):
-            return max(0, min(2, int(value)))
-
-        normalized = str(value).strip().lower()
-        named_levels = {
-            "off": 0,
-            "disabled": 0,
-            "none": 0,
-            "transitions": 1,
-            "transition": 1,
-            "state_changes": 1,
-            "changes": 1,
-            "all": 2,
-            "full": 2,
-            "debug": 2,
-        }
-        if normalized in named_levels:
-            return named_levels[normalized]
-        try:
-            return max(0, min(2, int(normalized)))
-        except (TypeError, ValueError):
-            return 0
-
-    def t_cell_decision_trace_file(self) -> str:
-        value = self.read_configuration(
-            "t_cell", "decision_trace_file", "t_cell_trace.jsonl"
-        )
-        if not isinstance(value, str) or not value.strip():
-            return "t_cell_trace.jsonl"
-        return value.strip()
-
-    def t_cell_decision_trace_max_evidence(self) -> int:
-        value = self.read_configuration(
-            "t_cell", "decision_trace_max_evidence", 10
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 10
-        return max(1, value)
-
-    def t_cell_store_dir(self) -> str:
-        value = self.read_configuration("t_cell", "store_dir", "output/t_cell")
-        if not isinstance(value, str) or not value.strip():
-            return "output/t_cell"
-        return value.strip()
-
-    def t_cell_persistent_store_dir(self) -> str:
-        value = self.read_configuration("t_cell", "persistent_store_dir", "")
-        if not isinstance(value, str) or not value.strip():
-            return ""
-        return value.strip()
-
-    def t_cell_observation_retention_seconds(self) -> int:
-        value = self.read_configuration(
-            "t_cell", "observation_retention_seconds", 604800
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 604800
-        return max(0, value)
-
-    def t_cell_anergy_ttl_seconds(self) -> int:
-        value = self.read_configuration("t_cell", "anergy_ttl_seconds", 21600)
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 21600
-        return max(0, value)
-
-    def t_cell_related_lookback_seconds(self) -> int:
-        value = self.read_configuration(
-            "t_cell", "related_lookback_seconds", 3600
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 3600
-        return max(1, value)
-
-    def t_cell_related_pamps_saturation(self) -> float:
-        value = self.read_configuration(
-            "t_cell", "related_pamps_saturation", 5
-        )
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            value = 5.0
-        return max(0.01, value)
-
-    def t_cell_danger_saturation(self) -> float:
-        value = self.read_configuration("t_cell", "danger_saturation", 2.5)
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            value = 2.5
-        return max(0.01, value)
-
-    def t_cell_damp_danger_weight(self) -> float:
-        value = self.read_configuration("t_cell", "damp_danger_weight", 1.5)
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            value = 1.5
-        return max(0.0, value)
-
-    def t_cell_co_stimulation_threshold(self) -> float:
-        value = self.read_configuration(
-            "t_cell", "co_stimulation_threshold", 0.65
-        )
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            value = 0.65
-        return max(0.0, min(1.0, value))
-
-    def t_cell_co_stimulation_weights(self) -> dict:
-        default_weights = {
-            "confidence": 0.35,
-            "related_pamps": 0.25,
-            "danger": 0.40,
-        }
-        value = self.read_configuration(
-            "t_cell", "co_stimulation_weights", default_weights
-        )
-        if not isinstance(value, dict):
-            return default_weights
-
-        sanitized_weights = {}
-        for weight_name, default_weight in default_weights.items():
-            raw_weight = value.get(weight_name, default_weight)
-            try:
-                raw_weight = float(raw_weight)
-            except (TypeError, ValueError):
-                raw_weight = default_weight
-            sanitized_weights[weight_name] = max(0.0, raw_weight)
-
-        if not any(sanitized_weights.values()):
-            return default_weights
-        return sanitized_weights
-
-    def t_cell_priming_profiles(self) -> dict:
-        default_profiles = {
-            "PAMP": {
-                "strength": 1.0,
-                "co_stimulation_threshold_offset": 0.0,
-                "effector_threshold_offset": 0.0,
-                "memory_threshold_offset": 0.0,
-                "state_wait_timeout_factor": 1.0,
-                "effector_min_related_count_offset": 0,
-                "memory_min_related_count_offset": 0,
-            },
-            "DAMP": {
-                "strength": 0.6,
-                "co_stimulation_threshold_offset": 0.15,
-                "effector_threshold_offset": 0.10,
-                "memory_threshold_offset": 0.05,
-                "state_wait_timeout_factor": 0.5,
-                "effector_min_related_count_offset": 1,
-                "memory_min_related_count_offset": 1,
-            },
-        }
-        value = self.read_configuration(
-            "t_cell", "priming_profiles", default_profiles
-        )
-        if not isinstance(value, dict):
-            return default_profiles
-        return value
-
-    def t_cell_novelty_window_seconds(self) -> int:
-        value = self.read_configuration(
-            "t_cell", "novelty_window_seconds", 86400
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 86400
-        return max(1, value)
-
-    def t_cell_context_recent_window_seconds(self) -> int:
-        value = self.read_configuration(
-            "t_cell", "context_recent_window_seconds", 1800
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 1800
-        return max(1, value)
-
-    def t_cell_effector_threshold(self) -> float:
-        value = self.read_configuration("t_cell", "effector_threshold", 0.70)
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            value = 0.70
-        return max(0.0, min(1.0, value))
-
-    def t_cell_effector_min_related_count(self) -> int:
-        value = self.read_configuration(
-            "t_cell", "effector_min_related_count", 4
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 4
-        return max(1, value)
-
-    def t_cell_effector_cooldown_seconds(self) -> int:
-        value = self.read_configuration(
-            "t_cell", "effector_cooldown_seconds", 1800
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 1800
-        return max(0, value)
-
-    def t_cell_memory_threshold(self) -> float:
-        value = self.read_configuration("t_cell", "memory_threshold", 0.60)
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            value = 0.60
-        return max(0.0, min(1.0, value))
-
-    def t_cell_memory_trend_ratio_max(self) -> float:
-        value = self.read_configuration(
-            "t_cell", "memory_trend_ratio_max", 0.60
-        )
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            value = 0.60
-        return max(0.0, value)
-
-    def t_cell_memory_min_related_count(self) -> int:
-        value = self.read_configuration(
-            "t_cell", "memory_min_related_count", 3
-        )
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            value = 3
-        return max(1, value)
-
-    def t_cell_simulate_effector_without_blocking(self) -> bool:
-        value = self.read_configuration(
-            "t_cell", "simulate_effector_without_blocking", True
-        )
-        if isinstance(value, bool):
-            return value
-        return str(value).strip().lower() in ("true", "1", "yes", "on")
-
     def analysis_direction(self):
         """
         Controls which traffic flows are processed and analyzed by SLIPS.
@@ -2200,32 +1226,11 @@ class ConfigParser(object):
     def delete_prev_db(self):
         return self.read_configuration("parameters", "deletePrevdb", True)
 
-    def rotation_period(self):
-        """
-        Read the configured log rotation interval.
-
-        Returns:
-            Sanitized interval string from `parameters.rotation_period` or the
-            legacy `parameters.default_rotation_interval` key.
-        """
-        rotation_period = self.read_configuration(
-            "parameters", "rotation_period", ""
-        )
-        if rotation_period in ("", None):
-            rotation_period = self.read_configuration(
-                "parameters", "default_rotation_interval", "1 day"
-            )
-        return utils.sanitize(str(rotation_period))
-
     def default_rotation_interval(self):
-        """
-        Read the legacy Zeek rotation interval setting.
-
-        Returns:
-            Sanitized interval string using the modern `rotation_period`
-            accessor with backward-compatible key lookup.
-        """
-        return self.rotation_period()
+        default_rotation_interval = self.read_configuration(
+            "parameters", "default_rotation_interval", "1 day"
+        )
+        return utils.sanitize(default_rotation_interval)
 
     def parse_ip(self, ip: str):
         """converts the given IP address or CIDR to an obj"""
@@ -2318,7 +1323,7 @@ class ConfigParser(object):
         # are we reading custom flows from cyst module?
         for param in ("--input-module", "-im"):
             try:
-                if Modules.CYST in sys.argv[sys.argv.index(param) + 1]:
+                if "cyst" in sys.argv[sys.argv.index(param) + 1]:
                     return True
             except ValueError:
                 # param isn't used
@@ -2336,16 +1341,16 @@ class ConfigParser(object):
         # Ignore exporting alerts module if export_to is empty
         export_to = self.export_to()
         if "stix" not in export_to and "slack" not in export_to:
-            to_ignore.append(Modules.EXPORTING_ALERTS)
+            to_ignore.append("exporting_alerts")
 
         use_p2p = self.use_local_p2p()
         if not (use_p2p and "-i" in sys.argv):
-            to_ignore.append(Modules.P2P_TRUST)
+            to_ignore.append("p2p_trust")
 
         use_global_p2p = self.use_global_p2p()
         if not (use_global_p2p and ("-i" in sys.argv)):
-            to_ignore.append(Modules.FIDES)
-            to_ignore.append(Modules.IRIS)
+            to_ignore.append("fides")
+            to_ignore.append("iris")
 
         # ignore CESNET sharing module if send and receive are
         # disabled in slips.yaml
@@ -2353,28 +1358,19 @@ class ConfigParser(object):
         receive_from_warden = self.receive_from_warden()
 
         if not send_to_warden and not receive_from_warden:
-            to_ignore.append(Modules.CESNET)
+            to_ignore.append("cesnet")
 
         # don't run blocking module unless specified
         if not ("-cb" in sys.argv or "-p" in sys.argv):
-            to_ignore.append(Modules.BLOCKING)
-            to_ignore.append(Modules.ARP_POISONER)
+            to_ignore.append("blocking")
+            to_ignore.append("arp_poisoner")
 
         # leak detector only works on pcap files
         if input_type != InputType.PCAP:
-            to_ignore.append(Modules.LEAK_DETECTOR)
+            to_ignore.append("leak_detector")
 
         if not self.reading_flows_from_cyst():
-            to_ignore.append(Modules.CYST)
-
-        if not self.llm_enabled():
-            to_ignore.append(Modules.LLM_PROXY)
-
-        if not self.regex_generator_enabled():
-            to_ignore.append(Modules.REGEX_GENERATOR)
-
-        if not self.t_cell_enabled():
-            to_ignore.append(Modules.T_CELL)
+            to_ignore.append("cyst")
 
         return to_ignore
 
@@ -2430,6 +1426,21 @@ class ConfigParser(object):
     def get_iris_config_location(self) -> str:
         return self.read_configuration(
             "global_p2p", "iris_conf", "config/iris_config.yaml"
+        )
+
+    def get_bootstrapping_setting(self) -> (bool, list):
+        return (
+            self.read_configuration("global_p2p", "bootstrapping_node", False)
+            and self.read_configuration("global_p2p", "use_global_p2p", False)
+            and ("-i" in sys.argv or "-g" in sys.argv),
+            ["fides", "iris"],
+        )
+
+    def is_bootstrapping_node(self) -> bool:
+        return (
+            self.read_configuration("global_p2p", "bootstrapping_node", False)
+            and self.read_configuration("global_p2p", "use_global_p2p", False)
+            and ("-i" in sys.argv or "-g" in sys.argv)
         )
 
     def get_bootstrapping_modules(self) -> list:
