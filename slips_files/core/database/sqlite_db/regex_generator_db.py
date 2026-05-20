@@ -9,6 +9,9 @@ from typing import Dict, Iterable, List
 from pybloom_live import ScalableBloomFilter
 
 from slips_files.common.abstracts.isqlite import ISQLite
+from slips_files.common.output_paths import (
+    get_this_filepath_inside_permanent_dir,
+)
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
@@ -370,12 +373,14 @@ class RegexGeneratorStorage:
         self.rejected_regex_filter = self._build_rejected_regex_filter()
 
     def _resolve_store_dir(self) -> str:
-        raw_store_dir = self._read_store_dir()
-        store_dir = self._normalize_store_dir(raw_store_dir)
+        raw_store_dir, is_persistent = self._read_store_dir()
+        store_dir = self._normalize_store_dir(raw_store_dir, is_persistent)
         store_dir.mkdir(parents=True, exist_ok=True)
         return str(store_dir)
 
-    def _normalize_store_dir(self, raw_store_dir: str) -> Path:
+    def _normalize_store_dir(
+        self, raw_store_dir: str, is_persistent: bool = False
+    ) -> Path:
         store_dir = Path(raw_store_dir).expanduser()
         if store_dir.is_absolute():
             return store_dir
@@ -383,6 +388,14 @@ class RegexGeneratorStorage:
         relative_parts = list(store_dir.parts)
         while relative_parts and relative_parts[0] == ".":
             relative_parts = relative_parts[1:]
+        if is_persistent:
+            if not relative_parts:
+                relative_parts = ["databases", "regex_store"]
+            return Path(
+                get_this_filepath_inside_permanent_dir(
+                    os.path.join(*relative_parts)
+                )
+            )
         if relative_parts and relative_parts[0] == "output":
             relative_parts = relative_parts[1:]
         if not relative_parts:
@@ -390,16 +403,16 @@ class RegexGeneratorStorage:
 
         return Path(self.output_dir).expanduser().joinpath(*relative_parts)
 
-    def _read_store_dir(self) -> str:
+    def _read_store_dir(self) -> tuple[str, bool]:
         persistent_value = self._read_string_config(
             "regex_generator_persistent_store_dir"
         )
         if persistent_value:
-            return persistent_value
+            return persistent_value, True
 
         value = self._read_string_config("regex_generator_store_dir")
         if value:
-            return value
+            return value, False
 
         parser = ConfigParser()
         persistent_getter = getattr(
@@ -411,7 +424,7 @@ class RegexGeneratorStorage:
             except TypeError:
                 persistent_value = None
             if isinstance(persistent_value, str) and persistent_value.strip():
-                return persistent_value.strip()
+                return persistent_value.strip(), True
 
         parser_getter = getattr(parser, "regex_generator_store_dir", None)
         if callable(parser_getter):
@@ -420,8 +433,8 @@ class RegexGeneratorStorage:
             except TypeError:
                 value = None
             if isinstance(value, str) and value.strip():
-                return value.strip()
-        return DEFAULT_REGEX_GENERATOR_STORE_DIR
+                return value.strip(), False
+        return DEFAULT_REGEX_GENERATOR_STORE_DIR, False
 
     def _read_seed_benign_samples(self) -> bool:
         value = self._read_bool_config("regex_generator_seed_benign_samples")
