@@ -34,6 +34,7 @@ The detection techniques are:
 - GRE tunnels
 - GRE tunnel scan
 - Invalid DNS answers
+- Tor exit nodes
 The details of each detection follows.
 
 
@@ -156,6 +157,10 @@ The number of MBs can be modified by changing the value of ```data_exfiltration_
 
 
 Slips also detects data upload when an IP uploads >=100MBs to any IP in 1 connections.
+
+## Tor Exit Nodes
+
+Slips generates informational evidence when it detects a tor exit node from the list https://check.torproject.org/torbulkexitlist.
 
 ## Malicious JA3 and JA3s hashes
 

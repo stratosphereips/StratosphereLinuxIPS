@@ -158,6 +158,30 @@ def test_get_the_other_ip_version():
     assert other_ip == ipv6
 
 
+def test_is_tor_node():
+    """Test the DB manager Tor node lookup wrapper."""
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    original_is_tor_node = db.rdb.is_tor_node
+    db.rdb.is_tor_node = Mock(return_value=True)
+
+    try:
+        assert db.is_tor_node("185.220.101.1") is True
+        db.rdb.is_tor_node.assert_called_once_with("185.220.101.1")
+    finally:
+        db.rdb.is_tor_node = original_is_tor_node
+
+
+def test_redis_db_is_tor_node():
+    """Test the Redis Tor nodes set membership lookup."""
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    db.rdb.rcache.sismember = Mock(return_value=1)
+
+    assert db.rdb.is_tor_node("185.220.101.1") is True
+    db.rdb.rcache.sismember.assert_called_once_with(
+        db.rdb.constants.TOR_NODES, "185.220.101.1"
+    )
+
+
 def test_setup_config_file_uses_isolated_path_and_preserves_save(
     tmp_path, monkeypatch
 ):

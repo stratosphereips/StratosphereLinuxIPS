@@ -673,6 +673,46 @@ def test_conn_without_dns(time_difference_hours, expected_confidence):
     )
 
 
+def test_tor_exit_node():
+    """Testing the tor_exit_node method."""
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    flow = Conn(
+        starttime="1726655400.0",
+        uid="123",
+        saddr="192.168.0.1",
+        daddr="185.220.101.1",
+        dur=1,
+        proto="tcp",
+        appproto="",
+        sport="12345",
+        dport="443",
+        spkts=0,
+        dpkts=0,
+        sbytes=0,
+        dbytes=0,
+        smac="",
+        dmac="",
+        state="Established",
+        history="",
+    )
+
+    set_ev.tor_exit_node("timewindow1", flow)
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
+    evidence = args[0]
+    assert evidence.evidence_type == EvidenceType.TOR_EXIT_NODE
+    assert evidence.attacker.direction == Direction.DST
+    assert evidence.attacker.value == flow.daddr
+    assert evidence.victim.direction == Direction.SRC
+    assert evidence.victim.value == flow.saddr
+    assert evidence.threat_level == ThreatLevel.INFO
+    assert evidence.description == "Tor exit node 185.220.101.1"
+    assert evidence.profile.ip == flow.daddr
+    assert evidence.timewindow.number == 1
+    assert evidence.uid == [flow.uid]
+    assert evidence.confidence == 1.0
+
+
 @pytest.mark.parametrize(
     "state, daddr, dport, proto, expected_threat_level, expected_description",
     [

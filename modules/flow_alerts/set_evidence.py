@@ -543,7 +543,7 @@ class SetEvidenceHelper:
                 value=flow.saddr,
             ),
             threat_level=ThreatLevel.INFO,
-            description=f"Tor exit node {flow.daddr}.",
+            description=f"A connection to TOR exit node {flow.daddr}.",
             profile=ProfileID(ip=flow.saddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
