@@ -131,6 +131,7 @@ class ProcessManager:
         self.is_slips_live_updating_event = Event()
         self.read_config()
         self.all_children_started = False
+        self.core_module_failure = False
 
     def read_config(self):
         self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
@@ -695,6 +696,7 @@ class ProcessManager:
             return False
 
         if self._did_a_core_module_fail():
+            self.core_module_failure = True
             return True
 
         if self.is_stop_msg_received() or self.is_done_receiving_new_flows():
@@ -702,29 +704,49 @@ class ProcessManager:
 
         return False
 
-    def _did_a_core_module_fail(self):
+    def _did_a_core_module_fail(self) -> bool:
         """
         if one of the core modules crash or gets killed by the OS,
         then slips should stop immediately
         """
 
-        input_running = self.input_process.poll() is None
-        profiler_running = self.profiler_process.poll() is None
-        evidence_running = self.evidence_process.poll() is None
+        input_exit_code = self.input_process.exitcode
+        profiler_exit_code = self.profiler_process.exitcode
+        evidence_exit_code = self.evidence_process.exitcode
+
+        input_running = input_exit_code is None
+        profiler_running = profiler_exit_code is None
+        evidence_running = evidence_exit_code is None
+
+        failed_modules: list[tuple[str, int | None]] = []
 
         if self.main.input_type in FOREVER_GROWING_INPUT_TYPES:
             # Slips is analyzing flows is continously recving flows,
             # none of these modules should stop or "finish"
-            return not all((input_running, profiler_running, evidence_running))
+            if not input_running:
+                failed_modules.append(("input", input_exit_code))
+            if not profiler_running:
+                failed_modules.append(("profiler", profiler_exit_code))
+            if not evidence_running:
+                failed_modules.append(("evidence", evidence_exit_code))
+        else:
+            # input can stop before the profiler  if it's done recving new
+            # flows from the file it's reading.
+            # but the profiler should never stop without the input. if it
+            # did then something went wrong.
+            if not profiler_running and input_running:
+                failed_modules.append(("profiler", profiler_exit_code))
 
-        # input can stop before the profiler  if it's done recving new
-        # flows from the file it's reading.
-        # but the profiler should never stop without the input. if it
-        # did then something went wrong.
-        profiler_stopped_before_input = not profiler_running and input_running
-        evidence_stopped = not evidence_running
+            if not evidence_running:
+                failed_modules.append(("evidence", evidence_exit_code))
 
-        return profiler_stopped_before_input or evidence_stopped
+        for module_name, exit_code in failed_modules:
+            self.main.print(
+                f"Stopping Slips because a core module failed: "
+                f"{module_name}, exit code: {exit_code}."
+            )
+
+        return bool(failed_modules)
 
     def is_stop_msg_received(self) -> bool:
         """
