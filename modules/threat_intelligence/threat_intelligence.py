@@ -59,7 +59,6 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             urlhaus (URLhaus): An instance of the URLhaus module for
             querying URLhaus data.
         """
-        self.separator = self.db.get_field_separator()
         self.__read_configuration()
         self.get_all_blacklisted_ip_ranges()
         self.urlhaus = URLhaus(self.db)

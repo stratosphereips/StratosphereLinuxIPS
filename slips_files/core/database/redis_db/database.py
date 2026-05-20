@@ -39,6 +39,7 @@ from typing import (
     Optional,
     Tuple,
     Any,
+    Set,
 )
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
@@ -93,6 +94,7 @@ class RedisDB(
         "new_weird",
         "new_software",
         "new_tunnel",
+        "new_login",
         "p2p_data_request",
         "remove_old_files",
         "export_evidence",
@@ -1619,6 +1621,24 @@ class RedisDB(
         key = f"{org}_{info_type}"
         if isinstance(org_info, list):
             self.rcache.sadd(key, *org_info)
+
+    def store_tor_nodes(self, nodes: Set[str]):
+        if not nodes:
+            return
+
+        self.rcache.sadd(self.constants.TOR_NODES, *nodes)
+
+    def is_tor_node(self, ip: str) -> bool:
+        """
+        Check whether an IP is stored in the Tor nodes set.
+
+        Parameters:
+        ip: IP address to check.
+
+        Return:
+        bool: True if the IP is stored as a Tor node.
+        """
+        return bool(self.rcache.sismember(self.constants.TOR_NODES, ip))
 
     def get_org_info(self, org, info_type: str) -> List[str]:
         """

@@ -4,6 +4,7 @@
 from unittest.mock import Mock
 
 from slips_files.core.input_profilers.zeek import ZeekJSON
+from tests.module_factory import ModuleFactory
 
 
 def test_zeek_json_maps_software_type_and_banner_fields():
@@ -65,3 +66,36 @@ def test_zeek_json_maps_ssh_ports_and_auth_attempts():
     assert flow.sport == 40422
     assert flow.dport == 902
     assert flow.auth_attempts == 3
+
+
+def test_zeek_json_maps_login_log_fields():
+    """Test login.log JSON fields are converted to a Login flow."""
+    module_factory = ModuleFactory()
+    parser = ZeekJSON(module_factory.logger)
+    flow, err = parser.process_line(
+        {
+            "type": "login.log",
+            "interface": "default",
+            "data": {
+                "ts": 1774173495.641272,
+                "uid": "CpUMTT6FJDsiSlCre",
+                "id.orig_h": "147.32.80.40",
+                "id.orig_p": 40422,
+                "id.resp_h": "147.32.80.37",
+                "id.resp_p": 23,
+                "proto": "telnet",
+                "success": "T",
+                "confused": "F",
+                "user": "root",
+                "client_user": "",
+                "password": "secret",
+            },
+        }
+    )
+
+    assert err == ""
+    assert flow.type_ == "login"
+    assert flow.success is True
+    assert flow.confused is False
+    assert flow.saddr == "147.32.80.40"
+    assert flow.daddr == "147.32.80.37"

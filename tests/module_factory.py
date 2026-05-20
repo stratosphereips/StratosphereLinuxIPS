@@ -508,6 +508,14 @@ class ModuleFactory:
         flowalerts = self.create_flowalerts_obj()
         return Software(flowalerts.db, flowalerts=flowalerts)
 
+    @patch(DB_MANAGER, name="mock_db")
+    def create_login_analyzer_obj(self, mock_db):
+        """Create a login analyzer test instance."""
+        from modules.flow_alerts.login import Login
+
+        flowalerts = self.create_flowalerts_obj()
+        return Login(flowalerts.db, flowalerts=flowalerts)
+
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_ip_info_obj(self, mock_db):
         from modules.ip_info.ip_info import IPInfo
