@@ -1,11 +1,8 @@
 # Alert Summary Module
 
-The `AlertSummary` module creates one analyst-facing summary paragraph for
-every Slips alert.
+The `AlertSummary` module creates one analyst-facing summary paragraph for every Slips alert.
 
-It listens for generated alerts, gathers the evidence that caused each alert,
-queries the shared `LLM` module, and writes one summary line per alert to
-`output/alerts/alerts-summary.log`.
+It listens for generated alerts, gathers the evidence that caused each alert, queries the shared `LLM` module, and writes one summary line per alert to `output/alerts/alerts-summary.log`.
 
 ## What it does
 
@@ -27,8 +24,7 @@ for the alert instead of leaving the run without output.
 
 ## Recursive summary hierarchy
 
-This module now follows the prompt style from
-`Slips-tools/alert_summary/inference.py`, but adapts it to live Slips alerts.
+This module follows the prompt style from `https://github.com/stratosphereips/Slips-tools/alert_summary/inference.py` as per the original specifgication, but it is completely implemented and adapted to live Slips alerts in this module.
 
 When the grouped evidence is too large for the final prompt, the module does
 not truncate it. It performs a hierarchy of summaries instead:
