@@ -950,17 +950,23 @@ class ProcessManager:
                 self.termination_event.set()
 
                 try:
-                    # Wait timeout_seconds for all the processes to finish
-                    while time.time() - method_start_time < timeout:
-                        (
-                            to_kill_first,
-                            to_kill_last,
-                        ) = self.shutdown_interactive(
-                            to_kill_first, to_kill_last
-                        )
-                        if not to_kill_first and not to_kill_last:
-                            # all modules are done
-                            break
+                    if self.core_module_failure:
+                        # dont wait for failed core modules to stop
+                        self.kill_all_children()
+                        reason = "Core module failure."
+                        graceful_shutdown = False
+                    else:
+                        # Wait timeout_seconds for all the processes to finish
+                        while time.time() - method_start_time < timeout:
+                            (
+                                to_kill_first,
+                                to_kill_last,
+                            ) = self.shutdown_interactive(
+                                to_kill_first, to_kill_last
+                            )
+                            if not to_kill_first and not to_kill_last:
+                                # all modules are done
+                                break
                 except KeyboardInterrupt:
                     # either the user wants to kill the remaining modules
                     # (pressed ctrl +c again)
