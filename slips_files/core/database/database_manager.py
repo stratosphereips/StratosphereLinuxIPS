@@ -934,6 +934,9 @@ class DBManager:
     def give_threat_intelligence(self, *args, **kwargs):
         return self.rdb.give_threat_intelligence(*args, **kwargs)
 
+    def store_tor_nodes(self, *args, **kwargs):
+        return self.rdb.store_tor_nodes(*args, **kwargs)
+
     def delete_ips_from_ioc_ips(self, *args, **kwargs):
         return self.rdb.delete_ips_from_ioc_ips(*args, **kwargs)
 

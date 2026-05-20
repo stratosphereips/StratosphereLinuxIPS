@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
 from asyncio import Task
+from typing import Dict
 
 from exclusiveprocess import (
     Lock,
@@ -45,7 +46,7 @@ class FeedsUpdateManager(
 
     name = "feeds_update_manager"
 
-    description = "Update Threat Intelligence files"
+    description = "Update Threat Intelligence feeds"
 
     authors = ["Kamila Babayeva", "Alya Gomaa"]
 
@@ -138,12 +139,17 @@ class FeedsUpdateManager(
                 self._update_online_whitelist()
 
             ############### Update remote TI files ################
+            feeds = (
+                self.url_feeds,
+                self.ja3_feeds,
+                self.ssl_feeds,
+                self.tor_nodes_feeds,
+            )
             # Check if the remote file is newer than our own
             # For each file that we should update`
-            files_to_download = {}
-            files_to_download.update(self.url_feeds)
-            files_to_download.update(self.ja3_feeds)
-            files_to_download.update(self.ssl_feeds)
+            files_to_download: Dict[str, Dict[str, str]] = {}
+            for feed in feeds:
+                files_to_download.update(feed)
 
             # before updating any feeds, make sure that the cached feeds
             # are not using any feed that is not given in the config of
@@ -159,7 +165,7 @@ class FeedsUpdateManager(
                     # this run wasn't started with existing ti files in the db
                     self.first_time_reading_files = True
 
-                    # every function call to update_TI_file is now running
+                    # every function call to update_ti_file is now running
                     # concurrently instead of serially
                     # so when a server's taking a while to give us the TI
                     # feed, we proceed to download the next file instead of

@@ -14,6 +14,27 @@ from slips_files.common.slips_utils import utils
 class TIFeedParserMixin:
     """Parse IP, domain, range, and JSON threat intelligence feeds."""
 
+    def parse_tor_nodes_feed(self, feed_path: str) -> bool:
+        """
+        This feed is a list of IPs, one per line.
+        :param feed_path: path of the downloaded tor nodes list
+        """
+        nodes = set()
+        with open(feed_path) as feed:
+            for line in feed.read().splitlines():
+
+                if line.startswith("#") or line.isspace():
+                    continue
+
+                ip = line.strip()
+                if utils.is_ignored_ip(ip):
+                    continue
+
+                nodes.add(ip)
+
+        self.db.store_tor_nodes(nodes)
+        return True
+
     def _parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
         """
         Slips has 2 json TI feeds that are parsed differently. hole.cert.pl

@@ -31,10 +31,10 @@ class RemoteFeedUpdaterMixin:
             file_name_to_download = link_to_download.split("/")[-1]
 
             # first download the file and save it locally
-            full_path = os.path.join(
+            feed_local_path = os.path.join(
                 self.path_to_remote_ti_files_dir, file_name_to_download
             )
-            self.write_file_to_disk(response, full_path)
+            self.write_file_to_disk(response, feed_local_path)
 
             # File is updated in the server and was in our database.
             # Delete previous iocs of this file.
@@ -43,7 +43,7 @@ class RemoteFeedUpdaterMixin:
             # ja3 files and ti_files are parsed differently, check which file is this
             # is it ja3 feed?
             if link_to_download in self.ja3_feeds and not self.parse_ja3_feed(
-                link_to_download, full_path
+                link_to_download, feed_local_path
             ):
                 self.print(
                     f"Error parsing JA3 feed {link_to_download}. "
@@ -55,7 +55,7 @@ class RemoteFeedUpdaterMixin:
 
             # is it a ti_file? load updated IPs/domains to the database
             elif link_to_download in self.url_feeds and not self.parse_ti_feed(
-                link_to_download, full_path
+                link_to_download, feed_local_path
             ):
                 self.print(
                     f"Error parsing feed {link_to_download}. "
@@ -66,7 +66,18 @@ class RemoteFeedUpdaterMixin:
                 return False
             elif (
                 link_to_download in self.ssl_feeds
-                and not self.parse_ssl_feed(link_to_download, full_path)
+                and not self.parse_ssl_feed(link_to_download, feed_local_path)
+            ):
+                self.print(
+                    f"Error parsing feed {link_to_download}. "
+                    f"Updating was aborted.",
+                    0,
+                    1,
+                )
+                return False
+            elif (
+                link_to_download == self.tor_nodes_feed_link
+                and not self.parse_tor_nodes_feed(feed_local_path)
             ):
                 self.print(
                     f"Error parsing feed {link_to_download}. "
@@ -89,7 +100,7 @@ class RemoteFeedUpdaterMixin:
 
             # done parsing the file, delete it from disk
             try:
-                os.remove(full_path)
+                os.remove(feed_local_path)
             except FileNotFoundError:
                 # this happens in integration tests, when another test deletes
                 # the file while this one is updating it, ignore it

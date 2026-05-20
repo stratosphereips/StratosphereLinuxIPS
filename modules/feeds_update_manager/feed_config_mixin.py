@@ -4,6 +4,7 @@
 
 
 import os
+from typing import Dict
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -52,7 +53,10 @@ class FeedConfigMixin:
 
         self.ssl_feeds_path = conf.ssl_feeds()
         self.ssl_feeds = self.get_feed_details(self.ssl_feeds_path)
-
+        self.tor_nodes_feed_link = (
+            "https://check.torproject.org/torbulkexitlist"
+        )
+        self.tor_nodes_feeds = {self.tor_nodes_feed_link: {}}
         risk_iq_credentials_path = conf.RiskIQ_credentials_path()
         self._read_riskiq_creds(risk_iq_credentials_path)
         self.riskiq_update_period = conf.riskiq_update_period()
@@ -67,7 +71,7 @@ class FeedConfigMixin:
         self.enable_online_whitelist: bool = conf.enable_online_whitelist()
         self.enable_local_whitelist: bool = conf.enable_local_whitelist()
 
-    def get_feed_details(self, feeds_path):
+    def get_feed_details(self, feeds_path) -> Dict[str, Dict[str, str]]:
         """
         Parse links, threat level and tags from the given feeds_path file and
         return

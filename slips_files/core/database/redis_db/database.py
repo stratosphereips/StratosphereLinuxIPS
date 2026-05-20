@@ -39,6 +39,7 @@ from typing import (
     Optional,
     Tuple,
     Any,
+    Set,
 )
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
@@ -1619,6 +1620,12 @@ class RedisDB(
         key = f"{org}_{info_type}"
         if isinstance(org_info, list):
             self.rcache.sadd(key, *org_info)
+
+    def store_tor_nodes(self, nodes: Set[str]):
+        if not nodes:
+            return
+
+        self.rcache.sadd(self.constants.TOR_NODES, *nodes)
 
     def get_org_info(self, org, info_type: str) -> List[str]:
         """
