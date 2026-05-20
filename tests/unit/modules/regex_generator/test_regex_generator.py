@@ -67,7 +67,10 @@ def test_regex_generator_config_defaults():
     assert parser.regex_generator_regex_validation_timeout_seconds() == 2
     assert parser.regex_generator_benign_match_strength_threshold() == 75
     assert parser.regex_generator_store_dir() == "output/regex_generator"
-    assert parser.regex_generator_persistent_store_dir() == ""
+    assert (
+        parser.regex_generator_persistent_store_dir()
+        == "databases/regex_store"
+    )
     assert parser.regex_generator_store_rejected_regexes() is False
     assert parser.regex_generator_max_stored_rejected_regexes() == 10000
     assert parser.regex_generator_seed_benign_samples() is True
@@ -671,6 +674,30 @@ def test_storage_prefers_persistent_store_dir_when_configured(tmp_path):
     )
 
     assert storage.store_dir == str(persistent_dir)
+    storage.close()
+
+
+def test_storage_resolves_relative_persistent_store_dir_inside_permanent_dir(
+    tmp_path, monkeypatch
+):
+    output_dir = tmp_path / "slips_run_output"
+    permanent_dir = tmp_path / "permanent"
+    monkeypatch.setattr(
+        "slips_files.core.database.sqlite_db.regex_generator_db."
+        "get_this_filepath_inside_permanent_dir",
+        lambda filename: str(permanent_dir / filename),
+    )
+    storage = RegexGeneratorStorage(
+        Mock(),
+        _build_storage_conf(
+            "output/regex_generator",
+            persistent_store_dir="databases/regex_store",
+        ),
+        str(output_dir),
+        12345,
+    )
+
+    assert storage.store_dir == str(permanent_dir / "databases/regex_store")
     storage.close()
 
 
