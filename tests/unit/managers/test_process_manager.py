@@ -424,9 +424,165 @@ def test_should_stop_slips(
     process_manager.is_done_receiving_new_flows = Mock(
         return_value=done_receiving
     )
+    process_manager._did_a_core_module_fail = Mock(return_value=False)
     process_manager.all_children_started = True
 
     assert process_manager.should_stop_slips() == expected_result
+
+
+@pytest.mark.parametrize(
+    "input_exitcode, profiler_exitcode, evidence_exitcode, expected_result",
+    [
+        (None, None, None, False),
+        (0, None, None, False),
+        (None, 1, None, True),
+        (0, 1, None, False),
+        (None, None, 0, True),
+    ],
+)
+def test_did_a_core_module_fail_for_file_input(
+    input_exitcode: int | None,
+    profiler_exitcode: int | None,
+    evidence_exitcode: int | None,
+    expected_result: bool,
+) -> None:
+    """
+    Test core module failure detection for finite file inputs.
+
+    Parameters:
+    input_exitcode: Input process exit code.
+    profiler_exitcode: Profiler process exit code.
+    evidence_exitcode: Evidence process exit code.
+    expected_result: Expected failure detection result.
+
+    Return:
+    None.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.input_process = Mock()
+    process_manager.profiler_process = Mock()
+    process_manager.evidence_process = Mock()
+    process_manager.input_process.exitcode = input_exitcode
+    process_manager.profiler_process.exitcode = profiler_exitcode
+    process_manager.evidence_process.exitcode = evidence_exitcode
+
+    assert process_manager._did_a_core_module_fail() == expected_result
+
+
+@pytest.mark.parametrize(
+    "input_type",
+    [
+        InputType.INTERFACE,
+        InputType.STDIN,
+        InputType.CYST,
+    ],
+)
+@pytest.mark.parametrize(
+    "input_exitcode, profiler_exitcode, evidence_exitcode, expected_result",
+    [
+        (None, None, None, False),
+        (0, None, None, True),
+        (None, 1, None, True),
+        (None, None, 0, True),
+    ],
+)
+def test_did_a_core_module_fail_for_forever_growing_input(
+    input_type: InputType,
+    input_exitcode: int | None,
+    profiler_exitcode: int | None,
+    evidence_exitcode: int | None,
+    expected_result: bool,
+) -> None:
+    """
+    Test core module failure detection for forever-growing inputs.
+
+    Parameters:
+    input_exitcode: Input process exit code.
+    profiler_exitcode: Profiler process exit code.
+    evidence_exitcode: Evidence process exit code.
+    expected_result: Expected failure detection result.
+
+    Return:
+    None.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.input_type = input_type
+    process_manager.input_process = Mock()
+    process_manager.profiler_process = Mock()
+    process_manager.evidence_process = Mock()
+    process_manager.input_process.exitcode = input_exitcode
+    process_manager.profiler_process.exitcode = profiler_exitcode
+    process_manager.evidence_process.exitcode = evidence_exitcode
+
+    assert process_manager._did_a_core_module_fail() == expected_result
+
+
+def test_should_stop_slips_sets_core_module_failure() -> None:
+    """
+    Test should_stop_slips marks core module failures for shutdown handling.
+
+    Return:
+    None.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.is_slips_live_updating_event.is_set = Mock(
+        return_value=False
+    )
+    process_manager._did_a_core_module_fail = Mock(return_value=True)
+    process_manager.is_stop_msg_received = Mock()
+    process_manager.is_done_receiving_new_flows = Mock()
+    process_manager.all_children_started = True
+
+    assert process_manager.should_stop_slips() is True
+    assert process_manager.core_module_failure is True
+    process_manager.is_stop_msg_received.assert_not_called()
+    process_manager.is_done_receiving_new_flows.assert_not_called()
+
+
+def test_shutdown_gracefully_handles_core_module_failure() -> None:
+    """
+    Test shutdown avoids waiting for modules after a core module failure.
+
+    Return:
+    None.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.core_module_failure = True
+    process_manager.main.args.stopdaemon = False
+    process_manager.main.args.save = False
+    process_manager.main.input_information = "test_input"
+    process_manager.main.conf.wait_for_modules_to_finish.return_value = 1
+    process_manager.main.conf.export_labeled_flows.return_value = False
+    process_manager.main.db.get_flows_count.return_value = 42
+    process_manager.main.db.check_tw_to_close = Mock()
+    process_manager.main.db.close_all_dbs = Mock()
+    process_manager.main.metadata_man = Mock()
+    process_manager.main.profilers_manager = Mock()
+    process_manager.main.store_zeek_dir_copy = Mock()
+    process_manager.main.delete_zeek_files = Mock()
+    process_manager.get_hitlist_in_order = Mock(return_value=([], []))
+    process_manager.shutdown_interactive = Mock()
+    process_manager.kill_all_children = Mock()
+    process_manager.get_analysis_time = Mock(
+        return_value=(1.23, "2026/05/21 12:00:00")
+    )
+    process_manager.is_slips_live_updating_event.is_set = Mock(
+        return_value=False
+    )
+
+    with patch(
+        "managers.process_manager.multiprocessing.active_children",
+        return_value=[],
+    ):
+        process_manager.shutdown_gracefully()
+
+    process_manager.shutdown_interactive.assert_not_called()
+    assert process_manager.kill_all_children.call_count == 2
+    process_manager.main.print.assert_any_call(
+        "[Process Manager] Slips didn't shutdown gracefully - "
+        "Core module failure.\n",
+        log_to_logfiles_only=True,
+    )
 
 
 @pytest.mark.parametrize(
