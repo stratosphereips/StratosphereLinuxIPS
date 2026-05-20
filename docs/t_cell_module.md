@@ -464,7 +464,7 @@ The DB is accessed through `DBManager.get_t_cell_storage()`.
 If `create_log_file` is enabled, the module writes:
 
 ```text
-output/t_cell.log
+<run_output_dir>/T Cell/t_cell.log
 ```
 
 The log is intentionally short and human-readable. It writes one line per
@@ -494,7 +494,7 @@ decision or transition, with:
 For verification runs, the module also supports a separate audit trace file:
 
 ```text
-<selected_run_output_dir>/t_cell_trace.jsonl
+<run_output_dir>/T Cell/t_cell_trace.jsonl
 ```
 
 This trace is disabled by default. When enabled, each JSON line explains one
@@ -509,10 +509,10 @@ co-stimulation or context evaluation and includes:
 - the evidence IDs that contributed to `PAMP` and `DAMP` danger totals
 - omitted-contributor counts when the trace limit is reached
 
-The trace path is always resolved under the output directory selected for the
-current Slips run. If the config contains an absolute path or a path that tries
-to escape the output directory, the module collapses it back under the selected
-run output directory before writing the file.
+The trace path is always resolved under the T Cell module output directory
+inside the selected run output. If the config contains an absolute path or a
+path that tries to escape the output directory, the module collapses it back
+under `<run_output_dir>/T Cell/` before writing the file.
 
 Recommended usage:
 
@@ -547,8 +547,8 @@ You can then open that HTML file directly in any browser. If you want a
 different output filename, pass `--out <path-to-html>`.
 
 The report is static and self-contained. It reads the T Cell SQLite DB as the
-primary source, then enriches the page with `t_cell.log` and
-`t_cell_trace.jsonl` when those files exist. This means:
+primary source, then enriches the page with `T Cell/t_cell.log` and
+`T Cell/t_cell_trace.jsonl` when those files exist. This means:
 
 - it still explains the run when `log_verbosity` is `1`
 - it gains richer per-evidence detail when `log_verbosity` is `2` or `3`
@@ -670,16 +670,18 @@ t_cell:
 Reference:
 
 - `enabled`: enable or disable the module
-- `create_log_file`: create `output/t_cell.log`
+- `create_log_file`: create `<run_output_dir>/T Cell/t_cell.log`
 - `log_colors`: keep ANSI colors in the module log
 - `log_verbosity`: `1` logs transitions/actions only, `2` adds decision
   summaries, `3` adds per-evidence debug details
 - `decision_trace_mode`: `off`, `transitions`, or `all`
 - `decision_trace_file`: JSONL audit file for threshold explanations, always
-  created under the selected run output directory
+  created under the T Cell module output directory
 - `decision_trace_max_evidence`: contributor cap per trace list
 - `store_dir`: run-local directory for the SQLite DB
-- `persistent_store_dir`: optional stable absolute directory for the DB
+- `persistent_store_dir`: optional stable directory for the SQLite DB. Leave
+  it empty for normal runs because T Cell state is tied to one Slips run.
+  If set, relative paths are resolved inside `parameters.permanent_dir`.
 - `observation_retention_seconds`: retention for observation rows
 - `anergy_ttl_seconds`: how long a non-matching cell remains tolerant
 - `related_lookback_seconds`: lookback for co-stimulation correlation
