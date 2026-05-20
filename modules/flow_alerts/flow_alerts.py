@@ -16,6 +16,7 @@ from .software import Software
 from .ssh import SSH
 from .ssl import SSL
 from .tunnel import Tunnel
+from .login import Login
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 
 
@@ -41,6 +42,7 @@ class FlowAlerts(IAsyncModule):
         self.downloaded_file = DownloadedFile(self.db, flowalerts=self)
         self.tunnel = Tunnel(self.db, flowalerts=self)
         self.conn = Conn(self.db, flowalerts=self)
+        self.login = Login(self.db, flowalerts=self)
         # list of async functions to await before flow_alerts shuts down
         self.tasks: List[Task] = []
 
@@ -56,6 +58,7 @@ class FlowAlerts(IAsyncModule):
             "new_smtp",
             "new_software",
             "new_tunnel",
+            "new_login",
         )
         for channel in channels:
             channel_obj = self.db.subscribe(channel)
@@ -81,6 +84,7 @@ class FlowAlerts(IAsyncModule):
             "new_software": [self.software],
             "new_tunnel": [self.tunnel],
             "new_ssl": [self.ssl],
+            "new_login": [self.login],
         }
 
     async def main(self):

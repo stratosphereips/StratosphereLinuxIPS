@@ -94,6 +94,7 @@ class RedisDB(
         "new_weird",
         "new_software",
         "new_tunnel",
+        "new_login",
         "p2p_data_request",
         "remove_old_files",
         "export_evidence",
