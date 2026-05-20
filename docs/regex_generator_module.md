@@ -52,7 +52,7 @@ regex_generator:
     tls_sni: 1
     certificate_cn: 1
   store_dir: output/regex_generator
-  persistent_store_dir: ""
+  persistent_store_dir: databases/regex_store
   store_rejected_regexes: false
   max_stored_rejected_regexes: 10000
   seed_benign_samples: true
@@ -91,9 +91,12 @@ Configuration reference:
   `generated_regexes.sqlite`. Absolute paths are used as-is. Relative paths are
   resolved inside the current Slips run output directory. The default
   `output/regex_generator` therefore becomes `<run_output_dir>/regex_generator`.
-- `persistent_store_dir`: stable absolute directory for the regex SQLite files.
-  If set, it takes precedence over `store_dir` and lets the generator reuse
-  the same DBs across many Slips restarts.
+- `persistent_store_dir`: stable directory for the regex SQLite files. Relative
+  paths are resolved inside `parameters.permanent_dir`; the default
+  `databases/regex_store` therefore becomes
+  `<permanent_dir>/databases/regex_store`. If set, it takes precedence over
+  `store_dir` and lets the generator reuse the same DBs across many Slips
+  restarts.
 - `store_rejected_regexes`: stores rejected regexes in SQLite for audit/debug
   purposes. Default `false` so discarded candidates do not fill the disk.
 - `max_stored_rejected_regexes`: retention cap for rejected rows when
@@ -152,11 +155,14 @@ This file records:
 - accepted regexes
 - rejected regexes and rejection reasons
 
-Accepted regexes are always stored in:
+Accepted regexes are stored in the configured persistent store by default:
 
 ```text
-<run_output_dir>/regex_generator/generated_regexes.sqlite
+<permanent_dir>/databases/regex_store/generated_regexes.sqlite
 ```
+
+If `persistent_store_dir` is empty, the fallback location is
+`<run_output_dir>/regex_generator/generated_regexes.sqlite`.
 
 Rejected regexes are tracked in memory during the current run to reduce cheap
 repeats, but they are not stored on disk unless `store_rejected_regexes` is
