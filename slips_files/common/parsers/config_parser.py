@@ -1015,7 +1015,9 @@ class ConfigParser(object):
 
     def regex_generator_persistent_store_dir(self) -> str:
         value = self.read_configuration(
-            "regex_generator", "persistent_store_dir", ""
+            "regex_generator",
+            "persistent_store_dir",
+            "databases/regex_store",
         )
         if not isinstance(value, str) or not value.strip():
             return ""
