@@ -20,6 +20,25 @@ def test_t_cell_storage_uses_persistent_store_dir_when_configured(tmp_path):
 
     assert storage.store_dir == str(persistent_dir)
     assert storage.db.db_path == str(persistent_dir / "t_cell.sqlite")
+    storage.close()
+
+
+def test_t_cell_storage_resolves_relative_persistent_store_dir_inside_permanent_dir(
+    tmp_path, monkeypatch
+):
+    permanent_dir = tmp_path / "permanent"
+    monkeypatch.setattr(
+        "slips_files.core.database.sqlite_db.t_cell_db."
+        "get_this_filepath_inside_permanent_dir",
+        lambda filename: str(permanent_dir / filename),
+    )
+    storage = _build_storage(tmp_path, persistent_store_dir="t_cell")
+
+    assert storage.store_dir == str(permanent_dir / "t_cell")
+    assert storage.db.db_path == str(
+        permanent_dir / "t_cell" / "t_cell.sqlite"
+    )
+    storage.close()
 
 
 def test_t_cell_storage_crud_and_pruning(tmp_path):
