@@ -64,10 +64,11 @@ class FidesModule(IModule):
         db_name = os.path.basename(self.__trust_model_config.database)
         # this sqlite is shared between all runs, like a cache,
         # so it should not be stored in the current output dir.
-        self.sqlite = FidesSQLiteDB(
-            self.logger,
-            get_this_filepath_inside_permanent_dir(db_name),
+        db_path = get_this_filepath_inside_permanent_dir(
+            os.path.join("databases", db_name)
         )
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        self.sqlite = FidesSQLiteDB(self.logger, db_path)
 
     def subscribe_to_channels(self):
         self.f2n = self.db.subscribe("fides2network")
