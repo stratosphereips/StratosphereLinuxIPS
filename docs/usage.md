@@ -496,7 +496,9 @@ This parameter allows you to tailor SLIPS's analysis focus based on your specifi
 
 Use ```permanent_dir``` to choose where Slips stores databases and runtime-generated files that must persist across different Slips runs and should not be overwritten.
 
-This includes persistent artifacts such as ```p2p_trust_runtime/``` and shared module databases like the Fides cache.
+This includes persistent artifacts such as ```p2p_trust_runtime/```,
+```databases/regex_store/```, and shared module databases like the Fides cache
+under ```databases/```.
 
 **Live Slips auto update**
 
