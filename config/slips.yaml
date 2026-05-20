@@ -407,10 +407,11 @@ regex_generator:
   # output directory of the current Slips run.
   store_dir: output/regex_generator
 
-  # Optional stable absolute directory for the regex SQLite files.
-  # If set, it takes precedence over store_dir and lets the generator reuse
-  # the same DBs across many Slips restarts.
-  persistent_store_dir: "~/StratosphereLinuxIPS/databases/regex_store"
+  # Stable directory for the regex SQLite files. Relative paths are resolved
+  # inside parameters.permanent_dir. If set, it takes precedence over
+  # store_dir and lets the generator reuse the same DBs across many Slips
+  # restarts.
+  persistent_store_dir: databases/regex_store
 
   # Persist rejected regexes in generated_regexes.sqlite.
   # Leave this disabled unless you need audit/debug history, otherwise disk
@@ -464,7 +465,9 @@ t_cell:
   # output directory of the current Slips run.
   store_dir: output/t_cell
 
-  # Optional stable absolute directory for the T Cell SQLite database.
+  # Optional stable directory for the T Cell SQLite database.
+  # Leave this empty for normal runs because T Cell state is run-specific.
+  # If set, relative paths are resolved inside parameters.permanent_dir.
   persistent_store_dir: ""
 
   # Keep processed evidence observations for this many seconds.
