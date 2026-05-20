@@ -289,6 +289,7 @@ class ProfilerWorker(IModule):
             "software": flow_handler.handle_software,
             "weird": flow_handler.handle_weird,
             "tunnel": flow_handler.handle_tunnel,
+            "login": flow_handler.handle_login,
         }
         try:
             # call the function that handles this flow
@@ -473,6 +474,7 @@ class ProfilerWorker(IModule):
             "software",
             "weird",
             "tunnel",
+            "login",
         )
         return bool(
             flow.starttime is not None and flow.type_ in supported_types
