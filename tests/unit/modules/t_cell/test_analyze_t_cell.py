@@ -548,3 +548,56 @@ def test_build_report_payload_and_html(tmp_path):
     assert "3 - activated (waiting for context)" not in html
 
     storage.close()
+
+
+def test_build_report_payload_resolves_persistent_db_and_module_output(
+    tmp_path,
+):
+    """Report builder should read persistent DBs and module output paths."""
+    run_dir = tmp_path / "run-output"
+    permanent_store = tmp_path / "permanent" / "t_cell"
+    module_dir = run_dir / "T Cell"
+    (run_dir / "metadata").mkdir(parents=True)
+    (module_dir / "audit").mkdir(parents=True)
+
+    conf = Mock()
+    conf.t_cell_store_dir = Mock(return_value="output/t_cell")
+    conf.t_cell_persistent_store_dir = Mock(return_value=str(permanent_store))
+    storage = TCellStorage(Mock(), conf, str(run_dir), 12345)
+    storage.close()
+
+    (run_dir / "metadata" / "slips-sebas.yaml").write_text(
+        "\n".join(
+            [
+                "parameters:",
+                f"  permanent_dir: {tmp_path / 'permanent'}",
+                "t_cell:",
+                "  persistent_store_dir: t_cell",
+                "  decision_trace_file: audit/t_cell_trace.jsonl",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (module_dir / "t_cell.log").write_text(
+        "T Cell module ready.\n",
+        encoding="utf-8",
+    )
+    (module_dir / "audit" / "t_cell_trace.jsonl").write_text(
+        "",
+        encoding="utf-8",
+    )
+
+    payload = build_report_payload(run_dir)
+
+    assert payload["sources"]["db_path"] == str(
+        permanent_store / "t_cell.sqlite"
+    )
+    assert payload["sources"]["log_path"] == str(module_dir / "t_cell.log")
+    assert payload["sources"]["trace_path"] == str(
+        module_dir / "audit" / "t_cell_trace.jsonl"
+    )
+    assert payload["sources"]["metadata_path"] == str(
+        run_dir / "metadata" / "slips-sebas.yaml"
+    )
+    assert payload["sources"]["log_present"] is True
+    assert payload["sources"]["trace_enabled"] is True
