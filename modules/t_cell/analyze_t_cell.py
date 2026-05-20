@@ -115,7 +115,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--run-output-dir",
         required=True,
-        help="Slips run output directory containing t_cell/t_cell.sqlite.",
+        help=(
+            "Slips run output directory. The T Cell DB is resolved from "
+            "metadata when it is stored under permanent_dir."
+        ),
     )
     parser.add_argument(
         "--out",
@@ -242,6 +245,127 @@ def load_yaml_config(metadata_path: Path) -> dict:
         return yaml.safe_load(metadata_path.read_text(encoding="utf-8")) or {}
     except Exception:
         return {}
+
+
+def find_metadata_path(run_output_dir: Path) -> Path:
+    """
+    Return the Slips metadata YAML path for a run output directory.
+
+    Parameters:
+        run_output_dir: Slips run output directory.
+
+    Returns:
+        Path to the preferred or first available metadata YAML file.
+    """
+    metadata_dir = run_output_dir / "metadata"
+    preferred_path = metadata_dir / "slips.yaml"
+    if preferred_path.exists():
+        return preferred_path
+
+    yaml_paths = sorted(metadata_dir.glob("*.yaml"))
+    yaml_paths.extend(sorted(metadata_dir.glob("*.yml")))
+    if yaml_paths:
+        return yaml_paths[0]
+    return preferred_path
+
+
+def resolve_persistent_store_dir(raw_store_dir: str, metadata: dict) -> Path:
+    """
+    Resolve a persistent store directory using the run metadata.
+
+    Parameters:
+        raw_store_dir: Configured persistent store directory.
+        metadata: Parsed Slips metadata YAML.
+
+    Returns:
+        Absolute path to the persistent store directory.
+    """
+    store_dir = Path(str(raw_store_dir or "t_cell").strip()).expanduser()
+    if store_dir.is_absolute():
+        return store_dir
+
+    parameters = metadata.get("parameters", {})
+    permanent_dir = Path(str(parameters.get("permanent_dir") or "permanent"))
+    permanent_dir = permanent_dir.expanduser()
+    if not permanent_dir.is_absolute():
+        permanent_dir = Path.cwd() / permanent_dir
+    return permanent_dir.joinpath(*store_dir.parts)
+
+
+def resolve_t_cell_db_path(run_output_dir: Path, metadata: dict) -> Path:
+    """
+    Resolve the T Cell SQLite DB path for current and legacy runs.
+
+    Parameters:
+        run_output_dir: Slips run output directory.
+        metadata: Parsed Slips metadata YAML.
+
+    Returns:
+        Existing DB path when found, otherwise the run-local DB path.
+    """
+    config = metadata.get("t_cell", {})
+    persistent_store_dir = config.get("persistent_store_dir", "")
+    candidates = []
+    if isinstance(persistent_store_dir, str) and persistent_store_dir.strip():
+        candidates.append(
+            resolve_persistent_store_dir(persistent_store_dir, metadata)
+            / "t_cell.sqlite"
+        )
+    candidates.append(run_output_dir / "t_cell" / "t_cell.sqlite")
+
+    for db_path in candidates:
+        if db_path.exists():
+            return db_path
+    return candidates[-1]
+
+
+def sanitize_module_relative_path(raw_path: str, default_filename: str) -> Path:
+    """
+    Normalize a configured module-local file path.
+
+    Parameters:
+        raw_path: Configured path value.
+        default_filename: Filename to use when the configured value is empty.
+
+    Returns:
+        Safe relative path inside the module output directory.
+    """
+    normalized = str(raw_path or "").strip() or default_filename
+    normalized = normalized.replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    if Path(normalized).is_absolute():
+        normalized = Path(normalized).name
+    if normalized.startswith("output/"):
+        normalized = normalized[len("output/") :]
+
+    safe_parts = []
+    for part in normalized.split("/"):
+        if not part or part in (".", ".."):
+            continue
+        if part.endswith(":"):
+            continue
+        safe_parts.append(part)
+    if not safe_parts:
+        safe_parts = [default_filename]
+    return Path(*safe_parts)
+
+
+def first_existing_path(paths: Iterable[Path]) -> Path:
+    """
+    Return the first existing path from a list of candidates.
+
+    Parameters:
+        paths: Candidate paths ordered by preference.
+
+    Returns:
+        First existing path, or the first candidate when none exist.
+    """
+    paths = list(paths)
+    for path in paths:
+        if path.exists():
+            return path
+    return paths[0]
 
 
 def _row_to_observation(row: sqlite3.Row) -> dict:
@@ -1441,11 +1565,27 @@ def build_report_payload(
     max_trace_rows: int = 200,
 ) -> dict:
     run_output_dir = run_output_dir.expanduser().resolve()
-    db_path = run_output_dir / "t_cell" / "t_cell.sqlite"
-    log_path = run_output_dir / "t_cell.log"
-    trace_path = run_output_dir / "t_cell_trace.jsonl"
-    metadata_path = run_output_dir / "metadata" / "slips.yaml"
-
+    metadata_path = find_metadata_path(run_output_dir)
+    metadata = load_yaml_config(metadata_path)
+    config = metadata.get("t_cell", {})
+    db_path = resolve_t_cell_db_path(run_output_dir, metadata)
+    log_path = first_existing_path(
+        [
+            run_output_dir / "T Cell" / "t_cell.log",
+            run_output_dir / "t_cell.log",
+        ]
+    )
+    trace_relative_path = sanitize_module_relative_path(
+        config.get("decision_trace_file"), "t_cell_trace.jsonl"
+    )
+    trace_path = first_existing_path(
+        [
+            run_output_dir / "T Cell" / trace_relative_path,
+            run_output_dir / trace_relative_path,
+            run_output_dir / "T Cell" / "t_cell_trace.jsonl",
+            run_output_dir / "t_cell_trace.jsonl",
+        ]
+    )
     db_records = load_db_records(db_path)
     observations = db_records["observations"]
     cells = db_records["cells"]
@@ -1453,8 +1593,6 @@ def build_report_payload(
     memories = db_records["memories"]
     log_data = load_log_entries(log_path, max_log_lines)
     trace_rows = load_trace_entries(trace_path)
-    metadata = load_yaml_config(metadata_path)
-    config = metadata.get("t_cell", {})
     parameters = metadata.get("parameters", {})
     report_config = report_config_with_defaults(
         {
