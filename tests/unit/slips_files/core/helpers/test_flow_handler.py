@@ -110,6 +110,25 @@ def test_handle_tunnel(flow):
     )
 
 
+def test_handle_login(flow):
+    """Test login flows are published to the new_login channel."""
+    flow_handler = ModuleFactory().create_flow_handler_obj(flow)
+
+    flow_handler.handle_login()
+
+    expected_payload = {
+        "profileid": flow_handler.profileid,
+        "twid": flow_handler.twid,
+        "flow": asdict(flow),
+    }
+    flow_handler.db.publish.assert_called_with(
+        "new_login", json.dumps(expected_payload)
+    )
+    flow_handler.db.add_altflow.assert_called_with(
+        flow, flow_handler.profileid, flow_handler.twid, "benign"
+    )
+
+
 def test_handle_conn(flow):
     flow_handler = ModuleFactory().create_flow_handler_obj(flow)
     flow.daddr = "192.168.1.1"

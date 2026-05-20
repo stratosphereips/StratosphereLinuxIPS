@@ -67,6 +67,7 @@ def test_initialize_logfile_skips_file_when_started_by_update(tmp_path):
         ("path/to/software.log", False),
         ("path/to/software.log.labeled", False),
         ("path/to/weird.log", False),
+        ("path/to/login.log", False),
         ("path/to/software.log.labeled.something", True),
         ("path/to/unsupported.log", True),
     ],
