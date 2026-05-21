@@ -241,7 +241,7 @@ class Trust(IModule):
         self.print(f"Rebuilding p2p4slips {reason}. This can take some time.")
         try:
             subprocess.run(
-                ["go", "build"],
+                ["go", "build", "-buildvcs=false"],
                 cwd=self.pigeon_binary_dir,
                 check=True,
                 capture_output=True,
