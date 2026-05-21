@@ -5,7 +5,10 @@ import sys
 
 import psutil
 
-from slips_files.common.input_type import InputType
+from slips_files.common.input_type import (
+    InputType,
+    FOREVER_GROWING_INPUT_TYPES,
+)
 from slips_files.common.slips_utils import utils
 
 
@@ -166,15 +169,6 @@ class Checker:
                     self.main.terminate_slips()
                     return
 
-    def _is_slips_running_non_stop(self) -> bool:
-        """determines if slips is monitoring real time traffic based oin
-        the giving params"""
-        return (
-            self.main.args.interface
-            or self.main.args.access_point
-            or self.main.args.input_module
-        )
-
     def verify_given_flags(self):
         """
         Checks the validity of the given flags.
@@ -208,20 +202,6 @@ class Checker:
                     self.main.args.config
                 )
 
-        if self.main.conf.use_local_p2p() and not self.main.args.interface:
-            print(
-                "Warning: P2P is only supported using "
-                "an interface. P2P Disabled."
-            )
-            return
-
-        if self.main.conf.use_global_p2p() and not self.main.args.interface:
-            print(
-                "Warning: Global P2P (Fides Module + Iris Module) is only supported using "
-                "an interface. Global P2P (Fides Module + Iris Module) Disabled."
-            )
-            return
-
         # if we're reading flows from some module other than the input
         # process, make sure it exists
         if self.main.args.input_module and not self.input_module_exists(
@@ -230,23 +210,62 @@ class Checker:
             self.main.terminate_slips()
             return
 
-        # Clear cache if the parameter was included
         if self.main.args.clearcache:
             self.clear_redis_cache()
-            return
-
-        # Clear cache if the parameter was included
-        if self.main.args.blocking and not self._is_slips_running_non_stop():
-            print(
-                "Blocking is only allowed when running slips on real time "
-                "traffic. (running with -i, -ap, -im, or -g)"
-            )
-            self.main.terminate_slips()
             return
 
         # kill all open unused redis servers if the parameter was included
         if self.main.args.killall:
             self.main.redis_man.close_open_redis_servers()
+            self.main.terminate_slips()
+            return
+
+    def is_running_non_stop(self, input_type: InputType) -> bool:
+        """
+        Slips runs non-stop in case of an interface or a growing zeek dir,
+        in these 2 cases, it only stops on ctrl+c
+        why are we duplicating this func and not just usin the one in the db?
+        because we need to call it here and we don't have access to the db
+        here yet, the db is initialized lated when all the given flags are
+        checked and are correct
+        """
+        if input_type in FOREVER_GROWING_INPUT_TYPES or self.main.args.growing:
+            return True
+        return False
+
+    def verify_flags_that_require_an_interface(self, input_type: InputType):
+        """
+        checks the modules that should be disabled if not running on an
+        interface.
+
+        Params::
+            input_type: the tyoe of input given to slips, pcap, interface,
+            zeek dir etc.
+        """
+        if self.is_running_non_stop(input_type):
+            return
+
+        if self.main.conf.use_local_p2p():
+            print(
+                "Warning: P2P is only supported using an interface. "
+                "P2P Disabled."
+            )
+            return
+
+        if self.main.conf.use_global_p2p():
+            print(
+                "Warning: Global P2P (Fides Module + Iris Module) "
+                "is only supported using "
+                "an interface. Global P2P (Fides Module + Iris Module) "
+                "Disabled."
+            )
+            return
+
+        if self.main.args.blocking:
+            print(
+                "Blocking is only allowed when running slips on real time "
+                "traffic. (running with -i, -ap, -im, or -g)"
+            )
             self.main.terminate_slips()
             return
 
