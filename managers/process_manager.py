@@ -129,14 +129,13 @@ class ProcessManager:
         # is set by the input process when it stops because of a failure.
         self.is_input_failed_event = Event()
         self.is_slips_live_updating_event = Event()
+        self.user_disabled_modules: List[str] = []
+        self.slips_disabled_modules: List[str] = []
         self.read_config()
         self.all_children_started = False
         self.core_module_failure = False
 
     def read_config(self):
-        self.disabled_modules_from_config: list = (
-            self.main.conf.get_disabled_modules(self.main.input_type)
-        )
         self.bootstrapping_modules = self.main.conf.get_bootstrapping_modules()
         self.bootstrapping_node = self.main.conf.read_configuration(
             "global_p2p", "bootstrapping_node", False
@@ -144,6 +143,84 @@ class ProcessManager:
         self.use_global_p2p = self.main.conf.read_configuration(
             "global_p2p", "use_global_p2p", False
         )
+
+    def _reading_flows_from_cyst(self) -> bool:
+        """
+        Check whether the selected input module is CYST.
+
+        Returns:
+            True when CYST is configured as the input module.
+        """
+        custom_flows = self.main.args.input_module
+        return "cyst" in str(custom_flows)
+
+    def get_disabled_modules(self) -> Tuple[List[str], List[str]]:
+        """
+        Get user-disabled modules and Slips-disabled modules.
+
+        Returns:
+            A tuple containing user-disabled modules and modules disabled by
+            Slips runtime rules.
+        """
+        user_disabled_modules: List[str] = self.main.conf.read_configuration(
+            "modules", "disable", ["template"]
+        )
+        user_disabled_modules = [
+            module.strip() for module in user_disabled_modules
+        ]
+
+        slips_disabled_modules: List[str] = []
+
+        if not self._is_exporting_module_enabled():
+            slips_disabled_modules.append("exporting_alerts")
+
+        use_p2p = self.main.conf.use_local_p2p()
+        if not (use_p2p and "-i" in sys.argv):
+            slips_disabled_modules.append("p2p_trust")
+
+        use_global_p2p = self.main.conf.use_global_p2p()
+        if not (use_global_p2p and "-i" in sys.argv):
+            slips_disabled_modules.extend(("fides", "iris"))
+
+        if not (
+            self.main.conf.send_to_warden()
+            or self.main.conf.receive_from_warden()
+        ):
+            slips_disabled_modules.append("cesnet")
+
+        if not ("-cb" in sys.argv or "-p" in sys.argv):
+            slips_disabled_modules.extend(("blocking", "arp_poisoner"))
+
+        if self.main.input_type != InputType.PCAP:
+            slips_disabled_modules.append("leak_detector")
+
+        if not self._reading_flows_from_cyst():
+            slips_disabled_modules.append("cyst")
+
+        for module in self.slips_disabled_modules:
+            if module not in slips_disabled_modules:
+                slips_disabled_modules.append(module)
+
+        return user_disabled_modules, slips_disabled_modules
+
+    def _is_exporting_module_enabled(self) -> bool:
+        """
+        Check whether alert exporting is configured.
+
+        Returns:
+            True when at least one supported alert exporter is enabled.
+        """
+        export_to = self.main.conf.export_to()
+        return "stix" in export_to or "slack" in export_to
+
+    def get_all_disabled_modules(self) -> List[str]:
+        """
+        Get all disabled modules as a single list.
+
+        Returns:
+            User-disabled modules followed by Slips-disabled modules.
+        """
+        return self.user_disabled_modules + self.slips_disabled_modules
 
     def declare_that_slips_done_starting_all_children(self):
         self.all_children_started = True
@@ -295,8 +372,12 @@ class ProcessManager:
             self.kill_process_tree(process.pid)
             self.print_stopped_module(module_name)
 
-    def is_ignored_module_in_the_config(self, module_name: str) -> bool:
-        for ignored_module in self.disabled_modules_from_config:
+    def is_disabled_module(self, module_name: str) -> bool:
+        """
+        returns true if the given module is disabled by the user or by
+        slips runtime
+        """
+        for ignored_module in self.get_all_disabled_modules():
             ignored_module = (
                 ignored_module.replace(" ", "")
                 .replace("_", "")
@@ -330,7 +411,9 @@ class ProcessManager:
 
             if m1.__contains__(m2):
                 return True
-        self.disabled_modules_from_config.append(module_name.split(".")[-1])
+        disabled_module = module_name.split(".")[-1]
+        if disabled_module not in self.slips_disabled_modules:
+            self.slips_disabled_modules.append(disabled_module)
         return False
 
     def is_bootstrapping_node(self) -> bool:
@@ -356,11 +439,15 @@ class ProcessManager:
         and returns a list of modules to load in the correct order if
         applicable.
         """
+        (
+            self.user_disabled_modules,
+            self.slips_disabled_modules,
+        ) = self.get_disabled_modules()
+
         plugins = {}
         failed_to_load_modules = 0
         for module_name in self._discover_module_names():
             if not self._should_load_module(module_name):
-                print(f"@@@@@@@@@@@@@@@@ shouldnt load {module_name}")
                 continue
 
             module = self._import_module(module_name)
@@ -406,8 +493,12 @@ class ProcessManager:
             if not self.is_bootstrapping_module(module_name):
                 return False
         else:
-            if self.is_ignored_module_in_the_config(module_name):
-                return False  # ignore blacklisted modules
+            if self.is_disabled_module(module_name):
+                print(
+                    f"@@@@@@@@@@@@@@@@ {module_name} is ignored in the "
+                    f"config? {self.slips_disabled_modules}"
+                )
+                return False
         return True
 
     def _import_module(self, module_name):
@@ -482,7 +573,9 @@ class ProcessManager:
     def print_disabled_modules(self):
         print("-" * 27)
         self.main.print(
-            f"Disabled Modules: {self.disabled_modules_from_config}", 1, 0
+            f"Disabled Modules: " f"{self.get_all_disabled_modules()}",
+            1,
+            0,
         )
 
     def load_modules(self):
