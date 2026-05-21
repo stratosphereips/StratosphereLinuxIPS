@@ -169,17 +169,19 @@ class ProcessManager:
             module.strip() for module in user_disabled_modules
         ]
 
+        is_running_non_stop = self.main.db.is_running_non_stop()
+
         slips_disabled_modules: List[str] = []
 
         if not self._is_exporting_module_enabled():
             slips_disabled_modules.append("exporting_alerts")
 
         use_p2p = self.main.conf.use_local_p2p()
-        if not (use_p2p and "-i" in sys.argv):
+        if not (use_p2p and is_running_non_stop):
             slips_disabled_modules.append("p2p_trust")
 
         use_global_p2p = self.main.conf.use_global_p2p()
-        if not (use_global_p2p and "-i" in sys.argv):
+        if not (use_global_p2p and is_running_non_stop):
             slips_disabled_modules.extend(("fides", "iris"))
 
         if not (
@@ -188,7 +190,7 @@ class ProcessManager:
         ):
             slips_disabled_modules.append("cesnet")
 
-        if not ("-cb" in sys.argv or "-p" in sys.argv):
+        if not (self.main.args.clearblocking or self.main.args.blocking):
             slips_disabled_modules.extend(("blocking", "arp_poisoner"))
 
         if self.main.input_type != InputType.PCAP:

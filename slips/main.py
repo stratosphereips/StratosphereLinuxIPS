@@ -68,20 +68,21 @@ class Main:
             self.checker.verify_given_flags()
             self.prepare_locks_dir()
             if not self.args.stopdaemon:
-                # Check the type of input
+                self.input_type: InputType
                 (
                     self.input_type,
                     self.input_information,
                     self.line_type,
                 ) = self.checker.get_input_type()
+                self.checker.verify_flags_that_require_an_interface(
+                    self.input_type
+                )
                 self.input_information = os.path.normpath(
                     self.input_information
                 )
                 self.input_information = self.input_information.replace(
                     ",", "_"
                 )
-
-                # If we need zeek (bro), test if we can run it.
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
                 self.redis_man.start_redis_cache_if_not_running()
@@ -279,7 +280,7 @@ class Main:
     def is_binetflow_line(self, line: str) -> bool:
         return "->" in line or "StartTime" in line
 
-    def get_input_file_type(self, given_path):
+    def get_input_file_type(self, given_path) -> InputType:
         """
         given_path: given file
         returns binetflow, pcap, nfdump, zeek_folder, suricata, etc.
