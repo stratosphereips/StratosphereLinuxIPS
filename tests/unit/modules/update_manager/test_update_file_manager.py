@@ -2,12 +2,15 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Unit test for modules/feeds_update_manager/feeds_update_manager.py"""
 
-from tests.module_factory import ModuleFactory
 import json
-import requests
-import pytest
 import time
 from unittest.mock import Mock, mock_open, patch
+
+import pytest
+import requests
+
+from slips_files.common.timer_manager import PeriodicUpdateTimer
+from tests.module_factory import ModuleFactory
 
 
 def test_check_if_update_based_on_update_period():
@@ -171,14 +174,14 @@ def test_download_file(
     mocker,
 ):
     """Test download_file with a successful request."""
+    update_manager = ModuleFactory().create_update_manager_obj()
     url = "https://example.com/file.txt"
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.text = "file content"
-    update_manager = ModuleFactory().create_update_manager_obj()
     response = update_manager.download_file(url)
 
-    mock_requests.assert_called_once_with(url, timeout=5)
+    mock_requests.assert_called_once_with(url, timeout=5, verify=False)
     assert response.text == "file content"
 
 
@@ -712,17 +715,48 @@ def test_shutdown_gracefully(
     mocker,
 ):
     """
-    Test shutdown_gracefully to ensure timers are canceled.
+    Test shutdown_gracefully to ensure the update timer is canceled.
     """
     update_manager = ModuleFactory().create_update_manager_obj()
-    update_manager.timer_manager = mocker.Mock()
-    update_manager.mac_db_update_manager = mocker.Mock()
-    update_manager.online_whitelist_update_timer = mocker.Mock()
+    update_manager.update_timer = mocker.Mock()
     result = update_manager.shutdown_gracefully()
-    update_manager.timer_manager.cancel.assert_called_once()
-    update_manager.mac_db_update_manager.cancel.assert_called_once()
-    update_manager.online_whitelist_update_timer.cancel.assert_called_once()
+    update_manager.update_timer.cancel.assert_called_once()
     assert result is True
+
+
+@pytest.mark.parametrize(
+    "periods, expected_due_times, expected_delay",
+    [
+        ((5, 10, 0), [15, 20], 5),
+        ((30,), [40], 30),
+    ],
+)
+def test_periodic_update_timer_schedules_next_due_time(
+    mocker,
+    periods,
+    expected_due_times,
+    expected_delay,
+):
+    """
+    Test PeriodicUpdateTimer schedules one timer for the nearest due time.
+    """
+    update_manager = ModuleFactory().create_update_manager_obj()
+    mock_timer = mocker.Mock()
+    timer_factory = mocker.patch(
+        "slips_files.common.timer_manager.Timer",
+        return_value=mock_timer,
+    )
+    mocker.patch(
+        "slips_files.common.timer_manager.time.monotonic",
+        return_value=10,
+    )
+
+    timer = PeriodicUpdateTimer(periods, update_manager.update_ti_files)
+    timer.start()
+
+    assert timer.next_due_at == expected_due_times
+    timer_factory.assert_called_once_with(expected_delay, timer._handle_target)
+    mock_timer.start.assert_called_once()
 
 
 @pytest.mark.parametrize(

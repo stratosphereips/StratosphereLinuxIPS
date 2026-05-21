@@ -7,10 +7,12 @@ from unittest.mock import (
     patch,
     MagicMock,
     Mock,
+    call,
 )
 import shutil
 import os
 import json
+import signal
 
 
 @pytest.mark.parametrize(
@@ -526,7 +528,13 @@ def test_shutdown_zeek_runtime_kills_pids(pids, expected_kills):
         input_process.zeek_utils.shutdown_zeek_runtime()
 
     mock_thread.join.assert_called_once_with(3)
-    assert mock_kill.call_count == expected_kills
+    if expected_kills:
+        mock_kill.assert_has_calls(
+            [call(pid, signal.SIGKILL) for pid in pids],
+            any_order=True,
+        )
+    else:
+        mock_kill.assert_not_called()
 
 
 def test_get_file_handle_non_existing_file():

@@ -494,6 +494,47 @@ def test_check_data_upload(
 
 
 @pytest.mark.parametrize(
+    "is_tor_node, expected_result, expected_call_count",
+    [
+        (True, True, 1),
+        (False, False, 0),
+    ],
+)
+def test_check_tor_exit_node(
+    mocker, is_tor_node, expected_result, expected_call_count
+):
+    """
+    Tests the check_tor_exit_node function with Tor and non-Tor destinations.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.is_tor_node = Mock(return_value=is_tor_node)
+    mock_set_evidence = mocker.patch.object(conn.set_evidence, "tor_exit_node")
+    flow = Conn(
+        starttime="1726249372.312124",
+        uid=uid,
+        saddr="192.168.1.1",
+        daddr="185.220.101.1",
+        dur=1,
+        proto="tcp",
+        appproto="",
+        sport="12345",
+        dport="443",
+        spkts=0,
+        dpkts=0,
+        sbytes=0,
+        dbytes=0,
+        smac="",
+        dmac="",
+        state="Established",
+        history="",
+    )
+
+    assert conn.check_tor_exit_node(twid, flow) is expected_result
+    conn.db.is_tor_node.assert_called_once_with(flow.daddr)
+    assert mock_set_evidence.call_count == expected_call_count
+
+
+@pytest.mark.parametrize(
     "mock_time_diff, expected_result",
     [
         (40, True),  # Timeout reached

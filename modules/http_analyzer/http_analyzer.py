@@ -13,13 +13,13 @@ from modules.http_analyzer.set_evidence import SetEvidenceHelper
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.abstracts.iasync_module import AsyncModule
+from slips_files.common.abstracts.iasync_module import IAsyncModule
 
 
 ESTAB = "Established"
 
 
-class HTTPAnalyzer(AsyncModule):
+class HTTPAnalyzer(IAsyncModule):
     # Name: short name of the module. Do not use spaces
     name = "http_analyzer"
     description = "Analyze HTTP flows"

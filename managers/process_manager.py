@@ -42,7 +42,10 @@ from slips_files.common.abstracts.imodule import (
 from slips_files.common.plotter import Plotter
 
 from slips_files.common.style import green
-from slips_files.common.input_type import InputType
+from slips_files.common.input_type import (
+    InputType,
+    FOREVER_GROWING_INPUT_TYPES,
+)
 from slips_files.core.evidence_handler import EvidenceHandler
 from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.input import Input
@@ -128,6 +131,7 @@ class ProcessManager:
         self.is_slips_live_updating_event = Event()
         self.read_config()
         self.all_children_started = False
+        self.core_module_failure = False
 
     def read_config(self):
         self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
@@ -192,6 +196,7 @@ class ProcessManager:
         # first message before the profiler can choose the input handler.
         if self.main.input_type == InputType.INTERFACE:
             self.is_profiler_done_starting_initial_workers_event.wait(30)
+        self.profiler_process = profiler_process
         return profiler_process
 
     def start_evidence_process(self):
@@ -213,6 +218,7 @@ class ProcessManager:
             0,
         )
         self.main.db.store_pid("evidence_handler", int(evidence_process.pid))
+        self.evidence_process = evidence_process
         return evidence_process
 
     def start_input_process(self):
@@ -245,6 +251,7 @@ class ProcessManager:
             0,
         )
         self.main.db.store_pid("Input", int(input_process.pid))
+        self.input_process = input_process
         return input_process
 
     def kill_process_tree(self, pid: int):
@@ -689,10 +696,58 @@ class ProcessManager:
             # happens in dataset/test4-malicious.binetflow
             return False
 
+        if self._did_a_core_module_fail():
+            self.core_module_failure = True
+            return True
+
         if self.is_stop_msg_received() or self.is_done_receiving_new_flows():
             return True
 
         return False
+
+    def _did_a_core_module_fail(self) -> bool:
+        """
+        if one of the core modules crash or gets killed by the OS,
+        then slips should stop immediately
+        """
+
+        input_exit_code = self.input_process.exitcode
+        profiler_exit_code = self.profiler_process.exitcode
+        evidence_exit_code = self.evidence_process.exitcode
+
+        input_running = input_exit_code is None
+        profiler_running = profiler_exit_code is None
+        evidence_running = evidence_exit_code is None
+
+        failed_modules: list[tuple[str, int | None]] = []
+
+        if self.main.input_type in FOREVER_GROWING_INPUT_TYPES:
+            # Slips is analyzing flows is continously recving flows,
+            # none of these modules should stop or "finish"
+            if not input_running:
+                failed_modules.append(("input", input_exit_code))
+            if not profiler_running:
+                failed_modules.append(("profiler", profiler_exit_code))
+            if not evidence_running:
+                failed_modules.append(("evidence", evidence_exit_code))
+        else:
+            # input can stop before the profiler  if it's done recving new
+            # flows from the file it's reading.
+            # but the profiler should never stop without the input. if it
+            # did then something went wrong.
+            if not profiler_running and input_running:
+                failed_modules.append(("profiler", profiler_exit_code))
+
+            if not evidence_running:
+                failed_modules.append(("evidence", evidence_exit_code))
+
+        for module_name, exit_code in failed_modules:
+            self.main.print(
+                f"Stopping Slips because a core module failed: "
+                f"{module_name}, exit code: {exit_code}."
+            )
+
+        return bool(failed_modules)
 
     def is_stop_msg_received(self) -> bool:
         """
@@ -739,6 +794,7 @@ class ProcessManager:
         returns 2 lists of alive children
         """
         # wait for the processes to be killed first as long as they want
+        # maximum time to wait is timeout_seconds
         alive_processes = self.wait_for_processes_to_finish(to_kill_first)
         if alive_processes:
             # update the list of processes to kill first with only the ones
@@ -750,11 +806,11 @@ class ProcessManager:
             # to join() em yet
             self.warn_about_pending_modules(alive_processes + to_kill_last)
             return to_kill_first, to_kill_last
-
-        # all of them are killed
-        to_kill_first = []
-        # tell evidence to stop since all the modules are done
-        self.evidence_handler_termination_event.set()
+        else:
+            # all of them are killed
+            to_kill_first = []
+            # tell evidence to stop since all the modules are done
+            self.evidence_handler_termination_event.set()
 
         alive_processes = self.wait_for_processes_to_finish(to_kill_last)
         if alive_processes:
@@ -895,18 +951,24 @@ class ProcessManager:
                 self.termination_event.set()
 
                 try:
-                    # Wait up to timeout_seconds for all the processes to
-                    # finish
-                    while time.time() - method_start_time < timeout:
-                        (
-                            to_kill_first,
-                            to_kill_last,
-                        ) = self.shutdown_interactive(
-                            to_kill_first, to_kill_last
-                        )
-                        if not to_kill_first and not to_kill_last:
-                            # all modules are done
-                            break
+                    if self.core_module_failure:
+                        # dont wait for failed core modules to stop
+                        self.kill_all_children()
+                        reason = "Core module failure."
+                        graceful_shutdown = False
+                    else:
+                        # Wait up to timeout_seconds for all the processes to
+                        # finish
+                        while time.time() - method_start_time < timeout:
+                            (
+                                to_kill_first,
+                                to_kill_last,
+                            ) = self.shutdown_interactive(
+                                to_kill_first, to_kill_last
+                            )
+                            if not to_kill_first and not to_kill_last:
+                                # all modules are done
+                                break
                 except KeyboardInterrupt:
                     # either the user wants to kill the remaining modules
                     # (pressed ctrl +c again)

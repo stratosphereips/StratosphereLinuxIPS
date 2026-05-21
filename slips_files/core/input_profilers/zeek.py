@@ -22,6 +22,7 @@ from slips_files.core.flows.zeek import (
     Weird,
     Software,
     FTP,
+    Login,
 )
 
 from slips_files.core.input_profilers.zeek_to_slips_maps import (
@@ -39,6 +40,7 @@ from slips_files.core.input_profilers.zeek_to_slips_maps import (
     arp_fields_to_slips_fields_map,
     software_fields_to_slips_fields_map,
     weird_fields_to_slips_fields_map,
+    login_fields_to_slips_fields_map,
 )
 
 LOG_MAP = {
@@ -56,6 +58,7 @@ LOG_MAP = {
     "arp.log": arp_fields_to_slips_fields_map,
     "software.log": software_fields_to_slips_fields_map,
     "weird.log": weird_fields_to_slips_fields_map,
+    "login.log": login_fields_to_slips_fields_map,
 }
 
 # define a mapping of log types to their corresponding classes
@@ -74,6 +77,7 @@ LINE_TYPE_TO_SLIPS_CLASS = {
     "files.log": Files,
     "weird.log": Weird,
     "software.log": Software,
+    "login.log": Login,
 }
 
 

@@ -12,7 +12,7 @@ jobs:
     outputs:
       test_files: ${{ steps.list.outputs.test_files }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - id: list
         uses: ./.github/actions/list-tests-dir
         with:
@@ -41,18 +41,18 @@ jobs:
         test_file: ${{ fromJson(needs.list-integration-tests.outputs.test_files) }}
 
     steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          lfs: true
+
 
       - name: Install Git LFS
         run: |
           apt-get update -qq
           apt-get install -y git-lfs
           git lfs install
-
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.ref }}
-          fetch-depth: 0
-          lfs: true
 
       - name: Start Redis
         uses: ./.github/actions/start-redis
@@ -71,7 +71,7 @@ jobs:
 
       - name: Upload Artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.artifact-name.outputs.name }}
           path: |

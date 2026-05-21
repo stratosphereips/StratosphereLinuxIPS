@@ -13,4 +13,5 @@ SUPPORTED_LOGFILES = (
     "arp",
     "software",
     "weird",
+    "login",
 )

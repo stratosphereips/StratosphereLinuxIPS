@@ -29,3 +29,10 @@ class InputType(str, Enum):
             return cls(value)
         except ValueError:
             return value
+
+
+FOREVER_GROWING_INPUT_TYPES = (
+    InputType.INTERFACE,
+    InputType.STDIN,
+    InputType.CYST,
+)
