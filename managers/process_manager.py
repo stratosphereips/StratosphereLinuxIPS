@@ -42,10 +42,7 @@ from slips_files.common.abstracts.imodule import (
 from slips_files.common.plotter import Plotter
 
 from slips_files.common.style import green
-from slips_files.common.input_type import (
-    InputType,
-    FOREVER_GROWING_INPUT_TYPES,
-)
+from slips_files.common.input_type import InputType
 from slips_files.core.evidence_handler import EvidenceHandler
 from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.input import Input
@@ -834,8 +831,8 @@ class ProcessManager:
 
         failed_modules: list[tuple[str, int | None]] = []
 
-        if self.main.input_type in FOREVER_GROWING_INPUT_TYPES:
-            # Slips is analyzing flows is continously recving flows,
+        if self.main.db.is_running_non_stop():
+            # Slips is continuously receiving flows,
             # none of these modules should stop or "finish"
             if not input_running:
                 failed_modules.append(("input", input_exit_code))
@@ -891,11 +888,7 @@ class ProcessManager:
         # these are the cases where slips should be running non-stop
         # when slips is reading from a special module other than the input process
         # this module should handle the stopping of slips
-        return (
-            self.is_debugger_active()
-            or self.main.input_type in (InputType.STDIN, InputType.CYST)
-            or self.main.db.is_running_non_stop()
-        )
+        return self.is_debugger_active() or self.main.db.is_running_non_stop()
 
     def shutdown_interactive(
         self, to_kill_first, to_kill_last

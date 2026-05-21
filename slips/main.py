@@ -151,9 +151,9 @@ class Main:
 
     def was_running_zeek(self) -> bool:
         """returns true if zeek was used in this run"""
-        return self.db.is_running_non_stop() or self.db.get_input_type() in (
-            InputType.PCAP,
-            InputType.INTERFACE,
+        return (
+            self.db.is_running_non_stop()
+            or self.db.get_input_type() == InputType.PCAP
         )
 
     def store_zeek_dir_copy(self):
@@ -468,9 +468,8 @@ class Main:
         """
         return (
             self.args.input_module
-            or self.args.growing
-            or self.input_type
-            in (InputType.STDIN, InputType.PCAP, InputType.INTERFACE)
+            or self.db.is_running_non_stop()
+            or self.input_type == InputType.PCAP
         )
 
     def get_slips_logfile(self) -> str:
