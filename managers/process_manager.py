@@ -134,13 +134,16 @@ class ProcessManager:
         self.core_module_failure = False
 
     def read_config(self):
-        self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
-            self.main.input_type
+        self.disabled_modules_from_config: list = (
+            self.main.conf.get_disabled_modules(self.main.input_type)
         )
-        self.bootstrap_p2p = self.main.conf.is_bootstrapping_node()
         self.bootstrapping_modules = self.main.conf.get_bootstrapping_modules()
-        # self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.
-        # get_bootstrapping_setting()
+        self.bootstrapping_node = self.main.conf.read_configuration(
+            "global_p2p", "bootstrapping_node", False
+        )
+        self.use_global_p2p = self.main.conf.read_configuration(
+            "global_p2p", "use_global_p2p", False
+        )
 
     def declare_that_slips_done_starting_all_children(self):
         self.all_children_started = True
@@ -292,8 +295,8 @@ class ProcessManager:
             self.kill_process_tree(process.pid)
             self.print_stopped_module(module_name)
 
-    def is_ignored_module(self, module_name: str) -> bool:
-        for ignored_module in self.modules_to_ignore:
+    def is_ignored_module_in_the_config(self, module_name: str) -> bool:
+        for ignored_module in self.disabled_modules_from_config:
             ignored_module = (
                 ignored_module.replace(" ", "")
                 .replace("_", "")
@@ -327,8 +330,20 @@ class ProcessManager:
 
             if m1.__contains__(m2):
                 return True
-        self.modules_to_ignore.append(module_name.split(".")[-1])
+        self.disabled_modules_from_config.append(module_name.split(".")[-1])
         return False
+
+    def is_bootstrapping_node(self) -> bool:
+        """
+        Check whether this Slips instance should run as a P2P bootstrap node.
+
+        Returns:
+            True when both bootstrapping and global P2P are enabled.
+        """
+        if not self.main.db.is_running_non_stop():
+            return False
+
+        return self.bootstrapping_node and self.use_global_p2p
 
     def is_abstract_module(self, obj) -> bool:
         return obj.name in ("imodule", "iasync_module")
@@ -345,6 +360,7 @@ class ProcessManager:
         failed_to_load_modules = 0
         for module_name in self._discover_module_names():
             if not self._should_load_module(module_name):
+                print(f"@@@@@@@@@@@@@@@@ shouldnt load {module_name}")
                 continue
 
             module = self._import_module(module_name)
@@ -383,13 +399,14 @@ class ProcessManager:
             if dir_name == file_name:
                 yield module_name
 
-    def _should_load_module(self, module_name):
-        # filter modules based on bootstrapping or blacklist conditions
-        if self.bootstrap_p2p:
+    def _should_load_module(self, module_name: str) -> bool:
+        if self.is_bootstrapping_node():
+            # in this node slips only runs bootstrapping-necessary modules,
+            # no detection modules are started.
             if not self.is_bootstrapping_module(module_name):
-                return False  # keep only the bootstrapping-necessary modules
+                return False
         else:
-            if self.is_ignored_module(module_name):
+            if self.is_ignored_module_in_the_config(module_name):
                 return False  # ignore blacklisted modules
         return True
 
@@ -464,7 +481,9 @@ class ProcessManager:
 
     def print_disabled_modules(self):
         print("-" * 27)
-        self.main.print(f"Disabled Modules: {self.modules_to_ignore}", 1, 0)
+        self.main.print(
+            f"Disabled Modules: {self.disabled_modules_from_config}", 1, 0
+        )
 
     def load_modules(self):
         """responsible for starting all the modules in the modules/ dir"""
