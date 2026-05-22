@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import pytest
+import json
 from unittest.mock import (
     patch,
     MagicMock,
@@ -147,6 +148,31 @@ def test_add_metadata(
     ):
         result = metadata_manager._add_metadata()
         assert result == expected_result
+
+
+def test_set_input_metadata_uses_process_manager_disabled_modules() -> None:
+    """Test input metadata stores disabled modules from ProcessManager."""
+    metadata_manager = ModuleFactory().create_metadata_manager_obj()
+    metadata_manager.main.proc_man.get_disabled_modules = Mock(
+        return_value=(["template"], ["exporting_alerts"])
+    )
+    metadata_manager.main.args.interface = False
+    metadata_manager.main.args.filepath = False
+    metadata_manager.main.db.get_zeek_output_dir.return_value = None
+
+    with patch.object(
+        utils,
+        "get_human_readable_datetime",
+        return_value="2026-05-21 10:00:00",
+    ):
+        metadata_manager.set_input_metadata()
+
+    metadata_manager.main.db.set_input_metadata.assert_called_once()
+    metadata = metadata_manager.main.db.set_input_metadata.call_args.args[0]
+    assert json.loads(metadata["disabled_modules"]) == [
+        "template",
+        "exporting_alerts",
+    ]
 
 
 @pytest.mark.parametrize(

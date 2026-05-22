@@ -93,8 +93,9 @@ def test_init_sets_live_update_event_for_update_start(
     main_mock.args.is_slips_started_by_an_update = (
         is_slips_started_by_an_update
     )
-    main_mock.conf.get_disabled_modules.return_value = []
-    main_mock.conf.is_bootstrapping_node.return_value = False
+    main_mock.conf.read_configuration.side_effect = (
+        lambda section, name, default_value: default_value
+    )
     main_mock.conf.get_bootstrapping_modules.return_value = []
 
     process_manager = ProcessManager(main_mock)
@@ -121,13 +122,119 @@ def test_init_sets_live_update_event_for_update_start(
 )
 def test_is_ignored_module(module_name, modules_to_ignore, expected):
     process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.modules_to_ignore = modules_to_ignore
-    assert process_manager.is_ignored_module(module_name) == expected
+    process_manager.user_disabled_modules = modules_to_ignore
+    assert process_manager.is_disabled_module(module_name) == expected
+
+
+@pytest.mark.parametrize(
+    "input_type, argv, export_to, expected_user, expected_slips",
+    [
+        (
+            InputType.PCAP,
+            ["slips.py", "-f", "dataset/test.pcap"],
+            [],
+            ["template", "custom_module"],
+            [
+                "exporting_alerts",
+                "p2p_trust",
+                "fides",
+                "iris",
+                "cesnet",
+                "blocking",
+                "arp_poisoner",
+                "cyst",
+            ],
+        ),
+        (
+            InputType.ZEEK,
+            ["slips.py", "-f", "dataset/conn.log"],
+            ["stix"],
+            ["template", "custom_module"],
+            [
+                "p2p_trust",
+                "fides",
+                "iris",
+                "cesnet",
+                "blocking",
+                "arp_poisoner",
+                "leak_detector",
+                "cyst",
+            ],
+        ),
+    ],
+)
+def test_get_disabled_modules(
+    input_type: InputType,
+    argv: list,
+    export_to: list,
+    expected_user: list,
+    expected_slips: list,
+) -> None:
+    """Test disabled modules are split by user and Slips runtime rules."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.input_type = input_type
+    process_manager.main.args.clearblocking = False
+    process_manager.main.args.blocking = False
+    process_manager.main.conf.read_configuration.side_effect = (
+        lambda section, name, default_value: (
+            [" template ", "custom_module"]
+            if (section, name) == ("modules", "disable")
+            else default_value
+        )
+    )
+    process_manager.main.conf.export_to.return_value = export_to
+
+    with patch("managers.process_manager.sys.argv", argv):
+        user_disabled_modules, slips_disabled_modules = (
+            process_manager.get_disabled_modules()
+        )
+
+    assert user_disabled_modules == expected_user
+    assert slips_disabled_modules == expected_slips
+
+
+@pytest.mark.parametrize(
+    "bootstrapping_node, use_global_p2p, expected",
+    [
+        (True, True, True),
+        (True, False, False),
+        (False, True, False),
+    ],
+)
+def test_should_bootstrap_p2p(bootstrapping_node, use_global_p2p, expected):
+    """Test P2P bootstrapping is enabled only when both flags are set."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.bootstrapping_node = bootstrapping_node
+    process_manager.use_global_p2p = use_global_p2p
+    process_manager.main.db.is_running_non_stop.return_value = True
+
+    assert process_manager.is_bootstrapping_node() is expected
+
+
+@pytest.mark.parametrize(
+    "should_bootstrap, module_name, disabled_modules, expected",
+    [
+        (True, "modules.fides.fides", [], True),
+        (True, "modules.flowalerts.flowalerts", [], False),
+        (False, "modules.flowalerts.flowalerts", ["flowalerts"], False),
+        (False, "modules.fides.fides", [], True),
+    ],
+)
+def test_should_load_module(
+    should_bootstrap, module_name, disabled_modules, expected
+):
+    """Test module loading respects bootstrapping and disabled modules."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.bootstrapping_modules = ["fides", "iris"]
+    process_manager.user_disabled_modules = disabled_modules
+    process_manager.is_bootstrapping_node = Mock(return_value=should_bootstrap)
+
+    assert process_manager._should_load_module(module_name) is expected
 
 
 def test_print_disabled_modules():
     process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.modules_to_ignore = ["Module1", "Module2"]
+    process_manager.user_disabled_modules = ["Module1", "Module2"]
     with patch.object(process_manager.main, "print") as mock_print:
         process_manager.print_disabled_modules()
         mock_print.assert_called_once_with(
@@ -348,9 +455,9 @@ def test_is_debugger_active(mock_return_value, expected_result):
         # Test case 1: Debugger active
         (True, InputType.PCAP, False, True),
         # Test case 2: Stdin input
-        (False, InputType.STDIN, False, True),
+        (False, InputType.STDIN, True, True),
         # Test case 3: Cyst input
-        (False, InputType.CYST, False, True),
+        (False, InputType.CYST, True, True),
         # Test case 4: Interface input
         (False, InputType.PCAP, True, True),
         # Test case 5: Normal case (should stop)
@@ -465,6 +572,7 @@ def test_did_a_core_module_fail_for_file_input(
     process_manager.input_process.exitcode = input_exitcode
     process_manager.profiler_process.exitcode = profiler_exitcode
     process_manager.evidence_process.exitcode = evidence_exitcode
+    process_manager.main.db.is_running_non_stop.return_value = False
 
     assert process_manager._did_a_core_module_fail() == expected_result
 
@@ -513,6 +621,7 @@ def test_did_a_core_module_fail_for_forever_growing_input(
     process_manager.input_process.exitcode = input_exitcode
     process_manager.profiler_process.exitcode = profiler_exitcode
     process_manager.evidence_process.exitcode = evidence_exitcode
+    process_manager.main.db.is_running_non_stop.return_value = True
 
     assert process_manager._did_a_core_module_fail() == expected_result
 
