@@ -983,7 +983,7 @@ class Utils(object):
         :param return_type: can be seconds, minutes, hours or days
         """
         if start_time == float("-inf"):
-            # a lot of time passed since -inf
+            # a lot of time passed since -inf :D:D
             return 100000000000
 
         start_time = self.convert_to_datetime(start_time)

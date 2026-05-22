@@ -1078,7 +1078,7 @@ class ProcessManager:
                 self.main.db.check_tw_to_close(close_all=True)
 
             graceful_shutdown = True
-            reason = ""
+            shutdown_reason = ""
             if self.main.mode == "daemonized":
                 self.kill_daemon_children()
                 profiles_len: int = self.main.db.get_profiles_len()
@@ -1102,7 +1102,7 @@ class ProcessManager:
                     if self.core_module_failure:
                         # dont wait for failed core modules to stop
                         self.kill_all_children()
-                        reason = "Core module failure."
+                        shutdown_reason = "Core module failure."
                         graceful_shutdown = False
                     else:
                         # Wait timeout_seconds for all the processes to finish
@@ -1122,27 +1122,27 @@ class ProcessManager:
                     # or slips was stuck looping for too long that the OS
                     # sent an automatic sigint to kill slips
                     # pass to kill the remaining modules
-                    reason = "User pressed ctr+c or Slips was killed by the OS"
+                    shutdown_reason = (
+                        "User pressed ctr+c or Slips was killed" " by the OS"
+                    )
                     graceful_shutdown = False
 
                 if time.time() - method_start_time >= timeout:
                     # getting here means we're killing them bc of the timeout
                     # not getting here means we're killing them bc of double
                     # ctr+c OR they terminated successfully
-                    reason = (
+                    shutdown_reason = (
                         f"Killing modules that took more than {timeout}"
                         f" mins to finish."
                     )
-                    print(reason)
+                    print(shutdown_reason)
                     graceful_shutdown = False
 
                 self.kill_all_children()
 
             if not self.is_slips_live_updating_event.is_set():
-                if self.main.args.save:
-                    self.main.save_the_db()
-                if self.main.redis_man.should_save_redis_db_after_analysis():
-                    self.main.redis_man.save_redis_db()
+                self.main.redis_man.decide_on_saving_the_redis_db()
+
                 if self.main.conf.export_labeled_flows():
                     format_ = self.main.conf.export_labeled_flows_to().lower()
                     self.main.db.export_labeled_flows(format_)
@@ -1165,7 +1165,7 @@ class ProcessManager:
                 self.main.redis_man.stop_redis_server_after_analysis()
 
             self._print_shutdown_stats(
-                graceful_shutdown, analysis_time, reason, print
+                graceful_shutdown, analysis_time, shutdown_reason, print
             )
 
         except KeyboardInterrupt:

@@ -1795,11 +1795,11 @@ class RedisDB(
         if os.path.exists(redis_db_path):
             shutil.copy2(redis_db_path, f"{safe_backup_file}.rdb")
             os.remove(redis_db_path)
-            print(f"[Main] Database saved to {safe_backup_file}.rdb")
+            self.print(f"Database saved to {safe_backup_file}.rdb")
             return True
 
-        print(
-            f"[DB] Error Saving: Cannot find the redis "
+        self.print(
+            f"Error Saving: Cannot find the redis "
             f"database directory {redis_db_path}"
         )
         return False

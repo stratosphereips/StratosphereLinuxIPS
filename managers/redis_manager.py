@@ -81,7 +81,16 @@ class RedisManager:
         Returns:
             True when Slips is not keeping Redis open for the web interface.
         """
+        if self.main.args.save:
+            return True
+
         return not self.main.args.webinterface
+
+    def decide_on_saving_the_redis_db(self):
+        if self.main.redis_man.should_save_redis_db_after_analysis():
+            self.main.redis_man.save_redis_db()
+        else:
+            self.main.redis_man.print_reason_for_not_killing_redis()
 
     def save_redis_db(self) -> bool:
         """
@@ -94,6 +103,21 @@ class RedisManager:
             self.main.args.output, "dump"
         )
         return bool(self.main.db.save(rdb_filepath))
+
+    def print_reason_for_not_killing_redis(self):
+        reason = ""
+        if self.main.args.webinterface:
+            reason = "the web interface is running."
+        elif self.main.redis_port == 6379:
+            reason = (
+                "the default redis port should always stay up"
+                " for storing cached TI data."
+            )
+
+        print(
+            f"The redis server on port {self.main.redis_port} "
+            f"will not be killed. Reason: {reason}."
+        )
 
     def stop_redis_server_after_analysis(self) -> None:
         """
