@@ -493,10 +493,6 @@ class ProcessManager:
                 return False
         else:
             if self.is_disabled_module(module_name):
-                print(
-                    f"@@@@@@@@@@@@@@@@ {module_name} is ignored in the "
-                    f"config? {self.slips_disabled_modules}"
-                )
                 return False
         return True
 
