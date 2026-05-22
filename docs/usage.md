@@ -299,9 +299,9 @@ Note: If you try to save the same file twice using ```-s``` the old backup will 
 
 You can load it again using ```-d```, For example:
 
-```sudo ./slips.py -d redis_backups/hide-and-seek-short.rdb ```
+```sudo ./slips.py -d redis_backups/hide-and-seek-short.rdb -w```
 
-And then use ```./webinterface.sh``` and select the entry on port 32850 to view the loaded database.
+Then navigate to ```http://localhost:55000/``` and select the entry on port 32850 to view the loaded database.
 
 Note: saving and loading the database requires **root privileges** and is only supported in linux.
 

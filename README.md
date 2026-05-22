@@ -116,7 +116,7 @@ terminal interface.
 
 ##### Web interface
 
-    ./webinterface.sh
+    ./slips.py -e 1 -f dataset/test7-malicious.pcap -o output_dir -w
 
 Then navigate to ```http://localhost:55000/``` from your browser.
 
