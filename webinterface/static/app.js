@@ -53,6 +53,60 @@ async function switchRedisDb(port) {
     return response.json();
 }
 
+function setRedisUploadWarning(message) {
+    /*
+        Render Redis upload warnings without inserting HTML.
+    */
+    const warningElement = document.getElementById("redis_upload_warning");
+    warningElement.textContent = message;
+    warningElement.classList.remove("d-none");
+}
+
+function clearRedisUploadWarning() {
+    /*
+        Hide the Redis upload warning.
+    */
+    const warningElement = document.getElementById("redis_upload_warning");
+    warningElement.textContent = "";
+    warningElement.classList.add("d-none");
+}
+
+function setBrowseRedisButtonLoading(isLoading) {
+    /*
+        Toggle the Browse Redis database button loading state.
+    */
+    const browseRedisButton = document.getElementById("browse_redis_button");
+    const icon = document.createElement("i");
+    icon.className = isLoading ? "fa fa-spinner fa-spin" : "fa fa-folder-open";
+    const label = isLoading ? " Loading Redis database" : " Browse redis database";
+    browseRedisButton.disabled = isLoading;
+    browseRedisButton.replaceChildren(icon, document.createTextNode(label));
+}
+
+async function uploadRedisRdb(file) {
+    /*
+        Upload a Redis RDB file and switch the active web interface DB.
+    */
+    const formData = new FormData();
+    formData.append("redis_db", file);
+
+    const response = await fetch("/redis/upload", {
+        method: "POST",
+        headers: {
+            "X-CSRF-Token": csrfToken
+        },
+        credentials: "same-origin",
+        body: formData
+    });
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+        throw new Error(data.warning || "Failed to use uploaded Redis database.");
+    }
+
+    return data;
+}
+
 function initializeWidgetsAndListeners() {
     const redisModalElement = document.getElementById("modal_choose_redis");
     const redisModal = new bootstrap.Modal(redisModalElement, {
@@ -81,6 +135,37 @@ function initializeWidgetsAndListeners() {
     $('#changedb_button').click(function (event) {
         event.preventDefault();
         redisModal.show();
+    })
+
+    $('#browse_redis_button').click(function () {
+        clearRedisUploadWarning();
+        document.getElementById("redis_rdb_file").click();
+    })
+
+    $('#redis_rdb_file').change(async function () {
+        const file = this.files[0];
+        if (!file) {
+            return;
+        }
+
+        if (!file.name.toLowerCase().endsWith(".rdb")) {
+            setRedisUploadWarning("Only .rdb files are accepted.");
+            this.value = "";
+            return;
+        }
+
+        try {
+            setBrowseRedisButtonLoading(true);
+            clearRedisUploadWarning();
+            await uploadRedisRdb(file);
+            window.location.reload();
+        } catch (error) {
+            console.error(error);
+            setRedisUploadWarning(error.message);
+        } finally {
+            setBrowseRedisButtonLoading(false);
+            this.value = "";
+        }
     })
 
     redisModalElement.addEventListener('show.bs.modal', function () {

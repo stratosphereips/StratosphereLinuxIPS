@@ -8,14 +8,21 @@
     font-size: 21px;
 }
 
-#slips_custom_navbar li a {
+#slips_custom_navbar li a,
+#slips_custom_navbar li button {
     display: inline-block;
     width: 100%;
     padding: 10px;
     text-decoration: none;
     color: grey;
+    background: transparent;
+    border: 0;
 }
 
 #slips_custom_navbar .nav-link.active {
     color: #0d6efd !important;
+}
+
+#redis_upload_warning {
+    margin: 10px 0 0 0;
 }

@@ -173,6 +173,9 @@ When using the web interface, you can select among the active Redis-backed analy
     [2] dataset/test7-malicious.pcap - port 59324
 
 You can choose the corresponding file or interface from the web interface.
+You can also use the `Browse redis database` button in the web interface to
+load a saved `.rdb` file directly. The upload accepts only files with the
+`.rdb` extension.
 
 Once you're done, you can run slips with ```--killall``` to close all the redis servers using the following command
 
@@ -254,6 +257,11 @@ Then navigate to ```http://localhost:55000/``` from your browser.
 
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px" title="Web Interface">
+
+Use `Change DB` to switch between active Redis server. Use
+`Browse redis database` to upload and inspect a saved Redis `.rdb` file. If the
+file is not a Redis RDB file or Redis cannot load it, the web interface shows a
+warning and keeps the current database selected.
 
 On the right column, you can see a list of all the IPs seen in your traffic.
 
