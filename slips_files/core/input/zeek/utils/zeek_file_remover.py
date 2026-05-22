@@ -20,7 +20,7 @@ class ZeekFileRemover:
         self.thread = threading.Thread(
             target=self.remove_old_zeek_files,
             daemon=True,
-            name="input_remover_thread",
+            name="rotated_zeek_logs_remover_thread",
         )
         self._started = False
 
