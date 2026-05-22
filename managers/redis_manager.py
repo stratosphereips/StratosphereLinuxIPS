@@ -93,16 +93,15 @@ class RedisManager:
             self.main.redis_man.print_reason_for_not_killing_redis()
 
     def save_redis_db(self) -> bool:
-        """
-        Save Redis to the analysis output databases directory.
-
-        Returns:
-            True if Redis reported a successful save, False otherwise.
-        """
         rdb_filepath = get_this_db_path_inside_output_dir(
             self.main.args.output, "dump"
         )
-        return bool(self.main.db.save(rdb_filepath))
+        saved = bool(self.main.db.save(rdb_filepath))
+        if saved:
+            self.main.print(f"Database saved to {rdb_filepath}")
+        else:
+            self.main.print("Faled to save the redis database.")
+        return saved
 
     def print_reason_for_not_killing_redis(self):
         reason = ""

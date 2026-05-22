@@ -1795,7 +1795,7 @@ class RedisDB(
         if os.path.exists(redis_db_path):
             shutil.copy2(redis_db_path, f"{safe_backup_file}.rdb")
             os.remove(redis_db_path)
-            self.print(f"Database saved to {safe_backup_file}.rdb")
+
             return True
 
         self.print(
