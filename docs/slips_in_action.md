@@ -50,7 +50,7 @@ This explains the start and stop timestamps in the alert `start 2021-04-10T16:44
 
 The difference between infected and normal timewindows is shown better in the web interface.
 
-You can inspect the results in another terminal using `./webinterface.sh`
+Start Slips with `-w` to inspect the results in the web interface.
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" title="Slips web interface">
 <p> Figure 3 </p>

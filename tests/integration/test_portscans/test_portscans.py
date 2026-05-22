@@ -10,10 +10,9 @@ from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
     get_slips_test_command,
-    close_test_redis_server,
+    get_total_analyzed_ips_from_output,
     skip_if_missing_runtime_dependencies,
 )
-from tests.module_factory import ModuleFactory
 
 alerts_file = "alerts.log"
 
@@ -51,10 +50,7 @@ def test_horizontal(path, output_dir, integration_port_factory):
         run_slips(command)
 
         assert_no_errors(output_dir)
-        database = ModuleFactory().create_db_manager_obj(
-            redis_port, output_dir=output_dir, start_redis_server=False
-        )
-        profiles = database.get_profiles_len()
+        profiles = get_total_analyzed_ips_from_output(output_dir)
         assert profiles > 0
 
         log_file = output_dir / "alerts" / alerts_file
@@ -62,7 +58,6 @@ def test_horizontal(path, output_dir, integration_port_factory):
         success = True
     finally:
         if success:
-            close_test_redis_server(redis_port)
             shutil.rmtree(output_dir)
 
 
@@ -95,10 +90,7 @@ def test_vertical(path, output_dir, integration_port_factory):
 
         assert_no_errors(output_dir)
 
-        database = ModuleFactory().create_db_manager_obj(
-            redis_port, output_dir=output_dir, start_redis_server=False
-        )
-        profiles = database.get_profiles_len()
+        profiles = get_total_analyzed_ips_from_output(output_dir)
         assert profiles > 0
 
         log_file = output_dir / "alerts" / alerts_file
@@ -106,5 +98,4 @@ def test_vertical(path, output_dir, integration_port_factory):
         success = True
     finally:
         if success:
-            close_test_redis_server(redis_port)
             shutil.rmtree(output_dir)

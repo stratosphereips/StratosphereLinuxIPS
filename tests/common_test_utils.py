@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import sqlite3
+import re
 from contextlib import contextmanager
 from importlib.util import find_spec
 from pathlib import Path
@@ -11,7 +12,6 @@ import binascii
 import subprocess
 import base64
 import sys
-import time
 import socket
 import threading
 from typing import (
@@ -21,7 +21,6 @@ from typing import (
 from pathlib import PosixPath
 from unittest.mock import Mock
 import yaml
-import redis
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
@@ -230,73 +229,6 @@ def allocate_integration_test_port(test_name: str, port_label: str) -> int:
     return port
 
 
-def start_test_redis_server(redis_port: int) -> None:
-    """
-    Ensure a Redis server is running for an integration test.
-
-    :param redis_port: Redis port required by the integration test
-    :return: None
-    """
-    client = redis.StrictRedis(host="localhost", port=redis_port, db=0)
-    try:
-        client.ping()
-        return
-    except redis.exceptions.ConnectionError:
-        pass
-    finally:
-        client.connection_pool.disconnect()
-
-    if shutil.which("redis-server") is None:
-        import pytest
-
-        pytest.skip("Missing integration runtime dependencies: redis-server")
-
-    subprocess.check_call(
-        ["redis-server", "--port", str(redis_port), "--daemonize", "yes"]
-    )
-
-    deadline = time.time() + 5
-    while time.time() < deadline:
-        client = redis.StrictRedis(host="localhost", port=redis_port, db=0)
-        try:
-            client.ping()
-            return
-        except redis.exceptions.ConnectionError:
-            time.sleep(0.1)
-        finally:
-            client.connection_pool.disconnect()
-
-    raise RuntimeError(
-        f"Redis server did not become ready on integration test port {redis_port}."
-    )
-
-
-def close_test_redis_server(redis_port: int) -> bool:
-    """
-    Flush and stop the Redis server used by an integration test.
-
-    :param redis_port: Redis port used by the test
-    :return: True when a Redis server was reached and shutdown was attempted
-    """
-    client = redis.StrictRedis(host="localhost", port=redis_port, db=0)
-    try:
-        client.ping()
-    except redis.exceptions.ConnectionError:
-        return False
-
-    try:
-        client.flushall()
-        client.flushdb()
-        client.script_flush()
-        client.shutdown(save=False)
-    except redis.exceptions.ConnectionError:
-        return True
-    finally:
-        client.connection_pool.disconnect()
-
-    return True
-
-
 def get_slips_test_command(arguments):
     """
     Build a Slips CLI command that uses the current Python interpreter.
@@ -401,6 +333,26 @@ def check_for_text(txt, output_dir):
             if txt in line:
                 return True
     return False
+
+
+def get_total_analyzed_ips_from_output(output_dir) -> int:
+    """
+    Return the highest total analyzed IP count printed by Slips.
+
+    Parameters:
+        output_dir: Integration test output directory.
+
+    Return value:
+        Highest total analyzed IP count found in slips_output.txt.
+    """
+    slips_output = os.path.join(output_dir, "slips_output.txt")
+    total_ips = 0
+    pattern = re.compile(r"Total analyzed IPs:\s*(\d+)")
+    with open(slips_output, "r") as f:
+        for line in f:
+            if match := pattern.search(line):
+                total_ips = max(total_ips, int(match.group(1)))
+    return total_ips
 
 
 def get_label_count_from_output_db(output_dir, label):
