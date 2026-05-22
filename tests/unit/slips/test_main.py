@@ -262,27 +262,6 @@ def test_get_input_file_type(given_path, cmd_result, expected_input_type):
 
 
 @pytest.mark.parametrize(
-    "input_information, expected_filepath",
-    [
-        # Test Case 1: Simple filename
-        ("input.pcap", "output/input"),
-        # Test Case 2: Filename with trailing slash
-        ("input.pcap/", "output/input"),
-        # Test Case 3: Filename with path
-        ("path/to/input.pcap", "output/input"),
-    ],
-)
-def test_save_the_db(input_information, expected_filepath):
-    main = ModuleFactory().create_main_obj()
-    main.input_information = input_information
-    main.args = MagicMock()
-    main.args.output = "output"
-    main.db = MagicMock()
-    main.save_the_db()
-    main.db.save.assert_called_once_with(expected_filepath)
-
-
-@pytest.mark.parametrize(
     "input_type, is_running_non_stop, expected_result",
     [
         # Test Case 1: PCAP input, not a growing Zeek directory

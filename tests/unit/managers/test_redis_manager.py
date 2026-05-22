@@ -129,14 +129,18 @@ def test_should_keep_redis_server_after_analysis(
 
 
 @pytest.mark.parametrize(
-    "webinterface, expected",
+    "save, webinterface, expected",
     [
-        (False, True),
-        (True, False),
+        (False, False, True),
+        (False, True, False),
+        (True, True, True),
     ],
 )
-def test_should_save_redis_db_after_analysis(webinterface, expected, mock_db):
+def test_should_save_redis_db_after_analysis(
+    save, webinterface, expected, mock_db
+):
     redis_manager = ModuleFactory().create_redis_manager_obj()
+    redis_manager.main.args.save = save
     redis_manager.main.args.webinterface = webinterface
 
     result = redis_manager.should_save_redis_db_after_analysis()
@@ -148,6 +152,7 @@ def test_save_redis_db_after_analysis(mock_db):
     redis_manager = ModuleFactory().create_redis_manager_obj()
     redis_manager.main.args.output = "output_dir"
     redis_manager.main.db.save = Mock(return_value=True)
+    redis_manager.main.print = Mock()
 
     with patch(
         "managers.redis_manager.get_this_db_path_inside_output_dir",
@@ -159,6 +164,9 @@ def test_save_redis_db_after_analysis(mock_db):
     mock_get_path.assert_called_once_with("output_dir", "dump")
     redis_manager.main.db.save.assert_called_once_with(
         "output_dir/databases/dump"
+    )
+    redis_manager.main.print.assert_called_once_with(
+        "Database saved to output_dir/databases/dump"
     )
 
 
