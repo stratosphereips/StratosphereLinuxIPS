@@ -4,7 +4,6 @@ import re
 from datetime import timedelta
 import os
 import sys
-from slips_files.common.input_type import InputType
 import ipaddress
 from typing import (
     List,
@@ -1074,51 +1073,6 @@ class ConfigParser(object):
                 # param isn't used
                 pass
 
-    def get_disabled_modules(self, input_type: str) -> list:
-        """
-        Uses input type to enable leak detector only on pcaps
-        """
-        to_ignore: List[str] = self.read_configuration(
-            "modules", "disable", ["template"]
-        )
-        to_ignore = [mod.strip() for mod in to_ignore]
-
-        # Ignore exporting alerts module if export_to is empty
-        export_to = self.export_to()
-        if "stix" not in export_to and "slack" not in export_to:
-            to_ignore.append("exporting_alerts")
-
-        use_p2p = self.use_local_p2p()
-        if not (use_p2p and "-i" in sys.argv):
-            to_ignore.append("p2p_trust")
-
-        use_global_p2p = self.use_global_p2p()
-        if not (use_global_p2p and ("-i" in sys.argv)):
-            to_ignore.append("fides")
-            to_ignore.append("iris")
-
-        # ignore CESNET sharing module if send and receive are
-        # disabled in slips.yaml
-        send_to_warden = self.send_to_warden()
-        receive_from_warden = self.receive_from_warden()
-
-        if not send_to_warden and not receive_from_warden:
-            to_ignore.append("cesnet")
-
-        # don't run blocking module unless specified
-        if not ("-cb" in sys.argv or "-p" in sys.argv):
-            to_ignore.append("blocking")
-            to_ignore.append("arp_poisoner")
-
-        # leak detector only works on pcap files
-        if input_type != InputType.PCAP:
-            to_ignore.append("leak_detector")
-
-        if not self.reading_flows_from_cyst():
-            to_ignore.append("cyst")
-
-        return to_ignore
-
     def get_cpu_profiler_enable(self):
         return self.read_configuration(
             "Profiling", "cpu_profiler_enable", False
@@ -1171,21 +1125,6 @@ class ConfigParser(object):
     def get_iris_config_location(self) -> str:
         return self.read_configuration(
             "global_p2p", "iris_conf", "config/iris_config.yaml"
-        )
-
-    def get_bootstrapping_setting(self) -> (bool, list):
-        return (
-            self.read_configuration("global_p2p", "bootstrapping_node", False)
-            and self.read_configuration("global_p2p", "use_global_p2p", False)
-            and ("-i" in sys.argv or "-g" in sys.argv),
-            ["fides", "iris"],
-        )
-
-    def is_bootstrapping_node(self) -> bool:
-        return (
-            self.read_configuration("global_p2p", "bootstrapping_node", False)
-            and self.read_configuration("global_p2p", "use_global_p2p", False)
-            and ("-i" in sys.argv or "-g" in sys.argv)
         )
 
     def get_bootstrapping_modules(self) -> list:

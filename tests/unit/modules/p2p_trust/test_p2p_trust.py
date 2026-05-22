@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 
+import errno
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
@@ -74,7 +75,7 @@ def test_rebuild_pigeon_binary_after_slips_update_runs_go_build():
         assert trust._rebuild_pigeon_binary_after_slips_update() is True
 
     mock_run.assert_called_once_with(
-        ["go", "build"],
+        ["go", "build", "-buildvcs=false"],
         cwd="p2p4slips",
         check=True,
         capture_output=True,
@@ -148,3 +149,79 @@ def test_start_pigeon_passes_runtime_arguments_to_go():
     assert "--redis-db" in executable
     assert f"localhost:{trust.redis_port}" in executable
     assert mock_popen.call_args.kwargs["cwd"] == "permanent/p2p_trust_runtime"
+
+
+def test_start_pigeon_rebuilds_and_retries_on_exec_format_error():
+    """
+    Ensure incompatible p2p4slips binaries are rebuilt and retried.
+
+    Returns:
+        None.
+    """
+    trust = create_trust()
+    trust.port = 32769
+    trust.host = "172.16.2.4"
+    trust.redis_port = 32768
+    trust.pygo_channel_raw = "p2p_pygo"
+    trust.gopy_channel_raw = "p2p_gopy"
+    trust.create_p2p_logfile = False
+    trust.p2p_trust_runtime_dir = "permanent/p2p_trust_runtime"
+    trust.pigeon_key_file = "pigeon.keys"
+    trust._rebuild_pigeon_binary_after_slips_update = Mock(return_value=True)
+    trust._build_pigeon_binary = Mock(return_value=True)
+    exec_error = OSError(errno.ENOEXEC, "Exec format error")
+    pigeon_process = Mock()
+
+    with (
+        patch("modules.p2p_trust.p2p_trust.shutil.which", return_value=True),
+        patch(
+            "modules.p2p_trust.p2p_trust.subprocess.Popen",
+            side_effect=[exec_error, pigeon_process],
+        ) as mock_popen,
+    ):
+        trust._start_pigeon()
+
+    assert trust.pigeon == pigeon_process
+    assert mock_popen.call_count == 2
+    trust._build_pigeon_binary.assert_called_once_with("for this system")
+    trust.print.assert_any_call(
+        "Warning: p2p4slips binary is not executable on this system. "
+        "Trying to rebuild it locally."
+    )
+
+
+def test_start_pigeon_reports_start_errors_without_retry():
+    """
+    Ensure non-format startup errors are reported without rebuilding.
+
+    Returns:
+        None.
+    """
+    trust = create_trust()
+    trust.port = 32769
+    trust.host = "172.16.2.4"
+    trust.redis_port = 32768
+    trust.pygo_channel_raw = "p2p_pygo"
+    trust.gopy_channel_raw = "p2p_gopy"
+    trust.create_p2p_logfile = False
+    trust.p2p_trust_runtime_dir = "permanent/p2p_trust_runtime"
+    trust.pigeon_key_file = "pigeon.keys"
+    trust._rebuild_pigeon_binary_after_slips_update = Mock(return_value=True)
+    trust._build_pigeon_binary = Mock()
+
+    with (
+        patch("modules.p2p_trust.p2p_trust.shutil.which", return_value=True),
+        patch(
+            "modules.p2p_trust.p2p_trust.subprocess.Popen",
+            side_effect=OSError(errno.EACCES, "Permission denied"),
+        ) as mock_popen,
+    ):
+        trust._start_pigeon()
+
+    assert trust.pigeon is None
+    mock_popen.assert_called_once()
+    trust._build_pigeon_binary.assert_not_called()
+    trust.print.assert_any_call(
+        "Warning: Failed to start p2p4slips. Error: "
+        "[Errno 13] Permission denied"
+    )

@@ -9,7 +9,10 @@ from slips_files.common.output_paths import (
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.input_type import InputType
+from slips_files.common.input_type import (
+    InputType,
+    FOREVER_GROWING_INPUT_TYPES,
+)
 from slips_files.core.database.redis_db.constants import (
     Constants,
     Channels,
@@ -740,7 +743,7 @@ class RedisDB(
         ):
             return json.loads(disabled_modules)
         else:
-            return {}
+            return []
 
     def set_input_metadata(self, info: dict):
         """
@@ -1384,10 +1387,7 @@ class RedisDB(
         in these 2 cases, it only stops on ctrl+c
         """
         input: InputType | None = self.get_input_type()
-        if (
-            input in (InputType.STDIN, InputType.INTERFACE)
-            or self.args.growing
-        ):
+        if input in FOREVER_GROWING_INPUT_TYPES or self.args.growing:
             return True
         return False
 

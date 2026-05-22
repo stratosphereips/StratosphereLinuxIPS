@@ -42,10 +42,7 @@ from slips_files.common.abstracts.imodule import (
 from slips_files.common.plotter import Plotter
 
 from slips_files.common.style import green
-from slips_files.common.input_type import (
-    InputType,
-    FOREVER_GROWING_INPUT_TYPES,
-)
+from slips_files.common.input_type import InputType
 from slips_files.core.evidence_handler import EvidenceHandler
 from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.input import Input
@@ -129,18 +126,100 @@ class ProcessManager:
         # is set by the input process when it stops because of a failure.
         self.is_input_failed_event = Event()
         self.is_slips_live_updating_event = Event()
+        self.user_disabled_modules: List[str] = []
+        self.slips_disabled_modules: List[str] = []
         self.read_config()
         self.all_children_started = False
         self.core_module_failure = False
 
     def read_config(self):
-        self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
-            self.main.input_type
-        )
-        self.bootstrap_p2p = self.main.conf.is_bootstrapping_node()
         self.bootstrapping_modules = self.main.conf.get_bootstrapping_modules()
-        # self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.
-        # get_bootstrapping_setting()
+        self.bootstrapping_node = self.main.conf.read_configuration(
+            "global_p2p", "bootstrapping_node", False
+        )
+        self.use_global_p2p = self.main.conf.read_configuration(
+            "global_p2p", "use_global_p2p", False
+        )
+
+    def _reading_flows_from_cyst(self) -> bool:
+        """
+        Check whether the selected input module is CYST.
+
+        Returns:
+            True when CYST is configured as the input module.
+        """
+        custom_flows = self.main.args.input_module
+        return "cyst" in str(custom_flows)
+
+    def get_disabled_modules(self) -> Tuple[List[str], List[str]]:
+        """
+        Get user-disabled modules and Slips-disabled modules.
+
+        Returns:
+            A tuple containing user-disabled modules and modules disabled by
+            Slips runtime rules.
+        """
+        user_disabled_modules: List[str] = self.main.conf.read_configuration(
+            "modules", "disable", ["template"]
+        )
+        user_disabled_modules = [
+            module.strip() for module in user_disabled_modules
+        ]
+
+        is_running_non_stop = self.main.db.is_running_non_stop()
+
+        slips_disabled_modules: List[str] = []
+
+        if not self._is_exporting_module_enabled():
+            slips_disabled_modules.append("exporting_alerts")
+
+        use_p2p = self.main.conf.use_local_p2p()
+        if not (use_p2p and is_running_non_stop):
+            slips_disabled_modules.append("p2p_trust")
+
+        use_global_p2p = self.main.conf.use_global_p2p()
+        if not (use_global_p2p and is_running_non_stop):
+            slips_disabled_modules.extend(("fides", "iris"))
+
+        if not (
+            self.main.conf.send_to_warden()
+            or self.main.conf.receive_from_warden()
+        ):
+            slips_disabled_modules.append("cesnet")
+
+        if not (self.main.args.clearblocking or self.main.args.blocking):
+            slips_disabled_modules.extend(("blocking", "arp_poisoner"))
+
+        if self.main.input_type != InputType.PCAP:
+            slips_disabled_modules.append("leak_detector")
+
+        if not self._reading_flows_from_cyst():
+            slips_disabled_modules.append("cyst")
+
+        for module in self.slips_disabled_modules:
+            if module not in slips_disabled_modules:
+                slips_disabled_modules.append(module)
+
+        return user_disabled_modules, slips_disabled_modules
+
+    def _is_exporting_module_enabled(self) -> bool:
+        """
+        Check whether alert exporting is configured.
+
+        Returns:
+            True when at least one supported alert exporter is enabled.
+        """
+        export_to = self.main.conf.export_to()
+        return "stix" in export_to or "slack" in export_to
+
+    def get_all_disabled_modules(self) -> List[str]:
+        """
+        Get all disabled modules as a single list.
+
+        Returns:
+            User-disabled modules followed by Slips-disabled modules.
+        """
+        return self.user_disabled_modules + self.slips_disabled_modules
 
     def declare_that_slips_done_starting_all_children(self):
         self.all_children_started = True
@@ -292,8 +371,12 @@ class ProcessManager:
             self.kill_process_tree(process.pid)
             self.print_stopped_module(module_name)
 
-    def is_ignored_module(self, module_name: str) -> bool:
-        for ignored_module in self.modules_to_ignore:
+    def is_disabled_module(self, module_name: str) -> bool:
+        """
+        returns true if the given module is disabled by the user or by
+        slips runtime
+        """
+        for ignored_module in self.get_all_disabled_modules():
             ignored_module = (
                 ignored_module.replace(" ", "")
                 .replace("_", "")
@@ -327,8 +410,22 @@ class ProcessManager:
 
             if m1.__contains__(m2):
                 return True
-        self.modules_to_ignore.append(module_name.split(".")[-1])
+        disabled_module = module_name.split(".")[-1]
+        if disabled_module not in self.slips_disabled_modules:
+            self.slips_disabled_modules.append(disabled_module)
         return False
+
+    def is_bootstrapping_node(self) -> bool:
+        """
+        Check whether this Slips instance should run as a P2P bootstrap node.
+
+        Returns:
+            True when both bootstrapping and global P2P are enabled.
+        """
+        if not self.main.db.is_running_non_stop():
+            return False
+
+        return self.bootstrapping_node and self.use_global_p2p
 
     def is_abstract_module(self, obj) -> bool:
         return obj.name in ("imodule", "iasync_module")
@@ -341,6 +438,11 @@ class ProcessManager:
         and returns a list of modules to load in the correct order if
         applicable.
         """
+        (
+            self.user_disabled_modules,
+            self.slips_disabled_modules,
+        ) = self.get_disabled_modules()
+
         plugins = {}
         failed_to_load_modules = 0
         for module_name in self._discover_module_names():
@@ -383,14 +485,19 @@ class ProcessManager:
             if dir_name == file_name:
                 yield module_name
 
-    def _should_load_module(self, module_name):
-        # filter modules based on bootstrapping or blacklist conditions
-        if self.bootstrap_p2p:
+    def _should_load_module(self, module_name: str) -> bool:
+        if self.is_bootstrapping_node():
+            # in this node slips only runs bootstrapping-necessary modules,
+            # no detection modules are started.
             if not self.is_bootstrapping_module(module_name):
-                return False  # keep only the bootstrapping-necessary modules
+                return False
         else:
-            if self.is_ignored_module(module_name):
-                return False  # ignore blacklisted modules
+            if self.is_disabled_module(module_name):
+                print(
+                    f"@@@@@@@@@@@@@@@@ {module_name} is ignored in the "
+                    f"config? {self.slips_disabled_modules}"
+                )
+                return False
         return True
 
     def _import_module(self, module_name):
@@ -464,7 +571,11 @@ class ProcessManager:
 
     def print_disabled_modules(self):
         print("-" * 27)
-        self.main.print(f"Disabled Modules: {self.modules_to_ignore}", 1, 0)
+        self.main.print(
+            f"Disabled Modules: " f"{self.get_all_disabled_modules()}",
+            1,
+            0,
+        )
 
     def load_modules(self):
         """responsible for starting all the modules in the modules/ dir"""
@@ -720,8 +831,8 @@ class ProcessManager:
 
         failed_modules: list[tuple[str, int | None]] = []
 
-        if self.main.input_type in FOREVER_GROWING_INPUT_TYPES:
-            # Slips is analyzing flows is continously recving flows,
+        if self.main.db.is_running_non_stop():
+            # Slips is continuously receiving flows,
             # none of these modules should stop or "finish"
             if not input_running:
                 failed_modules.append(("input", input_exit_code))
@@ -777,11 +888,7 @@ class ProcessManager:
         # these are the cases where slips should be running non-stop
         # when slips is reading from a special module other than the input process
         # this module should handle the stopping of slips
-        return (
-            self.is_debugger_active()
-            or self.main.input_type in (InputType.STDIN, InputType.CYST)
-            or self.main.db.is_running_non_stop()
-        )
+        return self.is_debugger_active() or self.main.db.is_running_non_stop()
 
     def shutdown_interactive(
         self, to_kill_first, to_kill_last

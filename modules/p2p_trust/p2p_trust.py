@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import errno
 import os
 import shutil
 import signal
@@ -225,13 +226,22 @@ class Trust(IModule):
         if not self._should_rebuild_pigeon_binary():
             return True
 
-        self.print(
-            "Rebuilding p2p4slips after Slips update. This can take "
-            "some time."
-        )
+        return self._build_pigeon_binary("after Slips update")
+
+    def _build_pigeon_binary(self, reason: str) -> bool:
+        """
+        Rebuild the p2p4slips binary.
+
+        Parameters:
+            reason: Human-readable reason included in log messages.
+
+        Returns:
+            True when the rebuild succeeds, otherwise False.
+        """
+        self.print(f"Rebuilding p2p4slips {reason}. This can take some time.")
         try:
             subprocess.run(
-                ["go", "build"],
+                ["go", "build", "-buildvcs=false"],
                 cwd=self.pigeon_binary_dir,
                 check=True,
                 capture_output=True,
@@ -239,19 +249,19 @@ class Trust(IModule):
             )
         except OSError as error:
             self.print(
-                "Warning: Failed to rebuild p2p4slips after Slips update. "
+                f"Warning: Failed to rebuild p2p4slips {reason}. "
                 f"Error: {error}"
             )
             return False
         except subprocess.CalledProcessError as error:
             error_output = (error.stderr or error.stdout or str(error)).strip()
             self.print(
-                "Warning: Failed to rebuild p2p4slips after Slips update. "
+                f"Warning: Failed to rebuild p2p4slips {reason}. "
                 f"Error: {error_output}"
             )
             return False
 
-        self.print("Done rebuilding p2p4slips after Slips update.")
+        self.print(f"Done rebuilding p2p4slips {reason}.")
         return True
 
     def extract_confidence(self, evidence: Evidence) -> Optional[float]:
@@ -620,7 +630,13 @@ class Trust(IModule):
         # give the report to evidenceProcess to decide whether to block or not
         self.db.publish("new_blame", data)
 
-    def _start_pigeon(self):
+    def _start_pigeon(self) -> None:
+        """
+        Start the p2p4slips process when local p2p is enabled.
+
+        Returns:
+            None.
+        """
         self.pigeon = None
         if not self.start_pigeon:
             return
@@ -654,9 +670,35 @@ class Trust(IModule):
         else:
             outfile = open(os.devnull, "+w")
 
-        self.pigeon = subprocess.Popen(
-            executable, cwd=self.p2p_trust_runtime_dir, stdout=outfile
-        )
+        try:
+            self.pigeon = subprocess.Popen(
+                executable, cwd=self.p2p_trust_runtime_dir, stdout=outfile
+            )
+        except OSError as error:
+            if error.errno != errno.ENOEXEC:
+                self.print(
+                    f"Warning: Failed to start p2p4slips. Error: {error}"
+                )
+                return
+
+            self.print(
+                "Warning: p2p4slips binary is not executable on this "
+                "system. Trying to rebuild it locally."
+            )
+            if not self._build_pigeon_binary("for this system"):
+                return
+
+            try:
+                self.pigeon = subprocess.Popen(
+                    executable,
+                    cwd=self.p2p_trust_runtime_dir,
+                    stdout=outfile,
+                )
+            except OSError as retry_error:
+                self.print(
+                    "Warning: Failed to start p2p4slips after rebuilding. "
+                    f"Error: {retry_error}"
+                )
 
     def shutdown_gracefully(self):
         if hasattr(self, "pigeon") and self.pigeon is not None:

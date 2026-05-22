@@ -14,7 +14,7 @@ RUN go mod download
 COPY iris/cmd ./cmd
 COPY iris/pkg ./pkg
 
-RUN go build -o /artifacts/iris cmd/peercli.go
+RUN go build -buildvcs=false -o /artifacts/iris cmd/peercli.go
 
 
 FROM golang:1.26.3 AS build-p2p
@@ -31,7 +31,7 @@ RUN go mod download
 
 COPY p2p4slips ./
 
-RUN go build -o /artifacts/p2p4slips
+RUN go build -buildvcs=false -o /artifacts/p2p4slips
 
 
 FROM ubuntu:22.04 AS build-redis

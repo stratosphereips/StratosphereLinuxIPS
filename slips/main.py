@@ -68,20 +68,21 @@ class Main:
             self.checker.verify_given_flags()
             self.prepare_locks_dir()
             if not self.args.stopdaemon:
-                # Check the type of input
+                self.input_type: InputType
                 (
                     self.input_type,
                     self.input_information,
                     self.line_type,
                 ) = self.checker.get_input_type()
+                self.checker.verify_flags_that_require_an_interface(
+                    self.input_type
+                )
                 self.input_information = os.path.normpath(
                     self.input_information
                 )
                 self.input_information = self.input_information.replace(
                     ",", "_"
                 )
-
-                # If we need zeek (bro), test if we can run it.
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
                 self.redis_man.start_redis_cache_if_not_running()
@@ -150,9 +151,9 @@ class Main:
 
     def was_running_zeek(self) -> bool:
         """returns true if zeek was used in this run"""
-        return self.db.is_running_non_stop() or self.db.get_input_type() in (
-            InputType.PCAP,
-            InputType.INTERFACE,
+        return (
+            self.db.is_running_non_stop()
+            or self.db.get_input_type() == InputType.PCAP
         )
 
     def store_zeek_dir_copy(self):
@@ -279,7 +280,7 @@ class Main:
     def is_binetflow_line(self, line: str) -> bool:
         return "->" in line or "StartTime" in line
 
-    def get_input_file_type(self, given_path):
+    def get_input_file_type(self, given_path) -> InputType:
         """
         given_path: given file
         returns binetflow, pcap, nfdump, zeek_folder, suricata, etc.
@@ -467,9 +468,8 @@ class Main:
         """
         return (
             self.args.input_module
-            or self.args.growing
-            or self.input_type
-            in (InputType.STDIN, InputType.PCAP, InputType.INTERFACE)
+            or self.db.is_running_non_stop()
+            or self.input_type == InputType.PCAP
         )
 
     def get_slips_logfile(self) -> str:

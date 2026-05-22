@@ -14,7 +14,7 @@ class APManager:
         """
         stores the interfaces given with -ap to slips in the db
         """
-        self.wifi_interface, self.eth_interface = input_information.split(",")
+        self.wifi_interface, self.eth_interface = input_information.split("_")
         interfaces = {
             "wifi_interface": self.wifi_interface,
             "ethernet_interface": self.eth_interface,

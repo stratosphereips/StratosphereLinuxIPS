@@ -7,7 +7,10 @@ from tests.module_factory import ModuleFactory
 from datetime import datetime, timedelta
 import sys
 import os
-from slips_files.common.input_type import InputType
+from slips_files.common.input_type import (
+    FOREVER_GROWING_INPUT_TYPES,
+    InputType,
+)
 
 
 @pytest.mark.parametrize(
@@ -66,6 +69,10 @@ def test_handle_flows_from_stdin_invalid_input():
 def test_is_total_flows_unknown(args, input_type, expected_result):
     main = ModuleFactory().create_main_obj()
     main.args = MagicMock(**args)
+    main.db = MagicMock()
+    main.db.is_running_non_stop.return_value = (
+        input_type in FOREVER_GROWING_INPUT_TYPES or args["growing"]
+    )
     main.input_type = input_type
 
     assert main.is_total_flows_unknown() == expected_result
@@ -280,8 +287,8 @@ def test_save_the_db(input_information, expected_filepath):
     [
         # Test Case 1: PCAP input, not a growing Zeek directory
         (InputType.PCAP, False, True),
-        # Test Case 2: Interface input, not a growing Zeek directory
-        (InputType.INTERFACE, False, True),
+        # Test Case 2: Interface input, running non-stop
+        (InputType.INTERFACE, True, True),
         # Test Case 3: Zeek folder input, is a growing Zeek directory
         (InputType.ZEEK_FOLDER, True, True),
         # Test Case 4: Other input type, not a growing Zeek directory

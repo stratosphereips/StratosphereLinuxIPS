@@ -1165,13 +1165,19 @@ class ModuleFactory:
         from managers.process_manager import ProcessManager
 
         main_mock = Mock()
-        main_mock.conf.get_disabled_modules.return_value = []
         # main_mock.conf.get_bootstrapping_setting.return_value = (False, [])
-        main_mock.conf.is_bootstrapping_node.return_value = False
+        main_mock.conf.read_configuration.side_effect = (
+            lambda section, name, default_value: default_value
+        )
         main_mock.conf.get_bootstrapping_modules.return_value = [
             "fides",
             "iris",
         ]
+        main_mock.conf.export_to.return_value = []
+        main_mock.conf.use_local_p2p.return_value = False
+        main_mock.conf.use_global_p2p.return_value = False
+        main_mock.conf.send_to_warden.return_value = False
+        main_mock.conf.receive_from_warden.return_value = False
         main_mock.conf.generate_performance_plots.return_value = False
         main_mock.input_type = InputType.PCAP
         main_mock.mode = "normal"
@@ -1199,7 +1205,16 @@ class ModuleFactory:
                 whitelist_path=MagicMock(
                     return_value="/path/to/whitelist.conf"
                 ),
-                get_disabled_modules=MagicMock(return_value=[]),
+                export_to=MagicMock(return_value=[]),
+                use_local_p2p=MagicMock(return_value=False),
+                use_global_p2p=MagicMock(return_value=False),
+                send_to_warden=MagicMock(return_value=False),
+                receive_from_warden=MagicMock(return_value=False),
+                read_configuration=MagicMock(
+                    side_effect=(
+                        lambda section, name, default_value: default_value
+                    )
+                ),
                 evidence_detection_threshold=MagicMock(return_value=0.5),
             ),
             "version": "1.0",
