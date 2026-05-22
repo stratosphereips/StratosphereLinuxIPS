@@ -765,6 +765,11 @@ class Main:
             # comes here if zeek terminates while slips is still working
             pass
 
-        if not self.sigterm_received:
-            # to avoid calling this func twice when sigterm is received
+        if self.sigterm_received:
+            with contextlib.suppress(Exception):
+                if self.redis_man.should_save_redis_db_after_analysis():
+                    self.redis_man.save_redis_db()
+                self.db.close_all_dbs()
+                self.redis_man.stop_redis_server_after_analysis()
+        else:
             self.proc_man.shutdown_gracefully()
