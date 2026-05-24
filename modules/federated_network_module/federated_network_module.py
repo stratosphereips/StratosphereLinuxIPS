@@ -246,16 +246,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.last_batch_loss: float = 0.0
         self.merge_count: int = 0
 
-        # Testing counters (dual: local + merged)
-        self.local_test_count: int = 0
-        self.merge_test_count: int = 0
-        self._init_testing_counters("local")
-        self._init_testing_counters("merged")
-
-        # Separate testing log files
-        self.testing_log_local = self._open_testing_log("local")
-        self.testing_log_merged = self._open_testing_log("merged")
-
         # Read module-specific config using ConfigParser
         conf = ConfigParser()
         section = self.module_config_section
@@ -308,53 +298,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         except (TypeError, ValueError):
             return default
 
-    def _init_testing_counters(self, prefix: str) -> None:
-        """Initialize TP/FP/TN/FN counters for local or merged testing."""
-        setattr(
-            self,
-            f"{prefix}_malware_metrics",
-            {"TP": 0, "FP": 0, "TN": 0, "FN": 0},
-        )
-        setattr(self, f"{prefix}_seen_labels", {MALICIOUS: 0, BENIGN: 0})
-        setattr(self, f"{prefix}_predicted_labels", {MALICIOUS: 0, BENIGN: 0})
-
-    def _open_testing_log(self, suffix: str):
-        """Open a separate testing log file for local or merged model."""
-        if not self.enable_logs:
-            return None
-        filename = f"testing_{suffix}_{self.log_suffix}.log"
-        log_path = os.path.join(self.output_dir, filename)
-        os.makedirs(self.output_dir, exist_ok=True)
-        return open(log_path, "w")
-
-    def _write_testing_snapshot_for(
-        self, log_file, prefix: str, count: int
-    ) -> None:
-        """Write TP/FP/TN/FN snapshot for a specific model to its log file."""
-        if log_file is None:
-            return
-        metrics = getattr(self, f"{prefix}_malware_metrics", {})
-        seen = getattr(self, f"{prefix}_seen_labels", {})
-        pred = getattr(self, f"{prefix}_predicted_labels", {})
-        total = sum(seen.values())
-        log_file.write(
-            f"Batch flows: {count}; "
-            f"Total flows: {total}; "
-            f"Seen labels: {seen}; "
-            f"Predicted labels: {pred}; "
-            f"Malware metrics (TP/FP/TN/FN): {metrics};\n"
-        )
-        log_file.flush()
-
     def _log_model_retrain(self) -> None:
-        """Write a model-change marker in testing logs after retraining."""
-        marker = "--- Local model retrained ---\n"
-        if self.testing_log_local:
-            self.testing_log_local.write(marker)
-            self.testing_log_local.flush()
-        if self.testing_log_merged:
-            self.testing_log_merged.write(marker)
-            self.testing_log_merged.flush()
+        """Write a model-change marker in the training log after retraining."""
+        self.write_to_log("--- Local model retrained ---")
 
     def create_empty_model(self) -> SimpleFederatedNet:
         """Create model with FIXED input dimension (18 features)."""
@@ -663,7 +609,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             return self._main_testing()
 
     def _main_training(self) -> bool:
-        """Training main loop - returns True on error."""
+        """Training main loop: buffer flows, train on alerts/sub-windows, test if model ready."""
         try:
             if msg := self.get_msg("new_flow"):
                 data = json.loads(msg["data"])
@@ -671,21 +617,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 flow_ts = float(data.get("stime", 0))
                 ground_truth = data.get("label", BENIGN)
 
-                # 1. Buffer flow for later training
+                # Buffer flow for later training
                 self.handle_new_flow(flow, flow_ts)
 
-                # 2. Test with local model (if trained)
+                # Test with local model (if trained) using base class metrics
                 if self.model is not None and self.is_preprocessor_fitted:
-                    self._test_on_flow(flow, ground_truth, "local")
-
-                # 3. Test with merged model (if available)
-                if (
-                    getattr(self, "merged_model", None) is not None
-                    and self.is_preprocessor_fitted
-                ):
-                    self._test_on_flow(
-                        flow, ground_truth, "merged", use_merged=True
-                    )
+                    predicted = self._classify_flow(flow)
+                    if predicted is not None:
+                        self.store_testing_results(ground_truth, predicted)
 
             if msg := self.get_msg("new_alert"):
                 self.handle_new_alert(json.loads(msg["data"]))
@@ -720,6 +659,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         except Exception:
             self.print(f"Error in main: {traceback.format_exc()}", 0, 1)
             return True
+
+    def _classify_flow(self, flow: dict) -> Optional[str]:
+        """Extract features, scale, classify. Returns BENIGN/MALICIOUS or None."""
+        features = self._extract_flow_features(flow)
+        if features is None:
+            return None
+        X = np.array([features], dtype=np.float32)
+        X_scaled = self.scaler.transform(X)
+        return self.predict_batch(X_scaled)[0]
 
     def handle_new_flow(self, flow: dict, flow_ts: float = 0.0):
         """Store flow in current sub-window, close window on timestamp-based expiry."""
@@ -1336,23 +1284,19 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
     def run_test_on_flow(self, flow: dict):
         """Test entrypoint - classify flow without creating evidence."""
         try:
-            if self.model is None or not self.is_preprocessor_fitted:
+            predicted = self._classify_flow(flow)
+            if predicted is None:
                 return
 
-            features = self._extract_flow_features(flow)
-            if features is None:
-                return
-
-            X = np.array([features], dtype=np.float32)
-            X_scaled = self.scaler.transform(X)
-            prediction = self.predict_batch(X_scaled)[0]
-
-            # Use base class method for logging metrics
-            self.store_testing_results(BENIGN, prediction)
+            ground_truth = flow.get(
+                "ground_truth_label",
+                flow.get("label", BENIGN),
+            )
+            self.store_testing_results(ground_truth, predicted)
 
             src_ip = flow.get("saddr", "unknown")
             dst_ip = flow.get("daddr", "unknown")
-            self.print(f"Flow {src_ip}->{dst_ip}: {prediction}", 1, 1)
+            self.print(f"Flow {src_ip}->{dst_ip}: {predicted}", 1, 1)
 
         except Exception:
             self.print(f"Error testing flow: {traceback.format_exc()}", 0, 1)
