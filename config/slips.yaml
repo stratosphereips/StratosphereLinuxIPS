@@ -255,7 +255,7 @@ flow_ml_detection:
   # training the models, to test in unknown data.
   # You should have trained at least once with 'Normal' data and once with
   # 'Malicious' data in order for the test to work.
-  mode: train
+  mode: test
 
   # Write training/testing metrics logs to output dir.
   # This affects only logging, not training behavior.
@@ -333,7 +333,7 @@ ml_linear_model:
 ############################ #
 ml_online_model:
   # Standalone river-based ML module.
-  mode: train
+  mode: test
 
   # Training startup behavior (used only when mode: train):
   # false -> warm-start from model_load_path/preprocess_load_path (recommended default)

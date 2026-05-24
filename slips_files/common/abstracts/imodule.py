@@ -209,6 +209,10 @@ class IModule(ABC, Process):
         """
         Check whether the incoming pub/sub message matches this module's
         Slips version.
+
+        Messages without a 'version' field (e.g. raw flow data) are
+        always allowed through. Only messages that explicitly carry a
+        version mismatch are filtered out.
         """
         if not message or "data" not in message:
             return False
@@ -225,7 +229,11 @@ class IModule(ABC, Process):
         if not isinstance(payload, dict):
             return False
 
-        return payload.get("version") == self.slips_version
+        msg_version = payload.get("version")
+        if msg_version is None:
+            return True
+
+        return msg_version == self.slips_version
 
     def get_msg(self, channel: str) -> Optional[dict]:
         try:
