@@ -283,7 +283,7 @@ flow_ml_detection:
 #############################
 ml_linear_model:
   # Standalone sklearn-based ML module.
-  mode: train
+  mode: test
 
   # Training startup behavior (used only when mode: train):
   # false -> warm-start from model_load_path/preprocess_load_path (recommended default)
@@ -417,8 +417,8 @@ federated_network_module:
 
   # Time window width in seconds specifically for this module.
   # Default SLIPS time_window_width is 3600 (1 hour).
-  # Set to 900 for 15-minute windows (flows outside this window are ignored for training).
-  time_window_width: 900
+  # Set to 1200 for 20-minute windows (flows outside this window are ignored for training).
+  time_window_width: 1200
 
   # Reproducibility seed for train/test behavior in this module.
   seed: 1111

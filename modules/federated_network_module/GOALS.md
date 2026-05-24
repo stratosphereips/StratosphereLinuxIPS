@@ -9,37 +9,34 @@
 
 ## Critical Goals (Must Implement)
 
-### 1. Fixed Feature Set (22 Features)
-**Goal**: Enforce exactly 22 features with fixed order
-- Define `SimpleFederatedNet.FIXED_INPUT_DIM = 22`
-- Update `process_features()` to produce exactly these 22 features:
+### 1. Fixed Feature Set (18 Features)
+**Goal**: Enforce exactly 18 features with fixed order matching Slips flow fields
+- Define `SimpleFederatedNet.FIXED_INPUT_DIM = 18`
+- Update `process_features()` to produce exactly these 18 features:
   ```python
-  # Raw numerical (10)
-  dur, orig_bytes, resp_bytes, orig_pkts, resp_pkts,
-  missed_bytes, sport, dport, orig_ip_bytes, resp_ip_bytes
-
-  # Derived (4)
-  total_bytes, total_pkts, avg_pkt_size, throughput
+  # Zeek-native numerics (9)
+  dur, sport, dport, spkts, dpkts, sbytes, dbytes
 
   # Encoded categoricals (3)
-  proto, service, history_len
+  proto, appproto, state
 
-  # State + Flags (4)
-  state, local_orig, local_resp, saddr_num, daddr_num
+  # Derived (6)
+  total_bytes, total_pkts, avg_pkt_size, throughput,
+  history_len, dir_num, saddr_num, daddr_num
   ```
 - Remove dynamic input dimension detection
 - Validate at model creation time
 
 ### 2. Enhanced process_features()
 **Goal**: Proper feature engineering matching ml_online_model patterns
-- Normalize categoricals to lowercase (`proto`, `service`, `conn_state`)
-- Encode proto with INCLUSIVE order (icmp-ipv6 before icmp)
-- Encode service with hardcoded mapping (http=1, ssl=2, ssh=3, etc.)
+- Normalize categoricals to lowercase (`proto`, `appproto`, `state`)
+- Use base class `_encode_proto()` with INCLUSIVE order (tcp=0, udp=1, icmp=2, icmp-ipv6=3, arp=4)
+- Encode appproto with hardcoded mapping (http=0, dns=1, ssl=2, ssh=3, etc.)
 - Encode history as LENGTH only (not complexity)
 - Use `_infer_state()` from base class (NOT conn_state directly)
 - Convert IPs to numeric via `ipaddress` library (`saddr_num`, `daddr_num`)
-- Drop identifiers AFTER label matching (uid, original saddr/daddr)
 - Keep ALL protocols (no filtering of icmp/arp)
+- Direction encoded as numeric (-> = 1.0, else 0.0)
 
 ### 3. Alert-Based Training with UID Matching
 **Goal**: Train on malicious+benign flows when alert occurs

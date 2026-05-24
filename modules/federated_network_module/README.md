@@ -133,11 +133,33 @@ federated_network_module:
 
 ## Feature Handling
 
-- **Dynamic Input Dimension**: Determined from first flow received (count numerical columns)
-- **All Numerical Features Kept**: No feature engineering, no dropping (except non-numeric like saddr, daddr, uid)
-- **Consistent Ordering**: Features must be in same order across all peers (Zeek output order)
+- **Fixed Input Dimension**: 18 features, matching `SimpleFederatedNet.FIXED_INPUT_DIM`
+- **All Protocols Kept**: Inclusive encoding (tcp=0, udp=1, icmp=2, icmp-ipv6=3, arp=4) via base class `_encode_proto()`
+- **State Inferred**: Uses base class `_infer_state()` (not raw conn_state)
+- **IP to Numeric**: Converted via `ipaddress.ip_address()` modulo 1e6
 
-Supported features include: dur, src_bytes, dst_bytes, count, srv_count, serror_rate, rerror_rate, same_srv_rate, diff_srv_rate, dst_host_count, dst_host_serror_rate, etc. (all Zeek flow numerical fields)
+### Feature List (18 features)
+
+| # | Feature | Source | Description |
+|---|---------|--------|-------------|
+| 1 | dur | flow.dur | Duration in seconds |
+| 2 | proto | `_encode_proto()` | Inclusive: tcp=0.0, udp=1.0, icmp=2.0, icmp-ipv6=3.0, arp=4.0 |
+| 3 | appproto | `_encode_appproto()` | http=0.0, dns=1.0, ssl=2.0, ssh=3.0, etc., other=10.0 |
+| 4 | sport | flow.sport | Source port |
+| 5 | dport | flow.dport | Destination port |
+| 6 | spkts | flow.spkts | Source packets |
+| 7 | dpkts | flow.dpkts | Destination packets |
+| 8 | sbytes | flow.sbytes | Source bytes |
+| 9 | dbytes | flow.dbytes | Destination bytes |
+| 10 | state | `_infer_state()` | Established/new=1.0, failed/closed=0.0 |
+| 11 | total_bytes | Derived | sbytes + dbytes |
+| 12 | total_pkts | Derived | spkts + dpkts |
+| 13 | avg_pkt_size | Derived | sbytes / max(spkts, 1) |
+| 14 | throughput | Derived | total_bytes / max(dur, 0.001) |
+| 15 | history_len | Derived | len(str(history)) |
+| 16 | saddr_num | Derived | ipaddress int % 1e6 |
+| 17 | daddr_num | Derived | ipaddress int % 1e6 |
+| 18 | dir_num | Derived | 1.0 if dir_=="->" else 0.0 |
 
 ## Graceful Shutdown
 

@@ -35,6 +35,7 @@ Artifact Paths:
 - Local: artifacts/latest_local_fc1.bin, latest_local_head.bin, latest_local_scaler.bin
 - Merged: artifacts/merged_N_fc1.bin, merged_N_head.bin (N = merge count)
 """
+import ipaddress
 import json
 import os
 import pickle
@@ -49,25 +50,24 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.preprocessing import StandardScaler
 
-from slips_files.common.abstracts.ml_module_base import (
-    BENIGN,
-    MALICIOUS,
-    MLBaseDetection,
-)
+import slips_files.common.abstracts.ml_module_base as ml_base
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.core.structures.evidence import EvidenceType
+
+BENIGN = ml_base.BENIGN
+MALICIOUS = ml_base.MALICIOUS
 
 
 class SimpleFederatedNet(nn.Module):
     """
     Federated network model: frozen shared random projection + learnable fc1 + head.
 
-    Architecture: input(22) -> RandomProjection(64,frozen) -> Linear(64->16)+ReLU -> Linear(16->2)
+    Architecture: input(18) -> RandomProjection(64,frozen) -> Linear(64->16)+ReLU -> Linear(16->2)
 
-    FIXED FEATURE COUNT: 22 features (see process_features for full list)
+    FIXED FEATURE COUNT: 18 Zeek-native features (see process_features for full list)
     """
 
-    FIXED_INPUT_DIM = 22  # Must match len(feature_order) in process_features
+    FIXED_INPUT_DIM = 18  # Must match len(feature_order) in process_features
 
     def __init__(
         self,
@@ -163,7 +163,7 @@ class SimpleFederatedNet(nn.Module):
             param.requires_grad = True
 
 
-class FederatedNetworkModule(MLBaseDetection):
+class FederatedNetworkModule(ml_base.MLBaseDetection):
     """
     Federated network ML detector with model sharing and merging.
 
@@ -185,8 +185,6 @@ class FederatedNetworkModule(MLBaseDetection):
         "Flow detected as malicious by federated_network_module. "
         "Src IP {src_ip}:{sport} to {dst_ip}:{dport}"
     )
-
-    WINDOW_SIZE_SECONDS = 900  # 15 minutes
 
     def init(self):
         """Initialize module, model, preprocessor, and buffers."""
@@ -248,6 +246,16 @@ class FederatedNetworkModule(MLBaseDetection):
         self.last_batch_loss: float = 0.0
         self.merge_count: int = 0
 
+        # Testing counters (dual: local + merged)
+        self.local_test_count: int = 0
+        self.merge_test_count: int = 0
+        self._init_testing_counters("local")
+        self._init_testing_counters("merged")
+
+        # Separate testing log files
+        self.testing_log_local = self._open_testing_log("local")
+        self.testing_log_merged = self._open_testing_log("merged")
+
         # Read module-specific config using ConfigParser
         conf = ConfigParser()
         section = self.module_config_section
@@ -259,24 +267,24 @@ class FederatedNetworkModule(MLBaseDetection):
             section, default=5
         )
 
-        # Window offset for off-sync timing
-        random_offset = int(np.random.RandomState(self.seed).randint(0, 900))
-        self.window_offset_seconds: int = conf.ml_module_window_offset_seconds(
-            section, default=random_offset
+        # Sub-window size for our module (shorter than global Slips TW, default 20 minutes)
+        self.window_size_seconds: int = self._read_module_config_int(
+            "time_window_width", default=1200
         )
 
+        # Sub-window tracking
+        self.window_start_ts: Optional[float] = None
+
     def subscribe_to_channels(self):
-        """Subscribe to flows, alerts, time window events, and optionally P2P model channel."""
+        """Subscribe to flows, alerts, and optionally P2P model channel."""
         # Always subscribe to these core channels
         self.c_flows = self.db.subscribe("new_flow")
         self.c_alerts = self.db.subscribe("new_alert")
-        self.c_tw_closed = self.db.subscribe("tw_closed")
 
         # Initialize channels dict with core subscriptions
         self.channels = {
             "new_flow": self.c_flows,
             "new_alert": self.c_alerts,
-            "tw_closed": self.c_tw_closed,
         }
 
         # Try to subscribe to P2P channel (optional)
@@ -290,8 +298,66 @@ class FederatedNetworkModule(MLBaseDetection):
                 1,
             )
 
+    def _read_module_config_int(self, config_key: str, default: int) -> int:
+        """Read an integer value from this module's config section."""
+        conf = ConfigParser()
+        section = self.module_config_section
+        value = conf.read_configuration(section, config_key, default)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _init_testing_counters(self, prefix: str) -> None:
+        """Initialize TP/FP/TN/FN counters for local or merged testing."""
+        setattr(
+            self,
+            f"{prefix}_malware_metrics",
+            {"TP": 0, "FP": 0, "TN": 0, "FN": 0},
+        )
+        setattr(self, f"{prefix}_seen_labels", {MALICIOUS: 0, BENIGN: 0})
+        setattr(self, f"{prefix}_predicted_labels", {MALICIOUS: 0, BENIGN: 0})
+
+    def _open_testing_log(self, suffix: str):
+        """Open a separate testing log file for local or merged model."""
+        if not self.enable_logs:
+            return None
+        filename = f"testing_{suffix}_{self.log_suffix}.log"
+        log_path = os.path.join(self.output_dir, filename)
+        os.makedirs(self.output_dir, exist_ok=True)
+        return open(log_path, "w")
+
+    def _write_testing_snapshot_for(
+        self, log_file, prefix: str, count: int
+    ) -> None:
+        """Write TP/FP/TN/FN snapshot for a specific model to its log file."""
+        if log_file is None:
+            return
+        metrics = getattr(self, f"{prefix}_malware_metrics", {})
+        seen = getattr(self, f"{prefix}_seen_labels", {})
+        pred = getattr(self, f"{prefix}_predicted_labels", {})
+        total = sum(seen.values())
+        log_file.write(
+            f"Batch flows: {count}; "
+            f"Total flows: {total}; "
+            f"Seen labels: {seen}; "
+            f"Predicted labels: {pred}; "
+            f"Malware metrics (TP/FP/TN/FN): {metrics};\n"
+        )
+        log_file.flush()
+
+    def _log_model_retrain(self) -> None:
+        """Write a model-change marker in testing logs after retraining."""
+        marker = "--- Local model retrained ---\n"
+        if self.testing_log_local:
+            self.testing_log_local.write(marker)
+            self.testing_log_local.flush()
+        if self.testing_log_merged:
+            self.testing_log_merged.write(marker)
+            self.testing_log_merged.flush()
+
     def create_empty_model(self) -> SimpleFederatedNet:
-        """Create model with FIXED input dimension (22 features)."""
+        """Create model with FIXED input dimension (18 features)."""
         # Always use fixed input dimension - don't rely on runtime detection
         self.input_dim = SimpleFederatedNet.FIXED_INPUT_DIM
         return SimpleFederatedNet(
@@ -319,78 +385,126 @@ class FederatedNetworkModule(MLBaseDetection):
 
     def process_features(self, dataset: pd.DataFrame) -> pd.DataFrame:
         """
-        Process Zeek flows into exactly 22 features with encoding.
+        Process Zeek flows into exactly 18 features matching ml_online_model patterns.
 
         Feature list (fixed order):
-        1. dur (duration)
-        2. src_bytes
-        3. dst_bytes
-        4. total_bytes (derived: src_bytes + dst_bytes)
-        5. count (connection count to same host/service)
-        6. srv_count (connection count to same service)
-        7. serror_rate (SYN error rate)
-        8. rerror_rate (REJ error rate)
-        9. same_srv_rate (same service rate)
-        10. diff_srv_rate (different service rate)
-        11. srv_diff_host_rate (service different host rate)
-        12. dst_host_count (count to same destination host)
-        13. dst_host_srv_count (count to same host/service)
-        14. dst_host_same_srv_rate
-        15. dst_host_diff_srv_rate
-        16. dst_host_same_src_port_rate
-        17. dst_host_srv_diff_host_rate
-        18. dst_host_serror_rate
-        19. dst_host_rerror_rate
-        20. dst_host_srv_serror_rate
-        21. dst_host_srv_rerror_rate
-        22. throughput (derived: total_bytes / dur if dur > 0 else 0)
+        1. dur         - Duration in seconds
+        2. proto       - Encoded via _encode_proto (tcp=0, udp=1, icmp=2, icmp-ipv6=3, arp=4)
+        3. appproto    - Encoded via _encode_appproto (http=0, dns=1, ssl=2, ...)
+        4. sport       - Source port
+        5. dport       - Destination port
+        6. spkts       - Source packets
+        7. dpkts       - Destination packets
+        8. sbytes      - Source bytes
+        9. dbytes      - Destination bytes
+        10. state      - Inferred via _infer_state (established=1.0, failed=0.0)
+        11. total_bytes - Derived: sbytes + dbytes
+        12. total_pkts  - Derived: spkts + dpkts
+        13. avg_pkt_size - Derived: sbytes / max(spkts, 1)
+        14. throughput  - Derived: total_bytes / max(dur, 0.001)
+        15. history_len - len(history or "")
+        16. saddr_num   - IP address to numeric via ipaddress
+        17. daddr_num   - IP address to numeric via ipaddress
+        18. dir_num     - Direction: 1.0 if "->", else 0.0
 
-        Encoding applied:
-        - proto: one-hot (tcp=0, udp=1, icmp=2, other=3)
-        - service: one-hot encoding for common services
-        - state: one-hot (SF=0, S0=1, REJ=2, RSTO=3, other=4)
-        - IPs converted to numeric hash
+        Protocol encoding is INCLUSIVE (no filtering of icmp, arp, icmp-ipv6).
 
-        Returns DataFrame with exactly 22 columns in fixed order.
+        Returns DataFrame with exactly 18 columns in fixed order.
         """
         if dataset.empty:
             return pd.DataFrame(columns=self._get_feature_order())
 
         df = dataset.copy()
 
-        # Normalize categorical fields
-        df["proto"] = self._encode_proto(df.get("proto", "tcp"))
-        df["service"] = self._encode_service(df.get("service", "-"))
-        df["state"] = self._encode_state(df.get("state", "SF"))
+        # Coerce base numeric fields (matching other ML modules)
+        for col in [
+            "dur",
+            "sport",
+            "dport",
+            "spkts",
+            "dpkts",
+            "sbytes",
+            "dbytes",
+        ]:
+            if col not in df.columns:
+                df[col] = 0.0
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
 
-        # Convert IPs to numeric (hash-based)
+        # Encode proto using base class method (inclusive: tcp, udp, icmp, arp all kept)
+        if "proto" in df.columns:
+            df["proto"] = df["proto"].apply(
+                lambda x: self._encode_proto(str(x))
+            )
+
+        # Encode appproto using module-specific mapping
+        if "appproto" in df.columns:
+            df["appproto"] = df["appproto"].apply(
+                lambda x: (
+                    self._encode_appproto(str(x)) if pd.notna(x) else 10.0
+                )
+            )
+
+        # Inline appproto if missing
+        if "appproto" not in df.columns:
+            df["appproto"] = 10.0
+
+        # Infer state using base class method (state, spkts, dpkts -> float)
+        if "state" in df.columns:
+            df["state"] = df.apply(
+                lambda row: self._infer_state(
+                    str(row.get("state", "")),
+                    row.get("spkts", 0.0),
+                    row.get("dpkts", 0.0),
+                ),
+                axis=1,
+            )
+
+        # Convert IPs to numeric using ipaddress
         if "saddr" in df.columns:
             df["saddr_num"] = df["saddr"].apply(
-                lambda x: hash(str(x)) % 1000000 if pd.notna(x) else 0
+                lambda x: (
+                    int(ipaddress.ip_address(str(x))) % 1000000
+                    if pd.notna(x)
+                    else 0.0
+                )
             )
         if "daddr" in df.columns:
             df["daddr_num"] = df["daddr"].apply(
-                lambda x: hash(str(x)) % 1000000 if pd.notna(x) else 0
+                lambda x: (
+                    int(ipaddress.ip_address(str(x))) % 1000000
+                    if pd.notna(x)
+                    else 0.0
+                )
             )
 
+        # Convert direction to numeric
+        if "dir_" in df.columns:
+            df["dir_num"] = (df["dir_"].astype(str) == "->").astype(float)
+        else:
+            df["dir_num"] = 0.0
+
         # Derived features
-        df["total_bytes"] = df.get("src_bytes", 0).fillna(0) + df.get(
-            "dst_bytes", 0
-        ).fillna(0)
-        df["throughput"] = df.apply(
-            lambda row: (
-                (row.get("total_bytes", 0) / row.get("dur", 1))
-                if row.get("dur", 0) > 0
-                else 0
-            ),
+        df["total_bytes"] = df["sbytes"] + df["dbytes"]
+        df["total_pkts"] = df["spkts"] + df["dpkts"]
+        df["avg_pkt_size"] = df.apply(
+            lambda row: (row["sbytes"] / max(float(row["spkts"]), 1.0)),
             axis=1,
         )
+        df["throughput"] = df.apply(
+            lambda row: (row["total_bytes"] / max(row["dur"], 0.001)),
+            axis=1,
+        )
+        df["history_len"] = (
+            df.get("history", "").astype(str).str.len().fillna(0.0)
+        )
 
-        # Select and order features to match FIXED_INPUT_DIM = 22
+        # Select and order features to match FIXED_INPUT_DIM = 18
         feature_order = self._get_feature_order()
-        available_features = [f for f in feature_order if f in df.columns]
+        for col in feature_order:
+            if col not in df.columns:
+                df[col] = 0.0
 
-        result = df[available_features].fillna(0)
+        result = df[feature_order].fillna(0.0).astype("float64")
 
         # Validate final dimension
         expected_dim = SimpleFederatedNet.FIXED_INPUT_DIM
@@ -407,72 +521,51 @@ class FederatedNetworkModule(MLBaseDetection):
 
     def _get_feature_order(self) -> list:
         """
-        Return the fixed order of 22 features.
+        Return the fixed order of 18 features.
 
-        Order from most specific to all-inclusive:
-        1-4: Basic flow stats (duration, bytes)
-        5-7: Connection rates (count, srv_count, error rates)
-        8-11: Service/host relationship rates
-        12-20: Destination host statistics
-        21: Protocol (encoded: tcp=0, udp=1, icmp=2, other=3)
-        22: Throughput (derived)
+        All Zeek-native: dur, proto, appproto, sport, dport, spkts, dpkts,
+        sbytes, dbytes, state, total_bytes, total_pkts, avg_pkt_size,
+        throughput, history_len, saddr_num, daddr_num, dir_num
         """
         return [
             "dur",
-            "src_bytes",
-            "dst_bytes",
+            "proto",
+            "appproto",
+            "sport",
+            "dport",
+            "spkts",
+            "dpkts",
+            "sbytes",
+            "dbytes",
+            "state",
             "total_bytes",
-            "count",
-            "srv_count",
-            "serror_rate",
-            "rerror_rate",
-            "same_srv_rate",
-            "diff_srv_rate",
-            "srv_diff_host_rate",
-            "dst_host_count",
-            "dst_host_srv_count",
-            "dst_host_same_srv_rate",
-            "dst_host_diff_srv_rate",
-            "dst_host_same_src_port_rate",
-            "dst_host_srv_diff_host_rate",
-            "dst_host_serror_rate",
-            "dst_host_rerror_rate",
-            "dst_host_srv_serror_rate",
-            "dst_host_srv_rerror_rate",
+            "total_pkts",
+            "avg_pkt_size",
             "throughput",
+            "history_len",
+            "saddr_num",
+            "daddr_num",
+            "dir_num",
         ]
 
-    def _encode_proto(self, proto) -> int:
-        """Encode protocol to numeric value."""
-        if isinstance(proto, str):
-            proto_map = {"tcp": 0, "udp": 1, "icmp": 2}
-            return proto_map.get(proto.lower(), 3)
-        return 0
-
-    def _encode_service(self, service) -> int:
-        """Encode service to numeric value."""
-        if isinstance(service, str):
-            common_services = {
-                "http": 0,
-                "dns": 1,
-                "ftp": 2,
-                "ssh": 3,
-                "smtp": 4,
-                "ssl": 5,
-                "pop3": 6,
-                "imap": 7,
-                "telnet": 8,
-                "https": 9,
-            }
-            return common_services.get(service.lower(), 10)
-        return 0
-
-    def _encode_state(self, state) -> int:
-        """Encode connection state to numeric value."""
-        if isinstance(state, str):
-            state_map = {"SF": 0, "S0": 1, "REJ": 2, "RSTO": 3}
-            return state_map.get(state, 4)
-        return 0
+    def _encode_appproto(self, appproto) -> float:
+        """Encode application protocol to numeric value."""
+        if not isinstance(appproto, str):
+            return 0.0
+        appproto = appproto.strip().lower()
+        proto_map = {
+            "http": 0.0,
+            "dns": 1.0,
+            "ssl": 2.0,
+            "ssh": 3.0,
+            "smtp": 4.0,
+            "ftp": 5.0,
+            "pop3": 6.0,
+            "imap": 7.0,
+            "telnet": 8.0,
+            "https": 9.0,
+        }
+        return proto_map.get(appproto, 10.0)
 
     def fit_incremental_model(
         self,
@@ -573,13 +666,29 @@ class FederatedNetworkModule(MLBaseDetection):
         """Training main loop - returns True on error."""
         try:
             if msg := self.get_msg("new_flow"):
-                self.handle_new_flow(json.loads(msg["data"]))
+                data = json.loads(msg["data"])
+                flow = data["flow"]
+                flow_ts = float(data.get("stime", 0))
+                ground_truth = data.get("label", BENIGN)
+
+                # 1. Buffer flow for later training
+                self.handle_new_flow(flow, flow_ts)
+
+                # 2. Test with local model (if trained)
+                if self.model is not None and self.is_preprocessor_fitted:
+                    self._test_on_flow(flow, ground_truth, "local")
+
+                # 3. Test with merged model (if available)
+                if (
+                    getattr(self, "merged_model", None) is not None
+                    and self.is_preprocessor_fitted
+                ):
+                    self._test_on_flow(
+                        flow, ground_truth, "merged", use_merged=True
+                    )
 
             if msg := self.get_msg("new_alert"):
                 self.handle_new_alert(json.loads(msg["data"]))
-
-            if msg := self.get_msg("tw_closed"):
-                self.handle_tw_closed()
 
             # Only check P2P channel if it exists
             if "p2p_model_received" in self.channels:
@@ -612,21 +721,22 @@ class FederatedNetworkModule(MLBaseDetection):
             self.print(f"Error in main: {traceback.format_exc()}", 0, 1)
             return True
 
-    def handle_new_flow(self, flow: dict):
-        """Store flow in current window for later labeling."""
-        if self.input_dim is None:
-            # Determine input dimension from first flow
-            features = self._extract_flow_features(flow)
-            if features:
-                self.input_dim = len(features)
-                self.print(
-                    f"Input dimension determined: {self.input_dim}", 0, 1
-                )
-                # Initialize model now
-                self.model = self.create_empty_model().to(self.device)
-
+    def handle_new_flow(self, flow: dict, flow_ts: float = 0.0):
+        """Store flow in current sub-window, close window on timestamp-based expiry."""
         flow_id = self._get_flow_id(flow)
         self.window_flows[flow_id] = flow
+
+        if flow_ts > 0:
+            # Initialize sub-window start on first flow
+            if self.window_start_ts is None:
+                self.window_start_ts = flow_ts
+
+            # Check if sub-window has expired
+            if flow_ts - self.window_start_ts >= self.window_size_seconds:
+                self._close_sub_window()
+                self.window_start_ts = flow_ts
+                # Re-add current flow to new window
+                self.window_flows[flow_id] = flow
 
     def handle_new_alert(self, alert: dict):
         """
@@ -757,14 +867,15 @@ class FederatedNetworkModule(MLBaseDetection):
         except Exception:
             self.print(f"Error handling alert: {traceback.format_exc()}", 0, 1)
 
-    def handle_tw_closed(self):
+    def _close_sub_window(self):
         """
-        Handle time window closure: label all remaining as BENIGN, train ONCE.
+        Close current sub-window: label all remaining flows as BENIGN, train ONCE.
 
-        Skips training if no unlabeled flows remain in the buffer.
+        Called when flow timestamps indicate our sub-window has expired.
+        Independent of Slips' global time windows.
         """
         try:
-            self.print("Window closed, preparing training batch", 0, 1)
+            self.print("Sub-window closed, preparing training batch", 0, 1)
 
             # All remaining unlabeled flows are benign
             remaining_flows = [
@@ -1037,57 +1148,102 @@ class FederatedNetworkModule(MLBaseDetection):
 
     def _extract_flow_features(self, flow: dict) -> Optional[list]:
         """
-        Extract exactly 22 features from a Zeek flow dictionary.
+        Extract exactly 18 features from a Slips flow dictionary.
 
-        Uses process_features() logic to ensure consistent feature extraction
-        matching the FIXED_INPUT_DIM constant.
+        Uses same logic as process_features() to ensure consistent feature
+        extraction matching the FIXED_INPUT_DIM constant.
 
-        Returns list of 22 numeric values or None if extraction fails.
+        Returns list of 18 numeric values or None if extraction fails.
         """
         try:
-            # Convert single flow dict to DataFrame for processing
             df = pd.DataFrame([flow])
 
-            # Apply same encoding as process_features
-            df["proto"] = self._encode_proto(df.iloc[0].get("proto", "tcp"))
-            df["service"] = self._encode_service(
-                df.iloc[0].get("service", "-")
-            )
-            df["state"] = self._encode_state(df.iloc[0].get("state", "SF"))
+            # Coerce base numerics (matching other ML modules)
+            for col in [
+                "dur",
+                "sport",
+                "dport",
+                "spkts",
+                "dpkts",
+                "sbytes",
+                "dbytes",
+            ]:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(
+                        0.0
+                    )
+                else:
+                    df[col] = 0.0
 
-            # Convert IPs to numeric
+            # Encode proto using base class method (inclusive)
+            proto_val = str(df.iloc[0].get("proto", ""))
+            df["proto"] = self._encode_proto(proto_val)
+
+            # Encode appproto
+            appproto_val = df.iloc[0].get("appproto")
+            if pd.notna(appproto_val):
+                df["appproto"] = self._encode_appproto(str(appproto_val))
+            else:
+                df["appproto"] = 10.0
+
+            # Infer state using base class method
+            state_str = str(df.iloc[0].get("state", ""))
+            spkts = df.iloc[0]["spkts"]
+            dpkts = df.iloc[0]["dpkts"]
+            df["state"] = self._infer_state(state_str, spkts, dpkts)
+
+            # IP to numeric via ipaddress
             saddr = df.iloc[0].get("saddr")
             daddr = df.iloc[0].get("daddr")
-            df["saddr_num"] = hash(str(saddr)) % 1000000 if saddr else 0
-            df["daddr_num"] = hash(str(daddr)) % 1000000 if daddr else 0
+            df["saddr_num"] = (
+                int(ipaddress.ip_address(str(saddr))) % 1000000
+                if saddr and pd.notna(saddr)
+                else 0.0
+            )
+            df["daddr_num"] = (
+                int(ipaddress.ip_address(str(daddr))) % 1000000
+                if daddr and pd.notna(daddr)
+                else 0.0
+            )
+
+            # Direction numeric
+            dir_val = str(df.iloc[0].get("dir_", "->"))
+            df["dir_num"] = 1.0 if dir_val == "->" else 0.0
 
             # Derived features
-            src_bytes = df.iloc[0].get("src_bytes", 0) or 0
-            dst_bytes = df.iloc[0].get("dst_bytes", 0) or 0
-            dur = df.iloc[0].get("dur", 0) or 0
-            df["total_bytes"] = src_bytes + dst_bytes
-            df["throughput"] = df["total_bytes"] / dur if dur > 0 else 0
+            sbytes = df.iloc[0]["sbytes"]
+            dbytes = df.iloc[0]["dbytes"]
+            dur_val = df.iloc[0]["dur"]
+            df["total_bytes"] = sbytes + dbytes
+            df["total_pkts"] = df.iloc[0]["spkts"] + df.iloc[0]["dpkts"]
+            df["avg_pkt_size"] = sbytes / max(float(spkts), 1.0)
+            df["throughput"] = df["total_bytes"] / max(dur_val, 0.001)
+            history = df.iloc[0].get("history")
+            df["history_len"] = float(len(str(history))) if history else 0.0
 
             # Extract features in fixed order
             feature_order = self._get_feature_order()
             features = []
-
             for feat in feature_order:
-                val = df.iloc[0].get(feat, 0)
+                val = df.iloc[0].get(feat, 0.0)
                 if val is None:
-                    val = 0
+                    val = 0.0
                 features.append(
-                    float(val) if isinstance(val, (int, float, str)) else 0.0
+                    float(val) if not isinstance(val, str) else 0.0
                 )
 
-            if len(features) != self.FIXED_INPUT_DIM:
+            if len(features) != SimpleFederatedNet.FIXED_INPUT_DIM:
                 self.print(
                     f"Feature extraction produced {len(features)} features "
-                    f"instead of {self.FIXED_INPUT_DIM}",
+                    f"instead of {SimpleFederatedNet.FIXED_INPUT_DIM}",
                     0,
                     1,
                 )
                 return None
+
+            return features
+        except Exception:
+            return None
 
             return features
         except Exception:
