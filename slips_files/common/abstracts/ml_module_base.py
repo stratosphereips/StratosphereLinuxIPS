@@ -41,7 +41,7 @@ class MLBaseDetection(IModule, ABC):
       - incremental fit and inference
     """
 
-    name = "ml_module"
+    name = "imodule"
     description = (
         "Train or test a Machine Learning model to detect malicious flows"
     )
