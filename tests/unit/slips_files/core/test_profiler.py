@@ -225,7 +225,7 @@ def test_notify_observers_with_correct_message():
     observer_mock.update.assert_called_once_with(test_msg)
 
 
-@patch("slips_files.core.profiler.ProfilerWorker")
+@patch("slips_files.core.worker_manager_mixin.ProfilerWorker")
 def test_start_profiler_worker_uses_parent_output_dir(mock_worker_cls):
     profiler = ModuleFactory().create_profiler_obj()
     worker = mock_worker_cls.return_value
@@ -258,4 +258,5 @@ def test_start_profiler_worker_uses_parent_output_dir(mock_worker_cls):
     worker.start.assert_called_once()
     assert profiler.profiler_child_processes == [worker]
     assert profiler.workers == []
+    assert profiler.active_profiler_workers == 1
     profiler.db.increment_profiler_workers_started.assert_called_once()
