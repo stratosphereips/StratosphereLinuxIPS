@@ -139,13 +139,7 @@ class WorkerManagerMixin:
             return True
         return False
 
-    def min_workers_started(self) -> bool:
-        """
-        Return whether only the initial profiler workers are active.
-
-        Return:
-        True when no profiler worker should be removed.
-        """
+    def is_the_min_number_of_workers_active(self) -> bool:
         return (
             self.active_profiler_workers
             <= self.num_of_initial_profiler_workers
@@ -202,9 +196,6 @@ class WorkerManagerMixin:
     def _update_lines_read_by_all_workers(self) -> None:
         """
         Update the number of lines read by all workers.
-
-        Return:
-        None.
         """
         # needed by store_flows_read_per_second()
         self.lines = sum([worker.received_lines for worker in self.workers])
@@ -212,12 +203,36 @@ class WorkerManagerMixin:
     def _run_profiler_workers_manager_loop(self) -> None:
         """
         Monitor profiler workers and update profiler stats while they run.
-
-        Return:
-        None.
         """
         while not self.did_all_workers_stop.is_set():
             self._update_lines_read_by_all_workers()
             # implemented in icore.py
             self.store_flows_read_per_second()
             self._check_if_high_throughput_and_add_workers()
+            self._check_if_stabled_throughput_and_remove_workers()
+
+    def _check_if_stabled_throughput_and_remove_workers(self) -> None:
+        """
+        Remove one extra worker when profiler throughput has stabilized.
+        """
+        if self.is_the_min_number_of_workers_active():
+            # can't decrese more than that
+            return
+
+        if not self.did_5min_pass_since_last_worker_decrease_check():
+            return
+
+        profiler_fps = self._get_flows_per_second(self.name)
+        input_fps = self._get_flows_per_second("Input")
+
+        if profiler_fps < input_fps:
+            # still under high throughput
+            return
+
+        self.profiler_queue.put("stop")
+        self.active_profiler_workers -= 1
+        self.last_worker_id -= 1
+        self.print(
+            "Stable throughput detected. Requested one additional "
+            "profiler worker to stop."
+        )
