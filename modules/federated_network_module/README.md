@@ -6,12 +6,14 @@ A federated learning module for Slips that enables collaborative intrusion detec
 
 ### Model Structure
 ```
-input(N features, dynamic) → RandomProjection(64, frozen, shared) → Linear(64→16)+ReLU [fc1] → Linear(16→2) [head]
+input(18 features, fixed) -> RandomProjection(64, frozen, shared) -> Linear(64->16)+ReLU [fc1] -> Linear(16->2) [head]
 ```
 
 - **Random Projection**: Frozen layer with 0-1 weights, loaded from shared base `artifacts/random_projection.bin`. Same across all peers for compatibility.
-- **fc1 Layer**: Learnable linear layer (64→16) with ReLU activation
-- **Head Layer**: Classification layer (16→2) for benign/malicious prediction
+- **fc1 Layer**: Learnable linear layer (64->16) with ReLU activation
+- **Head Layer**: Classification layer (16->2) for benign/malicious prediction
+
+All artifact paths are hardcoded in `init()` under `modules/federated_network_module/artifacts/`.
 
 ### Training Buffers
 
@@ -26,17 +28,18 @@ Two separate buffers manage different training phases:
 ### 1. Local Training (on Alert or Sub-Window Close)
 
 **On New Alert:**
-1. Extract evidence IDs from alert (correl_id + last_evidence)
+1. Extract evidence IDs from alert (`correl_id` + `last_evidence.ID`)
 2. Find flows connected to evidence via `db.get_flows_causing_evidence()`
-3. Label connected flows as **MALICIOUS**, all other window flows as **BENIGN**
-4. Compare inferred labels vs Zeek ground truth → write to `label_comparison_*.log`
-5. Train fc1 + head for configured epochs
-6. Send latest local model to peers via P2P
+3. Also collect window flows matching attacker/victim IPs as fallback
+4. Label connected flows as **MALICIOUS**, all other window flows as **BENIGN**
+5. Compare inferred labels vs Zeek ground truth -> write to `label_comparison_*.log`
+6. Train fc1 + head for configured epochs
+7. Send latest local model to peers via P2P
 
 **On Sub-Window Close (20 min by default):**
 1. Flow timestamps trigger sub-window expiry (independent of Slips global TW)
-2. All remaining unlabeled flows → **BENIGN**
-3. Compare inferred labels vs Zeek ground truth → write to `label_comparison_*.log`
+2. All remaining unlabeled flows -> **BENIGN**
+3. Compare inferred labels vs Zeek ground truth -> write to `label_comparison_*.log`
 4. Train fc1 + head for configured epochs
 5. Clear window, start fresh sub-window
 
@@ -47,7 +50,7 @@ Two separate buffers manage different training phases:
 3. Unfreeze fc1
 4. This aligns the head with the merged fc1 without overwriting learned features
 
-### 3. Model Merging (Periodic or Event-Based)
+### 3. Model Merging (Event-Based Only)
 
 1. Collect latest local models from all connected peers + own latest
 2. Aggregate fc1 weights using **AVERAGE** strategy:
@@ -57,8 +60,11 @@ Two separate buffers manage different training phases:
 3. Replace fc1 weights with merged values
 4. Freeze fc1, retrain head ONCE on alignment buffer
 5. Save as `merged_N` model (N = merge count)
+6. Log merge metrics to `training_merged_*.log`
 
 **Important**: Merged models are NOT used in future merges. Only latest local models participate in aggregation.
+
+**Note**: There is no periodic merge timer. Merge only triggers when a peer model is received via P2P.
 
 ## Model Sharing Protocol
 
@@ -75,60 +81,60 @@ When `p2p_model_received` channel message arrives:
 - Overwrite previous model from same peer (keep only latest)
 
 ### Merge Trigger
-Merge occurs when:
-- At least 1 peer model received
-- Or periodically based on `merge_interval_seconds` config
+Merge occurs only when:
+- At least 1 peer model received (event-based only)
+
+## Model Loading on Startup
+
+On init, if `train_from_scratch: false` in config and local artifacts exist:
+- Load `latest_local_fc1.bin` + bias, `latest_local_head.bin` + bias, `latest_local_scaler.bin`
+- Restore model and scaler state
+- Print confirmation log
+
+If `train_from_scratch: true` or artifacts missing, training starts from scratch.
 
 ## Artifact Paths
 
+All paths are hardcoded in `init()`. They are NOT configurable via `slips.yaml`.
+
 ### Base Artifacts (Shared Across All Peers)
 - `artifacts/random_projection.bin` - Frozen random projection matrix (created once, distributed to all)
-- `artifacts/scaler.bin` - StandardScaler state (local only)
 
 ### Local Model (Own Training Only)
 - `artifacts/latest_local_fc1.bin` - fc1 weights
 - `artifacts/latest_local_fc1_bias.bin` - fc1 bias
 - `artifacts/latest_local_head.bin` - head weights
 - `artifacts/latest_local_head_bias.bin` - head bias
-- `artifacts/latest_local_scaler.bin` - scaler state
+- `artifacts/latest_local_scaler.bin` - scaler state (pickle)
 
 ### Merged Models (Aggregated)
-- `artifacts/merged_1_fc1.bin`, `merged_1_fc1_bias.bin` - First merge
-- `artifacts/merged_1_head.bin`, `merged_1_head_bias.bin`
-- `artifacts/merged_2_*` - Second merge
+- `artifacts/merged/merged_1_fc1.bin`, `merged_1_fc1_bias.bin` - First merge
+- `artifacts/merged/merged_1_head.bin`, `merged_1_head_bias.bin`
+- `artifacts/merged/merged_2_*` - Second merge
 - etc.
 
 ## Configuration (slips.yaml)
 
+Only these keys are actually read by the module:
+
 ```yaml
 federated_network_module:
   mode: train  # or test
-
-  # Base random projection (shared across all peers)
-  random_projection_path: modules/federated_network_module/artifacts/random_projection.bin
-
-  # Local model paths
-  local_fc1_path: modules/federated_network_module/artifacts/latest_local_fc1.bin
-  local_head_path: modules/federated_network_module/artifacts/latest_local_head.bin
-  local_scaler_path: modules/federated_network_module/artifacts/latest_local_scaler.bin
-
-  # Merged models directory
-  merged_models_dir: modules/federated_network_module/artifacts/merged
-
-  # Training settings
-  training_batch_size: 500
+  train_from_scratch: false  # If false, load latest_local artifacts on startup
+  create_performance_metrics_log_files: true
+  validate_on_train: false
+  validation_percentage: 0.1
+  training_batch_size: 500  # Currently unused (trains on alert/TW close)
   local_training_epochs: 4   # Epochs for local training (fc1 + head)
   merge_finetune_epochs: 3   # Epochs for head fine-tuning after merge
   time_window_width: 1200    # 20 minutes (sub-window, independent of Slips global TW)
-
-  # Merge settings
-  merge_interval_seconds: 3600  # Merge every hour (or event-based)
-  min_peers_for_merge: 1  # Minimum peers needed before merging
-
-  # Logging
-  create_performance_metrics_log_files: true
-  log_suffix: federated_network_module
   seed: 1111
+  log_suffix: federated_network_module
+  test_log_batch_size: 1000
+  model_load_path: modules/federated_network_module/artifacts/model.bin  # Unused
+  preprocess_load_path: modules/federated_network_module/artifacts/scaler.bin  # Unused
+  model_store_path: modules/federated_network_module/artifacts/model_custom.bin  # Unused
+  preprocess_store_path: modules/federated_network_module/artifacts/scaler_custom.bin  # Unused
 ```
 
 ## Feature Handling
@@ -137,21 +143,22 @@ federated_network_module:
 - **All Protocols Kept**: Inclusive encoding (tcp=0, udp=1, icmp=2, icmp-ipv6=3, arp=4) via base class `_encode_proto()`
 - **State Inferred**: Uses base class `_infer_state()` (not raw conn_state)
 - **IP to Numeric**: Converted via `ipaddress.ip_address()` modulo 1e6
+- **Flow ID**: Uses Zeek `uid` when available, falls back to `saddr:sport-daddr:dport-starttime`
 
 ### Feature List (18 features)
 
 | # | Feature | Source | Description |
-|---|---------|--------|-------------|
+|---|---|---------|-------------|
 | 1 | dur | flow.dur | Duration in seconds |
 | 2 | proto | `_encode_proto()` | Inclusive: tcp=0.0, udp=1.0, icmp=2.0, icmp-ipv6=3.0, arp=4.0 |
-| 3 | appproto | `_encode_appproto()` | http=0.0, dns=1.0, ssl=2.0, ssh=3.0, etc., other=10.0 |
+| 3 | appproto | `_encode_appproto()` | http=0.0, dns=1.0, ssl=2.0, ssh=3.0, smtp=4.0, ftp=5.0, pop3=6.0, imap=7.0, telnet=8.0, https=9.0, other=10.0 |
 | 4 | sport | flow.sport | Source port |
 | 5 | dport | flow.dport | Destination port |
 | 6 | spkts | flow.spkts | Source packets |
 | 7 | dpkts | flow.dpkts | Destination packets |
 | 8 | sbytes | flow.sbytes | Source bytes |
 | 9 | dbytes | flow.dbytes | Destination bytes |
-| 10 | state | `_infer_state()` | Established/new=1.0, failed/closed=0.0 |
+| 10 | state | `_infer_state()` | 1.0 or 0.0 based on state string and packet counts |
 | 11 | total_bytes | Derived | sbytes + dbytes |
 | 12 | total_pkts | Derived | spkts + dpkts |
 | 13 | avg_pkt_size | Derived | sbytes / max(spkts, 1) |
@@ -167,33 +174,47 @@ On shutdown, the module saves:
 1. Latest local model (always)
 2. Latest merged model (if any merges occurred)
 
-This ensures no progress is lost between runs.
+This ensures no progress is lost between runs. If `train_from_scratch: false`, the next run will load these artifacts.
 
 ## Metrics and Logging
 
-Three separate log files in `output/<timestamp>/federated_network_module/`:
+Five separate log files in `output/<timestamp>/federated_network_module/`:
 
-### training_federated_network_module.log
-Per-batch training metrics (base class format):
+### training_local_federated_network_module.log
+Per-batch training metrics:
 ```
-Batch trained (4 epochs). Loss: 0.2932, Accuracy: 0.8500, Samples: 55 (Malicious: 5, Benign: 50)
+[alert] Trained (4 epochs) | Loss: 0.2932 | Acc: 0.8500 | Samples: 55 (Mal: 5, Ben: 50) | TP/FP/TN/FN: 5/0/50/0
+[twclose] Trained (4 epochs) | Loss: 0.1200 | Acc: 1.0000 | Samples: 23 (Mal: 0, Ben: 23) | TP/FP/TN/FN: 0/0/23/0
 ```
 
-### testing_federated_network_module.log
-Per-1000-flows testing metrics (base class format):
+### training_merged_federated_network_module.log
+Per-merge training metrics (only when merge occurs):
 ```
-Batch flows: 1000; Total flows: 1000; Seen labels: {Malicious: 52, Benign: 948}; Predicted labels: {Malicious: 45, Benign: 955}; Malware metrics (TP/FP/TN/FN): {TP: 40, FP: 5, TN: 943, FN: 12};
+--- MODEL 1 ---
+[merge] Trained (3 epochs) | Loss: 0.1500 | Acc: 0.9200 | Samples: 200 (Mal: 50, Ben: 150) | TP/FP/TN/FN: 48/5/145/2
 ```
-Metrics written every `test_log_batch_size` flows via `store_testing_results()`.
-Local model retrains are marked with `--- Local model retrained ---`.
+
+### testing_local_federated_network_module.log
+Per-batch testing metrics when using local model:
+```
+Batch flows: 1000; Total flows: 1000; Seen labels: {Malicious: 52, Benign: 948}; Predicted labels: {Malicious: 45, Benign: 955}; Malware metrics (TP/FP/TN/FN): {'TP': 40, 'FP': 5, 'TN': 943, 'FN': 12};
+--- Local model retrained ---
+```
+
+### testing_merged_federated_network_module.log
+Per-batch testing metrics when using merged model (switches after merge):
+```
+Batch flows: 1000; Total flows: 5000; ... Malware metrics (TP/FP/TN/FN): {'TP': ..., 'FP': ..., 'TN': ..., 'FN': ...};
+```
 
 ### label_comparison_federated_network_module.log
 Compares inferred labels (from alert evidence / benign-default) vs Zeek ground truth:
 ```
-[alert] Batch size: 12 | Inferred labels: {Malicious: 5, Benign: 7} | GT labels: {Malicious: 3, Benign: 9} | Metrics (TP/FP/TN/FN): {TP: 3, FP: 2, TN: 7, FN: 0}
-[twclose] Batch size: 55 | Inferred labels: {Malicious: 0, Benign: 55} | GT labels: {Malicious: 2, Benign: 53} | Metrics (TP/FP/TN/FN): {TP: 0, FP: 0, TN: 53, FN: 2}
+[alert_1] Batch: 172 | Inferred (Mal/Ben): 128/44 | GT (Mal/Ben): 44/128 | TP/FP/TN/FN: 0/128/0/44
+[twclose_1] Batch: 23 | Inferred (Mal/Ben): 0/23 | GT (Mal/Ben): 19/4 | TP/FP/TN/FN: 0/4/0/19
 ```
-Written once per training batch, before training, using the labels we assigned vs the Zeek file's labels.
+
+Note: Discrepancies between inferred and GT labels are expected when alerts from other modules have false positives. The label comparison log quantifies this noise.
 
 ## Extending Aggregation Strategy
 
@@ -225,8 +246,10 @@ If P2P channels are unavailable, local training continues normally but model sha
 
 **"Preprocessor not fitted" error**: Ensure training has occurred before testing. In train mode, wait for first alert or window close.
 
-**"Input dimension not determined"**: Module needs to see at least one flow before initializing. Check that flows are being received.
+**"Input dimension not determined"**: Model always uses fixed 18 features. Check that `process_features()` produces exactly 18 columns.
 
-**Merge fails with dimension mismatch**: All peers must use the same `random_projection.bin` base file. Verify artifact distribution.
+**No peer models received**: P2P module may not be available. Check P2P module configuration. Merge only triggers on peer model receipt (no periodic timer).
 
-**No peer models received**: Check P2P module configuration and network connectivity between peers.
+**Label comparison shows high FP**: Alerts from other modules may have false positives. The FL module learns from alert evidence, not Zeek ground truth. This is by design - the label comparison log helps quantify alert noise.
+
+**Model not loading on startup**: Check `train_from_scratch: false` in config and verify artifact files exist in `modules/federated_network_module/artifacts/`.
