@@ -4,6 +4,7 @@ import shutil
 import socket
 
 from slips_files.common.output_paths import (
+    get_databases_dir_path_inside_output_dir,
     get_redis_logs_path_inside_output_dir,
 )
 from slips_files.common.printer import Printer
@@ -281,6 +282,15 @@ class RedisDB(
             cls.output_dir, f"redis-server-port-{cls.redis_port}.log"
         )
         cls._options.update({"logfile": logfile})
+        cls._options.update(
+            {
+                # manual SAVE writes the .rdb file to <output_dir>/databases
+                "dir": get_databases_dir_path_inside_output_dir(
+                    cls.output_dir
+                ),
+                "dbfilename": "dump.rdb",
+            }
+        )
 
         # -s for saving the db
         if cls.args.save:
@@ -291,9 +301,6 @@ class RedisDB(
                     # AOF is now enabled. Redis will write each operation to the
                     # AOF file.
                     "appendonly": "yes",
-                    # saves the .rdb file to <output_dir>
-                    "dir": cls.output_dir,
-                    "dbfilename": "dump.rdb",
                 }
             )
 
@@ -1774,27 +1781,75 @@ class RedisDB(
         # delete anything older than the most recent 20 servers
         self.r.ltrim(self.constants.DHCP_SERVERS, 0, max - 1)
 
-    def save(self, backup_file):
+    def _get_redis_dump_path_from_redis_config(self) -> str:
         """
-        Save the db to disk.
-        backup_file should be the path+name of the file you want to save the db in
+        Return the dump file path configured in the running Redis server.
+
+        Return:
+        Path Redis writes when SAVE is executed.
+        """
+        redis_dir = self.r.config_get("dir").get("dir", os.getcwd())
+        dbfilename = self.r.config_get("dbfilename").get(
+            "dbfilename", "dump.rdb"
+        )
+        return os.path.join(redis_dir, dbfilename)
+
+    def _save_rdb_with_redis_cli(self, backup_rdb: str) -> bool:
+        """
+        Save Redis to an RDB with redis-cli
+        Parameters:
+        backup_rdb: Path where redis-cli should write the RDB file.
+
+        Return:
+        True if redis-cli created the requested RDB file, False otherwise.
+        """
+        safe_port = utils.validate_port(self.redis_port)
+        result = subprocess.run(
+            [
+                "redis-cli",
+                "-h",
+                LOCALHOST,
+                "-p",
+                str(safe_port),
+                "--rdb",
+                backup_rdb,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return result.returncode == 0 and os.path.exists(backup_rdb)
+
+    def save(self, backup_file: str) -> bool:
+        """
+        Saves the redis db to disk.
         If you -s the same file twice the old backup will be overwritten.
+
+        Parameters:
+        backup_file: Path without extension where the Redis dump should be saved.
+        it should be the path+name of the file you want to save the db in
+
+        Return:
+        True if the Redis dump was saved to the path, False otherwise.
         """
+        safe_backup_file = utils.validate_safe_path(backup_file)
+        safe_backup_rdb = f"{safe_backup_file}.rdb"
+        safe_backup_dir = os.path.dirname(safe_backup_rdb) or "."
+        os.makedirs(safe_backup_dir, exist_ok=True)
 
-        # use print statements in this function won't work because by the time this
-        # function is executed, the redis database would have already stopped
+        if self._save_rdb_with_redis_cli(safe_backup_rdb):
+            return True
 
-        # saves to /var/lib/redis/dump.rdb
-        # this path is only accessible by root
+        # Redis writes to the configured dir/dbfilename pair.
         self.r.save()
 
-        # gets the db saved to dump.rdb in the cwd
-        redis_db_path = os.path.join(os.getcwd(), "dump.rdb")
-        safe_backup_file = utils.validate_safe_path(backup_file)
+        redis_db_path = self._get_redis_dump_path_from_redis_config()
 
         if os.path.exists(redis_db_path):
-            shutil.copy2(redis_db_path, f"{safe_backup_file}.rdb")
-            os.remove(redis_db_path)
+            if os.path.abspath(redis_db_path) != os.path.abspath(
+                safe_backup_rdb
+            ):
+                shutil.copy2(redis_db_path, safe_backup_rdb)
+                os.remove(redis_db_path)
 
             return True
 

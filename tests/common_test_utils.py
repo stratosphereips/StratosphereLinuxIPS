@@ -248,7 +248,8 @@ def get_total_profiles(db):
 
 
 def is_evidence_present(log_file, expected_evidence):
-    """Function to read the log file line by line and returns when it finds the expected evidence"""
+    """Function to read the log file line by line and returns when it finds
+    the expected evidence"""
     with open(log_file, "r") as f:
         while line := f.readline():
             if expected_evidence in line:

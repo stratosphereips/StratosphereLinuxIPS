@@ -1141,17 +1141,13 @@ class ProcessManager:
                 self.kill_all_children()
 
             if not self.is_slips_live_updating_event.is_set():
-                self.main.redis_man.decide_on_saving_the_redis_db()
+                self.main.redis_man.decide_on_saving_and_killing_the_redis_db()
 
                 if self.main.conf.export_labeled_flows():
                     format_ = self.main.conf.export_labeled_flows_to().lower()
                     self.main.db.export_labeled_flows(format_)
 
-                # if store_a_copy_of_zeek_files is set to yes in slips.yaml
-                # copy the whole zeek_files dir to the output dir
                 self.main.store_zeek_dir_copy()
-                # if delete_zeek_files is set to yes in slips.yaml,
-                # delete zeek_files/ dir
                 self.main.delete_zeek_files()
 
             analysis_time, end_date = self.get_analysis_time()
