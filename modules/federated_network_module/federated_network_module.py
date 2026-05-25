@@ -152,6 +152,12 @@ class SimpleFederatedNet(nn.Module):
             self.fc1.weight.data.copy_(weight)
             self.fc1.bias.data.copy_(bias)
 
+    def set_head_weights(self, weight: torch.Tensor, bias: torch.Tensor):
+        """Set head weights (used during model loading)."""
+        with torch.no_grad():
+            self.head.weight.data.copy_(weight)
+            self.head.bias.data.copy_(bias)
+
     def freeze_fc1(self):
         """Freeze fc1 layer for head-only training."""
         for param in self.fc1.parameters():
@@ -393,6 +399,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         # Sub-window tracking
         self.window_start_ts: Optional[float] = None
 
+        # Load existing local model if present and not training from scratch
+        train_from_scratch = self._read_module_config_bool(
+            "train_from_scratch", default=False
+        )
+        if not train_from_scratch:
+            self._load_local_model()
+
     def subscribe_to_channels(self):
         """Subscribe to flows, alerts, and optionally P2P model channel."""
         # Always subscribe to these core channels
@@ -425,6 +438,53 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             return int(value)
         except (TypeError, ValueError):
             return default
+
+    def _read_module_config_bool(self, config_key: str, default: bool) -> bool:
+        """Read a boolean value from this module's config section."""
+        conf = ConfigParser()
+        section = self.module_config_section
+        value = conf.read_configuration(section, config_key, default)
+        return self._to_bool(value, default)
+
+    def _load_local_model(self):
+        """Load fc1, head, and scaler from disk if artifacts exist."""
+        try:
+            if not os.path.exists(self.local_fc1_path):
+                return
+            if not os.path.exists(self.local_head_path):
+                return
+            if not os.path.exists(self.local_scaler_path):
+                return
+
+            if self.model is None:
+                self.model = self.create_empty_model().to(self.device)
+                self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
+
+            fc1_w = torch.load(self.local_fc1_path, weights_only=True)
+            fc1_b = torch.load(
+                self.local_fc1_path.replace("_fc1", "_fc1_bias"),
+                weights_only=True,
+            )
+            head_w = torch.load(self.local_head_path, weights_only=True)
+            head_b = torch.load(
+                self.local_head_path.replace("_head", "_head_bias"),
+                weights_only=True,
+            )
+
+            self.model.set_fc1_weights(fc1_w, fc1_b)
+            self.model.set_head_weights(head_w, head_b)
+
+            with open(self.local_scaler_path, "rb") as f:
+                self.scaler = pickle.load(f)
+            self.is_preprocessor_fitted = True
+
+            self.print("Loaded local model and scaler from artifacts.", 0, 1)
+        except Exception:
+            self.print(
+                f"Could not load local model: {traceback.format_exc()}",
+                0,
+                1,
+            )
 
     def create_empty_model(self) -> SimpleFederatedNet:
         """Create model with FIXED input dimension (18 features)."""
@@ -1404,10 +1464,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         except Exception:
             return None
 
-            return features
-        except Exception:
-            return None
-
     def _get_flows_for_ip_in_window(self, ip: str) -> list:
         """Get flows for an IP in current window."""
         return [
@@ -1417,7 +1473,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         ]
 
     def _get_flow_id(self, flow: dict) -> str:
-        """Generate unique flow ID."""
+        """Generate unique flow ID. Prefer Zeek uid, fallback to 5-tuple + time."""
+        uid = flow.get("uid")
+        if uid:
+            return str(uid)
         return f"{flow.get('saddr', '')}:{flow.get('sport', '')}-{flow.get('daddr', '')}:{flow.get('dport', '')}-{flow.get('starttime', '')}"
 
     def _compute_accuracy(self, X: np.ndarray, y: np.ndarray) -> float:
