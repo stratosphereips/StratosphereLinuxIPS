@@ -23,19 +23,22 @@ Two separate buffers manage different training phases:
 
 ## Training Flow
 
-### 1. Local Training (on Alert or Window Close)
+### 1. Local Training (on Alert or Sub-Window Close)
 
 **On New Alert:**
-1. Get evidence from alert via database
-2. Find flows connected to evidence IPs in current 15-minute window
+1. Extract evidence IDs from alert (correl_id + last_evidence)
+2. Find flows connected to evidence via `db.get_flows_causing_evidence()`
 3. Label connected flows as **MALICIOUS**, all other window flows as **BENIGN**
-4. Train fc1 + head ONCE on this batch
-5. Send latest local model to peers via P2P
+4. Compare inferred labels vs Zeek ground truth → write to `label_comparison_*.log`
+5. Train fc1 + head for configured epochs
+6. Send latest local model to peers via P2P
 
-**On Time Window Closed:**
-1. All remaining unlabeled flows in window → **BENIGN**
-2. Train fc1 + head ONCE on this batch
-3. Clear window flow storage
+**On Sub-Window Close (20 min by default):**
+1. Flow timestamps trigger sub-window expiry (independent of Slips global TW)
+2. All remaining unlabeled flows → **BENIGN**
+3. Compare inferred labels vs Zeek ground truth → write to `label_comparison_*.log`
+4. Train fc1 + head for configured epochs
+5. Clear window, start fresh sub-window
 
 ### 2. Head Alignment (After Merge)
 
@@ -114,16 +117,13 @@ federated_network_module:
 
   # Training settings
   training_batch_size: 500
-  local_training_epochs: 10  # Epochs for local training (fc1 + head)
-  merge_finetune_epochs: 5   # Epochs for head fine-tuning after merge
-  time_window_width: 900     # 15 minutes
+  local_training_epochs: 4   # Epochs for local training (fc1 + head)
+  merge_finetune_epochs: 3   # Epochs for head fine-tuning after merge
+  time_window_width: 1200    # 20 minutes (sub-window, independent of Slips global TW)
 
   # Merge settings
   merge_interval_seconds: 3600  # Merge every hour (or event-based)
   min_peers_for_merge: 1  # Minimum peers needed before merging
-
-  # Off-sync window offset (random 0-900, generated at first run if not set)
-  window_offset_seconds: 423
 
   # Logging
   create_performance_metrics_log_files: true
@@ -171,15 +171,29 @@ This ensures no progress is lost between runs.
 
 ## Metrics and Logging
 
-Uses base class methods for consistent logging:
-- `self.write_to_log(message)` - Writes to `training_<suffix>.log` or `testing_<suffix>.log`
-- `self.store_testing_results(original_label, predicted_label)` - Accumulates TP/FP/TN/FN metrics
-- `self.print(message, level, verbosity)` - Console output
+Three separate log files in `output/<timestamp>/federated_network_module/`:
 
-Metrics logged per training batch:
-- Loss value
-- Accuracy
-- Sample counts (malicious vs benign)
+### training_federated_network_module.log
+Per-batch training metrics (base class format):
+```
+Batch trained (4 epochs). Loss: 0.2932, Accuracy: 0.8500, Samples: 55 (Malicious: 5, Benign: 50)
+```
+
+### testing_federated_network_module.log
+Per-1000-flows testing metrics (base class format):
+```
+Batch flows: 1000; Total flows: 1000; Seen labels: {Malicious: 52, Benign: 948}; Predicted labels: {Malicious: 45, Benign: 955}; Malware metrics (TP/FP/TN/FN): {TP: 40, FP: 5, TN: 943, FN: 12};
+```
+Metrics written every `test_log_batch_size` flows via `store_testing_results()`.
+Local model retrains are marked with `--- Local model retrained ---`.
+
+### label_comparison_federated_network_module.log
+Compares inferred labels (from alert evidence / benign-default) vs Zeek ground truth:
+```
+[alert] Batch size: 12 | Inferred labels: {Malicious: 5, Benign: 7} | GT labels: {Malicious: 3, Benign: 9} | Metrics (TP/FP/TN/FN): {TP: 3, FP: 2, TN: 7, FN: 0}
+[twclose] Batch size: 55 | Inferred labels: {Malicious: 0, Benign: 55} | GT labels: {Malicious: 2, Benign: 53} | Metrics (TP/FP/TN/FN): {TP: 0, FP: 0, TN: 53, FN: 2}
+```
+Written once per training batch, before training, using the labels we assigned vs the Zeek file's labels.
 
 ## Extending Aggregation Strategy
 

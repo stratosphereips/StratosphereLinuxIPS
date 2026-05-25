@@ -163,6 +163,123 @@ class SimpleFederatedNet(nn.Module):
             param.requires_grad = True
 
 
+class ModuleLogger:
+    """Centralized logging for training, testing, and label comparison."""
+
+    def __init__(self, output_dir: str, enable: bool):
+        self.enable = enable
+        self._files = {}
+        if enable:
+            os.makedirs(output_dir, exist_ok=True)
+            for name in [
+                "training_local",
+                "training_merged",
+                "testing_local",
+                "testing_merged",
+                "label_comparison",
+            ]:
+                path = os.path.join(
+                    output_dir, f"{name}_federated_network_module.log"
+                )
+                self._files[name] = open(path, "w")
+
+    def _write(self, name: str, msg: str) -> None:
+        if self.enable:
+            f = self._files.get(name)
+            if f:
+                f.write(msg + "\n")
+                f.flush()
+
+    def log_local_training(
+        self,
+        trigger: str,
+        epochs: int,
+        batch_size: int,
+        loss: float,
+        accuracy: float,
+        tp: int,
+        fp: int,
+        tn: int,
+        fn: int,
+    ) -> None:
+        self._write(
+            "training_local",
+            f"[{trigger}] Trained ({epochs} epochs) | "
+            f"Loss: {loss:.4f} | Acc: {accuracy:.4f} | "
+            f"Samples: {batch_size} (Mal: {tp + fn}, Ben: {fp + tn}) | "
+            f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn}",
+        )
+
+    def log_merge_training(
+        self,
+        model_number: int,
+        epochs: int,
+        batch_size: int,
+        loss: float,
+        accuracy: float,
+        tp: int,
+        fp: int,
+        tn: int,
+        fn: int,
+    ) -> None:
+        self._write(
+            "training_merged",
+            f"--- MODEL {model_number} ---",
+        )
+        self._write(
+            "training_merged",
+            f"[merge] Trained ({epochs} epochs) | "
+            f"Loss: {loss:.4f} | Acc: {accuracy:.4f} | "
+            f"Samples: {batch_size} (Mal: {tp + fn}, Ben: {fp + tn}) | "
+            f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn}",
+        )
+
+    def log_testing(
+        self,
+        which: str,
+        flow_count: int,
+        total_flows: int,
+        seen_labels: dict,
+        predicted_labels: dict,
+        tp: int,
+        fp: int,
+        tn: int,
+        fn: int,
+    ) -> None:
+        self._write(
+            f"testing_{which}",
+            f"Batch flows: {flow_count}; "
+            f"Total flows: {total_flows}; "
+            f"Seen labels: {seen_labels}; "
+            f"Predicted labels: {predicted_labels}; "
+            f"Malware metrics (TP/FP/TN/FN): {{'TP': {tp}, 'FP': {fp}, 'TN': {tn}, 'FN': {fn}}};",
+        )
+
+    def log_label_comparison(
+        self, trigger: str, inferred: list, gt: list
+    ) -> None:
+        inf_arr = np.array(inferred)
+        gt_arr = np.array(gt)
+        tp = int(np.sum((inf_arr == MALICIOUS) & (gt_arr == MALICIOUS)))
+        fp = int(np.sum((inf_arr == MALICIOUS) & (gt_arr == BENIGN)))
+        fn = int(np.sum((inf_arr == BENIGN) & (gt_arr == MALICIOUS)))
+        tn = int(np.sum((inf_arr == BENIGN) & (gt_arr == BENIGN)))
+        self._write(
+            "label_comparison",
+            f"[{trigger}] Batch: {len(inferred)} | "
+            f"Inferred (Mal/Ben): {int(np.sum(inf_arr == MALICIOUS))}/{int(np.sum(inf_arr == BENIGN))} | "
+            f"GT (Mal/Ben): {int(np.sum(gt_arr == MALICIOUS))}/{int(np.sum(gt_arr == BENIGN))} | "
+            f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn}",
+        )
+
+    def log_model_retrain(self) -> None:
+        self._write("testing_local", "--- Local model retrained ---")
+
+    def close(self) -> None:
+        for f in self._files.values():
+            f.close()
+
+
 class FederatedNetworkModule(ml_base.MLBaseDetection):
     """
     Federated network ML detector with model sharing and merging.
@@ -245,6 +362,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         # Metrics
         self.last_batch_loss: float = 0.0
         self.merge_count: int = 0
+
+        # Training counters
+        self.training_count_alert: int = 0
+        self.training_count_twclose: int = 0
+        self._training_trigger: str = ""
+
+        # Centralized logger
+        self.logger = ModuleLogger(self.output_dir, self.enable_logs)
 
         # Read module-specific config using ConfigParser
         conf = ConfigParser()
@@ -608,6 +733,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         else:
             return self._main_testing()
 
+    def is_msg_version_compatible(self, message: dict) -> bool:
+        """Bypass version check - this module handles all messages directly."""
+        return True
+
     def _main_training(self) -> bool:
         """Training main loop: buffer flows, train on alerts/sub-windows, test if model ready."""
         try:
@@ -615,7 +744,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 data = json.loads(msg["data"])
                 flow = data["flow"]
                 flow_ts = float(data.get("stime", 0))
-                ground_truth = data.get("label", BENIGN)
 
                 # Buffer flow for later training
                 self.handle_new_flow(flow, flow_ts)
@@ -624,10 +752,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 if self.model is not None and self.is_preprocessor_fitted:
                     predicted = self._classify_flow(flow)
                     if predicted is not None:
-                        self.store_testing_results(ground_truth, predicted)
+                        gt_label = flow.get(
+                            "ground_truth_label",
+                            data.get("label", BENIGN),
+                        )
+                        self.store_testing_results(gt_label, predicted)
 
             if msg := self.get_msg("new_alert"):
-                self.handle_new_alert(json.loads(msg["data"]))
+                if not self.training_lock:
+                    self.handle_new_alert(json.loads(msg["data"]))
 
             # Only check P2P channel if it exists
             if "p2p_model_received" in self.channels:
@@ -733,7 +866,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 uids = self.db.get_flows_causing_evidence(evid_id)
                 if uids:
                     for uid in uids:
-                        flow = self.db.get_flow_by_uid(uid)
+                        flow = self.db.get_flow(uid)
                         if flow and flow not in malicious_flows:
                             malicious_flows.append(flow)
 
@@ -859,8 +992,20 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     self.alignment_buffer_x.append(x)
                     self.alignment_buffer_y.append(BENIGN)
 
-            # Train ONCE on this batch
+            # Compare inferred labels vs ground truth before training
+            self.training_count_twclose += 1
             if len(self.training_buffer_x) > 0:
+                gt_labels = []
+                for flow in remaining_flows:
+                    gt = flow.get(
+                        "ground_truth_label", flow.get("label", BENIGN)
+                    )
+                    gt_labels.append(self._normalize_binary_label(gt))
+                self.logger.log_label_comparison(
+                    f"twclose_{self.training_count_twclose}",
+                    list(self.training_buffer_y),
+                    gt_labels,
+                )
                 self._train_batch()
 
             # Clear window for next iteration
@@ -911,6 +1056,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             X = np.array(self.training_buffer_x)
             y = np.array(self.training_buffer_y)
+            epochs = self.local_training_epochs
 
             # Fit/update scaler incrementally
             if not self.is_preprocessor_fitted:
@@ -919,22 +1065,39 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             # Train fc1 + head for configured epochs
             self.print(
-                f"Training for {self.local_training_epochs} epochs on {len(y)} samples",
+                f"Training for {epochs} epochs on {len(y)} samples",
                 0,
                 1,
             )
             self.fit_incremental_model(X_scaled, y)
 
-            # Log metrics using base class methods
+            # Compute metrics
             acc = self._compute_accuracy(X_scaled, y)
-            malicious_count = sum(1 for label in y if label == MALICIOUS)
-            benign_count = sum(1 for label in y if label == BENIGN)
+            model_output = self.predict_batch(X_scaled)
+            tp = int(np.sum((model_output == MALICIOUS) & (y == MALICIOUS)))
+            fp = int(np.sum((model_output == MALICIOUS) & (y == BENIGN)))
+            fn = int(np.sum((model_output == BENIGN) & (y == MALICIOUS)))
+            tn = int(np.sum((model_output == BENIGN) & (y == BENIGN)))
 
-            self.write_to_log(
-                f"Batch trained ({self.local_training_epochs} epochs). Loss: {self.last_batch_loss:.4f}, "
-                f"Accuracy: {acc:.4f}, "
-                f"Samples: {len(y)} (Malicious: {malicious_count}, Benign: {benign_count})"
+            # Determine trigger type
+            trigger = "twclose"
+            if "alert" in str(self.training_count_alert):
+                trigger = "alert"
+
+            self.logger.log_local_training(
+                trigger=trigger,
+                epochs=epochs,
+                batch_size=len(y),
+                loss=self.last_batch_loss,
+                accuracy=acc,
+                tp=tp,
+                fp=fp,
+                tn=tn,
+                fn=fn,
             )
+
+            # Retrain marker in testing logs
+            self.logger.log_model_retrain()
 
             # Clear training buffer (alignment buffer keeps all data)
             self.training_buffer_x.clear()
@@ -1300,3 +1463,20 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         except Exception:
             self.print(f"Error testing flow: {traceback.format_exc()}", 0, 1)
+
+    def _write_testing_snapshot(self, batch_flows: int) -> None:
+        """Override base class to route testing metrics through ModuleLogger."""
+        if batch_flows <= 0:
+            return
+        total_flows = sum(self.seen_labels.values())
+        self.logger.log_testing(
+            "local",
+            batch_flows,
+            total_flows,
+            self.seen_labels.copy(),
+            self.predicted_labels.copy(),
+            self.malware_metrics.get("TP", 0),
+            self.malware_metrics.get("FP", 0),
+            self.malware_metrics.get("TN", 0),
+            self.malware_metrics.get("FN", 0),
+        )
