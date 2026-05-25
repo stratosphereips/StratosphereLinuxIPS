@@ -3,7 +3,10 @@
 from unittest.mock import (
     Mock,
     call,
+    patch,
 )
+from pathlib import Path
+from typing import Any
 
 import redis
 import json
@@ -204,10 +207,169 @@ def test_setup_config_file_uses_isolated_path_and_preserves_save(
 
     conf_contents = expected_conf.read_text(encoding="utf-8").splitlines()
     assert 'save ""' in conf_contents
+    assert f"dir {tmp_path / 'databases'}" in conf_contents
+    assert "dbfilename dump.rdb" in conf_contents
     assert (
         f"logfile {tmp_path / 'redis' / f'redis-server-port-{RedisDB.redis_port}.log'}"
         in conf_contents
     )
+
+
+def test_setup_config_file_enables_autosave_when_save_enabled(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Test Redis autosave options are set when save is enabled."""
+    template = tmp_path / "redis.conf.template"
+    template.write_text(
+        'daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8"
+    )
+
+    monkeypatch.setattr(RedisDB, "_conf_file_template", str(template))
+    monkeypatch.setattr(RedisDB, "output_dir", tmp_path, raising=False)
+    monkeypatch.setattr(RedisDB, "redis_port", 6379, raising=False)
+    monkeypatch.setattr(RedisDB, "args", Mock(save=True), raising=False)
+
+    RedisDB._setup_config_file()
+
+    expected_conf = (
+        tmp_path / "redis" / f"redis-server-port-{RedisDB.redis_port}.conf"
+    )
+    conf_contents = expected_conf.read_text(encoding="utf-8").splitlines()
+
+    assert "save 30 500" in conf_contents
+    assert "appendonly yes" in conf_contents
+    assert f"dir {tmp_path / 'databases'}" in conf_contents
+    assert "dbfilename dump.rdb" in conf_contents
+
+
+def test_setup_config_file_uses_absolute_redis_paths(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Test generated Redis configs use absolute paths for dir and logfile."""
+    template = tmp_path / "redis.conf.template"
+    template.write_text(
+        'daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8"
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(RedisDB, "_conf_file_template", str(template))
+    monkeypatch.setattr(
+        RedisDB, "output_dir", "relative-output", raising=False
+    )
+    monkeypatch.setattr(RedisDB, "redis_port", 6379, raising=False)
+    monkeypatch.setattr(RedisDB, "args", Mock(save=False), raising=False)
+
+    RedisDB._setup_config_file()
+
+    expected_logfile = (
+        tmp_path / "relative-output" / "redis" / "redis-server-port-6379.log"
+    )
+    expected_dir = tmp_path / "relative-output" / "databases"
+    conf_contents = (
+        Path(RedisDB._conf_file).read_text(encoding="utf-8").splitlines()
+    )
+
+    assert f"logfile {expected_logfile}" in conf_contents
+    assert f"dir {expected_dir}" in conf_contents
+    assert expected_logfile.parent.exists()
+
+
+def test_save_points_redis_at_backup_path(tmp_path: Path) -> None:
+    """Test save writes the Redis RDB to the backup path."""
+    db = object.__new__(RedisDB)
+    backup_file = tmp_path / "databases" / "dump"
+    redis_dump = backup_file.parent / "dump.rdb"
+    backup_file.parent.mkdir()
+    redis_dump.write_text("redis dump", encoding="utf-8")
+    db.r = Mock()
+    db.r.config_get.side_effect = [
+        {"dir": str(backup_file.parent)},
+        {"dbfilename": "dump.rdb"},
+    ]
+    db._save_rdb_with_redis_cli = Mock(return_value=True)
+    db.print = Mock()
+
+    assert db.save(str(backup_file)) is True
+
+    db._save_rdb_with_redis_cli.assert_called_once_with(
+        str(backup_file.parent / "dump.rdb")
+    )
+    db.r.save.assert_not_called()
+    assert redis_dump.read_text(encoding="utf-8") == "redis dump"
+    db.print.assert_not_called()
+
+
+def test_save_copies_dump_from_configured_redis_dir(tmp_path: Path) -> None:
+    """Test save copies the RDB if Redis reports a different dump path."""
+    db = object.__new__(RedisDB)
+    redis_dir = tmp_path / "redis-data"
+    redis_dir.mkdir()
+    redis_dump = redis_dir / "custom.rdb"
+    redis_dump.write_text("redis dump", encoding="utf-8")
+    backup_file = tmp_path / "databases" / "dump"
+    backup_file.parent.mkdir()
+    db.r = Mock()
+    db.r.config_get.side_effect = [
+        {"dir": str(redis_dir)},
+        {"dbfilename": "custom.rdb"},
+    ]
+    db._save_rdb_with_redis_cli = Mock(return_value=False)
+    db.print = Mock()
+
+    assert db.save(str(backup_file)) is True
+
+    db._save_rdb_with_redis_cli.assert_called_once_with(
+        str(backup_file.parent / "dump.rdb")
+    )
+    db.r.save.assert_called_once()
+    assert (backup_file.parent / "dump.rdb").read_text(
+        encoding="utf-8"
+    ) == "redis dump"
+    assert not redis_dump.exists()
+    db.print.assert_not_called()
+
+
+def test_save_keeps_dump_when_redis_already_saved_to_backup_path(
+    tmp_path: Path,
+) -> None:
+    """Test save does not delete the target RDB when Redis writes there."""
+    db = object.__new__(RedisDB)
+    backup_file = tmp_path / "databases" / "dump"
+    backup_file.parent.mkdir()
+    redis_dump = backup_file.parent / "dump.rdb"
+    redis_dump.write_text("redis dump", encoding="utf-8")
+    db.r = Mock()
+    db.r.config_get.side_effect = [
+        {"dir": str(backup_file.parent)},
+        {"dbfilename": "dump.rdb"},
+    ]
+    db._save_rdb_with_redis_cli = Mock(return_value=False)
+    db.print = Mock()
+
+    assert db.save(str(backup_file)) is True
+
+    db._save_rdb_with_redis_cli.assert_called_once_with(
+        str(backup_file.parent / "dump.rdb")
+    )
+    db.r.save.assert_called_once()
+    assert redis_dump.read_text(encoding="utf-8") == "redis dump"
+    db.print.assert_not_called()
+
+
+def test_save_rdb_with_redis_cli_writes_requested_file(tmp_path: Path) -> None:
+    """Test redis-cli RDB export reports success when the file is created."""
+    db = object.__new__(RedisDB)
+    db.redis_port = 6379
+    backup_rdb = tmp_path / "dump.rdb"
+
+    def create_rdb_file(*args: Any, **kwargs: Any) -> Mock:
+        backup_rdb.write_text("redis dump", encoding="utf-8")
+        return Mock(returncode=0)
+
+    with patch("subprocess.run", side_effect=create_rdb_file) as mock_run:
+        assert db._save_rdb_with_redis_cli(str(backup_rdb)) is True
+
+    mock_run.assert_called_once()
 
 
 def test_init_p2p_trust_db_uses_permanent_dir(tmp_path, monkeypatch):

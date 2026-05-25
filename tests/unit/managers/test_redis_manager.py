@@ -109,21 +109,15 @@ def test_load_redis_db(redis_port, redis_pid, db_path, mock_db):
 
 
 @pytest.mark.parametrize(
-    "redis_port, webinterface, expected",
-    [
-        (DEFAULT_REDIS_PORT, False, True),
-        (32768, True, True),
-        (32768, False, False),
-    ],
+    "saved_redis_dump, expected", [(False, True), (True, False)]
 )
 def test_should_keep_redis_server_after_analysis(
-    redis_port, webinterface, expected, mock_db
+    saved_redis_dump, expected, mock_db
 ):
     redis_manager = ModuleFactory().create_redis_manager_obj()
-    redis_manager.main.redis_port = redis_port
-    redis_manager.main.args.webinterface = webinterface
+    redis_manager.saved_redis_dump = saved_redis_dump
 
-    result = redis_manager.should_keep_redis_server_after_analysis()
+    result = redis_manager._should_keep_redis_server_after_analysis()
 
     assert result is expected
 
@@ -143,7 +137,7 @@ def test_should_save_redis_db_after_analysis(
     redis_manager.main.args.save = save
     redis_manager.main.args.webinterface = webinterface
 
-    result = redis_manager.should_save_redis_db_after_analysis()
+    result = redis_manager._should_save_redis_db_after_analysis()
 
     assert result is expected
 
@@ -158,7 +152,7 @@ def test_save_redis_db_after_analysis(mock_db):
         "managers.redis_manager.get_this_db_path_inside_output_dir",
         return_value="output_dir/databases/dump",
     ) as mock_get_path:
-        result = redis_manager.save_redis_db()
+        result = redis_manager._save_redis_db()
 
     assert result is True
     mock_get_path.assert_called_once_with("output_dir", "dump")
@@ -166,7 +160,7 @@ def test_save_redis_db_after_analysis(mock_db):
         "output_dir/databases/dump"
     )
     redis_manager.main.print.assert_called_once_with(
-        "Database saved to output_dir/databases/dump"
+        "The redis database is saved to output_dir/databases/dump.rdb"
     )
 
 
@@ -175,6 +169,7 @@ def test_stop_redis_server_after_analysis_kills_non_default_port(mock_db):
     redis_manager.main.redis_port = 32768
     redis_manager.main.args.webinterface = False
     redis_manager.main.print = Mock()
+    redis_manager.saved_redis_dump = True
 
     with (
         patch.object(

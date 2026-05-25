@@ -105,7 +105,9 @@ class RedisManager:
         )
         saved = bool(self.main.db.save(rdb_filepath))
         if saved:
-            self.main.print(f"The redis database is saved to {rdb_filepath}")
+            self.main.print(
+                f"The redis database is saved to " f"{rdb_filepath}.rdb"
+            )
         else:
             self.main.print("Failed to save the redis database.")
         return saved
