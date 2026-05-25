@@ -236,3 +236,4 @@ class WorkerManagerMixin:
             "Stable throughput detected. Requested one additional "
             "profiler worker to stop."
         )
+        self.db.decrement_profiler_workers_started()

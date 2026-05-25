@@ -307,6 +307,9 @@ class DBManager:
     def increment_profiler_workers_started(self, *args, **kwargs):
         return self.rdb.increment_profiler_workers_started(*args, **kwargs)
 
+    def decrement_profiler_workers_started(self, *args, **kwargs):
+        return self.rdb.decrement_profiler_workers_started(*args, **kwargs)
+
     def get_profiler_workers_started(self, *args, **kwargs):
         return self.rdb.get_profiler_workers_started(*args, **kwargs)
 

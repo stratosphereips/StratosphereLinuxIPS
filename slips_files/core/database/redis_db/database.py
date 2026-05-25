@@ -2008,6 +2008,9 @@ class RedisDB(
         """increments the number of profiler workers started"""
         return self.r.incr(self.constants.PROFILER_WORKERS_STARTED, 1)
 
+    def decrement_profiler_workers_started(self) -> int:
+        return self.r.incr(self.constants.PROFILER_WORKERS_STARTED, -1)
+
     def get_profiler_workers_started(self) -> int:
         """returns number of profiler workers started so far"""
         count = self.r.get(self.constants.PROFILER_WORKERS_STARTED)
