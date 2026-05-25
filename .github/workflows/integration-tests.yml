@@ -54,7 +54,10 @@ jobs:
           python3 -m pytest tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 3
 
       - name: Build Artifact Name
-        # otherwise we get numeric names for the artifacts and we dont know which is which
+        # built names, otherwise we get numeric names for the artifacts and we dont know which is which
+        # always() here because when the pytest step fails, GitHub skips the name-building step, so steps.artifact-name.outputs.name is empty
+        # and upload-artifact rejects it.
+        if: always()
         id: artifact-name
         run: |
           sanitized_test_file="${{ matrix.test_file }}"

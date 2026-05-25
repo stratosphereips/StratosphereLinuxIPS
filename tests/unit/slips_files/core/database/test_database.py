@@ -11,11 +11,26 @@ from typing import Any
 import redis
 import json
 import os
+import pytest
 
 from slips_files.core.flows.zeek import Conn
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.database.redis_db.database import RedisDB
 from tests.module_factory import ModuleFactory
+
+
+@pytest.fixture(autouse=True)
+def ensure_redis_options(monkeypatch: Any) -> None:
+    """
+    Ensure Redis options exist when ModuleFactory skips config generation.
+
+    Parameters:
+        monkeypatch: Pytest fixture used to patch RedisDB class state.
+
+    Return value:
+        None.
+    """
+    monkeypatch.setattr(RedisDB, "_options", {}, raising=False)
 
 
 # random values for testing
