@@ -13,7 +13,6 @@ import redis
 from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
-    close_test_redis_server,
     modify_yaml_config,
 )
 import pytest
@@ -626,8 +625,6 @@ def test_messaging(
         assert_peer2_results(output_dir_peer, log_file_second_iris)
         success = True
     finally:
-        close_test_redis_server(redis_port)
-        close_test_redis_server(peer_redis_port)
         if peer2_key_path is not None and peer2_key_path.exists():
             peer2_key_path.unlink()
         shutil.rmtree(

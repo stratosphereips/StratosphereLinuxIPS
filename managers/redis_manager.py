@@ -4,6 +4,7 @@ import contextlib
 import shutil
 import redis
 import os
+import psutil
 import socket
 import time
 import subprocess
@@ -13,6 +14,9 @@ from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.common.input_type import InputType
+from slips_files.common.output_paths import (
+    get_this_db_path_inside_output_dir,
+)
 from slips_files.core.database.database_manager import DBManager
 
 LOCALHOST = "127.0.0.1"
@@ -38,6 +42,9 @@ class RedisManager:
         self.start_port = 32768
         self.end_port = 32850
         self.running_logfile = "running_slips_info.txt"
+        # slips sets this to true if it managed to save the redis dump.rdb
+        # to the output dir
+        self.saved_redis_dump = False
 
     def _clear_cached_redis_instance(self, port: int) -> None:
         """
@@ -48,6 +55,99 @@ class RedisManager:
 
     def get_start_port(self):
         return self.start_port
+
+    def _get_current_redis_port(self) -> int:
+        """
+        Return the Redis port used by the current Slips run.
+
+        Returns:
+            The configured Redis port, falling back to the default port.
+        """
+        return int(getattr(self.main, "redis_port", DEFAULT_REDIS_PORT))
+
+    def _should_keep_redis_server_after_analysis(self) -> bool:
+        """
+        Decide whether the started Redis server should stay in memory.
+
+        Returns:
+            True when Redis must stay open, false otherwise.
+        """
+        # if slips failed to save the redis dump for any reason, keep the
+        # server up after the analysis to avoid losing the analysis
+        return not self.saved_redis_dump
+
+    def _should_save_redis_db_after_analysis(self) -> bool:
+        """
+        Decide whether Slips should persist Redis after this analysis.
+
+        Returns:
+            True when Slips is not keeping Redis open for the web interface.
+        """
+        if self.main.args.save:
+            return True
+
+        return not self.main.args.webinterface
+
+    def decide_on_saving_and_killing_the_redis_db(self) -> bool:
+        """
+        returns True if the redis dump was saved, and redis should be
+        safely killed. and False otherwise
+        """
+        if self._should_save_redis_db_after_analysis():
+            if self._save_redis_db():
+                self.saved_redis_dump = True
+        else:
+            self._print_reason_for_not_killing_redis()
+        return self.saved_redis_dump
+
+    def _save_redis_db(self) -> bool:
+        rdb_filepath = get_this_db_path_inside_output_dir(
+            self.main.args.output, "dump"
+        )
+        saved = bool(self.main.db.save(rdb_filepath))
+        if saved:
+            self.main.print(
+                f"The redis database is saved to " f"{rdb_filepath}.rdb"
+            )
+        else:
+            self.main.print("Failed to save the redis database.")
+        return saved
+
+    def _print_reason_for_not_killing_redis(self):
+        reason = ""
+        if self.main.args.webinterface:
+            reason = "the web interface is running."
+        elif self.main.redis_port == 6379:
+            reason = (
+                "the default redis port should always stay up"
+                " for storing cached TI data."
+            )
+
+        print(
+            f"The redis server on port {self.main.redis_port} "
+            f"will not be killed. Reason: {reason}."
+        )
+
+    def stop_redis_server_after_analysis(self) -> None:
+        """
+        Stop the analysis Redis server when it should not remain open.
+        """
+        if self._should_keep_redis_server_after_analysis():
+            return
+
+        redis_port = self._get_current_redis_port()
+        redis_pid = self.get_pid_of_redis_server(redis_port)
+        if not redis_pid:
+            self.remove_server_from_log(redis_port)
+            return
+
+        if self.kill_redis_server(redis_pid):
+            self.main.print(f"Killed Redis server on port {redis_port}.")
+            self.remove_server_from_log(redis_port)
+        else:
+            self.main.print(
+                f"Slips didn't kill the Redis server on port {redis_port}."
+            )
 
     def log_redis_server_pid(self, redis_port: int, redis_pid: int):
         now = utils.get_human_readable_datetime()
@@ -96,7 +196,8 @@ class RedisManager:
 
         print(
             f"{self.main.args.db} loaded successfully.\n"
-            f"Run ./webinterface.sh and choose port {redis_port}"
+            f"Run ./slips.py -d {self.main.args.db} -w "
+            f"and choose port {redis_port}"
         )
 
     def load_db(self):
@@ -238,6 +339,21 @@ class RedisManager:
         Returns str(port) or false if there's no redis-server running on this
         port
         """
+        client = None
+        try:
+            client = redis.StrictRedis(
+                host=LOCALHOST,
+                port=port,
+                socket_connect_timeout=0.2,
+                socket_timeout=0.2,
+            )
+            return int(client.info(section="server")["process_id"])
+        except (redis.exceptions.RedisError, KeyError, TypeError, ValueError):
+            pass
+        finally:
+            if client:
+                client.connection_pool.disconnect()
+
         cmd = "ps aux | grep redis-server"
         process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
         cmd_output, _ = process.communicate()
@@ -562,7 +678,7 @@ class RedisManager:
             # server already killed!
             return False
 
-    def kill_redis_server(self, pid):
+    def kill_redis_server(self, pid: Union[int, str]) -> bool:
         """
         Kill the redis server on this pid
         """
@@ -573,24 +689,26 @@ class RedisManager:
             # the pid of it is 'not found'
             return False
 
-        # signal 0 is to check if the process is still running or not
-        # it returns 1 if the process used_redis_servers.txt exited
         try:
-            # check if the process is still running
-            while os.kill(pid, 0) != 1:
-                # sigterm is 9
-                os.kill(pid, 9)
-        except ProcessLookupError:
-            # ProcessLookupError: process already exited, sometimes this exception is raised
-            # but the process is still running, keep trying to kill it
+            process = psutil.Process(pid)
+            if process.status() == psutil.STATUS_ZOMBIE:
+                return True
+
+            process.kill()
+            deadline = time.time() + 5
+            while time.time() < deadline:
+                if process.status() == psutil.STATUS_ZOMBIE:
+                    return True
+                time.sleep(0.1)
+            return False
+        except psutil.NoSuchProcess:
             return True
-        except PermissionError:
+        except psutil.AccessDenied:
             # PermissionError happens when the user tries to close redis-servers
             # opened by root while he's not root,
             # or when he tries to close redis-servers
             # opened without root while he's root
             return False
-        return True
 
     def remove_old_logline(self, redis_port):
         """

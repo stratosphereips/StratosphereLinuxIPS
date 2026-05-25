@@ -21,6 +21,7 @@ from multiprocessing.process import BaseProcess
 from typing import (
     List,
     Tuple,
+    Callable,
 )
 
 from exclusiveprocess import (
@@ -766,7 +767,7 @@ class ProcessManager:
 
         return alive_processes
 
-    def get_analysis_time(self) -> Tuple[str, str]:
+    def get_analysis_time(self) -> Tuple[float, str]:
         """
         Returns how long slips took to analyze the given file
         returns analysis_time in minutes and slips end_time as a date
@@ -1001,6 +1002,50 @@ class ProcessManager:
             self.plotter.write_throughput_metrics()
             self.plotter.plot_flows_from_conn_log()
 
+    def _print_shutdown_stats(
+        self,
+        graceful_shutdown: bool,
+        analysis_time: float,
+        reason: str,
+        print: Callable,
+    ) -> None:
+        """
+        Print the shutdown summary.
+
+        Parameters:
+            graceful_shutdown: Whether Slips finished without forcing modules.
+            analysis_time: Analysis duration in minutes.
+            reason: Explanation when shutdown was not graceful.
+            print: Print function for the current Slips mode.
+
+        Return value:
+            None.
+        """
+        print(
+            f"Analysis of {self.main.input_information} "
+            f"finished in {analysis_time:.2f} minutes"
+        )
+
+        if graceful_shutdown:
+            if self.is_slips_live_updating_event.is_set():
+                print(
+                    "[Process Manager] Slips is live updating, "
+                    "Stopping this instance and starting the new "
+                    "instance now.\n",
+                    log_to_logfiles_only=True,
+                )
+
+            print(
+                "[Process Manager] Slips shutdown gracefully\n",
+                log_to_logfiles_only=True,
+            )
+        else:
+            print(
+                f"[Process Manager] Slips didn't "
+                f"shutdown gracefully - {reason}\n",
+                log_to_logfiles_only=True,
+            )
+
     def shutdown_gracefully(self):
         """
         Waits for all modules to confirm that they're done processing
@@ -1033,6 +1078,7 @@ class ProcessManager:
                 self.main.db.check_tw_to_close(close_all=True)
 
             graceful_shutdown = True
+            shutdown_reason = ""
             if self.main.mode == "daemonized":
                 self.kill_daemon_children()
                 profiles_len: int = self.main.db.get_profiles_len()
@@ -1056,7 +1102,7 @@ class ProcessManager:
                     if self.core_module_failure:
                         # dont wait for failed core modules to stop
                         self.kill_all_children()
-                        reason = "Core module failure."
+                        shutdown_reason = "Core module failure."
                         graceful_shutdown = False
                     else:
                         # Wait timeout_seconds for all the processes to finish
@@ -1076,67 +1122,47 @@ class ProcessManager:
                     # or slips was stuck looping for too long that the OS
                     # sent an automatic sigint to kill slips
                     # pass to kill the remaining modules
-                    reason = "User pressed ctr+c or Slips was killed by the OS"
+                    shutdown_reason = (
+                        "User pressed ctr+c or Slips was killed" " by the OS"
+                    )
                     graceful_shutdown = False
 
                 if time.time() - method_start_time >= timeout:
                     # getting here means we're killing them bc of the timeout
                     # not getting here means we're killing them bc of double
                     # ctr+c OR they terminated successfully
-                    reason = (
+                    shutdown_reason = (
                         f"Killing modules that took more than {timeout}"
                         f" mins to finish."
                     )
-                    print(reason)
+                    print(shutdown_reason)
                     graceful_shutdown = False
 
                 self.kill_all_children()
 
             if not self.is_slips_live_updating_event.is_set():
-                if self.main.args.save:
-                    self.main.save_the_db()
+                self.main.redis_man.decide_on_saving_and_killing_the_redis_db()
+
                 if self.main.conf.export_labeled_flows():
                     format_ = self.main.conf.export_labeled_flows_to().lower()
                     self.main.db.export_labeled_flows(format_)
 
-                # if store_a_copy_of_zeek_files is set to yes in slips.yaml
-                # copy the whole zeek_files dir to the output dir
                 self.main.store_zeek_dir_copy()
-                # if delete_zeek_files is set to yes in slips.yaml,
-                # delete zeek_files/ dir
                 self.main.delete_zeek_files()
 
             analysis_time, end_date = self.get_analysis_time()
             self.main.metadata_man.set_analysis_end_date(end_date)
 
-            print(
-                f"Analysis of {self.main.input_information} "
-                f"finished in {analysis_time:.2f} minutes"
-            )
-
             self.main.profilers_manager.cpu_profiler_release()
             self.main.profilers_manager.memory_profiler_release()
 
             self.main.db.close_all_dbs()
-            if graceful_shutdown:
-                if self.is_slips_live_updating_event.is_set():
-                    print(
-                        "[Process Manager] Slips is live updating, "
-                        "Stopping this instance and starting the new "
-                        "instance now.\n",
-                        log_to_logfiles_only=True,
-                    )
+            if not self.is_slips_live_updating_event.is_set():
+                self.main.redis_man.stop_redis_server_after_analysis()
 
-                print(
-                    "[Process Manager] Slips shutdown gracefully\n",
-                    log_to_logfiles_only=True,
-                )
-            else:
-                print(
-                    f"[Process Manager] Slips didn't "
-                    f"shutdown gracefully - {reason}\n",
-                    log_to_logfiles_only=True,
-                )
+            self._print_shutdown_stats(
+                graceful_shutdown, analysis_time, shutdown_reason, print
+            )
 
         except KeyboardInterrupt:
             return False

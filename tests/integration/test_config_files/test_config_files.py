@@ -15,14 +15,13 @@ from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
     check_for_text,
-    close_test_redis_server,
+    get_total_analyzed_ips_from_output,
     get_label_count_from_output_db,
     run_slips,
     get_slips_test_command,
     modify_yaml_config,
     skip_if_missing_runtime_dependencies,
 )
-from tests.module_factory import ModuleFactory
 
 alerts_file = "alerts.log"
 CONFIG_FILES_DIR = Path("output/integration/config_files")
@@ -95,10 +94,7 @@ def test_conf_file(
         print("Slip is done, checking for errors in the output dir.")
         assert_no_errors(output_dir)
         print("Comparing profiles with expected profiles")
-        database = ModuleFactory().create_db_manager_obj(
-            redis_port, output_dir=output_dir, start_redis_server=False
-        )
-        profiles = database.get_profiles_len()
+        profiles = get_total_analyzed_ips_from_output(output_dir)
         # expected_profiles is more than 50 because we're using direction = all
         assert profiles > expected_profiles
         print("Checking for a random evidence")
@@ -137,7 +133,6 @@ def test_conf_file(
         success = True
     finally:
         if success:
-            close_test_redis_server(redis_port)
             config_file.unlink(missing_ok=True)
             shutil.rmtree(output_dir)
 
@@ -204,6 +199,5 @@ def test_conf_file2(
         success = True
     finally:
         if success:
-            close_test_redis_server(redis_port)
             config_file.unlink(missing_ok=True)
             shutil.rmtree(output_dir)

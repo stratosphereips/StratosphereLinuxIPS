@@ -120,35 +120,6 @@ class Main:
         if not self.conf.get_cpu_profiler_enable():
             sys.exit(0)  # leaves any children started by slips as orphans
 
-    def save_the_db(self):
-        # save the db to the output dir of this analysis
-        # backups_dir = os.path.join(os.getcwd(), 'redis_backups/')
-        # try:
-        #     os.mkdir(backups_dir)
-        # except FileExistsError:
-        #     pass
-        backups_dir = self.args.output
-        # The name of the interface/pcap/nfdump/binetflow used is in self.input_information
-        # if the input is a zeek dir, remove the / at the end
-        if self.input_information.endswith("/"):
-            self.input_information = self.input_information[:-1]
-        # remove the path
-        self.input_information = os.path.basename(self.input_information)
-        # Remove the extension from the filename
-        with contextlib.suppress(ValueError):
-            self.input_information = self.input_information[
-                : self.input_information.index(".")
-            ]
-        # Give the exact path to save(), this is where our saved .rdb backup will be
-        rdb_filepath = os.path.join(backups_dir, self.input_information)
-        self.db.save(rdb_filepath)
-        # info will be lost only if you're out of space and redis
-        # can't write to dump.self.rdb, otherwise you're fine
-        print(
-            "[Main] [Warning] stop-writes-on-bgsave-error is set to no, "
-            "information may be lost in the redis backup file."
-        )
-
     def was_running_zeek(self) -> bool:
         """returns true if zeek was used in this run"""
         return (
@@ -680,6 +651,7 @@ class Main:
                     # need this handler to be called only once when slips
                     # is shutting down
                     return
+
                 if not self.sigterm_received:
                     self.sigterm_received = True
                     self.print("SIGTERM received, shutting down slips.")

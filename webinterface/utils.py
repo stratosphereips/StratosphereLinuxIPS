@@ -3,9 +3,13 @@
 import os
 import socket
 from typing import (
+    BinaryIO,
     Dict,
     List,
 )
+
+RDB_HEADER_SIZE = 9
+RDB_MAGIC = b"REDIS"
 
 
 def is_port_open(port: int) -> bool:
@@ -15,6 +19,43 @@ def is_port_open(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(0.2)
         return sock.connect_ex(("127.0.0.1", port)) == 0
+
+
+def has_rdb_extension(filename: str) -> bool:
+    """
+    Check whether a filename uses the Redis RDB extension.
+
+    Parameters:
+    filename: Uploaded filename to inspect.
+
+    Return:
+    True when the filename ends with .rdb.
+    """
+    return os.path.splitext(filename)[1].lower() == ".rdb"
+
+
+def is_redis_rdb_file(file_obj: BinaryIO) -> bool:
+    """
+    Verify a file-like object has a Redis RDB header.
+
+    Parameters:
+    file_obj: Binary stream positioned anywhere in the uploaded file.
+
+    Return:
+    True when the stream starts with a Redis RDB magic header and version.
+    """
+    position = file_obj.tell()
+    try:
+        file_obj.seek(0)
+        header = file_obj.read(RDB_HEADER_SIZE)
+    finally:
+        file_obj.seek(position)
+
+    return (
+        len(header) == RDB_HEADER_SIZE
+        and header.startswith(RDB_MAGIC)
+        and header[len(RDB_MAGIC) :].isdigit()
+    )
 
 
 def get_open_redis_ports_in_order() -> List[Dict[str, str]]:

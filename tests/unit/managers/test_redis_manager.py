@@ -3,6 +3,7 @@
 import shutil
 from unittest.mock import patch, mock_open, Mock, call
 import os
+import psutil
 import redis
 import pytest
 
@@ -104,8 +105,116 @@ def test_load_redis_db(redis_port, redis_pid, db_path, mock_db):
         mock_remove.assert_called_once_with(redis_port)
         mock_print.assert_called_once_with(
             f"{db_path} loaded successfully.\n"
-            f"Run ./webinterface.sh and choose port {redis_port}"
+            f"Run ./slips.py -d {db_path} -w and choose port {redis_port}"
         )
+
+
+@pytest.mark.parametrize(
+    "saved_redis_dump, expected", [(False, True), (True, False)]
+)
+def test_should_keep_redis_server_after_analysis(
+    saved_redis_dump, expected, mock_db
+):
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    redis_manager.saved_redis_dump = saved_redis_dump
+
+    result = redis_manager._should_keep_redis_server_after_analysis()
+
+    assert result is expected
+
+
+@pytest.mark.parametrize(
+    "save, webinterface, expected",
+    [
+        (False, False, True),
+        (False, True, False),
+        (True, True, True),
+    ],
+)
+def test_should_save_redis_db_after_analysis(
+    save, webinterface, expected, mock_db
+):
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    redis_manager.main.args.save = save
+    redis_manager.main.args.webinterface = webinterface
+
+    result = redis_manager._should_save_redis_db_after_analysis()
+
+    assert result is expected
+
+
+def test_save_redis_db_after_analysis(mock_db):
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    redis_manager.main.args.output = "output_dir"
+    redis_manager.main.db.save = Mock(return_value=True)
+    redis_manager.main.print = Mock()
+
+    with patch(
+        "managers.redis_manager.get_this_db_path_inside_output_dir",
+        return_value="output_dir/databases/dump",
+    ) as mock_get_path:
+        result = redis_manager._save_redis_db()
+
+    assert result is True
+    mock_get_path.assert_called_once_with("output_dir", "dump")
+    redis_manager.main.db.save.assert_called_once_with(
+        "output_dir/databases/dump"
+    )
+    redis_manager.main.print.assert_called_once_with(
+        "The redis database is saved to output_dir/databases/dump.rdb"
+    )
+
+
+def test_stop_redis_server_after_analysis_kills_non_default_port(mock_db):
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    redis_manager.main.redis_port = 32768
+    redis_manager.main.args.webinterface = False
+    redis_manager.main.print = Mock()
+    redis_manager.saved_redis_dump = True
+
+    with (
+        patch.object(
+            redis_manager, "get_pid_of_redis_server", return_value=1234
+        ) as mock_get_pid,
+        patch.object(
+            redis_manager, "kill_redis_server", return_value=True
+        ) as mock_kill,
+        patch.object(redis_manager, "remove_server_from_log") as mock_remove,
+    ):
+        redis_manager.stop_redis_server_after_analysis()
+
+    mock_get_pid.assert_called_once_with(32768)
+    mock_kill.assert_called_once_with(1234)
+    mock_remove.assert_called_once_with(32768)
+    redis_manager.main.print.assert_called_once_with(
+        "Killed Redis server on port 32768."
+    )
+
+
+@pytest.mark.parametrize(
+    "redis_port, webinterface",
+    [
+        (DEFAULT_REDIS_PORT, False),
+        (32768, True),
+    ],
+)
+def test_stop_redis_server_after_analysis_keeps_required_ports(
+    redis_port, webinterface, mock_db
+):
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    redis_manager.main.redis_port = redis_port
+    redis_manager.main.args.webinterface = webinterface
+
+    with (
+        patch.object(redis_manager, "get_pid_of_redis_server") as mock_get_pid,
+        patch.object(redis_manager, "kill_redis_server") as mock_kill,
+        patch.object(redis_manager, "remove_server_from_log") as mock_remove,
+    ):
+        redis_manager.stop_redis_server_after_analysis()
+
+    mock_get_pid.assert_not_called()
+    mock_kill.assert_not_called()
+    mock_remove.assert_not_called()
 
 
 def test_load_db_success(mock_db):
@@ -336,10 +445,42 @@ def test_print_port_in_use(port, mock_db):
 def test_get_pid_of_redis_server(port, cmd_output, expected_pid, mock_db):
     redis_manager = ModuleFactory().create_redis_manager_obj()
 
-    with patch("subprocess.Popen") as mock_popen:
+    with (
+        patch(
+            "managers.redis_manager.redis.StrictRedis",
+            side_effect=redis.exceptions.ConnectionError,
+        ),
+        patch("subprocess.Popen") as mock_popen,
+    ):
         mock_popen.return_value.communicate.return_value = (cmd_output, None)
         result = redis_manager.get_pid_of_redis_server(port)
         assert result == expected_pid
+
+
+def test_get_pid_of_redis_server_uses_redis_process_id(mock_db):
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    mock_client = Mock()
+    mock_client.info.return_value = {"process_id": "1234"}
+
+    with (
+        patch(
+            "managers.redis_manager.redis.StrictRedis",
+            return_value=mock_client,
+        ) as mock_redis,
+        patch("subprocess.Popen") as mock_popen,
+    ):
+        result = redis_manager.get_pid_of_redis_server(32768)
+
+    assert result == 1234
+    mock_redis.assert_called_once_with(
+        host="127.0.0.1",
+        port=32768,
+        socket_connect_timeout=0.2,
+        socket_timeout=0.2,
+    )
+    mock_client.info.assert_called_once_with(section="server")
+    mock_client.connection_pool.disconnect.assert_called_once()
+    mock_popen.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -509,31 +650,62 @@ def test_get_port_of_redis_server(cmd_output, pid, expected_port, mock_db):
 
 
 @pytest.mark.parametrize(
-    "pid, os_kill_side_effect, " "expected_result, expected_calls",
+    "pid, statuses, expected_result",
     [
-        # Testcase 1: Process killed successfully after one try
-        (
-            1234,
-            [None, ProcessLookupError],
-            True,
-            [call(1234, 0), call(1234, 9)],
-        ),
-        # Testcase 2: Process already killed
-        (5678, [ProcessLookupError], True, [call(5678, 0)]),
-        # Testcase 3: Permission error while killing
-        (9101, [PermissionError], False, [call(9101, 0)]),
+        (1234, ["running", "zombie"], True),
+        (5678, ["zombie"], True),
+        (9101, ["running", "running"], False),
     ],
 )
-def test_kill_redis_server(
-    pid, os_kill_side_effect, expected_result, expected_calls, mock_db
-):
+def test_kill_redis_server(pid, statuses, expected_result, mock_db):
+    """
+    Test Redis process killing for running, zombie, and timed-out processes.
+    """
     redis_manager = ModuleFactory().create_redis_manager_obj()
+    mock_process = Mock()
+    mock_process.status.side_effect = statuses
 
-    with patch("os.kill", side_effect=os_kill_side_effect) as mock_kill:
+    with (
+        patch(
+            "managers.redis_manager.psutil.Process",
+            return_value=mock_process,
+        ),
+        patch("managers.redis_manager.time.time", side_effect=[0, 1, 6]),
+        patch("managers.redis_manager.time.sleep"),
+    ):
         result = redis_manager.kill_redis_server(pid)
 
-        assert result == expected_result
-        mock_kill.assert_has_calls(expected_calls)
+    assert result == expected_result
+    if statuses[0] == "zombie":
+        mock_process.kill.assert_not_called()
+    else:
+        mock_process.kill.assert_called_once_with()
+
+
+@pytest.mark.parametrize(
+    "exception, expected_result",
+    [
+        ("no_such_process", True),
+        ("access_denied", False),
+    ],
+)
+def test_kill_redis_server_handles_psutil_exceptions(
+    exception, expected_result, mock_db
+):
+    """
+    Test Redis process killing handles missing and inaccessible processes.
+    """
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+
+    with patch("managers.redis_manager.psutil.Process") as mock_process:
+        if exception == "no_such_process":
+            mock_process.side_effect = psutil.NoSuchProcess(pid=1234)
+        else:
+            mock_process.side_effect = psutil.AccessDenied(pid=1234)
+
+        result = redis_manager.kill_redis_server(1234)
+
+    assert result == expected_result
 
 
 @pytest.mark.parametrize(
