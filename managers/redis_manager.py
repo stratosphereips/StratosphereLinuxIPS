@@ -4,6 +4,7 @@ import contextlib
 import shutil
 import redis
 import os
+import psutil
 import socket
 import time
 import subprocess
@@ -677,7 +678,7 @@ class RedisManager:
             # server already killed!
             return False
 
-    def kill_redis_server(self, pid):
+    def kill_redis_server(self, pid: Union[int, str]) -> bool:
         """
         Kill the redis server on this pid
         """
@@ -688,24 +689,26 @@ class RedisManager:
             # the pid of it is 'not found'
             return False
 
-        # signal 0 is to check if the process is still running or not
-        # it returns 1 if the process used_redis_servers.txt exited
         try:
-            # check if the process is still running
-            while os.kill(pid, 0) != 1:
-                # sigterm is 9
-                os.kill(pid, 9)
-        except ProcessLookupError:
-            # ProcessLookupError: process already exited, sometimes this exception is raised
-            # but the process is still running, keep trying to kill it
+            process = psutil.Process(pid)
+            if process.status() == psutil.STATUS_ZOMBIE:
+                return True
+
+            process.kill()
+            deadline = time.time() + 5
+            while time.time() < deadline:
+                if process.status() == psutil.STATUS_ZOMBIE:
+                    return True
+                time.sleep(0.1)
+            return False
+        except psutil.NoSuchProcess:
             return True
-        except PermissionError:
+        except psutil.AccessDenied:
             # PermissionError happens when the user tries to close redis-servers
             # opened by root while he's not root,
             # or when he tries to close redis-servers
             # opened without root while he's root
             return False
-        return True
 
     def remove_old_logline(self, redis_port):
         """
