@@ -368,6 +368,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.training_count_twclose: int = 0
         self._training_trigger: str = ""
 
+        # Track whether current model is merged (affects testing log target)
+        self._using_merged_model: bool = False
+
         # Centralized logger
         self.logger = ModuleLogger(self.output_dir, self.enable_logs)
 
@@ -422,10 +425,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             return int(value)
         except (TypeError, ValueError):
             return default
-
-    def _log_model_retrain(self) -> None:
-        """Write a model-change marker in the training log after retraining."""
-        self.write_to_log("--- Local model retrained ---")
 
     def create_empty_model(self) -> SimpleFederatedNet:
         """Create model with FIXED input dimension (18 features)."""
@@ -759,8 +758,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         self.store_testing_results(gt_label, predicted)
 
             if msg := self.get_msg("new_alert"):
-                if not self.training_lock:
-                    self.handle_new_alert(json.loads(msg["data"]))
+                self.handle_new_alert(json.loads(msg["data"]))
 
             # Only check P2P channel if it exists
             if "p2p_model_received" in self.channels:
@@ -938,8 +936,21 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     self.alignment_buffer_y.append(BENIGN)
                     self.labeled_flow_ids.add(self._get_flow_id(flow))
 
-            # Train ONCE on this batch
+            # Compare inferred labels vs ground truth before training
+            self.training_count_alert += 1
             if len(self.training_buffer_x) > 0:
+                gt_labels = []
+                for flow in malicious_flows + benign_flows:
+                    gt = flow.get(
+                        "ground_truth_label", flow.get("label", BENIGN)
+                    )
+                    gt_labels.append(self._normalize_binary_label(gt))
+                self.logger.log_label_comparison(
+                    f"alert_{self.training_count_alert}",
+                    list(self.training_buffer_y),
+                    gt_labels,
+                )
+                self._training_trigger = "alert"
                 self._train_batch()
 
             # Send model to peers
@@ -1006,6 +1017,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     list(self.training_buffer_y),
                     gt_labels,
                 )
+                self._training_trigger = "twclose"
                 self._train_batch()
 
             # Clear window for next iteration
@@ -1079,13 +1091,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             fn = int(np.sum((model_output == BENIGN) & (y == MALICIOUS)))
             tn = int(np.sum((model_output == BENIGN) & (y == BENIGN)))
 
-            # Determine trigger type
-            trigger = "twclose"
-            if "alert" in str(self.training_count_alert):
-                trigger = "alert"
-
             self.logger.log_local_training(
-                trigger=trigger,
+                trigger=self._training_trigger,
                 epochs=epochs,
                 batch_size=len(y),
                 loss=self.last_batch_loss,
@@ -1098,6 +1105,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             # Retrain marker in testing logs
             self.logger.log_model_retrain()
+
+            # Local training resets model back to local variant
+            self._using_merged_model = False
 
             # Clear training buffer (alignment buffer keeps all data)
             self.training_buffer_x.clear()
@@ -1146,6 +1156,44 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             # Freeze fc1, train head on alignment buffer
             self._align_head_on_buffer()
+
+            # Compute merge training metrics
+            if len(self.alignment_buffer_x) > 0:
+                X_align = np.array(self.alignment_buffer_x)
+                y_align = np.array(self.alignment_buffer_y)
+                if not self.is_preprocessor_fitted:
+                    self.update_preprocessor(pd.DataFrame(X_align))
+                X_align_scaled = self.scaler.transform(X_align)
+                acc = self._compute_accuracy(X_align_scaled, y_align)
+                model_output = self.predict_batch(X_align_scaled)
+                tp = int(
+                    np.sum(
+                        (model_output == MALICIOUS) & (y_align == MALICIOUS)
+                    )
+                )
+                fp = int(
+                    np.sum((model_output == MALICIOUS) & (y_align == BENIGN))
+                )
+                fn = int(
+                    np.sum((model_output == BENIGN) & (y_align == MALICIOUS))
+                )
+                tn = int(
+                    np.sum((model_output == BENIGN) & (y_align == BENIGN))
+                )
+                self.logger.log_merge_training(
+                    model_number=self.merge_count + 1,
+                    epochs=self.merge_finetune_epochs,
+                    batch_size=len(y_align),
+                    loss=self.last_batch_loss,
+                    accuracy=acc,
+                    tp=tp,
+                    fp=fp,
+                    tn=tn,
+                    fn=fn,
+                )
+
+            # Mark that we are now using a merged model for inference
+            self._using_merged_model = True
 
             # Save merged model
             self.merge_count += 1
@@ -1469,8 +1517,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         if batch_flows <= 0:
             return
         total_flows = sum(self.seen_labels.values())
+        which = "merged" if self._using_merged_model else "local"
         self.logger.log_testing(
-            "local",
+            which,
             batch_flows,
             total_flows,
             self.seen_labels.copy(),
