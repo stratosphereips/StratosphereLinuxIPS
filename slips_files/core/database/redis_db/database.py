@@ -224,6 +224,10 @@ class RedisDB(
             cls.output_dir, f"redis-server-port-{redis_port}.conf"
         )
 
+    @staticmethod
+    def _absolute_path(path: str) -> str:
+        return os.path.abspath(os.fspath(path))
+
     def _init_ttls(self):
         """sets the default and extended ttls for redis keys based on
         whether we're analysing files or interface"""
@@ -278,15 +282,17 @@ class RedisDB(
 
         # because slips may use different redis ports at the same time,
         # logs should be port specific
-        logfile = get_redis_logs_path_inside_output_dir(
-            cls.output_dir, f"redis-server-port-{cls.redis_port}.log"
+        logfile = cls._absolute_path(
+            get_redis_logs_path_inside_output_dir(
+                cls.output_dir, f"redis-server-port-{cls.redis_port}.log"
+            )
         )
         cls._options.update({"logfile": logfile})
         cls._options.update(
             {
                 # manual SAVE writes the .rdb file to <output_dir>/databases
-                "dir": get_databases_dir_path_inside_output_dir(
-                    cls.output_dir
+                "dir": cls._absolute_path(
+                    get_databases_dir_path_inside_output_dir(cls.output_dir)
                 ),
                 "dbfilename": "dump.rdb",
             }
@@ -446,6 +452,10 @@ class RedisDB(
         safe_conf_file = utils.validate_safe_path(
             cls._conf_file, must_exist=True
         )
+        logfile = cls._options.get("logfile")
+        if logfile:
+            os.makedirs(os.path.dirname(logfile), exist_ok=True)
+
         safe_port = utils.validate_port(cls.redis_port)
         cmd = [
             "redis-server",
@@ -474,9 +484,11 @@ class RedisDB(
         if process.returncode != 0:
             if utils.is_port_in_use(cls.redis_port):
                 return True
+            str_cmd = " ".join(cmd)
             raise RuntimeError(
                 f"database._start_redis_server: "
-                f"Redis did not start properly.\n{stderr}\n{stdout}"
+                f"Redis did not start properly using: "
+                f"{str_cmd}.\n{stderr}\n{stdout}"
             )
 
         return True
