@@ -3,6 +3,7 @@
 import shutil
 from unittest.mock import patch, mock_open, Mock, call
 import os
+import psutil
 import redis
 import pytest
 
@@ -649,31 +650,62 @@ def test_get_port_of_redis_server(cmd_output, pid, expected_port, mock_db):
 
 
 @pytest.mark.parametrize(
-    "pid, os_kill_side_effect, " "expected_result, expected_calls",
+    "pid, statuses, expected_result",
     [
-        # Testcase 1: Process killed successfully after one try
-        (
-            1234,
-            [None, ProcessLookupError],
-            True,
-            [call(1234, 0), call(1234, 9)],
-        ),
-        # Testcase 2: Process already killed
-        (5678, [ProcessLookupError], True, [call(5678, 0)]),
-        # Testcase 3: Permission error while killing
-        (9101, [PermissionError], False, [call(9101, 0)]),
+        (1234, ["running", "zombie"], True),
+        (5678, ["zombie"], True),
+        (9101, ["running", "running"], False),
     ],
 )
-def test_kill_redis_server(
-    pid, os_kill_side_effect, expected_result, expected_calls, mock_db
-):
+def test_kill_redis_server(pid, statuses, expected_result, mock_db):
+    """
+    Test Redis process killing for running, zombie, and timed-out processes.
+    """
     redis_manager = ModuleFactory().create_redis_manager_obj()
+    mock_process = Mock()
+    mock_process.status.side_effect = statuses
 
-    with patch("os.kill", side_effect=os_kill_side_effect) as mock_kill:
+    with (
+        patch(
+            "managers.redis_manager.psutil.Process",
+            return_value=mock_process,
+        ),
+        patch("managers.redis_manager.time.time", side_effect=[0, 1, 6]),
+        patch("managers.redis_manager.time.sleep"),
+    ):
         result = redis_manager.kill_redis_server(pid)
 
-        assert result == expected_result
-        mock_kill.assert_has_calls(expected_calls)
+    assert result == expected_result
+    if statuses[0] == "zombie":
+        mock_process.kill.assert_not_called()
+    else:
+        mock_process.kill.assert_called_once_with()
+
+
+@pytest.mark.parametrize(
+    "exception, expected_result",
+    [
+        ("no_such_process", True),
+        ("access_denied", False),
+    ],
+)
+def test_kill_redis_server_handles_psutil_exceptions(
+    exception, expected_result, mock_db
+):
+    """
+    Test Redis process killing handles missing and inaccessible processes.
+    """
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+
+    with patch("managers.redis_manager.psutil.Process") as mock_process:
+        if exception == "no_such_process":
+            mock_process.side_effect = psutil.NoSuchProcess(pid=1234)
+        else:
+            mock_process.side_effect = psutil.AccessDenied(pid=1234)
+
+        result = redis_manager.kill_redis_server(1234)
+
+    assert result == expected_result
 
 
 @pytest.mark.parametrize(
