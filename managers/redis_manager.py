@@ -41,6 +41,9 @@ class RedisManager:
         self.start_port = 32768
         self.end_port = 32850
         self.running_logfile = "running_slips_info.txt"
+        # slips sets this to true if it managed to save the redis dump.rdb
+        # to the output dir
+        self.saved_redis_dump = False
 
     def _clear_cached_redis_instance(self, port: int) -> None:
         """
@@ -52,7 +55,7 @@ class RedisManager:
     def get_start_port(self):
         return self.start_port
 
-    def get_current_redis_port(self) -> int:
+    def _get_current_redis_port(self) -> int:
         """
         Return the Redis port used by the current Slips run.
 
@@ -61,20 +64,18 @@ class RedisManager:
         """
         return int(getattr(self.main, "redis_port", DEFAULT_REDIS_PORT))
 
-    def should_keep_redis_server_after_analysis(self) -> bool:
+    def _should_keep_redis_server_after_analysis(self) -> bool:
         """
-        Decide whether the analysis Redis server should stay in memory.
+        Decide whether the started Redis server should stay in memory.
 
         Returns:
-            True when Redis must stay open for the web interface or because it
-            is the default cache port.
+            True when Redis must stay open, false otherwise.
         """
-        return (
-            self.main.args.webinterface
-            or self.get_current_redis_port() == DEFAULT_REDIS_PORT
-        )
+        # if slips failed to save the redis dump for any reason, keep the
+        # server up after the analysis to avoid losing the analysis
+        return not self.saved_redis_dump
 
-    def should_save_redis_db_after_analysis(self) -> bool:
+    def _should_save_redis_db_after_analysis(self) -> bool:
         """
         Decide whether Slips should persist Redis after this analysis.
 
@@ -86,24 +87,30 @@ class RedisManager:
 
         return not self.main.args.webinterface
 
-    def decide_on_saving_the_redis_db(self):
-        if self.main.redis_man.should_save_redis_db_after_analysis():
-            self.main.redis_man.save_redis_db()
+    def decide_on_saving_and_killing_the_redis_db(self) -> bool:
+        """
+        returns True if the redis dump was saved, and redis should be
+        safely killed. and False otherwise
+        """
+        if self._should_save_redis_db_after_analysis():
+            if self._save_redis_db():
+                self.saved_redis_dump = True
         else:
-            self.main.redis_man.print_reason_for_not_killing_redis()
+            self._print_reason_for_not_killing_redis()
+        return self.saved_redis_dump
 
-    def save_redis_db(self) -> bool:
+    def _save_redis_db(self) -> bool:
         rdb_filepath = get_this_db_path_inside_output_dir(
             self.main.args.output, "dump"
         )
         saved = bool(self.main.db.save(rdb_filepath))
         if saved:
-            self.main.print(f"Database saved to {rdb_filepath}")
+            self.main.print(f"The redis database is saved to {rdb_filepath}")
         else:
-            self.main.print("Faled to save the redis database.")
+            self.main.print("Failed to save the redis database.")
         return saved
 
-    def print_reason_for_not_killing_redis(self):
+    def _print_reason_for_not_killing_redis(self):
         reason = ""
         if self.main.args.webinterface:
             reason = "the web interface is running."
@@ -122,10 +129,10 @@ class RedisManager:
         """
         Stop the analysis Redis server when it should not remain open.
         """
-        if self.should_keep_redis_server_after_analysis():
+        if self._should_keep_redis_server_after_analysis():
             return
 
-        redis_port = self.get_current_redis_port()
+        redis_port = self._get_current_redis_port()
         redis_pid = self.get_pid_of_redis_server(redis_port)
         if not redis_pid:
             self.remove_server_from_log(redis_port)
@@ -136,7 +143,7 @@ class RedisManager:
             self.remove_server_from_log(redis_port)
         else:
             self.main.print(
-                f"Unable to kill Redis server on port {redis_port}."
+                f"Slips didn't kill the Redis server on port {redis_port}."
             )
 
     def log_redis_server_pid(self, redis_port: int, redis_pid: int):
