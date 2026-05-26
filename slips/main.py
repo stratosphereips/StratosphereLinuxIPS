@@ -411,7 +411,7 @@ class Main:
         if not hasattr(self, "total_flows"):
             self.total_flows = self.db.get_total_flows()
 
-        processed = self.db.get_flow_analyzed_by_the_profiler_so_far()
+        processed = self.db.get_flows_analyzed_by_the_profiler_so_far()
         if not processed:
             return ""
         try:

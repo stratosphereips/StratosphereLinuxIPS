@@ -8,6 +8,8 @@ from typing import List, Optional
 
 from slips_files.core.profiler_worker import ProfilerWorker
 
+FIVE_MINS = 300
+
 
 class WorkerManagerMixin:
     """
@@ -36,8 +38,8 @@ class WorkerManagerMixin:
         # detected
         self.max_workers = 6
         now = time.monotonic()
-        self.next_throughput_check_time = now + 300
-        self.next_worker_decrease_check_time = now + 300
+        self.next_throughput_check_time = now + FIVE_MINS
+        self.next_worker_decrease_check_time = now + FIVE_MINS
         self.profiler_monitor_thread = threading.Thread(
             target=self._run_profiler_workers_manager_loop,
             name="profiler_monitor_loop",
@@ -108,9 +110,8 @@ class WorkerManagerMixin:
         if now < self.next_throughput_check_time:
             return False
 
-        # Advance in 5-min steps to reduce drift on long delays.
         while self.next_throughput_check_time <= now:
-            self.next_throughput_check_time += 300
+            self.next_throughput_check_time += FIVE_MINS
         return True
 
     def did_5min_pass_since_last_worker_decrease_check(self) -> bool:
@@ -125,7 +126,7 @@ class WorkerManagerMixin:
             return False
 
         while self.next_worker_decrease_check_time <= now:
-            self.next_worker_decrease_check_time += 300
+            self.next_worker_decrease_check_time += FIVE_MINS
         return True
 
     def max_workers_started(self) -> bool:
@@ -176,7 +177,7 @@ class WorkerManagerMixin:
             return
 
         profiler_fps = self._get_flows_per_second(self.name)
-        input_fps = self._get_flows_per_second("Input")
+        input_fps = self._get_flows_per_second("input")
         if input_fps > (profiler_fps * 1.1):
             worker_id = self.last_worker_id + 1
             self.start_profiler_worker(worker_id)
@@ -223,7 +224,7 @@ class WorkerManagerMixin:
             return
 
         profiler_fps = self._get_flows_per_second(self.name)
-        input_fps = self._get_flows_per_second("Input")
+        input_fps = self._get_flows_per_second("input")
 
         if profiler_fps < input_fps:
             # still under high throughput

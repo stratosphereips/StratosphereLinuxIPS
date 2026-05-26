@@ -1152,7 +1152,7 @@ class DBManager:
     def increment_processed_flows(self, *args, **kwargs):
         return self.rdb.increment_processed_flows(*args, **kwargs)
 
-    def get_flow_analyzed_by_the_profiler_so_far(self, *args, **kwargs):
+    def get_flows_analyzed_by_the_profiler_so_far(self, *args, **kwargs):
         return self.rdb.get_flow_analyzed_by_the_profiler_so_far(
             *args, **kwargs
         )
