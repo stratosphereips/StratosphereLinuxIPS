@@ -151,15 +151,19 @@ def test_worker_scaling_uses_lowercase_input_metric_key() -> None:
     profiler.start_profiler_worker.assert_called_once_with(3)
 
 
-def test_update_lines_read_uses_shared_profiler_counter() -> None:
+def test_update_lines_read_sums_worker_received_lines() -> None:
     """
-    Test that profiler throughput uses the shared processed-flow counter.
+    Test that profiler throughput sums lines received by all workers.
 
     Return:
     None.
     """
     profiler = ModuleFactory().create_profiler_obj()
-    profiler.db.get_flows_analyzed_by_the_profiler_so_far.return_value = 42
+    profiler.workers = [
+        Mock(received_lines=10),
+        Mock(received_lines=20),
+        Mock(received_lines=12),
+    ]
 
     profiler._update_lines_read_by_all_workers()
 

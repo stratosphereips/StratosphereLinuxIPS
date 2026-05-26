@@ -96,6 +96,7 @@ class WorkerManagerMixin:
         )
         worker.start()
         self.profiler_child_processes.append(worker)
+        self.workers.append(worker)
         self.active_profiler_workers += 1
         self.db.increment_profiler_workers_started()
 
