@@ -183,6 +183,7 @@ class ModuleLogger:
                 "testing_local",
                 "testing_merged",
                 "label_comparison",
+                "test_time_alert_comparison",
             ]:
                 path = os.path.join(
                     output_dir, f"{name}_federated_network_module.log"
@@ -276,6 +277,25 @@ class ModuleLogger:
             f"Inferred (Mal/Ben): {int(np.sum(inf_arr == MALICIOUS))}/{int(np.sum(inf_arr == BENIGN))} | "
             f"GT (Mal/Ben): {int(np.sum(gt_arr == MALICIOUS))}/{int(np.sum(gt_arr == BENIGN))} | "
             f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn}",
+        )
+
+    def log_test_time_alert_comparison(
+        self, trigger: str, predictions: list, inferred: list
+    ) -> None:
+        """Compare model predictions at test time against alert-inferred labels."""
+        pred_arr = np.array(predictions)
+        inf_arr = np.array(inferred)
+        tp = int(np.sum((pred_arr == MALICIOUS) & (inf_arr == MALICIOUS)))
+        fp = int(np.sum((pred_arr == MALICIOUS) & (inf_arr == BENIGN)))
+        fn = int(np.sum((pred_arr == BENIGN) & (inf_arr == MALICIOUS)))
+        tn = int(np.sum((pred_arr == BENIGN) & (inf_arr == BENIGN)))
+        acc = (tp + tn) / len(predictions) if len(predictions) > 0 else 0.0
+        self._write(
+            "test_time_alert_comparison",
+            f"[{trigger}] Batch: {len(predictions)} | "
+            f"Pred (Mal/Ben): {int(np.sum(pred_arr == MALICIOUS))}/{int(np.sum(pred_arr == BENIGN))} | "
+            f"Inferred (Mal/Ben): {int(np.sum(inf_arr == MALICIOUS))}/{int(np.sum(inf_arr == BENIGN))} | "
+            f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
         )
 
     def log_model_retrain(self) -> None:
@@ -377,6 +397,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         # Track whether current model is merged (affects testing log target)
         self._using_merged_model: bool = False
 
+        # Store test-time predictions per flow for comparison against alert labels
+        self.test_time_predictions: dict = {}  # flow_id -> predicted_label
+
         # Centralized logger
         self.logger = ModuleLogger(self.output_dir, self.enable_logs)
 
@@ -475,8 +498,17 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.model.set_head_weights(head_w, head_b)
 
             with open(self.local_scaler_path, "rb") as f:
-                self.scaler = pickle.load(f)
-            self.is_preprocessor_fitted = True
+                loaded_scaler = pickle.load(f)
+            # Verify loaded scaler is actually fitted
+            if not hasattr(loaded_scaler, "n_features_in_"):
+                self.print(
+                    "Loaded scaler is not fitted, refitting on first training.",
+                    0,
+                    1,
+                )
+            else:
+                self.scaler = loaded_scaler
+                self.is_preprocessor_fitted = True
 
             self.print("Loaded local model and scaler from artifacts.", 0, 1)
         except Exception:
@@ -816,6 +848,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                             data.get("label", BENIGN),
                         )
                         self.store_testing_results(gt_label, predicted)
+                        self.test_time_predictions[self._get_flow_id(flow)] = (
+                            predicted
+                        )
 
             if msg := self.get_msg("new_alert"):
                 self.handle_new_alert(json.loads(msg["data"]))
@@ -853,12 +888,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
     def _classify_flow(self, flow: dict) -> Optional[str]:
         """Extract features, scale, classify. Returns BENIGN/MALICIOUS or None."""
-        features = self._extract_flow_features(flow)
-        if features is None:
+        try:
+            features = self._extract_flow_features(flow)
+            if features is None:
+                return None
+            X = np.array([features], dtype=np.float32)
+            X_scaled = self.scaler.transform(X)
+            return self.predict_batch(X_scaled)[0]
+        except Exception:
             return None
-        X = np.array([features], dtype=np.float32)
-        X_scaled = self.scaler.transform(X)
-        return self.predict_batch(X_scaled)[0]
 
     def handle_new_flow(self, flow: dict, flow_ts: float = 0.0):
         """Store flow in current sub-window, close window on timestamp-based expiry."""
@@ -979,13 +1017,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.training_buffer_y.clear()
 
             for flow in malicious_flows:
+                fid = self._get_flow_id(flow)
+                if fid in self.labeled_flow_ids:
+                    continue
                 x, _ = self._process_flow(flow, MALICIOUS)
                 if x is not None:
                     self.training_buffer_x.append(x)
                     self.training_buffer_y.append(MALICIOUS)
                     self.alignment_buffer_x.append(x)
                     self.alignment_buffer_y.append(MALICIOUS)
-                    self.labeled_flow_ids.add(self._get_flow_id(flow))
+                    self.labeled_flow_ids.add(fid)
 
             for flow in benign_flows:
                 x, _ = self._process_flow(flow, BENIGN)
@@ -1010,6 +1051,26 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     list(self.training_buffer_y),
                     gt_labels,
                 )
+
+                # Compare test-time predictions vs alert-inferred labels
+                pred_labels = []
+                inferred_labels = []
+                for flow in malicious_flows + benign_flows:
+                    fid = self._get_flow_id(flow)
+                    pred = self.test_time_predictions.get(fid)
+                    if pred is not None:
+                        pred_labels.append(pred)
+                        inferred_labels.append(
+                            MALICIOUS if flow in malicious_flows else BENIGN
+                        )
+                        del self.test_time_predictions[fid]
+                if len(pred_labels) > 0:
+                    self.logger.log_test_time_alert_comparison(
+                        f"alert_{self.training_count_alert}",
+                        pred_labels,
+                        inferred_labels,
+                    )
+
                 self._training_trigger = "alert"
                 self._train_batch()
 
@@ -1043,6 +1104,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     1,
                 )
                 # Still clear window for next iteration
+                for fid in list(self.window_flows.keys()):
+                    self.test_time_predictions.pop(fid, None)
                 self.window_flows.clear()
                 self.labeled_flow_ids.clear()
                 return
@@ -1077,6 +1140,24 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     list(self.training_buffer_y),
                     gt_labels,
                 )
+
+                # Compare test-time predictions vs inferred benign labels
+                pred_labels = []
+                inferred_labels = []
+                for flow in remaining_flows:
+                    fid = self._get_flow_id(flow)
+                    pred = self.test_time_predictions.get(fid)
+                    if pred is not None:
+                        pred_labels.append(pred)
+                        inferred_labels.append(BENIGN)
+                        del self.test_time_predictions[fid]
+                if len(pred_labels) > 0:
+                    self.logger.log_test_time_alert_comparison(
+                        f"twclose_{self.training_count_twclose}",
+                        pred_labels,
+                        inferred_labels,
+                    )
+
                 self._training_trigger = "twclose"
                 self._train_batch()
 
