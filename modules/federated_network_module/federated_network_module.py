@@ -361,6 +361,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.scaler = StandardScaler()
         self.is_preprocessor_fitted = False
 
+        # Classifier readiness flag (model + scaler both valid)
+        self._is_fitted: bool = False
+
         # Training state
         self.optimizer: Optional[optim.Adam] = None
         self.criterion = nn.CrossEntropyLoss()
@@ -372,7 +375,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.alignment_buffer_y: list = []
 
         # Flow tracking
-        self.labeled_flow_ids: set = set()
         self.window_flows: dict = {}  # flow_id -> flow_dict
 
         # Peer models storage
@@ -509,6 +511,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             else:
                 self.scaler = loaded_scaler
                 self.is_preprocessor_fitted = True
+                self._is_fitted = True
 
             self.print("Loaded local model and scaler from artifacts.", 0, 1)
         except Exception:
@@ -839,8 +842,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 # Buffer flow for later training
                 self.handle_new_flow(flow, flow_ts)
 
-                # Test with local model (if trained) using base class metrics
-                if self.model is not None and self.is_preprocessor_fitted:
+                # Test with local model (if fitted)
+                if self._is_fitted:
                     predicted = self._classify_flow(flow)
                     if predicted is not None:
                         gt_label = flow.get(
@@ -888,6 +891,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
     def _classify_flow(self, flow: dict) -> Optional[str]:
         """Extract features, scale, classify. Returns BENIGN/MALICIOUS or None."""
+        if not self._is_fitted:
+            return None
         try:
             features = self._extract_flow_features(flow)
             if features is None:
@@ -993,9 +998,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # Collect all other flows in window as benign
             benign_flows = []
             for flow_id, flow in self.window_flows.items():
-                if flow_id not in self.labeled_flow_ids:
-                    if flow not in malicious_flows:
-                        benign_flows.append(flow)
+                if flow not in malicious_flows:
+                    benign_flows.append(flow)
 
             self.print(
                 f"Found {len(malicious_flows)} malicious, {len(benign_flows)} benign flows",
@@ -1017,16 +1021,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.training_buffer_y.clear()
 
             for flow in malicious_flows:
-                fid = self._get_flow_id(flow)
-                if fid in self.labeled_flow_ids:
-                    continue
                 x, _ = self._process_flow(flow, MALICIOUS)
                 if x is not None:
                     self.training_buffer_x.append(x)
                     self.training_buffer_y.append(MALICIOUS)
                     self.alignment_buffer_x.append(x)
                     self.alignment_buffer_y.append(MALICIOUS)
-                    self.labeled_flow_ids.add(fid)
 
             for flow in benign_flows:
                 x, _ = self._process_flow(flow, BENIGN)
@@ -1035,7 +1035,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     self.training_buffer_y.append(BENIGN)
                     self.alignment_buffer_x.append(x)
                     self.alignment_buffer_y.append(BENIGN)
-                    self.labeled_flow_ids.add(self._get_flow_id(flow))
 
             # Compare inferred labels vs ground truth before training
             self.training_count_alert += 1
@@ -1074,6 +1073,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 self._training_trigger = "alert"
                 self._train_batch()
 
+            # Consume entire window after training
+            self.window_flows.clear()
+
             # Send model to peers
             self.send_model_to_peers()
 
@@ -1090,12 +1092,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         try:
             self.print("Sub-window closed, preparing training batch", 0, 1)
 
-            # All remaining unlabeled flows are benign
-            remaining_flows = [
-                flow
-                for flow_id, flow in self.window_flows.items()
-                if flow_id not in self.labeled_flow_ids
-            ]
+            # All remaining flows are benign
+            remaining_flows = list(self.window_flows.values())
 
             if not remaining_flows:
                 self.print(
@@ -1107,7 +1105,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 for fid in list(self.window_flows.keys()):
                     self.test_time_predictions.pop(fid, None)
                 self.window_flows.clear()
-                self.labeled_flow_ids.clear()
                 return
 
             self.print(
@@ -1163,7 +1160,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             # Clear window for next iteration
             self.window_flows.clear()
-            self.labeled_flow_ids.clear()
 
         except Exception:
             self.print(
@@ -1249,6 +1245,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             # Local training resets model back to local variant
             self._using_merged_model = False
+
+            # Mark classifier as fully fitted after first successful training
+            self._is_fitted = True
 
             # Clear training buffer (alignment buffer keeps all data)
             self.training_buffer_x.clear()
