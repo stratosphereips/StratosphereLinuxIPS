@@ -1040,16 +1040,24 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.training_count_alert += 1
             if len(self.training_buffer_x) > 0:
                 gt_labels = []
-                for flow in malicious_flows + benign_flows:
-                    gt = flow.get(
-                        "ground_truth_label", flow.get("label", BENIGN)
+                inferred_labels = []
+                for i, flow in enumerate(malicious_flows + benign_flows):
+                    if i >= len(self.training_buffer_y):
+                        break
+                    gt_raw = flow.get("ground_truth_label")
+                    if gt_raw is None:
+                        gt_raw = flow.get("label")
+                    if gt_raw is None:
+                        continue
+                    gt_norm = self._normalize_binary_label(gt_raw)
+                    inferred_labels.append(self.training_buffer_y[i])
+                    gt_labels.append(gt_norm)
+                if len(gt_labels) > 0:
+                    self.logger.log_label_comparison(
+                        f"alert_{self.training_count_alert}",
+                        inferred_labels,
+                        gt_labels,
                     )
-                    gt_labels.append(self._normalize_binary_label(gt))
-                self.logger.log_label_comparison(
-                    f"alert_{self.training_count_alert}",
-                    list(self.training_buffer_y),
-                    gt_labels,
-                )
 
                 # Compare test-time predictions vs alert-inferred labels
                 pred_labels = []
@@ -1127,16 +1135,24 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.training_count_twclose += 1
             if len(self.training_buffer_x) > 0:
                 gt_labels = []
-                for flow in remaining_flows:
-                    gt = flow.get(
-                        "ground_truth_label", flow.get("label", BENIGN)
+                inferred_labels = []
+                for i, flow in enumerate(remaining_flows):
+                    if i >= len(self.training_buffer_y):
+                        break
+                    gt_raw = flow.get("ground_truth_label")
+                    if gt_raw is None:
+                        gt_raw = flow.get("label")
+                    if gt_raw is None:
+                        continue
+                    gt_norm = self._normalize_binary_label(gt_raw)
+                    inferred_labels.append(self.training_buffer_y[i])
+                    gt_labels.append(gt_norm)
+                if len(gt_labels) > 0:
+                    self.logger.log_label_comparison(
+                        f"twclose_{self.training_count_twclose}",
+                        inferred_labels,
+                        gt_labels,
                     )
-                    gt_labels.append(self._normalize_binary_label(gt))
-                self.logger.log_label_comparison(
-                    f"twclose_{self.training_count_twclose}",
-                    list(self.training_buffer_y),
-                    gt_labels,
-                )
 
                 # Compare test-time predictions vs inferred benign labels
                 pred_labels = []
