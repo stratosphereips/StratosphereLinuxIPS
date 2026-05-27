@@ -27,7 +27,7 @@ six==1.17.0
 pytest==9.0.3
 pytest-mock==3.15.1
 pytest-xdist==3.8.0
-scipy==1.15.1
+scipy==1.17.1
 scikit-learn==1.7.2
 GitPython==3.1.50
 protobuf==5.29.6
