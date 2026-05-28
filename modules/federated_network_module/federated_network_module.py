@@ -39,6 +39,7 @@ import ipaddress
 import json
 import os
 import pickle
+import random
 import time
 import traceback
 from typing import Dict, Optional
@@ -426,6 +427,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "time_window_width", default=1200
         )
 
+        # Random per-instance sub-window offset to desynchronize peers (≤ half window width)
+        self._time_offset: float = random.uniform(
+            0, self.window_size_seconds / 2.0
+        )
+
         # Sub-window tracking
         self.window_start_ts: Optional[float] = None
 
@@ -539,7 +545,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         return StandardScaler()
 
     def update_preprocessor(self, x_train: pd.DataFrame):
-        """Incrementally fit scaler using partial_fit."""
+        """Incrementally update scaler using partial_fit.
+
+        Always calls partial_fit for ongoing incremental updates.
+        Keeps scaler statistics accumulating with each training batch.
+        """
         numeric_data = x_train.select_dtypes(include=[np.number]).fillna(0)
         self.scaler.partial_fit(numeric_data)
         self.is_preprocessor_fitted = True
@@ -907,14 +917,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.window_flows[flow_id] = flow
 
         if flow_ts > 0:
-            # Initialize sub-window start on first flow
+            # Initialize sub-window start skewed by random offset
             if self.window_start_ts is None:
-                self.window_start_ts = flow_ts
+                self.window_start_ts = flow_ts - self._time_offset
 
             # Check if sub-window has expired
             if flow_ts - self.window_start_ts >= self.window_size_seconds:
                 self._close_sub_window()
-                self.window_start_ts = flow_ts
+                self.window_start_ts = flow_ts - self._time_offset
                 # Re-add current flow to new window
                 self.window_flows[flow_id] = flow
 
@@ -1221,9 +1231,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             y = np.array(self.training_buffer_y)
             epochs = self.local_training_epochs
 
-            # Fit/update scaler incrementally
-            if not self.is_preprocessor_fitted:
-                self.update_preprocessor(pd.DataFrame(X))
+            # Incrementally update scaler
+            self.update_preprocessor(pd.DataFrame(X))
             X_scaled = self.scaler.transform(X)
 
             # Train fc1 + head for configured epochs
@@ -1315,8 +1324,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             if len(self.alignment_buffer_x) > 0:
                 X_align = np.array(self.alignment_buffer_x)
                 y_align = np.array(self.alignment_buffer_y)
-                if not self.is_preprocessor_fitted:
-                    self.update_preprocessor(pd.DataFrame(X_align))
+                self.update_preprocessor(pd.DataFrame(X_align))
                 X_align_scaled = self.scaler.transform(X_align)
                 acc = self._compute_accuracy(X_align_scaled, y_align)
                 model_output = self.predict_batch(X_align_scaled)
@@ -1376,8 +1384,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             X = np.array(self.alignment_buffer_x)
             y = np.array(self.alignment_buffer_y)
 
-            if not self.is_preprocessor_fitted:
-                self.update_preprocessor(pd.DataFrame(X))
+            self.update_preprocessor(pd.DataFrame(X))
             X_scaled = self.scaler.transform(X)
 
             # Get epochs from instance variable (set in init)

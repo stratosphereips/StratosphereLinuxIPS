@@ -36,12 +36,14 @@ Two separate buffers manage different training phases:
 6. Train fc1 + head for configured epochs
 7. Send latest local model to peers via P2P
 
-**On Sub-Window Close (20 min by default):**
-1. Flow timestamps trigger sub-window expiry (independent of Slips global TW)
-2. All remaining unlabeled flows -> **BENIGN**
-3. Compare inferred labels vs Zeek ground truth -> write to `label_comparison_*.log`
-4. Train fc1 + head for configured epochs
-5. Clear window, start fresh sub-window
+**On Sub-Window Close (20 min by default, with random per-instance offset):**
+1. Sub-window expiry based on the first flow's timestamp + `time_window_width`
+2. Each instance applies a random offset (up to half `time_window_width`) on startup to desynchronize peers
+3. Flow timestamps trigger sub-window expiry (independent of Slips global TW)
+4. All remaining unlabeled flows -> **BENIGN**
+5. Compare inferred labels vs Zeek ground truth -> write to `label_comparison_*.log`
+6. Train fc1 + head for configured epochs
+7. Clear window, start fresh sub-window
 
 ### 2. Head Alignment (After Merge)
 
@@ -126,8 +128,8 @@ federated_network_module:
   validation_percentage: 0.1
   training_batch_size: 500  # Currently unused (trains on alert/TW close)
   local_training_epochs: 4   # Epochs for local training (fc1 + head)
-  merge_finetune_epochs: 3   # Epochs for head fine-tuning after merge
-  time_window_width: 1200    # 20 minutes (sub-window, independent of Slips global TW)
+  merge_finetune_epochs: 3   # Epochs for fine-tuning head-only after merge (approximately half of local_training_epochs)
+  time_window_width: 1200    # 20-minute sub-window, per-instance random offset ≤ width/2 applied
   seed: 1111
   log_suffix: federated_network_module
   test_log_batch_size: 1000
