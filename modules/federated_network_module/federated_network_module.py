@@ -364,6 +364,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         # Classifier readiness flag (model + scaler both valid)
         self._is_fitted: bool = False
 
+        # Testing metrics dicts (initialized early to survive shutdown with no flows)
+        self.malware_metrics = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
+        self.seen_labels = {MALICIOUS: 0, BENIGN: 0}
+        self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
+
         # Training state
         self.optimizer: Optional[optim.Adam] = None
         self.criterion = nn.CrossEntropyLoss()
@@ -875,13 +880,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             if msg := self.get_msg("new_flow"):
                 flow = json.loads(msg["data"])
                 self.run_test_on_flow(flow)
-                self.testing_flows_since_last_log += 1
-                if (
-                    self.testing_flows_since_last_log
-                    >= self.testing_log_batch_size
-                ):
-                    self._log_testing_metrics()
-                    self.testing_flows_since_last_log = 0
 
             time.sleep(0.1)
             return False
