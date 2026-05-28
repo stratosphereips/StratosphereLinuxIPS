@@ -76,10 +76,14 @@ To analyze your own files using slips, you can mount it to your docker using -v
 
 
 #### Minimal Slips Docker Image
-In addition to the full stratosphereips/slips:latest image, there is now a minimal Docker image available: using `docker pull stratosphereips/slips_light:latest`. This image excludes the following modules to reduce size and resource usage:
+In addition to the full stratosphereips/slips:latest image, there is now a minimal Docker image available: using `docker pull stratosphereips/slips_light:latest`.
+This image excludes the following modules to reduce size and resource usage:
 
 * rnn_cc_detection/
 * timeline/
+* kalipso/
+* ml_linear_model/
+* ml_online_model/
 * p2p_trust/
 * flow_ml_detection/
 * cyst/

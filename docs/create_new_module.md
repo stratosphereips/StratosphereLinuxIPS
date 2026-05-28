@@ -2,6 +2,19 @@
 
 # How to Create a New Slips Module
 
+## Table of Contents
+
+- [Detection module](#detection-module)
+- [Creating a Module](#creating-a-module)
+- [ML module](#ml-module)
+- [Evidence setup](#evidence-setup-required)
+- [Conclusion](#conclusion)
+- [Complete Code](#complete-code)
+- [Final Notes](#final-notes)
+
+
+## Detection module
+
 
 
 ## What is SLIPS and why are modules useful
@@ -338,8 +351,92 @@ Using develop - 9f5f9412a3c941b3146d92c8cb2f1f12aab3699e - 2022-06-02 16:51:43.9
 title="Testing The Module">
 
 
+## ML module
 
-### Conclusion
+Shared infrastructure for standalone ML modules (for example `ml_linear_model`, `ml_online_model`) lives in `slips_files/common/abstracts/ml_module_base.py`.
+
+### Template location
+
+- New backend template: `modules/template/ml_backend_template.py`
+
+### How to add a new ML backend
+
+1. Create a new module folder under `modules/` with matching file name (required by Slips discovery), e.g. `modules/ml_xxx/ml_xxx.py`.
+2. Copy `modules/template/ml_backend_template.py` into your module and adapt.
+3. Implement a class inheriting `MLBaseDetection`.
+4. Set class metadata: `name`, `description`, `authors`, `module_key`, `module_config_section`.
+5. Implement all abstract methods.
+
+### Required abstract methods
+
+- `process_features(self, dataset: pd.DataFrame) -> pd.DataFrame`
+- `create_empty_model(self) -> Any`
+- `create_empty_preprocessor(self) -> Any`
+- `update_preprocessor(self, x_train: pd.DataFrame)`
+- `transform_features(self, x_data: pd.DataFrame) -> numpy.ndarray`
+- `fit_incremental_model(self, x_train: numpy.ndarray, y_train: numpy.ndarray, classes: Optional[list] = None)`
+- `predict_batch(self, x_data: numpy.ndarray) -> numpy.ndarray`
+- `is_preprocessor_initialized(self) -> bool`
+- `train(self, sum_labeled_flows)`
+- `run_test_on_flow(self, flow: dict)`
+
+### Evidence setup
+
+- Add a dedicated `EvidenceType` for your ML module in `slips_files/core/structures/evidence.py`. Do not reuse another module's evidence type.
+- Set `malicious_flow_evidence_type` in your module class to that dedicated type.
+- Use `Attacker` with `IoCType.IP` for the detected source when the source is the attacker.
+- Set `Victim` only when your detection semantics include a victim. If present, victim must be an IP (`IoCType.IP`).
+- For attacker-only evidence (no victim semantics), do not invent a victim.
+
+Example for individual ML modules:
+
+```python
+# modules/ml_linear_model/ml_linear_model.py
+import slips_files.common.abstracts.ml_module_base as ml_base
+
+class MLLinearModel(ml_base.MLBaseDetection):
+	malicious_flow_evidence_type = (
+		ml_base.EvidenceType.ML_LINEAR_MALICIOUS_FLOW
+	)
+
+
+# modules/ml_online_model/ml_online_model.py
+import slips_files.common.abstracts.ml_module_base as ml_base
+
+class MLOnlineModel(ml_base.MLBaseDetection):
+	malicious_flow_evidence_type = (
+		ml_base.EvidenceType.ML_ONLINE_MALICIOUS_FLOW
+	)
+```
+
+In `MLBaseDetection.set_evidence_malicious_flow()` the default flow semantics are:
+
+- `attacker`: source IP (`saddr`) as `IoCType.IP`
+- `victim`: destination IP (`daddr`) as `IoCType.IP`
+
+Use this only when the detection is truly source-attacker to destination-victim. If your detection does not have a victim, create evidence without `Victim`.
+
+### Config contract
+
+Add a section in `config/slips.yaml` matching `module_config_section` with:
+
+- `mode`, `training_batch_size`, `seed`
+- `create_performance_metrics_log_files`, `log_suffix`, `test_log_batch_size`
+- `model_load_path`, `model_store_path`, `preprocess_load_path`, `preprocess_store_path`
+
+Optional backend-specific keys (for example PCA) should be read in the child class.
+
+### Train/test workflow
+
+Each ML module has its own independent `mode` (`train` or `test`) and artifact paths in `config/slips.yaml`.
+
+- Test provided models: set that module section to `mode: test`.
+- Train custom models without overwriting defaults: set `mode: train`, keep `*_store_path` on custom files.
+- Test custom models: switch `*_load_path` to custom artifact files and set `mode: test`.
+
+
+
+## Conclusion
 
 Due to the high modularity of slips, adding a new slips module is as easy as modifying a few lines in our
 template module, and slips handles running
@@ -641,7 +738,7 @@ Feel free to join our [Discord server](https://discord.gg/zu5HwMFy5C) and ask qu
 
 PRs and Issues are welcomed in our repo.
 
-### Conclusion
+## Final Notes
 
 Adding a new feature to SLIPS is an easy task. The template is ready for everyone to use and there is not much to learn about Slips to be able to write a module.
 

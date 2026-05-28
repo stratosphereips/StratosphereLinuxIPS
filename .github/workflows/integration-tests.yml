@@ -7,6 +7,7 @@ on:
       - 'develop'
 
 jobs:
+  # auto discovery of integration tests files.
   list-integration-tests:
     runs-on: ubuntu-latest
     outputs:
@@ -18,6 +19,7 @@ jobs:
         with:
           test_dir: tests/integration
           output_prefix: integration/
+
 
   integration-tests:
     needs: list-integration-tests
@@ -41,10 +43,18 @@ jobs:
         test_file: ${{ fromJson(needs.list-integration-tests.outputs.test_files) }}
 
     steps:
+      # needs to be installed before checkout or the checkout wont be able to pull the LFS files
+      - name: Install Git LFS
+        run: |
+          apt-get update -qq
+          apt-get install -y git-lfs
+          git lfs install
+
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
+          lfs: true
 
       - name: Start Redis
         uses: ./.github/actions/start-redis

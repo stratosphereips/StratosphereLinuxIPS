@@ -536,8 +536,15 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
-    <td>flowmldetection</td>
-    <td>module to detect malicious flows using machine learning</td>
+    <td>ml_linear_model</td>
+    <td>standalone linear sklearn-based module to detect malicious flows using machine learning.<br/>
+    <i>This module uses a machine learning model that is the result of training with the <a href="https://github.com/stratosphereips/pipeline_ml_training_for_SLIPS">Slips-ML-Training-Pipeline</a>. The official models, along with training results, usage instructions, and details on how they were trained, are published in the <a href="https://github.com/stratosphereips/Stratosphere-ML-trained-models">Stratosphere-ML-trained-models</a> repository.</i></td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>ml_online_model</td>
+    <td>standalone online module to detect malicious flows using machine learning.<br/>
+    <i>This module uses a machine learning model that is the result of training with the <a href="https://github.com/stratosphereips/pipeline_ml_training_for_SLIPS">Slips-ML-Training-Pipeline</a>. The official models, along with training results, usage instructions, and details on how they were trained, are published in the <a href="https://github.com/stratosphereips/Stratosphere-ML-trained-models">Stratosphere-ML-trained-models</a> repository.</i></td>
     <td>✅</td>
   </tr>
 

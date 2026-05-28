@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Unit tests for the profiler core process."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import pytest
 from tests.module_factory import ModuleFactory
@@ -196,6 +196,60 @@ def test_shutdown_gracefully(monkeypatch):
     profiler.aid_queue.close.assert_called_once()
     profiler.print.assert_called_with("Stopping.", log_to_logfiles_only=True)
     profiler.mark_self_as_done_processing.assert_called_once()
+
+
+def test_stop_profiler_workers_sends_stop_per_started_worker():
+    """Test profiler owns worker stop sentinels and joins each worker."""
+    profiler = ModuleFactory().create_profiler_obj()
+    workers = [Mock(), Mock(), Mock()]
+    profiler.profiler_child_processes = workers
+    profiler.profiler_queue = Mock()
+    profiler.is_input_done_event = Mock()
+
+    profiler.stop_profiler_workers()
+
+    profiler.is_input_done_event.wait.assert_called_once()
+    assert profiler.profiler_queue.put.call_count == len(workers)
+    profiler.profiler_queue.put.assert_has_calls([call("stop")] * len(workers))
+    for worker in workers:
+        worker.join.assert_called_once()
+    assert profiler.did_all_workers_stop.is_set()
+
+
+@pytest.mark.parametrize(
+    "event, expected",
+    [
+        (None, False),
+        (Mock(is_set=Mock(return_value=False)), False),
+        (Mock(is_set=Mock(return_value=True)), True),
+    ],
+)
+def test_is_done_receiving_input(event, expected):
+    """Test profiler detects the input EOF event state."""
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.is_input_done_event = event
+
+    assert profiler.is_done_receiving_input() is expected
+
+
+def test_main_returns_when_input_done_before_first_msg():
+    """Test profiler exits when input ends without sending any flows."""
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.get_msg_from_queue = Mock(return_value=None)
+    profiler.is_done_receiving_input = Mock(return_value=True)
+
+    assert profiler.main() is None
+
+
+def test_high_throughput_check_skips_new_workers_after_input_done():
+    """Test profiler does not add workers after input has ended."""
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.is_done_receiving_input = Mock(return_value=True)
+    profiler.max_workers_started = Mock()
+
+    profiler._check_if_high_throughput_and_add_workers()
+
+    profiler.max_workers_started.assert_not_called()
 
 
 def test_notify_observers_no_observers():

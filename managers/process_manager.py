@@ -749,7 +749,8 @@ class ProcessManager:
         self, processes_to_wait_for: List[Process]
     ) -> List[Process]:
         """
-        :param processes_to_wait_for: list of PIDs to wait for
+        :param processes_to_wait_for: list of PIDs to wait for, if one of
+        them is joined, a msg will be printed
         :return: list of PIDs that still are not done yet
         """
         alive_processes: List[Process] = []
@@ -1105,7 +1106,8 @@ class ProcessManager:
                         shutdown_reason = "Core module failure."
                         graceful_shutdown = False
                     else:
-                        # Wait timeout_seconds for all the processes to finish
+                        # Wait up to timeout_seconds for all the processes to
+                        # finish
                         while time.time() - method_start_time < timeout:
                             (
                                 to_kill_first,

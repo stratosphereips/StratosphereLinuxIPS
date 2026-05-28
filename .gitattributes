@@ -1,0 +1,2 @@
+modules/ml_linear_model/artifacts/* filter=lfs diff=lfs merge=lfs -text
+modules/ml_online_model/artifacts/* filter=lfs diff=lfs merge=lfs -text

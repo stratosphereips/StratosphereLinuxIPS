@@ -663,6 +663,226 @@ class ConfigParser(object):
             "flow_ml_detection", "flowmldetection", "mode", "test"
         )
 
+    @staticmethod
+    def _to_bool(value, default: bool) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return default
+        if isinstance(value, (int, float)):
+            return bool(value)
+        text = str(value).strip().lower()
+        if text in {"1", "true", "yes", "y", "on"}:
+            return True
+        if text in {"0", "false", "no", "n", "off"}:
+            return False
+        return default
+
+    def ml_module_mode(self, section: str, default: str = "test") -> str:
+        value = self.read_configuration(section, "mode", default)
+        value = str(value).strip().lower()
+        if value not in ("train", "test"):
+            return default
+        return value
+
+    def ml_module_enable_logs(
+        self, section: str, default: bool = False
+    ) -> bool:
+        value = self.read_configuration(
+            section,
+            "create_performance_metrics_log_files",
+            default,
+        )
+        return self._to_bool(value, default)
+
+    def ml_module_validate_on_train(
+        self,
+        section: str,
+        default: bool = True,
+    ) -> bool:
+        value = self.read_configuration(section, "validate_on_train", default)
+        return self._to_bool(value, default)
+
+    def ml_module_validation_percentage(
+        self,
+        section: str,
+        default: float = 0.1,
+    ) -> float:
+        value = self.read_configuration(
+            section, "validation_percentage", default
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = default
+
+        if value > 1.0:
+            value = value / 100.0
+
+        return min(max(value, 0.0), 0.9)
+
+    def ml_module_training_batch_size(
+        self,
+        section: str,
+        default: int = 50,
+    ) -> int:
+        value = self.read_configuration(
+            section, "training_batch_size", default
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = default
+        return max(1, value)
+
+    def ml_module_seed(
+        self,
+        section: str,
+        default: int = 1111,
+    ) -> int:
+        value = self.read_configuration(section, "seed", default)
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = default
+        return value
+
+    def ml_module_train_from_scratch(
+        self,
+        section: str,
+        default: bool = False,
+    ) -> bool:
+        value = self.read_configuration(section, "train_from_scratch", default)
+        return self._to_bool(value, default)
+
+    def ml_module_log_suffix(self, section: str, default: str) -> str:
+        value = self.read_configuration(section, "log_suffix", default)
+        return str(value).strip()
+
+    def ml_module_test_log_batch_size(
+        self,
+        section: str,
+        default: int,
+    ) -> int:
+        value = self.read_configuration(
+            section, "test_log_batch_size", default
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = default
+        return max(1, value)
+
+    def ml_module_model_load_path(self, section: str, default: str) -> str:
+        return str(
+            self.read_configuration(section, "model_load_path", default)
+        ).strip()
+
+    def ml_module_model_store_path(self, section: str, default: str) -> str:
+        return str(
+            self.read_configuration(section, "model_store_path", default)
+        ).strip()
+
+    def ml_module_preprocess_load_path(
+        self, section: str, default: str
+    ) -> str:
+        return str(
+            self.read_configuration(section, "preprocess_load_path", default)
+        ).strip()
+
+    def ml_module_preprocess_store_path(
+        self, section: str, default: str
+    ) -> str:
+        return str(
+            self.read_configuration(section, "preprocess_store_path", default)
+        ).strip()
+
+    def ml_module_pca_n_components(
+        self,
+        section: str,
+        default: Optional[int] = None,
+    ) -> Optional[int]:
+        value = self.read_configuration(section, "pca_n_components", default)
+        if value in (None, "", "null", "None"):
+            return None
+        try:
+            n_components = int(value)
+        except (TypeError, ValueError):
+            return default
+        return max(1, n_components)
+
+    def ml_module_pca_batch_size(
+        self,
+        section: str,
+        default: int,
+    ) -> int:
+        value = self.read_configuration(section, "pca_batch_size", default)
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = default
+        return max(1, value)
+
+    def ml_module_pca_load_path(self, section: str, default: str) -> str:
+        return str(
+            self.read_configuration(section, "pca_load_path", default)
+        ).strip()
+
+    def ml_module_pca_store_path(self, section: str, default: str) -> str:
+        return str(
+            self.read_configuration(section, "pca_store_path", default)
+        ).strip()
+
+    def ml_module_benign_target_value(
+        self,
+        section: str,
+        default: float = 0.0,
+    ) -> float:
+        value = self.read_configuration(section, "benign_target_value", None)
+        if value is None:
+            value = self.read_configuration(
+                "flowmldetection",
+                "benign_target_value",
+                default,
+            )
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def ml_module_malicious_target_value(
+        self,
+        section: str,
+        default: float = 1.0,
+    ) -> float:
+        value = self.read_configuration(
+            section, "malicious_target_value", None
+        )
+        if value is None:
+            value = self.read_configuration(
+                "flowmldetection",
+                "malicious_target_value",
+                default,
+            )
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    # Legacy flowmldetection wrappers kept for compatibility.
+    def create_performance_metrics_log_files(self) -> bool:
+        return self.ml_module_enable_logs("flowmldetection", default=False)
+
+    def validate_on_train(self) -> bool:
+        return self.ml_module_validate_on_train(
+            "flowmldetection", default=True
+        )
+
+    def flow_ml_detection_training_batch_size(self) -> int:
+        return self.ml_module_training_batch_size(
+            "flowmldetection", default=50
+        )
+
     def https_anomaly_training_hours(self) -> int:
         training_hours = self.read_configuration(
             "anomaly_detection_https", "training_hours", 24
