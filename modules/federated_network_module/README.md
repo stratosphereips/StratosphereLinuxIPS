@@ -192,7 +192,7 @@ Per-batch training metrics:
 ### training_merged_federated_network_module.log
 Per-merge training metrics (only when merge occurs):
 ```
---- MODEL 1 ---
+--- MODEL 1 (2 peers + own: [peer_a, peer_b]) ---
 [merge] Trained (3 epochs) | Loss: 0.1500 | Acc: 0.9200 | Samples: 200 (Mal: 50, Ben: 150) | TP/FP/TN/FN: 48/5/145/2
 ```
 
