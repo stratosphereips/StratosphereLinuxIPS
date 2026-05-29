@@ -318,7 +318,7 @@ ml_linear_model:
 
   # Used only in mode: test.
   # Emit one testing-log snapshot every N processed flows.
-  test_log_batch_size: 1000
+  test_log_batch_size: 1
 
   # Artifact paths used by modules/ml_linear_model/ml_linear_model.py
   # Load paths point to provided reference artifacts for immediate test/warm-start use.
@@ -368,7 +368,7 @@ ml_online_model:
 
   # Used only in mode: test.
   # Emit one testing-log snapshot every N processed flows.
-  test_log_batch_size: 1000
+  test_log_batch_size: 1
 
   # Artifact paths used by modules/ml_online_model/ml_online_model.py
   # Load paths point to provided/default artifacts for immediate test/warm-start use.
@@ -429,7 +429,7 @@ federated_network_module:
 
   # Used only in mode: test.
   # Emit one testing-log snapshot every N processed flows.
-  test_log_batch_size: 1000
+  test_log_batch_size: 1
 
   # Artifact paths used by modules/federated_network_module/federated_network_module.py
   # Load paths point to provided reference artifacts for immediate test/warm-start use.
