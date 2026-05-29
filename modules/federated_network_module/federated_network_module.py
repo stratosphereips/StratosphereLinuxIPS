@@ -232,8 +232,25 @@ class ModuleLogger:
             f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn}",
         )
 
-    def log_test_flow(self, target: str, flow_id, gt, pred) -> None:
-        self._write(target, f"  {flow_id} | GT:{gt} | Pred:{pred}")
+    def log_test_flow(
+        self,
+        target: str,
+        total: int,
+        seen: dict,
+        predicted: dict,
+        tp: int,
+        fp: int,
+        tn: int,
+        fn: int,
+        acc: float,
+    ) -> None:
+        self._write(
+            target,
+            f"  flows={total} | "
+            f"Seen(Mal/Ben): {seen.get(MALICIOUS,0)}/{seen.get(BENIGN,0)} | "
+            f"Pred(Mal/Ben): {predicted.get(MALICIOUS,0)}/{predicted.get(BENIGN,0)} | "
+            f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc={acc:.4f}",
+        )
 
     def log_test_marker(self, target: str, msg: str) -> None:
         self._write(target, f"--- {msg} ---")
@@ -834,9 +851,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     predicted = self._classify_flow(flow)
                     if predicted is not None:
                         gt_label = self._get_simulated_gt(flow) or BENIGN
-                        self._current_test_flow_id = self._get_flow_id(flow)
-                        self._current_test_gt = gt_label
-                        self._current_test_pred = predicted
                         self.store_testing_results(gt_label, predicted)
                         self.test_time_predictions[self._get_flow_id(flow)] = (
                             predicted
@@ -1834,11 +1848,24 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print(f"Error testing flow: {traceback.format_exc()}", 0, 1)
 
     def _write_testing_snapshot(self, batch_flows: int) -> None:
-        """Override base class to write per-flow GT/Pred line through ModuleLogger."""
+        """Write cumulative TP/FP/TN/FN/Acc snapshot instead of per-flow UIDs."""
         if batch_flows <= 0:
             return
-        flow_id = getattr(self, "_current_test_flow_id", "?")
-        gt = getattr(self, "_current_test_gt", "?")
-        pred = getattr(self, "_current_test_pred", "?")
         target = "merged_test" if self._using_merged_model else "local_test"
-        self.logger.log_test_flow(target, flow_id, gt, pred)
+        tp = self.malware_metrics.get("TP", 0)
+        fp = self.malware_metrics.get("FP", 0)
+        tn = self.malware_metrics.get("TN", 0)
+        fn = self.malware_metrics.get("FN", 0)
+        total = tp + fp + tn + fn
+        acc = (tp + tn) / total if total > 0 else 0.0
+        self.logger.log_test_flow(
+            target,
+            total,
+            self.seen_labels,
+            self.predicted_labels,
+            tp,
+            fp,
+            tn,
+            fn,
+            acc,
+        )
