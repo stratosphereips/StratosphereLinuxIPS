@@ -413,7 +413,7 @@ federated_network_module:
   local_training_epochs: 6
 
   # Number of epochs for head fine-tuning after model merge.
-  merge_finetune_epochs: 3
+  merge_finetune_epochs: 2
 
   # Time window width in seconds specifically for this module.
   # Default SLIPS time_window_width is 3600 (1 hour).
