@@ -189,7 +189,9 @@ class ModuleLogger:
                 "local_test",
                 "merged_train",
                 "merged_test",
-                "label_comparison",
+                "comp_inferred_gt",
+                "comp_pred_inferred",
+                "comp_pred_gt",
             ]:
                 path = os.path.join(output_dir, f"{name}.log")
                 self._files[name] = open(path, "w")
@@ -260,11 +262,11 @@ class ModuleLogger:
     def log_test_marker(self, target: str, msg: str) -> None:
         self._write(target, f"--- {msg} ---")
 
-    def log_comparison_header(self, header: str) -> None:
-        self._write("label_comparison", f"--- {header} ---")
+    def log_comp_header(self, target: str, header: str) -> None:
+        self._write(target, f"--- {header} ---")
 
-    def log_comparison_line(self, line: str) -> None:
-        self._write("label_comparison", f"  {line}")
+    def log_comp_line(self, target: str, line: str) -> None:
+        self._write(target, f"  {line}")
 
     def close(self) -> None:
         for f in self._files.values():
@@ -463,7 +465,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             if self.model is None:
                 self.model = self.create_empty_model().to(self.device)
-                self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
+                self.optimizer = optim.Adam(self.model.parameters(), lr=0.005)
 
             fc1_w = torch.load(self.local_fc1_path, weights_only=True)
             fc1_b = torch.load(
@@ -754,7 +756,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         else:
             self.model.unfreeze_fc1()
             if self.optimizer is None:
-                self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
+                self.optimizer = optim.Adam(self.model.parameters(), lr=0.005)
 
         X_tensor = torch.FloatTensor(x_train).to(self.device)
         y_tensor = torch.LongTensor(
@@ -1045,7 +1047,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     f"{connected_count} connected, "
                     f"{total_batch} total batch"
                 )
-                self.logger.log_comparison_header(header)
+                self.logger.log_comp_header("comp_inferred_gt", header)
+                self.logger.log_comp_header("comp_pred_inferred", header)
+                self.logger.log_comp_header("comp_pred_gt", header)
 
                 # inferred vs GT
                 gt_labels = []
@@ -1081,10 +1085,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         if len(gt_labels) > 0
                         else 0.0
                     )
-                    self.logger.log_comparison_line(
+                    self.logger.log_comp_line(
+                        "comp_inferred_gt",
                         f"inferred vs GT: {len(gt_labels)} samples | "
                         f"Mal/Ben: {mal_inf}/{ben_inf} vs {mal_gt}/{ben_gt} | "
-                        f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}"
+                        f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
                     )
 
                 # Collect test-time preds with inferred labels and GT in one pass
@@ -1129,10 +1134,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         if len(pred_labels) > 0
                         else 0.0
                     )
-                    self.logger.log_comparison_line(
+                    self.logger.log_comp_line(
+                        "comp_pred_inferred",
                         f"pred vs inferred: {len(pred_labels)} samples | "
                         f"Mal/Ben: {mal_pred}/{ben_pred} vs {mal_pinf}/{ben_pinf} | "
-                        f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}"
+                        f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
                     )
 
                     # pred vs GT (only flows with GT available)
@@ -1171,14 +1177,19 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                             if len(pvg_preds) > 0
                             else 0.0
                         )
-                        self.logger.log_comparison_line(
+                        self.logger.log_comp_line(
+                            "comp_pred_gt",
                             f"pred vs GT: {len(pvg_preds)} samples | "
                             f"Mal/Ben: {mal_pvg}/{ben_pvg} vs {mal_gt2}/{ben_gt2} | "
-                            f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}"
+                            f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
                         )
 
                 self._training_trigger = "alert"
                 self._train_batch()
+
+                self.malware_metrics = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
+                self.seen_labels = {MALICIOUS: 0, BENIGN: 0}
+                self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
 
                 target = (
                     "merged_test" if self._using_merged_model else "local_test"
@@ -1241,9 +1252,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # 3-way label comparison block (no evidence count for twclose)
             self.training_count_twclose += 1
             if len(self.training_buffer_x) > 0:
-                self.logger.log_comparison_header(
-                    f"twclose_{self.training_count_twclose} | {len(remaining_flows)} benign flows"
-                )
+                header = f"twclose_{self.training_count_twclose} | {len(remaining_flows)} benign flows"
+                self.logger.log_comp_header("comp_inferred_gt", header)
+                self.logger.log_comp_header("comp_pred_inferred", header)
+                self.logger.log_comp_header("comp_pred_gt", header)
 
                 # inferred vs GT
                 gt_labels = []
@@ -1278,10 +1290,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         if len(gt_labels) > 0
                         else 0.0
                     )
-                    self.logger.log_comparison_line(
+                    self.logger.log_comp_line(
+                        "comp_inferred_gt",
                         f"inferred vs GT: {len(gt_labels)} samples | "
                         f"Mal/Ben: {mal_inf}/{ben_inf} vs {mal_gt}/{ben_gt} | "
-                        f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}"
+                        f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
                     )
 
                 # Collect test-time preds with inferred labels and GT in one pass
@@ -1323,10 +1336,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         if len(pred_labels) > 0
                         else 0.0
                     )
-                    self.logger.log_comparison_line(
+                    self.logger.log_comp_line(
+                        "comp_pred_inferred",
                         f"pred vs inferred: {len(pred_labels)} samples | "
                         f"Mal/Ben: {mal_pred}/{ben_pred} vs {mal_pinf}/{ben_pinf} | "
-                        f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}"
+                        f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
                     )
 
                     # pred vs GT (only flows with GT available)
@@ -1363,10 +1377,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                             if len(pvg_preds) > 0
                             else 0.0
                         )
-                        self.logger.log_comparison_line(
+                        self.logger.log_comp_line(
+                            "comp_pred_gt",
                             f"pred vs GT: {len(pvg_preds)} samples | "
                             f"Mal/Ben: {mal_pvg}/{ben_pvg} vs {mal_gt2}/{ben_gt2} | "
-                            f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}"
+                            f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
                         )
 
                 self._training_trigger = "twclose"
