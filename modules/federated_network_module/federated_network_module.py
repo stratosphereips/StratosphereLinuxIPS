@@ -970,7 +970,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 if uids:
                     matched_uids.update(uids)
 
-            # Build malicious flows from current window (uid-based matching)
+            # Build malicious flows from current window only (uid-based matching)
             malicious_flows = []
             malicious_flow_ids = set()
             for flow_id, flow in self.window_flows.items():
@@ -978,26 +978,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 if flow_uid and flow_uid in matched_uids:
                     malicious_flows.append(flow)
                     malicious_flow_ids.add(flow_id)
-
-            # Also fetch evidence-connected flows from DB not in current window
-            remaining_uids = matched_uids - set(
-                (f.get("uid") or "").strip() for f in malicious_flows
-            )
-            for uid in remaining_uids:
-                flow = self.db.get_flow(uid)
-                if flow:
-                    malicious_flows.append(flow)
-                    # Track with a synthetic id so these are excluded from benign_flows below
-                    db_fid = flow.get("uid", uid)
-                    malicious_flow_ids.add(db_fid)
-
-            # Fallback: match by profile IP if no flows were connected via evidence
-            if not malicious_flows:
-                profile_ip_flows = self._get_flows_for_ip_in_window(profile_ip)
-                for flow in profile_ip_flows:
-                    malicious_flows.append(flow)
-                    fid = self._get_flow_id(flow)
-                    malicious_flow_ids.add(fid)
 
             # Collect all other flows in window as benign
             benign_flows = []
@@ -1205,6 +1185,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     target,
                     f"New local model ({self._training_trigger}_{self.training_count_alert})",
                 )
+
+            # Discard window after alert — each training event sees only the last TW buffer
+            self.window_flows.clear()
 
             # Send model to peers
             self.send_model_to_peers()
