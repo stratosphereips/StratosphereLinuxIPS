@@ -763,27 +763,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             [0 if y == BENIGN else 1 for y in y_train]
         ).to(self.device)
 
-        # Compute class weights from alignment buffer (cumulative)
-        # to prevent benign-majority windows from collapsing to "predict all BENIGN"
-        mal_total = max(
-            1, sum(1 for y in self.alignment_buffer_y if y == MALICIOUS)
-        )
-        ben_total = max(
-            1, sum(1 for y in self.alignment_buffer_y if y == BENIGN)
-        )
-        total = mal_total + ben_total
-        class_weight = torch.tensor(
-            [total / (2.0 * ben_total), total / (2.0 * mal_total)],
-            device=self.device,
-        )
-        criterion = nn.CrossEntropyLoss(weight=class_weight)
-
         self.model.train()
 
         for epoch in range(epochs):
             self.optimizer.zero_grad()
             outputs = self.model(X_tensor)
-            loss = criterion(outputs, y_tensor)
+            loss = self.criterion(outputs, y_tensor)
             loss.backward()
             self.optimizer.step()
             self.last_batch_loss = loss.item()
@@ -1032,8 +1017,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # Prepare training data
             self.training_buffer_x.clear()
             self.training_buffer_y.clear()
-            self.alignment_buffer_x.clear()
-            self.alignment_buffer_y.clear()
 
             for flow in malicious_flows:
                 x, _ = self._process_flow(flow, MALICIOUS)
@@ -1257,8 +1240,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # Prepare training data
             self.training_buffer_x.clear()
             self.training_buffer_y.clear()
-            self.alignment_buffer_x.clear()
-            self.alignment_buffer_y.clear()
 
             for flow in remaining_flows:
                 x, _ = self._process_flow(flow, BENIGN)
@@ -1503,8 +1484,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             self.training_buffer_x.clear()
             self.training_buffer_y.clear()
-            self.alignment_buffer_x.clear()
-            self.alignment_buffer_y.clear()
 
         except Exception:
             self.print(
