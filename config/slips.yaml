@@ -410,7 +410,7 @@ federated_network_module:
   training_batch_size: 500
 
   # Number of epochs for local training (full pass over batch per epoch).
-  local_training_epochs: 20
+  local_training_epochs: 15
 
   # Number of epochs for head fine-tuning after model merge.
   merge_finetune_epochs: 5
