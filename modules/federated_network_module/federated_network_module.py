@@ -190,7 +190,7 @@ class ModuleLogger:
                 "merged_train",
                 "merged_test",
                 "comp_inferred_gt",
-                "comp_pred_inferred",
+                "comp_test_inferred",
                 "comp_pred_gt",
             ]:
                 path = os.path.join(output_dir, f"{name}.log")
@@ -1048,7 +1048,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     f"{total_batch} total batch"
                 )
                 self.logger.log_comp_header("comp_inferred_gt", header)
-                self.logger.log_comp_header("comp_pred_inferred", header)
+                self.logger.log_comp_header("comp_test_inferred", header)
                 self.logger.log_comp_header("comp_pred_gt", header)
 
                 # inferred vs GT
@@ -1135,7 +1135,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         else 0.0
                     )
                     self.logger.log_comp_line(
-                        "comp_pred_inferred",
+                        "comp_test_inferred",
                         f"pred vs inferred: {len(pred_labels)} samples | "
                         f"Mal/Ben: {mal_pred}/{ben_pred} vs {mal_pinf}/{ben_pinf} | "
                         f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
@@ -1254,7 +1254,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             if len(self.training_buffer_x) > 0:
                 header = f"twclose_{self.training_count_twclose} | {len(remaining_flows)} benign flows"
                 self.logger.log_comp_header("comp_inferred_gt", header)
-                self.logger.log_comp_header("comp_pred_inferred", header)
+                self.logger.log_comp_header("comp_test_inferred", header)
                 self.logger.log_comp_header("comp_pred_gt", header)
 
                 # inferred vs GT
@@ -1337,7 +1337,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         else 0.0
                     )
                     self.logger.log_comp_line(
-                        "comp_pred_inferred",
+                        "comp_test_inferred",
                         f"pred vs inferred: {len(pred_labels)} samples | "
                         f"Mal/Ben: {mal_pred}/{ben_pred} vs {mal_pinf}/{ben_pinf} | "
                         f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
@@ -1386,6 +1386,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
                 self._training_trigger = "twclose"
                 self._train_batch()
+
+                self.malware_metrics = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
+                self.seen_labels = {MALICIOUS: 0, BENIGN: 0}
+                self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
 
                 target = (
                     "merged_test" if self._using_merged_model else "local_test"
