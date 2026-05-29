@@ -40,6 +40,7 @@ import json
 import os
 import pickle
 import random
+import shutil
 import time
 import traceback
 from typing import Dict, Optional
@@ -333,6 +334,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
     def init(self):
         """Initialize module, model, preprocessor, and buffers."""
         super().init()
+
+        # Invalidate stale bytecode cache so every run compiles from source.
+        _pycache = os.path.join(os.path.dirname(__file__), "__pycache__")
+        if os.path.isdir(_pycache):
+            shutil.rmtree(_pycache)
 
         # Artifact paths
         artifacts_dir = os.path.join(
@@ -792,7 +798,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         self.model.train()
 
-        # Train for specified number of epochs
         for epoch in range(epochs):
             self.optimizer.zero_grad()
             outputs = self.model(X_tensor)
@@ -801,14 +806,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.optimizer.step()
             self.last_batch_loss = loss.item()
 
-            if epoch > 0 and (epoch + 1) % max(1, epochs // 5) == 0:
-                self.print(
-                    f"Epoch {epoch + 1}/{epochs}, Loss: {self.last_batch_loss:.4f}",
-                    1,
-                    1,
-                )
-
-        # Save local model after training
         self._save_local_model()
 
     def predict_batch(self, x_data: np.ndarray) -> np.ndarray:
