@@ -963,19 +963,46 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             self._last_alert_evidence_ids = list(evidence_ids)
 
-            # Collect flow UIDs connected to this alert's evidence
+            # Collect all potential malicious flow identifiers from evidence
             matched_uids: set = set()
             for evid_id in evidence_ids:
                 uids = self.db.get_flows_causing_evidence(evid_id)
                 if uids:
                     matched_uids.update(uids)
 
-            # Build malicious flows from current window only (uid-based matching)
+            # Also extract IPs from evidence for fallback matching
+            attacker_ip = (
+                last_evidence.get("attacker", {}).get("ip")
+                if isinstance(last_evidence.get("attacker"), dict)
+                else None
+            )
+            victim_ip = (
+                last_evidence.get("victim", {}).get("ip")
+                if isinstance(last_evidence.get("victim"), dict)
+                else None
+            )
+
+            # Build malicious flows from current window only:
+            # - match by evidence uid
+            # - match by attacker/victim IP (flows involving that IP in window)
             malicious_flows = []
             malicious_flow_ids = set()
             for flow_id, flow in self.window_flows.items():
+                # uid-based match from evidence
                 flow_uid = (flow.get("uid") or "").strip()
                 if flow_uid and flow_uid in matched_uids:
+                    malicious_flows.append(flow)
+                    malicious_flow_ids.add(flow_id)
+                    continue
+                # IP-based fallback match
+                saddr = str(flow.get("saddr", ""))
+                daddr = str(flow.get("daddr", ""))
+                if (
+                    attacker_ip
+                    and (saddr == attacker_ip or daddr == attacker_ip)
+                ) or (
+                    victim_ip and (saddr == victim_ip or daddr == victim_ip)
+                ):
                     malicious_flows.append(flow)
                     malicious_flow_ids.add(flow_id)
 
@@ -1845,10 +1872,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             if predicted is None:
                 return
 
-            ground_truth = flow.get(
-                "ground_truth_label",
-                flow.get("label", BENIGN),
-            )
+            ground_truth = self._get_simulated_gt(flow) or BENIGN
             self.store_testing_results(ground_truth, predicted)
 
             src_ip = flow.get("saddr", "unknown")
@@ -1859,7 +1883,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print(f"Error testing flow: {traceback.format_exc()}", 0, 1)
 
     def _write_testing_snapshot(self, batch_flows: int) -> None:
-        """Write cumulative TP/FP/TN/FN/Acc snapshot instead of per-flow UIDs."""
+        """Write cumulative TP/FP/TN/FN/Acc snapshot (tests against GT)."""
         if batch_flows <= 0:
             return
         target = "merged_test" if self._using_merged_model else "local_test"
@@ -1869,14 +1893,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         fn = self.malware_metrics.get("FN", 0)
         total = tp + fp + tn + fn
         acc = (tp + tn) / total if total > 0 else 0.0
-        self.logger.log_test_flow(
+        self._write(
             target,
-            total,
-            self.seen_labels,
-            self.predicted_labels,
-            tp,
-            fp,
-            tn,
-            fn,
-            acc,
+            f"  flows={total} | "
+            f"GT(Mal/Ben): {self.seen_labels.get(MALICIOUS,0)}/{self.seen_labels.get(BENIGN,0)} | "
+            f"Pred(Mal/Ben): {self.predicted_labels.get(MALICIOUS,0)}/{self.predicted_labels.get(BENIGN,0)} | "
+            f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc={acc:.4f}",
         )
