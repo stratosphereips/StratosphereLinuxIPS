@@ -1,4 +1,2 @@
-# Ignore local and merged model artifacts; keep random_projection.bin tracked.
-latest_local_*.bin
-merged/
-merged_*.bin
+latest*
+merged/*
