@@ -1032,6 +1032,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # Prepare training data
             self.training_buffer_x.clear()
             self.training_buffer_y.clear()
+            self.alignment_buffer_x.clear()
+            self.alignment_buffer_y.clear()
 
             for flow in malicious_flows:
                 x, _ = self._process_flow(flow, MALICIOUS)
@@ -1255,6 +1257,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # Prepare training data
             self.training_buffer_x.clear()
             self.training_buffer_y.clear()
+            self.alignment_buffer_x.clear()
+            self.alignment_buffer_y.clear()
 
             for flow in remaining_flows:
                 x, _ = self._process_flow(flow, BENIGN)
@@ -1499,6 +1503,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             self.training_buffer_x.clear()
             self.training_buffer_y.clear()
+            self.alignment_buffer_x.clear()
+            self.alignment_buffer_y.clear()
 
         except Exception:
             self.print(
