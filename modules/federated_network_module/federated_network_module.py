@@ -191,7 +191,7 @@ class ModuleLogger:
                 "merged_test",
                 "comp_inferred_gt",
                 "comp_test_inferred",
-                "comp_pred_gt",
+                "comp_test_gt",
             ]:
                 path = os.path.join(output_dir, f"{name}.log")
                 self._files[name] = open(path, "w")
@@ -987,11 +987,17 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 flow = self.db.get_flow(uid)
                 if flow:
                     malicious_flows.append(flow)
+                    # Track with a synthetic id so these are excluded from benign_flows below
+                    db_fid = flow.get("uid", uid)
+                    malicious_flow_ids.add(db_fid)
 
             # Fallback: match by profile IP if no flows were connected via evidence
             if not malicious_flows:
                 profile_ip_flows = self._get_flows_for_ip_in_window(profile_ip)
-                malicious_flows.extend(profile_ip_flows)
+                for flow in profile_ip_flows:
+                    malicious_flows.append(flow)
+                    fid = self._get_flow_id(flow)
+                    malicious_flow_ids.add(fid)
 
             # Collect all other flows in window as benign
             benign_flows = []
@@ -1043,13 +1049,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
                 header = (
                     f"alert_{self.training_count_alert} | "
-                    f"{evidence_ids_count} evidence, "
-                    f"{connected_count} connected, "
-                    f"{total_batch} total batch"
+                    f"{evidence_ids_count} evidence data. "
+                    f"{connected_count} malicious connected to evidence, "
+                    f"{len(benign_flows)} benign, "
+                    f"{total_batch} total"
                 )
                 self.logger.log_comp_header("comp_inferred_gt", header)
                 self.logger.log_comp_header("comp_test_inferred", header)
-                self.logger.log_comp_header("comp_pred_gt", header)
+                self.logger.log_comp_header("comp_test_gt", header)
 
                 # inferred vs GT
                 gt_labels = []
@@ -1178,7 +1185,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                             else 0.0
                         )
                         self.logger.log_comp_line(
-                            "comp_pred_gt",
+                            "comp_test_gt",
                             f"pred vs GT: {len(pvg_preds)} samples | "
                             f"Mal/Ben: {mal_pvg}/{ben_pvg} vs {mal_gt2}/{ben_gt2} | "
                             f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
@@ -1198,9 +1205,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     target,
                     f"New local model ({self._training_trigger}_{self.training_count_alert})",
                 )
-
-            # Consume entire window after training
-            self.window_flows.clear()
 
             # Send model to peers
             self.send_model_to_peers()
@@ -1255,7 +1259,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 header = f"twclose_{self.training_count_twclose} | {len(remaining_flows)} benign flows"
                 self.logger.log_comp_header("comp_inferred_gt", header)
                 self.logger.log_comp_header("comp_test_inferred", header)
-                self.logger.log_comp_header("comp_pred_gt", header)
+                self.logger.log_comp_header("comp_test_gt", header)
 
                 # inferred vs GT
                 gt_labels = []
@@ -1378,7 +1382,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                             else 0.0
                         )
                         self.logger.log_comp_line(
-                            "comp_pred_gt",
+                            "comp_test_gt",
                             f"pred vs GT: {len(pvg_preds)} samples | "
                             f"Mal/Ben: {mal_pvg}/{ben_pvg} vs {mal_gt2}/{ben_gt2} | "
                             f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
