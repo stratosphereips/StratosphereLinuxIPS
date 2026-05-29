@@ -942,14 +942,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             self._last_alert_evidence_ids = list(evidence_ids)
 
-            # Collect malicious flow IDs from evidence UIDs matched against current window
+            # Collect flow UIDs connected to this alert's evidence
             matched_uids: set = set()
             for evid_id in evidence_ids:
                 uids = self.db.get_flows_causing_evidence(evid_id)
                 if uids:
                     matched_uids.update(uids)
 
-            # Match evidence UIDs to flows in current window (by uid, not dict identity)
+            # Build malicious flows from current window (uid-based matching)
             malicious_flows = []
             malicious_flow_ids = set()
             for flow_id, flow in self.window_flows.items():
@@ -957,6 +957,20 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 if flow_uid and flow_uid in matched_uids:
                     malicious_flows.append(flow)
                     malicious_flow_ids.add(flow_id)
+
+            # Also fetch evidence-connected flows from DB not in current window
+            remaining_uids = matched_uids - set(
+                (f.get("uid") or "").strip() for f in malicious_flows
+            )
+            for uid in remaining_uids:
+                flow = self.db.get_flow(uid)
+                if flow:
+                    malicious_flows.append(flow)
+
+            # Fallback: match by profile IP if no flows were connected via evidence
+            if not malicious_flows:
+                profile_ip_flows = self._get_flows_for_ip_in_window(profile_ip)
+                malicious_flows.extend(profile_ip_flows)
 
             # Collect all other flows in window as benign
             benign_flows = []
