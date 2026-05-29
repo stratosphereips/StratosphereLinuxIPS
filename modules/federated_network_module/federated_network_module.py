@@ -64,7 +64,7 @@ class SimpleFederatedNet(nn.Module):
     """
     Federated network model: frozen shared random projection + learnable fc1 + head.
 
-    Architecture: input(18) -> RandomProjection(64,frozen) -> Linear(64->16)+ReLU -> Linear(16->2)
+    Architecture: input(18) -> RandomProjection(256,frozen) -> /sqrt(256) -> Linear(256->16)+ReLU -> Linear(16->2)
 
     FIXED FEATURE COUNT: 18 Zeek-native features (see process_features for full list)
     """
@@ -74,7 +74,7 @@ class SimpleFederatedNet(nn.Module):
     def __init__(
         self,
         input_dim: int,
-        hidden1: int = 64,
+        hidden1: int = 256,
         hidden2: int = 16,
         rp_path: Optional[str] = None,
         seed: int = 1111,
@@ -93,26 +93,30 @@ class SimpleFederatedNet(nn.Module):
             )
         self.input_dim = self.FIXED_INPUT_DIM
 
-        # Load or create frozen random projection with validation
+        # Load or create frozen random projection with He initialization
         if rp_path and os.path.exists(rp_path):
             try:
                 random_weights = torch.load(rp_path, weights_only=True)
-                # Validate loaded weights have correct input dimension
                 if random_weights.shape[0] != self.FIXED_INPUT_DIM:
                     raise ValueError(
                         f"Loaded random_projection has input_dim={random_weights.shape[0]}, "
                         f"expected {self.FIXED_INPUT_DIM}"
                     )
             except (RuntimeError, ValueError) as e:
-                # Reconstruct from seed if loading fails or dimension mismatch
                 print(
                     f"[FederatedNetworkModule] Random projection load failed: {e}. "
                     f"Reconstructing new random projection from seed={seed}."
                 )
-                random_weights = torch.rand(self.FIXED_INPUT_DIM, hidden1)
+                random_weights = torch.empty(self.FIXED_INPUT_DIM, hidden1)
+                nn.init.kaiming_normal_(
+                    random_weights, mode="fan_in", nonlinearity="relu"
+                )
         else:
             torch.manual_seed(seed)
-            random_weights = torch.rand(self.FIXED_INPUT_DIM, hidden1)
+            random_weights = torch.empty(self.FIXED_INPUT_DIM, hidden1)
+            nn.init.kaiming_normal_(
+                random_weights, mode="fan_in", nonlinearity="relu"
+            )
 
         if rp_path:
             os.makedirs(os.path.dirname(rp_path), exist_ok=True)
@@ -121,10 +125,10 @@ class SimpleFederatedNet(nn.Module):
         self.random_projection = nn.Linear(
             self.FIXED_INPUT_DIM, hidden1, bias=False
         )
-        # nn.Linear expects (out_features, in_features) = (hidden1, FIXED_INPUT_DIM)
-        # Our random_weights is (FIXED_INPUT_DIM, hidden1), so transpose
         self.random_projection.weight.data = random_weights.T
         self.random_projection.weight.requires_grad = False
+
+        self.projection_scale = hidden1**0.5
 
         # fc1 layer (learnable)
         self.fc1 = nn.Linear(hidden1, hidden2, bias=True)
@@ -135,6 +139,7 @@ class SimpleFederatedNet(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.random_projection(x)
+        x = x / self.projection_scale
         x = self.fc1(x)
         x = self.relu(x)
         x = self.head(x)
@@ -1734,10 +1739,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         # --- MONKEYPATCH: simulation-only attacker IP ---
         # TODO: Remove before production deployment
-        saddr = str(flow.get("saddr", ""))
-        daddr = str(flow.get("daddr", ""))
-        if saddr == "172.20.1.4" or daddr == "172.20.1.4":
-            return MALICIOUS
+        # saddr = str(flow.get("saddr", ""))
+        # daddr = str(flow.get("daddr", ""))
+        # if saddr == "172.20.1.4" or daddr == "172.20.1.4":
+        #     return MALICIOUS
         # --- END MONKEYPATCH ---
 
         gt_raw = flow.get("ground_truth_label")
