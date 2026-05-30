@@ -354,6 +354,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         # Flow tracking
         self.window_flows: dict = {}  # flow_id -> flow_dict
+        self._buffered_flow_ids: set = (
+            set()
+        )  # flows already in training buffer
 
         # Peer models storage
         self.peer_models: Dict[str, dict] = (
@@ -1053,25 +1056,30 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 )
                 return
 
-            # Prepare training data
-            self.training_buffer_x.clear()
-            self.training_buffer_y.clear()
-
+            # Prepare training data — accumulate across deferred alerts
             for flow in malicious_flows:
+                fid = self._get_flow_id(flow)
+                if fid in self._buffered_flow_ids:
+                    continue
                 x, _ = self._process_flow(flow, MALICIOUS)
                 if x is not None:
                     self.training_buffer_x.append(x)
                     self.training_buffer_y.append(MALICIOUS)
                     self.alignment_buffer_x.append(x)
                     self.alignment_buffer_y.append(MALICIOUS)
+                    self._buffered_flow_ids.add(fid)
 
             for flow in benign_flows:
+                fid = self._get_flow_id(flow)
+                if fid in self._buffered_flow_ids:
+                    continue
                 x, _ = self._process_flow(flow, BENIGN)
                 if x is not None:
                     self.training_buffer_x.append(x)
                     self.training_buffer_y.append(BENIGN)
                     self.alignment_buffer_x.append(x)
                     self.alignment_buffer_y.append(BENIGN)
+                    self._buffered_flow_ids.add(fid)
 
             # 3-way label comparison block
             self.training_count_alert += 1
@@ -1286,17 +1294,18 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"Training on {len(remaining_flows)} benign flows", 0, 1
             )
 
-            # Prepare training data
-            self.training_buffer_x.clear()
-            self.training_buffer_y.clear()
-
+            # Prepare training data — accumulate across deferred windows
             for flow in remaining_flows:
+                fid = self._get_flow_id(flow)
+                if fid in self._buffered_flow_ids:
+                    continue
                 x, _ = self._process_flow(flow, BENIGN)
                 if x is not None:
                     self.training_buffer_x.append(x)
                     self.training_buffer_y.append(BENIGN)
                     self.alignment_buffer_x.append(x)
                     self.alignment_buffer_y.append(BENIGN)
+                    self._buffered_flow_ids.add(fid)
 
             # 3-way label comparison block (no evidence count for twclose)
             self.training_count_twclose += 1
@@ -1536,6 +1545,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             self.training_buffer_x.clear()
             self.training_buffer_y.clear()
+            self._buffered_flow_ids.clear()
 
         except Exception:
             self.print(
