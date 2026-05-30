@@ -470,7 +470,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             if self.model is None:
                 self.model = self.create_empty_model().to(self.device)
-                self.optimizer = optim.Adam(self.model.parameters(), lr=0.005)
+                self.optimizer = optim.Adam(
+                    self.model.parameters(), lr=0.005, weight_decay=1e-4
+                )
 
             fc1_w = torch.load(self.local_fc1_path, weights_only=True)
             fc1_b = torch.load(
@@ -753,15 +755,21 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         if self.model is None:
             self.model = self.create_empty_model().to(self.device)
-            self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
+            self.optimizer = optim.Adam(
+                self.model.parameters(), lr=0.001, weight_decay=1e-4
+            )
 
         if freeze_fc1:
             self.model.freeze_fc1()
-            self.optimizer = optim.Adam(self.model.head.parameters(), lr=0.001)
+            self.optimizer = optim.Adam(
+                self.model.head.parameters(), lr=0.001, weight_decay=1e-4
+            )
         else:
             self.model.unfreeze_fc1()
             if self.optimizer is None:
-                self.optimizer = optim.Adam(self.model.parameters(), lr=0.005)
+                self.optimizer = optim.Adam(
+                    self.model.parameters(), lr=0.005, weight_decay=1e-4
+                )
 
         X_tensor = torch.FloatTensor(x_train).to(self.device)
         y_tensor = torch.LongTensor(
