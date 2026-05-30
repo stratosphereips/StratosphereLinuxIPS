@@ -36,3 +36,23 @@ completed normally. This is misleading in logs.
 whether memory pressure actually existed.
 
 **Date identified**: 2026-05-29
+
+## resolve_artifact_path uses CWD instead of SLIPS dir for relative paths
+
+**Severity**: Critical (breaks all ML module artifact loading in Docker)
+
+**Root cause**: `MLBaseDetection.resolve_artifact_path` returns `os.path.join(".", path.lstrip("./"))` for relative paths. The leading `"./"` resolves against the Python process's *current working directory*, not the SLIPS installation directory. In the Docker image `WORKDIR` is `/opt`, but SLIPS lives under `/opt/StratosphereLinuxIPS`. Every child module process inherits `/opt` as CWD, so paths like `modules/ml_linear_model/artifacts/pca.bin` resolve to `/opt/modules/...` (missing) instead of `/opt/StratosphereLinuxIPS/modules/...` (present).
+
+**Symptoms**:
+- All ML modules (ml_linear_model, ml_online_model, federated_network_module) report `"No PCA found in test mode"` even though `pca.bin` exists in the repo
+- `_read_pickle_or_none()` silently returns `None` because the resolved path does not exist
+- `read_model()` falls through to test-mode fallback, leaving PCA/scaler/model uninitialized
+- `detect()` prints `"Classifier/preprocessor is not initialized. Please train the model before detecting."` on every flow
+- Training and test logs stay empty
+
+**Fix applied**: Changed `resolve_artifact_path` to derive `slips_dir` from `__file__` (four `os.path.dirname` levels up from `ml_module_base.py`) and join relative paths against it instead of `"."`.
+
+**Files changed**:
+- `slips_files/common/abstracts/ml_module_base.py` — `resolve_artifact_path` method
+
+**Date fixed**: 2026-05-30

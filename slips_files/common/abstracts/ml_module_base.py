@@ -161,7 +161,11 @@ class MLBaseDetection(IModule, ABC):
         path = str(explicit_path)
         if os.path.isabs(path):
             return path
-        return os.path.join(".", path.lstrip("./"))
+        # Resolve relative paths relative to SLIPS installation directory
+        slips_dir = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        )
+        return os.path.join(slips_dir, path.lstrip("./"))
 
     @staticmethod
     def _to_bool(value, default: bool) -> bool:
