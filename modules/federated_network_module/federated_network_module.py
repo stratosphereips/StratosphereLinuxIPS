@@ -978,7 +978,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         - id: alert ID
         """
         try:
-            self.print("Alert received, preparing training batch", 0, 1)
+            self.print("Alert received, preparing training batch", 1, 1)
 
             # Extract alert components
             profile_ip = alert.get("profile", {}).get("ip")
@@ -1003,7 +1003,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 evidence_ids.add(last_evidence["ID"])
 
             if not evidence_ids:
-                self.print("No evidence IDs in alert, skipping", 0, 1)
+                self.print("No evidence IDs in alert, skipping", 1, 1)
                 return
 
             self._last_alert_evidence_ids = list(evidence_ids)
@@ -1289,7 +1289,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         Independent of Slips' global time windows.
         """
         try:
-            self.print("Sub-window closed, preparing training batch", 0, 1)
+            self.print("Sub-window closed, preparing training batch", 1, 1)
 
             # All remaining flows are benign
             remaining_flows = list(self.window_flows.values())
@@ -1307,7 +1307,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 return
 
             self.print(
-                f"Training on {len(remaining_flows)} benign flows", 0, 1
+                f"Training on {len(remaining_flows)} benign flows", 1, 1
             )
 
             # Prepare training data — accumulate across deferred windows
@@ -1504,7 +1504,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 "timestamp": model_data.get("timestamp", time.time()),
             }
 
-            self.print(f"Received model from peer {peer_id}", 0, 1)
+            self.print(f"Received model from peer {peer_id}", 1, 1)
 
             # Trigger merge if we have enough peers
             if len(self.peer_models) >= 1:
@@ -1548,8 +1548,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             X_scaled = self.scaler.transform(X)
 
             self.print(
-                f"Training for {epochs} epochs on {len(y)} samples",
-                0,
+                f"[TIMELINE] TRAIN {self._training_trigger}_{counter}: "
+                f"{epochs} epochs, {len(y)} samples ({mal_count} mal, {ben_count} ben), "
+                f"{evidence_count} evidence",
+                1,
                 1,
             )
             self.fit_incremental_model(X_scaled, y, train_target="local")
