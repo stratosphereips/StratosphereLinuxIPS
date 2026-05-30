@@ -1893,7 +1893,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         fn = self.malware_metrics.get("FN", 0)
         total = tp + fp + tn + fn
         acc = (tp + tn) / total if total > 0 else 0.0
-        self._write(
+        self.logger._write(
             target,
             f"  flows={total} | "
             f"GT(Mal/Ben): {self.seen_labels.get(MALICIOUS,0)}/{self.seen_labels.get(BENIGN,0)} | "
