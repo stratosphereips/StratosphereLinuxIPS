@@ -979,12 +979,22 @@ class MLBaseDetection(IModule, ABC):
                 }
             )
 
+            # Monkeypatch: IP-based label assignment for federated experiment.
+            # Attacker traffic appears from connect pivot at 172.20.1.4.
+            # Any flow involving the attacker is Malicious, rest Benign.
+            # This overrides the config-based default "unknown" label so
+            # test-mode modules produce meaningful metrics and train-mode
+            # modules (federated) accumulate labeled flows for training.
             if (not self.flow.get("ground_truth_label")) or (
                 self.flow.get("ground_truth_label") == ""
             ):
-                self.flow["ground_truth_label"] = (
-                    self.ground_truth_config_label
-                )
+                saddr = str(self.flow.get("saddr", "0.0.0.0"))
+                daddr = str(self.flow.get("daddr", "0.0.0.0"))
+                attacker_subnet = "172.20.1.4"
+                if attacker_subnet in (saddr, daddr):
+                    self.flow["ground_truth_label"] = MALICIOUS
+                else:
+                    self.flow["ground_truth_label"] = BENIGN
 
             self.flow["ground_truth_label"] = self._normalize_binary_label(
                 self.flow["ground_truth_label"]
