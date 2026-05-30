@@ -422,26 +422,25 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self._load_local_model()
 
     def subscribe_to_channels(self):
-        """Subscribe to flows, alerts, and optionally P2P model channel."""
-        # Always subscribe to these core channels
+        """Subscribe to flows and alerts. P2P channel deferred to main loop."""
         self.c_flows = self.db.subscribe("new_flow")
         self.c_alerts = self.db.subscribe("new_alert")
-
-        # Initialize channels dict with core subscriptions
         self.channels = {
             "new_flow": self.c_flows,
             "new_alert": self.c_alerts,
         }
+        self._p2p_connected = False
 
-        # Try to subscribe to P2P channel (optional)
-        c_p2p_model = self.db.subscribe("p2p_model_received")
-        if c_p2p_model and c_p2p_model is not True:
-            self.channels["p2p_model_received"] = c_p2p_model
-        else:
+    def _try_p2p_subscribe(self):
+        """Attempt to subscribe to the P2P channel (may not exist at startup)."""
+        if self._p2p_connected:
+            return
+        c_p2p = self.db.subscribe("p2p_model_received")
+        if c_p2p and c_p2p is not True:
+            self.channels["p2p_model_received"] = c_p2p
+            self._p2p_connected = True
             self.print(
-                "P2P model channel not available, model sharing disabled",
-                0,
-                1,
+                "P2P model channel connected, model sharing enabled", 0, 1
             )
 
     def _read_module_config_int(self, config_key: str, default: int) -> int:
@@ -899,6 +898,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             if "p2p_model_received" in self.channels:
                 if msg := self.get_msg("p2p_model_received"):
                     self.handle_p2p_model(json.loads(msg["data"]))
+            elif not self._p2p_connected:
+                self._try_p2p_subscribe()
 
             time.sleep(0.1)
             return False
@@ -912,6 +913,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             if msg := self.get_msg("new_flow"):
                 flow = json.loads(msg["data"])
                 self.run_test_on_flow(flow)
+
+            if not self._p2p_connected:
+                self._try_p2p_subscribe()
 
             time.sleep(0.1)
             return False
