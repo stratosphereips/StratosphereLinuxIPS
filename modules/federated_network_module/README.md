@@ -6,22 +6,25 @@ A federated learning module for Slips that enables collaborative intrusion detec
 
 ### Model Structure
 ```
-input(18 features, fixed) -> RandomProjection(64, frozen, shared) -> Linear(64->16)+ReLU [fc1] -> Linear(16->2) [head]
+input(18) -> RandomProjection(256, frozen, He init) -> /√256 -> fc1(256->16)+ReLU -> head(16->2)
 ```
 
-- **Random Projection**: Frozen layer with 0-1 weights, loaded from shared base `artifacts/random_projection.bin`. Same across all peers for compatibility.
-- **fc1 Layer**: Learnable linear layer (64->16) with ReLU activation
-- **Head Layer**: Classification layer (16->2) for benign/malicious prediction
+- **Random Projection**: Frozen 18→256 layer with He (`kaiming_normal_`) initialization, output scaled by 1/√256 ≈ 1/16. Shared across peers via `artifacts/random_projection.bin`.
+- **fc1 Layer**: Learnable 256→16 with ReLU activation
+- **Head Layer**: Classification 16→2 for benign/malicious prediction
 
-All artifact paths are hardcoded in `init()` under `modules/federated_network_module/artifacts/`.
+### Training Regime
+
+- **Optimizer**: Adam with $\eta=0.005$, L2 weight decay $\lambda=10^{-4}$
+- **Class-weighted loss**: $w_c = \frac{N_{\text{total}}}{2 \cdot \max(N_c, 1)}$ per batch, computed fresh each call
+- **Minimum batch size**: 30 flows — training deferred, buffer accumulates across consecutive alerts/windows until threshold met
+- **Epochs**: 15 local (fc1 + head), 5 merge fine-tune (head-only)
 
 ### Training Buffers
 
-Two separate buffers manage different training phases:
+1. **Training Buffer**: Populated incrementally across deferred alerts/twcloses. Only cleared after successful training (≥30 flows). Tracks buffered flow IDs to prevent duplicates.
 
-1. **Training Buffer** (small): Used for local training on alert/window data. Cleared after each training event. Trains both fc1 and head.
-
-2. **Alignment Buffer** (large): Accumulates ALL flows processed locally. Used only for head alignment after model merging. Never cleared.
+2. **Alignment Buffer**: Mirrors the training buffer. Used for head-only fine-tuning during FedAvg model merging. Cleared alongside training buffer.
 
 ## Training Flow
 
@@ -29,44 +32,29 @@ Two separate buffers manage different training phases:
 
 **On New Alert:**
 1. Extract evidence IDs from alert (`correl_id` + `last_evidence.ID`)
-2. Find flows connected to evidence via `db.get_flows_causing_evidence()`
-3. Also collect window flows matching attacker/victim IPs as fallback
-4. Label connected flows as **MALICIOUS**, all other window flows as **BENIGN**
-5. Compare inferred labels vs Zeek ground truth -> write to `label_comparison_*.log`
-6. Train fc1 + head for configured epochs
-7. Send latest local model to peers via P2P
+2. Match evidence UIDs against current window flows
+3. Fallback: match by attacker/victim IP from `last_evidence` against window
+4. Label connected flows **MALICIOUS**, all other window flows **BENIGN**
+5. Add newly labeled flows to accumulating training buffer (skip duplicates via `_buffered_flow_ids`)
+6. Compare labels vs ground truth → write to `comp_inferred_gt.log` / `comp_test_inferred.log` / `comp_test_gt.log`
+7. If buffer ≥ 30 flows: train fc1 + head, clear buffer + window, send model to peers
+8. If buffer < 30 flows: defer training, keep buffer and window for next alert/twclose
 
-**On Sub-Window Close (20 min by default, with random per-instance offset):**
-1. Sub-window expiry based on the first flow's timestamp + `time_window_width`
-2. Each instance applies a random offset (up to half `time_window_width`) on startup to desynchronize peers
-3. Flow timestamps trigger sub-window expiry (independent of Slips global TW)
-4. All remaining unlabeled flows -> **BENIGN**
-5. Compare inferred labels vs Zeek ground truth -> write to `label_comparison_*.log`
-6. Train fc1 + head for configured epochs
-7. Clear window, start fresh sub-window
+**On Sub-Window Close:**
+1. Flow timestamps trigger sub-window expiry (independent of Slips global TW)
+2. Per-instance random offset (≤ $T_w/2$) desynchronizes peer window boundaries
+3. All flows in window → **BENIGN**, added to accumulating buffer
+4. If buffer ≥ 30: train, clear, restart window
+5. If buffer < 30: defer, keep buffer and window
 
-### 2. Head Alignment (After Merge)
+**Accumulation across deferred alerts**: Labeled flows persist in the buffer even if subsequent alerts' evidence doesn't match them. Their original labels (malicious/benign) are preserved.
 
-1. Freeze fc1 weights
-2. Train head ONLY on alignment buffer (all accumulated flows)
-3. Unfreeze fc1
-4. This aligns the head with the merged fc1 without overwriting learned features
+### 2. Model Merging (Event-Based)
 
-### 3. Model Merging (Event-Based Only)
-
-1. Collect latest local models from all connected peers + own latest
-2. Aggregate fc1 weights using **AVERAGE** strategy:
-   ```python
-   merged_fc1 = sum(peer.fc1 for peer in all_peers) / len(all_peers)
-   ```
-3. Replace fc1 weights with merged values
-4. Freeze fc1, retrain head ONCE on alignment buffer
-5. Save as `merged_N` model (N = merge count)
-6. Log merge metrics to `training_merged_*.log`
-
-**Important**: Merged models are NOT used in future merges. Only latest local models participate in aggregation.
-
-**Note**: There is no periodic merge timer. Merge only triggers when a peer model is received via P2P.
+1. Receive peer models via P2P → aggregate fc1 using **AVERAGE**
+2. Freeze fc1, retrain head on alignment buffer (same data as last training batch)
+3. Save as `merged_N` model
+4. Merged models NOT reused in future merges
 
 ## Model Sharing Protocol
 
@@ -121,23 +109,52 @@ Only these keys are actually read by the module:
 
 ```yaml
 federated_network_module:
-  mode: train  # or test
-  train_from_scratch: false  # If false, load latest_local artifacts on startup
+  mode: train
+  train_from_scratch: false
   create_performance_metrics_log_files: true
-  validate_on_train: false
-  validation_percentage: 0.1
-  training_batch_size: 500  # Currently unused (trains on alert/TW close)
-  local_training_epochs: 4   # Epochs for local training (fc1 + head)
-  merge_finetune_epochs: 3   # Epochs for fine-tuning head-only after merge (approximately half of local_training_epochs)
-  time_window_width: 1200    # 20-minute sub-window, per-instance random offset ≤ width/2 applied
+  local_training_epochs: 15
+  merge_finetune_epochs: 5
+  min_training_samples: 30
+  time_window_width: 1200
+  test_log_batch_size: 1
   seed: 1111
-  log_suffix: federated_network_module
-  test_log_batch_size: 1000
-  model_load_path: modules/federated_network_module/artifacts/model.bin  # Unused
-  preprocess_load_path: modules/federated_network_module/artifacts/scaler.bin  # Unused
-  model_store_path: modules/federated_network_module/artifacts/model_custom.bin  # Unused
-  preprocess_store_path: modules/federated_network_module/artifacts/scaler_custom.bin  # Unused
+  evidence_detection_threshold: 0.20
 ```
+
+### Hyperparameter Summary
+
+\begin{table}[h]
+\centering
+\caption{Federated Learning hyperparameters}
+\label{tab:fl-hyperparams}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Parameter} & \textbf{Value} & \textbf{Description} \\
+\midrule
+$E_{\text{local}}$  & 15  & Local training epochs (fc1 + head) \\
+$E_{\text{merge}}$  & 5   & Merge fine-tuning epochs (head-only) \\
+$\eta$              & 0.005 & Initial learning rate (Adam) \\
+$\lambda$           & $10^{-4}$ & L2 weight decay \\
+$B_{\text{min}}$    & 30  & Minimum training batch size \\
+$T_w$               & 1200 s & Sub-window width \\
+$\Delta_T$          & $\sim\mathcal{U}(0, T_w/2)$ & Per-instance random window offset \\
+$s_{\text{thresh}}$ & 0.20 & Slips evidence detection threshold \\
+\multicolumn{3}{@{}l}{}\\
+\textbf{Class-Weighted Loss} & & \\
+\midrule
+\multicolumn{3}{@{}l}{$w_c = \dfrac{N_{\text{mal}} + N_{\text{ben}}}{2 \cdot \max(N_c, 1)}$ \quad for $c \in \{\text{Benign}, \text{Malicious}\}$} \\
+\multicolumn{3}{@{}l}{$\mathcal{L} = -\sum_{i} w_{y_i} \log \hat{p}_{i, y_i}$ \quad (per-batch weights)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+### Epochs
+- **Local training**: 15 epochs per batch (alert or twclose trigger)
+- **Merge fine-tuning**: 5 epochs head-only after model aggregation
+
+### Learning Rate
+- Adam optimizer with $\eta = 0.005$, weight decay $\lambda = 10^{-4}$
+- L2 penalty applied to all learnable parameters (fc1 + head)
 
 ## Feature Handling
 
@@ -180,43 +197,50 @@ This ensures no progress is lost between runs. If `train_from_scratch: false`, t
 
 ## Metrics and Logging
 
-Five separate log files in `output/<timestamp>/federated_network_module/`:
+Seven log files in `output/<timestamp>/federated_network_module/`:
 
-### training_local_federated_network_module.log
-Per-batch training metrics:
+### local_train.log
+Per-epoch training metrics for local model (alert or twclose):
 ```
-[alert] Trained (4 epochs) | Loss: 0.2932 | Acc: 0.8500 | Samples: 55 (Mal: 5, Ben: 50) | TP/FP/TN/FN: 5/0/50/0
-[twclose] Trained (4 epochs) | Loss: 0.1200 | Acc: 1.0000 | Samples: 23 (Mal: 0, Ben: 23) | TP/FP/TN/FN: 0/0/23/0
-```
-
-### training_merged_federated_network_module.log
-Per-merge training metrics (only when merge occurs):
-```
---- MODEL 1 (2 peers + own: [peer_a, peer_b]) ---
-[merge] Trained (3 epochs) | Loss: 0.1500 | Acc: 0.9200 | Samples: 200 (Mal: 50, Ben: 150) | TP/FP/TN/FN: 48/5/145/2
+--- alert_1 | 26 mal (295 evidence), 18 ben ---
+  epoch 1/15 | loss=0.9281 | acc=0.4091
+  ...
+  epoch 15/15 | loss=0.7974 | acc=0.4091
+  batch 44 (Mal:26 Ben:18) | loss=0.7852 | acc=0.4091 | TP/FP/TN/FN: 0/0/18/26
 ```
 
-### testing_local_federated_network_module.log
-Per-batch testing metrics when using local model:
+### local_test.log / merged_test.log
+Continuous per-flow testing: the latest model classifies each incoming flow against GT.
+Metrics accumulate between training events, reset after each `--- New local model ---` marker.
 ```
-Batch flows: 1000; Total flows: 1000; Seen labels: {Malicious: 52, Benign: 948}; Predicted labels: {Malicious: 45, Benign: 955}; Malware metrics (TP/FP/TN/FN): {'TP': 40, 'FP': 5, 'TN': 943, 'FN': 12};
---- Local model retrained ---
-```
-
-### testing_merged_federated_network_module.log
-Per-batch testing metrics when using merged model (switches after merge):
-```
-Batch flows: 1000; Total flows: 5000; ... Malware metrics (TP/FP/TN/FN): {'TP': ..., 'FP': ..., 'TN': ..., 'FN': ...};
+--- New local model (alert_1) ---
+  flows=44 | GT(Mal/Ben): 26/18 | Pred(Mal/Ben): 0/44 | TP/FP/TN/FN: 0/0/18/26 | Acc=0.4091
 ```
 
-### label_comparison_federated_network_module.log
-Compares inferred labels (from alert evidence / benign-default) vs Zeek ground truth:
+### comp_inferred_gt.log
+Inferred labels (from alert evidence / twclose default) vs ground truth.
+Calculated at training time — compares what we're ABOUT to train on against the actual GT.
 ```
-[alert_1] Batch: 172 | Inferred (Mal/Ben): 128/44 | GT (Mal/Ben): 44/128 | TP/FP/TN/FN: 0/128/0/44
-[twclose_1] Batch: 23 | Inferred (Mal/Ben): 0/23 | GT (Mal/Ben): 19/4 | TP/FP/TN/FN: 0/4/0/19
+--- alert_1 | 295 evidence data. 26 mal connected, 18 benign, 44 total ---
+  inferred vs GT: 10 samples | Mal/Ben: 5/5 vs 8/2 | TP/FP/TN/FN: 3/2/0/5 | Acc: 0.3000
 ```
 
-Note: Discrepancies between inferred and GT labels are expected when alerts from other modules have false positives. The label comparison log quantifies this noise.
+### comp_test_inferred.log
+Model predictions vs inferred (alert) labels. Tests: "was the model agreeing with the
+alert evidence BEFORE we trained on it?" Uses predictions stored during the main loop
+(test-time inference) compared against the labels assigned by the current alert.
+```
+--- alert_1 | ... ---
+  pred vs inferred: 5 samples | Mal/Ben: 0/5 vs 3/2 | TP/FP/TN/FN: 0/0/2/3 | Acc: 0.4000
+```
+
+### comp_test_gt.log
+Model predictions vs ground truth. Same stored test-time predictions, but compared against
+actual GT labels (from Slips metadata). Only includes flows with genuine GT labels.
+```
+--- alert_1 | ... ---
+  pred vs GT: 3 samples | Mal/Ben: 0/3 vs 3/0 | TP/FP/TN/FN: 0/0/0/3 | Acc: 0.0000
+```
 
 ## Extending Aggregation Strategy
 
@@ -252,6 +276,8 @@ If P2P channels are unavailable, local training continues normally but model sha
 
 **No peer models received**: P2P module may not be available. Check P2P module configuration. Merge only triggers on peer model receipt (no periodic timer).
 
-**Label comparison shows high FP**: Alerts from other modules may have false positives. The FL module learns from alert evidence, not Zeek ground truth. This is by design - the label comparison log helps quantify alert noise.
+**Label comparison shows high FP**: Alerts from other modules may have false positives. The FL module learns from alert evidence, not Zeek ground truth. This is by design — the comparison logs quantify alert noise.
 
 **Model not loading on startup**: Check `train_from_scratch: false` in config and verify artifact files exist in `modules/federated_network_module/artifacts/`.
+
+**Stale `__pycache__` causing silent training failure**: When the module source is updated, old `.pyc` bytecode cache can cause Python to load stale code where `fit_incremental_model` is a `pass`-only abstractmethod. Fix: the module's `init()` calls `shutil.rmtree()` on `__pycache__` at startup. Also documented in `bugs.md`.
