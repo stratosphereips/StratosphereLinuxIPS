@@ -1820,19 +1820,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         # --- MONKEYPATCH: simulation-only attacker IP ---
         # TODO: Remove before production deployment
-        # saddr = str(flow.get("saddr", ""))
-        # daddr = str(flow.get("daddr", ""))
-        # if saddr == "172.20.1.4" or daddr == "172.20.1.4":
-        #     return MALICIOUS
+        saddr = str(flow.get("saddr", ""))
+        daddr = str(flow.get("daddr", ""))
+        return (
+            MALICIOUS
+            if (saddr == "172.20.1.4" or daddr == "172.20.1.4")
+            else BENIGN
+        )
         # --- END MONKEYPATCH ---
-
-        gt_raw = flow.get("ground_truth_label")
-        if gt_raw is not None:
-            return self._normalize_binary_label(gt_raw)
-        gt_raw = flow.get("label")
-        if gt_raw is not None:
-            return self._normalize_binary_label(gt_raw)
-        return None
 
     def _get_flow_id(self, flow: dict) -> str:
         """Generate unique flow ID. Prefer Zeek uid, fallback to 5-tuple + time."""
