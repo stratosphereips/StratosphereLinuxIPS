@@ -35,6 +35,7 @@ Artifact Paths:
 - Local: artifacts/latest_local_fc1.bin, latest_local_head.bin, latest_local_scaler.bin
 - Merged: artifacts/merged_N_fc1.bin, merged_N_head.bin (N = merge count)
 """
+
 import ipaddress
 import json
 import os
@@ -392,6 +393,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.merge_finetune_epochs = conf.ml_module_merge_finetune_epochs(
             section, default=5
         )
+        self.min_training_samples = conf.read_configuration(
+            section, "min_training_samples", 30
+        )
+        self.min_training_samples = int(self.min_training_samples)
 
         # Sub-window size for our module (shorter than global Slips TW, default 20 minutes)
         self.window_size_seconds: int = self._read_module_config_int(
@@ -763,12 +768,25 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             [0 if y == BENIGN else 1 for y in y_train]
         ).to(self.device)
 
+        # Per-batch class weights: weight = total / (2 * max(class_count, 1))
+        mal_count = int((y_tensor == 1).sum().item())
+        ben_count = int((y_tensor == 0).sum().item())
+        total_count = mal_count + ben_count
+        class_weight = torch.tensor(
+            [
+                total_count / (2.0 * max(ben_count, 1)),
+                total_count / (2.0 * max(mal_count, 1)),
+            ],
+            device=self.device,
+        )
+        criterion = nn.CrossEntropyLoss(weight=class_weight)
+
         self.model.train()
 
         for epoch in range(epochs):
             self.optimizer.zero_grad()
             outputs = self.model(X_tensor)
-            loss = self.criterion(outputs, y_tensor)
+            loss = criterion(outputs, y_tensor)
             loss.backward()
             self.optimizer.step()
             self.last_batch_loss = loss.item()
@@ -1199,25 +1217,34 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         )
 
                 self._training_trigger = "alert"
-                self._train_batch()
+                if len(self.training_buffer_x) >= self.min_training_samples:
+                    self._train_batch()
 
-                self.malware_metrics = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
-                self.seen_labels = {MALICIOUS: 0, BENIGN: 0}
-                self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
+                    self.malware_metrics = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
+                    self.seen_labels = {MALICIOUS: 0, BENIGN: 0}
+                    self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
 
-                target = (
-                    "merged_test" if self._using_merged_model else "local_test"
-                )
-                self.logger.log_test_marker(
-                    target,
-                    f"New local model ({self._training_trigger}_{self.training_count_alert})",
-                )
+                    target = (
+                        "merged_test"
+                        if self._using_merged_model
+                        else "local_test"
+                    )
+                    self.logger.log_test_marker(
+                        target,
+                        f"New local model ({self._training_trigger}_{self.training_count_alert})",
+                    )
 
-            # Discard window after alert — each training event sees only the last TW buffer
-            self.window_flows.clear()
+                    # Discard window after training batch
+                    self.window_flows.clear()
 
-            # Send model to peers
-            self.send_model_to_peers()
+                    # Send model to peers
+                    self.send_model_to_peers()
+
+            if (
+                self.testing_flows_since_last_log > 0
+                and self._using_merged_model
+            ):
+                self.flush_testing_results()
 
         except Exception:
             self.print(f"Error handling alert: {traceback.format_exc()}", 0, 1)
@@ -1399,22 +1426,25 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         )
 
                 self._training_trigger = "twclose"
-                self._train_batch()
+                if len(self.training_buffer_x) >= self.min_training_samples:
+                    self._train_batch()
 
-                self.malware_metrics = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
-                self.seen_labels = {MALICIOUS: 0, BENIGN: 0}
-                self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
+                    self.malware_metrics = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
+                    self.seen_labels = {MALICIOUS: 0, BENIGN: 0}
+                    self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
 
-                target = (
-                    "merged_test" if self._using_merged_model else "local_test"
-                )
-                self.logger.log_test_marker(
-                    target,
-                    f"New local model ({self._training_trigger}_{self.training_count_twclose})",
-                )
+                    target = (
+                        "merged_test"
+                        if self._using_merged_model
+                        else "local_test"
+                    )
+                    self.logger.log_test_marker(
+                        target,
+                        f"New local model ({self._training_trigger}_{self.training_count_twclose})",
+                    )
 
-            # Clear window for next iteration
-            self.window_flows.clear()
+                    # Clear window for next iteration
+                    self.window_flows.clear()
 
         except Exception:
             self.print(
