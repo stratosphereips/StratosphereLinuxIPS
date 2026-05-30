@@ -422,25 +422,37 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self._load_local_model()
 
     def subscribe_to_channels(self):
-        """Subscribe to flows and alerts. P2P channel deferred to main loop."""
+        """Subscribe to flows, alerts, TW close, and P2P channels."""
         self.c_flows = self.db.subscribe("new_flow")
         self.c_alerts = self.db.subscribe("new_alert")
         self.channels = {
             "new_flow": self.c_flows,
             "new_alert": self.c_alerts,
         }
+        if self.mode == "train":
+            c_tw = self.db.subscribe("tw_closed")
+            if c_tw and c_tw is not True:
+                self.channels["tw_closed"] = c_tw
         self._p2p_connected = False
 
     def _try_p2p_subscribe(self):
-        """Attempt to subscribe to the P2P channel (may not exist at startup)."""
+        """Attempt to subscribe to the P2P channel (may not exist at startup).
+
+        Uses the real P2P gopy channel (Go -> Python) for receiving peer
+        models, and filters messages to extract only model data.
+        """
         if self._p2p_connected:
             return
-        c_p2p = self.db.subscribe("p2p_model_received")
+        # The P2P module creates p2p_gopy (Go->Python) for receiving data
+        # and p2p_pygo (Python->Go) for sending. Subscribe to gopy.
+        c_p2p = self.db.subscribe("p2p_gopy")
         if c_p2p and c_p2p is not True:
-            self.channels["p2p_model_received"] = c_p2p
+            self.channels["p2p_gopy"] = c_p2p
             self._p2p_connected = True
             self.print(
-                "P2P model channel connected, model sharing enabled", 1, 1
+                "P2P model channel (p2p_gopy) connected, model sharing enabled",
+                1,
+                1,
             )
 
     def _read_module_config_int(self, config_key: str, default: int) -> int:
@@ -894,9 +906,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             if msg := self.get_msg("new_alert"):
                 self.handle_new_alert(json.loads(msg["data"]))
 
-            # Only check P2P channel if it exists
-            if "p2p_model_received" in self.channels:
-                if msg := self.get_msg("p2p_model_received"):
+            # Only check P2P channel if it exists (uses p2p_gopy)
+            if "p2p_gopy" in self.channels:
+                if msg := self.get_msg("p2p_gopy"):
                     self.handle_p2p_model(json.loads(msg["data"]))
             elif not self._p2p_connected:
                 self._try_p2p_subscribe()
@@ -1678,10 +1690,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 "peer_id": getattr(self, "my_peer_id", "unknown"),
             }
 
-            # Publish to P2P module (channel may not exist yet)
+            # Publish to P2P module via p2p_pygo (Python -> Go) channel
             try:
-                self.db.publish("p2p_model_outgoing", json.dumps(model_data))
-                self.print("Model sent to peers", 1, 1)
+                self.db.publish("p2p_pygo", json.dumps(model_data))
+                self.print(
+                    "Model published to p2p_pygo for peer sharing", 1, 1
+                )
             except Exception:
                 self.print(
                     "P2P publish channel not available, model not sent",
