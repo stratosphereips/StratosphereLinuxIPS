@@ -440,7 +440,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.channels["p2p_model_received"] = c_p2p
             self._p2p_connected = True
             self.print(
-                "P2P model channel connected, model sharing enabled", 0, 1
+                "P2P model channel connected, model sharing enabled", 1, 1
             )
 
     def _read_module_config_int(self, config_key: str, default: int) -> int:
@@ -1564,12 +1564,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         try:
             if len(self.peer_models) < 1:
-                self.print("Not enough peers to merge", 0, 1)
+                self.print("Not enough peers to merge", 1, 1)
                 return
 
             self.print(
                 f"Merging {len(self.peer_models)} peer models + own model",
-                0,
+                1,
                 1,
             )
 
@@ -1602,7 +1602,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self._save_merged_model(self.merge_count)
 
             self.print(
-                f"Merged model saved as merged_{self.merge_count}", 0, 1
+                f"Merged model saved as merged_{self.merge_count}", 1, 1
             )
 
         except Exception:
@@ -1617,7 +1617,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         try:
             if len(self.alignment_buffer_x) == 0:
                 self.print(
-                    "Alignment buffer empty, skipping head alignment", 0, 1
+                    "Alignment buffer empty, skipping head alignment", 1, 1
                 )
                 return
 
@@ -1633,7 +1633,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # Train head ONLY (fc1 frozen) for specified epochs
             self.print(
                 f"Fine-tuning head for {epochs} epochs on {len(y)} samples",
-                0,
+                1,
                 1,
             )
             # For head alignment, we need to train with frozen fc1
@@ -1645,7 +1645,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print(
                 f"Head aligned ({self.merge_finetune_epochs} epochs) on {len(y)} samples "
                 f"from alignment buffer",
-                0,
+                1,
                 1,
             )
 
@@ -1681,11 +1681,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # Publish to P2P module (channel may not exist yet)
             try:
                 self.db.publish("p2p_model_outgoing", json.dumps(model_data))
-                self.print("Model sent to peers", 0, 1)
+                self.print("Model sent to peers", 1, 1)
             except Exception:
                 self.print(
                     "P2P publish channel not available, model not sent",
-                    0,
+                    1,
                     1,
                 )
 
