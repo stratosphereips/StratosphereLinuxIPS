@@ -759,11 +759,20 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             classes: List of class labels (unused, kept for compatibility)
             train_target: Logger target ("local" for "local_train", "merged" for "merged_train")
         """
+        self.print("fit_incremental_model: entering", 1, 1)
+
         freeze_fc1 = getattr(self, "_freeze_fc1_for_training", False)
         epochs = (
             self.merge_finetune_epochs
             if freeze_fc1
             else self.local_training_epochs
+        )
+
+        model_state = "new" if self.model is None else "loaded"
+        self.print(
+            f"fit_incremental_model: model={model_state} device={self.device}",
+            1,
+            1,
         )
 
         log_target = f"{train_target}_train"
@@ -805,6 +814,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         criterion = nn.CrossEntropyLoss(weight=class_weight)
 
         self.model.train()
+        torch.set_num_threads(1)
+        torch.set_num_interop_threads(1)
+
+        self.print(
+            f"fit_incremental_model: starting {epochs} epochs with {len(y_train)} samples",
+            1,
+            1,
+        )
 
         for epoch in range(epochs):
             self.optimizer.zero_grad()
@@ -813,6 +830,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             loss.backward()
             self.optimizer.step()
             self.last_batch_loss = loss.item()
+
+            self.print(
+                f"fit_incremental_model: epoch {epoch+1}/{epochs} done loss={loss.item():.6f}",
+                1,
+                1,
+            )
 
             with torch.no_grad():
                 epoch_outputs = self.model(X_tensor)
@@ -823,10 +846,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     log_target, epoch + 1, epochs, loss.item(), epoch_acc
                 )
 
+        self.print(
+            "fit_incremental_model: training complete, computing final loss",
+            1,
+            1,
+        )
+
         with torch.no_grad():
             final_outputs = self.model(X_tensor)
             final_preds = torch.argmax(final_outputs, dim=1)
-            final_loss = self.criterion(final_outputs, y_tensor).item()
+            final_loss = criterion(final_outputs, y_tensor).item()
 
             tp = int(((final_preds == 1) & (y_tensor == 1)).sum().item())
             fp = int(((final_preds == 1) & (y_tensor == 0)).sum().item())
@@ -847,6 +876,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             tn,
             fn,
         )
+
+        self.print("fit_incremental_model: exiting", 1, 1)
 
     def predict_batch(self, x_data: np.ndarray) -> np.ndarray:
         """Predict labels for a batch."""
@@ -917,6 +948,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         raw = msg["data"]
                         decoded = base64.b64decode(raw).decode()
                         model_data = json.loads(decoded)
+                        self.print(
+                            f"p2p_gopy: received message, type={model_data.get('message_type','?')}",
+                            1,
+                            1,
+                        )
                         self.handle_p2p_model(model_data)
                     except Exception:
                         # Ignore non-model messages (evidence, peer updates, etc.)
@@ -1504,6 +1540,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         try:
             peer_id = model_data.get("peer_id")
+            self.print(f"handle_p2p_model: entering, peer={peer_id}", 1, 1)
             if not peer_id:
                 return
 
@@ -1519,7 +1556,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             # Trigger merge if we have enough peers
             if len(self.peer_models) >= 1:
+                self.print("handle_p2p_model: calling trigger_merge", 1, 1)
                 self.trigger_merge()
+
+            self.print("handle_p2p_model: exiting", 1, 1)
 
         except Exception:
             self.print(
@@ -1529,8 +1569,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
     def _train_batch(self):
         """Train on accumulated training buffer with configured epochs, log metrics."""
         try:
+            self.print("_train_batch: entering", 1, 1)
             if len(self.training_buffer_x) == 0:
                 return
+
+            self.print(
+                f"_train_batch: buffer has {len(self.training_buffer_x)} samples",
+                1,
+                1,
+            )
 
             X = np.array(self.training_buffer_x)
             y = np.array(self.training_buffer_y)
@@ -1573,9 +1620,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self._is_fitted = True
             self.print("[DEBUG] _train_batch done, about to send model", 1, 1)
 
+            self.print("_train_batch: calling send_model_to_peers", 1, 1)
+            self.send_model_to_peers()
+            self.print("_train_batch: fit_incremental_model returned", 1, 1)
+
             self.training_buffer_x.clear()
             self.training_buffer_y.clear()
             self._buffered_flow_ids.clear()
+
+            self.print("_train_batch: exiting", 1, 1)
 
         except Exception:
             self.print(
@@ -1589,12 +1642,23 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         Only uses latest local models from each peer (not previous merges).
         """
         try:
+            self.print("trigger_merge: entering", 1, 1)
             if len(self.peer_models) < 1:
-                self.print("Not enough peers to merge", 1, 1)
+                self.print(
+                    f"trigger_merge: {len(self.peer_models)} peer models available",
+                    1,
+                    1,
+                )
                 return
 
             self.print(
                 f"Merging {len(self.peer_models)} peer models + own model",
+                1,
+                1,
+            )
+
+            self.print(
+                f"trigger_merge: merging fc1 from {len(self.peer_models)} peers",
                 1,
                 1,
             )
@@ -1620,6 +1684,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             if self.model:
                 self.model.set_fc1_weights(merged_fc1_weight, merged_fc1_bias)
 
+            self.print("trigger_merge: calling _align_head_on_buffer", 1, 1)
             self._align_head_on_buffer()
 
             self._using_merged_model = True
@@ -1628,7 +1693,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self._save_merged_model(self.merge_count)
 
             self.print(
-                f"Merged model saved as merged_{self.merge_count}", 1, 1
+                f"trigger_merge: exiting, merged_{self.merge_count} saved",
+                1,
+                1,
             )
 
         except Exception:
@@ -1689,11 +1756,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         Called after each local training event.
         """
         try:
+            self.print("send_model_to_peers: entering", 1, 1)
             if self.model is None:
                 return
 
             fc1_w, fc1_b = self.model.get_fc1_weights()
             head_w, head_b = self.model.get_head_weights()
+
+            self.print(f"send_model_to_peers: fc1_w shape={fc1_w.shape}", 1, 1)
 
             model_data = {
                 "message_type": "model",
@@ -1716,13 +1786,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     "message": message_b64,
                     "recipient": "*",
                 }
+                self.print(
+                    f"send_model_to_peers: message_b64_len={len(message_b64)}",
+                    1,
+                    1,
+                )
                 self.db.publish("p2p_pygo", json.dumps(go_message))
                 self.print(
-                    "Model published to p2p_pygo for peer sharing", 1, 1
-                )
-            except Exception:
-                self.print(
-                    "P2P publish channel not available, model not sent",
+                    "send_model_to_peers: published to p2p_pygo, result=True",
                     1,
                     1,
                 )
@@ -1732,6 +1803,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     1,
                     1,
                 )
+            except Exception:
+                self.print(
+                    "P2P publish channel not available, model not sent",
+                    1,
+                    1,
+                )
+
+            self.print("send_model_to_peers: exiting", 1, 1)
 
         except Exception:
             self.print(
