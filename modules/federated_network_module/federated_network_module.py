@@ -117,17 +117,13 @@ class SimpleFederatedNet(nn.Module):
         else:
             torch.manual_seed(seed)
             random_weights = torch.empty(self.FIXED_INPUT_DIM, hidden1)
-            nn.init.kaiming_normal_(
-                random_weights, mode="fan_in", nonlinearity="relu"
-            )
+            nn.init.kaiming_normal_(random_weights, mode="fan_in", nonlinearity="relu")
 
         if rp_path:
             os.makedirs(os.path.dirname(rp_path), exist_ok=True)
             torch.save(random_weights, rp_path)
 
-        self.random_projection = nn.Linear(
-            self.FIXED_INPUT_DIM, hidden1, bias=False
-        )
+        self.random_projection = nn.Linear(self.FIXED_INPUT_DIM, hidden1, bias=False)
         self.random_projection.weight.data = random_weights.T
         self.random_projection.weight.requires_grad = False
 
@@ -300,9 +296,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
     authors = ["Jan Svoboda"]
     module_key = "federated_network_module"
     module_config_section = "federated_network_module"
-    malicious_flow_evidence_type = (
-        EvidenceType.FEDERATED_NETWORK_MALICIOUS_FLOW
-    )
+    malicious_flow_evidence_type = EvidenceType.FEDERATED_NETWORK_MALICIOUS_FLOW
     malicious_flow_description_template = (
         "Flow detected as malicious by federated_network_module. "
         "Src IP {src_ip}:{sport} to {dst_ip}:{dport}"
@@ -333,15 +327,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         )
         os.makedirs(artifacts_dir, exist_ok=True)
         self.rp_path = os.path.join(artifacts_dir, "random_projection.bin")
-        self.local_fc1_path = os.path.join(
-            artifacts_dir, "latest_local_fc1.bin"
-        )
-        self.local_head_path = os.path.join(
-            artifacts_dir, "latest_local_head.bin"
-        )
-        self.local_scaler_path = os.path.join(
-            artifacts_dir, "latest_local_scaler.bin"
-        )
+        self.local_fc1_path = os.path.join(artifacts_dir, "latest_local_fc1.bin")
+        self.local_head_path = os.path.join(artifacts_dir, "latest_local_head.bin")
+        self.local_scaler_path = os.path.join(artifacts_dir, "latest_local_scaler.bin")
         self.merged_dir = os.path.join(artifacts_dir, "merged")
         os.makedirs(self.merged_dir, exist_ok=True)
 
@@ -377,14 +365,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         # Flow tracking
         self.window_flows: dict = {}  # flow_id -> flow_dict
-        self._buffered_flow_ids: set = (
-            set()
-        )  # flows already in training buffer
+        self._buffered_flow_ids: set = set()  # flows already in training buffer
 
         # Peer models storage
-        self.peer_models: Dict[str, dict] = (
-            {}
-        )  # peer_id -> {fc1, head, timestamp}
+        self.peer_models: Dict[str, dict] = {}  # peer_id -> {fc1, head, timestamp}
 
         # Use hostname as our peer identity (deterministic, available in Docker)
         try:
@@ -396,9 +380,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.print(f"My peer ID: {self.my_peer_id}", 1, 1)
 
         # Device
-        self.device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
-        )
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Metrics
         self.last_batch_loss: float = 0.0
@@ -439,9 +421,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         )
 
         # Random per-instance sub-window offset to desynchronize peers (≤ half window width)
-        self._time_offset: float = random.uniform(
-            0, self.window_size_seconds / 2.0
-        )
+        self._time_offset: float = random.uniform(0, self.window_size_seconds / 2.0)
 
         # Sub-window tracking
         self.window_start_ts: Optional[float] = None
@@ -559,9 +539,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """Create model with FIXED input dimension (18 features)."""
         # Always use fixed input dimension - don't rely on runtime detection
         self.input_dim = SimpleFederatedNet.FIXED_INPUT_DIM
-        return SimpleFederatedNet(
-            self.input_dim, rp_path=self.rp_path, seed=self.seed
-        )
+        return SimpleFederatedNet(self.input_dim, rp_path=self.rp_path, seed=self.seed)
 
     def create_empty_preprocessor(self) -> StandardScaler:
         """Create untrained scaler."""
@@ -635,16 +613,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         # Encode proto using base class method (inclusive: tcp, udp, icmp, arp all kept)
         if "proto" in df.columns:
-            df["proto"] = df["proto"].apply(
-                lambda x: self._encode_proto(str(x))
-            )
+            df["proto"] = df["proto"].apply(lambda x: self._encode_proto(str(x)))
 
         # Encode appproto using module-specific mapping
         if "appproto" in df.columns:
             df["appproto"] = df["appproto"].apply(
-                lambda x: (
-                    self._encode_appproto(str(x)) if pd.notna(x) else 10.0
-                )
+                lambda x: (self._encode_appproto(str(x)) if pd.notna(x) else 10.0)
             )
 
         # Inline appproto if missing
@@ -666,17 +640,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         if "saddr" in df.columns:
             df["saddr_num"] = df["saddr"].apply(
                 lambda x: (
-                    int(ipaddress.ip_address(str(x))) % 1000000
-                    if pd.notna(x)
-                    else 0.0
+                    int(ipaddress.ip_address(str(x))) % 1000000 if pd.notna(x) else 0.0
                 )
             )
         if "daddr" in df.columns:
             df["daddr_num"] = df["daddr"].apply(
                 lambda x: (
-                    int(ipaddress.ip_address(str(x))) % 1000000
-                    if pd.notna(x)
-                    else 0.0
+                    int(ipaddress.ip_address(str(x))) % 1000000 if pd.notna(x) else 0.0
                 )
             )
 
@@ -697,9 +667,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             lambda row: (row["total_bytes"] / max(row["dur"], 0.001)),
             axis=1,
         )
-        df["history_len"] = (
-            df.get("history", "").astype(str).str.len().fillna(0.0)
-        )
+        df["history_len"] = df.get("history", "").astype(str).str.len().fillna(0.0)
 
         # Select and order features to match FIXED_INPUT_DIM = 18
         feature_order = self._get_feature_order()
@@ -793,9 +761,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         freeze_fc1 = getattr(self, "_freeze_fc1_for_training", False)
         epochs = (
-            self.merge_finetune_epochs
-            if freeze_fc1
-            else self.local_training_epochs
+            self.merge_finetune_epochs if freeze_fc1 else self.local_training_epochs
         )
 
         model_state = "new" if self.model is None else "loaded"
@@ -816,9 +782,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 1,
             )
             self.optimizer = None  # manual SGD, no torch.optim (fork-safety)
-            self.print(
-                "fit_incremental_model: using manual SGD (fork-safe)", 1, 1
-            )
+            self.print("fit_incremental_model: using manual SGD (fork-safe)", 1, 1)
             self.print("fit_incremental_model: optimizer created", 1, 1)
 
         if freeze_fc1:
@@ -836,9 +800,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         )
         X_tensor = torch.FloatTensor(x_train).to(self.device)
         self.print("fit_incremental_model: X_tensor created", 1, 1)
-        y_tensor = torch.LongTensor(
-            [0 if y == BENIGN else 1 for y in y_train]
-        ).to(self.device)
+        y_tensor = torch.LongTensor([0 if y == BENIGN else 1 for y in y_train]).to(
+            self.device
+        )
 
         # Per-batch class weights: weight = total / (2 * max(class_count, 1))
         mal_count = int((y_tensor == 1).sum().item())
@@ -969,10 +933,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             predictions = torch.argmax(probs, dim=1)
 
         return np.array(
-            [
-                MALICIOUS if p == 1 else BENIGN
-                for p in predictions.cpu().numpy()
-            ]
+            [MALICIOUS if p == 1 else BENIGN for p in predictions.cpu().numpy()]
         )
 
     def is_preprocessor_initialized(self) -> bool:
@@ -1007,9 +968,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     if predicted is not None:
                         gt_label = self._get_simulated_gt(flow) or BENIGN
                         self.store_testing_results(gt_label, predicted)
-                        self.test_time_predictions[self._get_flow_id(flow)] = (
-                            predicted
-                        )
+                        self.test_time_predictions[self._get_flow_id(flow)] = predicted
 
             if msg := self.get_msg("new_alert"):
                 self.handle_new_alert(json.loads(msg["data"]))
@@ -1029,13 +988,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                             # Model messages: base64 payload inside message_contents.message
                             b64_payload = outer_contents.get("message", "")
                             if b64_payload:
-                                decoded = base64.b64decode(
-                                    b64_payload
-                                ).decode()
+                                decoded = base64.b64decode(b64_payload).decode()
                                 model_data = json.loads(decoded)
-                                inner_type = model_data.get(
-                                    "message_type", "?"
-                                )
+                                inner_type = model_data.get("message_type", "?")
                                 self.print(
                                     f"p2p_gopy: received {inner_type} message from {outer_contents.get('reporter','?')}",
                                     1,
@@ -1118,9 +1073,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         try:
             self.print("Alert received, preparing training batch", 1, 1)
-            self.logger.log_timeline(
-                "ALERT", f"alert_{self.training_count_alert}"
-            )
+            self.logger.log_timeline("ALERT", f"alert_{self.training_count_alert}")
 
             # Extract alert components
             profile_ip = alert.get("profile", {}).get("ip")
@@ -1184,10 +1137,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 # IP-based fallback match
                 saddr = str(flow.get("saddr", ""))
                 daddr = str(flow.get("daddr", ""))
-                if (
-                    attacker_ip
-                    and (saddr == attacker_ip or daddr == attacker_ip)
-                ) or (
+                if (attacker_ip and (saddr == attacker_ip or daddr == attacker_ip)) or (
                     victim_ip and (saddr == victim_ip or daddr == victim_ip)
                 ):
                     malicious_flows.append(flow)
@@ -1276,21 +1226,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     ben_inf = int(np.sum(inf_arr == BENIGN))
                     mal_gt = int(np.sum(gt_arr == MALICIOUS))
                     ben_gt = int(np.sum(gt_arr == BENIGN))
-                    tp = int(
-                        np.sum((inf_arr == MALICIOUS) & (gt_arr == MALICIOUS))
-                    )
-                    fp = int(
-                        np.sum((inf_arr == MALICIOUS) & (gt_arr == BENIGN))
-                    )
+                    tp = int(np.sum((inf_arr == MALICIOUS) & (gt_arr == MALICIOUS)))
+                    fp = int(np.sum((inf_arr == MALICIOUS) & (gt_arr == BENIGN)))
                     tn = int(np.sum((inf_arr == BENIGN) & (gt_arr == BENIGN)))
-                    fn = int(
-                        np.sum((inf_arr == BENIGN) & (gt_arr == MALICIOUS))
-                    )
-                    acc = (
-                        (tp + tn) / len(gt_labels)
-                        if len(gt_labels) > 0
-                        else 0.0
-                    )
+                    fn = int(np.sum((inf_arr == BENIGN) & (gt_arr == MALICIOUS)))
+                    acc = (tp + tn) / len(gt_labels) if len(gt_labels) > 0 else 0.0
                     self.logger.log_comp_line(
                         "comp_inferred_gt",
                         f"inferred vs GT: {len(gt_labels)} samples | "
@@ -1304,9 +1244,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     fid = self._get_flow_id(flow)
                     pred = self.test_time_predictions.pop(fid, None)
                     if pred is not None:
-                        inferred = (
-                            MALICIOUS if fid in malicious_flow_ids else BENIGN
-                        )
+                        inferred = MALICIOUS if fid in malicious_flow_ids else BENIGN
                         gt_norm = self._get_simulated_gt(flow)
                         pred_data.append((pred, inferred, gt_norm))
 
@@ -1321,25 +1259,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     ben_pred = int(np.sum(pred_arr == BENIGN))
                     mal_pinf = int(np.sum(pinf_arr == MALICIOUS))
                     ben_pinf = int(np.sum(pinf_arr == BENIGN))
-                    tp = int(
-                        np.sum(
-                            (pred_arr == MALICIOUS) & (pinf_arr == MALICIOUS)
-                        )
-                    )
-                    fp = int(
-                        np.sum((pred_arr == MALICIOUS) & (pinf_arr == BENIGN))
-                    )
-                    tn = int(
-                        np.sum((pred_arr == BENIGN) & (pinf_arr == BENIGN))
-                    )
-                    fn = int(
-                        np.sum((pred_arr == BENIGN) & (pinf_arr == MALICIOUS))
-                    )
-                    acc = (
-                        (tp + tn) / len(pred_labels)
-                        if len(pred_labels) > 0
-                        else 0.0
-                    )
+                    tp = int(np.sum((pred_arr == MALICIOUS) & (pinf_arr == MALICIOUS)))
+                    fp = int(np.sum((pred_arr == MALICIOUS) & (pinf_arr == BENIGN)))
+                    tn = int(np.sum((pred_arr == BENIGN) & (pinf_arr == BENIGN)))
+                    fn = int(np.sum((pred_arr == BENIGN) & (pinf_arr == MALICIOUS)))
+                    acc = (tp + tn) / len(pred_labels) if len(pred_labels) > 0 else 0.0
                     self.logger.log_comp_line(
                         "comp_test_inferred",
                         f"pred vs inferred: {len(pred_labels)} samples | "
@@ -1348,9 +1272,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     )
 
                     # pred vs GT (only flows with GT available)
-                    pvg_pairs = [
-                        (p, g) for p, _, g in pred_data if g is not None
-                    ]
+                    pvg_pairs = [(p, g) for p, _, g in pred_data if g is not None]
                     if len(pvg_pairs) > 0:
                         pvg_preds = [p for p, _ in pvg_pairs]
                         pvg_gts = [g for _, g in pvg_pairs]
@@ -1361,28 +1283,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         mal_gt2 = int(np.sum(gt_arr2 == MALICIOUS))
                         ben_gt2 = int(np.sum(gt_arr2 == BENIGN))
                         tp = int(
-                            np.sum(
-                                (pvg_arr == MALICIOUS) & (gt_arr2 == MALICIOUS)
-                            )
+                            np.sum((pvg_arr == MALICIOUS) & (gt_arr2 == MALICIOUS))
                         )
-                        fp = int(
-                            np.sum(
-                                (pvg_arr == MALICIOUS) & (gt_arr2 == BENIGN)
-                            )
-                        )
-                        tn = int(
-                            np.sum((pvg_arr == BENIGN) & (gt_arr2 == BENIGN))
-                        )
-                        fn = int(
-                            np.sum(
-                                (pvg_arr == BENIGN) & (gt_arr2 == MALICIOUS)
-                            )
-                        )
-                        acc = (
-                            (tp + tn) / len(pvg_preds)
-                            if len(pvg_preds) > 0
-                            else 0.0
-                        )
+                        fp = int(np.sum((pvg_arr == MALICIOUS) & (gt_arr2 == BENIGN)))
+                        tn = int(np.sum((pvg_arr == BENIGN) & (gt_arr2 == BENIGN)))
+                        fn = int(np.sum((pvg_arr == BENIGN) & (gt_arr2 == MALICIOUS)))
+                        acc = (tp + tn) / len(pvg_preds) if len(pvg_preds) > 0 else 0.0
                         self.logger.log_comp_line(
                             "comp_test_gt",
                             f"pred vs GT: {len(pvg_preds)} samples | "
@@ -1398,11 +1304,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     self.seen_labels = {MALICIOUS: 0, BENIGN: 0}
                     self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
 
-                    target = (
-                        "merged_test"
-                        if self._using_merged_model
-                        else "local_test"
-                    )
+                    target = "merged_test" if self._using_merged_model else "local_test"
                     self.logger.log_test_marker(
                         target,
                         f"New local model ({self._training_trigger}_{self.training_count_alert})",
@@ -1411,10 +1313,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     # Discard window after training batch
                     self.window_flows.clear()
 
-            if (
-                self.testing_flows_since_last_log > 0
-                and self._using_merged_model
-            ):
+            if self.testing_flows_since_last_log > 0 and self._using_merged_model:
                 self.flush_testing_results()
 
         except Exception:
@@ -1448,9 +1347,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 self.window_flows.clear()
                 return
 
-            self.print(
-                f"Training on {len(remaining_flows)} benign flows", 1, 1
-            )
+            self.print(f"Training on {len(remaining_flows)} benign flows", 1, 1)
 
             # Prepare training data — accumulate across deferred windows
             for flow in remaining_flows:
@@ -1491,21 +1388,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     ben_inf = int(np.sum(inf_arr == BENIGN))
                     mal_gt = int(np.sum(gt_arr == MALICIOUS))
                     ben_gt = int(np.sum(gt_arr == BENIGN))
-                    tp = int(
-                        np.sum((inf_arr == MALICIOUS) & (gt_arr == MALICIOUS))
-                    )
-                    fp = int(
-                        np.sum((inf_arr == MALICIOUS) & (gt_arr == BENIGN))
-                    )
+                    tp = int(np.sum((inf_arr == MALICIOUS) & (gt_arr == MALICIOUS)))
+                    fp = int(np.sum((inf_arr == MALICIOUS) & (gt_arr == BENIGN)))
                     tn = int(np.sum((inf_arr == BENIGN) & (gt_arr == BENIGN)))
-                    fn = int(
-                        np.sum((inf_arr == BENIGN) & (gt_arr == MALICIOUS))
-                    )
-                    acc = (
-                        (tp + tn) / len(gt_labels)
-                        if len(gt_labels) > 0
-                        else 0.0
-                    )
+                    fn = int(np.sum((inf_arr == BENIGN) & (gt_arr == MALICIOUS)))
+                    acc = (tp + tn) / len(gt_labels) if len(gt_labels) > 0 else 0.0
                     self.logger.log_comp_line(
                         "comp_inferred_gt",
                         f"inferred vs GT: {len(gt_labels)} samples | "
@@ -1533,25 +1420,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     ben_pred = int(np.sum(pred_arr == BENIGN))
                     mal_pinf = int(np.sum(pinf_arr == MALICIOUS))
                     ben_pinf = int(np.sum(pinf_arr == BENIGN))
-                    tp = int(
-                        np.sum(
-                            (pred_arr == MALICIOUS) & (pinf_arr == MALICIOUS)
-                        )
-                    )
-                    fp = int(
-                        np.sum((pred_arr == MALICIOUS) & (pinf_arr == BENIGN))
-                    )
-                    tn = int(
-                        np.sum((pred_arr == BENIGN) & (pinf_arr == BENIGN))
-                    )
-                    fn = int(
-                        np.sum((pred_arr == BENIGN) & (pinf_arr == MALICIOUS))
-                    )
-                    acc = (
-                        (tp + tn) / len(pred_labels)
-                        if len(pred_labels) > 0
-                        else 0.0
-                    )
+                    tp = int(np.sum((pred_arr == MALICIOUS) & (pinf_arr == MALICIOUS)))
+                    fp = int(np.sum((pred_arr == MALICIOUS) & (pinf_arr == BENIGN)))
+                    tn = int(np.sum((pred_arr == BENIGN) & (pinf_arr == BENIGN)))
+                    fn = int(np.sum((pred_arr == BENIGN) & (pinf_arr == MALICIOUS)))
+                    acc = (tp + tn) / len(pred_labels) if len(pred_labels) > 0 else 0.0
                     self.logger.log_comp_line(
                         "comp_test_inferred",
                         f"pred vs inferred: {len(pred_labels)} samples | "
@@ -1571,28 +1444,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         mal_gt2 = int(np.sum(gt_arr2 == MALICIOUS))
                         ben_gt2 = int(np.sum(gt_arr2 == BENIGN))
                         tp = int(
-                            np.sum(
-                                (pvg_arr == MALICIOUS) & (gt_arr2 == MALICIOUS)
-                            )
+                            np.sum((pvg_arr == MALICIOUS) & (gt_arr2 == MALICIOUS))
                         )
-                        fp = int(
-                            np.sum(
-                                (pvg_arr == MALICIOUS) & (gt_arr2 == BENIGN)
-                            )
-                        )
-                        tn = int(
-                            np.sum((pvg_arr == BENIGN) & (gt_arr2 == BENIGN))
-                        )
-                        fn = int(
-                            np.sum(
-                                (pvg_arr == BENIGN) & (gt_arr2 == MALICIOUS)
-                            )
-                        )
-                        acc = (
-                            (tp + tn) / len(pvg_preds)
-                            if len(pvg_preds) > 0
-                            else 0.0
-                        )
+                        fp = int(np.sum((pvg_arr == MALICIOUS) & (gt_arr2 == BENIGN)))
+                        tn = int(np.sum((pvg_arr == BENIGN) & (gt_arr2 == BENIGN)))
+                        fn = int(np.sum((pvg_arr == BENIGN) & (gt_arr2 == MALICIOUS)))
+                        acc = (tp + tn) / len(pvg_preds) if len(pvg_preds) > 0 else 0.0
                         self.logger.log_comp_line(
                             "comp_test_gt",
                             f"pred vs GT: {len(pvg_preds)} samples | "
@@ -1608,11 +1465,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     self.seen_labels = {MALICIOUS: 0, BENIGN: 0}
                     self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
 
-                    target = (
-                        "merged_test"
-                        if self._using_merged_model
-                        else "local_test"
-                    )
+                    target = "merged_test" if self._using_merged_model else "local_test"
                     self.logger.log_test_marker(
                         target,
                         f"New local model ({self._training_trigger}_{self.training_count_twclose})",
@@ -1622,9 +1475,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     self.window_flows.clear()
 
         except Exception:
-            self.print(
-                f"Error handling tw_closed: {traceback.format_exc()}", 0, 1
-            )
+            self.print(f"Error handling tw_closed: {traceback.format_exc()}", 0, 1)
 
     def handle_p2p_model(self, model_data: dict):
         """
@@ -1656,9 +1507,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print("handle_p2p_model: exiting", 1, 1)
 
         except Exception:
-            self.print(
-                f"Error handling P2P model: {traceback.format_exc()}", 0, 1
-            )
+            self.print(f"Error handling P2P model: {traceback.format_exc()}", 0, 1)
 
     def _train_batch(self):
         """Train on accumulated training buffer with configured epochs, log metrics."""
@@ -1691,9 +1540,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 else self.training_count_twclose
             )
             if self._training_trigger == "alert":
-                evidence_count = len(
-                    getattr(self, "_last_alert_evidence_ids", [])
-                )
+                evidence_count = len(getattr(self, "_last_alert_evidence_ids", []))
 
             self.logger.log_train_header(
                 "local_train",
@@ -1730,9 +1577,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print("_train_batch: fit_incremental_model returned", 1, 1)
             # After own training, try merge if we have pending peer models
             if len(self.peer_models) >= 1:
-                self.print(
-                    "_train_batch: pending peer models, triggering merge", 1, 1
-                )
+                self.print("_train_batch: pending peer models, triggering merge", 1, 1)
                 self.trigger_merge()
 
             self.training_buffer_x.clear()
@@ -1742,9 +1587,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print("_train_batch: exiting", 1, 1)
 
         except Exception:
-            self.print(
-                f"Error in _train_batch: {traceback.format_exc()}", 1, 1
-            )
+            self.print(f"Error in _train_batch: {traceback.format_exc()}", 1, 1)
 
     def trigger_merge(self):
         """
@@ -1779,9 +1622,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"merge_{self.merge_count + 1} | {len(self.peer_models)} peers: {','.join(self.peer_models.keys())} + own",
             )
 
-            all_fc1_weights = [
-                m["fc1_weight"] for m in self.peer_models.values()
-            ]
+            all_fc1_weights = [m["fc1_weight"] for m in self.peer_models.values()]
             all_fc1_biases = [m["fc1_bias"] for m in self.peer_models.values()]
 
             if self.model:
@@ -1839,9 +1680,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
 
         except Exception:
-            self.print(
-                f"Error in trigger_merge: {traceback.format_exc()}", 0, 1
-            )
+            self.print(f"Error in trigger_merge: {traceback.format_exc()}", 0, 1)
 
     def _align_head_on_buffer(self, X: np.ndarray, y: np.ndarray):
         """
@@ -1849,9 +1688,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         try:
             if len(X) == 0:
-                self.print(
-                    "Alignment buffer empty, skipping head alignment", 1, 1
-                )
+                self.print("Alignment buffer empty, skipping head alignment", 1, 1)
                 return
 
             self.update_preprocessor(pd.DataFrame(X))
@@ -1993,9 +1830,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 "dbytes",
             ]:
                 if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(
-                        0.0
-                    )
+                    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
                 else:
                     df[col] = 0.0
 
@@ -2052,9 +1887,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 val = df.iloc[0].get(feat, 0.0)
                 if val is None:
                     val = 0.0
-                features.append(
-                    float(val) if not isinstance(val, str) else 0.0
-                )
+                features.append(float(val) if not isinstance(val, str) else 0.0)
 
             if len(features) != SimpleFederatedNet.FIXED_INPUT_DIM:
                 self.print(
@@ -2090,11 +1923,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         # TODO: Remove before production deployment
         saddr = str(flow.get("saddr", ""))
         daddr = str(flow.get("daddr", ""))
-        return (
-            MALICIOUS
-            if (saddr == "172.20.1.4" or daddr == "172.20.1.4")
-            else BENIGN
-        )
+        return MALICIOUS if (saddr == "172.20.1.4" or daddr == "172.20.1.4") else BENIGN
         # --- END MONKEYPATCH ---
 
     def _get_flow_id(self, flow: dict) -> str:
@@ -2122,17 +1951,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             torch.save(fc1_w, self.local_fc1_path)
             torch.save(fc1_b, self.local_fc1_path.replace("_fc1", "_fc1_bias"))
             torch.save(head_w, self.local_head_path)
-            torch.save(
-                head_b, self.local_head_path.replace("_head", "_head_bias")
-            )
+            torch.save(head_b, self.local_head_path.replace("_head", "_head_bias"))
 
             with open(self.local_scaler_path, "wb") as f:
                 pickle.dump(self.scaler, f)
 
         except Exception:
-            self.print(
-                f"Error saving local model: {traceback.format_exc()}", 0, 1
-            )
+            self.print(f"Error saving local model: {traceback.format_exc()}", 0, 1)
 
     def _save_merged_model(self, merge_count: int):
         """Save merged model weights."""
@@ -2144,15 +1969,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             head_w, head_b = self.model.get_head_weights()
 
             prefix = f"merged_{merge_count}"
-            torch.save(
-                fc1_w, os.path.join(self.merged_dir, f"{prefix}_fc1.bin")
-            )
-            torch.save(
-                fc1_b, os.path.join(self.merged_dir, f"{prefix}_fc1_bias.bin")
-            )
-            torch.save(
-                head_w, os.path.join(self.merged_dir, f"{prefix}_head.bin")
-            )
+            torch.save(fc1_w, os.path.join(self.merged_dir, f"{prefix}_fc1.bin"))
+            torch.save(fc1_b, os.path.join(self.merged_dir, f"{prefix}_fc1_bias.bin"))
+            torch.save(head_w, os.path.join(self.merged_dir, f"{prefix}_head.bin"))
             torch.save(
                 head_b,
                 os.path.join(self.merged_dir, f"{prefix}_head_bias.bin"),
