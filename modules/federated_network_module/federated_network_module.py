@@ -195,6 +195,7 @@ class ModuleLogger:
                 "comp_inferred_gt",
                 "comp_test_inferred",
                 "comp_test_gt",
+                "merging_data",
             ]:
                 path = os.path.join(output_dir, f"{name}.log")
                 self._files[name] = open(path, "w")
@@ -1740,12 +1741,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 1,
             )
 
-            self.print(
-                f"trigger_merge: merging fc1 from {len(self.peer_models)} peers",
-                1,
-                1,
-            )
-
             self.logger.log_train_header(
                 "merged_train",
                 f"merge_{self.merge_count + 1} | {len(self.peer_models)} peers: {','.join(self.peer_models.keys())} + own",
@@ -1763,6 +1758,35 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             merged_fc1_weight = torch.stack(all_fc1_weights).mean(dim=0)
             merged_fc1_bias = torch.stack(all_fc1_biases).mean(dim=0)
+
+            # Log peer weight distances for analysis
+            if self.model and own_fc1_w is not None:
+                merge_label = f"merge_{self.merge_count + 1}"
+                self.logger._write(
+                    "merging_data",
+                    f"--- {merge_label} | {len(self.peer_models)} peers ---",
+                )
+                for peer_id, m in self.peer_models.items():
+                    pw = m["fc1_weight"]
+                    l2_norm = torch.norm(pw - own_fc1_w).item()
+                    numel = pw.numel()
+                    l2_normalized = l2_norm / (numel**0.5)
+                    self.logger._write(
+                        "merging_data",
+                        f"  peer={peer_id} | L2_dist={l2_norm:.6f} | L2_norm={l2_normalized:.6f} | n_params={numel}",
+                    )
+                merged_l2 = torch.norm(merged_fc1_weight - own_fc1_w).item()
+                merged_l2_norm = merged_l2 / (numel**0.5)
+                merged_differs = merged_l2 > 1e-8
+                self.logger._write(
+                    "merging_data",
+                    f"  merged_vs_own | L2_dist={merged_l2:.6f} | L2_norm={merged_l2_norm:.6f} | differs={merged_differs}",
+                )
+            self.print(
+                f"trigger_merge: merging fc1 from {len(self.peer_models)} peers",
+                1,
+                1,
+            )
 
             if self.model:
                 self.model.set_fc1_weights(merged_fc1_weight, merged_fc1_bias)
