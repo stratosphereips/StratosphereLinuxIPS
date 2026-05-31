@@ -774,6 +774,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             1,
             1,
         )
+        # Prevent fork-related segfaults: single-thread all torch backends
+        torch.set_num_threads(1)
+        torch.set_num_interop_threads(1)
+        self.print("fit_incremental_model: threads limited to 1", 1, 1)
 
         log_target = f"{train_target}_train"
 
@@ -814,8 +818,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         criterion = nn.CrossEntropyLoss(weight=class_weight)
 
         self.model.train()
-        torch.set_num_threads(1)
-        torch.set_num_interop_threads(1)
 
         self.print(
             f"fit_incremental_model: starting {epochs} epochs with {len(y_train)} samples",
