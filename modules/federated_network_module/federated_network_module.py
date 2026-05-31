@@ -1685,6 +1685,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             head_w, head_b = self.model.get_head_weights()
 
             model_data = {
+                "message_type": "model",
                 "fc1_weight": fc1_w.cpu().numpy().tolist(),
                 "fc1_bias": fc1_b.cpu().numpy().tolist(),
                 "head_weight": head_w.cpu().numpy().tolist(),
