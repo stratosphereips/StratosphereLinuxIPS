@@ -95,6 +95,9 @@ class SimpleFederatedNet(nn.Module):
         self.input_dim = self.FIXED_INPUT_DIM
 
         # Load or create frozen random projection with He initialization
+        import sys
+
+        sys.stdout.flush()
         if rp_path and os.path.exists(rp_path):
             try:
                 random_weights = torch.load(rp_path, weights_only=True)
@@ -782,7 +785,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         log_target = f"{train_target}_train"
 
         if self.model is None:
+            self.print("fit_incremental_model: creating model...", 1, 1)
             self.model = self.create_empty_model().to(self.device)
+            self.print(
+                "fit_incremental_model: model created, creating optimizer...",
+                1,
+                1,
+            )
             self.optimizer = optim.Adam(
                 self.model.parameters(), lr=0.001, weight_decay=1e-4
             )
