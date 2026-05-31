@@ -910,7 +910,17 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # Only check P2P channel if it exists (uses p2p_gopy)
             if "p2p_gopy" in self.channels:
                 if msg := self.get_msg("p2p_gopy"):
-                    self.handle_p2p_model(json.loads(msg["data"]))
+                    # Go binary forwards raw base64-encoded model JSON
+                    try:
+                        import base64
+
+                        raw = msg["data"]
+                        decoded = base64.b64decode(raw).decode()
+                        model_data = json.loads(decoded)
+                        self.handle_p2p_model(model_data)
+                    except Exception:
+                        # Ignore non-model messages (evidence, peer updates, etc.)
+                        pass
             elif not self._p2p_connected:
                 self._try_p2p_subscribe()
 
