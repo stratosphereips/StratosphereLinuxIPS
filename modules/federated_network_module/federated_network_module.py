@@ -375,10 +375,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             {}
         )  # peer_id -> {fc1, head, timestamp}
 
-        # Read own peer ID from P2P key file
+        # Use hostname as our peer identity (deterministic, available in Docker)
         try:
-            with open("p2p4slips/pigeon.keys", "r") as _f:
-                self.my_peer_id = _f.read().strip()
+            import socket
+
+            self.my_peer_id = socket.gethostname()
         except Exception:
             self.my_peer_id = "unknown"
         self.print(f"My peer ID: {self.my_peer_id}", 1, 1)
