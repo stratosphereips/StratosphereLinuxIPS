@@ -1695,10 +1695,25 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             }
 
             # Publish to P2P module via p2p_pygo (Python -> Go) channel
+            # The Go binary requires {"message": "<base64>", "recipient": "<peer_id|*>"}
             try:
-                self.db.publish("p2p_pygo", json.dumps(model_data))
+                import base64
+
+                message_json = json.dumps(model_data)
+                message_b64 = base64.b64encode(message_json.encode()).decode()
+                go_message = {
+                    "message": message_b64,
+                    "recipient": "*",
+                }
+                self.db.publish("p2p_pygo", json.dumps(go_message))
                 self.print(
                     "Model published to p2p_pygo for peer sharing", 1, 1
+                )
+            except Exception:
+                self.print(
+                    "P2P publish channel not available, model not sent",
+                    1,
+                    1,
                 )
             except Exception:
                 self.print(
