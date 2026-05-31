@@ -196,6 +196,7 @@ class ModuleLogger:
                 "comp_test_inferred",
                 "comp_test_gt",
                 "merging_data",
+                "training_network",
             ]:
                 path = os.path.join(output_dir, f"{name}.log")
                 self._files[name] = open(path, "w")
@@ -271,6 +272,13 @@ class ModuleLogger:
 
     def log_comp_line(self, target: str, line: str) -> None:
         self._write(target, f"  {line}")
+
+    def log_timeline(self, event: str, details: str = "") -> None:
+        """Log a timestamped event to training_network.log."""
+        import datetime as _dt
+
+        ts = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        self._write("training_network", f"{ts} | {event} | {details}")
 
     def close(self) -> None:
         for f in self._files.values():
@@ -362,6 +370,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         # Buffers
         self.training_buffer_x: list = []
         self.training_buffer_y: list = []
+        self._last_train_X: Optional[np.ndarray] = None
+        self._last_train_Y: Optional[np.ndarray] = None
         self.alignment_buffer_x: list = []
         self.alignment_buffer_y: list = []
 
@@ -1108,6 +1118,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         try:
             self.print("Alert received, preparing training batch", 1, 1)
+            self.logger.log_timeline(
+                "ALERT", f"alert_{self.training_count_alert}"
+            )
 
             # Extract alert components
             profile_ip = alert.get("profile", {}).get("ip")
@@ -1416,6 +1429,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         try:
             self.print("Sub-window closed, preparing training batch", 1, 1)
+            self.logger.log_timeline(
+                "TW_CLOSE", f"twclose_{self.training_count_twclose + 1}"
+            )
 
             # All remaining flows are benign
             remaining_flows = list(self.window_flows.values())
@@ -1648,6 +1664,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """Train on accumulated training buffer with configured epochs, log metrics."""
         try:
             self.print("_train_batch: entering", 1, 1)
+            self.logger.log_timeline(
+                "TRAIN_START",
+                f"{self._training_trigger}_{counter} buffer={len(X)} mal={mal_count} ben={ben_count} epochs={epochs}",
+            )
             if len(self.training_buffer_x) == 0:
                 return
 
@@ -1691,11 +1711,18 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 1,
             )
             self.fit_incremental_model(X_scaled, y, train_target="local")
+            self.logger.log_timeline(
+                "TRAIN_DONE",
+                f"{self._training_trigger}_{counter} samples={len(y)}",
+            )
 
             self._save_local_model()
 
             self._using_merged_model = False
             self._is_fitted = True
+            # Save training data for potential merge fine-tuning
+            self._last_train_X = X_scaled.copy()
+            self._last_train_Y = y.copy()
             self.print("[DEBUG] _train_batch done, about to send model", 1, 1)
 
             self.print("_train_batch: calling send_model_to_peers", 1, 1)
@@ -1727,6 +1754,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         try:
             self.print("trigger_merge: entering", 1, 1)
+            self.logger.log_timeline(
+                "MERGE_START",
+                f"merge_{self.merge_count + 1} peers={len(self.peer_models)} ("
+                + ",".join(self.peer_models.keys())
+                + ")",
+            )
             if len(self.peer_models) < 1:
                 self.print(
                     f"trigger_merge: {len(self.peer_models)} peer models available",
@@ -1792,7 +1825,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 self.model.set_fc1_weights(merged_fc1_weight, merged_fc1_bias)
 
             self.print("trigger_merge: calling _align_head_on_buffer", 1, 1)
-            self._align_head_on_buffer()
+            self._align_head_on_buffer(self._last_train_X, self._last_train_Y)
 
             self._using_merged_model = True
 
@@ -1810,19 +1843,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"Error in trigger_merge: {traceback.format_exc()}", 0, 1
             )
 
-    def _align_head_on_buffer(self):
+    def _align_head_on_buffer(self, X: np.ndarray, y: np.ndarray):
         """
         Freeze fc1, train head ONLY on alignment buffer with configured epochs.
         """
         try:
-            if len(self.alignment_buffer_x) == 0:
+            if len(X) == 0:
                 self.print(
                     "Alignment buffer empty, skipping head alignment", 1, 1
                 )
                 return
-
-            X = np.array(self.alignment_buffer_x)
-            y = np.array(self.alignment_buffer_y)
 
             self.update_preprocessor(pd.DataFrame(X))
             X_scaled = self.scaler.transform(X)
@@ -1901,6 +1931,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 self.db.publish("p2p_pygo", json.dumps(go_message))
                 self.print(
                     "send_model_to_peers: published to p2p_pygo, result=True",
+                    self.logger.log_timeline(
+                        "MODEL_SENT",
+                        f"peer={getattr(self, 'my_peer_id', '?' )} fc1_shape={fc1_w.shape}",
+                    ),
                     1,
                     1,
                 )
