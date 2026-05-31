@@ -375,6 +375,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             {}
         )  # peer_id -> {fc1, head, timestamp}
 
+        # Read own peer ID from P2P key file
+        try:
+            with open("p2p4slips/pigeon.keys", "r") as _f:
+                self.my_peer_id = _f.read().strip()
+        except Exception:
+            self.my_peer_id = "unknown"
+        self.print(f"My peer ID: {self.my_peer_id}", 1, 1)
+
         # Device
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
@@ -1621,13 +1629,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 "timestamp": model_data.get("timestamp", time.time()),
             }
 
-            self.print(f"Received model from peer {peer_id}", 1, 1)
-
-            # Trigger merge if we have enough peers
-            if len(self.peer_models) >= 1:
-                self.print("handle_p2p_model: calling trigger_merge", 1, 1)
-                self.trigger_merge()
-
+            self.print(
+                f"Received model from peer {peer_id}, stashed ({len(self.peer_models)} total)",
+                1,
+                1,
+            )
+            # Merge ONLY after own local training (triggered in _train_batch)
             self.print("handle_p2p_model: exiting", 1, 1)
 
         except Exception:
@@ -1692,6 +1699,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print("_train_batch: calling send_model_to_peers", 1, 1)
             self.send_model_to_peers()
             self.print("_train_batch: fit_incremental_model returned", 1, 1)
+            # After own training, try merge if we have pending peer models
+            if len(self.peer_models) >= 1:
+                self.print(
+                    "_train_batch: pending peer models, triggering merge", 1, 1
+                )
+                self.trigger_merge()
 
             self.training_buffer_x.clear()
             self.training_buffer_y.clear()
