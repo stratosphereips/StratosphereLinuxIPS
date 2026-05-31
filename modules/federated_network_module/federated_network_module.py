@@ -1579,7 +1579,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         except Exception:
             self.print(
-                f"Error in _train_batch: {traceback.format_exc()}", 0, 1
+                f"Error in _train_batch: {traceback.format_exc()}", 1, 1
             )
 
     def trigger_merge(self):
