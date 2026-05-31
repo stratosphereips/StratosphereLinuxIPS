@@ -50,7 +50,6 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-import torch.optim as optim
 from sklearn.preprocessing import StandardScaler
 
 import slips_files.common.abstracts.ml_module_base as ml_base
@@ -356,7 +355,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
 
         # Training state
-        self.optimizer: Optional[optim.Adam] = None
+        self.optimizer: Optional[object] = None
         self.criterion = nn.CrossEntropyLoss()
 
         # Buffers
@@ -498,9 +497,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             if self.model is None:
                 self.model = self.create_empty_model().to(self.device)
-                self.optimizer = optim.Adam(
-                    self.model.parameters(), lr=0.005, weight_decay=1e-4
-                )
+                self.optimizer = None  # manual SGD, fork-safe
 
             fc1_w = torch.load(self.local_fc1_path, weights_only=True)
             fc1_b = torch.load(
@@ -798,23 +795,27 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 1,
                 1,
             )
-            self.optimizer = optim.Adam(
-                self.model.parameters(), lr=0.001, weight_decay=1e-4
+            self.optimizer = None  # manual SGD, no torch.optim (fork-safety)
+            self.print(
+                "fit_incremental_model: using manual SGD (fork-safe)", 1, 1
             )
+            self.print("fit_incremental_model: optimizer created", 1, 1)
 
         if freeze_fc1:
             self.model.freeze_fc1()
-            self.optimizer = optim.Adam(
-                self.model.head.parameters(), lr=0.001, weight_decay=1e-4
-            )
+            self.optimizer = None  # manual SGD, fork-safe
         else:
             self.model.unfreeze_fc1()
             if self.optimizer is None:
-                self.optimizer = optim.Adam(
-                    self.model.parameters(), lr=0.005, weight_decay=1e-4
-                )
+                self.optimizer = None  # manual SGD, fork-safe
 
+        self.print(
+            f"fit_incremental_model: creating tensors, x_shape={x_train.shape}",
+            1,
+            1,
+        )
         X_tensor = torch.FloatTensor(x_train).to(self.device)
+        self.print("fit_incremental_model: X_tensor created", 1, 1)
         y_tensor = torch.LongTensor(
             [0 if y == BENIGN else 1 for y in y_train]
         ).to(self.device)
@@ -841,11 +842,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         )
 
         for epoch in range(epochs):
-            self.optimizer.zero_grad()
+            for param in self.model.parameters():
+                if param.grad is not None:
+                    param.grad.zero_()
             outputs = self.model(X_tensor)
             loss = criterion(outputs, y_tensor)
             loss.backward()
-            self.optimizer.step()
+            with torch.no_grad():
+                for param in self.model.parameters():
+                    if param.grad is not None:
+                        param -= 0.001 * param.grad
             self.last_batch_loss = loss.item()
 
             self.print(
@@ -958,21 +964,37 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # Only check P2P channel if it exists (uses p2p_gopy)
             if "p2p_gopy" in self.channels:
                 if msg := self.get_msg("p2p_gopy"):
-                    # Go binary forwards raw base64-encoded model JSON
                     try:
                         import base64
 
-                        raw = msg["data"]
-                        decoded = base64.b64decode(raw).decode()
-                        model_data = json.loads(decoded)
-                        self.print(
-                            f"p2p_gopy: received message, type={model_data.get('message_type','?')}",
-                            1,
-                            1,
-                        )
-                        self.handle_p2p_model(model_data)
+                        # Parse outer Go wrapper: {"message_type":"go_data", "message_contents":{"message":"<base64>","reporter":"...","report_time":...}}
+                        outer = json.loads(msg["data"])
+                        outer_type = outer.get("message_type", "")
+                        outer_contents = outer.get("message_contents", {})
+
+                        if outer_type == "go_data":
+                            # Model messages: base64 payload inside message_contents.message
+                            b64_payload = outer_contents.get("message", "")
+                            if b64_payload:
+                                decoded = base64.b64decode(
+                                    b64_payload
+                                ).decode()
+                                model_data = json.loads(decoded)
+                                inner_type = model_data.get(
+                                    "message_type", "?"
+                                )
+                                self.print(
+                                    f"p2p_gopy: received {inner_type} message from {outer_contents.get('reporter','?')}",
+                                    1,
+                                    1,
+                                )
+                                if inner_type == "model":
+                                    self.handle_p2p_model(model_data)
+                        elif outer_type == "peer_update":
+                            # Peer updates: ignore (handled by p2p_trust module)
+                            pass
                     except Exception:
-                        # Ignore non-model messages (evidence, peer updates, etc.)
+                        # Ignore non-model/parse-error messages
                         pass
             elif not self._p2p_connected:
                 self._try_p2p_subscribe()
