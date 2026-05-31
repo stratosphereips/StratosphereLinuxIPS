@@ -448,6 +448,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         c_p2p = self.db.subscribe("p2p_gopy")
         if c_p2p and c_p2p is not True:
             self.channels["p2p_gopy"] = c_p2p
+            self.channel_tracker["p2p_gopy"] = {"msg_received": False}
             self._p2p_connected = True
             self.print(
                 "P2P model channel (p2p_gopy) connected, model sharing enabled",
