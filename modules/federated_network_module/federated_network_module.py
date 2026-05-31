@@ -304,14 +304,24 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """Initialize module, model, preprocessor, and buffers."""
         super().init()
 
+        # Single-thread all torch backends BEFORE any torch operations.
+        # Must be called in init() (before multiprocessing fork) to prevent
+        # RuntimeError: "cannot set number of interop threads after parallel work has started"
+        # when the forked child calls torch operations.
+        import torch as _torch
+
+        _torch.set_num_threads(1)
+        _torch.set_num_interop_threads(1)
+
         # Invalidate stale bytecode cache so every run compiles from source.
         _pycache = os.path.join(os.path.dirname(__file__), "__pycache__")
         if os.path.isdir(_pycache):
             shutil.rmtree(_pycache)
 
-        # Artifact paths
+        # Artifact paths - use SLIPS root dir, not relative CWD
+        _slips_root = os.path.dirname(os.path.dirname(__file__))
         artifacts_dir = os.path.join(
-            ".", "modules", "federated_network_module", "artifacts"
+            _slips_root, "modules", "federated_network_module", "artifacts"
         )
         os.makedirs(artifacts_dir, exist_ok=True)
         self.rp_path = os.path.join(artifacts_dir, "random_projection.bin")
@@ -777,10 +787,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             1,
             1,
         )
-        # Prevent fork-related segfaults: single-thread all torch backends
-        torch.set_num_threads(1)
-        torch.set_num_interop_threads(1)
-        self.print("fit_incremental_model: threads limited to 1", 1, 1)
 
         log_target = f"{train_target}_train"
 
