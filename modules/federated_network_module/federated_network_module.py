@@ -841,17 +841,50 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             1,
         )
 
+        lr = 0.001
+        wd = 1e-4
+        beta1 = 0.9
+        beta2 = 0.999
+        eps = 1e-8
+        # Adam state: m (first moment), v (second moment) per parameter
+        if not hasattr(self, "_adam_state"):
+            self._adam_state = {}
+            for name, param in self.model.named_parameters():
+                if param.requires_grad:
+                    self._adam_state[name] = {
+                        "m": torch.zeros_like(param),
+                        "v": torch.zeros_like(param),
+                        "step": 0,
+                    }
+
         for epoch in range(epochs):
-            for param in self.model.parameters():
-                if param.grad is not None:
-                    param.grad.zero_()
             outputs = self.model(X_tensor)
             loss = criterion(outputs, y_tensor)
             loss.backward()
+
             with torch.no_grad():
-                for param in self.model.parameters():
-                    if param.grad is not None:
-                        param -= 0.001 * param.grad
+                for name, param in self.model.named_parameters():
+                    if param.grad is None:
+                        continue
+                    state = self._adam_state[name]
+                    state["step"] += 1
+                    g = param.grad.clone()
+
+                    # Weight decay (decoupled, as in PyTorch's Adam)
+                    param.mul_(1.0 - lr * wd)
+
+                    m = state["m"]
+                    v = state["v"]
+                    m.mul_(beta1).add_(g, alpha=1.0 - beta1)
+                    v.mul_(beta2).addcmul_(g, g, value=1.0 - beta2)
+
+                    m_hat = m / (1.0 - beta1 ** state["step"])
+                    v_hat = v / (1.0 - beta2 ** state["step"])
+
+                    param.addcdiv_(m_hat, v_hat.sqrt().add_(eps), value=-lr)
+
+                    param.grad.zero_()
+
             self.last_batch_loss = loss.item()
 
             self.print(
