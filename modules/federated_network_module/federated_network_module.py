@@ -1807,6 +1807,29 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         except Exception:
             return None, None
 
+    def _get_feature_order(self) -> list:
+        """Return fixed 18-feature order matching FIXED_INPUT_DIM."""
+        return [
+            "dur",
+            "sport",
+            "dport",
+            "spkts",
+            "dpkts",
+            "sbytes",
+            "dbytes",
+            "proto",
+            "appproto",
+            "state",
+            "saddr_num",
+            "daddr_num",
+            "dir_num",
+            "total_bytes",
+            "total_pkts",
+            "avg_pkt_size",
+            "throughput",
+            "history_len",
+        ]
+
     def _extract_flow_features(self, flow: dict) -> Optional[list]:
         """
         Extract exactly 18 features from a Slips flow dictionary.
