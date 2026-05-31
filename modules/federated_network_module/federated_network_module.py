@@ -1290,7 +1290,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 self.flush_testing_results()
 
         except Exception:
-            self.print(f"Error handling alert: {traceback.format_exc()}", 0, 1)
+            self.print(f"Error handling alert: {traceback.format_exc()}", 1, 1)
 
     def _close_sub_window(self):
         """
@@ -1571,6 +1571,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             self._using_merged_model = False
             self._is_fitted = True
+            self.print("[DEBUG] _train_batch done, about to send model", 1, 1)
 
             self.training_buffer_x.clear()
             self.training_buffer_y.clear()
