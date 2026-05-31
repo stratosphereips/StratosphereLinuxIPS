@@ -1333,9 +1333,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     # Discard window after training batch
                     self.window_flows.clear()
 
-                    # Send model to peers
-                    self.send_model_to_peers()
-
             if (
                 self.testing_flows_since_last_log > 0
                 and self._using_merged_model
