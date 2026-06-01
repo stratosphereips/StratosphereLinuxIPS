@@ -1,6 +1,5 @@
-# Build Iris. Iris is currently pinned to the legacy quic-go/libp2p stack,
-# which does not compile with modern Go toolchains.
-FROM golang:1.17 AS build-iris
+# Build Iris.
+FROM golang:1.26.3 AS build-iris
 
 # Set Go modules to "on" to avoid issues with GOPATH
 ENV GO111MODULE=on
@@ -14,7 +13,7 @@ RUN go mod download
 COPY iris/cmd ./cmd
 COPY iris/pkg ./pkg
 
-RUN go build -buildvcs=false -o /artifacts/iris cmd/peercli.go
+RUN CGO_ENABLED=0 go build -buildvcs=false -o /artifacts/iris cmd/peercli.go
 
 
 FROM golang:1.26.3 AS build-p2p

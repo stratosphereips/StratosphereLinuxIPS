@@ -54,7 +54,6 @@ RUN cd modules \
     && cd .. \
     && rm -rf dataset/ docs/  tests/ \
     && rm pytest.ini \
-      webinterface.sh \
       CITATION.cff \
       CHANGELOG.md \
       conftest.py
