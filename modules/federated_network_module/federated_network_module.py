@@ -825,7 +825,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             1,
         )
 
-        lr = 0.05 if freeze_fc1 else 0.01
+        lr = 0.01
         wd = 1e-4
         beta1 = 0.9
         beta2 = 0.999
