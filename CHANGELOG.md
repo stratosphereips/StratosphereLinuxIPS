@@ -1,3 +1,20 @@
+1.1.21 (Jun 1st, 2026)
+
+* Improve Slips security by updating dependencies, reducing shipped build tools, sanitizing inputs, and improving permissions.
+* Secure the Slips web interface by binding it to localhost and adding CSRF protection.
+* Drop support for `webinterface.sh`. Now the web interface starts only with `-w`.
+* Kill the redis server opened by Slips once the analysis is done, and save a Redis database snapshot for later analysis in the output directory.
+* Support analyzing a redis dump.rdb using the web interface.
+* Add TOR exit nodes detection.
+* Fix issue with TI feeds not updating periodically.
+* Add detection for telnet, rlogin, and rsh logins using zeek scripts.
+* Stop Slips on core module failures.
+* Scale profiler workers down when throughput drops to reduce resource usage.
+* Fix issue starting P2P in access point mode (-ap).
+* Auto rebuild Go binaries when needed after Slips is done auto updating.
+* Fix daemon shutdown with `-S`.
+
+
 1.1.20 (Apr 30th, 2026)
 
 * Add optional live Slips auto-update feature.
