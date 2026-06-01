@@ -1513,10 +1513,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """Train on accumulated training buffer with configured epochs, log metrics."""
         try:
             self.print("_train_batch: entering", 1, 1)
-            self.logger.log_timeline(
-                "TRAIN_START",
-                f"{self._training_trigger}_{counter} buffer={len(X)} mal={mal_count} ben={ben_count} epochs={epochs}",
-            )
             if len(self.training_buffer_x) == 0:
                 return
 
@@ -1541,6 +1537,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
             if self._training_trigger == "alert":
                 evidence_count = len(getattr(self, "_last_alert_evidence_ids", []))
+
+            self.logger.log_timeline(
+                "TRAIN_START",
+                f"{self._training_trigger}_{counter} buffer={len(X)} mal={mal_count} ben={ben_count} epochs={epochs}",
+            )
 
             self.logger.log_train_header(
                 "local_train",
