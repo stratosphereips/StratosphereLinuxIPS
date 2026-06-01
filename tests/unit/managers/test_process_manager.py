@@ -1,8 +1,9 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+import signal
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 from managers.process_manager import ProcessManager
 from tests.module_factory import ModuleFactory
 from slips_files.common.slips_utils import utils
@@ -738,6 +739,53 @@ def test_print_stopped_module():
         assert "green_module_name" in printed_str
         assert "Stopped" in printed_str
         assert "green_count left" in printed_str
+
+        process_manager.print_stopped_module("testmodule")
+
+        assert mock_print.call_count == 1
+
+
+def test_kill_daemon_children_uses_stored_pid_count_for_logging():
+    """Kill stored daemon PIDs without requiring active child objects."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.db.get_pids.return_value = {
+        "module_one": 123,
+        "module_thread": 456,
+        "module_two": 789,
+    }
+
+    with patch.object(
+        process_manager, "kill_process_tree"
+    ) as mock_kill_process_tree, patch.object(
+        process_manager, "print_stopped_module"
+    ) as mock_print_stopped_module:
+        process_manager.kill_daemon_children()
+
+    assert mock_kill_process_tree.call_args_list == [call(123), call(789)]
+    assert mock_print_stopped_module.call_args_list == [
+        call("module_one", total_modules=2),
+        call("module_two", total_modules=2),
+    ]
+
+
+def test_kill_process_tree_kills_descendants_before_parent():
+    """Kill descendants before their parent can reparent them."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    parent_children = Mock()
+    parent_children.read.return_value = "456\n"
+    child_children = Mock()
+    child_children.read.return_value = ""
+
+    with patch(
+        "managers.process_manager.os.popen",
+        side_effect=[parent_children, child_children],
+    ), patch("managers.process_manager.os.kill") as mock_kill:
+        process_manager.kill_process_tree(123)
+
+    assert mock_kill.call_args_list == [
+        call(456, signal.SIGKILL),
+        call(123, signal.SIGKILL),
+    ]
 
 
 def test_start_profiler_process():
