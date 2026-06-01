@@ -411,11 +411,17 @@ class Daemon:
                 if os.path.exists(self.pidfile):
                     self.delete_pidfile()
 
-                stopped = not self.is_pid_running(self.pid) and not any(
-                    self.is_pid_running(pid)
-                    for module_name, pid in self.db.get_pids().items()
-                    if "thread" not in module_name.lower()
-                )
+                stopped = False
+                deadline = time.time() + 5
+                while time.time() < deadline:
+                    stopped = not self.is_pid_running(self.pid) and not any(
+                        self.is_pid_running(pid)
+                        for module_name, pid in self.db.get_pids().items()
+                        if "thread" not in module_name.lower()
+                    )
+                    if stopped:
+                        break
+                    time.sleep(0.1)
                 return {
                     "stopped": stopped,
                     "error": None if stopped else "Daemon shutdown timed out.",

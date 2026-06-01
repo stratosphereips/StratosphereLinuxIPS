@@ -22,6 +22,7 @@ from typing import (
     List,
     Tuple,
     Callable,
+    Optional,
 )
 
 from exclusiveprocess import (
@@ -334,22 +335,27 @@ class ProcessManager:
         self.input_process = input_process
         return input_process
 
-    def kill_process_tree(self, pid: int):
-        try:
-            # Send SIGKILL signal to the process
-            os.kill(pid, signal.SIGKILL)
-        except OSError:
-            pass  # Ignore if the process doesn't exist or cannot be killed
+    def kill_process_tree(self, pid: int) -> None:
+        """
+        Kill a process and its descendants.
 
-        # Get the child processes of the current process
+        Parameters:
+            pid: PID at the root of the process tree.
+        """
+        # Get descendants before killing their parent so they do not get
+        # reparented and disappear from pgrep's results.
         try:
             process_list = os.popen(f"pgrep -P {pid}").read().splitlines()
         except Exception:
             process_list = []
 
-        # Recursively kill the child processes
         for child_pid in process_list:
             self.kill_process_tree(int(child_pid))
+
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass  # Ignore if the process doesn't exist or cannot be killed
 
     def kill_all_children(self):
         """
@@ -608,10 +614,29 @@ class ProcessManager:
             0,
         )
 
-    def print_stopped_module(self, module):
+    def print_stopped_module(
+        self, module: str, total_modules: Optional[int] = None
+    ) -> None:
+        """
+        Log that a module stopped and report the number still running.
+
+        Parameters:
+            module: Name of the stopped module.
+            total_modules: Number of modules being stopped. Uses active
+                children when omitted.
+        """
+        if module.casefold() in (
+            stopped_module.casefold()
+            for stopped_module in self.stopped_modules
+        ):
+            return
+
         self.stopped_modules.append(module)
 
-        modules_left = len(self.children) - len(self.stopped_modules)
+        total_modules = (
+            len(self.children) if total_modules is None else total_modules
+        )
+        modules_left = total_modules - len(self.stopped_modules)
 
         # to vertically align them when printing
         module += " " * (20 - len(module))
@@ -960,7 +985,7 @@ class ProcessManager:
         )
         return input_done_processing and profiler_done_processing
 
-    def kill_daemon_children(self):
+    def kill_daemon_children(self) -> None:
         """
         kills the processes started by the daemon
         """
@@ -975,7 +1000,7 @@ class ProcessManager:
                 # skip threads, they'll be  handled by their parent process
                 continue
             self.kill_process_tree(int(pid))
-            self.print_stopped_module(module_name)
+            self.print_stopped_module(module_name, total_modules=len(children))
 
     def get_print_function(self):
         """

@@ -656,9 +656,7 @@ class Main:
                     self.sigterm_received = True
                     self.print("SIGTERM received, shutting down slips.")
                     self.print(
-                        "SIGTERM received, likely due to "
-                        "OOM kill. Slips is stopping "
-                        "without completing the analysis.",
+                        "Slips is stopping without completing the analysis.",
                         0,
                         1,
                     )
