@@ -170,7 +170,7 @@ class ArgumentParser(argparse.ArgumentParser):
             action="store",
             required=False,
             help="Read packets from two interfaces when Slips is running as "
-            "an access point. the wifi interface should come first (e.g -ap wlan0, eth0).",
+            "an access point. the wifi interface should come first (e.g -ap wlan0,eth0).",
         )
         self.add_argument(
             "-F",

@@ -190,7 +190,7 @@ exit_on_cmd_failure
 
 print_green "Installing p2p4slips"
 # build the pigeon and Add pigeon to path
-git submodule init && git submodule update && cd p2p4slips && go build && export PATH=$PATH:$(pwd) >> ~/.bashrc && cd ..
+git submodule init && git submodule update && cd p2p4slips && go build -buildvcs=false && export PATH=$PATH:$(pwd) >> ~/.bashrc && cd ..
 
 exit_on_cmd_failure
 

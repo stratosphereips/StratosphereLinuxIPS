@@ -18,11 +18,11 @@
 import queue
 import multiprocessing
 import time
-import threading
-from multiprocessing import Process
+from multiprocessing.synchronize import Event, Semaphore
 from typing import (
     List,
     Union,
+    Optional,
 )
 
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
@@ -40,7 +40,7 @@ from slips_files.core.input_profilers.argus import Argus
 from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
-from slips_files.core.profiler_worker import ProfilerWorker
+from slips_files.core.worker_manager_mixin import WorkerManagerMixin
 
 SUPPORTED_INPUT_TYPES = {
     InputType.ZEEK: ZeekJSON,
@@ -60,25 +60,34 @@ SEPARATORS = {
 }
 
 
-class Profiler(ICore, IObservable):
+class Profiler(WorkerManagerMixin, ICore, IObservable):
     """A class to create the profiles for IPs"""
 
     name = "profiler"
 
     def init(
         self,
-        is_profiler_done: multiprocessing.Semaphore = None,
+        is_profiler_done_semaphore: Optional[Semaphore] = None,
         profiler_queue=None,
-        is_profiler_done_event: multiprocessing.Event = None,
-        is_input_done_event: multiprocessing.Event = None,
-    ):
+        is_profiler_done_event: Optional[Event] = None,
+        is_input_done_event: Optional[Event] = None,
+        is_input_failed_event: Optional[Event] = None,
+        is_profiler_done_starting_initial_workers_event: Optional[
+            Event
+        ] = None,
+    ) -> None:
         IObservable.__init__(self)
         self.add_observer(self.logger)
         # when profiler is done processing, it releases this semaphore,
         # that's how the process_manager knows it's done
         # when both the input and the profiler are done,
         # the input process signals the rest of the modules to stop
-        self.done_processing: multiprocessing.Semaphore = is_profiler_done
+        self.is_profiler_done_semaphore: Optional[Semaphore] = (
+            is_profiler_done_semaphore
+        )
+        self.is_profiler_done_starting_initial_workers_event: Optional[
+            Event
+        ] = is_profiler_done_starting_initial_workers_event
         # every line put in this queue should be profiled
         self.profiler_queue: multiprocessing.Queue = profiler_queue
 
@@ -87,26 +96,16 @@ class Profiler(ICore, IObservable):
         self.rec_lines = 0
         self.read_configuration()
         self.symbol = SymbolHandler(self.logger, self.db)
-        # there has to be a timeout or it will wait forever and never
-        # receive a new line
-        self.timeout = 0.0000001
         self.channels = {}
         # is set by this proc to tell input proc that we are done
-        # processing and it can exit no issue
-        self.is_profiler_done_event = is_profiler_done_event
+        # processing and it can shutdown now
+        self.is_profiler_done_event: Optional[Event] = is_profiler_done_event
         # is set by input to indicate no more flows are coming
-        self.is_input_done_event = is_input_done_event
+        self.is_input_done_event: Optional[Event] = is_input_done_event
+        # is set by input to indicate it stopped because of a failure
+        self.is_input_failed_event: Optional[Event] = is_input_failed_event
         self.input_handler_obj = None
-        # to close them on shutdown
-        self.profiler_child_processes: List[Process] = []
-        # to access their internal attributes if needed
-        self.workers: List[ProfilerWorker] = []
-        # is set by this module to indicate to the monitor thread that
-        # workers stoppped.
-        self.did_all_workers_stop = multiprocessing.Event()
-        self.last_worker_id = -1
-        # max parallel profiler workers to start when high throughput is detected
-        self.max_workers = 6
+        self.init_worker_manager()
         # 30MBs max size of this queue to avoid growing forever in mem
         self.aid_queue = multiprocessing.Queue(maxsize=30000000)
         # This starts a process that handles calculatng aid hash and stores
@@ -115,13 +114,6 @@ class Profiler(ICore, IObservable):
         self.aid_manager = AIDManager(
             self.db,
             self.aid_queue,
-        )
-        now = time.monotonic()
-        self.next_throughput_check_time = now + 300
-        self.profiler_monitor_thread = threading.Thread(
-            target=self._run_profiler_monitor_loop,
-            name="profiler_monitor_loop",
-            daemon=True,
         )
 
     def subscribe_to_channels(self):
@@ -166,24 +158,7 @@ class Profiler(ICore, IObservable):
             # binetflow, binetflow tabs, nfdump, suricata
             return input_type
 
-    def stop_profiler_workers(self):
-        """
-        wait as long as needed foreach worker to stop
-        """
-        # ensure we don't block forever waiting for workers that will never
-        # receive the stop sentinel
-        if self.is_input_done_event is not None:
-            self.is_input_done_event.wait()
-
-        for process in self.profiler_child_processes:
-            try:
-                process.join()
-            except (OSError, ChildProcessError):
-                pass
-
-        self.did_all_workers_stop.set()
-
-    def mark_self_as_done_processing(self):
+    def mark_self_as_done_processing(self) -> None:
         """
         is called to mark this process as done processing so
         slips.py would know when to terminate
@@ -192,9 +167,11 @@ class Profiler(ICore, IObservable):
         self.print(
             "Marking Profiler as done processing.", log_to_logfiles_only=True
         )
-        self.done_processing.release()
+        if self.is_profiler_done_semaphore is not None:
+            self.is_profiler_done_semaphore.release()
         self.print("Profiler is done processing.", log_to_logfiles_only=True)
-        self.is_profiler_done_event.set()
+        if self.is_profiler_done_event is not None:
+            self.is_profiler_done_event.set()
         self.print(
             "Profiler is done telling input.py that it's done processing.",
             log_to_logfiles_only=True,
@@ -210,30 +187,6 @@ class Profiler(ICore, IObservable):
             return None
         except Exception:
             return None
-
-    def start_profiler_worker(self, worker_id: int = None):
-        """starts A profiler worker for faster processing of the flows"""
-        worker_name = f"profiler_worker_process_{worker_id}"
-        worker = ProfilerWorker(
-            logger=self.logger,
-            output_dir=self.parent_output_dir,
-            redis_port=self.redis_port,
-            termination_event=self.termination_event,
-            conf=self.conf,
-            ppid=self.ppid,
-            slips_args=self.args,
-            bloom_filters_manager=self.bloom_filters,
-            # module specific kwargs
-            name=worker_name,
-            profiler_queue=self.profiler_queue,
-            input_handler=self.input_handler_obj,
-            aid_queue=self.aid_queue,
-            aid_manager=self.aid_manager,
-            is_input_done_event=self.is_input_done_event,
-        )
-        worker.start()
-        self.profiler_child_processes.append(worker)
-        self.db.increment_profiler_workers_started()
 
     def get_handler_obj(
         self, first_msg: dict
@@ -295,69 +248,10 @@ class Profiler(ICore, IObservable):
             self.mark_self_as_done_processing()
             self.db.set_new_incoming_flows(False)
 
-    def did_5min_pass_since_last_throughput_check(self) -> bool:
-        """
-        returns true if 5 mins passed since the last time we checked
-        the flows read per second
-        """
-        now = time.monotonic()
-        if now < self.next_throughput_check_time:
-            return False
-
-        # Advance in 5-min steps to reduce drift on long delays.
-        while self.next_throughput_check_time <= now:
-            self.next_throughput_check_time += 300
-        return True
-
-    def max_workers_started(self) -> bool:
-        """
-        returns true if the maximum number of profiler workers
-        is already started
-        """
-        # bc workers start from 0
-        if self.last_worker_id + 1 >= self.max_workers:
-            return True
-        return False
-
-    def _check_if_high_throughput_and_add_workers(self):
-        """
-        Checks for input and profile flows/sec imbalance and adds more
-        profiler workers if needed.
-        """
-        if self.max_workers_started():
-            return
-
-        if not self.did_5min_pass_since_last_throughput_check():
-            return
-
-        profiler_fps = self.db.get_core_module_flows_per_second(self.name) or 0
-        input_fps = self.db.get_core_module_flows_per_second("Input") or 0
-        if float(input_fps) > (
-            float(profiler_fps) * 1.1
-        ):  # 10% more input fps than profiler fps
-            worker_id = self.last_worker_id + 1
-            self.start_profiler_worker(worker_id)
-            self.last_worker_id = worker_id
-            self.print(
-                f"Warning: High throughput detected. Started "
-                f"additional worker: "
-                f"profiler_worker_{worker_id} to handle the flows."
-            )
-
-            if self.last_worker_id == self.max_workers - 1:
-                self.print(
-                    f"Maximum number of profiler workers "
-                    f"({self.max_workers}) started."
-                )
-
     def pre_main(self):
         client_ips = [str(ip) for ip in self.client_ips]
         if client_ips:
             self.print(f"Used client IPs: {green(', '.join(client_ips))}")
-
-    def _update_lines_read_by_all_workers(self):
-        # needed by store_flows_read_per_second()
-        self.lines = sum([worker.received_lines for worker in self.workers])
 
     def should_stop(self):
         """
@@ -369,16 +263,23 @@ class Profiler(ICore, IObservable):
         """
         return self.stop_other_workers.is_set()
 
-    def _run_profiler_monitor_loop(self):
+    def _is_input_done(self) -> bool:
+        return (
+            self.is_input_done_event is not None
+            and self.is_input_done_event.is_set()
+        )
+
+    def _did_input_fail(self) -> bool:
         """
-        Does necessary monitoring for the profiler while the workers are
-        running.
+        Return whether input stopped because of a failure.
+
+        Return:
+        True when the input failure event is set.
         """
-        while not self.did_all_workers_stop.is_set():
-            self._update_lines_read_by_all_workers()
-            # implemented in icore.py
-            self.store_flows_read_per_second()
-            self._check_if_high_throughput_and_add_workers()
+        return (
+            self.is_input_failed_event is not None
+            and self.is_input_failed_event.is_set()
+        )
 
     def main(self):
         # process the first msg only here, to determine what kind of input
@@ -386,28 +287,54 @@ class Profiler(ICore, IObservable):
         # wait as long as needed for it
         msg = None
         while not msg:
+            if self._did_input_fail():
+                self.print(
+                    "Stopping profiler, input stopped before profiling began.",
+                )
+                self.is_profiler_done_starting_initial_workers_event.set()
+                return 1
+
+            if self.args.interface:
+                # we know the input type, no need to wait for the first msg
+                # to determine it, we can start the workers right away
+                break
+
             msg = self.get_msg_from_queue(self.profiler_queue)
+            if not msg and self._is_input_done():
+                self.print(
+                    "Stopping profiler, no more msgs are coming.",
+                )
+                self.is_profiler_done_starting_initial_workers_event.set()
+                return 1
             time.sleep(0.1)
 
-        self.input_handler_obj = self.get_handler_obj(msg)
-        # put again that msg in queue to be processed by the profilers,
-        # we just checked it here to determine the input handler obj
-        self.profiler_queue.put(msg)
-        if not self.input_handler_obj:
-            self.print("Unsupported input type, exiting.")
-            return 1
+        if self.args.interface:
+            self.input_handler_obj = SUPPORTED_INPUT_TYPES[InputType.ZEEK](
+                self.db
+            )
+        else:
+            self.input_handler_obj = self.get_handler_obj(msg)
+            # put again that msg in queue to be processed by the profilers,
+            # we just checked it here to determine the input handler obj
+            self.profiler_queue.put(msg)
+            if not self.input_handler_obj:
+                self.print("Unsupported input type, exiting.")
+                return 1
 
-        line: dict = msg["line"]
-        # updates internal zeek to slips mapping if needed, just once
-        self.input_handler_obj.process_line(line)
+            line: dict = msg["line"]
+            # updates internal zeek to slips mapping if needed, just once
+            self.input_handler_obj.process_line(line)
+
         # start the thread now after we know the input type
         utils.start_thread(self.profiler_monitor_thread, self.db)
+
         # slips starts with these workers by default until it detects
         # high throughput that these workers arent enough to handle
-        num_of_profiler_workers = 3
-        for worker_id in range(num_of_profiler_workers):
+        for worker_id in range(self.num_of_initial_profiler_workers):
             self.last_worker_id = worker_id
             self.start_profiler_worker(worker_id)
+
+        self.is_profiler_done_starting_initial_workers_event.set()
 
         # ICore() will call shutdown_gracefully() on return
         return

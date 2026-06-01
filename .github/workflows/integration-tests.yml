@@ -12,7 +12,7 @@ jobs:
     outputs:
       test_files: ${{ steps.list.outputs.test_files }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - id: list
         uses: ./.github/actions/list-tests-dir
         with:
@@ -41,7 +41,7 @@ jobs:
         test_file: ${{ fromJson(needs.list-integration-tests.outputs.test_files) }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
@@ -54,7 +54,10 @@ jobs:
           python3 -m pytest tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 3
 
       - name: Build Artifact Name
-        # otherwise we get numeric names for the artifacts and we dont know which is which
+        # built names, otherwise we get numeric names for the artifacts and we dont know which is which
+        # always() here because when the pytest step fails, GitHub skips the name-building step, so steps.artifact-name.outputs.name is empty
+        # and upload-artifact rejects it.
+        if: always()
         id: artifact-name
         run: |
           sanitized_test_file="${{ matrix.test_file }}"
@@ -63,7 +66,7 @@ jobs:
 
       - name: Upload Artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.artifact-name.outputs.name }}
           path: |

@@ -28,6 +28,7 @@ This is the main guide to the documentation related to the changes done to Slips
 - [Blocking with Slips as an Access Point](https://stratospherelinuxips.readthedocs.io/en/develop/immune/blocking_in_slips.html)
 - [IDS-in-the-middle Traffic routing](https://stratospherelinuxips.readthedocs.io/en/develop/immune/ids_in_the_middle_traffic_routing.html)
 - [RPI Failover Mechanisms](https://stratospherelinuxips.readthedocs.io/en/develop/immune/failover_mechanisms.html)
+- [Security Audit](https://stratospherelinuxips.readthedocs.io/en/develop/immune/security_audit.html)
 
 ### Datasets & LLM Training
 

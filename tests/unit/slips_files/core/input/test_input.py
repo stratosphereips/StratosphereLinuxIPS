@@ -7,10 +7,12 @@ from unittest.mock import (
     patch,
     MagicMock,
     Mock,
+    call,
 )
 import shutil
 import os
 import json
+import signal
 
 
 @pytest.mark.parametrize(
@@ -27,18 +29,31 @@ def test_handle_pcap_input(tmp_path, input_type, input_information):
     input_process.zeek_utils.create_zeek_output_dir = Mock(
         return_value=str(tmp_path)
     )
-    input_process.zeek_utils.init_zeek = Mock()
+    input_process.zeek_utils.init_zeek_and_start_the_zeek_thread = Mock()
     input_process.zeek_utils.read_zeek_files = Mock(return_value=7)
 
     assert handler.run() is True
 
     input_process.zeek_utils.create_zeek_output_dir.assert_called_once()
-    input_process.zeek_utils.init_zeek.assert_called_once_with(
+    input_process.zeek_utils.init_zeek_and_start_the_zeek_thread.assert_called_once_with(
         handler.observer, str(tmp_path), input_process.given_path
     )
     input_process.zeek_utils.read_zeek_files.assert_called_once()
     handler.file_remover.start.assert_not_called()
     assert input_process.lines == 7
+
+
+def test_main_publishes_stop_when_handler_returns_false():
+    input_process = ModuleFactory().create_input_obj("", InputType.INTERFACE)
+    input_process.db.publish_stop = Mock()
+    input_process.input_handlers[InputType.INTERFACE].run = Mock(
+        return_value=False
+    )
+
+    assert input_process.main() is False
+
+    input_process.is_input_failed_event.set.assert_called_once_with()
+    input_process.db.publish_stop.assert_called_once_with()
 
 
 @pytest.mark.parametrize(
@@ -496,7 +511,13 @@ def test_shutdown_zeek_runtime_kills_pids(pids, expected_kills):
         input_process.zeek_utils.shutdown_zeek_runtime()
 
     mock_thread.join.assert_called_once_with(3)
-    assert mock_kill.call_count == expected_kills
+    if expected_kills:
+        mock_kill.assert_has_calls(
+            [call(pid, signal.SIGKILL) for pid in pids],
+            any_order=True,
+        )
+    else:
+        mock_kill.assert_not_called()
 
 
 def test_get_file_handle_non_existing_file():

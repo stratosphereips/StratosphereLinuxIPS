@@ -54,11 +54,11 @@ git clone --recurse-submodules --remote-submodules https://github.com/stratosphe
 ```
 
 then you should only build the pigeon using:
-```cd p2p4slips && go build```
+```cd p2p4slips && go build -buildvcs=false```
 - If you installed Slips without the submodules then you should download and build the pigeon using:
 
 ```
-git submodule init && git submodule update && cd p2p4slips && go build
+git submodule init && git submodule update && cd p2p4slips && go build -buildvcs=false
 ```
 
 The p2p binary should now be in ```p2p4slips/``` dir and slips will be able to find it.

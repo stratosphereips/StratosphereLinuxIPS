@@ -5,7 +5,7 @@ import contextlib
 import ipaddress
 import json
 from datetime import datetime
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Any
 import validators
 
 from modules.flow_alerts.dns import DNS
@@ -495,6 +495,26 @@ class Conn(IFlowalertsAnalyzer):
             return True
         return False
 
+    def check_tor_exit_node(self, twid: str, flow: Any) -> bool:
+        """
+        Check whether the destination IP is a known Tor exit node.
+
+        Parameters:
+        twid: Time window ID.
+        flow: Connection flow to check.
+
+        Return:
+        bool: True when Tor exit node evidence is set.
+        """
+        if not flow.daddr:
+            return False
+
+        if not self.db.is_tor_node(flow.daddr):
+            return False
+
+        self.set_evidence.tor_exit_node(twid, flow)
+        return True
+
     def should_ignore_conn_without_dns(self, flow) -> bool:
         """
         checks for the cases that we should ignore the connection without dns
@@ -875,6 +895,7 @@ class Conn(IFlowalertsAnalyzer):
             )
             self.detect_connection_to_multiple_ports(profileid, twid, flow)
             self.check_data_upload(profileid, twid, flow)
+            self.check_tor_exit_node(twid, flow)
 
             self.check_connection_to_local_ip(twid, flow)
             self.check_device_changing_ips(twid, flow)

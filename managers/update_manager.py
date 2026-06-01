@@ -28,6 +28,11 @@ from slips_files.core.database.database_manager import DBManager
 
 
 class UpdateManager:
+    UPDATE_BRANCH_MAP = {
+        "stable": "origin/master",
+        "unstable": "origin/develop",
+    }
+
     def __init__(
         self,
         database: DBManager = None,
@@ -40,6 +45,7 @@ class UpdateManager:
         self.cached_update_info: Optional[Dict[str, Any]] = None
         self.conf = ConfigParser()
         self.args = self.conf.get_args()
+        self.print = print_func or (lambda *args, **kwargs: None)
         # The very first time, slips is started by the user via CLI. then
         # for each new update, it's started by this update manager.
         # this func returns true if the user just started slips from cli.
@@ -48,14 +54,48 @@ class UpdateManager:
         )
         self._read_configuration()
         self.last_update_time = 0
-        self.print = print_func
 
     def _read_configuration(self):
-        self.auto_update_slips_enabled = self.conf.auto_update_slips()
-
-    def _get_master_update_json_link(self) -> Optional[str]:
         """
-        Build the raw GitHub URL for update.json on the master branch.
+        Read update channel and branch configuration.
+
+        Returns:
+            None.
+        """
+        self.auto_update_slips_enabled = self.conf.auto_update_slips()
+        self.update_channel = self.conf.channel_to_update_slips_from()
+        self.testing_branch_to_update_slips_from = (
+            self.conf.testing_branch_to_update_slips_from()
+        )
+
+        if self.update_channel == "testing":
+            self.update_branch = self.testing_branch_to_update_slips_from
+            if not self.update_branch:
+                # use stable instead
+                self.update_branch = self.UPDATE_BRANCH_MAP["stable"]
+                self.update_channel = "stable"
+                self.print(
+                    "Warning: Invalid "
+                    "update.testing_branch_to_update_slips_from value "
+                    f"{self.testing_branch_to_update_slips_from!r}. Falling "
+                    f"back to stable."
+                )
+            return
+
+        self.update_branch = self.UPDATE_BRANCH_MAP[self.update_channel]
+
+    def _get_remote_branch_name(self) -> str:
+        """
+        Get the branch name without the origin/ prefix.
+
+        Returns:
+            The configured remote branch name.
+        """
+        return self.update_branch.removeprefix("origin/")
+
+    def _get_update_json_link(self) -> Optional[str]:
+        """
+        Build the raw GitHub URL for update.json on the configured branch.
 
         Returns:
             The raw update.json URL if the origin remote is supported,
@@ -86,12 +126,58 @@ class UpdateManager:
             return None
 
         return (
-            f"https://raw.githubusercontent.com/{repo_path}/master/update.json"
+            "https://raw.githubusercontent.com/"
+            f"{repo_path}/{self._get_remote_branch_name()}/update.json"
         )
 
-    def _read_master_update_json(self) -> Dict[str, Any]:
+    def _get_matching_update_entry(
+        self, update_data: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
-        Read the update.json file from the origin/master branch of slips repo.
+        Which entry of  update.json matches the user selection in slips
+        config file?
+
+        Parameters:
+            update_data: Parsed list of update.json entries.
+
+        Returns:
+            The matching update metadata entry, or an empty dictionary.
+        """
+        if not update_data:
+            return {}
+
+        short_branch_name = self._get_remote_branch_name()
+        normalized_channel = self.update_channel.lower()
+
+        for entry in update_data:
+            entry_branch = entry.get("branch")
+            if (
+                isinstance(entry_branch, str)
+                and entry_branch.strip().lower() == short_branch_name.lower()
+            ):
+                return entry
+
+        for entry in update_data:
+            entry_channel = entry.get("channel")
+            if (
+                isinstance(entry_channel, str)
+                and entry_channel.strip().lower() == normalized_channel
+            ):
+                return entry
+
+        for entry in update_data:
+            entry_branch = entry.get("branch")
+            if (
+                isinstance(entry_branch, str)
+                and entry_branch.strip().lower() == normalized_channel
+            ):
+                return entry
+
+        return {}
+
+    def _read_update_json(self) -> Dict[str, Any]:
+        """
+        Read the update.json file from the configured Slips branch.
 
         Returns:
             Parsed update metadata if it can be fetched and decoded,
@@ -100,7 +186,7 @@ class UpdateManager:
         if self.cached_update_info is not None:
             return self.cached_update_info
 
-        update_json_link = self._get_master_update_json_link()
+        update_json_link = self._get_update_json_link()
         if not update_json_link:
             self.cached_update_info = {}
             return self.cached_update_info
@@ -119,35 +205,43 @@ class UpdateManager:
             self.cached_update_info = {}
             return self.cached_update_info
 
-        self.cached_update_info = (
-            update_data if isinstance(update_data, dict) else {}
-        )
+        if isinstance(update_data, dict):
+            self.cached_update_info = update_data
+            return self.cached_update_info
+
+        if isinstance(update_data, list):
+            self.cached_update_info = self._get_matching_update_entry(
+                [entry for entry in update_data if isinstance(entry, dict)]
+            )
+            return self.cached_update_info
+
+        self.cached_update_info = {}
         return self.cached_update_info
 
     def _new_version_has_new_dependencies(self) -> bool:
         """
-        Check whether the version on master introduces new dependencies.
+        Check whether the configured update target introduces dependencies.
 
         Returns:
             True if update.json reports new dependencies or the metadata
             cannot be read safely, otherwise False.
         """
-        update_data = self._read_master_update_json()
+        update_data = self._read_update_json()
         return bool(update_data.get("has_new_dependencies", True))
 
     def _is_new_version_backwards_compatible(self) -> bool:
         """
-        Check whether the version on master is backwards compatible.
+        Check whether the configured update target is backwards compatible.
 
         Returns:
             True if update.json marks the update as backwards compatible,
             otherwise False.
         """
-        update_data = self._read_master_update_json()
+        update_data = self._read_update_json()
         return bool(update_data.get("backwards_compatible", False))
 
     def _is_new_version_available(self) -> bool:
-        update_data = self._read_master_update_json()
+        update_data = self._read_update_json()
         latest_version = update_data.get("version", False)
 
         if not latest_version:
@@ -155,19 +249,33 @@ class UpdateManager:
 
         return utils.get_current_version() != latest_version
 
-    def git_pull_master(self):
+    def git_pull_branch(self):
         """
-        Pull the latest origin/master changes and check them out.
+        Pull the latest configured branch changes and check them out.
 
         Returns:
-            The checked out origin/master commit.
+            None.
         """
         repo = Repo(".")
-        repo.remote("origin").fetch("master")
-        repo.git.checkout("origin/master")
+        remote_branch_name = self._get_remote_branch_name()
+        repo.remote("origin").fetch(remote_branch_name)
+        repo.git.checkout(self.update_branch)
         self.print(
-            "Done pulling new version and checking out master " "branch."
+            "Done pulling new version and checking out "
+            f"{self.update_branch} branch."
         )
+
+    def update_submodules(self):
+        """
+        Sync and update git submodules after the main repository update.
+
+        Returns:
+            None.
+        """
+        repo = Repo(".")
+        repo.git.submodule("sync", "--recursive")
+        repo.git.submodule("update", "--init", "--recursive")
+        self.print("Done updating Slips submodules.")
 
     def _get_checkout_overwritten_files(
         self, git_error: GitCommandError
@@ -219,9 +327,7 @@ class UpdateManager:
         Returns:
             The update version if known, otherwise None.
         """
-        update_data = (
-            self.cached_update_info or self._read_master_update_json()
-        )
+        update_data = self.cached_update_info or self._read_update_json()
         version = update_data.get("version")
         return version if isinstance(version, str) and version else None
 
@@ -298,7 +404,8 @@ class UpdateManager:
 
     def update_slips(self):
         try:
-            self.git_pull_master()
+            self.git_pull_branch()
+            self.update_submodules()
         except GitError as git_error:
             self._warn_about_aborted_update(git_error)
             return
@@ -324,6 +431,9 @@ class UpdateManager:
         return sTrue if a new compatible version is available and slips
         should update itself
         """
+        if not self.auto_update_slips_enabled:
+            return False
+
         if self._did_1d_pass_since_last_update():
             should_update: bool = self.should_update_slips()
 

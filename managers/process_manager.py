@@ -21,6 +21,8 @@ from multiprocessing.process import BaseProcess
 from typing import (
     List,
     Tuple,
+    Callable,
+    Optional,
 )
 
 from exclusiveprocess import (
@@ -51,6 +53,40 @@ from slips_files.core.profiler import Profiler
 
 
 class ProcessManager:
+    """
+    Responsible for starting and stopping all the slips processes and modules.
+    Here's how the stopping of input.py and profiler.py works
+    input.py
+      -> realizes that no more flows are arriving
+      -> puts "stop" in the profiler_queue
+      -> is_input_done_event.set()
+      -> waits on is_profiler_done_event
+
+    profiler.py
+      <- recvs is_input_done_event for normal input completion
+      <- recvs is_input_failed_event for abnormal input failure
+      -> waits/join() profiler workers
+
+    profiler workers
+      <- recvs the "stop" from the  profiler_queue
+      -> exit
+
+    profiler.py
+      <- realizes that all workers exited
+      -> is_profiler_done_semaphore.release()
+      -> is_profiler_done_event.set()
+
+    input.py
+      <- is_profiler_done_event
+      -> is_input_done.release()
+
+    process_manager
+      <- is_input_done
+      <- is_profiler_done_semaphore
+      -> Slips can finish shutdown
+
+    """
+
     def __init__(self, main):
         self.main = main
         # Can be used by signal handlers before startup finishes.
@@ -76,28 +112,119 @@ class ProcessManager:
         # release the semaphore. Once having the semaphore, then slips.py can
         # terminate slips.
         self.is_input_done = Semaphore(0)
-        self.is_profiler_done = Semaphore(0)
+        # when profiler is done processing, it releases this semaphore,
+        self.is_profiler_done_semaphore = Semaphore(0)
         # is set by the profiler process to indicate that it's done so
         # input can shutdown no issue
         # now without this event, input process doesn't know that profiler
         # is still waiting for the queue to stop
         # and inout stops and renders the profiler queue useless and profiler
-        # cant get more lines anymore!
+        # cant get more lines any more!
         self.is_profiler_done_event = Event()
+        self.is_profiler_done_starting_initial_workers_event = Event()
         # is set by the input process to indicate no more flows are coming
         # so profiler can safely begin shutdown/joins.
         self.is_input_done_event = Event()
+        # is set by the input process when it stops because of a failure.
+        self.is_input_failed_event = Event()
         self.is_slips_live_updating_event = Event()
+        self.user_disabled_modules: List[str] = []
+        self.slips_disabled_modules: List[str] = []
         self.read_config()
+        self.all_children_started = False
+        self.core_module_failure = False
 
     def read_config(self):
-        self.modules_to_ignore: list = self.main.conf.get_disabled_modules(
-            self.main.input_type
-        )
-        self.bootstrap_p2p = self.main.conf.is_bootstrapping_node()
         self.bootstrapping_modules = self.main.conf.get_bootstrapping_modules()
-        # self.bootstrap_p2p, self.boootstrapping_modules = self.main.conf.
-        # get_bootstrapping_setting()
+        self.bootstrapping_node = self.main.conf.read_configuration(
+            "global_p2p", "bootstrapping_node", False
+        )
+        self.use_global_p2p = self.main.conf.read_configuration(
+            "global_p2p", "use_global_p2p", False
+        )
+
+    def _reading_flows_from_cyst(self) -> bool:
+        """
+        Check whether the selected input module is CYST.
+
+        Returns:
+            True when CYST is configured as the input module.
+        """
+        custom_flows = self.main.args.input_module
+        return "cyst" in str(custom_flows)
+
+    def get_disabled_modules(self) -> Tuple[List[str], List[str]]:
+        """
+        Get user-disabled modules and Slips-disabled modules.
+
+        Returns:
+            A tuple containing user-disabled modules and modules disabled by
+            Slips runtime rules.
+        """
+        user_disabled_modules: List[str] = self.main.conf.read_configuration(
+            "modules", "disable", ["template"]
+        )
+        user_disabled_modules = [
+            module.strip() for module in user_disabled_modules
+        ]
+
+        is_running_non_stop = self.main.db.is_running_non_stop()
+
+        slips_disabled_modules: List[str] = []
+
+        if not self._is_exporting_module_enabled():
+            slips_disabled_modules.append("exporting_alerts")
+
+        use_p2p = self.main.conf.use_local_p2p()
+        if not (use_p2p and is_running_non_stop):
+            slips_disabled_modules.append("p2p_trust")
+
+        use_global_p2p = self.main.conf.use_global_p2p()
+        if not (use_global_p2p and is_running_non_stop):
+            slips_disabled_modules.extend(("fides", "iris"))
+
+        if not (
+            self.main.conf.send_to_warden()
+            or self.main.conf.receive_from_warden()
+        ):
+            slips_disabled_modules.append("cesnet")
+
+        if not (self.main.args.clearblocking or self.main.args.blocking):
+            slips_disabled_modules.extend(("blocking", "arp_poisoner"))
+
+        if self.main.input_type != InputType.PCAP:
+            slips_disabled_modules.append("leak_detector")
+
+        if not self._reading_flows_from_cyst():
+            slips_disabled_modules.append("cyst")
+
+        for module in self.slips_disabled_modules:
+            if module not in slips_disabled_modules:
+                slips_disabled_modules.append(module)
+
+        return user_disabled_modules, slips_disabled_modules
+
+    def _is_exporting_module_enabled(self) -> bool:
+        """
+        Check whether alert exporting is configured.
+
+        Returns:
+            True when at least one supported alert exporter is enabled.
+        """
+        export_to = self.main.conf.export_to()
+        return "stix" in export_to or "slack" in export_to
+
+    def get_all_disabled_modules(self) -> List[str]:
+        """
+        Get all disabled modules as a single list.
+
+        Returns:
+            User-disabled modules followed by Slips-disabled modules.
+        """
+        return self.user_disabled_modules + self.slips_disabled_modules
+
+    def declare_that_slips_done_starting_all_children(self):
+        self.all_children_started = True
 
     def start_slips_update_manager(self):
         return UpdateManager(
@@ -130,10 +257,12 @@ class ProcessManager:
             self.main.conf,
             self.main.pid,
             self.main.bloom_filters_man,
-            is_profiler_done=self.is_profiler_done,
+            is_profiler_done_semaphore=self.is_profiler_done_semaphore,
             profiler_queue=self.profiler_queue,
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
+            is_input_failed_event=self.is_input_failed_event,
+            is_profiler_done_starting_initial_workers_event=self.is_profiler_done_starting_initial_workers_event,
         )
         profiler_process.start()
         self.main.print(
@@ -143,6 +272,12 @@ class ProcessManager:
             0,
         )
         self.main.db.store_pid("Profiler", int(profiler_process.pid))
+        # Interface input starts profiler workers before the input process
+        # sends any flows. File-like inputs need the input process to send the
+        # first message before the profiler can choose the input handler.
+        if self.main.input_type == InputType.INTERFACE:
+            self.is_profiler_done_starting_initial_workers_event.wait(30)
+        self.profiler_process = profiler_process
         return profiler_process
 
     def start_evidence_process(self):
@@ -164,6 +299,7 @@ class ProcessManager:
             0,
         )
         self.main.db.store_pid("evidence_handler", int(evidence_process.pid))
+        self.evidence_process = evidence_process
         return evidence_process
 
     def start_input_process(self):
@@ -185,6 +321,7 @@ class ProcessManager:
             line_type=self.main.line_type,
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
+            is_input_failed_event=self.is_input_failed_event,
             is_slips_live_updating_event=self.is_slips_live_updating_event,
         )
         input_process.start()
@@ -195,24 +332,30 @@ class ProcessManager:
             0,
         )
         self.main.db.store_pid("Input", int(input_process.pid))
+        self.input_process = input_process
         return input_process
 
-    def kill_process_tree(self, pid: int):
-        try:
-            # Send SIGKILL signal to the process
-            os.kill(pid, signal.SIGKILL)
-        except OSError:
-            pass  # Ignore if the process doesn't exist or cannot be killed
+    def kill_process_tree(self, pid: int) -> None:
+        """
+        Kill a process and its descendants.
 
-        # Get the child processes of the current process
+        Parameters:
+            pid: PID at the root of the process tree.
+        """
+        # Get descendants before killing their parent so they do not get
+        # reparented and disappear from pgrep's results.
         try:
             process_list = os.popen(f"pgrep -P {pid}").read().splitlines()
         except Exception:
             process_list = []
 
-        # Recursively kill the child processes
         for child_pid in process_list:
             self.kill_process_tree(int(child_pid))
+
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass  # Ignore if the process doesn't exist or cannot be killed
 
     def kill_all_children(self):
         """
@@ -235,8 +378,12 @@ class ProcessManager:
             self.kill_process_tree(process.pid)
             self.print_stopped_module(module_name)
 
-    def is_ignored_module(self, module_name: str) -> bool:
-        for ignored_module in self.modules_to_ignore:
+    def is_disabled_module(self, module_name: str) -> bool:
+        """
+        returns true if the given module is disabled by the user or by
+        slips runtime
+        """
+        for ignored_module in self.get_all_disabled_modules():
             ignored_module = (
                 ignored_module.replace(" ", "")
                 .replace("_", "")
@@ -270,8 +417,22 @@ class ProcessManager:
 
             if m1.__contains__(m2):
                 return True
-        self.modules_to_ignore.append(module_name.split(".")[-1])
+        disabled_module = module_name.split(".")[-1]
+        if disabled_module not in self.slips_disabled_modules:
+            self.slips_disabled_modules.append(disabled_module)
         return False
+
+    def is_bootstrapping_node(self) -> bool:
+        """
+        Check whether this Slips instance should run as a P2P bootstrap node.
+
+        Returns:
+            True when both bootstrapping and global P2P are enabled.
+        """
+        if not self.main.db.is_running_non_stop():
+            return False
+
+        return self.bootstrapping_node and self.use_global_p2p
 
     def is_abstract_module(self, obj) -> bool:
         return obj.name in ("imodule", "iasync_module")
@@ -284,6 +445,11 @@ class ProcessManager:
         and returns a list of modules to load in the correct order if
         applicable.
         """
+        (
+            self.user_disabled_modules,
+            self.slips_disabled_modules,
+        ) = self.get_disabled_modules()
+
         plugins = {}
         failed_to_load_modules = 0
         for module_name in self._discover_module_names():
@@ -326,14 +492,15 @@ class ProcessManager:
             if dir_name == file_name:
                 yield module_name
 
-    def _should_load_module(self, module_name):
-        # filter modules based on bootstrapping or blacklist conditions
-        if self.bootstrap_p2p:
+    def _should_load_module(self, module_name: str) -> bool:
+        if self.is_bootstrapping_node():
+            # in this node slips only runs bootstrapping-necessary modules,
+            # no detection modules are started.
             if not self.is_bootstrapping_module(module_name):
-                return False  # keep only the bootstrapping-necessary modules
+                return False
         else:
-            if self.is_ignored_module(module_name):
-                return False  # ignore blacklisted modules
+            if self.is_disabled_module(module_name):
+                return False
         return True
 
     def _import_module(self, module_name):
@@ -407,7 +574,11 @@ class ProcessManager:
 
     def print_disabled_modules(self):
         print("-" * 27)
-        self.main.print(f"Disabled Modules: {self.modules_to_ignore}", 1, 0)
+        self.main.print(
+            f"Disabled Modules: " f"{self.get_all_disabled_modules()}",
+            1,
+            0,
+        )
 
     def load_modules(self):
         """responsible for starting all the modules in the modules/ dir"""
@@ -443,10 +614,29 @@ class ProcessManager:
             0,
         )
 
-    def print_stopped_module(self, module):
+    def print_stopped_module(
+        self, module: str, total_modules: Optional[int] = None
+    ) -> None:
+        """
+        Log that a module stopped and report the number still running.
+
+        Parameters:
+            module: Name of the stopped module.
+            total_modules: Number of modules being stopped. Uses active
+                children when omitted.
+        """
+        if module.casefold() in (
+            stopped_module.casefold()
+            for stopped_module in self.stopped_modules
+        ):
+            return
+
         self.stopped_modules.append(module)
 
-        modules_left = len(self.children) - len(self.stopped_modules)
+        total_modules = (
+            len(self.children) if total_modules is None else total_modules
+        )
+        modules_left = total_modules - len(self.stopped_modules)
 
         # to vertically align them when printing
         module += " " * (20 - len(module))
@@ -602,7 +792,7 @@ class ProcessManager:
 
         return alive_processes
 
-    def get_analysis_time(self) -> Tuple[str, str]:
+    def get_analysis_time(self) -> Tuple[float, str]:
         """
         Returns how long slips took to analyze the given file
         returns analysis_time in minutes and slips end_time as a date
@@ -620,7 +810,7 @@ class ProcessManager:
         based on the following:
         1. is slips still receiving new flows? (checks input.py and
         profiler.py)
-        2. did slips the control channel recv the stop_slips
+        2. did the control channel recv the stop_slips
         3. is a debugger present?
 
         This function NEVER returns True if the input and profiler are
@@ -628,15 +818,68 @@ class ProcessManager:
         """
         if self.is_slips_live_updating_event.is_set():
             # slips is auto updating this version of slips should stop and
-            # the updated one will start
+            # the updated one will start soon
             return True
 
-        if self.should_run_non_stop():
+        if not self.all_children_started:
+            # to avoid race conditions that happen when the input file is
+            # very fast, that slips decides to stop before even all the
+            # modules are up and running.
+            # happens in dataset/test4-malicious.binetflow
             return False
 
-        return (
-            self.is_stop_msg_received() or self.is_done_receiving_new_flows()
-        )
+        if self._did_a_core_module_fail():
+            self.core_module_failure = True
+            return True
+
+        if self.is_stop_msg_received() or self.is_done_receiving_new_flows():
+            return True
+
+        return False
+
+    def _did_a_core_module_fail(self) -> bool:
+        """
+        if one of the core modules crash or gets killed by the OS,
+        then slips should stop immediately
+        """
+
+        input_exit_code = self.input_process.exitcode
+        profiler_exit_code = self.profiler_process.exitcode
+        evidence_exit_code = self.evidence_process.exitcode
+
+        input_running = input_exit_code is None
+        profiler_running = profiler_exit_code is None
+        evidence_running = evidence_exit_code is None
+
+        failed_modules: list[tuple[str, int | None]] = []
+
+        if self.main.db.is_running_non_stop():
+            # Slips is continuously receiving flows,
+            # none of these modules should stop or "finish"
+            if not input_running:
+                failed_modules.append(("input", input_exit_code))
+            if not profiler_running:
+                failed_modules.append(("profiler", profiler_exit_code))
+            if not evidence_running:
+                failed_modules.append(("evidence", evidence_exit_code))
+        else:
+            # input can stop before the profiler  if it's done recving new
+            # flows from the file it's reading.
+            # but the profiler should never stop without the input. if it
+            # did then something went wrong.
+            if not profiler_running and input_running:
+                failed_modules.append(("profiler", profiler_exit_code))
+
+            if not evidence_running:
+                failed_modules.append(("evidence", evidence_exit_code))
+
+        for module_name, exit_code in failed_modules:
+            self.main.print(
+                f"Stopping Slips because a core module failed: "
+                f"{module_name}, exit code: {exit_code}."
+            )
+
+        return bool(failed_modules)
 
     def is_stop_msg_received(self) -> bool:
         """
@@ -667,11 +910,7 @@ class ProcessManager:
         # these are the cases where slips should be running non-stop
         # when slips is reading from a special module other than the input process
         # this module should handle the stopping of slips
-        return (
-            self.is_debugger_active()
-            or self.main.input_type in (InputType.STDIN, InputType.CYST)
-            or self.main.db.is_running_non_stop()
-        )
+        return self.is_debugger_active() or self.main.db.is_running_non_stop()
 
     def shutdown_interactive(
         self, to_kill_first, to_kill_last
@@ -742,11 +981,11 @@ class ProcessManager:
             self.is_input_done
         )
         profiler_done_processing: bool = self.can_acquire_semaphore(
-            self.is_profiler_done
+            self.is_profiler_done_semaphore
         )
         return input_done_processing and profiler_done_processing
 
-    def kill_daemon_children(self):
+    def kill_daemon_children(self) -> None:
         """
         kills the processes started by the daemon
         """
@@ -755,13 +994,14 @@ class ProcessManager:
         # they are the children of the slips.py that ran using -D
         # (so they started on a previous run)
         # and we only have access to the PIDs
-        children = self.main.db.get_pids().items()
+        children = [
+            (module_name, pid)
+            for module_name, pid in self.main.db.get_pids().items()
+            if "thread" not in module_name.lower()
+        ]
         for module_name, pid in children:
-            if "thread" in module_name.lower():
-                # skip threads, they'll be  handled by their parent process
-                continue
             self.kill_process_tree(int(pid))
-            self.print_stopped_module(module_name)
+            self.print_stopped_module(module_name, total_modules=len(children))
 
     def get_print_function(self):
         """
@@ -787,6 +1027,50 @@ class ProcessManager:
             self.plotter.plot_throughput_csv()
             self.plotter.write_throughput_metrics()
             self.plotter.plot_flows_from_conn_log()
+
+    def _print_shutdown_stats(
+        self,
+        graceful_shutdown: bool,
+        analysis_time: float,
+        reason: str,
+        print: Callable,
+    ) -> None:
+        """
+        Print the shutdown summary.
+
+        Parameters:
+            graceful_shutdown: Whether Slips finished without forcing modules.
+            analysis_time: Analysis duration in minutes.
+            reason: Explanation when shutdown was not graceful.
+            print: Print function for the current Slips mode.
+
+        Return value:
+            None.
+        """
+        print(
+            f"Analysis of {self.main.input_information} "
+            f"finished in {analysis_time:.2f} minutes"
+        )
+
+        if graceful_shutdown:
+            if self.is_slips_live_updating_event.is_set():
+                print(
+                    "[Process Manager] Slips is live updating, "
+                    "Stopping this instance and starting the new "
+                    "instance now.\n",
+                    log_to_logfiles_only=True,
+                )
+
+            print(
+                "[Process Manager] Slips shutdown gracefully\n",
+                log_to_logfiles_only=True,
+            )
+        else:
+            print(
+                f"[Process Manager] Slips didn't "
+                f"shutdown gracefully - {reason}\n",
+                log_to_logfiles_only=True,
+            )
 
     def shutdown_gracefully(self):
         """
@@ -820,6 +1104,7 @@ class ProcessManager:
                 self.main.db.check_tw_to_close(close_all=True)
 
             graceful_shutdown = True
+            shutdown_reason = ""
             if self.main.mode == "daemonized":
                 self.kill_daemon_children()
                 profiles_len: int = self.main.db.get_profiles_len()
@@ -840,84 +1125,70 @@ class ProcessManager:
                 self.termination_event.set()
 
                 try:
-                    # Wait timeout_seconds for all the processes to finish
-                    while time.time() - method_start_time < timeout:
-                        (
-                            to_kill_first,
-                            to_kill_last,
-                        ) = self.shutdown_interactive(
-                            to_kill_first, to_kill_last
-                        )
-                        if not to_kill_first and not to_kill_last:
-                            # all modules are done
-                            break
+                    if self.core_module_failure:
+                        # dont wait for failed core modules to stop
+                        self.kill_all_children()
+                        shutdown_reason = "Core module failure."
+                        graceful_shutdown = False
+                    else:
+                        # Wait timeout_seconds for all the processes to finish
+                        while time.time() - method_start_time < timeout:
+                            (
+                                to_kill_first,
+                                to_kill_last,
+                            ) = self.shutdown_interactive(
+                                to_kill_first, to_kill_last
+                            )
+                            if not to_kill_first and not to_kill_last:
+                                # all modules are done
+                                break
                 except KeyboardInterrupt:
                     # either the user wants to kill the remaining modules
                     # (pressed ctrl +c again)
                     # or slips was stuck looping for too long that the OS
                     # sent an automatic sigint to kill slips
                     # pass to kill the remaining modules
-                    reason = "User pressed ctr+c or Slips was killed by the OS"
+                    shutdown_reason = (
+                        "User pressed ctr+c or Slips was killed" " by the OS"
+                    )
                     graceful_shutdown = False
 
                 if time.time() - method_start_time >= timeout:
                     # getting here means we're killing them bc of the timeout
                     # not getting here means we're killing them bc of double
                     # ctr+c OR they terminated successfully
-                    reason = (
+                    shutdown_reason = (
                         f"Killing modules that took more than {timeout}"
                         f" mins to finish."
                     )
-                    print(reason)
+                    print(shutdown_reason)
                     graceful_shutdown = False
 
                 self.kill_all_children()
 
             if not self.is_slips_live_updating_event.is_set():
-                if self.main.args.save:
-                    self.main.save_the_db()
+                self.main.redis_man.decide_on_saving_and_killing_the_redis_db()
+
                 if self.main.conf.export_labeled_flows():
                     format_ = self.main.conf.export_labeled_flows_to().lower()
                     self.main.db.export_labeled_flows(format_)
 
-                # if store_a_copy_of_zeek_files is set to yes in slips.yaml
-                # copy the whole zeek_files dir to the output dir
                 self.main.store_zeek_dir_copy()
-                # if delete_zeek_files is set to yes in slips.yaml,
-                # delete zeek_files/ dir
                 self.main.delete_zeek_files()
 
             analysis_time, end_date = self.get_analysis_time()
             self.main.metadata_man.set_analysis_end_date(end_date)
 
-            print(
-                f"Analysis of {self.main.input_information} "
-                f"finished in {analysis_time:.2f} minutes"
-            )
-
             self.main.profilers_manager.cpu_profiler_release()
             self.main.profilers_manager.memory_profiler_release()
 
             self.main.db.close_all_dbs()
-            if graceful_shutdown:
-                if self.is_slips_live_updating_event.is_set():
-                    print(
-                        "[Process Manager] Slips is live updating, "
-                        "Stopping this instance and starting the new "
-                        "instance now.\n",
-                        log_to_logfiles_only=True,
-                    )
+            if not self.is_slips_live_updating_event.is_set():
+                self.main.redis_man.stop_redis_server_after_analysis()
 
-                print(
-                    "[Process Manager] Slips shutdown gracefully\n",
-                    log_to_logfiles_only=True,
-                )
-            else:
-                print(
-                    f"[Process Manager] Slips didn't "
-                    f"shutdown gracefully - {reason}\n",
-                    log_to_logfiles_only=True,
-                )
+            self._print_shutdown_stats(
+                graceful_shutdown, analysis_time, shutdown_reason, print
+            )
 
         except KeyboardInterrupt:
             return False

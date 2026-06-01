@@ -105,14 +105,18 @@ class MetadataManager:
          in the db
         """
         now = utils.get_human_readable_datetime()
-        to_ignore: dict = self.main.conf.get_disabled_modules(
-            self.main.input_type
-        )
+        (
+            user_disabled_modules,
+            slips_disabled_modules,
+        ) = self.main.proc_man.get_disabled_modules()
+        disabled_modules = user_disabled_modules + slips_disabled_modules
+        self.main.proc_man.user_disabled_modules = user_disabled_modules
+        self.main.proc_man.slips_disabled_modules = slips_disabled_modules
         info = {
             "slips_version": self.main.version,
             "name": self.main.input_information,
             "analysis_start": now,
-            "disabled_modules": json.dumps(to_ignore),
+            "disabled_modules": json.dumps(disabled_modules),
             "output_dir": self.main.args.output,
             "input_type": self.main.input_type,
             "evidence_detection_threshold": self.main.conf.evidence_detection_threshold(),

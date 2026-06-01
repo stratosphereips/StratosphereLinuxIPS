@@ -1,7 +1,11 @@
 # Ignore all .log files in output/ dir
 output/*.log
+output*/
+output_dir*/
 **/alerts.json
 **/.git
+*.whl
+iris/orgsig
 
 #node modules
 **/node_modules
@@ -19,6 +23,10 @@ Dataset/
 # virtual env files
 ENV/*
 env/*
+.venv/
+venv/
+p2ptrust_runtime/
+peer*_demo/
 
 # compiled yara rules
 modules/leak_detector/yara_rules/compiled/
@@ -41,3 +49,6 @@ __pycache__/
 
 # for vscode
 .vscode/
+
+# permanent p2p dbs and encryption keys
+permanent/

@@ -449,3 +449,34 @@ class Weird(BaseFlow):
     addl: str
 
     type_: str = field(default="weird")
+
+
+@dataclass(kw_only=True)
+class Login(BaseFlow):
+    """A Zeek login.log entry for telnet, rlogin, or rsh activity."""
+
+    starttime: str
+    uid: str
+    saddr: str
+    daddr: str
+
+    sport: str
+    dport: str
+
+    proto: str
+    success: bool
+    confused: bool
+    user: str
+    client_user: str
+    password: str
+
+    type_: str = field(default="login")
+
+    def __post_init__(self) -> None:
+        self.success = self._to_bool(self.success)
+        self.confused = self._to_bool(self.confused)
+
+    def _to_bool(self, value: bool | str) -> bool:
+        if isinstance(value, bool):
+            return value
+        return str(value).lower() in ("t", "true", "1")

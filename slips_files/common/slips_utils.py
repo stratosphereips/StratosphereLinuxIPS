@@ -18,6 +18,7 @@ import requests
 import json
 import platform
 import os
+import subprocess
 import sys
 import ipaddress
 import aid_hash
@@ -65,7 +66,6 @@ class Utils(object):
         }
         # why are we not using /var/lock? bc we need it to be r/w/x by
         # everyone
-        self.slips_locks_dir = "/tmp/slips"
         self.time_formats = (
             "%Y-%m-%dT%H:%M:%S.%f%z",
             "%Y-%m-%d %H:%M:%S.%f",
@@ -202,6 +202,50 @@ class Utils(object):
         sanitized_string = input_string.translate(remove_characters)
 
         return sanitized_string
+
+    @staticmethod
+    def validate_safe_path(path: str, must_exist: bool = False) -> str:
+        """
+        Validate that a filesystem path is safe to pass as a command argument.
+
+        Parameters:
+        path: Path value to validate.
+        must_exist: Whether the path must already exist on disk.
+
+        Return:
+        The normalized path string.
+        """
+        if path is None:
+            raise ValueError("Path cannot be None.")
+
+        stripped_path = str(path).strip()
+        if not stripped_path:
+            raise ValueError("Path cannot be empty.")
+        normalized_path = os.path.normpath(stripped_path)
+
+        if Utils.sanitize(normalized_path) != normalized_path:
+            raise ValueError(f"Unsafe path argument: {path}")
+
+        if must_exist and not os.path.exists(normalized_path):
+            raise ValueError(f"Path does not exist: {normalized_path}")
+
+        return normalized_path
+
+    @staticmethod
+    def validate_port(port: Any) -> int:
+        """
+        Validate that a value is a TCP/UDP port number.
+
+        Parameters:
+        port: Port value to validate.
+
+        Return:
+        The validated port as an integer.
+        """
+        port = int(port)
+        if not 1 <= port <= 65535:
+            raise ValueError(f"Invalid port: {port}")
+        return port
 
     def to_dict(self, obj):
         """
@@ -651,7 +695,7 @@ class Utils(object):
         returns either an IPv4 or IPv6 address as a string, or None if unavailable
         """
         try:
-            response = requests.get("http://ipinfo.io/json", timeout=5)
+            response = requests.get("https://ipinfo.io/json", timeout=5)
             if response.status_code == 200:
                 data = json.loads(response.text)
                 if "ip" in data:
@@ -847,7 +891,12 @@ class Utils(object):
             # they should be anything other than 0
             return
 
-        os.system(f"chown {UID}:{GID} {file}")
+        safe_file = self.validate_safe_path(file, must_exist=True)
+        safe_uid = int(UID)
+        safe_gid = int(GID)
+        subprocess.run(
+            ["chown", f"{safe_uid}:{safe_gid}", safe_file], check=True
+        )
 
     def initialize_logfile(
         self,
@@ -934,7 +983,7 @@ class Utils(object):
         :param return_type: can be seconds, minutes, hours or days
         """
         if start_time == float("-inf"):
-            # a lot of time passed since -inf
+            # a lot of time passed since -inf :D:D
             return 100000000000
 
         start_time = self.convert_to_datetime(start_time)

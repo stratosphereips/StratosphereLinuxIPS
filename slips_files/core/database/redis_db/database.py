@@ -4,12 +4,16 @@ import shutil
 import socket
 
 from slips_files.common.output_paths import (
+    get_databases_dir_path_inside_output_dir,
     get_redis_logs_path_inside_output_dir,
 )
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.input_type import InputType
+from slips_files.common.input_type import (
+    InputType,
+    FOREVER_GROWING_INPUT_TYPES,
+)
 from slips_files.core.database.redis_db.constants import (
     Constants,
     Channels,
@@ -39,6 +43,7 @@ from typing import (
     Optional,
     Tuple,
     Any,
+    Set,
 )
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
@@ -93,6 +98,7 @@ class RedisDB(
         "new_weird",
         "new_software",
         "new_tunnel",
+        "new_login",
         "p2p_data_request",
         "remove_old_files",
         "export_evidence",
@@ -218,6 +224,10 @@ class RedisDB(
             cls.output_dir, f"redis-server-port-{redis_port}.conf"
         )
 
+    @staticmethod
+    def _absolute_path(path: str) -> str:
+        return os.path.abspath(os.fspath(path))
+
     def _init_ttls(self):
         """sets the default and extended ttls for redis keys based on
         whether we're analysing files or interface"""
@@ -272,10 +282,21 @@ class RedisDB(
 
         # because slips may use different redis ports at the same time,
         # logs should be port specific
-        logfile = get_redis_logs_path_inside_output_dir(
-            cls.output_dir, f"redis-server-port-{cls.redis_port}.log"
+        logfile = cls._absolute_path(
+            get_redis_logs_path_inside_output_dir(
+                cls.output_dir, f"redis-server-port-{cls.redis_port}.log"
+            )
         )
         cls._options.update({"logfile": logfile})
+        cls._options.update(
+            {
+                # manual SAVE writes the .rdb file to <output_dir>/databases
+                "dir": cls._absolute_path(
+                    get_databases_dir_path_inside_output_dir(cls.output_dir)
+                ),
+                "dbfilename": "dump.rdb",
+            }
+        )
 
         # -s for saving the db
         if cls.args.save:
@@ -286,9 +307,6 @@ class RedisDB(
                     # AOF is now enabled. Redis will write each operation to the
                     # AOF file.
                     "appendonly": "yes",
-                    # saves the .rdb file to <output_dir>
-                    "dir": cls.output_dir,
-                    "dbfilename": "dump.rdb",
                 }
             )
 
@@ -431,16 +449,27 @@ class RedisDB(
 
     @classmethod
     def _start_redis_server(cls) -> bool:
-        cmd = (
-            f"redis-server {cls._conf_file} "
-            f"--port {cls.redis_port} "
-            f"--bind {LOCALHOST} "
-            f"--daemonize yes"
+        safe_conf_file = utils.validate_safe_path(
+            cls._conf_file, must_exist=True
         )
+        logfile = cls._options.get("logfile")
+        if logfile:
+            os.makedirs(os.path.dirname(logfile), exist_ok=True)
+
+        safe_port = utils.validate_port(cls.redis_port)
+        cmd = [
+            "redis-server",
+            safe_conf_file,
+            "--port",
+            str(safe_port),
+            "--bind",
+            LOCALHOST,
+            "--daemonize",
+            "yes",
+        ]
         process = subprocess.Popen(
             cmd,
             cwd=os.getcwd(),
-            shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
@@ -455,9 +484,11 @@ class RedisDB(
         if process.returncode != 0:
             if utils.is_port_in_use(cls.redis_port):
                 return True
+            str_cmd = " ".join(cmd)
             raise RuntimeError(
                 f"database._start_redis_server: "
-                f"Redis did not start properly.\n{stderr}\n{stdout}"
+                f"Redis did not start properly using: "
+                f"{str_cmd}.\n{stderr}\n{stdout}"
             )
 
         return True
@@ -731,7 +762,7 @@ class RedisDB(
         ):
             return json.loads(disabled_modules)
         else:
-            return {}
+            return []
 
     def set_input_metadata(self, info: dict):
         """
@@ -1375,10 +1406,7 @@ class RedisDB(
         in these 2 cases, it only stops on ctrl+c
         """
         input: InputType | None = self.get_input_type()
-        if (
-            input in (InputType.STDIN, InputType.INTERFACE)
-            or self.args.growing
-        ):
+        if input in FOREVER_GROWING_INPUT_TYPES or self.args.growing:
             return True
         return False
 
@@ -1613,6 +1641,24 @@ class RedisDB(
         if isinstance(org_info, list):
             self.rcache.sadd(key, *org_info)
 
+    def store_tor_nodes(self, nodes: Set[str]):
+        if not nodes:
+            return
+
+        self.rcache.sadd(self.constants.TOR_NODES, *nodes)
+
+    def is_tor_node(self, ip: str) -> bool:
+        """
+        Check whether an IP is stored in the Tor nodes set.
+
+        Parameters:
+        ip: IP address to check.
+
+        Return:
+        bool: True if the IP is stored as a Tor node.
+        """
+        return bool(self.rcache.sismember(self.constants.TOR_NODES, ip))
+
     def get_org_info(self, org, info_type: str) -> List[str]:
         """
         Returns the ASN or domains of an org from the db
@@ -1747,32 +1793,80 @@ class RedisDB(
         # delete anything older than the most recent 20 servers
         self.r.ltrim(self.constants.DHCP_SERVERS, 0, max - 1)
 
-    def save(self, backup_file):
+    def _get_redis_dump_path_from_redis_config(self) -> str:
         """
-        Save the db to disk.
-        backup_file should be the path+name of the file you want to save the db in
+        Return the dump file path configured in the running Redis server.
+
+        Return:
+        Path Redis writes when SAVE is executed.
+        """
+        redis_dir = self.r.config_get("dir").get("dir", os.getcwd())
+        dbfilename = self.r.config_get("dbfilename").get(
+            "dbfilename", "dump.rdb"
+        )
+        return os.path.join(redis_dir, dbfilename)
+
+    def _save_rdb_with_redis_cli(self, backup_rdb: str) -> bool:
+        """
+        Save Redis to an RDB with redis-cli
+        Parameters:
+        backup_rdb: Path where redis-cli should write the RDB file.
+
+        Return:
+        True if redis-cli created the requested RDB file, False otherwise.
+        """
+        safe_port = utils.validate_port(self.redis_port)
+        result = subprocess.run(
+            [
+                "redis-cli",
+                "-h",
+                LOCALHOST,
+                "-p",
+                str(safe_port),
+                "--rdb",
+                backup_rdb,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return result.returncode == 0 and os.path.exists(backup_rdb)
+
+    def save(self, backup_file: str) -> bool:
+        """
+        Saves the redis db to disk.
         If you -s the same file twice the old backup will be overwritten.
+
+        Parameters:
+        backup_file: Path without extension where the Redis dump should be saved.
+        it should be the path+name of the file you want to save the db in
+
+        Return:
+        True if the Redis dump was saved to the path, False otherwise.
         """
+        safe_backup_file = utils.validate_safe_path(backup_file)
+        safe_backup_rdb = f"{safe_backup_file}.rdb"
+        safe_backup_dir = os.path.dirname(safe_backup_rdb) or "."
+        os.makedirs(safe_backup_dir, exist_ok=True)
 
-        # use print statements in this function won't work because by the time this
-        # function is executed, the redis database would have already stopped
-
-        # saves to /var/lib/redis/dump.rdb
-        # this path is only accessible by root
-        self.r.save()
-
-        # gets the db saved to dump.rdb in the cwd
-        redis_db_path = os.path.join(os.getcwd(), "dump.rdb")
-
-        if os.path.exists(redis_db_path):
-            command = f"{self.sudo} cp {redis_db_path} {backup_file}.rdb"
-            os.system(command)
-            os.remove(redis_db_path)
-            print(f"[Main] Database saved to {backup_file}.rdb")
+        if self._save_rdb_with_redis_cli(safe_backup_rdb):
             return True
 
-        print(
-            f"[DB] Error Saving: Cannot find the redis "
+        # Redis writes to the configured dir/dbfilename pair.
+        self.r.save()
+
+        redis_db_path = self._get_redis_dump_path_from_redis_config()
+
+        if os.path.exists(redis_db_path):
+            if os.path.abspath(redis_db_path) != os.path.abspath(
+                safe_backup_rdb
+            ):
+                shutil.copy2(redis_db_path, safe_backup_rdb)
+                os.remove(redis_db_path)
+
+            return True
+
+        self.print(
+            f"Error Saving: Cannot find the redis "
             f"database directory {redis_db_path}"
         )
         return False
@@ -1785,16 +1879,22 @@ class RedisDB(
 
         # do not use self.print here! the output queue isn't initialized yet
         def is_valid_rdb_file():
-            if not os.path.exists(backup_file):
-                print("{} doesn't exist.".format(backup_file))
+            safe_backup_file = utils.validate_safe_path(
+                backup_file, must_exist=True
+            )
+            if not os.path.exists(safe_backup_file):
+                print("{} doesn't exist.".format(safe_backup_file))
                 return False
 
             # Check if valid .rdb file
-            command = f"file {backup_file}"
-            result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+            result = subprocess.run(
+                ["file", safe_backup_file], stdout=subprocess.PIPE
+            )
             file_type = result.stdout.decode("utf-8")
             if "Redis" not in file_type:
-                print(f"{backup_file} is not a valid redis database file.")
+                print(
+                    f"{safe_backup_file} is not a valid redis database file."
+                )
                 return False
             return True
 
@@ -1802,11 +1902,14 @@ class RedisDB(
             return False
 
         try:
+            safe_backup_file = utils.validate_safe_path(
+                backup_file, must_exist=True
+            )
             RedisDB._conf_file = RedisDB._get_conf_file_path(32850)
             RedisDB._options.update(
                 {
-                    "dbfilename": os.path.basename(backup_file),
-                    "dir": os.path.dirname(backup_file),
+                    "dbfilename": os.path.basename(safe_backup_file),
+                    "dir": os.path.dirname(safe_backup_file),
                     "port": 32850,
                 }
             )
@@ -1904,6 +2007,9 @@ class RedisDB(
     def increment_profiler_workers_started(self) -> int:
         """increments the number of profiler workers started"""
         return self.r.incr(self.constants.PROFILER_WORKERS_STARTED, 1)
+
+    def decrement_profiler_workers_started(self) -> int:
+        return self.r.incr(self.constants.PROFILER_WORKERS_STARTED, -1)
 
     def get_profiler_workers_started(self) -> int:
         """returns number of profiler workers started so far"""

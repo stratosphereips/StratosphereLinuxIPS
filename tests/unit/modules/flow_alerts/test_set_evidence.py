@@ -428,11 +428,9 @@ def test_incompatible_cn(org, daddr, expected_description):
     [  # Testcase 1: Exactly at the threshold
         (100, 1.00),
         # Testcase 2: Above the threshold
-        (150, 1.50),
+        (150, 1.00),
         # Testcase 3: Below the threshold
         (50, 0.5),
-        # Testcase 4: Significantly above the threshold
-        (300, 3.00),
     ],
 )
 def test_dga(nxdomains, expected_confidence):
@@ -673,6 +671,48 @@ def test_conn_without_dns(time_difference_hours, expected_confidence):
         evidence.description
         == "A connection without DNS resolution to Destination IP: 10.0.0.1"
     )
+
+
+def test_tor_exit_node():
+    """Testing the tor_exit_node method."""
+    set_ev = ModuleFactory().create_set_evidence_helper()
+    flow = Conn(
+        starttime="1726655400.0",
+        uid="123",
+        saddr="192.168.0.1",
+        daddr="185.220.101.1",
+        dur=1,
+        proto="tcp",
+        appproto="",
+        sport="12345",
+        dport="443",
+        spkts=0,
+        dpkts=0,
+        sbytes=0,
+        dbytes=0,
+        smac="",
+        dmac="",
+        state="Established",
+        history="",
+    )
+
+    set_ev.tor_exit_node("timewindow1", flow)
+    assert set_ev.db.set_evidence.call_count == 1
+    args, _ = set_ev.db.set_evidence.call_args
+    evidence = args[0]
+    assert evidence.evidence_type == EvidenceType.TOR_EXIT_NODE
+    assert evidence.attacker.direction == Direction.DST
+    assert evidence.attacker.value == flow.daddr
+    assert evidence.victim.direction == Direction.SRC
+    assert evidence.victim.value == flow.saddr
+    assert evidence.threat_level == ThreatLevel.INFO
+    assert (
+        evidence.description == "A connection to TOR exit node 185.220.101.1."
+    )
+    assert evidence.profile.ip == flow.saddr
+    assert evidence.timewindow.number == 1
+    assert evidence.uid == [flow.uid]
+    assert evidence.confidence == 1.0
 
 
 @pytest.mark.parametrize(

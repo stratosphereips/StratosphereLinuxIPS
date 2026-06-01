@@ -77,12 +77,13 @@ class InterfaceInput(IInputHandler):
                 )
                 self.input.print(logline)
 
-            self.input.zeek_utils.init_zeek(
+            if not self.input.zeek_utils.init_zeek_and_start_the_zeek_thread(
                 self.observer,
                 interface_dir,
                 interface,
                 tcpdump_filter=tcpdump_filter,
-            )
+            ):
+                return False
 
         self.input.lines = self.input.zeek_utils.read_zeek_files()
         return True

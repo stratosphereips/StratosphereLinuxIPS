@@ -32,6 +32,7 @@ class FlowTracker:
         "new_weird": 0,
         "new_software": 0,
         "new_tunnel": 0,
+        "new_login": 0,
     }
 
     def _should_track_msg(self, msg: dict) -> bool:

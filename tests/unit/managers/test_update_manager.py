@@ -24,6 +24,10 @@ def create_update_manager():
         multiinstance=False,
     )
     conf.auto_update_slips.return_value = True
+    conf.channel_to_update_slips_from.return_value = "stable"
+    conf.testing_branch_to_update_slips_from.return_value = (
+        "origin/feature/test"
+    )
 
     with patch("managers.update_manager.ConfigParser", return_value=conf):
         return UpdateManager(
@@ -34,28 +38,171 @@ def create_update_manager():
 
 
 @pytest.mark.parametrize(
-    "remote_url, expected_link",
+    "configured_branch, remote_url, expected_link",
     [
         (
+            "origin/master",
             "https://github.com/stratosphereips/StratosphereLinuxIPS.git",
             "https://raw.githubusercontent.com/stratosphereips/"
             "StratosphereLinuxIPS/master/update.json",
         ),
         (
+            "origin/develop",
             "git@github.com:stratosphereips/StratosphereLinuxIPS.git",
             "https://raw.githubusercontent.com/stratosphereips/"
-            "StratosphereLinuxIPS/master/update.json",
+            "StratosphereLinuxIPS/develop/update.json",
         ),
-        ("https://example.com/stratosphereips/StratosphereLinuxIPS.git", None),
+        (
+            "origin/feature/test",
+            "git@github.com:stratosphereips/StratosphereLinuxIPS.git",
+            "https://raw.githubusercontent.com/stratosphereips/"
+            "StratosphereLinuxIPS/feature/test/update.json",
+        ),
+        (
+            "origin/master",
+            "https://example.com/stratosphereips/StratosphereLinuxIPS.git",
+            None,
+        ),
     ],
 )
-def test_get_master_update_json_link(remote_url, expected_link):
+def test_get_update_json_link(configured_branch, remote_url, expected_link):
     update_manager = create_update_manager()
+    update_manager.update_branch = configured_branch
     repo = Mock()
     repo.remote.return_value.url = remote_url
 
     with patch("managers.update_manager.Repo", return_value=repo):
-        assert update_manager._get_master_update_json_link() == expected_link
+        assert update_manager._get_update_json_link() == expected_link
+
+
+@pytest.mark.parametrize(
+    "configured_channel, configured_testing_branch, expected_branch, expected_channel",
+    [
+        ("stable", "origin/feature/test", "origin/master", "stable"),
+        ("unstable", "origin/feature/test", "origin/develop", "unstable"),
+        ("testing", "origin/feature/test", "origin/feature/test", "testing"),
+    ],
+)
+def test_read_configuration_resolves_update_branch(
+    configured_channel,
+    configured_testing_branch,
+    expected_branch,
+    expected_channel,
+):
+    db = Mock()
+    db.is_running_non_stop.return_value = True
+
+    conf = Mock()
+    conf.get_args.return_value = Mock(
+        is_slips_started_by_an_update=False,
+        multiinstance=False,
+    )
+    conf.auto_update_slips.return_value = True
+    conf.channel_to_update_slips_from.return_value = configured_channel
+    conf.testing_branch_to_update_slips_from.return_value = (
+        configured_testing_branch
+    )
+
+    with patch("managers.update_manager.ConfigParser", return_value=conf):
+        update_manager = UpdateManager(
+            database=db,
+            is_slips_live_updating_event=Mock(),
+            print_func=Mock(),
+        )
+
+    assert update_manager.update_branch == expected_branch
+    assert update_manager.update_channel == expected_channel
+
+
+def test_invalid_update_channel_raises_key_error():
+    db = Mock()
+    db.is_running_non_stop.return_value = True
+
+    conf = Mock()
+    conf.get_args.return_value = Mock(
+        is_slips_started_by_an_update=False,
+        multiinstance=False,
+    )
+    conf.auto_update_slips.return_value = True
+    conf.channel_to_update_slips_from.return_value = "branch with spaces"
+    conf.testing_branch_to_update_slips_from.return_value = (
+        "origin/feature/test"
+    )
+
+    with (
+        patch("managers.update_manager.ConfigParser", return_value=conf),
+        pytest.raises(KeyError, match="branch with spaces"),
+    ):
+        UpdateManager(
+            database=db,
+            is_slips_live_updating_event=Mock(),
+            print_func=Mock(),
+        )
+
+
+@pytest.mark.parametrize(
+    "configured_testing_branch",
+    [
+        "origin/../master",
+        "origin/@{bad}",
+        "origin/-bad",
+    ],
+)
+def test_testing_update_channel_uses_configured_branch_as_is(
+    configured_testing_branch,
+):
+    db = Mock()
+    db.is_running_non_stop.return_value = True
+
+    conf = Mock()
+    conf.get_args.return_value = Mock(
+        is_slips_started_by_an_update=False,
+        multiinstance=False,
+    )
+    conf.auto_update_slips.return_value = True
+    conf.channel_to_update_slips_from.return_value = "testing"
+    conf.testing_branch_to_update_slips_from.return_value = (
+        configured_testing_branch
+    )
+
+    with patch("managers.update_manager.ConfigParser", return_value=conf):
+        update_manager = UpdateManager(
+            database=db,
+            is_slips_live_updating_event=Mock(),
+            print_func=Mock(),
+        )
+
+    assert update_manager.update_branch == configured_testing_branch
+    assert update_manager.update_channel == "testing"
+
+
+def test_testing_update_channel_without_branch_falls_back_to_stable():
+    db = Mock()
+    db.is_running_non_stop.return_value = True
+
+    conf = Mock()
+    conf.get_args.return_value = Mock(
+        is_slips_started_by_an_update=False,
+        multiinstance=False,
+    )
+    conf.auto_update_slips.return_value = True
+    conf.channel_to_update_slips_from.return_value = "testing"
+    conf.testing_branch_to_update_slips_from.return_value = ""
+    print_func = Mock()
+
+    with patch("managers.update_manager.ConfigParser", return_value=conf):
+        update_manager = UpdateManager(
+            database=db,
+            is_slips_live_updating_event=Mock(),
+            print_func=print_func,
+        )
+
+    assert update_manager.update_branch == "origin/master"
+    assert update_manager.update_channel == "stable"
+    print_func.assert_called_once_with(
+        "Warning: Invalid update.testing_branch_to_update_slips_from "
+        "value ''. Falling back to stable."
+    )
 
 
 @pytest.mark.parametrize(
@@ -87,7 +234,7 @@ def test_update_json_flags(
 
     with patch.object(
         update_manager,
-        "_get_master_update_json_link",
+        "_get_update_json_link",
         return_value=(
             "https://raw.githubusercontent.com/org/repo/master/update.json"
         ),
@@ -122,7 +269,7 @@ def test_update_json_fallbacks(
     patches = [
         patch.object(
             update_manager,
-            "_get_master_update_json_link",
+            "_get_update_json_link",
             return_value=(
                 "https://raw.githubusercontent.com/org/repo/master/update.json"
             ),
@@ -157,6 +304,116 @@ def test_update_json_fallbacks(
             update_manager._is_new_version_backwards_compatible()
             == expected_compatibility
         )
+
+
+def test_update_json_list_uses_matching_branch_entry():
+    update_manager = create_update_manager()
+    update_manager.update_branch = "origin/develop"
+    update_manager.update_channel = "unstable"
+    response = Mock()
+    response.read.return_value = (
+        "["
+        '{"version": "1.1.20", "branch": "master", "channel": "stable",'
+        ' "has_new_dependencies": false,'
+        ' "backwards_compatible": true},'
+        '{"version": "1.1.21", "branch": "develop", "channel": "unstable",'
+        ' "has_new_dependencies": true,'
+        ' "backwards_compatible": false}'
+        "]"
+    ).encode("utf-8")
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=None)
+
+    with patch.object(
+        update_manager,
+        "_get_update_json_link",
+        return_value=(
+            "https://raw.githubusercontent.com/org/repo/develop/update.json"
+        ),
+    ), patch(
+        "managers.update_manager.request.urlopen",
+        return_value=response,
+    ):
+        assert update_manager._read_update_json() == {
+            "version": "1.1.21",
+            "branch": "develop",
+            "channel": "unstable",
+            "has_new_dependencies": True,
+            "backwards_compatible": False,
+        }
+
+
+def test_update_json_list_falls_back_to_matching_channel_entry():
+    update_manager = create_update_manager()
+    update_manager.update_branch = "origin/feature/test"
+    update_manager.update_channel = "testing"
+    response = Mock()
+    response.read.return_value = (
+        "["
+        '{"version": "1.1.20", "branch": "master", "channel": "stable",'
+        ' "has_new_dependencies": false,'
+        ' "backwards_compatible": true},'
+        '{"version": "1.1.22", "branch": "feature/other", "channel": "testing",'
+        ' "has_new_dependencies": false,'
+        ' "backwards_compatible": true}'
+        "]"
+    ).encode("utf-8")
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=None)
+
+    with patch.object(
+        update_manager,
+        "_get_update_json_link",
+        return_value=(
+            "https://raw.githubusercontent.com/org/repo/feature/test/update.json"
+        ),
+    ), patch(
+        "managers.update_manager.request.urlopen",
+        return_value=response,
+    ):
+        assert update_manager._read_update_json() == {
+            "version": "1.1.22",
+            "branch": "feature/other",
+            "channel": "testing",
+            "has_new_dependencies": False,
+            "backwards_compatible": True,
+        }
+
+
+def test_update_json_list_supports_legacy_branch_only_channel_aliases():
+    update_manager = create_update_manager()
+    update_manager.update_branch = "origin/develop"
+    update_manager.update_channel = "unstable"
+    response = Mock()
+    response.read.return_value = (
+        "["
+        '{"version": "1.1.20", "branch": "stable",'
+        ' "has_new_dependencies": false,'
+        ' "backwards_compatible": true},'
+        '{"version": "1.1.21", "branch": "unstable",'
+        ' "has_new_dependencies": true,'
+        ' "backwards_compatible": false}'
+        "]"
+    ).encode("utf-8")
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=None)
+
+    with patch.object(
+        update_manager,
+        "_get_update_json_link",
+        return_value=(
+            "https://raw.githubusercontent.com/org/repo/develop/update.json"
+        ),
+    ), patch(
+        "managers.update_manager.request.urlopen",
+        return_value=response,
+    ):
+        assert update_manager._read_update_json() == {
+            "version": "1.1.21",
+            "branch": "unstable",
+            "has_new_dependencies": True,
+            "backwards_compatible": False,
+        }
 
 
 def test_get_updated_slips_command_appends_update_flag():
@@ -216,10 +473,19 @@ def test_start_updated_slips_verison_starts_detached_process():
 
 
 def test_update_slips_starts_updated_process_before_stopping_current_slips():
+    """
+    Ensure Slips updates submodules before starting the new process.
+
+    Returns:
+        None.
+    """
     update_manager = create_update_manager()
     calls = []
-    update_manager.git_pull_master = Mock(
-        side_effect=lambda: calls.append("git_pull_master")
+    update_manager.git_pull_branch = Mock(
+        side_effect=lambda: calls.append("git_pull_branch")
+    )
+    update_manager.update_submodules = Mock(
+        side_effect=lambda: calls.append("update_submodules")
     )
     update_manager.start_updated_slips_version = Mock(
         side_effect=lambda: calls.append("start_updated_slips_verison")
@@ -230,14 +496,45 @@ def test_update_slips_starts_updated_process_before_stopping_current_slips():
 
     update_manager.update_slips()
 
-    update_manager.git_pull_master.assert_called_once()
+    update_manager.git_pull_branch.assert_called_once()
+    update_manager.update_submodules.assert_called_once()
     update_manager.start_updated_slips_version.assert_called_once()
     update_manager.is_slips_live_updating_event.set.assert_called_once()
     assert calls == [
-        "git_pull_master",
+        "git_pull_branch",
+        "update_submodules",
         "start_updated_slips_verison",
         "set_update_event",
     ]
+
+
+def test_update_slips_aborts_when_submodule_update_fails():
+    """
+    Ensure submodule update errors abort the live update.
+
+    Returns:
+        None.
+    """
+    update_manager = create_update_manager()
+    git_error = GitCommandError(
+        "git submodule update --init --recursive",
+        1,
+        stderr="fatal: unable to update submodule",
+    )
+    update_manager.git_pull_branch = Mock()
+    update_manager.update_submodules = Mock(side_effect=git_error)
+    update_manager.start_updated_slips_version = Mock()
+
+    update_manager.update_slips()
+
+    update_manager.git_pull_branch.assert_called_once()
+    update_manager.update_submodules.assert_called_once()
+    update_manager.start_updated_slips_version.assert_not_called()
+    update_manager.is_slips_live_updating_event.set.assert_not_called()
+    update_manager.print.assert_called_once_with(
+        "Warning: Aborting Slips update because a git error occurred: "
+        f"{git_error}"
+    )
 
 
 def test_update_slips_aborts_when_local_changes_block_checkout():
@@ -261,12 +558,12 @@ def test_update_slips_aborts_when_local_changes_block_checkout():
             "Aborting"
         ),
     )
-    update_manager.git_pull_master = Mock(side_effect=git_error)
+    update_manager.git_pull_branch = Mock(side_effect=git_error)
     update_manager.start_updated_slips_version = Mock()
 
     update_manager.update_slips()
 
-    update_manager.git_pull_master.assert_called_once()
+    update_manager.git_pull_branch.assert_called_once()
     update_manager.start_updated_slips_version.assert_not_called()
     update_manager.is_slips_live_updating_event.set.assert_not_called()
     update_manager.print.assert_called_once_with(
@@ -288,7 +585,7 @@ def test_update_slips_aborts_on_unrelated_git_errors():
         128,
         stderr="fatal: not a git repository",
     )
-    update_manager.git_pull_master = Mock(side_effect=git_error)
+    update_manager.git_pull_branch = Mock(side_effect=git_error)
     update_manager.start_updated_slips_version = Mock()
 
     update_manager.update_slips()
@@ -298,4 +595,19 @@ def test_update_slips_aborts_on_unrelated_git_errors():
     update_manager.print.assert_called_once_with(
         "Warning: Aborting Slips update because a git error occurred: "
         f"{git_error}"
+    )
+
+
+def test_git_pull_branch_fetches_and_checks_out_configured_branch():
+    update_manager = create_update_manager()
+    update_manager.update_branch = "origin/develop"
+    repo = Mock()
+
+    with patch("managers.update_manager.Repo", return_value=repo):
+        update_manager.git_pull_branch()
+
+    repo.remote.return_value.fetch.assert_called_once_with("develop")
+    repo.git.checkout.assert_called_once_with("origin/develop")
+    update_manager.print.assert_called_once_with(
+        "Done pulling new version and checking out origin/develop branch."
     )

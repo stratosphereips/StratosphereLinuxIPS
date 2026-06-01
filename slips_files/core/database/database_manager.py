@@ -307,6 +307,9 @@ class DBManager:
     def increment_profiler_workers_started(self, *args, **kwargs):
         return self.rdb.increment_profiler_workers_started(*args, **kwargs)
 
+    def decrement_profiler_workers_started(self, *args, **kwargs):
+        return self.rdb.decrement_profiler_workers_started(*args, **kwargs)
+
     def get_profiler_workers_started(self, *args, **kwargs):
         return self.rdb.get_profiler_workers_started(*args, **kwargs)
 
@@ -934,6 +937,12 @@ class DBManager:
     def give_threat_intelligence(self, *args, **kwargs):
         return self.rdb.give_threat_intelligence(*args, **kwargs)
 
+    def store_tor_nodes(self, *args, **kwargs):
+        return self.rdb.store_tor_nodes(*args, **kwargs)
+
+    def is_tor_node(self, *args, **kwargs):
+        return self.rdb.is_tor_node(*args, **kwargs)
+
     def delete_ips_from_ioc_ips(self, *args, **kwargs):
         return self.rdb.delete_ips_from_ioc_ips(*args, **kwargs)
 
@@ -1143,7 +1152,7 @@ class DBManager:
     def increment_processed_flows(self, *args, **kwargs):
         return self.rdb.increment_processed_flows(*args, **kwargs)
 
-    def get_flow_analyzed_by_the_profiler_so_far(self, *args, **kwargs):
+    def get_flows_analyzed_by_the_profiler_so_far(self, *args, **kwargs):
         return self.rdb.get_flow_analyzed_by_the_profiler_so_far(
             *args, **kwargs
         )

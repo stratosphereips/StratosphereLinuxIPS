@@ -86,6 +86,11 @@ class ModuleFactory:
                 return_value=Mock(),
             ),
             patch(
+                "slips_files.core.database.redis_db.database."
+                "RedisDB._conf_file",
+                "config/redis.conf.template",
+            ),
+            patch(
                 "slips_files.core.database.redis_db.database.ConfigParser",
                 return_value=conf,
             ),
@@ -503,6 +508,14 @@ class ModuleFactory:
         flowalerts = self.create_flowalerts_obj()
         return Software(flowalerts.db, flowalerts=flowalerts)
 
+    @patch(DB_MANAGER, name="mock_db")
+    def create_login_analyzer_obj(self, mock_db):
+        """Create a login analyzer test instance."""
+        from modules.flow_alerts.login import Login
+
+        flowalerts = self.create_flowalerts_obj()
+        return Login(flowalerts.db, flowalerts=flowalerts)
+
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_ip_info_obj(self, mock_db):
         from modules.ip_info.ip_info import IPInfo
@@ -544,6 +557,7 @@ class ModuleFactory:
             zeek_or_bro=check_zeek_or_bro(),
             line_type=line_type,
             is_profiler_done_event=Mock(),
+            is_input_failed_event=Mock(),
         )
         input.db = mock_db
         input.mark_self_as_done_processing = Mock()
@@ -590,18 +604,27 @@ class ModuleFactory:
     def create_profiler_obj(self, mock_db):
         from slips_files.core.profiler import Profiler
 
+        slips_args = Mock()
+        slips_args.interface = False
+        is_input_done_event = Mock()
+        is_input_done_event.is_set.return_value = False
+        is_input_failed_event = Mock()
+        is_input_failed_event.is_set.return_value = False
         profiler = Profiler(
             logger=self.logger,
             output_dir="output",
             redis_port=6379,
             termination_event=Mock(),
-            slips_args=Mock(),
+            slips_args=slips_args,
             conf=Mock(),
             ppid=Mock(),
             bloom_filters_manager=Mock(),
-            is_profiler_done=Mock(),
+            is_profiler_done_semaphore=Mock(),
             profiler_queue=self.input_queue,
             is_profiler_done_event=Mock(),
+            is_input_done_event=is_input_done_event,
+            is_input_failed_event=is_input_failed_event,
+            is_profiler_done_starting_initial_workers_event=Mock(),
         )
         profiler.print = Mock()
         profiler.local_whitelist_path = "tests/unit/test_whitelist.conf"
@@ -1142,13 +1165,19 @@ class ModuleFactory:
         from managers.process_manager import ProcessManager
 
         main_mock = Mock()
-        main_mock.conf.get_disabled_modules.return_value = []
         # main_mock.conf.get_bootstrapping_setting.return_value = (False, [])
-        main_mock.conf.is_bootstrapping_node.return_value = False
+        main_mock.conf.read_configuration.side_effect = (
+            lambda section, name, default_value: default_value
+        )
         main_mock.conf.get_bootstrapping_modules.return_value = [
             "fides",
             "iris",
         ]
+        main_mock.conf.export_to.return_value = []
+        main_mock.conf.use_local_p2p.return_value = False
+        main_mock.conf.use_global_p2p.return_value = False
+        main_mock.conf.send_to_warden.return_value = False
+        main_mock.conf.receive_from_warden.return_value = False
         main_mock.conf.generate_performance_plots.return_value = False
         main_mock.input_type = InputType.PCAP
         main_mock.mode = "normal"
@@ -1176,7 +1205,16 @@ class ModuleFactory:
                 whitelist_path=MagicMock(
                     return_value="/path/to/whitelist.conf"
                 ),
-                get_disabled_modules=MagicMock(return_value=[]),
+                export_to=MagicMock(return_value=[]),
+                use_local_p2p=MagicMock(return_value=False),
+                use_global_p2p=MagicMock(return_value=False),
+                send_to_warden=MagicMock(return_value=False),
+                receive_from_warden=MagicMock(return_value=False),
+                read_configuration=MagicMock(
+                    side_effect=(
+                        lambda section, name, default_value: default_value
+                    )
+                ),
                 evidence_detection_threshold=MagicMock(return_value=0.5),
             ),
             "version": "1.0",

@@ -1,8 +1,9 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+import signal
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 from managers.process_manager import ProcessManager
 from tests.module_factory import ModuleFactory
 from slips_files.common.slips_utils import utils
@@ -68,6 +69,7 @@ def test_start_input_process(
             line_type=line_type,
             is_profiler_done_event=process_manager.is_profiler_done_event,
             is_input_done_event=process_manager.is_input_done_event,
+            is_input_failed_event=process_manager.is_input_failed_event,
             is_slips_live_updating_event=(
                 process_manager.is_slips_live_updating_event
             ),
@@ -92,8 +94,9 @@ def test_init_sets_live_update_event_for_update_start(
     main_mock.args.is_slips_started_by_an_update = (
         is_slips_started_by_an_update
     )
-    main_mock.conf.get_disabled_modules.return_value = []
-    main_mock.conf.is_bootstrapping_node.return_value = False
+    main_mock.conf.read_configuration.side_effect = (
+        lambda section, name, default_value: default_value
+    )
     main_mock.conf.get_bootstrapping_modules.return_value = []
 
     process_manager = ProcessManager(main_mock)
@@ -120,13 +123,119 @@ def test_init_sets_live_update_event_for_update_start(
 )
 def test_is_ignored_module(module_name, modules_to_ignore, expected):
     process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.modules_to_ignore = modules_to_ignore
-    assert process_manager.is_ignored_module(module_name) == expected
+    process_manager.user_disabled_modules = modules_to_ignore
+    assert process_manager.is_disabled_module(module_name) == expected
+
+
+@pytest.mark.parametrize(
+    "input_type, argv, export_to, expected_user, expected_slips",
+    [
+        (
+            InputType.PCAP,
+            ["slips.py", "-f", "dataset/test.pcap"],
+            [],
+            ["template", "custom_module"],
+            [
+                "exporting_alerts",
+                "p2p_trust",
+                "fides",
+                "iris",
+                "cesnet",
+                "blocking",
+                "arp_poisoner",
+                "cyst",
+            ],
+        ),
+        (
+            InputType.ZEEK,
+            ["slips.py", "-f", "dataset/conn.log"],
+            ["stix"],
+            ["template", "custom_module"],
+            [
+                "p2p_trust",
+                "fides",
+                "iris",
+                "cesnet",
+                "blocking",
+                "arp_poisoner",
+                "leak_detector",
+                "cyst",
+            ],
+        ),
+    ],
+)
+def test_get_disabled_modules(
+    input_type: InputType,
+    argv: list,
+    export_to: list,
+    expected_user: list,
+    expected_slips: list,
+) -> None:
+    """Test disabled modules are split by user and Slips runtime rules."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.input_type = input_type
+    process_manager.main.args.clearblocking = False
+    process_manager.main.args.blocking = False
+    process_manager.main.conf.read_configuration.side_effect = (
+        lambda section, name, default_value: (
+            [" template ", "custom_module"]
+            if (section, name) == ("modules", "disable")
+            else default_value
+        )
+    )
+    process_manager.main.conf.export_to.return_value = export_to
+
+    with patch("managers.process_manager.sys.argv", argv):
+        user_disabled_modules, slips_disabled_modules = (
+            process_manager.get_disabled_modules()
+        )
+
+    assert user_disabled_modules == expected_user
+    assert slips_disabled_modules == expected_slips
+
+
+@pytest.mark.parametrize(
+    "bootstrapping_node, use_global_p2p, expected",
+    [
+        (True, True, True),
+        (True, False, False),
+        (False, True, False),
+    ],
+)
+def test_should_bootstrap_p2p(bootstrapping_node, use_global_p2p, expected):
+    """Test P2P bootstrapping is enabled only when both flags are set."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.bootstrapping_node = bootstrapping_node
+    process_manager.use_global_p2p = use_global_p2p
+    process_manager.main.db.is_running_non_stop.return_value = True
+
+    assert process_manager.is_bootstrapping_node() is expected
+
+
+@pytest.mark.parametrize(
+    "should_bootstrap, module_name, disabled_modules, expected",
+    [
+        (True, "modules.fides.fides", [], True),
+        (True, "modules.flowalerts.flowalerts", [], False),
+        (False, "modules.flowalerts.flowalerts", ["flowalerts"], False),
+        (False, "modules.fides.fides", [], True),
+    ],
+)
+def test_should_load_module(
+    should_bootstrap, module_name, disabled_modules, expected
+):
+    """Test module loading respects bootstrapping and disabled modules."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.bootstrapping_modules = ["fides", "iris"]
+    process_manager.user_disabled_modules = disabled_modules
+    process_manager.is_bootstrapping_node = Mock(return_value=should_bootstrap)
+
+    assert process_manager._should_load_module(module_name) is expected
 
 
 def test_print_disabled_modules():
     process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.modules_to_ignore = ["Module1", "Module2"]
+    process_manager.user_disabled_modules = ["Module1", "Module2"]
     with patch.object(process_manager.main, "print") as mock_print:
         process_manager.print_disabled_modules()
         mock_print.assert_called_once_with(
@@ -347,9 +456,9 @@ def test_is_debugger_active(mock_return_value, expected_result):
         # Test case 1: Debugger active
         (True, InputType.PCAP, False, True),
         # Test case 2: Stdin input
-        (False, InputType.STDIN, False, True),
+        (False, InputType.STDIN, True, True),
         # Test case 3: Cyst input
-        (False, InputType.CYST, False, True),
+        (False, InputType.CYST, True, True),
         # Test case 4: Interface input
         (False, InputType.PCAP, True, True),
         # Test case 5: Normal case (should stop)
@@ -389,6 +498,201 @@ def test_is_done_receiving_new_flows(
         side_effect=[input_acquired, profiler_acquired]
     )
     assert process_manager.is_done_receiving_new_flows() == expected_result
+
+
+@pytest.mark.parametrize(
+    "live_update, stop_received, done_receiving, expected_result",
+    [
+        (True, False, False, True),
+        (False, True, False, True),
+        (False, False, True, True),
+        (False, False, False, False),
+    ],
+)
+def test_should_stop_slips(
+    live_update, stop_received, done_receiving, expected_result
+):
+    """
+    Test whether Slips should stop for live updates, stop messages, or done input.
+
+    Parameters:
+    live_update: Whether a live update is in progress.
+    stop_received: Whether a stop message was received.
+    done_receiving: Whether input and profiler finished processing.
+    expected_result: Expected stop decision.
+
+    Return:
+    None.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.is_slips_live_updating_event.is_set = Mock(
+        return_value=live_update
+    )
+    process_manager.is_stop_msg_received = Mock(return_value=stop_received)
+    process_manager.is_done_receiving_new_flows = Mock(
+        return_value=done_receiving
+    )
+    process_manager._did_a_core_module_fail = Mock(return_value=False)
+    process_manager.all_children_started = True
+
+    assert process_manager.should_stop_slips() == expected_result
+
+
+@pytest.mark.parametrize(
+    "input_exitcode, profiler_exitcode, evidence_exitcode, expected_result",
+    [
+        (None, None, None, False),
+        (0, None, None, False),
+        (None, 1, None, True),
+        (0, 1, None, False),
+        (None, None, 0, True),
+    ],
+)
+def test_did_a_core_module_fail_for_file_input(
+    input_exitcode: int | None,
+    profiler_exitcode: int | None,
+    evidence_exitcode: int | None,
+    expected_result: bool,
+) -> None:
+    """
+    Test core module failure detection for finite file inputs.
+
+    Parameters:
+    input_exitcode: Input process exit code.
+    profiler_exitcode: Profiler process exit code.
+    evidence_exitcode: Evidence process exit code.
+    expected_result: Expected failure detection result.
+
+    Return:
+    None.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.input_process = Mock()
+    process_manager.profiler_process = Mock()
+    process_manager.evidence_process = Mock()
+    process_manager.input_process.exitcode = input_exitcode
+    process_manager.profiler_process.exitcode = profiler_exitcode
+    process_manager.evidence_process.exitcode = evidence_exitcode
+    process_manager.main.db.is_running_non_stop.return_value = False
+
+    assert process_manager._did_a_core_module_fail() == expected_result
+
+
+@pytest.mark.parametrize(
+    "input_type",
+    [
+        InputType.INTERFACE,
+        InputType.STDIN,
+        InputType.CYST,
+    ],
+)
+@pytest.mark.parametrize(
+    "input_exitcode, profiler_exitcode, evidence_exitcode, expected_result",
+    [
+        (None, None, None, False),
+        (0, None, None, True),
+        (None, 1, None, True),
+        (None, None, 0, True),
+    ],
+)
+def test_did_a_core_module_fail_for_forever_growing_input(
+    input_type: InputType,
+    input_exitcode: int | None,
+    profiler_exitcode: int | None,
+    evidence_exitcode: int | None,
+    expected_result: bool,
+) -> None:
+    """
+    Test core module failure detection for forever-growing inputs.
+
+    Parameters:
+    input_exitcode: Input process exit code.
+    profiler_exitcode: Profiler process exit code.
+    evidence_exitcode: Evidence process exit code.
+    expected_result: Expected failure detection result.
+
+    Return:
+    None.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.input_type = input_type
+    process_manager.input_process = Mock()
+    process_manager.profiler_process = Mock()
+    process_manager.evidence_process = Mock()
+    process_manager.input_process.exitcode = input_exitcode
+    process_manager.profiler_process.exitcode = profiler_exitcode
+    process_manager.evidence_process.exitcode = evidence_exitcode
+    process_manager.main.db.is_running_non_stop.return_value = True
+
+    assert process_manager._did_a_core_module_fail() == expected_result
+
+
+def test_should_stop_slips_sets_core_module_failure() -> None:
+    """
+    Test should_stop_slips marks core module failures for shutdown handling.
+
+    Return:
+    None.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.is_slips_live_updating_event.is_set = Mock(
+        return_value=False
+    )
+    process_manager._did_a_core_module_fail = Mock(return_value=True)
+    process_manager.is_stop_msg_received = Mock()
+    process_manager.is_done_receiving_new_flows = Mock()
+    process_manager.all_children_started = True
+
+    assert process_manager.should_stop_slips() is True
+    assert process_manager.core_module_failure is True
+    process_manager.is_stop_msg_received.assert_not_called()
+    process_manager.is_done_receiving_new_flows.assert_not_called()
+
+
+def test_shutdown_gracefully_handles_core_module_failure() -> None:
+    """
+    Test shutdown avoids waiting for modules after a core module failure.
+
+    Return:
+    None.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.core_module_failure = True
+    process_manager.main.args.stopdaemon = False
+    process_manager.main.args.save = False
+    process_manager.main.input_information = "test_input"
+    process_manager.main.conf.wait_for_modules_to_finish.return_value = 1
+    process_manager.main.conf.export_labeled_flows.return_value = False
+    process_manager.main.db.get_flows_count.return_value = 42
+    process_manager.main.db.check_tw_to_close = Mock()
+    process_manager.main.db.close_all_dbs = Mock()
+    process_manager.main.metadata_man = Mock()
+    process_manager.main.profilers_manager = Mock()
+    process_manager.main.store_zeek_dir_copy = Mock()
+    process_manager.main.delete_zeek_files = Mock()
+    process_manager.get_hitlist_in_order = Mock(return_value=([], []))
+    process_manager.shutdown_interactive = Mock()
+    process_manager.kill_all_children = Mock()
+    process_manager.get_analysis_time = Mock(
+        return_value=(1.23, "2026/05/21 12:00:00")
+    )
+    process_manager.is_slips_live_updating_event.is_set = Mock(
+        return_value=False
+    )
+
+    with patch(
+        "managers.process_manager.multiprocessing.active_children",
+        return_value=[],
+    ):
+        process_manager.shutdown_gracefully()
+
+    process_manager.shutdown_interactive.assert_not_called()
+    assert process_manager.kill_all_children.call_count == 2
+    process_manager.main.print.assert_any_call(
+        "[Process Manager] Slips didn't shutdown gracefully - "
+        "Core module failure.\n",
+        log_to_logfiles_only=True,
+    )
 
 
 @pytest.mark.parametrize(
@@ -436,11 +740,63 @@ def test_print_stopped_module():
         assert "Stopped" in printed_str
         assert "green_count left" in printed_str
 
+        process_manager.print_stopped_module("testmodule")
+
+        assert mock_print.call_count == 1
+
+
+def test_kill_daemon_children_excludes_thread_pids_from_logging_count():
+    """Exclude stored thread PIDs from daemon-child shutdown log counts."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.db.get_pids.return_value = {
+        "module_one": 123,
+        "module_thread": 456,
+        "module_two": 789,
+    }
+
+    with patch.object(
+        process_manager, "kill_process_tree"
+    ) as mock_kill_process_tree, patch.object(
+        process_manager, "print_stopped_module"
+    ) as mock_print_stopped_module:
+        process_manager.kill_daemon_children()
+
+    assert mock_kill_process_tree.call_args_list == [call(123), call(789)]
+    assert mock_print_stopped_module.call_args_list == [
+        call("module_one", total_modules=2),
+        call("module_two", total_modules=2),
+    ]
+
+
+def test_kill_process_tree_kills_descendants_before_parent():
+    """Kill descendants before their parent can reparent them."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    parent_children = Mock()
+    parent_children.read.return_value = "456\n"
+    child_children = Mock()
+    child_children.read.return_value = ""
+
+    with patch(
+        "managers.process_manager.os.popen",
+        side_effect=[parent_children, child_children],
+    ), patch("managers.process_manager.os.kill") as mock_kill:
+        process_manager.kill_process_tree(123)
+
+    assert mock_kill.call_args_list == [
+        call(456, signal.SIGKILL),
+        call(123, signal.SIGKILL),
+    ]
+
 
 def test_start_profiler_process():
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.bloom_filters_man = Mock()
-    with patch("managers.process_manager.Profiler") as mock_profiler:
+    with patch(
+        "managers.process_manager.Profiler"
+    ) as mock_profiler, patch.object(
+        process_manager.is_profiler_done_starting_initial_workers_event,
+        "wait",
+    ):
         mock_profiler_process = Mock()
         mock_profiler.return_value = mock_profiler_process
         mock_profiler_process.pid = 67890
@@ -457,16 +813,64 @@ def test_start_profiler_process():
             process_manager.main.conf,
             process_manager.main.pid,
             process_manager.main.bloom_filters_man,
-            is_profiler_done=process_manager.is_profiler_done,
+            is_profiler_done_semaphore=(
+                process_manager.is_profiler_done_semaphore
+            ),
             profiler_queue=process_manager.profiler_queue,
             is_profiler_done_event=process_manager.is_profiler_done_event,
             is_input_done_event=process_manager.is_input_done_event,
+            is_input_failed_event=process_manager.is_input_failed_event,
+            is_profiler_done_starting_initial_workers_event=(
+                process_manager.is_profiler_done_starting_initial_workers_event
+            ),
         )
         mock_profiler_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()
         process_manager.main.db.store_pid.assert_called_once_with(
             "Profiler", 67890
         )
+
+
+@pytest.mark.parametrize(
+    "input_type, should_wait",
+    [
+        (InputType.INTERFACE, True),
+        (InputType.PCAP, False),
+    ],
+)
+def test_start_profiler_process_waits_for_initial_workers(
+    input_type, should_wait
+):
+    """
+    Test that only interface profiler startup waits for initial workers.
+
+    Parameters:
+    input_type: Input type used for the run.
+    should_wait: Whether profiler startup should wait for initial workers.
+
+    Return:
+    None.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.bloom_filters_man = Mock()
+    process_manager.main.input_type = input_type
+    wait_event = (
+        process_manager.is_profiler_done_starting_initial_workers_event
+    )
+
+    with patch(
+        "managers.process_manager.Profiler"
+    ) as mock_profiler, patch.object(wait_event, "wait") as mock_wait:
+        mock_profiler_process = Mock()
+        mock_profiler.return_value = mock_profiler_process
+        mock_profiler_process.pid = 67890
+
+        process_manager.start_profiler_process()
+
+    if should_wait:
+        mock_wait.assert_called_once_with(30)
+    else:
+        mock_wait.assert_not_called()
 
 
 @pytest.mark.parametrize(

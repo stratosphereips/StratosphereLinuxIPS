@@ -7,7 +7,10 @@ from tests.module_factory import ModuleFactory
 from datetime import datetime, timedelta
 import sys
 import os
-from slips_files.common.input_type import InputType
+from slips_files.common.input_type import (
+    FOREVER_GROWING_INPUT_TYPES,
+    InputType,
+)
 
 
 @pytest.mark.parametrize(
@@ -66,6 +69,10 @@ def test_handle_flows_from_stdin_invalid_input():
 def test_is_total_flows_unknown(args, input_type, expected_result):
     main = ModuleFactory().create_main_obj()
     main.args = MagicMock(**args)
+    main.db = MagicMock()
+    main.db.is_running_non_stop.return_value = (
+        input_type in FOREVER_GROWING_INPUT_TYPES or args["growing"]
+    )
     main.input_type = input_type
 
     assert main.is_total_flows_unknown() == expected_result
@@ -255,33 +262,12 @@ def test_get_input_file_type(given_path, cmd_result, expected_input_type):
 
 
 @pytest.mark.parametrize(
-    "input_information, expected_filepath",
-    [
-        # Test Case 1: Simple filename
-        ("input.pcap", "output/input"),
-        # Test Case 2: Filename with trailing slash
-        ("input.pcap/", "output/input"),
-        # Test Case 3: Filename with path
-        ("path/to/input.pcap", "output/input"),
-    ],
-)
-def test_save_the_db(input_information, expected_filepath):
-    main = ModuleFactory().create_main_obj()
-    main.input_information = input_information
-    main.args = MagicMock()
-    main.args.output = "output"
-    main.db = MagicMock()
-    main.save_the_db()
-    main.db.save.assert_called_once_with(expected_filepath)
-
-
-@pytest.mark.parametrize(
     "input_type, is_running_non_stop, expected_result",
     [
         # Test Case 1: PCAP input, not a growing Zeek directory
         (InputType.PCAP, False, True),
-        # Test Case 2: Interface input, not a growing Zeek directory
-        (InputType.INTERFACE, False, True),
+        # Test Case 2: Interface input, running non-stop
+        (InputType.INTERFACE, True, True),
         # Test Case 3: Zeek folder input, is a growing Zeek directory
         (InputType.ZEEK_FOLDER, True, True),
         # Test Case 4: Other input type, not a growing Zeek directory
@@ -475,6 +461,18 @@ def test_prepare_output_dir_with_o_flag_creates_dir(
 
     assert os.path.exists(non_existent)
     assert oct(os.stat(non_existent).st_mode & 0o777) == "0o777"
+
+
+def test_prepare_locks_dir_sets_sticky_permissions(main_obj, tmp_path):
+    locks_dir = tmp_path / "slips-locks"
+
+    with patch(
+        "slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(locks_dir)
+    ):
+        main_obj.prepare_locks_dir()
+
+    assert locks_dir.exists()
+    assert oct(locks_dir.stat().st_mode & 0o1777) == "0o1777"
 
 
 @patch(

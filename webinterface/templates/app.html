@@ -10,6 +10,7 @@
   <link rel="stylesheet" type="text/css" href="{{url_for('analysis.static', filename='css/analysis.css')}}" />
   <link rel="stylesheet" type="text/css" href="{{url_for('general.static', filename='css/general.css')}}" />
   <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='app.css')}}" />
+  <meta name="csrf-token" content="{{ csrf_token }}">
     <title>Slips</title>
 
 </head>
@@ -74,10 +75,17 @@
         </a>
       </li>
       <li class="nav-item ms-auto">
-        <a type="button" id="changedb_button" class="nav-link btn-primary" data-toggle="modal" data-target="#modal_choose_redis" style=" color: #0d6efd!important">
+        <a type="button" id="changedb_button" class="nav-link btn-primary" data-bs-toggle="modal" data-bs-target="#modal_choose_redis" style=" color: #0d6efd!important">
           <i class="fa-solid fa-database"></i>
           Change DB
         </a>
+      </li>
+      <li class="nav-item">
+        <button type="button" id="browse_redis_button" class="nav-link btn-primary">
+          <i class="fa fa-folder-open" aria-hidden="true"></i>
+          Browse redis database
+        </button>
+        <input type="file" id="redis_rdb_file" accept=".rdb" hidden>
       </li>
       <li class="nav-item">
         <a type="button" id="reload_button" class="nav-link btn-primary">
@@ -85,6 +93,7 @@
         </a>
       </li>
     </ul>
+    <div id="redis_upload_warning" class="alert alert-warning d-none" role="alert"></div>
 
 
 
@@ -99,13 +108,12 @@
         {% include 'documentation.html' %}
       </div>
     </div>
-    <div class="modal " id="modal_choose_redis" tabindex="-1" role="dialog" aria-labelledby="staticBackdropLabel">
-      <div class="modal-dialog" role="document">
+    <div class="modal" id="modal_choose_redis" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+      <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="staticBackdropLabel">Choose DB</h5>
-            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-              <span aria-hidden="true">&times;</span>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
             </button>
           </div>
           <div class="modal-body">
@@ -119,7 +127,7 @@
             </table>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             <button type="button" id="button_choose_db" class="btn btn-primary">Apply</button>
           </div>
         </div>

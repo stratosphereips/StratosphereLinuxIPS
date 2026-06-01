@@ -173,6 +173,9 @@ When using the web interface, you can select among the active Redis-backed analy
     [2] dataset/test7-malicious.pcap - port 59324
 
 You can choose the corresponding file or interface from the web interface.
+You can also use the `Browse redis database` button in the web interface to
+load a saved `.rdb` file directly. The upload accepts only files with the
+`.rdb` extension.
 
 Once you're done, you can run slips with ```--killall``` to close all the redis servers using the following command
 
@@ -255,6 +258,11 @@ Then navigate to ```http://localhost:55000/``` from your browser.
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px" title="Web Interface">
 
+Use `Change DB` to switch between active Redis server. Use
+`Browse redis database` to upload and inspect a saved Redis `.rdb` file. If the
+file is not a Redis RDB file or Redis cannot load it, the web interface shows a
+warning and keeps the current database selected.
+
 On the right column, you can see a list of all the IPs seen in your traffic.
 
 The traffic of IP is splitted into time windows. each time window is 1h long of traffic.
@@ -299,9 +307,9 @@ Note: If you try to save the same file twice using ```-s``` the old backup will 
 
 You can load it again using ```-d```, For example:
 
-```sudo ./slips.py -d redis_backups/hide-and-seek-short.rdb ```
+```sudo ./slips.py -d redis_backups/hide-and-seek-short.rdb -w```
 
-And then use ```./webinterface.sh``` and select the entry on port 32850 to view the loaded database.
+Then navigate to ```http://localhost:55000/``` and select the entry on port 32850 to view the loaded database.
 
 Note: saving and loading the database requires **root privileges** and is only supported in linux.
 
@@ -334,6 +342,21 @@ request to the DNS server 1.2.3.4 asking for slack.com will still be shown.
 
 
 This whitelist can be enabled or disabled by changing the ```enable_local_whitelist``` key in `config/slips.yaml`.
+
+Do not modify the default ```config/whitelist.conf``` in place. Create a copy, update your copy, and set ```whitelists.local_whitelist_path``` in the Slips config file you are using to point to that copy.
+
+Example:
+
+```bash
+cp config/whitelist.conf config/my_whitelist.conf
+cp config/slips.yaml config/my_slips.yaml
+```
+
+Then set ```local_whitelist_path: config/my_whitelist.conf``` in ```config/my_slips.yaml``` and run Slips with:
+
+```bash
+./slips.py -c config/my_slips.yaml -f dataset/test7-malicious.pcap
+```
 
 The attacker and victim of every evidence are checked against the whitelist. In addition to all the related IPs, DNS resolutions, SNI, and CNAMEs of the attacker and teh victim. If any of them are whitelisted, the flow/evidence is discarded.
 
@@ -393,7 +416,9 @@ The tranco list is updated daily by default in Slips, but you can change how oft
 Tranco whitelist can be enabled or disabled by changing the ```enable_online_whitelist``` key in `config/slips.yaml`.
 
 ### Whitelisting Example
-You can modify the file ```config/whitelist.conf``` file with this content:
+Do not edit the default ```config/whitelist.conf``` directly. Copy it, set ```local_whitelist_path``` in your copied Slips config file to the copied whitelist file, and modify that copied whitelist instead.
+
+For example, your copied whitelist file can contain:
 
 
     "IoCType","IoCValue","Direction","IgnoreType"
@@ -458,6 +483,15 @@ Even when Slips is run using sudo, it drops root privileges  in modules that don
 
 Slips has a ```config/slips.yaml``` the contains user configurations for different modules and general execution. Below are some of Slips features that can be modifie with respect to the user preferences.
 
+Do not modify the default ```config/slips.yaml``` in place. Keep it as the shipped baseline, create a copy for your local changes, and run Slips with that copy using ```-c```.
+
+Example:
+
+```bash
+cp config/slips.yaml config/my_slips.yaml
+./slips.py -c config/my_slips.yaml -f dataset/test7-malicious.pcap
+```
+
 ### Generic configuration
 
 **Time window width.**
@@ -496,6 +530,12 @@ update:
 This setting is separate from the runtime ```feeds_update_manager``` module, which only updates TI feeds and related files.
 
 Automatic Slips updates may overwrite the default config files shipped with Slips. If you want to keep local config changes safe, do not modify the default config files. Create and use your own config files with different names instead.
+
+Use ```update.channel_to_update_slips_from``` in slips.yaml to choose the update channel:
+
+- ```stable``` -> ```origin/master```
+- ```unstable``` -> ```origin/develop```
+- ```testing``` -> uses the branch specified in ```update.testing_branch_to_update_slips_from```
 
 
 
@@ -746,7 +786,7 @@ this file can be used for training Slips RNN module.
 
 ## Slips parameters
 
-- ```-c``` or  ```--config``` Used for changing then path to the Slips config file. default is config/slips.yaml
+- ```-c``` or  ```--config``` Used for changing then path to the Slips config file. default is config/slips.yaml. It is recommended to copy ```config/slips.yaml``` and pass your copy with ```-c``` instead of editing the default file.
 - ```-v``` or  ```--verbose``` Verbosity level. This logs more info about Slips.
 - ```-e``` or  ```--debug``` Debugging level. This shows more detailed errors.
 - ```-f``` or  ```--filepath``` Read and automatically recognize a Zeek dir, a Zeek conn.log file, a Suricata JSON file, Argus, PCAP.

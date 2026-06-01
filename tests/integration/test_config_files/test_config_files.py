@@ -1,30 +1,30 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 """
-This file tests 2 different config files other than slips' default config/slips.yaml
-test/test.yaml and tests/test2.yaml
+This file tests generated config files other than slips' default config/slips.yaml.
 """
 
+import os
+import shutil
+from pathlib import Path
+from typing import Callable
+
+import pytest
 from tests.common_test_utils import (
     is_evidence_present,
     create_output_dir,
     assert_no_errors,
     check_for_text,
-    close_test_redis_server,
+    get_total_analyzed_ips_from_output,
     get_label_count_from_output_db,
     run_slips,
     get_slips_test_command,
     modify_yaml_config,
     skip_if_missing_runtime_dependencies,
 )
-from tests.module_factory import ModuleFactory
-import pytest
-import shutil
-import os
-from pathlib import Path
 
 alerts_file = "alerts.log"
-TEST_DIR = Path(__file__).resolve().parent
+CONFIG_FILES_DIR = Path("output/integration/config_files")
 
 
 @pytest.mark.parametrize(
@@ -38,10 +38,13 @@ TEST_DIR = Path(__file__).resolve().parent
     ],
 )
 def test_conf_file(
-    pcap_path, expected_profiles, output_dir, integration_port_factory
-):
+    pcap_path: str,
+    expected_profiles: int,
+    output_dir: str,
+    integration_port_factory: Callable[[str], int],
+) -> None:
     """
-    In this test we're using tests/test.conf
+    Test a generated config file with broad analysis and metadata enabled.
     """
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",),
@@ -49,10 +52,10 @@ def test_conf_file(
         require_zeek_or_bro=True,
     )
     redis_port = integration_port_factory("redis")
-    config_file = TEST_DIR / "test.yaml"
-    modify_yaml_config(
-        output_filename=config_file.name,
-        output_dir=TEST_DIR,
+    CONFIG_FILES_DIR.mkdir(parents=True, exist_ok=True)
+    config_file = modify_yaml_config(
+        output_filename=f"config_test_{redis_port}.yaml",
+        output_dir=CONFIG_FILES_DIR,
         changes={
             "DisabledAlerts": {
                 "disabled_detections": ["ConnectionWithoutDNS"]
@@ -91,10 +94,7 @@ def test_conf_file(
         print("Slip is done, checking for errors in the output dir.")
         assert_no_errors(output_dir)
         print("Comparing profiles with expected profiles")
-        database = ModuleFactory().create_db_manager_obj(
-            redis_port, output_dir=output_dir, start_redis_server=False
-        )
-        profiles = database.get_profiles_len()
+        profiles = get_total_analyzed_ips_from_output(output_dir)
         # expected_profiles is more than 50 because we're using direction = all
         assert profiles > expected_profiles
         print("Checking for a random evidence")
@@ -119,7 +119,7 @@ def test_conf_file(
         # test metadata_dir
         assert "metadata" in os.listdir(output_dir)
         metadata_path = os.path.join(output_dir, "metadata")
-        for file in ("test.yaml", "whitelist.conf", "info.txt"):
+        for file in (config_file.name, "whitelist.conf", "info.txt"):
             print(f"checking if {file} in the metadata path {metadata_path}")
             assert file in os.listdir(metadata_path)
 
@@ -133,9 +133,8 @@ def test_conf_file(
         success = True
     finally:
         if success:
-            close_test_redis_server(redis_port)
+            config_file.unlink(missing_ok=True)
             shutil.rmtree(output_dir)
-        os.remove(config_file)
 
 
 @pytest.mark.parametrize(
@@ -149,10 +148,13 @@ def test_conf_file(
     ],
 )
 def test_conf_file2(
-    pcap_path, expected_profiles, output_dir, integration_port_factory
-):
+    pcap_path: str,
+    expected_profiles: int,
+    output_dir: str,
+    integration_port_factory: Callable[[str], int],
+) -> None:
     """
-    In this test we're using tests/test2.conf
+    Test a generated config file with metadata disabled.
     """
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",),
@@ -160,10 +162,10 @@ def test_conf_file2(
         require_zeek_or_bro=True,
     )
     redis_port = integration_port_factory("redis")
-    config_file = TEST_DIR / "test2.yaml"
-    modify_yaml_config(
-        output_filename=config_file.name,
-        output_dir=TEST_DIR,
+    CONFIG_FILES_DIR.mkdir(parents=True, exist_ok=True)
+    config_file = modify_yaml_config(
+        output_filename=f"config_test2_{redis_port}.yaml",
+        output_dir=CONFIG_FILES_DIR,
         changes={
             "detection": {"evidence_detection_threshold": 0.1},
             "parameters": {
@@ -197,6 +199,5 @@ def test_conf_file2(
         success = True
     finally:
         if success:
-            close_test_redis_server(redis_port)
+            config_file.unlink(missing_ok=True)
             shutil.rmtree(output_dir)
-        os.remove(config_file)

@@ -24,6 +24,7 @@ from managers.ui_manager import UIManager
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_paths import get_performance_plots_dir
 from slips_files.common.printer import Printer
+from slips_files.common.sqlite_flock import SQLiteFlock
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import green, yellow
 from slips_files.common.input_type import InputType
@@ -67,20 +68,21 @@ class Main:
             self.checker.verify_given_flags()
             self.prepare_locks_dir()
             if not self.args.stopdaemon:
-                # Check the type of input
+                self.input_type: InputType
                 (
                     self.input_type,
                     self.input_information,
                     self.line_type,
                 ) = self.checker.get_input_type()
+                self.checker.verify_flags_that_require_an_interface(
+                    self.input_type
+                )
                 self.input_information = os.path.normpath(
                     self.input_information
                 )
                 self.input_information = self.input_information.replace(
                     ",", "_"
                 )
-
-                # If we need zeek (bro), test if we can run it.
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
                 self.redis_man.start_redis_cache_if_not_running()
@@ -118,40 +120,11 @@ class Main:
         if not self.conf.get_cpu_profiler_enable():
             sys.exit(0)  # leaves any children started by slips as orphans
 
-    def save_the_db(self):
-        # save the db to the output dir of this analysis
-        # backups_dir = os.path.join(os.getcwd(), 'redis_backups/')
-        # try:
-        #     os.mkdir(backups_dir)
-        # except FileExistsError:
-        #     pass
-        backups_dir = self.args.output
-        # The name of the interface/pcap/nfdump/binetflow used is in self.input_information
-        # if the input is a zeek dir, remove the / at the end
-        if self.input_information.endswith("/"):
-            self.input_information = self.input_information[:-1]
-        # remove the path
-        self.input_information = os.path.basename(self.input_information)
-        # Remove the extension from the filename
-        with contextlib.suppress(ValueError):
-            self.input_information = self.input_information[
-                : self.input_information.index(".")
-            ]
-        # Give the exact path to save(), this is where our saved .rdb backup will be
-        rdb_filepath = os.path.join(backups_dir, self.input_information)
-        self.db.save(rdb_filepath)
-        # info will be lost only if you're out of space and redis
-        # can't write to dump.self.rdb, otherwise you're fine
-        print(
-            "[Main] [Warning] stop-writes-on-bgsave-error is set to no, "
-            "information may be lost in the redis backup file."
-        )
-
     def was_running_zeek(self) -> bool:
         """returns true if zeek was used in this run"""
-        return self.db.is_running_non_stop() or self.db.get_input_type() in (
-            InputType.PCAP,
-            InputType.INTERFACE,
+        return (
+            self.db.is_running_non_stop()
+            or self.db.get_input_type() == InputType.PCAP
         )
 
     def store_zeek_dir_copy(self):
@@ -278,7 +251,7 @@ class Main:
     def is_binetflow_line(self, line: str) -> bool:
         return "->" in line or "StartTime" in line
 
-    def get_input_file_type(self, given_path):
+    def get_input_file_type(self, given_path) -> InputType:
         """
         given_path: given file
         returns binetflow, pcap, nfdump, zeek_folder, suricata, etc.
@@ -287,7 +260,7 @@ class Main:
         input_type = InputType.FILE
         # Get the type of file
         cmd_result = subprocess.run(
-            ["file", given_path], stdout=subprocess.PIPE
+            ["file", utils.sanitize(given_path)], stdout=subprocess.PIPE
         )
         # Get command output
         cmd_result = cmd_result.stdout.decode("utf-8")
@@ -438,7 +411,7 @@ class Main:
         if not hasattr(self, "total_flows"):
             self.total_flows = self.db.get_total_flows()
 
-        processed = self.db.get_flow_analyzed_by_the_profiler_so_far()
+        processed = self.db.get_flows_analyzed_by_the_profiler_so_far()
         if not processed:
             return ""
         try:
@@ -466,9 +439,8 @@ class Main:
         """
         return (
             self.args.input_module
-            or self.args.growing
-            or self.input_type
-            in (InputType.STDIN, InputType.PCAP, InputType.INTERFACE)
+            or self.db.is_running_non_stop()
+            or self.input_type == InputType.PCAP
         )
 
     def get_slips_logfile(self) -> str:
@@ -511,19 +483,14 @@ class Main:
 
     def prepare_locks_dir(self):
         """
-        sets the correct permissions for the /tmp/slips directory to be
-        used by root and non-root users
+        Set secure shared permissions for the lock directory.
+
+        The directory must remain writable by root and non-root processes
+        because Slips may create lock files before and after dropping
+        privileges. Use the sticky bit so other users cannot remove or
+        replace lock files they do not own.
         """
-        locks_dir = utils.slips_locks_dir
-        # Create the directory if it doesn't exist
-        if not os.path.exists(locks_dir):
-            os.makedirs(locks_dir, exist_ok=True)
-        try:
-            os.chmod(locks_dir, 0o777)  # World-writable, no sticky bit
-        except PermissionError:
-            # this dir was created by root, so we can't change the permissions
-            # but probably root has already set the permissions
-            pass
+        SQLiteFlock.prepare_locks_dir()
 
     def start(self):
         """Main Slips Function"""
@@ -684,13 +651,12 @@ class Main:
                     # need this handler to be called only once when slips
                     # is shutting down
                     return
+
                 if not self.sigterm_received:
                     self.sigterm_received = True
                     self.print("SIGTERM received, shutting down slips.")
                     self.print(
-                        "SIGTERM received, likely due to "
-                        "OOM kill. Slips is stopping "
-                        "without completing the analysis.",
+                        "Slips is stopping without completing the analysis.",
                         0,
                         1,
                     )
@@ -701,7 +667,8 @@ class Main:
 
             self.proc_man.start_evidence_process()
             self.proc_man.start_profiler_process()
-            # give the profiler process time to start and subscribe to the db before we start sending data to it
+            # give the profiler process time to start and subscribe to the db
+            # before we start sending data to it
             time.sleep(1)
 
             self.c1 = self.db.subscribe("control_channel")
@@ -710,6 +677,9 @@ class Main:
             self.input_process = self.proc_man.start_input_process()
 
             self.db.store_pid("main", int(self.pid))
+
+            self.proc_man.declare_that_slips_done_starting_all_children()
+
             self.metadata_man.set_input_metadata()
 
             # warn about unused open redis servers

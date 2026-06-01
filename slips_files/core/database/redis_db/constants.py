@@ -12,6 +12,7 @@ class Constants:
     IOC_JA3 = "IoC_JA3"
     IOC_JARM = "IoC_JARM"
     IOC_SSL = "IoC_SSL"
+    TOR_NODES = "tor_nodes"
     LABELED_AS_MALICIOUS = "labeled_as_malicious"
     # used to cache url info by the virustotal module only
     VT_CACHED_URL_INFO = "virustotal_cached_url_info"

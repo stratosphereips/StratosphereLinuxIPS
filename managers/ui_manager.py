@@ -44,7 +44,7 @@ class UIManager:
 
     def start_webinterface(self):
         """
-        Starts the web interface shell script if -w is given
+        Starts the web interface if -w is given
         """
 
         def detach_child():
@@ -57,10 +57,6 @@ class UIManager:
             os.setpgrp()
 
         def run_webinterface():
-            # starting the wbeinterface using the shell script results
-            # in slips not being able to
-            # get the PID of the python proc started by the .sh script
-            # so we'll start it with python instead
             command = [sys.executable, "-m", "webinterface.app"]
 
             webinterface = subprocess.Popen(

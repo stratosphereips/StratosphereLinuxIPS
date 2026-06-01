@@ -10,11 +10,10 @@ from tests.common_test_utils import (
     is_evidence_present,
     create_output_dir,
     assert_no_errors,
-    close_test_redis_server,
+    get_total_analyzed_ips_from_output,
     get_slips_test_command,
     skip_if_missing_runtime_dependencies,
 )
-from tests.module_factory import ModuleFactory
 import pytest
 import shutil
 import os
@@ -82,10 +81,7 @@ def test_binetflow(
 
         assert_no_errors(output_dir)
 
-        database = ModuleFactory().create_db_manager_obj(
-            redis_port, output_dir=output_dir, start_redis_server=False
-        )
-        profiles = database.get_profiles_len()
+        profiles = get_total_analyzed_ips_from_output(output_dir)
         assert profiles > expected_profiles
 
         log_file = output_dir / "alerts" / alerts_file
@@ -93,7 +89,6 @@ def test_binetflow(
         success = True
     finally:
         if success:
-            close_test_redis_server(redis_port)
             shutil.rmtree(output_dir)
 
 
@@ -134,10 +129,7 @@ def test_suricata(
 
         assert_no_errors(output_dir)
 
-        database = ModuleFactory().create_db_manager_obj(
-            redis_port, output_dir=output_dir, start_redis_server=False
-        )
-        profiles = database.get_profiles_len()
+        profiles = get_total_analyzed_ips_from_output(output_dir)
         # todo the profiles should be way more than 10, maybe 76, but it varies
         #  each run, we need to sy why
         assert profiles > 10
@@ -149,7 +141,6 @@ def test_suricata(
         success = True
     finally:
         if success:
-            close_test_redis_server(redis_port)
             shutil.rmtree(output_dir)
 
 
@@ -182,14 +173,10 @@ def test_nfdump(nfdump_path, output_dir, integration_port_factory):
         # this function returns when slips is done
         run_slips(command)
 
-        database = ModuleFactory().create_db_manager_obj(
-            redis_port, output_dir=output_dir, start_redis_server=False
-        )
-        profiles = database.get_profiles_len()
+        profiles = get_total_analyzed_ips_from_output(output_dir)
         assert_no_errors(output_dir)
         assert profiles > 0
         success = True
     finally:
         if success:
-            close_test_redis_server(redis_port)
             shutil.rmtree(output_dir)

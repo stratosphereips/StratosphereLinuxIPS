@@ -1,6 +1,11 @@
 # This configuration file controls several aspects of the working of Slips.
+################ 🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨 #########################
+##                DO NOT MODIFY THIS FILE. EVER.                                                      #
+##      IF YOU NEED TO CHANGE ANYTHING, MAKE A COPY AND USE THAT COPY WITH slips.py -c                #
+################ 🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨 #########################
 
 ---
+
 update:
   # Enable automatic live updates of the installed Slips version.
   # This setting is separate from the feeds_update_manager module, which only
@@ -9,6 +14,19 @@ update:
   # with Slips. If you want to keep your local configuration changes intact, avoid editing the default config files.
   # Instead, create separate config files with different names and use those.
   auto_update_slips: false
+
+  # Select which update channel Slips should auto-update from.
+  # Available update channels:
+  # - stable:  uses origin/master
+  # - unstable: uses origin/develop
+  # - testing:  specify your branch name in the testing_branch_to_update_slips_from parameter below.
+  channel_to_update_slips_from: stable
+
+  # This branch is used only when channel_to_update_slips_from is set to
+  # testing.
+  # Must be a remote origin/<branch> ref.
+  # Example: origin/your_branch_here
+  testing_branch_to_update_slips_from: origin/your_branch_here
 
 output:
   # Define the file names for the default output.
@@ -95,7 +113,7 @@ parameters:
   # traffic, you can use
   # pcapfilter: 'not icmp and not multicast and not broadcast and not arp and
   # not port 5353 and not port 67'
-  pcapfilter: false
+  pcapfilter: ''
 
   # Defines for Zeek how much is the TCP inactivity timeout.
   # This means when will Zeek consider a TCP connection timeout after no

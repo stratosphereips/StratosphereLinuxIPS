@@ -1,5 +1,5 @@
 <h1 align="center">
-Slips v1.1.20
+Slips v1.1.21
 </h1>
 
 
@@ -116,7 +116,7 @@ terminal interface.
 
 ##### Web interface
 
-    ./webinterface.sh
+    ./slips.py -e 1 -f dataset/test7-malicious.pcap -o output_dir -w
 
 Then navigate to ```http://localhost:55000/``` from your browser.
 
@@ -164,6 +164,11 @@ Slips can be run on different platforms, the easiest and most recommended way if
 
 # Configuration
 Slips has a [config/slips.yaml](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/config/slips.yaml) that contains user configurations for different modules and general execution.
+
+Do not edit the default `config/slips.yaml` directly. Create a copy for your local configuration changes and run Slips with `-c`, for example `./slips.py -c config/my_slips.yaml -f dataset/test7-malicious.pcap`.
+
+The same applies to `config/whitelist.conf`: keep the default file unchanged, create a copy, and set `whitelists.local_whitelist_path` in your copied Slips config file to point to your copied whitelist file.
+Slips aborts updating to new versions when there are changes to Slips local config files.
 
 * You can change the timewindow width by modifying the ```time_window_width``` parameter
 * You can change the analysis direction to ```all```  if you want to see the attacks from and to your computer

@@ -109,6 +109,17 @@ Redis allows all the modules in Slips to access the data in parallel.
 Apart from read and write operations, Slips takes advantage of the Redis messaging system called Redis PUB/SUB.
 Processes may publish data into the channels, while others subscribe to these channels and process the new data when it is published.
 
+When Slips uses a Redis port other than the default Redis port 6379,
+it closes the opened redis server when analysis is done, and keeps a
+copy of the Redis database for later analysis in
+`output_dir/databases/dump.rdb`. To inspect this database, start a Redis server
+with that RDB file and connect to the same port:
+
+```bash
+redis-server --port 6380 --dir output_dir/databases --dbfilename dump.rdb
+redis-cli -p 6380
+```
+
 ### Usage of SQLite database.
 
 Slips uses SQLite database to store all flows in Slips interpreted format.

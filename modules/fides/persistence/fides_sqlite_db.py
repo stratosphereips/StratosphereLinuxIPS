@@ -22,6 +22,38 @@ import threading
 class FidesSQLiteDB:
     _lock = threading.RLock()
     name = "fides_sqlite_db"
+    _allowed_table_columns = {
+        "Organisation": frozenset({"organisationID"}),
+        "PeerInfo": frozenset({"peerID", "ip"}),
+        "PeerOrganisation": frozenset({"peerID", "organisationID"}),
+        "PeerTrustData": frozenset(
+            {
+                "peerID",
+                "has_fixed_trust",
+                "service_trust",
+                "reputation",
+                "recommendation_trust",
+                "competence_belief",
+                "integrity_belief",
+                "initial_reputation_provided_by_count",
+            }
+        ),
+        "PeerTrustRecommendationHistory": frozenset(
+            {"peer_trust_data_id", "recommendation_history_id"}
+        ),
+        "PeerTrustServiceHistory": frozenset(
+            {"peer_trust_data_id", "service_history_id"}
+        ),
+        "RecommendationHistory": frozenset(
+            {"peerID", "satisfaction", "weight", "recommend_time"}
+        ),
+        "ServiceHistory": frozenset(
+            {"peerID", "satisfaction", "weight", "service_time"}
+        ),
+        "ThreatIntelligence": frozenset(
+            {"target", "score", "confidence", "confidentiality"}
+        ),
+    }
 
     def __init__(self, logger: Output, db_path: str) -> None:
         """
@@ -575,9 +607,18 @@ class FidesSQLiteDB:
         :param data: A dictionary where the keys are column names, and values are the values to be saved.
         :return: None
         """
+        allowed_columns = self.__get_allowed_columns(table)
+        invalid_columns = set(data.keys()) - allowed_columns
+        if invalid_columns:
+            raise ValueError(
+                f"Invalid columns for table {table}: {sorted(invalid_columns)}"
+            )
         columns = ", ".join(data.keys())
         placeholders = ", ".join("?" * len(data))
-        query = f"INSERT OR REPLACE INTO {table} ({columns}) VALUES ({placeholders})"
+        query = (
+            f"INSERT OR REPLACE INTO {table} ({columns}) "
+            f"VALUES ({placeholders})"
+        )
         self.__slips_log(f"Saving data: {data} into table: {table}")
         self.__execute_query(query, list(data.values()))
 
@@ -592,9 +633,22 @@ class FidesSQLiteDB:
         :param params: Optional list of parameters for parameterized queries.
         :return: None
         """
+        self.__get_allowed_columns(table)
         query = f"DELETE FROM {table} WHERE {condition}"
         self.__slips_log(f"Deleting from table: {table} where {condition}")
         self.__execute_query(query, params)
+
+    def __get_allowed_columns(self, table: str) -> frozenset[str]:
+        """
+        Return the allowed column set for a known internal table.
+
+        :param table: Table name to validate.
+        :return: Allowed columns for the given table.
+        """
+        try:
+            return self._allowed_table_columns[table]
+        except KeyError as error:
+            raise ValueError(f"Invalid Fides table name: {table}") from error
 
     def close(self) -> None:
         """

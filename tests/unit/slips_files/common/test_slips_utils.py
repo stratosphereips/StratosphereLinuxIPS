@@ -67,6 +67,7 @@ def test_initialize_logfile_skips_file_when_started_by_update(tmp_path):
         ("path/to/software.log", False),
         ("path/to/software.log.labeled", False),
         ("path/to/weird.log", False),
+        ("path/to/login.log", False),
         ("path/to/software.log.labeled.something", True),
         ("path/to/unsupported.log", True),
     ],
@@ -127,6 +128,40 @@ def test_get_msg_payload(message, expected_payload):
 def test_sanitize(input_string, expected_output):
     utils = ModuleFactory().create_utils_obj()
     assert utils.sanitize(input_string) == expected_output
+
+
+def test_validate_safe_path_returns_normalized_path(tmp_path):
+    utils = ModuleFactory().create_utils_obj()
+    path = tmp_path / "nested" / ".." / "safe.txt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("data", encoding="utf-8")
+
+    assert utils.validate_safe_path(str(path), must_exist=True) == str(
+        path.resolve()
+    )
+
+
+@pytest.mark.parametrize("path", ["bad;path", "bad\npath", ""])
+def test_validate_safe_path_rejects_unsafe_values(path):
+    utils = ModuleFactory().create_utils_obj()
+
+    with pytest.raises(ValueError):
+        utils.validate_safe_path(path)
+
+
+@pytest.mark.parametrize("port, expected", [("5000", 5000), (6379, 6379)])
+def test_validate_port_returns_int(port, expected):
+    utils = ModuleFactory().create_utils_obj()
+
+    assert utils.validate_port(port) == expected
+
+
+@pytest.mark.parametrize("port", [0, -1, 65536, "not-a-port"])
+def test_validate_port_rejects_invalid_values(port):
+    utils = ModuleFactory().create_utils_obj()
+
+    with pytest.raises((TypeError, ValueError)):
+        utils.validate_port(port)
 
 
 def test_get_ip_identification_as_str_skips_timestamp():

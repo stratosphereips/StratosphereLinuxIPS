@@ -218,3 +218,18 @@ weird_fields_to_slips_fields_map = {
     "name": "name",
     "addl": "addl",
 }
+
+login_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "uid": "uid",
+    "id.orig_h": "saddr",
+    "id.orig_p": "sport",
+    "id.resp_h": "daddr",
+    "id.resp_p": "dport",
+    "proto": "proto",
+    "success": "success",
+    "confused": "confused",
+    "user": "user",
+    "client_user": "client_user",
+    "password": "password",  #  pragma: allowlist secret
+}

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import time
 import ipaddress
-from typing import Dict
+from typing import Awaitable, Callable, Dict
 
 import dns.resolver
 import ipwhois
@@ -18,6 +18,9 @@ class ASN:
         self.db = db
         # update asn every 1 month
         self.update_period = 2592000
+        self.negative_cache_ttl = 300
+        self.failed_rdap_lookups = {}
+        self.failed_online_asn_lookups = {}
 
         # Open the maxminddb ASN offline db
         try:
@@ -109,6 +112,9 @@ class ASN:
         if not ip:
             return False
 
+        if self._is_negative_cache_hit(self.failed_rdap_lookups, ip):
+            return False
+
         try:
             # Cache the range of this ip
             whois_info: dict = ipwhois.IPWhois(address=ip).lookup_rdap()
@@ -117,6 +123,7 @@ class ASN:
             asn_number = whois_info.get("asn", False)
 
             if asnorg and asn_cidr not in ("", "NA"):
+                self.failed_rdap_lookups.pop(ip, None)
                 self.db.set_asn_cache(asnorg, asn_cidr, asn_number)
                 asn_info = {
                     "asn": {"number": f"AS{asn_number}", "org": asnorg}
@@ -132,6 +139,7 @@ class ASN:
         ):
             # private ip or RDAP lookup failed. don't cache
             # or ASN lookup failed with no more methods to try
+            self._store_negative_cache(self.failed_rdap_lookups, ip)
             return False
 
     def get_asn_online(self, ip):
@@ -143,22 +151,29 @@ class ASN:
         if utils.is_ignored_ip(ip):
             return asn
 
+        if self._is_negative_cache_hit(self.failed_online_asn_lookups, ip):
+            return asn
+
         url = "http://ip-api.com/json/"
         try:
             response = requests.get(f"{url}/{ip}", timeout=5)
             if response.status_code != 200:
+                self._store_negative_cache(self.failed_online_asn_lookups, ip)
                 return asn
 
             ip_info = json.loads(response.text)
             if "as" not in ip_info:
+                self._store_negative_cache(self.failed_online_asn_lookups, ip)
                 return asn
 
             asn_info = ip_info["as"].split()
             if asn_info == []:
+                self._store_negative_cache(self.failed_online_asn_lookups, ip)
                 return
 
             # usually it's somthing like AS15169 Google LLC
             # separate the org name
+            self.failed_online_asn_lookups.pop(ip, None)
             asn.update(
                 {"asn": {"number": asn_info[0], "org": " ".join(asn_info[1:])}}
             )
@@ -172,9 +187,38 @@ class ASN:
         ):
             # comes here if slips fails to get the as info from the response
             # OR gets it correctly, but the info doesn't contain the fields slip sis expecting
+            self._store_negative_cache(self.failed_online_asn_lookups, ip)
             pass
 
         return asn
+
+    def _is_negative_cache_hit(self, cache: dict, key: str) -> bool:
+        """
+        Check whether a negative cache entry is still valid.
+
+        :param cache: Cache mapping keys to monotonic timestamps.
+        :param key: Cache key to evaluate.
+        :return: True if the negative cache entry is active.
+        """
+        timestamp = cache.get(key)
+        if timestamp is None:
+            return False
+
+        if (time.monotonic() - timestamp) > self.negative_cache_ttl:
+            cache.pop(key, None)
+            return False
+
+        return True
+
+    def _store_negative_cache(self, cache: dict, key: str):
+        """
+        Store a negative cache entry.
+
+        :param cache: Cache mapping keys to monotonic timestamps.
+        :param key: Cache key to store.
+        :return: None.
+        """
+        cache[key] = time.monotonic()
 
     def update_ip_info_in_the_db(
         self, ip: str, asn: Dict[str, Dict[str, str | float]]
@@ -203,16 +247,15 @@ class ASN:
             # either search for the ASN in our offline db, or online
             # either way we need to cache the asn of this ip's range so we
             # don't search for ips in the same range
+            # we don't have it cached in our db, get it from geolite
+            if asn := self.get_asn_info_from_geolite(ip):
+                self.update_ip_info_in_the_db(ip, asn)
+                return
+
             # cache this range in our redis db
             if asn := self.cache_ip_range(ip):
                 # range is cached and we managed to get the number and org of
                 # the given ip using whois
-                # no need to search online or offline
-                self.update_ip_info_in_the_db(ip, asn)
-                return
-
-            # we don't have it cached in our db, get it from geolite
-            if asn := self.get_asn_info_from_geolite(ip):
                 self.update_ip_info_in_the_db(ip, asn)
                 return
 
@@ -221,3 +264,31 @@ class ASN:
                 # found it online
                 self.update_ip_info_in_the_db(ip, asn)
                 return
+
+    async def get_asn_async(
+        self,
+        ip: str,
+        run_in_executor: Callable[..., Awaitable[dict]],
+    ):
+        """
+        Get ASN info without blocking the event loop.
+
+        :param ip: IP address to enrich.
+        :param run_in_executor: Async helper that runs blocking callables in
+         a bounded executor.
+        :return: None.
+        """
+        if cached_asn := self.get_cached_asn(ip):
+            self.update_ip_info_in_the_db(ip, cached_asn)
+            return
+
+        if asn := self.get_asn_info_from_geolite(ip):
+            self.update_ip_info_in_the_db(ip, asn)
+            return
+
+        if asn := await run_in_executor(self.cache_ip_range, ip):
+            self.update_ip_info_in_the_db(ip, asn)
+            return
+
+        if asn := await run_in_executor(self.get_asn_online, ip):
+            self.update_ip_info_in_the_db(ip, asn)

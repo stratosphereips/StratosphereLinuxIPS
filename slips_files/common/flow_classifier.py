@@ -27,6 +27,7 @@ from slips_files.core.flows.zeek import (
     ARP,
     Software,
     Weird,
+    Login,
 )
 
 
@@ -54,6 +55,7 @@ class FlowClassifier:
             "arp": ARP,
             "software": Software,
             "weird": Weird,
+            "login": Login,
             "argus": ArgusConn,
             "nfdump": NfdumpConn,
             "suricata_conn": SuricataFlow,

@@ -206,3 +206,14 @@ class FlowHandler:
         self.db.publish("new_tunnel", to_send)
 
         self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
+
+    def handle_login(self):
+        """Publish login.log entries for flow_alerts processing."""
+        to_send = {
+            "profileid": self.profileid,
+            "twid": self.twid,
+            "flow": asdict(self.flow),
+        }
+        to_send = json.dumps(to_send)
+        self.db.publish("new_login", to_send)
+        self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")

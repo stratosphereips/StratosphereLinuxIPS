@@ -1,13 +1,14 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import re
 from datetime import timedelta
 import os
 import sys
-from slips_files.common.input_type import InputType
 import ipaddress
 from typing import (
     List,
     Union,
+    Optional,
 )
 import yaml
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
@@ -20,6 +21,10 @@ class ConfigParser(object):
     name = "ConfigParser"
     description = "Parse and sanitize slips.yaml values. used by all modules"
     authors = ["Alya Gomaa"]
+    UPDATE_BRANCH_ALIASES = {
+        "stable": "origin/master",
+        "unstable": "origin/develop",
+    }
 
     def __init__(self):
         configfile: str = self.get_config_file()
@@ -151,6 +156,108 @@ class ConfigParser(object):
             True when automatic live updates are enabled, otherwise False.
         """
         return self.read_configuration("update", "auto_update_slips", False)
+
+    def channel_to_update_slips_from(self) -> str:
+        """
+        Read which update channel Slips should auto-update from.
+
+        Returns:
+            The configured channel name, or "stable" when unset.
+        """
+        return self._sanitize_update_channel(
+            self.read_configuration(
+                "update", "channel_to_update_slips_from", "stable"
+            )
+        )
+
+    def _sanitize_update_branch(self, branch_name: str) -> Optional[str]:
+        """
+        Resolve and sanitize the configured update branch.
+
+        Parameters:
+            branch_name: Raw branch selector from the configuration file.
+
+        Returns:
+            A safe origin/<branch> reference, or None when the value
+            cannot be sanitized safely.
+        """
+        if not isinstance(branch_name, str):
+            return None
+
+        normalized_branch_name = branch_name.strip()
+        # is it master or develop??
+        branch_alias = self.UPDATE_BRANCH_ALIASES.get(
+            normalized_branch_name.lower()
+        )
+        if branch_alias:
+            return branch_alias
+
+        if not normalized_branch_name.startswith("origin/"):
+            return None
+
+        if (
+            ".." in normalized_branch_name
+            or "@{" in normalized_branch_name
+            or "\\" in normalized_branch_name
+            or normalized_branch_name.endswith("/")
+            or "//" in normalized_branch_name
+            or normalized_branch_name.endswith(".lock")
+        ):
+            return None
+
+        if not re.fullmatch(
+            r"origin/[A-Za-z0-9._/-]+", normalized_branch_name
+        ):
+            return None
+
+        branch_without_remote = normalized_branch_name.removeprefix("origin/")
+        if branch_without_remote.startswith(("-", "/", ".")):
+            return None
+
+        return normalized_branch_name
+
+    def _sanitize_update_channel(self, channel_name: str) -> str:
+        """
+        Resolve and sanitize the configured update channel.
+
+        Parameters:
+            channel_name: Raw channel name from the configuration file.
+
+        Returns:
+            A supported update channel name.
+        """
+        if not isinstance(channel_name, str):
+            return "stable"
+
+        normalized_channel_name = channel_name.strip().lower()
+        if normalized_channel_name in (
+            "stable",
+            "unstable",
+            "testing",
+        ):
+            return normalized_channel_name
+
+        self.print(
+            "Warning: Invalid update.channel_to_update_slips_from "
+            f"value {channel_name!r}. Falling back to stable."
+        )
+        return "stable"
+
+    def testing_branch_to_update_slips_from(self) -> str:
+        """
+        Read which testing branch Slips should auto-update from.
+
+        Returns:
+            The configured testing branch ref, or
+            "origin/your_branch_here" when unset.
+        """
+        return self._sanitize_update_branch(
+            self.read_configuration(
+                "update",
+                "testing_branch_to_update_slips_from",
+                "origin/your_branch_here",
+            )
+        )
 
     def online_whitelist(self):
         return self.read_configuration("whitelists", "online_whitelist", False)
@@ -966,51 +1073,6 @@ class ConfigParser(object):
                 # param isn't used
                 pass
 
-    def get_disabled_modules(self, input_type: str) -> list:
-        """
-        Uses input type to enable leak detector only on pcaps
-        """
-        to_ignore: List[str] = self.read_configuration(
-            "modules", "disable", ["template"]
-        )
-        to_ignore = [mod.strip() for mod in to_ignore]
-
-        # Ignore exporting alerts module if export_to is empty
-        export_to = self.export_to()
-        if "stix" not in export_to and "slack" not in export_to:
-            to_ignore.append("exporting_alerts")
-
-        use_p2p = self.use_local_p2p()
-        if not (use_p2p and "-i" in sys.argv):
-            to_ignore.append("p2p_trust")
-
-        use_global_p2p = self.use_global_p2p()
-        if not (use_global_p2p and ("-i" in sys.argv)):
-            to_ignore.append("fides")
-            to_ignore.append("iris")
-
-        # ignore CESNET sharing module if send and receive are
-        # disabled in slips.yaml
-        send_to_warden = self.send_to_warden()
-        receive_from_warden = self.receive_from_warden()
-
-        if not send_to_warden and not receive_from_warden:
-            to_ignore.append("cesnet")
-
-        # don't run blocking module unless specified
-        if not ("-cb" in sys.argv or "-p" in sys.argv):
-            to_ignore.append("blocking")
-            to_ignore.append("arp_poisoner")
-
-        # leak detector only works on pcap files
-        if input_type != InputType.PCAP:
-            to_ignore.append("leak_detector")
-
-        if not self.reading_flows_from_cyst():
-            to_ignore.append("cyst")
-
-        return to_ignore
-
     def get_cpu_profiler_enable(self):
         return self.read_configuration(
             "Profiling", "cpu_profiler_enable", False
@@ -1063,21 +1125,6 @@ class ConfigParser(object):
     def get_iris_config_location(self) -> str:
         return self.read_configuration(
             "global_p2p", "iris_conf", "config/iris_config.yaml"
-        )
-
-    def get_bootstrapping_setting(self) -> (bool, list):
-        return (
-            self.read_configuration("global_p2p", "bootstrapping_node", False)
-            and self.read_configuration("global_p2p", "use_global_p2p", False)
-            and ("-i" in sys.argv or "-g" in sys.argv),
-            ["fides", "iris"],
-        )
-
-    def is_bootstrapping_node(self) -> bool:
-        return (
-            self.read_configuration("global_p2p", "bootstrapping_node", False)
-            and self.read_configuration("global_p2p", "use_global_p2p", False)
-            and ("-i" in sys.argv or "-g" in sys.argv)
         )
 
     def get_bootstrapping_modules(self) -> list:

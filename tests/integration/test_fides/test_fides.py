@@ -16,7 +16,6 @@ from modules.fides.persistence.fides_sqlite_db import FidesSQLiteDB
 from tests.common_test_utils import (
     create_output_dir,
     assert_no_errors,
-    close_test_redis_server,
     modify_yaml_config,
 )
 from tests.module_factory import ModuleFactory
@@ -359,7 +358,6 @@ def test_conf_file2(path, output_dir, integration_port_factory):
     finally:
         if process is not None and process.poll() is None:
             stop_process_group(process, "fides slips")
-        close_test_redis_server(redis_port)
         if test_db.exists():
             test_db.unlink()
         shutil.rmtree(
@@ -435,6 +433,7 @@ def test_trust_recommendation_response(
     ]
     # success = False
     process = None
+    cached_network_opinion = None
 
     print(f"command: {' '.join(command)}")
 
@@ -489,17 +488,19 @@ def test_trust_recommendation_response(
 
         # these 30s are the time we give slips to process the msg
         countdown(30, "sigterm")
+        db = ModuleFactory().create_db_manager_obj(
+            redis_port, output_dir=output_dir, start_redis_server=False
+        )
+        cached_network_opinion = db.get_cached_network_opinion(
+            "stratosphere.org", 200000000000, 200000000000
+        )
+        db.close_all_dbs()
         stop_process_group(process, "fides slips")
 
     print(f"Slips with PID {process.pid} was killed.")
 
     print("Slips is done, checking for errors in the output dir.")
     assert_no_errors(output_dir)
-
-    print("Checking database")
-    db = ModuleFactory().create_db_manager_obj(
-        redis_port, output_dir=output_dir, start_redis_server=False
-    )
 
     # assert db.get_msgs_received_at_runtime("fides")["fides2network"] == "1"
     print("Checking Fides' data outlets")
@@ -508,9 +509,7 @@ def test_trust_recommendation_response(
     assert fdb.get_peer_trust_data("peer2").service_history != []
     assert fdb.get_peer_trust_data("peer1").service_history_size == 1
     assert fdb.get_peer_trust_data("peer2").service_history_size == 1
-    assert db.get_cached_network_opinion(
-        "stratosphere.org", 200000000000, 200000000000
-    ) == {
+    assert cached_network_opinion == {
         "target": "stratosphere.org",
         "score": "0.0",
         "confidence": "0.0",
@@ -522,7 +521,6 @@ def test_trust_recommendation_response(
     # finally:
     #     if process is not None and process.poll() is None:
     #         stop_process_group(process, "fides slips")
-    #     close_test_redis_server(redis_port)
     #     if permanent_db.exists():
     #         permanent_db.unlink()
     #     shutil.rmtree(

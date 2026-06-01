@@ -9,11 +9,14 @@ from tests.module_factory import ModuleFactory
 
 def test_load_modules():
     proc_manager = ModuleFactory().create_process_manager_obj()
-    proc_manager.modules_to_ignore = [
-        "template",
-        "mldetection-1",
-        "fides",
-    ]
+    disabled_modules = ["template", "mldetection-1", "fides"]
+    proc_manager.main.conf.read_configuration.side_effect = (
+        lambda section, name, default_value: (
+            disabled_modules
+            if (section, name) == ("modules", "disable")
+            else default_value
+        )
+    )
     failed_to_load_modules = proc_manager.get_modules()[1]
     assert failed_to_load_modules == 0
 
