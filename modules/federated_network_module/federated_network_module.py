@@ -498,8 +498,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             if self.model is None:
                 self.model = self.create_empty_model().to(self.device)
-                self.optimizer = optim.Adam(
-                    self.model.parameters(), lr=0.01, weight_decay=1e-4
+                self.optimizer = None  # manual SGD                    self.model.parameters(), lr=0.01, weight_decay=1e-4
                 )
 
             fc1_w = torch.load(self.local_fc1_path, weights_only=True)
@@ -788,21 +787,18 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 1,
                 1,
             )
-            self.optimizer = optim.Adam(
-                self.model.parameters(), lr=0.01, weight_decay=1e-4
+            self.optimizer = None  # manual SGD                self.model.parameters(), lr=0.01, weight_decay=1e-4
             )
             self.print("fit_incremental_model: optimizer created", 1, 1)
 
         if freeze_fc1:
             self.model.freeze_fc1()
-            self.optimizer = optim.Adam(
-                self.model.head.parameters(), lr=0.01, weight_decay=1e-4
+            self.optimizer = None  # manual SGD                self.model.head.parameters(), lr=0.01, weight_decay=1e-4
             )
         else:
             self.model.unfreeze_fc1()
             if self.optimizer is None:
-                self.optimizer = optim.Adam(
-                    self.model.parameters(), lr=0.01, weight_decay=1e-4
+                self.optimizer = None  # manual SGD                    self.model.parameters(), lr=0.01, weight_decay=1e-4
                 )
 
         self.print(
@@ -838,11 +834,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         )
 
         for epoch in range(epochs):
-            self.optimizer.zero_grad()
             outputs = self.model(X_tensor)
             loss = criterion(outputs, y_tensor)
             loss.backward()
-            self.optimizer.step()
+            with torch.no_grad():
+                for name, param in self.model.named_parameters():
+                    if param.grad is None:
+                        continue
+                    param -= 0.01 * param.grad
             self.last_batch_loss = loss.item()
 
             self.print(
