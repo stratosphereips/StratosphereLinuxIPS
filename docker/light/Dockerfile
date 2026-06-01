@@ -43,18 +43,17 @@ RUN cd modules \
         rnn_cc_detection/ \
         timeline/ \
         p2ptrust/ \
-        flowmldetection/ \
+        flow_ml_detection/ \
         cyst/ \
         cesnet/ \
         exporting_alerts/ \
-        riskiq/ \
+        risk_iq/ \
         template/ \
         blocking/ \
         virustotal/ \
     && cd .. \
     && rm -rf dataset/ docs/  tests/ \
-    && rm package.json \
-      pytest.ini \
+    && rm pytest.ini \
       webinterface.sh \
       CITATION.cff \
       CHANGELOG.md \
