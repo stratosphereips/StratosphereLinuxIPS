@@ -26,6 +26,11 @@ import sys
 import time
 import warnings
 
+# Force multiprocessing "spawn" to avoid fork-safety issues with PyTorch/MKL.
+# Must be called before any multiprocessing.Process creation.
+import multiprocessing
+multiprocessing.set_start_method("spawn", force=True)
+
 from slips.main import Main
 from slips.daemon import Daemon
 
