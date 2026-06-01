@@ -4,7 +4,7 @@ Identity:
 PeerDiscovery:
   DisableBootstrappingNodes: false
   ListOfMultiAddresses:
-  - /dns/melchior.slips.stratosphere.fel.cvut.cz/udp/6437/quic 12D3KooWJJa9PpMFVP7s3TQs2sedypJXxtMVkphRhgkjGH9EYMfM
+  - /dns/melchior.slips.stratosphere.fel.cvut.cz/udp/6437/quic-v1 12D3KooWJJa9PpMFVP7s3TQs2sedypJXxtMVkphRhgkjGH9EYMfM
 Redis:
   Host: 127.0.0.1
   Port: 6644
