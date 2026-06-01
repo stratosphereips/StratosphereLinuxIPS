@@ -760,6 +760,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             classes: List of class labels (unused, kept for compatibility)
             train_target: Logger target ("local" for "local_train", "merged" for "merged_train")
         """
+        # Single-thread torch for fork safety -- must be called here (after fork),
+        # not in init (before fork). set_num_interop_threads is NOT called to avoid
+        # RuntimeError: cannot set after parallel work has started.
+        torch.set_num_threads(1)
         self.print("fit_incremental_model: entering", 1, 1)
 
         freeze_fc1 = getattr(self, "_freeze_fc1_for_training", False)
