@@ -745,8 +745,8 @@ def test_print_stopped_module():
         assert mock_print.call_count == 1
 
 
-def test_kill_daemon_children_uses_stored_pid_count_for_logging():
-    """Kill stored daemon PIDs without requiring active child objects."""
+def test_kill_daemon_children_excludes_thread_pids_from_logging_count():
+    """Exclude stored thread PIDs from daemon-child shutdown log counts."""
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.db.get_pids.return_value = {
         "module_one": 123,

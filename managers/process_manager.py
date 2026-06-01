@@ -994,11 +994,12 @@ class ProcessManager:
         # they are the children of the slips.py that ran using -D
         # (so they started on a previous run)
         # and we only have access to the PIDs
-        children = self.main.db.get_pids().items()
+        children = [
+            (module_name, pid)
+            for module_name, pid in self.main.db.get_pids().items()
+            if "thread" not in module_name.lower()
+        ]
         for module_name, pid in children:
-            if "thread" in module_name.lower():
-                # skip threads, they'll be  handled by their parent process
-                continue
             self.kill_process_tree(int(pid))
             self.print_stopped_module(module_name, total_modules=len(children))
 
