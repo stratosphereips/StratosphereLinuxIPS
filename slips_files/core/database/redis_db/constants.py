@@ -52,6 +52,7 @@ class Constants:
     SLIPS_START_TIME = "slips_start_time"
     CURRENT_TIMEWINDOW = "current_timewindow"
     CURRENT_RISK_LEVEL = "current_risk_level"
+    MAX_RISK_LEVEL_OF_ALL_PROFILES = "max_risk_level_of_all_profiles"
     USED_FTP_PORTS = "used_ftp_ports"
     SLIPS_INTERNAL_TIME = "slips_internal_time"
     IS_RUNNING_AS_AP = "is_slips_running_as_an_ap"

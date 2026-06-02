@@ -344,7 +344,7 @@ class RedisDB(
     @classmethod
     def incr_current_timewindow(cls) -> None:
         cls.r.incr(cls.constants.CURRENT_TIMEWINDOW)
-        cls.r.set(cls.constants.CURRENT_RISK_LEVEL, 0)
+        cls.r._set_current_risk_level("", 0)
 
     @classmethod
     def get_current_timewindow(cls) -> Optional[str]:
