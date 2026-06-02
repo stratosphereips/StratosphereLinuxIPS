@@ -52,6 +52,8 @@ def _raw_evidence(
 def test_build_report_payload_and_html(tmp_path):
     run_dir = tmp_path / "run-output"
     (run_dir / "metadata").mkdir(parents=True)
+    module_dir = run_dir / "t_cell"
+    module_dir.mkdir(parents=True)
     storage = _build_storage(run_dir)
 
     damp_observation_id = storage.insert_observation(
@@ -290,7 +292,7 @@ def test_build_report_payload_and_html(tmp_path):
         ),
         encoding="utf-8",
     )
-    (run_dir / "t_cell.log").write_text(
+    (module_dir / "t_cell.log").write_text(
         "\n".join(
             [
                 "T Cell module ready.",
@@ -301,7 +303,7 @@ def test_build_report_payload_and_html(tmp_path):
         ),
         encoding="utf-8",
     )
-    (run_dir / "t_cell_trace.jsonl").write_text(
+    (module_dir / "t_cell_trace.jsonl").write_text(
         "\n".join(
             [
                 json.dumps(
@@ -556,7 +558,7 @@ def test_build_report_payload_resolves_persistent_db_and_module_output(
     """Report builder should read persistent DBs and module output paths."""
     run_dir = tmp_path / "run-output"
     permanent_store = tmp_path / "permanent" / "t_cell"
-    module_dir = run_dir / "T Cell"
+    module_dir = run_dir / "t_cell"
     (run_dir / "metadata").mkdir(parents=True)
     (module_dir / "audit").mkdir(parents=True)
 
