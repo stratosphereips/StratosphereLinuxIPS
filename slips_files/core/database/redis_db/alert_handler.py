@@ -406,6 +406,58 @@ class AlertHandler:
         )
         return accumulated_threat_lvl or 0
 
+    def _set_current_risk_level(
+        self, profileid: str, risk_level: float
+    ) -> None:
+        """
+        Store the given risk level to be used across all profiles.
+
+        Parameters:
+            profileid: Profile that owns the current highest risk level. or ""
+                if we're resetting the level to 0
+            risk_level: Current risk level of that profile to store.
+        """
+        self.r.hset(
+            self.constants.MAX_RISK_LEVEL_OF_ALL_PROFILES,
+            mapping={
+                "risk_level": float(risk_level),
+                "profile": profileid,
+            },
+        )
+
+    def get_current_risk_level(self) -> Dict[str, Union[float, str]]:
+        """
+        Return the highest current risk level seen across all profiles.
+
+        Return value:
+            Dictionary with risk_level as float and profile as string.
+        """
+        current_risk_level = self.r.hgetall(
+            self.constants.MAX_RISK_LEVEL_OF_ALL_PROFILES
+        )
+        if not current_risk_level:
+            return {"risk_level": 0.0, "profile": ""}
+
+        return {
+            "risk_level": float(current_risk_level.get("risk_level", 0)),
+            "profile": current_risk_level.get("profile", ""),
+        }
+
+    def update_current_risk_level_for_all_profiles(
+        self, profileid: str, risk_level: float
+    ) -> None:
+        """
+        Store the current risk level when it exceeds the global maximum.
+
+        Parameters:
+            profileid: Profile that owns the candidate current risk level.
+            risk_level: Candidate current risk level value.
+        """
+        current_risk_level = self.get_current_risk_level()
+        old_risk_level = float(current_risk_level["risk_level"])
+        if old_risk_level < float(risk_level):
+            self._set_current_risk_level(profileid, risk_level)
+
     def update_accumulated_threat_level(
         self, profileid: str, twid: str, update_val: float
     ):
