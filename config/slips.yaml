@@ -463,7 +463,7 @@ t_cell:
   # Directory that stores the isolated T Cell SQLite database.
   # Absolute paths are used as-is. Relative paths are resolved inside the
   # output directory of the current Slips run.
-  store_dir: output/t_cell
+  store_dir: output/t_cell/data
 
   # Optional stable directory for the T Cell SQLite database.
   # Leave this empty for normal runs because T Cell state is run-specific.
