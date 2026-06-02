@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 from modules.t_cell.t_cell import (
@@ -60,6 +61,16 @@ def _prepare_t_cell(
     t_cell.decision_trace_max_evidence = trace_max_evidence
     t_cell._init_trace_file()
     return t_cell, storage
+
+
+def test_t_cell_uses_lowercase_underscore_output_dir():
+    """T Cell should use a lowercase underscore module output directory."""
+    t_cell = ModuleFactory().create_t_cell_obj()
+
+    assert t_cell.output_dir == str(Path("dummy_output_dir") / "t_cell")
+    assert t_cell.log_file_path == str(
+        Path("dummy_output_dir") / "t_cell" / "t_cell.log"
+    )
 
 
 def _build_evidence(
