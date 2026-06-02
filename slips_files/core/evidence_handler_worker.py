@@ -24,6 +24,7 @@ from slips_files.core.structures.evidence import (
     TimeWindow,
     dict_to_evidence,
 )
+from slips_files.core.structures.risk_levels import RiskLevel
 from slips_files.core.text_formatters.evidence_formatter import (
     EvidenceFormatter,
 )
@@ -46,9 +47,6 @@ class EvidenceHandlerWorker(IModule):
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.idmefv2 = IDMEFv2(self.logger, self.db)
         self.read_configuration()
-        self.detection_threshold_in_this_width = (
-            self.detection_threshold * self.width / 60
-        )
         if self.popup_alerts:
             self.notify = Notify()
             if self.notify.bin_found:
@@ -57,6 +55,9 @@ class EvidenceHandlerWorker(IModule):
                 self.popup_alerts = False
 
         self.is_running_non_stop = self.db.is_running_non_stop()
+        self.detection_threshold_in_this_width = (
+            self._get_detection_threshold()
+        )
         self.blocking_modules_supported = self.is_blocking_modules_supported()
         self.our_ips: List[str] = utils.get_own_ips(ret="List")
         self.formatter = EvidenceFormatter(self.db, self.args)
@@ -88,6 +89,18 @@ class EvidenceHandlerWorker(IModule):
         )
         if IS_IN_A_DOCKER_CONTAINER:
             self.popup_alerts = False
+
+    def _get_detection_threshold(self) -> float:
+        if self.is_running_non_stop:
+            # if the RATL reached this value, slips sets an alert
+            # the detection threshold is not constant here, it increases
+            # and decreases # todo test this
+            # todo use RiskLevel enum everywhere
+            return RiskLevel.LOW.max_score
+        else:
+            # a fixed threshold for when slips is analyzing files/pcaps
+            # todo say in the docs that this threshold is used for pcaps only.
+            return self.detection_threshold * self.width / 60
 
     def handle_unable_to_log(self, failed_log, error=None):
         self.print(f"Error logging evidence/alert: {error}. {failed_log}.")
@@ -468,7 +481,14 @@ class EvidenceHandlerWorker(IModule):
                 "report_to_peers", json.dumps(utils.to_dict(evidence))
             )
 
-        if accumulated_threat_level < self.detection_threshold_in_this_width:
+        if self.is_running_non_stop:
+            # here we use tha RATL to dynamically change the sensitivity of
+            # slips
+            score = risk_accumulated_threat_level
+        else:
+            score = accumulated_threat_level
+
+        if score < self.detection_threshold_in_this_width:
             return
 
         tw_evidence = self.get_evidence_for_tw(profileid, twid)
