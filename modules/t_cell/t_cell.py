@@ -128,6 +128,7 @@ class TCell(IModule):
         self.channels = {}
         self.subscribe_to_channels()
         self.enabled = False
+        self.output_dir = os.path.join(self.parent_output_dir, "t_cell")
         self.create_log_file = True
         self.log_colors = True
         self.log_verbosity = LOG_VERBOSITY_SUMMARY
