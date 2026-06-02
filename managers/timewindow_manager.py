@@ -39,7 +39,7 @@ class TimewindowManager:
         slips_start_time = float(self.main.db.get_slips_start_time())
         self.next_timewindow_update = slips_start_time + self.twid_width
         self.current_timewindow = 1
-        self.main.db.set_current_timewindow(self.current_timewindow)
+        self.main.db.incr_current_timewindow()
 
     def update_current_timewindow_if_due(self) -> None:
         """
@@ -61,4 +61,4 @@ class TimewindowManager:
 
         self.current_timewindow += 1
         self.next_timewindow_update += self.twid_width
-        self.main.db.set_current_timewindow(self.current_timewindow)
+        self.main.db.incr_current_timewindow()

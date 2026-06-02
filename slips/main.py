@@ -20,6 +20,7 @@ from managers.metadata_manager import MetadataManager
 from managers.process_manager import ProcessManager
 from managers.profilers_manager import ProfilersManager
 from managers.redis_manager import RedisManager
+from managers.timewindow_manager import TimewindowManager
 from managers.ui_manager import UIManager
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_paths import get_performance_plots_dir
@@ -49,6 +50,7 @@ class Main:
         self.redis_man = RedisManager(self)
         self.conf = ConfigParser()
         self.metadata_man = MetadataManager(self)
+        self.timewindow_man = TimewindowManager(self)
         self.ui_man = UIManager(self)
         self.version = utils.get_slips_version()
         # will be filled later
@@ -718,6 +720,7 @@ class Main:
                 self.ui_man.check_if_webinterface_started()
 
                 self.update_stats()
+                self.timewindow_man.update_current_timewindow_if_due()
                 self.db.check_tw_to_close()
                 self.db.ping()
 
