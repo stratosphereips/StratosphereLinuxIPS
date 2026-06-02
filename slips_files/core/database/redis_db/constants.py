@@ -50,6 +50,7 @@ class Constants:
     P2P_REPORTS = "p2p_reports"
     ORGANIZATIONS_PORTS = "organization_port"
     SLIPS_START_TIME = "slips_start_time"
+    CURRENT_TIMEWINDOW = "current_timewindow"
     USED_FTP_PORTS = "used_ftp_ports"
     SLIPS_INTERNAL_TIME = "slips_internal_time"
     IS_RUNNING_AS_AP = "is_slips_running_as_an_ap"

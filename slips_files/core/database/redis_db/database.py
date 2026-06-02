@@ -342,6 +342,14 @@ class RedisDB(
         return cls.r.get(cls.constants.SLIPS_START_TIME)
 
     @classmethod
+    def set_current_timewindow(cls, timewindow: int) -> None:
+        cls.r.set(cls.constants.CURRENT_TIMEWINDOW, timewindow)
+
+    @classmethod
+    def get_current_timewindow(cls) -> Optional[str]:
+        return cls.r.get(cls.constants.CURRENT_TIMEWINDOW)
+
+    @classmethod
     def _should_flush_db(cls) -> bool:
         """
         these are the cases that we DO NOT flush the db when we
