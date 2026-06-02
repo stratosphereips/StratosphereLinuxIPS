@@ -444,6 +444,19 @@ class EvidenceHandlerWorker(IModule):
         accumulated_threat_level = self.get_accumulated_threat_level(
             profileid, twid, evidence
         )
+        # get the current threat level (sensitivity) of slips
+        current_risk_level: dict = self.db.get_current_risk_level()
+        risk_level = float(current_risk_level.get("risk_level", 0))
+
+        # this is profile-specific RATL
+        risk_accumulated_threat_level = accumulated_threat_level * risk_level
+
+        # if this RATL is the max one we've seen, store it in the db,
+        # and use it as the current RATL
+        self.db.update_current_risk_level_for_all_profiles(
+            profileid, risk_accumulated_threat_level
+        )
+
         self.add_evidence_to_json_log_file(
             evidence,
             accumulated_threat_level,
