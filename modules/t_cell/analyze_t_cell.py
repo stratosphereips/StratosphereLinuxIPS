@@ -1571,8 +1571,8 @@ def build_report_payload(
     db_path = resolve_t_cell_db_path(run_output_dir, metadata)
     log_path = first_existing_path(
         [
+            run_output_dir / "t_cell" / "t_cell.log",
             run_output_dir / "T Cell" / "t_cell.log",
-            run_output_dir / "t_cell.log",
         ]
     )
     trace_relative_path = sanitize_module_relative_path(
@@ -1580,10 +1580,10 @@ def build_report_payload(
     )
     trace_path = first_existing_path(
         [
+            run_output_dir / "t_cell" / trace_relative_path,
             run_output_dir / "T Cell" / trace_relative_path,
-            run_output_dir / trace_relative_path,
+            run_output_dir / "t_cell" / "t_cell_trace.jsonl",
             run_output_dir / "T Cell" / "t_cell_trace.jsonl",
-            run_output_dir / "t_cell_trace.jsonl",
         ]
     )
     db_records = load_db_records(db_path)
