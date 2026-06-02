@@ -726,7 +726,7 @@ class Main:
                 )
 
                 self.host_ip_man.update_host_ip(host_ips, modified_profiles)
-                if self.update_man.check_for_update_every_1_day():
+                if self.update_man.check_for_slips_new_version_every_1_day():
                     self.update_man.update_slips()
 
         except KeyboardInterrupt:
