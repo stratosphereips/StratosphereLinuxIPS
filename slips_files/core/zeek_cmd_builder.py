@@ -57,7 +57,7 @@ class ZeekCommandBuilder:
         Return:
         The validated packet filter or None.
         """
-        if packet_filter is None:
+        if packet_filter is None or packet_filter is False:
             return None
 
         packet_filter = str(packet_filter).strip()

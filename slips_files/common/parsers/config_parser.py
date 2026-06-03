@@ -373,13 +373,7 @@ class ConfigParser(object):
             # or no section or no configuration file specified
             twid_width = 3600
 
-        try:
-            twid_width = float(twid_width)
-        except ValueError:
-            # Its not a float
-            if "only_one_tw" in twid_width:
-                # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
-                twid_width = 9999999999
+        twid_width = float(twid_width)
         return twid_width
 
     def disabled_detections(self) -> list:
