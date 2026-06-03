@@ -74,11 +74,16 @@ The final prompt contains:
 - alert metadata
 - grouped evidence patterns with time ranges, counts, severities, and sample
   IPs or ports
+- explicit guidance that evidence threat levels must be weighed differently,
+  and that `info` evidence is context only rather than a security finding by
+  itself
 - instructions to explain the suspicious behavior, strongest supporting or
   weakening evidence, likely alert validity, and operational risk
 
 Reduction prompts reuse the same alert metadata but ask the model to compress
-one chunk into a shorter intermediate digest for the next reduction layer.
+one chunk into a shorter intermediate digest for the next reduction layer
+while preserving threat-level distinctions, including the rule that `info`
+evidence remains contextual.
 
 ## Shared LLM integration
 
