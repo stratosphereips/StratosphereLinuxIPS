@@ -13,9 +13,9 @@ class RiskLevel(Enum):
     HIGH = (0.25, inf)
 
     @property
-    def min_score(self):
+    def lower_bound(self):
         return self.value[0]
 
     @property
-    def max_score(self):
+    def upper_bound(self):
         return self.value[1]
