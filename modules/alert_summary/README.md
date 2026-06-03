@@ -97,6 +97,8 @@ The final prompt is built around:
 - incident metadata
 - recent alert history for the same source/profile when enabled
 - grouped evidence patterns with time ranges, counts, severities, and samples
+- explicit weighting guidance for evidence threat levels, where `info`
+  evidence is treated as context only and not as a standalone security finding
 - instructions to explain the suspicious behavior, strongest supporting or
   weakening evidence, likely true-positive or false-positive status,
   operational risk, and whether the current alert looks like a continuation,
@@ -105,7 +107,7 @@ The final prompt is built around:
 
 Intermediate reduction prompts use the same incident metadata but ask the model
 to compress one evidence chunk into a shorter digest for the next reduction
-layer or the final summary.
+layer or the final summary while preserving those threat-level distinctions.
 
 ## Recent alert history
 
