@@ -99,6 +99,8 @@ The final prompt is built around:
 - grouped evidence patterns with time ranges, counts, severities, and samples
 - explicit weighting guidance for evidence threat levels, where `info`
   evidence is treated as context only and not as a standalone security finding
+- explicit separation between current-alert evidence and historical context,
+  so prior details are not restated as if they happened in the current alert
 - instructions to explain the suspicious behavior, strongest supporting or
   weakening evidence, likely true-positive or false-positive status,
   operational risk, and whether the current alert looks like a continuation,
@@ -126,7 +128,9 @@ source of truth, but repeated aligned alerts are meant to be treated as
 cumulative supporting context. In other words, recurrence should not replace
 the current alert evidence, but it can strengthen the assessment of risk,
 urgency, and likely true-positive status when the current alert matches the
-historical pattern.
+historical pattern. To avoid recursive contamination, the prompt renders
+structured historical patterns and metrics rather than past free-text LLM
+summaries.
 
 ## Shared LLM integration
 
