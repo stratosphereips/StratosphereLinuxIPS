@@ -77,6 +77,9 @@ The final prompt contains:
 - explicit guidance that evidence threat levels must be weighed differently,
   and that `info` evidence is context only rather than a security finding by
   itself
+- explicit separation between current-alert evidence and historical context,
+  so history can inform recurrence and risk without being restated as if it
+  happened in the current alert
 - instructions to explain the suspicious behavior, strongest supporting or
   weakening evidence, likely alert validity, and operational risk
 
@@ -84,6 +87,12 @@ Reduction prompts reuse the same alert metadata but ask the model to compress
 one chunk into a shorter intermediate digest for the next reduction layer
 while preserving threat-level distinctions, including the rule that `info`
 evidence remains contextual.
+
+Recent-history prompt context is now intentionally structured from historical
+patterns and alert-level metrics, not prior free-text LLM summaries. That
+avoids recursively feeding one generated explanation into later prompts, which
+can otherwise cause old details to be repeated as if they were part of the
+current alert.
 
 ## Shared LLM integration
 
