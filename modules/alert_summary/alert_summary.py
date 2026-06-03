@@ -17,7 +17,7 @@ from slips_files.core.structures.alerts import dict_to_alert
 from slips_files.core.structures.evidence import dict_to_evidence
 
 
-PROMPT_VERSION = "alert-summary-v3"
+PROMPT_VERSION = "alert-summary-v4"
 LOG_VERBOSITY_SUMMARY = 1
 LOG_VERBOSITY_REQUESTS = 2
 LOG_VERBOSITY_DEBUG = 3
@@ -36,6 +36,8 @@ Use only the provided alert and evidence data.
 If recent alert history is provided, use it as cumulative context for the current alert.
 If the current alert evidence aligns with repeated historical alerts, treat that recurrence as additional support that can increase confidence and urgency.
 Do not treat historical activity as proof of the current alert when the current alert evidence conflicts with it.
+Describe the current alert only from the current alert evidence digest.
+Do not restate ports, IPs, destinations, or behaviors from historical context as if they happened in the current alert unless they also appear in the current alert evidence digest.
 Evidence threat levels matter. Treat informational (`info`) evidence as context only, not as a security finding by itself.
 Give analytical weight to low, medium, high, and critical evidence, with higher threat levels carrying more weight.
 Do not let informational evidence inflate the verdict, confidence, urgency, or risk unless it is supported by non-info evidence.
@@ -624,6 +626,9 @@ class AlertSummary(IModule):
             "- Write exactly one paragraph.\n"
             "- Use plain text only.\n"
             "- Base the assessment only on the provided data.\n"
+            "- Describe the current alert using only details from CURRENT ALERT EVIDENCE DIGEST.\n"
+            "- Do not present historical-only details as part of the current alert.\n"
+            "- If you mention history-specific details, mark them explicitly as historical or prior activity.\n"
             "- Weigh evidence according to threat level.\n"
             "- Treat informational (`info`) evidence as context only, not as suspicious evidence by itself.\n"
             "- Use recent alert history as cumulative context when it aligns with the current alert evidence.\n"
@@ -757,7 +762,7 @@ class AlertSummary(IModule):
         lines = []
         remaining_tokens = self.history_max_tokens
         header_lines = [
-            "HISTORICAL PROGRESSION (same source/profile, context for the current alert):",
+            "HISTORICAL PROGRESSION ONLY (same source/profile, context for the current alert):",
             f"- Prior summarized alerts: {history_analysis['prior_alert_count']}",
             f"- Prior alerts with overlapping dominant patterns: {history_analysis['matching_alert_count']}",
             f"- Repeated dominant current patterns seen before: {history_analysis['repeated_pattern_count']}",
@@ -765,6 +770,7 @@ class AlertSummary(IModule):
             f"- Threat trend versus recent history: {history_analysis['threat_trend']}",
             f"- Confidence trend versus recent history: {history_analysis['confidence_trend']}",
             "- Guidance: if the current alert matches the repeated prior pattern, treat recurrence as cumulative supporting context that can raise confidence and urgency.",
+            "- Guidance: do not restate ports, IPs, destinations, or behaviors from this history as current-alert facts unless they also appear in CURRENT ALERT EVIDENCE DIGEST.",
         ]
         header_text = "\n".join(header_lines)
         header_tokens = self._estimate_text_tokens(header_text)
@@ -818,14 +824,15 @@ class AlertSummary(IModule):
         :return: Single-line history description.
         """
         top_patterns = entry.get("top_patterns") or []
-        pattern_text = "; ".join(top_patterns) or "No dominant patterns stored."
+        pattern_text = (
+            "; ".join(top_patterns) or "No dominant historical patterns stored."
+        )
         return (
             f"TW {entry.get('timewindow', '?')} | "
             f"{entry.get('time_range', 'Unknown')} | "
             f"threat={entry.get('accumulated_threat_level', 0.0):.2f} | "
             f"conf={entry.get('confidence', 0.0):.2f} | "
-            f"top patterns: {pattern_text} | "
-            f"prior summary: {entry.get('summary_text', '')}"
+            f"historical patterns: {pattern_text}"
         )
 
     def _analyze_recent_history(
