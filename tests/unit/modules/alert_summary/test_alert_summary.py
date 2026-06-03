@@ -117,11 +117,38 @@ def test_build_prompt_messages_uses_incident_metadata_and_digest():
     )
 
     assert messages[0]["content"] == SYSTEM_PROMPT
+    assert "Treat informational (`info`) evidence as context only" in messages[0]["content"]
     assert "INCIDENT METADATA:" in messages[1]["content"]
     assert "CURRENT ALERT EVIDENCE DIGEST:" in messages[1]["content"]
     assert "Grouped Evidence Patterns: 1" in messages[1]["content"]
-    assert "Prompt version: alert-summary-v2" in messages[1]["content"]
+    assert "Weigh evidence according to threat level." in messages[1]["content"]
+    assert "Treat informational (`info`) evidence as context only" in messages[1]["content"]
+    assert "Prompt version: alert-summary-v3" in messages[1]["content"]
     assert "RECENT ALERT HISTORY" not in messages[1]["content"]
+
+
+def test_build_reduction_messages_preserves_info_threat_level_guidance():
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    evidence = _build_evidence()
+    alert = _build_alert(evidence)
+    alert_summary.active_job = {
+        "alert": alert,
+        "evidences": [evidence],
+        "grouped_item_count": 1,
+    }
+
+    messages = alert_summary._build_reduction_messages(
+        alert,
+        ["10:00 | Connection to 203.0.113.10 without a preceding DNS lookup."],
+        1,
+        1,
+        1,
+        1,
+    )
+
+    assert messages[0]["content"] == REDUCTION_SYSTEM_PROMPT
+    assert "Informational (`info`) evidence is context only" in messages[0]["content"]
+    assert "Preserve threat-level distinctions and keep informational (`info`) evidence as context only." in messages[1]["content"]
 
 
 def test_build_prompt_messages_includes_recent_history_for_same_profile():
