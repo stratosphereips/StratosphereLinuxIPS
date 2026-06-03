@@ -17,7 +17,7 @@ from slips_files.core.structures.alerts import dict_to_alert
 from slips_files.core.structures.evidence import dict_to_evidence
 
 
-PROMPT_VERSION = "alert-summary-v2"
+PROMPT_VERSION = "alert-summary-v3"
 LOG_VERBOSITY_SUMMARY = 1
 LOG_VERBOSITY_REQUESTS = 2
 LOG_VERBOSITY_DEBUG = 3
@@ -36,6 +36,9 @@ Use only the provided alert and evidence data.
 If recent alert history is provided, use it as cumulative context for the current alert.
 If the current alert evidence aligns with repeated historical alerts, treat that recurrence as additional support that can increase confidence and urgency.
 Do not treat historical activity as proof of the current alert when the current alert evidence conflicts with it.
+Evidence threat levels matter. Treat informational (`info`) evidence as context only, not as a security finding by itself.
+Give analytical weight to low, medium, high, and critical evidence, with higher threat levels carrying more weight.
+Do not let informational evidence inflate the verdict, confidence, urgency, or risk unless it is supported by non-info evidence.
 Write exactly one paragraph of plain text for a human analyst.
 Explain the main suspicious behavior, what evidence most strongly supports or weakens the alert,
 whether it looks like a likely true positive, likely false positive, or uncertain, and how risky it appears.
@@ -48,6 +51,7 @@ You are compressing raw security evidence into a compact intermediate digest for
 Use only the provided evidence subset.
 Write exactly one plain-text paragraph.
 Preserve concrete behaviors, time ranges, counts, suspicious indicators, and false-positive clues when they matter.
+Preserve threat-level distinctions. Informational (`info`) evidence is context only and should not be described as a threat indicator by itself.
 Do not invent missing facts and do not add introductions or meta-commentary.
 """.strip()
 
@@ -620,6 +624,8 @@ class AlertSummary(IModule):
             "- Write exactly one paragraph.\n"
             "- Use plain text only.\n"
             "- Base the assessment only on the provided data.\n"
+            "- Weigh evidence according to threat level.\n"
+            "- Treat informational (`info`) evidence as context only, not as suspicious evidence by itself.\n"
             "- Use recent alert history as cumulative context when it aligns with the current alert evidence.\n"
             "- Do not use recent alert history as replacement evidence when the current alert evidence is weak or conflicting.\n"
             "- When recent alert history is present, include one explicit clause about how recurrence affects confidence or risk.\n"
@@ -664,6 +670,7 @@ class AlertSummary(IModule):
             "- Write exactly one paragraph.\n"
             "- Keep it shorter than the source evidence subset.\n"
             "- Preserve the most important behaviors, time ranges, counts, indicators, and false-positive clues.\n"
+            "- Preserve threat-level distinctions and keep informational (`info`) evidence as context only.\n"
             "- Do not include introductions, bullet points, markdown, or JSON.\n"
             "- Do not make a final analyst verdict for the whole alert.\n"
             f"- Prompt version: {PROMPT_VERSION}"
