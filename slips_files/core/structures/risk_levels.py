@@ -1,5 +1,6 @@
 from enum import Enum
 from math import inf
+from typing import Tuple
 
 
 class RiskLevel(Enum):
@@ -19,3 +20,15 @@ class RiskLevel(Enum):
     @property
     def upper_bound(self):
         return self.value[1]
+
+
+def convert_float_to_risk_level(value: float) -> RiskLevel:
+    value = float(value)
+
+    if value < 0:
+        return RiskLevel.LOW
+
+    for level in RiskLevel:
+        level_boundaries: Tuple[float, float] = level.value
+        if level_boundaries[0] <= value < level_boundaries[1]:
+            return level
