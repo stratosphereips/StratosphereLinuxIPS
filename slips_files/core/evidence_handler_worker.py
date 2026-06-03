@@ -96,7 +96,7 @@ class EvidenceHandlerWorker(IModule):
             # the detection threshold is not constant here, it increases
             # and decreases # todo test this
             # todo use RiskLevel enum everywhere
-            return RiskLevel.LOW.max_score
+            return RiskLevel.LOW.upper_bound
         else:
             # a fixed threshold for when slips is analyzing files/pcaps
             # todo say in the docs that this threshold is used for pcaps only.
@@ -459,7 +459,9 @@ class EvidenceHandlerWorker(IModule):
         )
         # get the current threat level (sensitivity) of slips
         current_risk_level: dict = self.db.get_current_risk_level()
-        risk_level = float(current_risk_level.get("risk_level", 0))
+        risk_level = float(
+            current_risk_level.get("risk_level", RiskLevel.LOW.upper_bound)
+        )
 
         # this is profile-specific RATL
         risk_accumulated_threat_level = accumulated_threat_level * risk_level
