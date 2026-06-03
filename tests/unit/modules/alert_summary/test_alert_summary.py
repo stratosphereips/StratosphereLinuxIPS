@@ -121,9 +121,11 @@ def test_build_prompt_messages_uses_incident_metadata_and_digest():
     assert "INCIDENT METADATA:" in messages[1]["content"]
     assert "CURRENT ALERT EVIDENCE DIGEST:" in messages[1]["content"]
     assert "Grouped Evidence Patterns: 1" in messages[1]["content"]
+    assert "Describe the current alert using only details from CURRENT ALERT EVIDENCE DIGEST." in messages[1]["content"]
+    assert "Do not present historical-only details as part of the current alert." in messages[1]["content"]
     assert "Weigh evidence according to threat level." in messages[1]["content"]
     assert "Treat informational (`info`) evidence as context only" in messages[1]["content"]
-    assert "Prompt version: alert-summary-v3" in messages[1]["content"]
+    assert "Prompt version: alert-summary-v4" in messages[1]["content"]
     assert "RECENT ALERT HISTORY" not in messages[1]["content"]
 
 
@@ -178,11 +180,38 @@ def test_build_prompt_messages_includes_recent_history_for_same_profile():
     )
 
     assert "RECENT ALERT HISTORY" in messages[1]["content"]
-    assert "HISTORICAL PROGRESSION" in messages[1]["content"]
-    assert "Earlier scanning activity suggests reconnaissance." in messages[1]["content"]
+    assert "HISTORICAL PROGRESSION ONLY" in messages[1]["content"]
+    assert "do not restate ports, IPs, destinations, or behaviors from this history as current-alert facts" in messages[1]["content"]
     assert "Horizontal port scan to port 443/TCP" in messages[1]["content"]
+    assert "historical patterns:" in messages[1]["content"]
+    assert "Earlier scanning activity suggests reconnaissance." not in messages[1]["content"]
     assert "continuation, escalation, repetition, diversification, or a different pattern" in messages[1]["content"]
     assert "recurrence raises, lowers, or does not materially change confidence and urgency" in messages[1]["content"]
+
+
+def test_build_prompt_messages_excludes_prior_summary_text_from_history():
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    prior_alert = _build_alert(_build_evidence())
+    alert_summary._remember_alert_summary(
+        prior_alert,
+        "Prior summary claimed a single connection to 192.168.1.255 on port 137.",
+        ["08:10 | Horizontal port scan to port 443/TCP"],
+    )
+
+    current_alert = _build_alert(_build_evidence())
+    messages = alert_summary._build_prompt_messages(
+        current_alert,
+        [
+            "10:00 | Malicious JA3 to 95.46.8.65 over 443/TCP "
+            "(2x similar, severities: high=2)"
+        ],
+        2,
+        1,
+        0,
+    )
+
+    assert "port 137" not in messages[1]["content"]
+    assert "Prior summary claimed a single connection" not in messages[1]["content"]
 
 
 def test_analyze_recent_history_counts_repeated_pattern_overlap():
