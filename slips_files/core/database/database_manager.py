@@ -539,13 +539,8 @@ class DBManager:
     def get_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.get_accumulated_threat_level(*args, **kwargs)
 
-    def get_current_risk_level(self, *args, **kwargs):
-        return self.rdb.get_current_risk_level(*args, **kwargs)
-
-    def update_current_risk_level_for_all_profiles(self, *args, **kwargs):
-        return self.rdb.update_current_risk_level_for_all_profiles(
-            *args, **kwargs
-        )
+    def get_max_seen_risk_weight(self, *args, **kwargs):
+        return self.rdb.get_max_seen_risk_weight(*args, **kwargs)
 
     def update_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.update_accumulated_threat_level(*args, **kwargs)
