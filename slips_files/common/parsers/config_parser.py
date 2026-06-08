@@ -145,6 +145,16 @@ class ConfigParser(object):
             threshold = default_value
         return threshold
 
+    def risk_accumulated_threat_level(self) -> float:
+        default_value = 15.0
+        threshold = self.read_configuration(
+            "detection", "risk_accumulated_threat_level", default_value
+        )
+        try:
+            return float(threshold)
+        except (TypeError, ValueError):
+            return default_value
+
     def packet_filter(self):
         return self.read_configuration("parameters", "pcapfilter", False)
 
