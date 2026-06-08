@@ -1,6 +1,32 @@
 from enum import Enum
 from typing import Tuple
 
+from slips_files.common.parsers.config_parser import ConfigParser
+
+
+def _read_configured_risk_weight(config_name: str) -> float:
+    """
+    Read a risk weight boundary from slips.yaml.
+
+    Parameters:
+        config_name: Detection configuration key to read.
+
+    Return value:
+        Configured risk weight boundary as a float.
+    """
+    risk_weight = ConfigParser().read_configuration(
+        "detection", config_name, None
+    )
+    if risk_weight is None:
+        raise ValueError(f"Missing detection.{config_name} in slips.yaml.")
+
+    return float(risk_weight)
+
+
+HIGH_RISK_WEIGHT = _read_configured_risk_weight("high_risk_weight")
+MEDIUM_RISK_WEIGHT = _read_configured_risk_weight("medium_risk_weight")
+LOW_RISK_WEIGHT = _read_configured_risk_weight("low_risk_weight")
+
 
 class RiskWeight(Enum):
     """
@@ -8,9 +34,9 @@ class RiskWeight(Enum):
     the more risk -> the more sensitive slips is -> the more alerts are generated
     """
 
-    HIGH = (0.0, 0.32)
-    MEDIUM = (0.32, 1.0)
-    LOW = (1.0, 1.72)
+    HIGH = (0.0, HIGH_RISK_WEIGHT)
+    MEDIUM = (HIGH_RISK_WEIGHT, MEDIUM_RISK_WEIGHT)
+    LOW = (MEDIUM_RISK_WEIGHT, LOW_RISK_WEIGHT)
 
     @property
     def lower_bound(self) -> float:
