@@ -167,6 +167,10 @@ class RedisManager:
                         "Save the DB\n"
                     )
 
+                db = getattr(self.main, "db", None)
+                zeek_dir = '""'
+                if db:
+                    zeek_dir = db.get_zeek_output_dir()
                 zeek_dir = self.main.args.output
 
                 f.write(
