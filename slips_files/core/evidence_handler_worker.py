@@ -24,7 +24,10 @@ from slips_files.core.structures.evidence import (
     TimeWindow,
     dict_to_evidence,
 )
-from slips_files.core.structures.risk_levels import RiskLevel
+from slips_files.core.structures.risk_weights import (
+    RiskWeight,
+    convert_float_to_risk_weight,
+)
 from slips_files.core.text_formatters.evidence_formatter import (
     EvidenceFormatter,
 )
@@ -67,10 +70,13 @@ class EvidenceHandlerWorker(IModule):
     def subscribe_to_channels(self):
         self.channels = {}
 
-    def read_configuration(self):
+    def read_configuration(self) -> None:
         conf = ConfigParser()
         self.width: float = conf.get_tw_width_in_seconds()
         self.detection_threshold = conf.evidence_detection_threshold()
+        self.risk_accumulated_threat_level_threshold = (
+            conf.risk_accumulated_threat_level()
+        )
         self.print(
             f"Detection Threshold: {self.detection_threshold} "
             f"attacks per minute "
@@ -93,13 +99,9 @@ class EvidenceHandlerWorker(IModule):
     def _get_detection_threshold(self) -> float:
         if self.is_running_non_stop:
             # if the RATL reached this value, slips sets an alert
-            # the detection threshold is not constant here, it increases
-            # and decreases # todo test this
-            # todo use RiskLevel enum everywhere
-            return RiskLevel.LOW.upper_bound
+            return self.risk_accumulated_threat_level_threshold
         else:
             # a fixed threshold for when slips is analyzing files/pcaps
-            # todo say in the docs that this threshold is used for pcaps only.
             return self.detection_threshold * self.width / 60
 
     def handle_unable_to_log(self, failed_log, error=None):
@@ -388,6 +390,25 @@ class EvidenceHandlerWorker(IModule):
         alert_description = self.formatter.get_printable_alert(alert)
         self.notify.show_popup(alert_description)
 
+    def get_float_risk_weight(self, accumulated_threat_level: float) -> float:
+        """
+        Return the dynamic risk weight for the accumulated threat level.
+
+        Parameters:
+            accumulated_threat_level: Current accumulated threat level.
+
+        Return value:
+            Numeric risk weight used to calculate RATL.
+        """
+        risk_weight: RiskWeight = convert_float_to_risk_weight(
+            accumulated_threat_level
+        )
+        if risk_weight.upper_bound == float("inf"):
+            float_risk_weight = risk_weight.lower_bound
+        else:
+            float_risk_weight = risk_weight.upper_bound
+        return float_risk_weight
+
     def get_accumulated_threat_level(
         self, profileid, twid, evidence: Evidence
     ) -> float:
@@ -457,20 +478,6 @@ class EvidenceHandlerWorker(IModule):
         accumulated_threat_level = self.get_accumulated_threat_level(
             profileid, twid, evidence
         )
-        # get the current threat level (sensitivity) of slips
-        current_risk_level: dict = self.db.get_current_risk_level()
-        risk_level = float(
-            current_risk_level.get("risk_level", RiskLevel.LOW.upper_bound)
-        )
-
-        # this is profile-specific RATL
-        risk_accumulated_threat_level = accumulated_threat_level * risk_level
-
-        # if this RATL is the max one we've seen, store it in the db,
-        # and use it as the current RATL
-        self.db.update_current_risk_level_for_all_profiles(
-            profileid, risk_accumulated_threat_level
-        )
 
         self.add_evidence_to_json_log_file(
             evidence,
@@ -482,6 +489,15 @@ class EvidenceHandlerWorker(IModule):
             self.db.publish(
                 "report_to_peers", json.dumps(utils.to_dict(evidence))
             )
+
+        # Use the max risk weight seen by any profiler as the current weight.
+        risk_weight: float = self.get_float_risk_weight(
+            accumulated_threat_level
+        )
+        risk_weight = self.db.get_max_seen_risk_weight(profileid, risk_weight)
+
+        # this is profile-specific RATL = ATL * RW
+        risk_accumulated_threat_level = accumulated_threat_level * risk_weight
 
         if self.is_running_non_stop:
             # here we use tha RATL to dynamically change the sensitivity of
