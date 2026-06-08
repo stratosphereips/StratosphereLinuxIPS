@@ -23,6 +23,10 @@ from slips_files.core.structures.evidence import (
     IoCType,
     Attacker,
 )
+from slips_files.core.structures.risk_weights import (
+    RiskWeight,
+    convert_float_to_risk_weight,
+)
 
 
 class AlertHandler:
@@ -406,57 +410,73 @@ class AlertHandler:
         )
         return accumulated_threat_lvl or 0
 
-    def _set_current_risk_level(
-        self, profileid: str, risk_level: float
+    def _set_max_seen_risk_weight(
+        self, profileid: str, risk_weight: float
     ) -> None:
         """
-        Store the given risk level to be used across all profiles.
+        Store the given max seen risk weight across all profiles.
 
         Parameters:
-            profileid: Profile that owns the current highest risk level. or ""
-                if we're resetting the level to 0
-            risk_level: Current risk level of that profile to store.
+            profileid: Profile that owns the max seen risk weight. or ""
+                if we're resetting the weight to 0.
+            risk_weight: Max seen risk weight of that profile to store.
         """
+        # Do not store huge values beyond the largest configured weight.
+        capped_risk_weight = max(
+            0.0, min(float(risk_weight), RiskWeight.LOW.upper_bound)
+        )
         self.r.hset(
-            self.constants.MAX_RISK_LEVEL_OF_ALL_PROFILES,
+            self.constants.MAX_RISK_WEIGHT_OF_ALL_PROFILES,
             mapping={
-                "risk_level": float(risk_level),
+                "risk_weight": capped_risk_weight,
+                "risk_weight_str": convert_float_to_risk_weight(
+                    capped_risk_weight
+                ).name.lower(),
                 "profile": profileid,
             },
         )
 
-    def get_current_risk_level(self) -> Dict[str, Union[float, str]]:
+    def _get_max_seen_risk_weight(self) -> Dict[str, Union[float, str]]:
         """
-        Return the highest current risk level seen across all profiles.
+        Return the max seen risk weight across all profiles.
 
         Return value:
-            Dictionary with risk_level as float and profile as string.
+            Dictionary with risk_weight as float and profile as string.
         """
-        current_risk_level = self.r.hgetall(
-            self.constants.MAX_RISK_LEVEL_OF_ALL_PROFILES
+        current_risk_weight = self.r.hgetall(
+            self.constants.MAX_RISK_WEIGHT_OF_ALL_PROFILES
         )
-        if not current_risk_level:
-            return {"risk_level": 0.0, "profile": ""}
+        if not current_risk_weight:
+            return {"risk_weight": 0.0, "profile": ""}
 
         return {
-            "risk_level": float(current_risk_level.get("risk_level", 0)),
-            "profile": current_risk_level.get("profile", ""),
+            "risk_weight": float(current_risk_weight.get("risk_weight", 0.0)),
+            "profile": current_risk_weight.get("profile", ""),
         }
 
-    def update_current_risk_level_for_all_profiles(
-        self, profileid: str, risk_level: float
-    ) -> None:
+    def get_max_seen_risk_weight(
+        self, profileid: str, risk_weight: float
+    ) -> float:
         """
-        Store the current risk level when it exceeds the global maximum.
+        Store and return the max seen risk weight across all profiles.
 
         Parameters:
-            profileid: Profile that owns the candidate current risk level.
-            risk_level: Candidate current risk level value.
+            profileid: Profile that owns the candidate risk weight.
+            risk_weight: Candidate risk weight value.
+
+        Return value:
+            Max seen risk weight across all profiles.
         """
-        current_risk_level = self.get_current_risk_level()
-        old_risk_level = float(current_risk_level["risk_level"])
-        if old_risk_level < float(risk_level):
-            self._set_current_risk_level(profileid, risk_level)
+        max_seen_risk_weight = self._get_max_seen_risk_weight()
+        old_risk_weight = float(max_seen_risk_weight["risk_weight"])
+        candidate_risk_weight = max(
+            0.0, min(float(risk_weight), RiskWeight.LOW.upper_bound)
+        )
+        if old_risk_weight < candidate_risk_weight:
+            self._set_max_seen_risk_weight(profileid, candidate_risk_weight)
+            return candidate_risk_weight
+
+        return old_risk_weight
 
     def update_accumulated_threat_level(
         self, profileid: str, twid: str, update_val: float
