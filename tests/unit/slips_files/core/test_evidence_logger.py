@@ -69,6 +69,19 @@ def test_clean_file(output_dir, file_to_clean, file_exists):
             {"where": "alerts.json", "to_log": {"key": "value"}},
             "print_to_alerts_json",
         ),
+        (
+            {
+                "where": "accumulated_threat_level.csv",
+                "to_log": {
+                    "profile": "profile_192.168.1.21",
+                    "timewindow": "timewindow1",
+                    "evidence_timestamp": "1728417813.8868346",
+                    "accumulated_threat_level": 1.5,
+                    "risk_accumulated_threat_level": 3.0,
+                },
+            },
+            "print_to_accumulated_threat_level_csv",
+        ),
     ],
 )
 def test_run_logger_thread(msg, expected_method):
@@ -114,3 +127,55 @@ def test_run_logger_thread(msg, expected_method):
 
     # assert shutdown was called once
     logger.shutdown_gracefully.assert_called_once()
+
+
+def test_print_to_accumulated_threat_level_csv() -> None:
+    """Test ATL CSV rows are written with the expected column order."""
+    logger = ModuleFactory().create_evidence_loggr_obj()
+    logger.accumulated_threat_level_writer = Mock()
+    logger.accumulated_threat_level_file = Mock()
+    logger.accumulated_threat_level_file.fileno.return_value = 1
+    row = {
+        "profile": "profile_192.168.1.21",
+        "timewindow": "timewindow1",
+        "evidence_timestamp": "1728417813.8868346",
+        "accumulated_threat_level": 1.5,
+        "risk_accumulated_threat_level": 3.0,
+    }
+
+    with patch("slips_files.core.evidence_logger.os.fsync") as mock_fsync:
+        logger.print_to_accumulated_threat_level_csv(row)
+
+    logger.accumulated_threat_level_writer.writerow.assert_called_once_with(
+        [
+            "profile_192.168.1.21",
+            "timewindow1",
+            "1728417813.8868346",
+            "1.5",
+            "3.0",
+        ]
+    )
+    logger.accumulated_threat_level_file.flush.assert_called_once_with()
+    mock_fsync.assert_called_once_with(1)
+
+
+def test_print_to_accumulated_threat_level_csv_skips_duplicate() -> None:
+    """Test duplicate ATL CSV rows are not written twice in a row."""
+    logger = ModuleFactory().create_evidence_loggr_obj()
+    logger.accumulated_threat_level_writer = Mock()
+    logger.accumulated_threat_level_file = Mock()
+    logger.accumulated_threat_level_file.fileno.return_value = 1
+    row = {
+        "profile": "profile_192.168.1.21",
+        "timewindow": "timewindow1",
+        "evidence_timestamp": "1728417813.8868346",
+        "accumulated_threat_level": 1.5,
+        "risk_accumulated_threat_level": 3.0,
+    }
+
+    with patch("slips_files.core.evidence_logger.os.fsync"):
+        logger.print_to_accumulated_threat_level_csv(row)
+        logger.print_to_accumulated_threat_level_csv(row)
+
+    logger.accumulated_threat_level_writer.writerow.assert_called_once()
+    logger.accumulated_threat_level_file.flush.assert_called_once_with()

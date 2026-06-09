@@ -415,7 +415,7 @@ def test_get_threat_level(confidence, threat_level, expected_output):
     evidence.threat_level = threat_level
 
     with patch.object(worker, "print") as mock_print:
-        result = worker.get_threat_level(evidence)
+        result = worker.get_weighted_threat_level(evidence)
 
     assert pytest.approx(result, abs=1e-6) == expected_output
     mock_print.assert_called_once_with(

@@ -1011,6 +1011,8 @@ class ModuleFactory:
         logfile.name = "alerts.log"
         jsonfile = Mock()
         jsonfile.name = "alerts.json"
+        accumulated_threat_level_file = Mock()
+        accumulated_threat_level_file.name = "accumulated_threat_level.csv"
 
         with (
             patch(
@@ -1024,7 +1026,11 @@ class ModuleFactory:
             patch.object(
                 EvidenceLogger,
                 "clean_file",
-                side_effect=[logfile, jsonfile],
+                side_effect=[
+                    logfile,
+                    jsonfile,
+                    accumulated_threat_level_file,
+                ],
             ),
         ):
             handler = EvidenceLogger(

@@ -1014,14 +1014,18 @@ class ProcessManager:
             return self.main.print
 
     def _generate_plots(self):
-        if self.is_slips_live_updating_event:
+        if self.is_slips_live_updating_event.is_set():
             # slips is updating and will start a new instance, plots
             # should be done when slips is actually shutting down at the
             # very end of the analysis.
             return
 
+        self.plotter = Plotter(
+            self.main.args.output, self.get_print_function()
+        )
+        self.plotter.plot_accumulated_threat_level_csv()
+
         if self.main.conf.generate_performance_plots() is True:
-            self.plotter = Plotter(self.main.args.output, print)
             self.plotter.plot_latency_csv()
             self.plotter.plot_profiler_latency_csvs()
             self.plotter.plot_throughput_csv()
@@ -1079,8 +1083,6 @@ class ProcessManager:
         """
         try:
             print = self.get_print_function()
-
-            self._generate_plots()
 
             if not self.main.args.stopdaemon:
                 print("\n" + "-" * 27)
@@ -1167,6 +1169,7 @@ class ProcessManager:
                 self.kill_all_children()
 
             if not self.is_slips_live_updating_event.is_set():
+                self._generate_plots()
                 self.main.redis_man.decide_on_saving_and_killing_the_redis_db()
 
                 if self.main.conf.export_labeled_flows():

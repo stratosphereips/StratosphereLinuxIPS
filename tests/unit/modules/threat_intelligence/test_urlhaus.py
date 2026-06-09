@@ -330,7 +330,7 @@ def test_urlhaus_lookup_json_decode_error(
 )
 def test_get_threat_level(url_info, expected_threat_level):
     urlhaus = ModuleFactory().create_urlhaus_obj()
-    assert urlhaus.get_threat_level(url_info) == expected_threat_level
+    assert urlhaus.get_weighted_threat_level(url_info) == expected_threat_level
 
 
 @pytest.mark.parametrize(

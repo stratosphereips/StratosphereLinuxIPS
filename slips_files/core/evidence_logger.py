@@ -10,6 +10,8 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_paths import get_performance_csv_path
 from slips_files.common.slips_utils import utils
 
+ACCUMULATED_THREAT_LEVEL_CSV = "accumulated_threat_level.csv"
+
 
 class EvidenceLogger:
     def __init__(
@@ -33,6 +35,10 @@ class EvidenceLogger:
         utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
         self.latency_file = None
         self.latency_writer = None
+        self.accumulated_threat_level_file = None
+        self.accumulated_threat_level_writer = None
+        self.last_accumulated_threat_level_row = None
+        self._init_accumulated_threat_level_file()
         if self.generate_performance_plots:
             self._init_latency_file()
 
@@ -55,6 +61,31 @@ class EvidenceLogger:
         self.latency_writer = csv.writer(self.latency_file)
         self.latency_writer.writerow(["ts", "evidence_id", "latency"])
         self.latency_file.flush()
+
+    def _init_accumulated_threat_level_file(self) -> None:
+        """
+        Open the monitored profile accumulated threat level CSV.
+        """
+        self.accumulated_threat_level_file = self.clean_file(
+            self.output_dir,
+            ACCUMULATED_THREAT_LEVEL_CSV,
+        )
+        utils.change_logfiles_ownership(
+            self.accumulated_threat_level_file.name, self.UID, self.GID
+        )
+        self.accumulated_threat_level_writer = csv.writer(
+            self.accumulated_threat_level_file
+        )
+        self.accumulated_threat_level_writer.writerow(
+            [
+                "profile",
+                "timewindow",
+                "evidence_timestamp",
+                "accumulated_threat_level",
+                "risk_accumulated_threat_level",
+            ]
+        )
+        self.accumulated_threat_level_file.flush()
 
     def clean_file(self, output_dir, file_to_clean):
         """
@@ -119,6 +150,40 @@ class EvidenceLogger:
         except Exception:
             return
 
+    def print_to_accumulated_threat_level_csv(self, row: dict) -> None:
+        """
+        Write one monitored profile accumulated threat level CSV row.
+
+        Parameters:
+            row: Mapping with profile, timewindow, evidence timestamp, ATL,
+                and risk-weighted ATL values.
+        """
+        if (
+            self.accumulated_threat_level_writer is None
+            or self.accumulated_threat_level_file is None
+        ):
+            return
+
+        try:
+            csv_row = [
+                str(row["profile"]),
+                str(row["timewindow"]),
+                str(row["evidence_timestamp"]),
+                str(row["accumulated_threat_level"]),
+                str(row["risk_accumulated_threat_level"]),
+            ]
+            if csv_row == self.last_accumulated_threat_level_row:
+                return
+
+            self.accumulated_threat_level_writer.writerow(csv_row)
+            self.last_accumulated_threat_level_row = csv_row
+            self.accumulated_threat_level_file.flush()
+            os.fsync(self.accumulated_threat_level_file.fileno())
+        except KeyboardInterrupt:
+            return
+        except Exception:
+            return
+
     def run_logger_thread(self):
         """
         runs forever in a loop reveiving msgs from evidence_handler and
@@ -148,6 +213,8 @@ class EvidenceLogger:
                 self.print_to_alerts_json(msg["to_log"])
             elif destination == "latency.csv":
                 self.print_to_latency_csv(msg["to_log"])
+            elif destination == ACCUMULATED_THREAT_LEVEL_CSV:
+                self.print_to_accumulated_threat_level_csv(msg["to_log"])
 
         self.shutdown_gracefully()
 
@@ -156,3 +223,5 @@ class EvidenceLogger:
         self.jsonfile.close()
         if self.latency_file is not None:
             self.latency_file.close()
+        if self.accumulated_threat_level_file is not None:
+            self.accumulated_threat_level_file.close()

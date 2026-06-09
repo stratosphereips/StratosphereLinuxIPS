@@ -33,6 +33,7 @@ from slips_files.core.text_formatters.evidence_formatter import (
 )
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
+ACCUMULATED_THREAT_LEVEL_PROFILE_IP = "192.168.1.21"
 
 
 class EvidenceHandlerWorker(IModule):
@@ -205,6 +206,42 @@ class EvidenceHandlerWorker(IModule):
             }
         )
 
+    def add_accumulated_threat_level_to_csv(
+        self,
+        profileid: str,
+        timewindow: str,
+        evidence_timestamp: str,
+        accumulated_threat_level: float,
+        risk_accumulated_threat_level: float,
+    ) -> None:
+        """
+        Queue accumulated threat level values for the monitored profile.
+
+        Parameters:
+            profileid: Profile identifier associated with the evidence.
+            timewindow: Time window identifier associated with the evidence.
+            evidence_timestamp: Timestamp associated with the evidence.
+            accumulated_threat_level: Current accumulated threat level.
+            risk_accumulated_threat_level: Current risk-weighted ATL.
+        """
+        if ACCUMULATED_THREAT_LEVEL_PROFILE_IP not in profileid:
+            return
+
+        self.evidence_logger_q.put(
+            {
+                "to_log": {
+                    "profile": profileid,
+                    "timewindow": timewindow,
+                    "evidence_timestamp": evidence_timestamp,
+                    "accumulated_threat_level": accumulated_threat_level,
+                    "risk_accumulated_threat_level": (
+                        risk_accumulated_threat_level
+                    ),
+                },
+                "where": "accumulated_threat_level.csv",
+            }
+        )
+
     def add_to_log_file(self, data: str):
         self.evidence_logger_q.put({"to_log": data, "where": "alerts.log"})
 
@@ -284,7 +321,7 @@ class EvidenceHandlerWorker(IModule):
 
         return False
 
-    def get_threat_level(self, evidence: Evidence) -> float:
+    def get_weighted_threat_level(self, evidence: Evidence) -> float:
         evidence_threat_level = (
             evidence.threat_level.value * evidence.confidence
         )
@@ -379,11 +416,13 @@ class EvidenceHandlerWorker(IModule):
         return True
 
     def update_accumulated_threat_level(self, evidence: Evidence) -> float:
-        evidence_threat_level = self.get_threat_level(evidence)
+        weighted_evidence_threat_level = self.get_weighted_threat_level(
+            evidence
+        )
         return self.db.update_accumulated_threat_level(
             str(evidence.profile),
             str(evidence.timewindow),
-            evidence_threat_level,
+            weighted_evidence_threat_level,
         )
 
     def show_popup(self, alert: Alert):
@@ -498,6 +537,13 @@ class EvidenceHandlerWorker(IModule):
 
         # this is profile-specific RATL = ATL * RW
         risk_accumulated_threat_level = accumulated_threat_level * risk_weight
+        self.add_accumulated_threat_level_to_csv(
+            profileid,
+            twid,
+            timestamp,
+            accumulated_threat_level,
+            risk_accumulated_threat_level,
+        )
 
         if self.is_running_non_stop:
             # here we use tha RATL to dynamically change the sensitivity of
