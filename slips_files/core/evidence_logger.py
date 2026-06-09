@@ -80,7 +80,7 @@ class EvidenceLogger:
             [
                 "profile",
                 "timewindow",
-                "evidence_timestamp",
+                "time_since_slips_started",
                 "accumulated_threat_level",
                 "risk_accumulated_threat_level",
             ]
@@ -155,8 +155,8 @@ class EvidenceLogger:
         Write one monitored profile accumulated threat level CSV row.
 
         Parameters:
-            row: Mapping with profile, timewindow, evidence timestamp, ATL,
-                and risk-weighted ATL values.
+            row: Mapping with profile, timewindow, elapsed time, ATL, and
+                risk-weighted ATL values.
         """
         if (
             self.accumulated_threat_level_writer is None
@@ -168,7 +168,7 @@ class EvidenceLogger:
             csv_row = [
                 str(row["profile"]),
                 str(row["timewindow"]),
-                str(row["evidence_timestamp"]),
+                str(row["time_since_slips_started"]),
                 str(row["accumulated_threat_level"]),
                 str(row["risk_accumulated_threat_level"]),
             ]

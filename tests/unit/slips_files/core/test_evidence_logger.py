@@ -75,7 +75,7 @@ def test_clean_file(output_dir, file_to_clean, file_exists):
                 "to_log": {
                     "profile": "profile_192.168.1.21",
                     "timewindow": "timewindow1",
-                    "evidence_timestamp": "1728417813.8868346",
+                    "time_since_slips_started": 0,
                     "accumulated_threat_level": 1.5,
                     "risk_accumulated_threat_level": 3.0,
                 },
@@ -91,6 +91,7 @@ def test_run_logger_thread(msg, expected_method):
     # mock the printing methods
     logger.print_to_alerts_logfile = MagicMock()
     logger.print_to_alerts_json = MagicMock()
+    logger.print_to_accumulated_threat_level_csv = MagicMock()
     logger.shutdown_gracefully = MagicMock()
 
     # prepare a mock queue
@@ -122,8 +123,12 @@ def test_run_logger_thread(msg, expected_method):
     # assert the correct method was called with the correct argument
     if expected_method == "print_to_alerts_logfile":
         logger.print_to_alerts_logfile.assert_called_once_with(msg["to_log"])
-    else:
+    elif expected_method == "print_to_alerts_json":
         logger.print_to_alerts_json.assert_called_once_with(msg["to_log"])
+    else:
+        logger.print_to_accumulated_threat_level_csv.assert_called_once_with(
+            msg["to_log"]
+        )
 
     # assert shutdown was called once
     logger.shutdown_gracefully.assert_called_once()
@@ -138,7 +143,7 @@ def test_print_to_accumulated_threat_level_csv() -> None:
     row = {
         "profile": "profile_192.168.1.21",
         "timewindow": "timewindow1",
-        "evidence_timestamp": "1728417813.8868346",
+        "time_since_slips_started": 0,
         "accumulated_threat_level": 1.5,
         "risk_accumulated_threat_level": 3.0,
     }
@@ -150,7 +155,7 @@ def test_print_to_accumulated_threat_level_csv() -> None:
         [
             "profile_192.168.1.21",
             "timewindow1",
-            "1728417813.8868346",
+            "0",
             "1.5",
             "3.0",
         ]
@@ -168,7 +173,7 @@ def test_print_to_accumulated_threat_level_csv_skips_duplicate() -> None:
     row = {
         "profile": "profile_192.168.1.21",
         "timewindow": "timewindow1",
-        "evidence_timestamp": "1728417813.8868346",
+        "time_since_slips_started": 0,
         "accumulated_threat_level": 1.5,
         "risk_accumulated_threat_level": 3.0,
     }

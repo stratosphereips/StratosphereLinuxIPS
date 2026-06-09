@@ -152,6 +152,47 @@ def test_add_to_log_file(data):
     )
 
 
+def test_get_time_since_slips_started_starts_from_zero():
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    worker.slips_start_time = "100.0"
+
+    with patch(
+        "slips_files.core.evidence_handler_worker.time.time",
+        side_effect=[105.25, 107.75],
+    ):
+        first_elapsed_time = worker.get_time_since_slips_started()
+        second_elapsed_time = worker.get_time_since_slips_started()
+
+    assert first_elapsed_time == 0
+    assert second_elapsed_time == 2.5
+
+
+def test_add_accumulated_threat_level_to_csv_uses_elapsed_time():
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    worker.evidence_logger_q.put = Mock()
+    worker.get_time_since_slips_started = Mock(return_value=12.5)
+
+    worker.add_accumulated_threat_level_to_csv(
+        "profile_192.168.1.21",
+        "timewindow1",
+        1.5,
+        3.0,
+    )
+
+    worker.evidence_logger_q.put.assert_called_once_with(
+        {
+            "to_log": {
+                "profile": "profile_192.168.1.21",
+                "timewindow": "timewindow1",
+                "time_since_slips_started": 12.5,
+                "accumulated_threat_level": 1.5,
+                "risk_accumulated_threat_level": 3.0,
+            },
+            "where": "accumulated_threat_level.csv",
+        }
+    )
+
+
 @pytest.mark.parametrize(
     "all_uids, timewindow, accumulated_threat_level",
     [

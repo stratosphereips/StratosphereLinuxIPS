@@ -207,6 +207,7 @@ Once all modules are done processing, EvidenceHandler is killed by the Process m
 - On shutdown, the process manager turns those CSVs into plots and metrics under `output/performance_plots/` and `output/metrics.txt`.
 - Leave it `false` for normal development and production-style runs. Enabling it adds Redis bookkeeping, file writes, and plot-generation work that are only useful when diagnosing throughput or latency behavior.
 - The plots shown in [docs/immune/stress_testing.md](docs/immune/stress_testing.md) were generated with this parameter enabled.
+- `accumulated_threat_level.csv` uses `time_since_slips_started` as its x-axis field. The first ATL sample is normalized to `0`, and later samples are elapsed seconds after that first sample.
 
 ### Where and how do we get the GW info?
 

@@ -953,10 +953,13 @@ class ModuleFactory:
         def fake_read_configuration(worker):
             worker.width = 3600
             worker.detection_threshold = 0.25
+            worker.risk_accumulated_threat_level_threshold = 15
             worker.popup_alerts = False
             worker.use_p2p = False
             worker.exporting_modules_enabled = False
             worker.generate_performance_plots = False
+
+        mock_db.is_running_non_stop.return_value = False
 
         with (
             patch(

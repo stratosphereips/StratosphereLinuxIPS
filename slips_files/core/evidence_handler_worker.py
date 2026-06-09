@@ -7,6 +7,7 @@ import json
 import os
 import queue
 import sys
+import time
 from multiprocessing import Queue
 from typing import Dict, List, Optional
 
@@ -67,6 +68,7 @@ class EvidenceHandlerWorker(IModule):
         self.formatter = EvidenceFormatter(self.db, self.args)
         self.slips_start_time: str = self.db.get_slips_start_time()
         self.first_flow_pcap_time = None
+        self.accumulated_threat_level_elapsed_start = None
 
     def subscribe_to_channels(self):
         self.channels = {}
@@ -210,7 +212,6 @@ class EvidenceHandlerWorker(IModule):
         self,
         profileid: str,
         timewindow: str,
-        evidence_timestamp: str,
         accumulated_threat_level: float,
         risk_accumulated_threat_level: float,
     ) -> None:
@@ -220,19 +221,19 @@ class EvidenceHandlerWorker(IModule):
         Parameters:
             profileid: Profile identifier associated with the evidence.
             timewindow: Time window identifier associated with the evidence.
-            evidence_timestamp: Timestamp associated with the evidence.
             accumulated_threat_level: Current accumulated threat level.
             risk_accumulated_threat_level: Current risk-weighted ATL.
         """
         if ACCUMULATED_THREAT_LEVEL_PROFILE_IP not in profileid:
             return
 
+        time_since_slips_started = self.get_time_since_slips_started()
         self.evidence_logger_q.put(
             {
                 "to_log": {
                     "profile": profileid,
                     "timewindow": timewindow,
-                    "evidence_timestamp": evidence_timestamp,
+                    "time_since_slips_started": time_since_slips_started,
                     "accumulated_threat_level": accumulated_threat_level,
                     "risk_accumulated_threat_level": (
                         risk_accumulated_threat_level
@@ -240,6 +241,30 @@ class EvidenceHandlerWorker(IModule):
                 },
                 "where": "accumulated_threat_level.csv",
             }
+        )
+
+    def get_time_since_slips_started(self) -> float:
+        """
+        Return normalized elapsed wall-clock seconds for ATL plotting.
+
+        Return value:
+            Seconds elapsed since Slips started, normalized so the first ATL
+            CSV sample starts at 0.
+        """
+        try:
+            elapsed_time = time.time() - float(self.slips_start_time)
+        except (TypeError, ValueError):
+            elapsed_time = 0
+
+        if self.accumulated_threat_level_elapsed_start is None:
+            self.accumulated_threat_level_elapsed_start = elapsed_time
+
+        return max(
+            0,
+            round(
+                elapsed_time - self.accumulated_threat_level_elapsed_start,
+                6,
+            ),
         )
 
     def add_to_log_file(self, data: str):
@@ -540,7 +565,6 @@ class EvidenceHandlerWorker(IModule):
         self.add_accumulated_threat_level_to_csv(
             profileid,
             twid,
-            timestamp,
             accumulated_threat_level,
             risk_accumulated_threat_level,
         )
