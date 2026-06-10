@@ -96,9 +96,6 @@ class HorizontalPortscan:
         )
 
         self.db.set_evidence(evidence)
-        # to be able to avoid setting "unknown port" evidence for each
-        # scanned port from this attacker
-        self.db.mark_ip_as_port_scanner(srcip, str_twid)
 
     def should_set_evidence(
         self,
@@ -139,6 +136,13 @@ class HorizontalPortscan:
                         profileid, twid, protocol, dport
                     )
                 )
+                amount_of_dstips = int(amount_of_dstips)
+
+                if amount_of_dstips > self.minimum_dstips_to_set_evidence:
+                    # to be able to avoid setting "unknown port" evidence for each
+                    # scanned port from this attacker
+                    self.db.mark_ip_as_port_scanner(profileid.ip, str(twid))
+
                 if self.should_set_evidence(
                     amount_of_dstips, profileid, twid, dport
                 ):

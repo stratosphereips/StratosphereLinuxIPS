@@ -570,13 +570,15 @@ class ScanDetectionsHandler:
         of this is to avoid setting "unknown port" for every port scanned
         by this host
         """
-        self.r.hset(
-            f"profile_{attacker}_{timewindow}", "detected_doing_port_scan", 1
+        key = f"profile_{attacker}"
+        self.r.hset(key, self.constants.DETECTED_DOING_PORTSCAN, 1)
+        self.r.hexpire(
+            key, 10800, self.constants.DETECTED_DOING_PORTSCAN, nx=True
         )
 
     def is_a_port_scanner(self, ip: str, timewindow):
         return self.r.hget(
-            f"profile_{ip}_{timewindow}", "detected_doing_port_scan"
+            f"profile_{ip}", self.constants.DETECTED_DOING_PORTSCAN
         )
 
     def get_final_state_from_flags(self, state, pkts):
