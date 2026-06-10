@@ -38,7 +38,7 @@ from slips_files.common.abstracts.icore import ICore
 from slips_files.core.evidence_handler_worker import EvidenceHandlerWorker
 
 
-DEFAULT_EVIDENCE_HANDLER_WORKERS = 3
+DEFAULT_EVIDENCE_HANDLER_WORKERS = 1
 
 
 # Evidence Process
