@@ -80,6 +80,7 @@ class EvidenceLogger:
             [
                 "profile",
                 "timewindow",
+                "evidence_id",
                 "time_since_slips_started",
                 "accumulated_threat_level",
                 "risk_accumulated_threat_level",
@@ -168,6 +169,7 @@ class EvidenceLogger:
             csv_row = [
                 str(row["profile"]),
                 str(row["timewindow"]),
+                str(row["evidence_id"]),
                 str(row["time_since_slips_started"]),
                 str(row["accumulated_threat_level"]),
                 str(row["risk_accumulated_threat_level"]),

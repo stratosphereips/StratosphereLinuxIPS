@@ -212,6 +212,7 @@ class EvidenceHandlerWorker(IModule):
         self,
         profileid: str,
         timewindow: str,
+        evidence_id: str,
         accumulated_threat_level: float,
         risk_accumulated_threat_level: float,
     ) -> None:
@@ -221,6 +222,7 @@ class EvidenceHandlerWorker(IModule):
         Parameters:
             profileid: Profile identifier associated with the evidence.
             timewindow: Time window identifier associated with the evidence.
+            evidence_id: Current evidence identifier.
             accumulated_threat_level: Current accumulated threat level.
             risk_accumulated_threat_level: Current risk-weighted ATL.
         """
@@ -233,6 +235,7 @@ class EvidenceHandlerWorker(IModule):
                 "to_log": {
                     "profile": profileid,
                     "timewindow": timewindow,
+                    "evidence_id": evidence_id,
                     "time_since_slips_started": time_since_slips_started,
                     "accumulated_threat_level": accumulated_threat_level,
                     "risk_accumulated_threat_level": (
@@ -565,6 +568,7 @@ class EvidenceHandlerWorker(IModule):
         self.add_accumulated_threat_level_to_csv(
             profileid,
             twid,
+            evidence.id,
             accumulated_threat_level,
             risk_accumulated_threat_level,
         )
