@@ -228,9 +228,9 @@ detection:
 
   # these risk weights define different sensitivity levels in slips.
   # the higher the risk weight, the more sensitive slips is, the more alerts you will get.
-  high_risk_weight: 0.32
+  high_risk_weight: 1.72
   medium_risk_weight: 1
-  low_risk_weight: 1.72
+  low_risk_weight: 0.32
   # When the accumulated evidence weights reach this threshold, slips sets an evidence.
   # the lower this value is, the more alerts slips will generate.
   risk_accumulated_threat_level: 15
