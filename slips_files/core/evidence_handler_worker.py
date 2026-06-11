@@ -34,7 +34,6 @@ from slips_files.core.text_formatters.evidence_formatter import (
 )
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
-ACCUMULATED_THREAT_LEVEL_PROFILE_IP = "192.168.1.21"
 
 
 class EvidenceHandlerWorker(IModule):
@@ -217,7 +216,7 @@ class EvidenceHandlerWorker(IModule):
         risk_accumulated_threat_level: float,
     ) -> None:
         """
-        Queue accumulated threat level values for the monitored profile.
+        Queue accumulated threat level values for a profile.
 
         Parameters:
             profileid: Profile identifier associated with the evidence.
@@ -226,9 +225,6 @@ class EvidenceHandlerWorker(IModule):
             accumulated_threat_level: Current accumulated threat level.
             risk_accumulated_threat_level: Current risk-weighted ATL.
         """
-        if ACCUMULATED_THREAT_LEVEL_PROFILE_IP not in profileid:
-            return
-
         time_since_slips_started = self.get_time_since_slips_started()
         self.evidence_logger_q.put(
             {

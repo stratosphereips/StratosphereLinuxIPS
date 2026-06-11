@@ -5,12 +5,23 @@ import queue
 import threading
 import traceback
 import multiprocessing
+from typing import TextIO
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_paths import get_performance_csv_path
 from slips_files.common.slips_utils import utils
 
 ACCUMULATED_THREAT_LEVEL_CSV = "accumulated_threat_level.csv"
+ACCUMULATED_THREAT_LEVEL_CSV_PREFIX = "accumulated_threat_level_"
+ACCUMULATED_THREAT_LEVEL_CSV_SUFFIX = ".csv"
+ACCUMULATED_THREAT_LEVEL_CSV_HEADER = [
+    "profile",
+    "timewindow",
+    "evidence_id",
+    "time_since_slips_started",
+    "accumulated_threat_level",
+    "risk_accumulated_threat_level",
+]
 
 
 class EvidenceLogger:
@@ -35,10 +46,9 @@ class EvidenceLogger:
         utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
         self.latency_file = None
         self.latency_writer = None
-        self.accumulated_threat_level_file = None
-        self.accumulated_threat_level_writer = None
-        self.last_accumulated_threat_level_row = None
-        self._init_accumulated_threat_level_file()
+        self.accumulated_threat_level_files: dict[str, TextIO] = {}
+        self.accumulated_threat_level_writers: dict[str, csv.writer] = {}
+        self.last_accumulated_threat_level_rows: dict[str, list[str]] = {}
         if self.generate_performance_plots:
             self._init_latency_file()
 
@@ -62,31 +72,82 @@ class EvidenceLogger:
         self.latency_writer.writerow(["ts", "evidence_id", "latency"])
         self.latency_file.flush()
 
-    def _init_accumulated_threat_level_file(self) -> None:
+    def get_accumulated_threat_level_csv_name(self, profileid: str) -> str:
         """
-        Open the monitored profile accumulated threat level CSV.
+        Build the ATL CSV filename for a profile.
+
+        Parameters:
+            profileid: Profile identifier associated with evidence.
+
+        Return value:
+            Per-profile accumulated threat level CSV filename.
         """
-        self.accumulated_threat_level_file = self.clean_file(
+        profile_ip = str(profileid).removeprefix("profile_")
+        safe_profile_ip = profile_ip.replace(os.sep, "_")
+        if os.altsep:
+            safe_profile_ip = safe_profile_ip.replace(os.altsep, "_")
+        return (
+            f"{ACCUMULATED_THREAT_LEVEL_CSV_PREFIX}"
+            f"{safe_profile_ip}"
+            f"{ACCUMULATED_THREAT_LEVEL_CSV_SUFFIX}"
+        )
+
+    def _init_accumulated_threat_level_file(
+        self, profileid: str
+    ) -> tuple[TextIO, csv.writer]:
+        """
+        Open the accumulated threat level CSV for one profile.
+
+        Parameters:
+            profileid: Profile identifier associated with evidence.
+
+        Return value:
+            Open file handle and CSV writer for the profile.
+        """
+        csv_name = self.get_accumulated_threat_level_csv_name(profileid)
+        accumulated_threat_level_file = self.clean_file(
             self.output_dir,
-            ACCUMULATED_THREAT_LEVEL_CSV,
+            csv_name,
         )
         utils.change_logfiles_ownership(
-            self.accumulated_threat_level_file.name, self.UID, self.GID
+            accumulated_threat_level_file.name, self.UID, self.GID
         )
-        self.accumulated_threat_level_writer = csv.writer(
-            self.accumulated_threat_level_file
+        accumulated_threat_level_writer = csv.writer(
+            accumulated_threat_level_file
         )
-        self.accumulated_threat_level_writer.writerow(
-            [
-                "profile",
-                "timewindow",
-                "evidence_id",
-                "time_since_slips_started",
-                "accumulated_threat_level",
-                "risk_accumulated_threat_level",
-            ]
+        accumulated_threat_level_writer.writerow(
+            ACCUMULATED_THREAT_LEVEL_CSV_HEADER
         )
-        self.accumulated_threat_level_file.flush()
+        accumulated_threat_level_file.flush()
+        self.accumulated_threat_level_files[csv_name] = (
+            accumulated_threat_level_file
+        )
+        self.accumulated_threat_level_writers[csv_name] = (
+            accumulated_threat_level_writer
+        )
+        return accumulated_threat_level_file, accumulated_threat_level_writer
+
+    def _get_accumulated_threat_level_csv(
+        self, profileid: str
+    ) -> tuple[TextIO, csv.writer, str]:
+        """
+        Return the open ATL CSV handle and writer for a profile.
+
+        Parameters:
+            profileid: Profile identifier associated with evidence.
+
+        Return value:
+            File handle, CSV writer, and CSV filename for the profile.
+        """
+        csv_name = self.get_accumulated_threat_level_csv_name(profileid)
+        if csv_name not in self.accumulated_threat_level_files:
+            file_handle, writer = self._init_accumulated_threat_level_file(
+                profileid
+            )
+        else:
+            file_handle = self.accumulated_threat_level_files[csv_name]
+            writer = self.accumulated_threat_level_writers[csv_name]
+        return file_handle, writer, csv_name
 
     def clean_file(self, output_dir, file_to_clean):
         """
@@ -153,34 +214,39 @@ class EvidenceLogger:
 
     def print_to_accumulated_threat_level_csv(self, row: dict) -> None:
         """
-        Write one monitored profile accumulated threat level CSV row.
+        Write one profile accumulated threat level CSV row.
 
         Parameters:
             row: Mapping with profile, timewindow, elapsed time, ATL, and
                 risk-weighted ATL values.
         """
-        if (
-            self.accumulated_threat_level_writer is None
-            or self.accumulated_threat_level_file is None
-        ):
+        profileid = str(row.get("profile", ""))
+        if not profileid:
             return
 
         try:
+            (
+                accumulated_threat_level_file,
+                accumulated_threat_level_writer,
+                csv_name,
+            ) = self._get_accumulated_threat_level_csv(profileid)
             csv_row = [
-                str(row["profile"]),
+                profileid,
                 str(row["timewindow"]),
                 str(row["evidence_id"]),
                 str(row["time_since_slips_started"]),
                 str(row["accumulated_threat_level"]),
                 str(row["risk_accumulated_threat_level"]),
             ]
-            if csv_row == self.last_accumulated_threat_level_row:
+            if csv_row == self.last_accumulated_threat_level_rows.get(
+                csv_name
+            ):
                 return
 
-            self.accumulated_threat_level_writer.writerow(csv_row)
-            self.last_accumulated_threat_level_row = csv_row
-            self.accumulated_threat_level_file.flush()
-            os.fsync(self.accumulated_threat_level_file.fileno())
+            accumulated_threat_level_writer.writerow(csv_row)
+            self.last_accumulated_threat_level_rows[csv_name] = csv_row
+            accumulated_threat_level_file.flush()
+            os.fsync(accumulated_threat_level_file.fileno())
         except KeyboardInterrupt:
             return
         except Exception:
@@ -225,5 +291,7 @@ class EvidenceLogger:
         self.jsonfile.close()
         if self.latency_file is not None:
             self.latency_file.close()
-        if self.accumulated_threat_level_file is not None:
-            self.accumulated_threat_level_file.close()
+        for (
+            accumulated_threat_level_file
+        ) in self.accumulated_threat_level_files.values():
+            accumulated_threat_level_file.close()

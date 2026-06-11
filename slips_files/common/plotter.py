@@ -16,9 +16,10 @@ from slips_files.common.performance_paths import (
 from slips_files.common.slips_utils import utils
 
 ACCUMULATED_THREAT_LEVEL_CSV = "accumulated_threat_level.csv"
-ACCUMULATED_THREAT_LEVEL_PLOT = (
-    "accumulated_threat_level_profile_192_168_1_21.png"
-)
+ACCUMULATED_THREAT_LEVEL_CSV_PATTERN = "accumulated_threat_level_*.csv"
+ACCUMULATED_THREAT_LEVEL_PLOTTING_SCRIPT = "plotting_atl_and_ratl.py"
+ALERTS_DIRNAME = "alerts"
+ALERTS_PLOTS_DIRNAME = "plots"
 
 
 class Plotter:
@@ -30,52 +31,84 @@ class Plotter:
         self.print = print_func
         self.plots_dir = get_performance_plots_dir(self.output_dir)
         self.csv_dir = get_performance_csv_dir(self.output_dir)
+        self.alerts_dir = os.path.join(self.output_dir, ALERTS_DIRNAME)
+        self.alerts_plots_dir = os.path.join(
+            self.alerts_dir, ALERTS_PLOTS_DIRNAME
+        )
 
     def plot_accumulated_threat_level_csv(self) -> None:
         """
-        Plot accumulated threat level for profile 192.168.1.21.
+        Plot every per-profile accumulated threat level CSV.
         """
-        csv_path = os.path.join(
-            self.output_dir, "alerts", ACCUMULATED_THREAT_LEVEL_CSV
-        )
-        if not self._is_valid_input(csv_path):
+        self.plot_accumulated_threat_level_csvs()
+
+    def plot_accumulated_threat_level_csvs(self) -> None:
+        """
+        Plot all per-profile accumulated threat level CSVs.
+        """
+        if not self.output_dir:
             return
 
-        time_values = []
-        accumulated_threat_levels = []
+        csv_paths = sorted(
+            glob.glob(
+                os.path.join(
+                    self.alerts_dir, ACCUMULATED_THREAT_LEVEL_CSV_PATTERN
+                )
+            )
+        )
+        if not csv_paths:
+            return
+
+        os.makedirs(self.alerts_plots_dir, exist_ok=True)
+        for csv_path in csv_paths:
+            output_file = (
+                os.path.splitext(os.path.basename(csv_path))[0] + ".png"
+            )
+            self._plot_accumulated_threat_level_csv_with_script(
+                csv_path, output_file
+            )
+
+    def _plot_accumulated_threat_level_csv_with_script(
+        self, csv_path: str, output_file: str
+    ) -> None:
+        """
+        Plot one ATL CSV using the standalone ATL plotting script.
+
+        Parameters:
+            csv_path: Per-profile accumulated threat level CSV path.
+            output_file: Output plot filename inside alerts/plots/.
+        """
+        command = [
+            sys.executable,
+            ACCUMULATED_THREAT_LEVEL_PLOTTING_SCRIPT,
+            csv_path,
+            "-o",
+            self.alerts_plots_dir,
+            "--output-file",
+            output_file,
+        ]
         try:
-            with open(csv_path, newline="", encoding="utf-8") as csv_file:
-                reader = csv.DictReader(csv_file)
-                for index, row in enumerate(reader):
-                    raw_value = row.get("accumulated_threat_level")
-                    if raw_value is None:
-                        continue
-                    try:
-                        accumulated_threat_levels.append(float(raw_value))
-                        time_values.append(index)
-                    except ValueError:
-                        continue
+            subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self._log(
+                "[Plotter] Saved accumulated threat level plot to "
+                f"{os.path.join(self.alerts_plots_dir, output_file)}"
+            )
+        except subprocess.CalledProcessError as exc:
+            error = exc.stderr.strip() or exc.stdout.strip()
+            self._log(
+                "[Plotter] Failed to plot accumulated threat level CSV "
+                f"{csv_path}: {error}"
+            )
         except Exception as exc:
             self._log(
-                "[Plotter] Failed to read "
-                f"{ACCUMULATED_THREAT_LEVEL_CSV}: {exc}"
+                "[Plotter] Error plotting accumulated threat level CSV "
+                f"{csv_path}: {exc}"
             )
-            return
-
-        if not time_values:
-            return
-
-        output_path = os.path.join(
-            self.plots_dir, ACCUMULATED_THREAT_LEVEL_PLOT
-        )
-        self._save_plot(
-            output_path,
-            time_values,
-            {"accumulated_threat_level": accumulated_threat_levels},
-            xlabel="time (minutes)",
-            ylabel="accumulated_threat_level",
-            title=("Accumulated threat level for profile 192.168.1.21"),
-        )
 
     def plot_latency_csv(self):
         latency_path = get_performance_csv_path(self.output_dir, "latency.csv")

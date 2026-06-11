@@ -1023,7 +1023,7 @@ class ProcessManager:
         self.plotter = Plotter(
             self.main.args.output, self.get_print_function()
         )
-        self.plotter.plot_accumulated_threat_level_csv()
+        self.plotter.plot_accumulated_threat_level_csvs()
 
         if self.main.conf.generate_performance_plots() is True:
             self.plotter.plot_latency_csv()
