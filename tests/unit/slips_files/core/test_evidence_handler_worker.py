@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import json
 from datetime import datetime
 from unittest.mock import MagicMock, Mock, patch
 
@@ -239,6 +240,48 @@ def test_add_evidence_to_json_log_file_maps_confidence_to_string(
     note = logged_evidence["Note"]
     assert '"confidence":' in note
     assert f'"confidence": "{expected_output}"' in note
+
+
+@pytest.mark.parametrize(
+    "accumulated_threat_level, accumulated_ratl",
+    [
+        (3.5, 7.0),
+        (0, 0),
+    ],
+)
+def test_add_evidence_to_json_log_file_adds_accumulated_ratl(
+    accumulated_threat_level, accumulated_ratl
+):
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    worker.idmefv2.convert_to_idmef_event = Mock(return_value={"ID": "e1"})
+    worker.evidence_logger_q.put = Mock()
+    worker.add_latency_to_csv = Mock()
+    evidence = Evidence(
+        evidence_type=EvidenceType.ARP_SCAN,
+        description="ARP scan detected",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="192.168.1.20",
+        ),
+        threat_level=ThreatLevel.INFO,
+        confidence=0.8,
+        profile=ProfileID("192.168.1.20"),
+        timewindow=TimeWindow(1),
+        uid=["uid1"],
+        timestamp="2024/10/04 15:45:30.123456+0000",
+    )
+
+    worker.add_evidence_to_json_log_file(
+        evidence,
+        accumulated_threat_level,
+        accumulated_ratl,
+    )
+
+    logged_evidence = worker.evidence_logger_q.put.call_args[0][0]["to_log"]
+    note = json.loads(logged_evidence["Note"])
+    assert note["accumulated_threat_level"] == accumulated_threat_level
+    assert note["accumulated_ratl"] == accumulated_ratl
 
 
 def test_show_popup():

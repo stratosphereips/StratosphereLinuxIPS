@@ -124,6 +124,7 @@ class EvidenceHandlerWorker(IModule):
         self,
         evidence: Evidence,
         accumulated_threat_level: float = 0,
+        risk_accumulated_threat_level: float = 0,
     ):
         idmef_evidence: dict = self.idmefv2.convert_to_idmef_event(evidence)
         if not idmef_evidence:
@@ -139,6 +140,7 @@ class EvidenceHandlerWorker(IModule):
                         {
                             "uids": evidence.uid,
                             "accumulated_threat_level": accumulated_threat_level,
+                            "risk_accumulated_threat_level": risk_accumulated_threat_level,
                             "threat_level": str(evidence.threat_level),
                             "confidence": utils.evidence_confidence_to_string(
                                 evidence.confidence
@@ -219,10 +221,18 @@ class EvidenceHandlerWorker(IModule):
         else:
             alert_description += "Generated an alert "
 
+        current_risk_weight = self.db.get_max_seen_risk_weight(
+            str(alert.profile), 0
+        )
+        current_risk_weight = convert_float_to_risk_weight(current_risk_weight)
+
         alert_description += (
             f"given enough evidence on timewindow "
-            f"{alert.timewindow.number}. (real time {now})"
+            f"{alert.timewindow.number}. (real time: {now})"
         )
+        if self.is_running_non_stop:
+            alert_description += f"(risk weight: {current_risk_weight})"
+
         self.add_to_log_file(alert_description)
         self.add_alert_to_json_log_file(alert)
 
@@ -479,17 +489,6 @@ class EvidenceHandlerWorker(IModule):
             profileid, twid, evidence
         )
 
-        self.add_evidence_to_json_log_file(
-            evidence,
-            accumulated_threat_level,
-        )
-        self.give_evidence_to_exporting_modules(evidence)
-
-        if self.use_p2p:
-            self.db.publish(
-                "report_to_peers", json.dumps(utils.to_dict(evidence))
-            )
-
         # Use the max risk weight seen by any profiler as the current weight.
         risk_weight: float = self.get_float_risk_weight(
             accumulated_threat_level
@@ -498,6 +497,18 @@ class EvidenceHandlerWorker(IModule):
 
         # this is profile-specific RATL = ATL * RW
         risk_accumulated_threat_level = accumulated_threat_level * risk_weight
+
+        self.add_evidence_to_json_log_file(
+            evidence,
+            accumulated_threat_level,
+            risk_accumulated_threat_level,
+        )
+        self.give_evidence_to_exporting_modules(evidence)
+
+        if self.use_p2p:
+            self.db.publish(
+                "report_to_peers", json.dumps(utils.to_dict(evidence))
+            )
 
         if self.is_running_non_stop:
             # here we use tha RATL to dynamically change the sensitivity of
@@ -522,6 +533,7 @@ class EvidenceHandlerWorker(IModule):
             timewindow=evidence.timewindow,
             last_evidence=evidence,
             accumulated_threat_level=accumulated_threat_level,
+            accumulated_ratl=risk_accumulated_threat_level,
             correl_id=list(tw_evidence.keys()),
         )
         self.handle_new_alert(alert, tw_evidence)

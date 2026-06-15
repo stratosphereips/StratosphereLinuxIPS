@@ -158,6 +158,7 @@ class IDMEFv2:
                     "Note": json.dumps(
                         {
                             "accumulated_threat_level": alert.accumulated_threat_level,
+                            "accumulated_ratl": alert.accumulated_ratl,
                             "timewindow": alert.timewindow.number,
                             # temporary. there's an issue with the imefv2 python
                             # library validator, it doesn't recognize the endtime
