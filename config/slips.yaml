@@ -233,7 +233,7 @@ detection:
   low_risk_weight: 0.32
   # When the accumulated evidence weights reach this threshold, slips sets an evidence.
   # the lower this value is, the more alerts slips will generate.
-  risk_accumulated_threat_level: 15
+  risk_accumulated_threat_level: 9
 
 #############################
 modules:
