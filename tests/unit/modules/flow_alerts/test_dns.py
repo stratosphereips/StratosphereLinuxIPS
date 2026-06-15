@@ -178,6 +178,67 @@ def test_extract_ips_from_dns_answers():
     assert extracted_ips == ["192.168.1.1", "2001:db8::1"]
 
 
+def test_dns_misconfiguration_detection_tracks_private_ipv6_dns_server():
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.db.is_official_dns_server.return_value = True
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid="1234",
+        saddr="fd00:1::10",
+        daddr="fd00:2::53",
+        dport="53",
+        sport="53000",
+        proto="udp",
+        query="example.com",
+        qclass_name="",
+        qtype_name="AAAA",
+        rcode_name="NOERROR",
+        answers=["2001:db8::1"],
+        TTLs="",
+    )
+
+    assert dns.is_possible_dns_misconfiguration(flow.daddr, flow) is True
+
+    dns.db.is_official_dns_server.assert_called_once_with("fd00:2::53")
+
+
+@pytest.mark.parametrize(
+    "what_to_check, expected_calls",
+    [
+        ("dstip", 0),
+        ("srcip", 0),
+    ],
+)
+def test_check_different_localnet_usage_ignores_official_dns_server(
+    what_to_check, expected_calls
+):
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.set_evidence.different_localnet_usage = Mock()
+    dns.db.get_local_network.return_value = "fd00:1::/64"
+    dns.db.is_official_dns_server.return_value = True
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid="1234",
+        saddr="fd00:2::53",
+        daddr="fd00:3::53",
+        dport="53",
+        sport="53",
+        proto="udp",
+        query="example.com",
+        qclass_name="",
+        qtype_name="AAAA",
+        rcode_name="NOERROR",
+        answers=["2001:db8::1"],
+        TTLs="",
+    )
+
+    dns.check_different_localnet_usage(twid, flow, what_to_check=what_to_check)
+
+    assert (
+        dns.set_evidence.different_localnet_usage.call_count == expected_calls
+    )
+
+
 @pytest.mark.parametrize(
     "contacted_ips, other_ip, expected_result",
     [  # Testcase1: Connection exists from other IP version

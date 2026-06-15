@@ -758,6 +758,12 @@ class DBManager:
     def is_dhcp_server(self, *args, **kwargs):
         return self.rdb.is_dhcp_server(*args, **kwargs)
 
+    def store_official_dns_server(self, *args, **kwargs):
+        return self.rdb.store_official_dns_server(*args, **kwargs)
+
+    def is_official_dns_server(self, *args, **kwargs):
+        return self.rdb.is_official_dns_server(*args, **kwargs)
+
     def save(self, *args, **kwargs):
         return self.rdb.save(*args, **kwargs)
 

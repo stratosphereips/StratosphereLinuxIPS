@@ -200,6 +200,18 @@ def test_redis_db_is_tor_node():
     )
 
 
+def test_store_official_dns_server():
+    """Test storing detected DNS servers in Redis."""
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+
+    db.store_official_dns_server("192.168.1.53")
+    db.store_official_dns_server("fd00::53")
+
+    assert db.is_official_dns_server("192.168.1.53") is True
+    assert db.is_official_dns_server("fd00::53") is True
+    assert db.is_official_dns_server("not-an-ip") is False
+
+
 def test_setup_config_file_uses_isolated_path_and_preserves_save(
     tmp_path, monkeypatch
 ):

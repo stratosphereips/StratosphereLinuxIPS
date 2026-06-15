@@ -127,3 +127,4 @@ The full pipeline (dataset prep → training → inference → eval → report) 
 |---|---|
 | Incident Summarization | [Summarization Fine-Tuned Model: Evaluation Results](finetuning_results.md) |
 | Risk Assessment & Cause Analysis | [Risk Fine-Tuned Model: Evaluation Results](finetuning_risk_results.md) |
+| Unified (Summary + Cause + Risk) | [Unified Fine-Tuned Model: Evaluation Results](finetuning_unified_results.md) |

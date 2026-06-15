@@ -7,7 +7,6 @@ from tests.module_factory import ModuleFactory
 import json
 from unittest.mock import (
     Mock,
-    patch,
 )
 import pytest
 from ipaddress import ip_address
@@ -532,24 +531,6 @@ def test_check_tor_exit_node(
     assert conn.check_tor_exit_node(twid, flow) is expected_result
     conn.db.is_tor_node.assert_called_once_with(flow.daddr)
     assert mock_set_evidence.call_count == expected_call_count
-
-
-@pytest.mark.parametrize(
-    "mock_time_diff, expected_result",
-    [
-        (40, True),  # Timeout reached
-        (20, False),  # Timeout not reached
-    ],
-)
-def test_is_interface_timeout_reached(mock_time_diff, expected_result):
-    conn = ModuleFactory().create_conn_analyzer_obj()
-    conn.is_running_non_stop = True
-    conn.conn_without_dns_interface_wait_time = 30
-    with patch(
-        "slips_files.common.slips_utils.utils.get_time_diff",
-        return_value=mock_time_diff,
-    ):
-        assert conn.is_interface_timeout_reached() == expected_result
 
 
 @pytest.mark.parametrize(
@@ -1178,6 +1159,22 @@ def test_is_well_known_org(
             "srcip",
             0,
         ),
+        (  # Test case 5: Different IPv6 local network usage (dstip)
+            "fd00:1::10",
+            "fd00:2::20",
+            80,
+            "tcp",
+            "dstip",
+            1,
+        ),
+        (  # Test case 6: Same IPv6 local network usage, no evidence
+            "fd00:1::10",
+            "fd00:1::20",
+            80,
+            "tcp",
+            "dstip",
+            0,
+        ),
     ],
 )
 def test_check_different_localnet_usage(
@@ -1189,7 +1186,9 @@ def test_check_different_localnet_usage(
     """
     conn = ModuleFactory().create_conn_analyzer_obj()
     conn.set_evidence.different_localnet_usage = Mock()
-    conn.db.get_local_network.return_value = "192.168.1.0/24"
+    conn.db.get_local_network.return_value = (
+        "fd00:1::/64" if ":" in saddr or ":" in daddr else "192.168.1.0/24"
+    )
     flow = Conn(
         starttime="1726249372.312124",
         uid="123",
@@ -1216,6 +1215,49 @@ def test_check_different_localnet_usage(
     )
     call_count = conn.set_evidence.different_localnet_usage.call_count
     assert call_count == expected_calls
+
+
+@pytest.mark.parametrize(
+    "what_to_check, sport, dport",
+    [
+        ("dstip", "40000", "53"),
+        ("srcip", "53", "40000"),
+    ],
+)
+def test_check_different_localnet_usage_ignores_official_dns_server(
+    what_to_check, sport, dport
+):
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.set_evidence.different_localnet_usage = Mock()
+    conn.db.get_local_network.return_value = "fd00:1::/64"
+    conn.db.is_official_dns_server.return_value = True
+    flow = Conn(
+        starttime="1726249372.312124",
+        uid="123",
+        saddr="fd00:2::53",
+        daddr="fd00:3::53",
+        dur=1,
+        proto="tcp",
+        appproto="",
+        sport=sport,
+        dport=dport,
+        spkts=0,
+        dpkts=0,
+        sbytes=0,
+        dbytes=0,
+        smac="",
+        dmac="",
+        state="Established",
+        history="",
+    )
+
+    conn.check_different_localnet_usage(
+        twid,
+        flow,
+        what_to_check=what_to_check,
+    )
+
+    conn.set_evidence.different_localnet_usage.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -1276,6 +1318,87 @@ def test_check_connection_to_local_ip(
     )
     conn.check_connection_to_local_ip(twid, flow)
     assert conn.set_evidence.conn_to_private_ip.call_count == expected_calls
+
+
+@pytest.mark.parametrize(
+    "saddr, daddr, sport, dport, official_dns_ip",
+    [
+        ("192.168.1.20", "192.168.1.53", "40000", "53", ""),
+        ("fd00::53", "fd00::10", "547", "546", ""),
+        ("fd00::10", "fd00::53", "546", "547", ""),
+    ],
+)
+def test_check_connection_to_local_ip_ignores_official_dns_server(
+    saddr, daddr, sport, dport, official_dns_ip
+):
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.set_evidence.conn_to_private_ip = Mock()
+    conn.db.get_gateway_ip.return_value = "192.168.1.1"
+    conn.db.is_official_dns_server.side_effect = (
+        lambda ip: ip == official_dns_ip
+    )
+    flow = Conn(
+        starttime="1726249372.312124",
+        uid="123",
+        saddr=saddr,
+        daddr=daddr,
+        dur=1,
+        proto="udp",
+        appproto="",
+        sport=sport,
+        dport=dport,
+        spkts=0,
+        dpkts=0,
+        sbytes=0,
+        dbytes=0,
+        smac="",
+        dmac="",
+        state="Established",
+        history="",
+    )
+
+    conn.check_connection_to_local_ip(twid, flow)
+
+    conn.set_evidence.conn_to_private_ip.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "saddr, daddr, sport, dport",
+    [
+        ("fd00::10", "fd00::53", "40000", "53"),
+        ("fd00::53", "fd00::10", "547", "546"),
+        ("fd00::10", "fd00::53", "546", "547"),
+    ],
+)
+def test_check_connection_to_local_ip_ignores_dns_and_dhcpv6_service_ports(
+    saddr, daddr, sport, dport
+):
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.set_evidence.conn_to_private_ip = Mock()
+    conn.db.get_gateway_ip.return_value = "192.168.1.1"
+    flow = Conn(
+        starttime="1726249372.312124",
+        uid="123",
+        saddr=saddr,
+        daddr=daddr,
+        dur=1,
+        proto="udp",
+        appproto="",
+        sport=sport,
+        dport=dport,
+        spkts=0,
+        dpkts=0,
+        sbytes=0,
+        dbytes=0,
+        smac="",
+        dmac="",
+        state="Established",
+        history="",
+    )
+
+    conn.check_connection_to_local_ip(twid, flow)
+
+    conn.set_evidence.conn_to_private_ip.assert_not_called()
 
 
 @pytest.mark.parametrize(

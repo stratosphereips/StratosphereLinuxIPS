@@ -57,6 +57,16 @@ def test_get_local_net_of_flow_prefers_configured_default_localnet():
     assert localnet == {"default": "192.168.1.0/24"}
 
 
+def test_get_local_net_of_flow_returns_ipv6_network():
+    profiler = create_profiler()
+    handler = LocalnetHandler(profiler)
+    flow = Mock(saddr="fd00:1::abcd")
+
+    localnet = handler._get_local_net_of_flow(flow)
+
+    assert localnet == {"default": "fd00:1::/64"}
+
+
 @patch("slips_files.core.helpers.localnet_handler.netifaces.ifaddresses")
 @patch("slips_files.core.helpers.localnet_handler.utils.get_all_interfaces")
 def test_get_localnet_of_given_interface_returns_ipv4_networks(
@@ -80,6 +90,25 @@ def test_get_localnet_of_given_interface_returns_ipv4_networks(
         "eth0": "192.168.1.0/24",
         "wlan0": "10.0.0.0/8",
     }
+
+
+@patch("slips_files.core.helpers.localnet_handler.netifaces.ifaddresses")
+@patch("slips_files.core.helpers.localnet_handler.utils.get_all_interfaces")
+def test_get_localnet_of_given_interface_returns_ipv6_networks(
+    mock_get_all_interfaces, mock_ifaddresses
+):
+    profiler = create_profiler(running_non_stop=True)
+    handler = LocalnetHandler(profiler)
+    mock_get_all_interfaces.return_value = ["eth0"]
+    mock_ifaddresses.return_value = {
+        netifaces.AF_INET6: [
+            {"addr": "fd00:1::1234%eth0", "prefixlen": "64"}
+        ]
+    }
+
+    localnets = handler._get_localnet_of_given_interfaces_using_netifaces()
+
+    assert localnets == {"eth0": "fd00:1::/64"}
 
 
 def test_handle_setting_local_net_updates_cache_and_db():
@@ -136,6 +165,7 @@ def test_handle_setting_local_net_updates_cache_and_db():
         (False, {}, [], "224.0.0.1", "eth0", True, False),
         (False, {}, [], "8.8.8.8", "eth0", False, False),
         (False, {}, [], "192.168.1.8", "eth0", False, True),
+        (False, {}, [], "fd00:1::abcd", "eth0", False, True),
     ],
 )
 def test_should_set_localnet(

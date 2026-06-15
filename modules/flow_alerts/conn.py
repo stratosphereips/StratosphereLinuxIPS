@@ -4,11 +4,20 @@ import asyncio
 import contextlib
 import ipaddress
 import json
-from datetime import datetime
 from typing import Tuple, List, Dict, Any
 import validators
 
 from modules.flow_alerts.dns import DNS
+from modules.flow_alerts.utils import (
+    SPECIAL_IPV4,
+    get_ip_to_check,
+    is_interface_timeout_reached as has_interface_timeout_reached,
+    is_ip_allowed_outside_localnet,
+    is_ip_outside_local_network,
+    is_official_dns_server,
+    should_check_different_localnet,
+    should_ignore_dns_or_dhcpv6_flow,
+)
 from slips_files.common.abstracts.iflowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
@@ -20,7 +29,6 @@ from slips_files.common.input_type import InputType
 
 NOT_ESTAB = "Not Established"
 ESTAB = "Established"
-SPECIAL_IPV4 = ("0.0.0.0", "255.255.255.255")
 
 
 class Conn(IFlowalertsAnalyzer):
@@ -561,22 +569,6 @@ class Conn(IFlowalertsAnalyzer):
             pass
         return False
 
-    def is_interface_timeout_reached(self) -> bool:
-        """
-        To avoid false positives in case of an interface
-        don't alert ConnectionWithoutDNS until 30 minutes has passed after
-        starting slips because the dns may have happened before starting slips
-        """
-        if not self.is_running_non_stop:
-            # no timeout
-            return True
-
-        start_time = self.db.get_slips_start_time()
-        now = datetime.now()
-        diff = utils.get_time_diff(start_time, now, return_type="minutes")
-        # 30 minutes have passed?
-        return diff >= self.conn_without_dns_interface_wait_time
-
     async def check_connection_without_dns_resolution(
         self, profileid, twid, flow
     ) -> bool:
@@ -587,7 +579,14 @@ class Conn(IFlowalertsAnalyzer):
         if self.should_ignore_conn_without_dns(flow):
             return False
 
-        if not self.is_interface_timeout_reached():
+        if not has_interface_timeout_reached(
+            self.db,
+            self.is_running_non_stop,
+            self.conn_without_dns_interface_wait_time,
+        ):
+            # To avoid false positives in case of an interface
+            # don't alert ConnectionWithoutDNS until 30 minutes has passed after
+            # starting slips because the dns may have happened before starting slips
             return False
 
         # search 24hs back for a dns resolution
@@ -737,53 +736,13 @@ class Conn(IFlowalertsAnalyzer):
                     return True
             return False
 
-    def _is_ok_to_connect_to_ip_outside_localnet(self, ip) -> bool:
-        """
-        returns true if it's ok to connect to the given IP even if it's
-        "outside the given local network"
-        """
-        ip_obj = ipaddress.ip_address(ip)
-        return (
-            # because slips only knows about the ipv4 local networks
-            not validators.ipv4(ip)
-            or ip in SPECIAL_IPV4
-            or not ip_obj.is_private
-            or ip_obj.is_loopback
-            or ip_obj.is_multicast
-        )
-
-    def _is_dns(self, flow) -> bool:
-        return str(flow.dport) == "53" and flow.proto.lower() == "udp"
-
-    def should_check_diff_localnet(self, flow) -> bool:
+    def should_check_diff_localnet(self, flow: Any) -> bool:
         """
         returns true when it's a non-dns flow where
         1. both ips are private
         2. the flow is from a public ip -> a private ip
         """
-        if self._is_dns(flow):
-            # dns flows are checked fot this same detection in dns.py
-            return False
-
-        for ip in (flow.saddr, flow.daddr):
-            ip_obj = ipaddress.ip_address(ip)
-            if (
-                not validators.ipv4(ip)
-                or ip in SPECIAL_IPV4
-                or ip_obj.is_loopback
-                or ip_obj.is_multicast
-            ):
-                return False
-
-        saddr_obj = ipaddress.ip_address(flow.saddr)
-        daddr_obj = ipaddress.ip_address(flow.daddr)
-
-        is_saddr_private = utils.is_private_ip(saddr_obj)
-        is_daddr_private = utils.is_private_ip(daddr_obj)
-
-        return (is_saddr_private and is_daddr_private) or (
-            not is_saddr_private and is_daddr_private
-        )
+        return should_check_different_localnet(flow, skip_dns_flows=True)
 
     def check_different_localnet_usage(self, twid, flow, what_to_check=""):
         """
@@ -801,20 +760,14 @@ class Conn(IFlowalertsAnalyzer):
         if not self.should_check_diff_localnet(flow):
             return
 
-        ip_to_check = flow.saddr if what_to_check == "srcip" else flow.daddr
-        if self._is_ok_to_connect_to_ip_outside_localnet(ip_to_check):
+        if is_official_dns_server(self.db, flow, what_to_check):
             return
 
-        ip_obj = ipaddress.ip_address(ip_to_check)
-        own_local_network = self.db.get_local_network(flow.interface)
-        if not own_local_network:
-            # the current local network wasn't set in the db yet
-            # it's impossible to get here because the localnet is set before
-            # any msg is published in the new_flow channel
+        ip_to_check = get_ip_to_check(flow, what_to_check)
+        if is_ip_allowed_outside_localnet(ip_to_check):
             return
 
-        # if it's a private ipv4 addr, it should belong to our local network
-        if ip_obj in ipaddress.IPv4Network(own_local_network):
+        if not is_ip_outside_local_network(self.db, flow, ip_to_check):
             return
 
         self.set_evidence.different_localnet_usage(
@@ -826,15 +779,8 @@ class Conn(IFlowalertsAnalyzer):
     def check_connection_to_local_ip(self, twid, flow):
         """
         Alerts when there's a connection from a private IP to
-        another private IP except for DNS connections to the gateway
+        another private IP except for expected DNS and DHCP service traffic.
         """
-
-        def is_dns_conn(flow):
-            return (
-                flow.dport == 53
-                and flow.proto.lower() == "udp"
-                and flow.daddr == self.db.get_gateway_ip(flow.interface)
-            )
 
         def is_dhcp_conn(flow):
             # Bootstrap protocol server. Used by DHCP servers to communicate
@@ -847,9 +793,16 @@ class Conn(IFlowalertsAnalyzer):
 
         with contextlib.suppress(ValueError):
             flow.dport = int(flow.dport)
+        with contextlib.suppress(ValueError):
+            flow.sport = int(flow.sport)
 
-        if is_dns_conn(flow) or is_dhcp_conn(flow):
-            # skip DNS conns to the gw to avoid having tons of this evidence
+        if is_dhcp_conn(flow):
+            # skip DHCP conns to avoid having tons of this evidence
+            return
+
+        if should_ignore_dns_or_dhcpv6_flow(self.db, flow):
+            # skip DNS and DHCPv6 service traffic that matches the
+            # detected local resolver behavior
             return
 
         # make sure the 2 ips are private

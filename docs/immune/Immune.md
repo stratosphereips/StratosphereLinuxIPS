@@ -61,3 +61,7 @@ This is the main guide to the documentation related to the changes done to Slips
   *Risk Assessment & Cause Analysis task:*
   - [Risk Assessment Training Procedure](https://stratospherelinuxips.readthedocs.io/en/develop/immune/finetuning_risk_procedure.html) - Dataset filtering, best-of-N selection, combined adapter training
   - [Risk Fine-Tuned Model: Evaluation Results](https://stratospherelinuxips.readthedocs.io/en/develop/immune/finetuning_risk_results.html) - Benchmark results for the finetuned Qwen2.5-1.5B risk model
+
+  *Unified model (Summary + Cause + Risk):*
+  - [Unified Training Procedure](https://stratospherelinuxips.readthedocs.io/en/develop/immune/finetuning_unified_procedure.html) - Single adapter for all three tasks: dataset merging, lora_r=128 + RSLoRA, version history
+  - [Unified Fine-Tuned Model: Evaluation Results](https://stratospherelinuxips.readthedocs.io/en/develop/immune/finetuning_unified_results.html) - Benchmark results vs standalone models and quantization impact

@@ -118,7 +118,7 @@ class Utils(object):
     def get_cidr_of_private_ip(self, ip):
         """
         returns the cidr/range of the given private ip
-        :param ip: should be a private ipv4
+        :param ip: should be a private ipv4 or ipv6
         """
         if validators.ipv4(ip):
             first_octet = ip.split(".")[0]
@@ -127,6 +127,12 @@ class Utils(object):
             for network_range in self.home_network_ranges_str:
                 if first_octet in network_range:
                     return network_range
+        elif validators.ipv6(ip):
+            ip_obj = ipaddress.ip_address(ip)
+            if ip_obj in ipaddress.ip_network("fc00::/7"):
+                return str(ipaddress.ip_network(f"{ip}/64", strict=False))
+            if not self.are_detection_modules_interested_in_this_ip(ip):
+                return str(ipaddress.ip_network(f"{ip}/64", strict=False))
 
     def threat_level_to_string(self, threat_level: float) -> str:
         for str_lvl, int_value in self.threat_levels.items():

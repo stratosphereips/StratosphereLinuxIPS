@@ -4,6 +4,7 @@ import shutil
 import importlib.util
 import sys
 from contextlib import contextmanager
+from types import ModuleType
 from unittest.mock import (
     patch,
     Mock,
@@ -686,6 +687,17 @@ class ModuleFactory:
         from slips_files.common.slips_utils import utils
 
         return utils
+
+    def create_flow_alert_utils_obj(self) -> ModuleType:
+        """
+        Create a flow alerts utils module instance for unit tests.
+
+        Return:
+        ModuleType: The flow alerts utils module.
+        """
+        from modules.flow_alerts import utils as flow_alert_utils
+
+        return flow_alert_utils
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_threatintel_obj(self, mock_db):

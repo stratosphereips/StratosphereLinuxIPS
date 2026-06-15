@@ -40,6 +40,7 @@ class Constants:
     WHITELIST = "whitelist"
     GROWING_ZEEK_DIR = "growing_zeek_dir"
     DHCP_SERVERS = "DHCP_servers"
+    OFFICIAL_DNS_SERVERS = "official_DNS_servers"
     LABELS = "labels"
     MSGS_PUBLISHED_AT_RUNTIME = "msgs_published_at_runtime"
     ZEEK_FILES = "zeekfiles"

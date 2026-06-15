@@ -1801,6 +1801,25 @@ class RedisDB(
         # delete anything older than the most recent 20 servers
         self.r.ltrim(self.constants.DHCP_SERVERS, 0, max - 1)
 
+    def is_official_dns_server(self, ip: str) -> bool:
+        """
+        Check whether the given IP is one of the detected DNS servers.
+        """
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+
+        return bool(self.r.sismember(self.constants.OFFICIAL_DNS_SERVERS, ip))
+
+    def store_official_dns_server(self, server_addr: str):
+        try:
+            ipaddress.ip_address(server_addr)
+        except ValueError:
+            return
+
+        self.r.sadd(self.constants.OFFICIAL_DNS_SERVERS, server_addr)
+
     def _get_redis_dump_path_from_redis_config(self) -> str:
         """
         Return the dump file path configured in the running Redis server.

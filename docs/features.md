@@ -117,6 +117,11 @@ Slips detects when a private IP is connected to another private IP with threat l
 But it skips this alert when it's a DNS or a DHCP connection on port
 53, 67 or 68 UDP to the gateway IP.
 
+Slips also skips this alert for DNS traffic on port 53 and for DHCPv6 traffic
+on ports 546 and 547. When Slips sees a private DNS flow in the analyzed
+traffic, it records that destination address as a DNS server and prints it to
+the display and to slips.log.
+
 
 ### Connection to private IPs outside the current local network
 
@@ -139,8 +144,19 @@ and high if the destination ip is the one outside of local network.
 
 
 Slips ignores evidence of this type when the destination IP is a private IP outside of local network and is
-communicating on port 53/UDP. Slips marks that destination address as the DNS server when 5 flows are seen using port
-53/udp while having DNS answers. this is likely a DNS misconfiguration hence a FP.
+communicating on port 53/UDP. Slips marks that destination address as the DNS server as soon as it sees a private
+DNS flow in `dns.log` and prints `Detected DNS server by traffic heuristic: <ip>` to the display and `slips.log`.
+The same heuristic applies to private IPv4 and IPv6 DNS servers. this is likely a DNS misconfiguration hence a FP.
+
+Slips also ignores this evidence when the checked IP is one of the DNS
+servers detected from the analyzed DNS traffic and the matching DNS server
+port is 53. This applies to both IPv4 and IPv6 resolver addresses and
+covers requests sent to the resolver and replies coming back from it.
+
+For `CONNECTION_TO_PRIVATE_IP`, Slips suppresses DHCPv6 traffic on ports 546
+and 547. This avoids false positives when the same local network device
+provides both DNS and DHCPv6 services but answers with a different IPv6
+address, such as a link-local address.
 
 
 ### Weird HTTP methods

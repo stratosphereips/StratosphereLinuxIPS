@@ -15,6 +15,7 @@ from unittest.mock import (
 import json
 import requests
 import socket
+from slips_files.core.flows.zeek import DNS
 from slips_files.core.structures.evidence import (
     ThreatLevel,
     Evidence,
@@ -570,6 +571,67 @@ def test_check_if_we_have_pending_mac_queries_empty_queue(
     mock_get_vendor = mocker.patch.object(ip_info, "get_vendor")
     ip_info.check_if_we_have_pending_offline_mac_queries()
     mock_get_vendor.assert_not_called()
+
+
+def test_register_private_dns_server_stores_private_dns_server():
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.db.is_official_dns_server.return_value = False
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid="1234",
+        saddr="fd00:1::10",
+        daddr="fd00:2::53",
+        dport="53",
+        sport="53000",
+        proto="udp",
+        query="example.com",
+        qclass_name="",
+        qtype_name="AAAA",
+        rcode_name="NOERROR",
+        answers=["2001:db8::1"],
+        TTLs="",
+    )
+
+    assert ip_info.register_private_dns_server(flow) is True
+
+    ip_info.db.store_official_dns_server.assert_called_once_with("fd00:2::53")
+    ip_info.print.assert_called_once_with(
+        "Detected DNS server by traffic heuristic: fd00:2::53"
+    )
+
+
+@pytest.mark.parametrize(
+    "daddr, dport, proto",
+    [
+        ("8.8.8.8", "53", "udp"),
+        ("fd00:2::53", "5353", "udp"),
+        ("fd00:2::53", "53", "tcp"),
+    ],
+)
+def test_register_private_dns_server_ignores_non_private_dns_server_flows(
+    daddr, dport, proto
+):
+    ip_info = ModuleFactory().create_ip_info_obj()
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid="1234",
+        saddr="fd00:1::10",
+        daddr=daddr,
+        dport=dport,
+        sport="53000",
+        proto=proto,
+        query="example.com",
+        qclass_name="",
+        qtype_name="A",
+        rcode_name="NOERROR",
+        answers=["8.8.4.4"],
+        TTLs="",
+    )
+
+    assert ip_info.register_private_dns_server(flow) is False
+
+    ip_info.db.store_official_dns_server.assert_not_called()
+    ip_info.print.assert_not_called()
 
 
 @pytest.fixture
