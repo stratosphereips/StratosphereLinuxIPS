@@ -19,8 +19,11 @@ class WhitelistUpdaterMixin:
         if not self.enable_online_whitelist:
             return False
 
-        if not self.db.is_tranco_whitelist_expired():
-            # update period isnt reached yet
+        if not self._did_update_period_pass(
+            self.online_whitelist_update_period,
+            "tranco_whitelist",
+        ):
+            self.loaded_ti_files += 1
             return False
 
         # update period passed
@@ -112,7 +115,6 @@ class WhitelistUpdaterMixin:
         Updates online tranco whitelist defined in slips.yaml
          online_whitelist key
         """
-        # delete the old ones
         response = self.responses["tranco_whitelist"]
         domains = []
         for line in response.text.splitlines():

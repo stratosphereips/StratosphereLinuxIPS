@@ -1310,7 +1310,6 @@ class RedisDB(
 
         Parameters:
             domains: Ordered Tranco domains to store. they must be ordered.
-            ttl: Optional expiration in seconds.
             limit: Optional maximum number of domains to store.
         """
         if limit is not None:
@@ -1343,15 +1342,6 @@ class RedisDB(
             )
             is not None
         )
-
-    def is_tranco_whitelist_expired(self) -> bool:
-        """
-        checks if tranco whitelist is expired based on Redis TTL so slips
-        can update it
-        """
-        ttl = self.rcache.ttl(self.constants.TRANCO_WHITELISTED_DOMAINS)
-        # -2: key does not exist, -1: no expire
-        return ttl <= 0
 
     def get_asn_info(self, ip: str) -> Optional[Dict[str, str]]:
         """

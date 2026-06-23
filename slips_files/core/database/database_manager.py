@@ -632,9 +632,6 @@ class DBManager:
     def is_whitelisted_tranco_domain(self, *args, **kwargs):
         return self.rdb.is_whitelisted_tranco_domain(*args, **kwargs)
 
-    def is_tranco_whitelist_expired(self, *args, **kwargs):
-        return self.rdb.is_tranco_whitelist_expired(*args, **kwargs)
-
     def get_ip_identification(self, *args, **kwargs):
         return self.rdb.get_ip_identification(*args, **kwargs)
 
