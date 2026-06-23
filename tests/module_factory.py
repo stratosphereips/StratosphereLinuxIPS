@@ -214,17 +214,23 @@ class ModuleFactory:
         return llm
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_regex_generator_obj(self, mock_db, store_dir="dummy_output_dir/regex_generator"):
+    def create_regex_generator_obj(
+        self, mock_db, store_dir="dummy_output_dir/regex_generator"
+    ):
         from modules.regex_generator.regex_generator import RegexGenerator
 
         conf = Mock()
         conf.regex_generator_enabled = Mock(return_value=True)
         conf.regex_generator_create_log_file = Mock(return_value=False)
         conf.regex_generator_generation_interval_seconds = Mock(return_value=5)
-        conf.regex_generator_allowed_backends = Mock(return_value=["local_qwen"])
+        conf.regex_generator_allowed_backends = Mock(
+            return_value=["local_qwen"]
+        )
         conf.regex_generator_llm_temperature = Mock(return_value=1.2)
         conf.regex_generator_llm_max_tokens = Mock(return_value=80)
-        conf.regex_generator_llm_response_timeout_seconds = Mock(return_value=90)
+        conf.regex_generator_llm_response_timeout_seconds = Mock(
+            return_value=90
+        )
         conf.regex_generator_recent_history_size = Mock(return_value=0)
         conf.regex_generator_max_regex_length = Mock(return_value=180)
         conf.regex_generator_regex_validation_timeout_seconds = Mock(
@@ -279,9 +285,7 @@ class ModuleFactory:
 
         conf = Mock()
         conf.alert_summary_enabled = Mock(return_value=True)
-        conf.alert_summary_allowed_backends = Mock(
-            return_value=["local_qwen"]
-        )
+        conf.alert_summary_allowed_backends = Mock(return_value=["local_qwen"])
         conf.alert_summary_log_verbosity = Mock(return_value=2)
         conf.alert_summary_llm_temperature = Mock(return_value=0.2)
         conf.alert_summary_llm_max_tokens = Mock(return_value=220)
@@ -412,12 +416,6 @@ class ModuleFactory:
         t_cell.db.publish = Mock()
         t_cell.print = Mock()
         return t_cell
-
-    @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_fides_module_obj(self, mock_db):
-        from modules.fides.fides import FidesModule
-
-        return self.create_fides_obj()
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_fides_obj(self, mock_db):

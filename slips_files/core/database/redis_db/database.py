@@ -326,9 +326,7 @@ class RedisDB(
         cls.config_flush_db: bool = conf.delete_prev_db()
         cls.disabled_detections: List[str] = conf.disabled_detections()
         cls.default_evidence_signal: str = conf.evidence_signal_default()
-        cls.evidence_signal_overrides: dict = (
-            conf.evidence_signal_overrides()
-        )
+        cls.evidence_signal_overrides: dict = conf.evidence_signal_overrides()
         cls.width = conf.get_tw_width_in_seconds()
         cls.client_ips: List[str] = conf.client_ips()
 
@@ -850,7 +848,9 @@ class RedisDB(
         except (TypeError, ValueError):
             return 0
 
-    def _normalize_available_llm_backends_registry(self, registry: dict) -> dict:
+    def _normalize_available_llm_backends_registry(
+        self, registry: dict
+    ) -> dict:
         if not isinstance(registry, dict):
             return self._empty_available_llm_backends()
 
@@ -1306,14 +1306,15 @@ class RedisDB(
         """
         store whitelisted domains from tranco whitelist in the db
         """
-        # the reason we store tranco whitelisted domains in the cache db
-        # instead of the main db is, we don't want them cleared on every new
-        # instance of slips
-        self.rcache.sadd(self.constants.TRANCO_WHITELISTED_DOMAINS, *domains)
-        if ttl and ttl > 0:
-            self.rcache.expire(
-                self.constants.TRANCO_WHITELISTED_DOMAINS, int(ttl)
-            )
+        with self.rcache.pipeline() as pipe:
+            pipe.sadd(self.constants.TRANCO_WHITELISTED_DOMAINS, *domains)
+
+            if ttl and ttl > 0:
+                pipe.expire(
+                    self.constants.TRANCO_WHITELISTED_DOMAINS,
+                    int(ttl),
+                )
+            pipe.execute()
 
     def store_tranco_top_domains(
         self, domains: List[str], ttl: Optional[int] = None, limit: int = 1000
@@ -1342,13 +1343,13 @@ class RedisDB(
                 self.constants.TRANCO_TOP_DOMAINS, *ordered_domains
             )
             if ttl and ttl > 0:
-                self.rcache.expire(
-                    self.constants.TRANCO_TOP_DOMAINS, int(ttl)
-                )
+                self.rcache.expire(self.constants.TRANCO_TOP_DOMAINS, int(ttl))
 
     def get_tranco_top_domains(self, limit: Optional[int] = None):
         end = -1 if limit is None or limit <= 0 else limit - 1
-        return self.rcache.lrange(self.constants.TRANCO_TOP_DOMAINS, 0, end) or []
+        return (
+            self.rcache.lrange(self.constants.TRANCO_TOP_DOMAINS, 0, end) or []
+        )
 
     def is_tranco_whitelist_expired(self) -> bool:
         """
