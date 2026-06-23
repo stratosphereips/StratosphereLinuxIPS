@@ -296,11 +296,9 @@ def test_update_online_whitelist_stores_top_1000_domains():
     update_manager.online_whitelist_update_period = 86400
     update_manager.tranco_top_benign_limit = 3
     lines = ["1,example.com", "2,google.com", "3,github.com"]
-    update_manager.responses["tranco_whitelist"] = Mock(
-        text="\n".join(lines)
-    )
+    update_manager.responses["tranco_whitelist"] = Mock(text="\n".join(lines))
 
-    update_manager.update_online_whitelist()
+    update_manager._update_online_whitelist()
 
     update_manager.db.store_tranco_whitelisted_domains.assert_called_once_with(
         ["example.com", "google.com", "github.com"], ttl=86400

@@ -882,6 +882,7 @@ def test_close_open_redis_servers_interactive(mock_db):
     # Mocking user choosing server #1
     with (
         patch("builtins.input", return_value="1"),
+        patch("sys.stdin.isatty", return_value=True),
         patch.object(
             redis_manager,
             "print_open_redis_servers",
