@@ -4,6 +4,7 @@ import asyncio
 import traceback
 from asyncio import Task
 from typing import (
+    Any,
     Callable,
     List,
 )
@@ -49,11 +50,34 @@ class IAsyncModule(IModule):
             # Task already removed or not tracked.
             pass
 
-    def handle_task_exception(self, task: asyncio.Task):
+    @staticmethod
+    def is_shutdown_exception(exception: BaseException | None) -> bool:
+        """
+        Check whether an exception is part of normal process shutdown.
+
+        :param exception: Exception raised while a task was running.
+        :return: True when the exception should not be logged as a task error.
+        """
+        shutdown_exceptions = (
+            KeyboardInterrupt,
+            SystemExit,
+            asyncio.CancelledError,
+        )
+        return isinstance(exception, shutdown_exceptions)
+
+    def handle_task_exception(self, task: asyncio.Task) -> None:
+        """
+        Log task exceptions while suppressing normal shutdown exceptions.
+
+        :param task: Completed asyncio task to inspect.
+        :return: None.
+        """
         try:
             exception = task.exception()
         except asyncio.CancelledError:
-            return  # Task was cancelled, not an error
+            return  # Task was cancelled, not an error.
+        if self.is_shutdown_exception(exception):
+            return
         if exception:
             self.print(f"Unhandled exception in task: {exception!r} .. ")
             self.print_traceback_from_exception(exception, task)
@@ -111,7 +135,9 @@ class IAsyncModule(IModule):
         loop.set_exception_handler(self.handle_loop_exception)
         return loop.run_until_complete(func())
 
-    def handle_loop_exception(self, loop, context):
+    def handle_loop_exception(
+        self, loop: asyncio.AbstractEventLoop, context: dict[str, Any]
+    ) -> None:
         """A common loop exception handler"""
         exception = context.get("exception")
         future = context.get("future")
@@ -119,9 +145,13 @@ class IAsyncModule(IModule):
         if future:
             try:
                 future.result()
-            except Exception:
+            except BaseException as error:
+                if self.is_shutdown_exception(error):
+                    return
                 self.print_traceback()
-        elif exception:
+        elif isinstance(exception, BaseException):
+            if self.is_shutdown_exception(exception):
+                return
             self.print(f"Unhandled loop exception: {exception}")
         else:
             self.print(f"Unhandled loop error: {context.get('message')}")

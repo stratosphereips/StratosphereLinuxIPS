@@ -14,6 +14,8 @@ conn_fields_to_slips_fields_map = {
     "history": "history",
     "orig_pkts": "spkts",
     "resp_pkts": "dpkts",
+    "orig_l2_addr": "smac",
+    "resp_l2_addr": "dmac",
     "label": "ground_truth_label",
     "detailedlabel": "detailed_ground_truth_label",
 }

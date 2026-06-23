@@ -372,6 +372,10 @@ class HTTPAnalyzer(IAsyncModule):
                 return False
 
         ua: str = cached_ua.get("user_agent", "")
+        if ua == flow.user_agent:
+            # same UA is used again, nothing to alert about here
+            return False
+
         self.set_evidence.multiple_user_agents_in_a_row(flow, ua, twid)
         return True
 

@@ -3,6 +3,7 @@
 import json
 import threading
 import pytest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 from tests.module_factory import ModuleFactory
@@ -39,6 +40,29 @@ def test_get_ts_from_line_returns_timestamp_for_tabs():
     ts, line = input_process.zeek_utils.get_ts_from_line("1.5\tfield\n")
     assert ts == 1.5
     assert line == "1.5\tfield\n"
+
+
+def test_get_zeek_cmd_and_logs_dir_logs_command_to_logfiles_only(
+    tmp_path: Path,
+) -> None:
+    """Test Zeek command logging is restricted to log files."""
+    input_process = ModuleFactory().create_input_obj("", InputType.PCAP)
+    input_process.print = Mock()
+    command = ["zeek", "-r", "pcaps/input file.pcap"]
+    input_process.zeek_utils._construct_zeek_cmd = Mock(return_value=command)
+
+    returned_command, zeek_dir = (
+        input_process.zeek_utils._get_zeek_cmd_and_logs_dir(
+            str(tmp_path), "pcaps/input file.pcap"
+        )
+    )
+
+    assert returned_command == command
+    assert zeek_dir == str(tmp_path)
+    input_process.print.assert_called_once_with(
+        "Zeek command: zeek -r 'pcaps/input file.pcap'",
+        log_to_logfiles_only=True,
+    )
 
 
 def test_read_zeek_files_drains_generated_lines_during_live_update(tmp_path):

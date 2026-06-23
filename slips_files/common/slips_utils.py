@@ -294,7 +294,7 @@ class Utils(object):
         """returns the default gateway for the given interface"""
         gws = netifaces.gateways()
         for family in (netifaces.AF_INET, netifaces.AF_INET6):
-            if "default" in gws and gws["default"][family]:
+            if "default" in gws and family in gws["default"]:
                 gw, gw_iface = gws["default"][family]
                 if gw_iface == iface:
                     return gw

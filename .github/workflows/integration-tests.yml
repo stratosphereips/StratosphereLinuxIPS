@@ -12,7 +12,7 @@ jobs:
     outputs:
       test_files: ${{ steps.list.outputs.test_files }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - id: list
         uses: ./.github/actions/list-tests-dir
         with:
@@ -41,7 +41,7 @@ jobs:
         test_file: ${{ fromJson(needs.list-integration-tests.outputs.test_files) }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0

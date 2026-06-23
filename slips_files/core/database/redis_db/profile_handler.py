@@ -1328,7 +1328,6 @@ class ProfileHandler:
         """
         Used to mark this profile as dhcp server
         """
-
         self.set_profileid_field(profileid, self.constants.GATEWAY, "true")
 
     def set_ipv6_of_profile(self, profileid, ip: list):

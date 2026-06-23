@@ -26,6 +26,28 @@ from slips_files.core.structures.evidence import (
 )
 
 
+def test_start_mac_db_reader_returns_without_running_loop() -> None:
+    module_factory = ModuleFactory()
+    ip_info = module_factory.create_ip_info_obj()
+    ip_info.create_task = Mock()
+
+    ip_info._start_mac_db_reader()
+
+    ip_info.create_task.assert_not_called()
+
+
+async def test_start_mac_db_reader_schedules_reader_in_running_loop() -> None:
+    module_factory = ModuleFactory()
+    ip_info = module_factory.create_ip_info_obj()
+    created_task = Mock()
+    ip_info.create_task = Mock(return_value=created_task)
+
+    ip_info._start_mac_db_reader()
+
+    ip_info.create_task.assert_called_once_with(ip_info.read_mac_db)
+    assert ip_info.reading_mac_db_task == created_task
+
+
 @pytest.mark.parametrize(
     "ip_address, expected_geocountry",
     [  # Testcase 1: Valid IP address

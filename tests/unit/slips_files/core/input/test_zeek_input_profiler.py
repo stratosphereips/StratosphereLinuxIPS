@@ -3,7 +3,9 @@
 
 from unittest.mock import Mock
 
-from slips_files.core.input_profilers.zeek import ZeekJSON
+import pytest
+
+from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 from tests.module_factory import ModuleFactory
 
 
@@ -99,3 +101,99 @@ def test_zeek_json_maps_login_log_fields():
     assert flow.confused is False
     assert flow.saddr == "147.32.80.40"
     assert flow.daddr == "147.32.80.37"
+
+
+@pytest.mark.parametrize(
+    "src_mac,dst_mac",
+    [("00:0c:29:66:c7:82", "00:90:0b:7a:15:eb")],
+)
+def test_zeek_json_maps_conn_l2_addresses_to_mac_fields(
+    src_mac: str, dst_mac: str
+) -> None:
+    """
+    Test conn.log JSON l2 address fields are converted to MAC fields.
+
+    :param src_mac: Source layer-2 address from Zeek conn.log.
+    :param dst_mac: Destination layer-2 address from Zeek conn.log.
+    :return: None.
+    """
+    module_factory = ModuleFactory()
+    parser = ZeekJSON(module_factory.logger)
+
+    flow, err = parser.process_line(
+        {
+            "type": "conn.log",
+            "interface": "default",
+            "data": {
+                "ts": 279.103822,
+                "uid": "CNybJS33LDUfyyg1Pi",
+                "id.orig_h": "10.0.2.15",
+                "id.orig_p": 44927,
+                "id.resp_h": "1.1.1.1",
+                "id.resp_p": 80,
+                "proto": "tcp",
+                "service": "http",
+                "duration": 0.5273809432983398,
+                "orig_bytes": 656,
+                "resp_bytes": 12310,
+                "conn_state": "SF",
+                "history": "ShADadFf",
+                "orig_pkts": 7,
+                "resp_pkts": 14,
+                "orig_l2_addr": src_mac,
+                "resp_l2_addr": dst_mac,
+            },
+        }
+    )
+
+    assert err == ""
+    assert flow.smac == src_mac
+    assert flow.dmac == dst_mac
+
+
+@pytest.mark.parametrize(
+    "src_mac,dst_mac",
+    [("08:00:27:ef:ee:34", "52:54:00:12:35:02")],
+)
+def test_zeek_tabs_maps_conn_l2_addresses_to_mac_fields(
+    src_mac: str, dst_mac: str
+) -> None:
+    """
+    Test conn.log tab l2 address fields are converted to MAC fields.
+
+    :param src_mac: Source layer-2 address from Zeek conn.log.
+    :param dst_mac: Destination layer-2 address from Zeek conn.log.
+    :return: None.
+    """
+    module_factory = ModuleFactory()
+    db = module_factory.logger
+    db.channels.NEW_ZEEK_FIELDS_LINE = "new_zeek_fields_line"
+    parser = ZeekTabs(db)
+    fields_line = (
+        "#fields\tts\tuid\tid.orig_h\tid.orig_p\tid.resp_h\tid.resp_p\t"
+        "proto\tservice\tduration\torig_bytes\tresp_bytes\tconn_state\t"
+        "history\torig_pkts\tresp_pkts\torig_l2_addr\tresp_l2_addr"
+    )
+
+    flow, err = parser.process_line(
+        {"type": "conn.log", "interface": "default", "data": fields_line}
+    )
+    assert flow is False
+    assert err == "Field line processed"
+
+    flow, err = parser.process_line(
+        {
+            "type": "conn.log",
+            "interface": "default",
+            "data": (
+                "904728.025376\tCIhV323VBG6udE1Ho3\t10.0.2.19\t"
+                "1701\t78.6.164.6\t2928\tudp\t-\t0.11151099996641278\t"
+                "196\t118\tSF\tDd\t1\t1\t"
+                f"{src_mac}\t{dst_mac}"
+            ),
+        }
+    )
+
+    assert err == ""
+    assert flow.smac == src_mac
+    assert flow.dmac == dst_mac

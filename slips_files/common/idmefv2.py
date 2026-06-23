@@ -26,7 +26,7 @@ class IDMEFv2Status(Enum):
     ALERT = "Incident"
 
 
-class IDMEFv2Severity(Enum):
+class IDMEFv2PriorityEnum(Enum):
     UNKNOWN = "Unknown"
     INFO = "Info"
     LOW = "Low"
@@ -42,7 +42,8 @@ class IDMEFv2:
     Class to convert Slips evidence and alerts to
     The Incident Detection Message Exchange Format version 2 (IDMEFv2 format).
     More Details about it here:
-    https://www.ietf.org/id/draft-lehmann-idmefv2-03.html#name-the-alert-class
+    https://datatracker.ietf.org/doc/draft-lehmann-idmefv2/#:~:text=Site%22%0A%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%5D%0A%20%20%20%7D%0A%0AAppendix%20C.-,JSON%20Validation%20Schema%20(Non%2Dnormative),-Listing%205%20contains
+
     """
 
     name = "idmefv2"
@@ -53,7 +54,7 @@ class IDMEFv2:
         self.model: str = utils.get_slips_version()
 
         # the used idmef version
-        self.version = "2.0.3"
+        self.version = "2.D.V03"
 
     def _get_analyzer(self, interface):
         return {
@@ -75,7 +76,7 @@ class IDMEFv2:
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
 
-    def convert_threat_level_to_idmefv2_severity(
+    def convert_threat_level_to_idmefv2_priority(
         self, threat_lvl: ThreatLevel
     ) -> str:
         """
@@ -83,11 +84,12 @@ class IDMEFv2:
         All threat levels have a corresponding sevirity except
         for the Critical threat level, so we map it to High severity
         """
-        if hasattr(IDMEFv2Severity, threat_lvl.name):
-            return getattr(IDMEFv2Severity, threat_lvl.name).value
+        if hasattr(IDMEFv2PriorityEnum, threat_lvl.name):
+            return getattr(IDMEFv2PriorityEnum, threat_lvl.name).value
 
         if threat_lvl.name == "CRITICAL":
-            return IDMEFv2Severity.HIGH.value
+            return IDMEFv2PriorityEnum.HIGH.value
+        return IDMEFv2PriorityEnum.UNKNOWN.value
 
     def extract_role_type(
         self, evidence: Evidence, role=None
@@ -111,6 +113,7 @@ class IDMEFv2:
             IoCType.DOMAIN.name: "Hostname",
             IoCType.URL.name: "URL",
         }
+        ioc_type = ioc_type.name if isinstance(ioc_type, IoCType) else ioc_type
         # todo make sure that its a fq domain
         return ioc, type_[ioc_type]
 
@@ -185,7 +188,7 @@ class IDMEFv2:
         The Incident Detection Message Exchange Format version 2
         (IDMEFv2 format).
         More Details about it here:
-        https://www.ietf.org/id/draft-lehmann-idmefv2-03.html#name-the-alert-class
+        https://datatracker.ietf.org/doc/draft-lehmann-idmefv2/#:~:text=Site%22%0A%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%5D%0A%20%20%20%7D%0A%0AAppendix%20C.-,JSON%20Validation%20Schema%20(Non%2Dnormative),-Listing%205%20contains
         """
         try:
             now = datetime.now(utils.local_tz).isoformat("T")
@@ -195,7 +198,7 @@ class IDMEFv2:
             attacker, attacker_type = self.extract_role_type(
                 evidence, role="attacker"
             )
-            severity: str = self.convert_threat_level_to_idmefv2_severity(
+            priority: str = self.convert_threat_level_to_idmefv2_priority(
                 evidence.threat_level
             )
 
@@ -207,7 +210,7 @@ class IDMEFv2:
                     "Status": IDMEFv2Status.EVIDENCE.value,
                     # that is a uuid4()
                     "ID": evidence.id,
-                    "Severity": severity,
+                    "Priority": priority,
                     # Timestamp indicating the deduced start of the event
                     "StartTime": iso_ts,
                     # Timestamp indicating when the message was created

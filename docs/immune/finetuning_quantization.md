@@ -1,8 +1,8 @@
 ### Quantization and Deployment for Finetuned Models
 
-**Summary:** Finetuned models are converted to GGUF and published to Ollama in three quantization variants (q4_k_m, q5_k_m, q8_0). Quality degrades with quantization: ~2% loss at q8_0, ~12% at q5_k_m, ~9% at q4_k_m. q8_0 is the best quantized variant; q5_k_m offers the best quality/size trade-off for CPU/RPi deployment; 16-bit is recommended when a GPU is available.
+**Summary:** Finetuned models are converted to GGUF and published to Ollama in three quantization variants (q4_k_m, q5_k_m, q8_0). The GPU-served reference baseline uses BnB NF4 4-bit quantization at inference (not true fp16 — the evaluation GPU lacked sufficient VRAM for the full model), so all comparisons are NF4 vs. GGUF. Quality degrades with quantization relative to the NF4 baseline: ~2% loss at q8_0, ~12% at q5_k_m, ~9% at q4_k_m. q8_0 is the best quantized variant; q5_k_m offers the best quality/size trade-off for CPU/RPi deployment.
 
-> **Evaluation basis:** performance numbers in this document were measured on the [finetuned summarization model](finetuning_results.md) (47 held-out incidents, judge: gpt-oss-120b). The conversion and publication methodology applies to any finetuned model in this pipeline.
+> **Evaluation basis:** performance numbers in this document were measured on the [finetuned summarization model](finetuning_results.md) (47 held-out incidents, judge: gpt-oss-120b). The GPU-served reference is `serve_model.py` with `--quant 4bit` (bitsandbytes NF4), not true fp16. The conversion and publication methodology applies to any finetuned model in this pipeline.
 
 ---
 
@@ -96,20 +96,20 @@ Published model: [stratosphere/qwen2.5-1.5b-slips-immune-summarization](https://
 ---
 
 ### Performance by Quantization
-The 16-bit model serves as the reference; all GGUF variants are compared against it.
+The GPU-served NF4 model serves as the reference; all GGUF variants are compared against it.
 
 #### Overall
 
 | Quantization | Avg Score | Win Rate | Score Loss | Size |
 |---|---|---|---|---|
-| **16bit (reference)** | **4.70** | **19.1%** | — | ~3.0 GB |
+| **NF4 4-bit / GPU (reference)** | **4.70** | **19.1%** | — | ~3.0 GB |
 | q8_0 | 4.59 | 17.4% | −0.11 (−2%) | ~1.6 GB |
 | q4_k_m | 4.28 | 14.9% | −0.42 (−9%) | ~0.9 GB |
 | q5_k_m | 4.14 | 8.5% | −0.56 (−12%) | ~1.1 GB |
 
 #### By Complexity
 
-| Tier | 16bit | q8_0 | q5_k_m | q4_k_m |
+| Tier | NF4 / GPU | q8_0 | q5_k_m | q4_k_m |
 |---|---|---|---|---|
 | Simple (<500 events) | 5.45 | 5.24 | 4.67 | 4.93 |
 | Medium (500–1999 events) | 4.00 | 4.25 | 3.00 | 3.60 |
@@ -130,36 +130,36 @@ The 16-bit model serves as the reference; all GGUF variants are compared against
 | Scenario | Recommended variant | Rationale |
 |---|---|---|
 | Raspberry Pi 5 (CPU-only) | **q5_k_m** | Best quality/size balance at 1.1 GB; fits RPi RAM with headroom |
-| Low-VRAM GPU (≤4 GB) | **q8_0** | Only 2% score loss at half the size of 16-bit |
-| GPU with ≥6 GB VRAM | **16-bit** | Reference quality: 4.70 avg score, 19.1% win rate |
+| Low-VRAM GPU (≤4 GB) | **q8_0** | Only 2% score loss vs NF4 baseline at half the memory |
+| GPU with ≥6 GB VRAM | **NF4 via serve_model.py** | Reference quality: 4.70 avg score, 19.1% win rate |
 | Edge / minimal storage | **q4_k_m** | Smallest footprint (0.9 GB); 9% score loss acceptable for triage-only use |
 
 ---
 
 ## Risk Assessment Model Quantization
 
-> **Evaluation basis:** performance numbers below were measured on the [finetuned risk model](finetuning_risk_results.md) (67 held-out incidents, judge: qwen3.5, date: 2026-04-24). Scores are cause score (max 30) and risk score (max 30); win rate is fraction of incidents ranked 1st among 5 models.
+> **Evaluation basis:** performance numbers below were measured on the [finetuned risk model](finetuning_risk_results.md) (67 held-out incidents, judge: qwen3.5, date: 2026-04-24). The GPU-served reference is `serve_model.py` with `--quant 4bit` (bitsandbytes NF4), not true fp16. Scores are cause score (max 30) and risk score (max 30); win rate is fraction of incidents ranked 1st among 5 models.
 
 ### Overall Performance
 
 | Variant | Avg Position | Cause Score | Risk Score | Win Rate |
 |---------|-------------|-------------|------------|----------|
-| **fp16 (reference)** | **1.99** | **20.21** | 13.33 | **35.8%** |
+| **NF4 4-bit / GPU (reference)** | **1.99** | **20.21** | 13.33 | **35.8%** |
 | q8_0 | 2.25 | 17.66 | **14.15** | 34.3% |
 | q4_k_m | 2.34 | 18.03 | 14.46 | 26.9% |
 | q5_k_m | 2.57 | 16.46 | 14.45 | 23.9% |
 
 ### By Complexity
 
-| Tier | fp16 cause/risk/wr | q8_0 cause/risk/wr | q4_k_m cause/risk/wr | q5_k_m cause/risk/wr |
-|------|-------------------|-------------------|----------------------|----------------------|
+| Tier | NF4/GPU cause/risk/wr | q8_0 cause/risk/wr | q4_k_m cause/risk/wr | q5_k_m cause/risk/wr |
+|------|----------------------|-------------------|----------------------|----------------------|
 | Simple (<500 events) | 21.05 / 12.39 / 38.6% | 19.27 / 14.45 / 45.5% | 19.68 / 15.05 / 34.1% | 17.95 / 15.48 / 29.5% |
 | Medium (500–1999 events) | 21.38 / 15.62 / 50.0% | 16.25 / 16.62 / 37.5% | 18.25 / 15.00 / 37.5% | 15.62 / 15.38 / 37.5% |
 | Complex (≥2000 events) | 17.13 / 14.87 / 20.0% | 13.67 / 11.93 / 0.0% | 13.07 / 12.47 / 0.0% | 12.53 / 10.93 / 0.0% |
 
 **Key observations:**
 
-- **fp16 is the only variant competitive on complex incidents** (20% win rate). All quantized variants collapse to 0% wins on complex incidents — quantization significantly degrades performance on long, evidence-heavy DAGs.
+- **NF4/GPU is the only variant competitive on complex incidents** (20% win rate). All GGUF quantized variants collapse to 0% wins on complex incidents — quantization significantly degrades performance on long, evidence-heavy DAGs.
 - **Quantization degrades cause analysis more than risk assessment.** Cause scores drop 2–4 points with quantization while risk scores remain roughly stable or improve slightly. Cause analysis requires precise evidence grounding from the DAG and is more sensitive to precision loss.
 - **q8_0 is the best quantized variant.** Smallest gap vs fp16: cause 17.66 (vs 20.21), win rate 34.3% (vs 35.8%). It even outperforms fp16 on risk score and simple incident win rate (45.5% vs 38.6%).
 - **q4_k_m outperforms q5_k_m** (cause 18.03 vs 16.46, win rate 26.9% vs 23.9%). q5_k_m is not a reliable quality/size middle ground for this task.
@@ -168,8 +168,50 @@ The 16-bit model serves as the reference; all GGUF variants are compared against
 
 | Use Case | Recommended Variant |
 |----------|-------------------|
-| Best accuracy (research/offline) | **fp16** |
-| Production deployment (GPU server) | **q8_0** — near-fp16 quality on simple/medium, ~2× memory saving |
+| Best accuracy (research/offline) | **NF4 via serve_model.py** |
+| Production deployment (GPU server) | **q8_0** — near-NF4 quality on simple/medium, ~2× memory saving |
 | Edge / constrained deployment | **q4_k_m** — outperforms q5_k_m on this task |
 
-For complex incident analysis specifically, only fp16 is competitive. If complex incidents are a priority deployment target, do not use quantized variants without further fine-tuning on longer DAGs.
+For complex incident analysis specifically, only the NF4/GPU variant is competitive. If complex incidents are a priority deployment target, do not use quantized variants without further fine-tuning on longer DAGs.
+
+---
+
+## Unified Model Quantization
+
+> **Evaluation basis:** performance numbers below were measured on the [unified model v2](finetuning_unified_results.md) (47 summary incidents, judge: gpt-oss-120b; 67 risk incidents, judge: qwen3.5; date: 2026-06-09). The fp16 baseline uses BnB NF4 4-bit quantization at inference (the evaluation GPU lacked sufficient VRAM for the full model in true fp16), so the comparison is NF4 vs. GGUF rather than full-precision vs. GGUF.
+
+### Summary Task Performance (47 incidents)
+
+| Variant | Avg Score /10 | Win Rate |
+|---------|---------------|----------|
+| **fp16 / NF4 (reference)** | **5.20** | **17.0%** |
+| q8_0 | 5.09 | **32.6%** |
+| q5_k_m | 5.00 | 14.9% |
+| q4_k_m | 4.91 | 12.8% |
+
+### Risk Task Performance (67 incidents)
+
+| Variant | Avg Cause /30 | Avg Risk /30 | Win Rate |
+|---------|---------------|--------------|----------|
+| **fp16 / NF4 (reference)** | **18.30** | 12.36 | 23.9% |
+| q8_0 | 17.43 | 12.75 | **26.9%** |
+| q5_k_m | 17.30 | **13.66** | 26.9% |
+| q4_k_m | **17.75** | 13.70 | 26.9% |
+
+**Key observations:**
+
+- **Quantization does not hurt — it slightly helps on risk.** Unlike the standalone risk model, all three unified GGUF variants match or exceed the fp16 baseline on risk win rate (26.9% vs 23.9%). This is explained by the NF4 vs GGUF comparison: the fp16 baseline is already a 4-bit quantized inference path, so GGUF quantization is competitive with it.
+- **q8_0 is the standout for summary.** q8_0 wins 32.6% of summary incidents vs 17.0% for fp16 — a +15.6pp gain. Average score is nearly identical (5.09 vs 5.20). Ollama's inference stack appears to produce more consistently top-ranked outputs than the BnB NF4 GPU server on this task.
+- **All three quants are equivalent on risk.** q4_k_m, q5_k_m, and q8_0 all win 26.9% of risk incidents. There is no meaningful quality degradation from lower quantization on the risk task.
+- **q4_k_m is the recommended deployment variant.** At 986 MB, it matches the larger quants on risk and comes close on summary, with the smallest footprint.
+
+### Deployment Recommendation
+
+| Use Case | Recommended Variant |
+|----------|-------------------|
+| Best summary quality | **q8_0** — 32.6% win rate, nearly identical avg score to fp16 |
+| Best risk quality | **q4_k_m** — best cause score among GGUF variants, smallest size |
+| Balanced / general deployment | **q5_k_m** — good middle ground on both tasks |
+| Edge / RPi5 | **q4_k_m** — 986 MB, competitive on both tasks |
+
+Published model: [stratosphere/qwen2.5-1.5b-slips-immune-unified](https://ollama.com/stratosphere/qwen2.5-1.5b-slips-immune-unified)

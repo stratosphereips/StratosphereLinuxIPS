@@ -428,6 +428,7 @@ class Main:
         else:
             percentage = int(percentage)
 
+        percentage = min(100, percentage)  # cap at 100%
         return f"Analyzed Flows: {green(percentage)}{green('%')}. "
 
     def is_total_flows_unknown(self) -> bool:

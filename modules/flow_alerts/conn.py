@@ -192,6 +192,10 @@ class Conn(IFlowalertsAnalyzer):
         if not flow.dport:
             return
 
+        if "unknown_transport" in flow.proto:
+            # the protocol is unrecognized by zeek. not tcp or udp.
+            return
+
         if self.db.is_a_port_scanner(flow.saddr, twid):
             # avoid setting unknown port evidence for each port
             # scanned from this attacker
