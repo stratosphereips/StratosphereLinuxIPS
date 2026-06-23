@@ -241,7 +241,7 @@ modules:
   timeline_human_timestamp: true
 
 #############################
-llm:
+llm_proxy:
   # Enable the shared LLM service module.
   enabled: true
 
@@ -281,7 +281,7 @@ llm:
       timeout: 300
 
     slips-high:
-      # slips-high is the fine-tunned model in Slips for high quality. It is slower 
+      # slips-high is the fine-tunned model in Slips for high quality. It is slower
       provider: ollama
       # Default model for this backend alias. Caller modules may override the
       # model in an individual request while still using this connection.
@@ -325,7 +325,7 @@ alert_summary:
   enabled: true
 
   # Write operational logs for this module to:
-  # <output-dir>/llm-summary/alert_summary.log
+  # <output-dir>/llm_proxy-summary/alert_summary.log
   # log_verbosity levels:
   # 0 = only create the file
   # 1 = startup, shutdown, and failures
@@ -745,8 +745,7 @@ whitelists:
   # 2 weeks = 1209600 seconds
   online_whitelist_update_period: 86400
   online_whitelist: https://tranco-list.eu/download/X5QNN/10000
-  # Keep the first N Tranco domains in order in Redis under
-  # `tranco_top_domains` so other modules can reuse them as benign data.
+  # Only store the first N Tranco domains in the database.
   # RegexGenerator and the offline regex coverage report use this limit.
   tranco_top_benign_limit: 1000
 

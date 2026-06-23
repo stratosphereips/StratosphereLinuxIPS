@@ -949,17 +949,17 @@ class ConfigParser(object):
         )
 
     def llm_enabled(self) -> bool:
-        value = self.read_configuration("llm", "enabled", False)
+        value = self.read_configuration("llm_proxy", "enabled", False)
         if isinstance(value, bool):
             return value
         return str(value).strip().lower() in ("true", "1", "yes", "on")
 
     def llm_default_backend(self) -> str:
-        value = self.read_configuration("llm", "default_backend", "")
+        value = self.read_configuration("llm_proxy", "default_backend", "")
         return str(value or "").strip()
 
     def llm_worker_threads(self) -> int:
-        value = self.read_configuration("llm", "worker_threads", 2)
+        value = self.read_configuration("llm_proxy", "worker_threads", 2)
         try:
             value = int(value)
         except (TypeError, ValueError):
@@ -967,7 +967,7 @@ class ConfigParser(object):
         return max(1, value)
 
     def llm_queue_size(self) -> int:
-        value = self.read_configuration("llm", "queue_size", 100)
+        value = self.read_configuration("llm_proxy", "queue_size", 100)
         try:
             value = int(value)
         except (TypeError, ValueError):
@@ -975,7 +975,7 @@ class ConfigParser(object):
         return max(1, value)
 
     def llm_backends(self) -> dict:
-        backends = self.read_configuration("llm", "backends", {})
+        backends = self.read_configuration("llm_proxy", "backends", {})
         return backends if isinstance(backends, dict) else {}
 
     def regex_generator_enabled(self) -> bool:
@@ -1771,7 +1771,7 @@ class ConfigParser(object):
             to_ignore.append("cyst")
 
         if not self.llm_enabled():
-            to_ignore.append("llm")
+            to_ignore.append("llm_proxy")
 
         if not self.regex_generator_enabled():
             to_ignore.append("regex_generator")

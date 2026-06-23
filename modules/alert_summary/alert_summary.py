@@ -7,7 +7,6 @@ import time
 import uuid
 from collections import defaultdict, deque
 from datetime import datetime
-from typing import Any
 
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.output_paths import get_alerts_path_inside_output_dir
@@ -74,9 +73,7 @@ class AlertSummary(IModule):
         self.history_enabled = False
         self.history_max_alerts = DEFAULT_HISTORY_MAX_ALERTS
         self.history_max_tokens = DEFAULT_HISTORY_MAX_TOKENS
-        self.history_patterns_per_alert = (
-            DEFAULT_HISTORY_PATTERNS_PER_ALERT
-        )
+        self.history_patterns_per_alert = DEFAULT_HISTORY_PATTERNS_PER_ALERT
         self.pending_alerts = deque()
         self.active_job = None
         self.pending_request = None
@@ -87,7 +84,7 @@ class AlertSummary(IModule):
         self.alert_history_by_profile = defaultdict(deque)
         self.operation_log_path = os.path.join(
             self.parent_output_dir,
-            "llm-summary",
+            "llm_proxy-summary",
             "alert_summary.log",
         )
         self.summary_log_path = os.path.join(
@@ -389,7 +386,10 @@ class AlertSummary(IModule):
             return (0, float(timestamp))
 
         try:
-            return (0, float(utils.convert_ts_format(timestamp, "unixtimestamp")))
+            return (
+                0,
+                float(utils.convert_ts_format(timestamp, "unixtimestamp")),
+            )
         except (TypeError, ValueError):
             return (1, str(timestamp))
 
@@ -460,9 +460,7 @@ class AlertSummary(IModule):
             f"digest_items={len(job['current_items'])}",
             verbosity=LOG_VERBOSITY_DEBUG,
         )
-        if self._messages_fit(
-            final_messages, FINAL_PROMPT_INPUT_TOKEN_BUDGET
-        ):
+        if self._messages_fit(final_messages, FINAL_PROMPT_INPUT_TOKEN_BUDGET):
             self._dispatch_llm_request(
                 phase="final_summary",
                 messages=final_messages,
@@ -794,7 +792,12 @@ class AlertSummary(IModule):
         if not lines:
             return ""
 
-        return header_text + "\nRECENT ALERT HISTORY (most recent first):\n" + "\n".join(lines) + "\n\n"
+        return (
+            header_text
+            + "\nRECENT ALERT HISTORY (most recent first):\n"
+            + "\n".join(lines)
+            + "\n\n"
+        )
 
     def _get_recent_alert_history(self, alert) -> list[dict]:
         """
@@ -825,7 +828,8 @@ class AlertSummary(IModule):
         """
         top_patterns = entry.get("top_patterns") or []
         pattern_text = (
-            "; ".join(top_patterns) or "No dominant historical patterns stored."
+            "; ".join(top_patterns)
+            or "No dominant historical patterns stored."
         )
         return (
             f"TW {entry.get('timewindow', '?')} | "
@@ -961,7 +965,9 @@ class AlertSummary(IModule):
         """
         grouped_evidences = defaultdict(list)
         for evidence in evidences:
-            description = str(getattr(evidence, "description", "") or "").strip()
+            description = str(
+                getattr(evidence, "description", "") or ""
+            ).strip()
             grouped_evidences[self._normalize_pattern(description)].append(
                 evidence
             )
@@ -992,14 +998,13 @@ class AlertSummary(IModule):
                 line = f"{time_range} | {description}"
             else:
                 line = (
-                    f"{time_range} | {description} "
-                    f"({len(group)}x similar"
+                    f"{time_range} | {description} " f"({len(group)}x similar"
                 )
                 if severity_text:
                     line += f", severities: {severity_text}"
                 if sample_values:
-                    line += (
-                        ", samples: " + ", ".join(sample_values[:MAX_SAMPLE_VALUES])
+                    line += ", samples: " + ", ".join(
+                        sample_values[:MAX_SAMPLE_VALUES]
                     )
                 line += ")"
 
@@ -1022,9 +1027,7 @@ class AlertSummary(IModule):
         :return: Normalized grouping key.
         """
         pattern = description
-        pattern = re.sub(
-            r"\b\d{1,3}(?:\.\d{1,3}){3}\b", "<IP>", pattern
-        )
+        pattern = re.sub(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", "<IP>", pattern)
         pattern = re.sub(
             r"\b\d+/(TCP|UDP)\b", r"<PORT>/\1", pattern, flags=re.IGNORECASE
         )
@@ -1327,7 +1330,9 @@ class AlertSummary(IModule):
         :param token_budget: Approximate token budget per part.
         :return: Split text parts.
         """
-        raw_parts = [part.strip() for part in text.split(separator) if part.strip()]
+        raw_parts = [
+            part.strip() for part in text.split(separator) if part.strip()
+        ]
         if len(raw_parts) <= 1:
             return [text]
 
@@ -1367,7 +1372,10 @@ class AlertSummary(IModule):
         for word in words:
             candidate_words = current_words + [word]
             candidate = " ".join(candidate_words)
-            if current_words and self._estimate_text_tokens(candidate) > token_budget:
+            if (
+                current_words
+                and self._estimate_text_tokens(candidate) > token_budget
+            ):
                 parts.append(" ".join(current_words))
                 current_words = [word]
                 continue
@@ -1387,7 +1395,9 @@ class AlertSummary(IModule):
         token_count = 0
         for message in messages:
             token_count += 12
-            token_count += self._estimate_text_tokens(message.get("content", ""))
+            token_count += self._estimate_text_tokens(
+                message.get("content", "")
+            )
         return token_count
 
     def _estimate_text_tokens(self, text: str) -> int:
@@ -1398,7 +1408,11 @@ class AlertSummary(IModule):
         :return: Approximate token count.
         """
         normalized = str(text or "")
-        return max(1, (len(normalized) + APPROX_CHARS_PER_TOKEN - 1) // APPROX_CHARS_PER_TOKEN)
+        return max(
+            1,
+            (len(normalized) + APPROX_CHARS_PER_TOKEN - 1)
+            // APPROX_CHARS_PER_TOKEN,
+        )
 
     def _truncate_text_to_budget(self, text: str, token_budget: int) -> str:
         """
@@ -1438,7 +1452,10 @@ class AlertSummary(IModule):
         return self._estimate_messages_tokens(messages) <= budget
 
     def _handle_pending_response(self):
-        """Consume the matching shared LLM response or wait for shutdown."""
+        """Consumes LLM responses published in the
+        self.db.channels.LLM_RESPONSE channel.
+        Each of these responses
+        """
         msg = self.get_msg(self.db.channels.LLM_RESPONSE)
         if msg:
             try:
@@ -1450,7 +1467,10 @@ class AlertSummary(IModule):
                 )
                 return
 
-            if response.get("request_id") != self.pending_request["request_id"]:
+            if (
+                response.get("request_id")
+                != self.pending_request["request_id"]
+            ):
                 return
 
             self._finalize_request(response)
@@ -1503,10 +1523,7 @@ class AlertSummary(IModule):
         phase = request["phase"]
         usage = response.get("usage") or {}
         usage_suffix = (
-            " "
-            f"usage={json.dumps(usage, sort_keys=True)}"
-            if usage
-            else ""
+            " " f"usage={json.dumps(usage, sort_keys=True)}" if usage else ""
         )
 
         if response.get("success") and str(response.get("text", "")).strip():
@@ -1582,7 +1599,9 @@ class AlertSummary(IModule):
 
         :return: True while alerts are queued or in-flight.
         """
-        return bool(self.pending_alerts or self.active_job or self.pending_request)
+        return bool(
+            self.pending_alerts or self.active_job or self.pending_request
+        )
 
     def _fail_active_job(self, reason: str):
         """
@@ -1605,7 +1624,9 @@ class AlertSummary(IModule):
             alert,
             summary_text,
             self.active_job.get("initial_grouped_items")
-            or self._build_grouped_evidence_items(self.active_job["evidences"]),
+            or self._build_grouped_evidence_items(
+                self.active_job["evidences"]
+            ),
         )
         self.pending_request = None
         self.active_job = None
@@ -1837,9 +1858,15 @@ class AlertSummary(IModule):
             ):
                 return "high"
             return "medium-to-high"
-        if severity_counts.get("high", 0) >= 3 or alert.accumulated_threat_level >= 10:
+        if (
+            severity_counts.get("high", 0) >= 3
+            or alert.accumulated_threat_level >= 10
+        ):
             return "high"
-        if severity_counts.get("medium", 0) >= 2 or alert.accumulated_threat_level >= 5:
+        if (
+            severity_counts.get("medium", 0) >= 2
+            or alert.accumulated_threat_level >= 5
+        ):
             return "medium"
         return "low"
 
@@ -1864,7 +1891,9 @@ class AlertSummary(IModule):
         history = self.alert_history_by_profile[profileid]
         top_patterns = [
             self._normalize_summary_text(item)
-            for item in (grouped_items or [])[: self.history_patterns_per_alert]
+            for item in (grouped_items or [])[
+                : self.history_patterns_per_alert
+            ]
         ]
         pattern_signatures = self._build_pattern_signatures(top_patterns)
         history.append(
