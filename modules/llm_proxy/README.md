@@ -68,6 +68,21 @@ Backend aliases are the names that caller modules use in the request field
 `backend`. The alias is the stable selector. The `model` field inside a request
 is only an optional override for that chosen backend.
 
+## Implementation Layout
+
+`llm.py` contains the `LLM` service class that implements `IModule`. Backend
+support is split across these files:
+
+- `llm_backend_config.py`: backend configuration validation.
+- `llm_backend.py`: shared HTTP and response helpers.
+- `openai_backend_mixin.py`: `MixinOpenAIBackend`.
+- `anthropic_backend_mixin.py`: `MixinAnthropicBackend`.
+- `ollama_backend_mixin.py`: `MixinOllamaBackend`.
+- `llm_errors.py`: shared LLM exceptions.
+
+Provider-specific behavior should live in a `_mixin.py` file and use a class
+name prefixed with `Mixin`.
+
 ## Request channel
 
 Channel: `llm_request`
