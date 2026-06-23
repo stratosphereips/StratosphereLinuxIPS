@@ -102,9 +102,9 @@ Configuration reference:
 - `max_stored_rejected_regexes`: retention cap for rejected rows when
   `store_rejected_regexes` is enabled. Set `0` for unlimited retention.
 - `seed_benign_samples`: seed the benign DB once with a small built-in sample.
-- `whitelists.tranco_top_benign_limit`: number of ordered Tranco domains kept
-  in Redis under `tranco_top_domains` and reused as benign data by
-  `RegexGenerator` and the offline coverage report.
+- `whitelists.tranco_top_benign_limit`: number of ordered Tranco whitelist
+  domains reused as benign data by `RegexGenerator` and the offline coverage
+  report.
 
 ## LLM request and response usage
 
@@ -294,12 +294,11 @@ zero evidence.
 Redis storage note:
 
 - Slips still stores the full downloaded Tranco whitelist in Redis under
-  `tranco_whitelisted_domains`.
-- Slips now also stores a second Redis key, `tranco_top_domains`, as an
-  ordered list containing the configured top-ranked Tranco domains.
-- `RegexGenerator` uses this ordered Redis list when it needs benign
-  high-reputation domains for domain-like regex testing.
-- The number of domains kept in `tranco_top_domains` is configured with
+  `tranco_whitelisted_domains` while preserving download order.
+- `RegexGenerator` reads the configured number of top-ranked entries from that
+  ordered whitelist cache when it needs benign high-reputation domains for
+  domain-like regex testing.
+- The number of domains read is configured with
   `whitelists.tranco_top_benign_limit`.
 
 It also builds one in-memory bloom filter per benign type and one bloom filter

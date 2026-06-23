@@ -14,6 +14,7 @@ import yaml
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 
 from slips_files.common.parsers.arg_parser import ArgumentParser
+from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
 
 
@@ -408,9 +409,7 @@ class ConfigParser(object):
         return value
 
     def evidence_signal_overrides(self) -> dict:
-        overrides = self.read_configuration(
-            "EvidenceSignals", "overrides", {}
-        )
+        overrides = self.read_configuration("EvidenceSignals", "overrides", {})
         if not isinstance(overrides, dict):
             return {}
 
@@ -1010,9 +1009,7 @@ class ConfigParser(object):
         if not isinstance(value, list):
             return []
         return [
-            str(backend).strip()
-            for backend in value
-            if str(backend).strip()
+            str(backend).strip() for backend in value if str(backend).strip()
         ]
 
     def regex_generator_llm_temperature(self) -> float:
@@ -1169,9 +1166,7 @@ class ConfigParser(object):
         if not isinstance(value, list):
             return []
         return [
-            str(backend).strip()
-            for backend in value
-            if str(backend).strip()
+            str(backend).strip() for backend in value if str(backend).strip()
         ]
 
     def alert_summary_llm_temperature(self) -> float:
@@ -1185,9 +1180,7 @@ class ConfigParser(object):
         return max(0.0, value)
 
     def alert_summary_llm_max_tokens(self) -> int:
-        value = self.read_configuration(
-            "alert_summary", "llm_max_tokens", 220
-        )
+        value = self.read_configuration("alert_summary", "llm_max_tokens", 220)
         try:
             value = int(value)
         except (TypeError, ValueError):
@@ -1205,9 +1198,7 @@ class ConfigParser(object):
         return max(0, value)
 
     def alert_summary_log_verbosity(self) -> int:
-        value = self.read_configuration(
-            "alert_summary", "log_verbosity", 2
-        )
+        value = self.read_configuration("alert_summary", "log_verbosity", 2)
         try:
             value = int(value)
         except (TypeError, ValueError):
@@ -1345,9 +1336,7 @@ class ConfigParser(object):
         return value.strip()
 
     def t_cell_persistent_store_dir(self) -> str:
-        value = self.read_configuration(
-            "t_cell", "persistent_store_dir", ""
-        )
+        value = self.read_configuration("t_cell", "persistent_store_dir", "")
         if not isinstance(value, str) or not value.strip():
             return ""
         return value.strip()

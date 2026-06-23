@@ -67,6 +67,7 @@ class FeedConfigMixin:
         self.online_whitelist_update_period = (
             conf.online_whitelist_update_period()
         )
+        self.tranco_top_benign_limit = conf.tranco_top_benign_limit()
         self.online_whitelist = conf.online_whitelist()
         self.enable_online_whitelist: bool = conf.enable_online_whitelist()
         self.enable_local_whitelist: bool = conf.enable_local_whitelist()

@@ -43,6 +43,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from slips_files.core.database.redis_db.constants import Constants
+
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.sqlite_db.regex_generator_db import REGEX_TYPES
@@ -121,7 +123,9 @@ class ProgressTracker:
         filled = int(regex_ratio * self.BAR_WIDTH)
         bar = f"{self.GREEN}{'█' * filled}{self.YELLOW}{'░' * (self.BAR_WIDTH - filled)}{self.RESET}"
         elapsed = max(0.001, time.monotonic() - self.start_time)
-        progress_ratio = min(1.0, self.comparisons_done / self.total_comparisons)
+        progress_ratio = min(
+            1.0, self.comparisons_done / self.total_comparisons
+        )
         if done or progress_ratio >= 1.0:
             eta_seconds = 0.0
         else:
@@ -405,7 +409,9 @@ def load_tranco_benign_populations(
         )
         if limit <= 0:
             return populations
-        tranco_domains = cache_client.lrange("tranco_top_domains", 0, limit - 1)
+        tranco_domains = cache_client.zrange(
+            Constants.TRANCO_WHITELISTED_DOMAINS, 0, limit - 1
+        )
     except Exception:
         return populations
 
@@ -701,7 +707,9 @@ def add_ti_token(
             add_string(populations, "filename", filename)
 
 
-def compile_regexes(regexes_by_type: dict[str, list[dict]]) -> dict[str, list[dict]]:
+def compile_regexes(
+    regexes_by_type: dict[str, list[dict]],
+) -> dict[str, list[dict]]:
     compiled_by_type = defaultdict(list)
     for regex_type, regex_rows in regexes_by_type.items():
         for row in regex_rows:
@@ -790,8 +798,12 @@ def compute_coverage(
 
     for regex_type in REGEX_TYPES:
         benign_values_all = sorted(benign_populations.get(regex_type, set()))
-        malicious_values_all = sorted(malicious_populations.get(regex_type, set()))
-        observed_values_all = sorted(observed_populations.get(regex_type, set()))
+        malicious_values_all = sorted(
+            malicious_populations.get(regex_type, set())
+        )
+        observed_values_all = sorted(
+            observed_populations.get(regex_type, set())
+        )
         reference_union_all = sorted(
             set(malicious_values_all).union(observed_values_all)
         )
@@ -852,7 +864,9 @@ def compute_coverage(
             }
             compiled = row["compiled"]
             regex_features = measure_regex_specificity(row["regex"])
-            comparisons_for_regex = sum(len(values) for values in population_map.values())
+            comparisons_for_regex = sum(
+                len(values) for values in population_map.values()
+            )
             for population_name, values in population_map.items():
                 try:
                     with timeout_context(match_timeout_seconds):
@@ -886,11 +900,12 @@ def compute_coverage(
             detail["unique_reference_matches"] = len(
                 set(detail["matches"]["reference_union"])
             )
-            detail["score"] = (
-                len(detail["matches"]["reference_union"])
-                - len(detail["matches"]["benign"])
+            detail["score"] = len(detail["matches"]["reference_union"]) - len(
+                detail["matches"]["benign"]
             )
-            malicious_avg = detail["score_stats"]["malicious"]["avg_all"] or 0.0
+            malicious_avg = (
+                detail["score_stats"]["malicious"]["avg_all"] or 0.0
+            )
             benign_avg = detail["score_stats"]["benign"]["avg_all"] or 0.0
             detail["strength_gap"] = malicious_avg - benign_avg
             detail["quality_score"] = detail["strength_gap"]
@@ -916,14 +931,20 @@ def compute_coverage(
         for population_name, values in population_map.items():
             total = len(values)
             matched_values = sorted(overall_matches[population_name])
-            unmatched_values = [value for value in values if value not in overall_matches[population_name]]
+            unmatched_values = [
+                value
+                for value in values
+                if value not in overall_matches[population_name]
+            ]
             original_total = original_totals[population_name]
             population_stats[population_name] = {
                 "total": total,
                 "original_total": original_total,
                 "sampled": total != original_total,
                 "matched": len(matched_values),
-                "coverage_ratio": (len(matched_values) / total) if total else None,
+                "coverage_ratio": (
+                    (len(matched_values) / total) if total else None
+                ),
                 "timeout_count": population_timeout_counts[population_name],
                 "matched_values": matched_values,
                 "unmatched_values": unmatched_values,
@@ -950,7 +971,9 @@ def build_report_payload(
             details["regex_count"] for details in coverage_summary.values()
         ),
         "types_with_regexes": sum(
-            1 for details in coverage_summary.values() if details["regex_count"]
+            1
+            for details in coverage_summary.values()
+            if details["regex_count"]
         ),
     }
     generated_at = datetime.now(timezone.utc).isoformat()
@@ -1099,7 +1122,12 @@ def render_html(report: dict, sample_limit: int, top_regexes: int) -> str:
         all_regex_rows = details["regex_details"]
 
         population_blocks = []
-        for population_name in ("reference_union", "malicious", "observed", "benign"):
+        for population_name in (
+            "reference_union",
+            "malicious",
+            "observed",
+            "benign",
+        ):
             stats = populations[population_name]
             label = {
                 "reference_union": "Reference Union",
@@ -1461,7 +1489,9 @@ def ensure_paths(
     nested_regex_db_path = (
         input_path / "regex_generator" / "generated_regexes.sqlite"
     )
-    nested_benign_db_path = input_path / "regex_generator" / "benign_corpus.sqlite"
+    nested_benign_db_path = (
+        input_path / "regex_generator" / "benign_corpus.sqlite"
+    )
 
     if direct_regex_db_path.exists() and direct_benign_db_path.exists():
         run_output_dir = input_path
@@ -1490,13 +1520,21 @@ def ensure_paths(
     )
     output_html.parent.mkdir(parents=True, exist_ok=True)
     output_json.parent.mkdir(parents=True, exist_ok=True)
-    return run_output_dir, regex_db_path, benign_db_path, output_html, output_json
+    return (
+        run_output_dir,
+        regex_db_path,
+        benign_db_path,
+        output_html,
+        output_json,
+    )
 
 
 def main():
     args = parse_args()
     if args.sampling_ratio <= 0 or args.sampling_ratio > 1:
-        raise ValueError("--sampling-ratio must be greater than 0 and less than or equal to 1")
+        raise ValueError(
+            "--sampling-ratio must be greater than 0 and less than or equal to 1"
+        )
     if args.full_scan:
         args.max_population_size = 0
         args.sampling_ratio = 1.0

@@ -1301,74 +1301,57 @@ class RedisDB(
         return self.separator
 
     def store_tranco_whitelisted_domains(
-        self, domains: List[str], ttl: Optional[int] = None
-    ):
+        self,
+        domains: List[str],
+        limit: Optional[int] = None,
+    ) -> None:
         """
-        store whitelisted domains from tranco whitelist in the db
-        """
-        with self.rcache.pipeline() as pipe:
-            pipe.sadd(self.constants.TRANCO_WHITELISTED_DOMAINS, *domains)
+        Store ordered tranco domains in the db.
 
-            if ttl and ttl > 0:
-                pipe.expire(
+        Parameters:
+            domains: Ordered Tranco domains to store. they must be ordered.
+            ttl: Optional expiration in seconds.
+            limit: Optional maximum number of domains to store.
+        """
+        if limit is not None:
+            if limit <= 0:
+                return
+            domains = domains[:limit]
+
+        with self.rcache.pipeline() as pipe:
+            if domains:
+                pipe.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
+                pipe.zadd(
                     self.constants.TRANCO_WHITELISTED_DOMAINS,
-                    int(ttl),
+                    {domain: rank for rank, domain in enumerate(domains)},
                 )
             pipe.execute()
 
-    def store_tranco_top_domains(
-        self, domains: List[str], ttl: Optional[int] = None, limit: int = 1000
-    ):
-        """
-        store the ordered top-ranked Tranco domains so ranking can be reused
-        later by modules that need the actual top N entries
-        """
-        self.rcache.delete(self.constants.TRANCO_TOP_DOMAINS)
-        if limit <= 0:
-            return
-
-        ordered_domains = []
-        seen = set()
-        for domain in domains:
-            domain = str(domain or "").strip().lower()
-            if not domain or domain in seen:
-                continue
-            ordered_domains.append(domain)
-            seen.add(domain)
-            if len(ordered_domains) >= limit:
-                break
-
-        if ordered_domains:
-            self.rcache.rpush(
-                self.constants.TRANCO_TOP_DOMAINS, *ordered_domains
-            )
-            if ttl and ttl > 0:
-                self.rcache.expire(self.constants.TRANCO_TOP_DOMAINS, int(ttl))
-
-    def get_tranco_top_domains(self, limit: Optional[int] = None):
+    def get_tranco_top_domains(self, limit: Optional[int] = None) -> List[str]:
         end = -1 if limit is None or limit <= 0 else limit - 1
         return (
-            self.rcache.lrange(self.constants.TRANCO_TOP_DOMAINS, 0, end) or []
+            self.rcache.zrange(
+                self.constants.TRANCO_WHITELISTED_DOMAINS, 0, end
+            )
+            or []
+        )
+
+    def is_whitelisted_tranco_domain(self, domain: str) -> bool:
+        return (
+            self.rcache.zscore(
+                self.constants.TRANCO_WHITELISTED_DOMAINS, domain
+            )
+            is not None
         )
 
     def is_tranco_whitelist_expired(self) -> bool:
         """
-        checks if tranco whitelist is expired based on Redis TTL
+        checks if tranco whitelist is expired based on Redis TTL so slips
+        can update it
         """
         ttl = self.rcache.ttl(self.constants.TRANCO_WHITELISTED_DOMAINS)
         # -2: key does not exist, -1: no expire
         return ttl <= 0
-
-    def is_whitelisted_tranco_domain(self, domain):
-        return self.rcache.sismember(
-            self.constants.TRANCO_WHITELISTED_DOMAINS, domain
-        )
-
-    def delete_tranco_whitelist(self):
-        return self.rcache.delete(
-            self.constants.TRANCO_WHITELISTED_DOMAINS,
-            self.constants.TRANCO_TOP_DOMAINS,
-        )
 
     def get_asn_info(self, ip: str) -> Optional[Dict[str, str]]:
         """

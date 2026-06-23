@@ -626,17 +626,11 @@ class DBManager:
     def store_tranco_whitelisted_domains(self, *args, **kwargs):
         return self.rdb.store_tranco_whitelisted_domains(*args, **kwargs)
 
-    def store_tranco_top_domains(self, *args, **kwargs):
-        return self.rdb.store_tranco_top_domains(*args, **kwargs)
-
     def get_tranco_top_domains(self, *args, **kwargs):
         return self.rdb.get_tranco_top_domains(*args, **kwargs)
 
     def is_whitelisted_tranco_domain(self, *args, **kwargs):
         return self.rdb.is_whitelisted_tranco_domain(*args, **kwargs)
-
-    def delete_tranco_whitelist(self, *args, **kwargs):
-        return self.rdb.delete_tranco_whitelist(*args, **kwargs)
 
     def is_tranco_whitelist_expired(self, *args, **kwargs):
         return self.rdb.is_tranco_whitelist_expired(*args, **kwargs)
@@ -1145,9 +1139,7 @@ class DBManager:
         return self.sqlite.get_all_flows_in_profileid_twid(*args, **kwargs)
 
     def get_all_altflows_in_profileid_twid(self, *args, **kwargs):
-        return self.sqlite.get_all_altflows_in_profileid_twid(
-            *args, **kwargs
-        )
+        return self.sqlite.get_all_altflows_in_profileid_twid(*args, **kwargs)
 
     def get_all_flows_in_profileid(self, *args, **kwargs):
         return self.sqlite.get_all_flows_in_profileid(*args, **kwargs)
