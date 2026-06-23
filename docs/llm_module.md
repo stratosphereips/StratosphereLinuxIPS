@@ -23,6 +23,22 @@ Supported providers:
 - `openai`
 - `anthropic`
 
+## Implementation Layout
+
+The `LLM` class in `modules/llm/llm.py` is the only class in this module that
+implements `IModule`. Backend support is split into smaller files:
+
+- `llm_backend_config.py`: validates one backend alias configuration.
+- `llm_backend.py`: owns shared HTTP request, URL, usage, and text helpers.
+- `openai_backend_mixin.py`: contains `MixinOpenAIBackend`.
+- `anthropic_backend_mixin.py`: contains `MixinAnthropicBackend`.
+- `ollama_backend_mixin.py`: contains `MixinOllamaBackend`.
+- `llm_errors.py`: contains shared configuration and request exceptions.
+
+New provider-specific backend behavior should be added as a mixin file under
+`modules/llm/`, with a class name prefixed by `Mixin` and a filename ending in
+`_mixin.py`.
+
 ## Configuration
 
 Example section in `config/slips.yaml`:

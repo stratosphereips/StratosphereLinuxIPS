@@ -414,15 +414,11 @@ Slips still shows the flows to and from these IoC.
 
 Redis storage detail:
 
-- Slips still stores the full Tranco whitelist in Redis as the existing set
-  `tranco_whitelisted_domains`.
-- Slips now also stores a second Redis key, `tranco_top_domains`, as an
-  ordered list containing the configured top-ranked Tranco domains.
-- The new ordered key exists so other modules, such as `RegexGenerator`, can
-  reuse the actual top-ranked domains as benign data without losing ranking
-  order.
-- The size of this ordered Redis list is controlled by
-  `whitelists.tranco_top_benign_limit` in `config/slips.yaml`.
+- Slips stores the full downloaded Tranco whitelist in Redis under
+  `tranco_whitelisted_domains` while preserving download order.
+- Other modules, such as `RegexGenerator`, read the first
+  `whitelists.tranco_top_benign_limit` entries from that ordered whitelist
+  cache as benign data without losing ranking order.
 
 The tranco list is updated daily by default in Slips, but you can change how often to update it using the
 ```online_whitelist_update_period``` key in config/slips.yaml.
