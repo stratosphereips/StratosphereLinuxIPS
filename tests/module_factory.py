@@ -175,7 +175,7 @@ class ModuleFactory:
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_llm_obj(self, mock_db):
-        from modules.llm.llm import LLM
+        from modules.llm.llm_proxy import LLMProxy
 
         conf = Mock()
         conf.llm_enabled = Mock(return_value=True)
@@ -193,7 +193,7 @@ class ModuleFactory:
             }
         )
 
-        llm = LLM(
+        llm = LLMProxy(
             logger=self.logger,
             output_dir="dummy_output_dir",
             redis_port=6379,

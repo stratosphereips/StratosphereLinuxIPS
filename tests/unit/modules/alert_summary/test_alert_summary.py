@@ -117,14 +117,28 @@ def test_build_prompt_messages_uses_incident_metadata_and_digest():
     )
 
     assert messages[0]["content"] == SYSTEM_PROMPT
-    assert "Treat informational (`info`) evidence as context only" in messages[0]["content"]
+    assert (
+        "Treat informational (`info`) evidence as context only"
+        in messages[0]["content"]
+    )
     assert "INCIDENT METADATA:" in messages[1]["content"]
     assert "CURRENT ALERT EVIDENCE DIGEST:" in messages[1]["content"]
     assert "Grouped Evidence Patterns: 1" in messages[1]["content"]
-    assert "Describe the current alert using only details from CURRENT ALERT EVIDENCE DIGEST." in messages[1]["content"]
-    assert "Do not present historical-only details as part of the current alert." in messages[1]["content"]
-    assert "Weigh evidence according to threat level." in messages[1]["content"]
-    assert "Treat informational (`info`) evidence as context only" in messages[1]["content"]
+    assert (
+        "Describe the current alert using only details from CURRENT ALERT EVIDENCE DIGEST."
+        in messages[1]["content"]
+    )
+    assert (
+        "Do not present historical-only details as part of the current alert."
+        in messages[1]["content"]
+    )
+    assert (
+        "Weigh evidence according to threat level." in messages[1]["content"]
+    )
+    assert (
+        "Treat informational (`info`) evidence as context only"
+        in messages[1]["content"]
+    )
     assert "Prompt version: alert-summary-v4" in messages[1]["content"]
     assert "RECENT ALERT HISTORY" not in messages[1]["content"]
 
@@ -149,8 +163,14 @@ def test_build_reduction_messages_preserves_info_threat_level_guidance():
     )
 
     assert messages[0]["content"] == REDUCTION_SYSTEM_PROMPT
-    assert "Informational (`info`) evidence is context only" in messages[0]["content"]
-    assert "Preserve threat-level distinctions and keep informational (`info`) evidence as context only." in messages[1]["content"]
+    assert (
+        "Informational (`info`) evidence is context only"
+        in messages[0]["content"]
+    )
+    assert (
+        "Preserve threat-level distinctions and keep informational (`info`) evidence as context only."
+        in messages[1]["content"]
+    )
 
 
 def test_build_prompt_messages_includes_recent_history_for_same_profile():
@@ -181,12 +201,24 @@ def test_build_prompt_messages_includes_recent_history_for_same_profile():
 
     assert "RECENT ALERT HISTORY" in messages[1]["content"]
     assert "HISTORICAL PROGRESSION ONLY" in messages[1]["content"]
-    assert "do not restate ports, IPs, destinations, or behaviors from this history as current-alert facts" in messages[1]["content"]
+    assert (
+        "do not restate ports, IPs, destinations, or behaviors from this history as current-alert facts"
+        in messages[1]["content"]
+    )
     assert "Horizontal port scan to port 443/TCP" in messages[1]["content"]
     assert "historical patterns:" in messages[1]["content"]
-    assert "Earlier scanning activity suggests reconnaissance." not in messages[1]["content"]
-    assert "continuation, escalation, repetition, diversification, or a different pattern" in messages[1]["content"]
-    assert "recurrence raises, lowers, or does not materially change confidence and urgency" in messages[1]["content"]
+    assert (
+        "Earlier scanning activity suggests reconnaissance."
+        not in messages[1]["content"]
+    )
+    assert (
+        "continuation, escalation, repetition, diversification, or a different pattern"
+        in messages[1]["content"]
+    )
+    assert (
+        "recurrence raises, lowers, or does not materially change confidence and urgency"
+        in messages[1]["content"]
+    )
 
 
 def test_build_prompt_messages_excludes_prior_summary_text_from_history():
@@ -211,7 +243,10 @@ def test_build_prompt_messages_excludes_prior_summary_text_from_history():
     )
 
     assert "port 137" not in messages[1]["content"]
-    assert "Prior summary claimed a single connection" not in messages[1]["content"]
+    assert (
+        "Prior summary claimed a single connection"
+        not in messages[1]["content"]
+    )
 
 
 def test_analyze_recent_history_counts_repeated_pattern_overlap():
@@ -339,11 +374,16 @@ def test_advance_active_job_starts_reduction_when_final_prompt_is_too_large(
     def _messages_fit(messages, _budget):
         return messages[0]["content"] == REDUCTION_SYSTEM_PROMPT
 
-    mocker.patch.object(alert_summary, "_messages_fit", side_effect=_messages_fit)
+    mocker.patch.object(
+        alert_summary, "_messages_fit", side_effect=_messages_fit
+    )
     mocker.patch.object(
         alert_summary,
         "_chunk_items_for_reduction",
-        return_value=[["10:00 | repeated connection one"], ["10:05 | repeated connection two"]],
+        return_value=[
+            ["10:00 | repeated connection one"],
+            ["10:05 | repeated connection two"],
+        ],
     )
 
     alert_summary._advance_active_job()
@@ -371,7 +411,10 @@ def test_reduction_response_advances_to_final_summary(mocker):
             "10:05 | repeated connection two",
         ],
         "reduction_layer": 0,
-        "current_chunks": [["10:00 | repeated connection one"], ["10:05 | repeated connection two"]],
+        "current_chunks": [
+            ["10:00 | repeated connection one"],
+            ["10:05 | repeated connection two"],
+        ],
         "completed_chunk_summaries": ["first digest"],
     }
     alert_summary.pending_request = {
@@ -410,14 +453,16 @@ def test_reduction_response_advances_to_final_summary(mocker):
     assert alert_summary.pending_request["phase"] == "final_summary"
 
 
-def test_handle_pending_response_writes_one_paragraph_summary(tmp_path, mocker):
+def test_handle_pending_response_writes_one_paragraph_summary(
+    tmp_path, mocker
+):
     alert_summary = ModuleFactory().create_alert_summary_obj()
     alert_summary.parent_output_dir = str(tmp_path)
     alert_summary.summary_log_path = str(
         tmp_path / "alerts" / "alerts-summary.log"
     )
     alert_summary.operation_log_path = str(
-        tmp_path / "llm-summary" / "alert_summary.log"
+        tmp_path / "llm_proxy-summary" / "alert_summary.log"
     )
     mocker.patch(
         "modules.alert_summary.alert_summary.utils.drop_root_privs_permanently"
@@ -431,7 +476,9 @@ def test_handle_pending_response_writes_one_paragraph_summary(tmp_path, mocker):
         "evidences": [evidence],
         "backend": "local_qwen",
         "grouped_item_count": 1,
-        "current_items": ["10:00 | Connection to 203.0.113.10 without a preceding DNS lookup."],
+        "current_items": [
+            "10:00 | Connection to 203.0.113.10 without a preceding DNS lookup."
+        ],
         "reduction_layer": 0,
         "current_chunks": [],
         "completed_chunk_summaries": [],
@@ -459,10 +506,15 @@ def test_handle_pending_response_writes_one_paragraph_summary(tmp_path, mocker):
 
     with open(alert_summary.summary_log_path, "r", encoding="utf-8") as handle:
         content = handle.read()
-    with open(alert_summary.operation_log_path, "r", encoding="utf-8") as handle:
+    with open(
+        alert_summary.operation_log_path, "r", encoding="utf-8"
+    ) as handle:
         operation_content = handle.read()
 
-    assert "Likely true positive. Repeated outbound behavior suggests beaconing." in content
+    assert (
+        "Likely true positive. Repeated outbound behavior suggests beaconing."
+        in content
+    )
     assert "\n\n" not in content
     assert "phase=final_summary" in operation_content
     assert alert_summary.pending_request is None
@@ -479,12 +531,14 @@ def test_handle_pending_response_does_not_timeout_during_shutdown(
         tmp_path / "alerts" / "alerts-summary.log"
     )
     alert_summary.operation_log_path = str(
-        tmp_path / "llm-summary" / "alert_summary.log"
+        tmp_path / "llm_proxy-summary" / "alert_summary.log"
     )
     mocker.patch(
         "modules.alert_summary.alert_summary.utils.drop_root_privs_permanently"
     )
-    mocker.patch("modules.alert_summary.alert_summary.time.time", return_value=200)
+    mocker.patch(
+        "modules.alert_summary.alert_summary.time.time", return_value=200
+    )
     alert_summary.pre_main()
 
     evidence = _build_evidence()
@@ -494,7 +548,9 @@ def test_handle_pending_response_does_not_timeout_during_shutdown(
         "evidences": [evidence],
         "backend": "local_qwen",
         "grouped_item_count": 1,
-        "current_items": ["10:00 | Connection to 203.0.113.10 without a preceding DNS lookup."],
+        "current_items": [
+            "10:00 | Connection to 203.0.113.10 without a preceding DNS lookup."
+        ],
         "reduction_layer": 0,
         "current_chunks": [],
         "completed_chunk_summaries": [],
@@ -515,7 +571,9 @@ def test_handle_pending_response_does_not_timeout_during_shutdown(
 
     with open(alert_summary.summary_log_path, "r", encoding="utf-8") as handle:
         content = handle.read()
-    with open(alert_summary.operation_log_path, "r", encoding="utf-8") as handle:
+    with open(
+        alert_summary.operation_log_path, "r", encoding="utf-8"
+    ) as handle:
         operation_content = handle.read()
 
     assert content == ""
@@ -533,7 +591,7 @@ def test_main_flushes_pending_alerts_without_backend_on_shutdown(
         tmp_path / "alerts" / "alerts-summary.log"
     )
     alert_summary.operation_log_path = str(
-        tmp_path / "llm-summary" / "alert_summary.log"
+        tmp_path / "llm_proxy-summary" / "alert_summary.log"
     )
     mocker.patch(
         "modules.alert_summary.alert_summary.utils.drop_root_privs_permanently"
@@ -557,7 +615,10 @@ def test_main_flushes_pending_alerts_without_backend_on_shutdown(
     with open(alert_summary.summary_log_path, "r", encoding="utf-8") as handle:
         content = handle.read()
 
-    assert "LLM summary unavailable (No runtime-ready LLM backend available.)." in content
+    assert (
+        "LLM summary unavailable (No runtime-ready LLM backend available.)."
+        in content
+    )
     assert "Local heuristic summary:" in content
     assert not alert_summary.pending_alerts
     alert_summary.shutdown_gracefully()
@@ -565,7 +626,9 @@ def test_main_flushes_pending_alerts_without_backend_on_shutdown(
 
 def test_should_stop_waits_for_pending_alerts_during_shutdown():
     alert_summary = ModuleFactory().create_alert_summary_obj()
-    alert_summary.pending_alerts.append({"alert": _build_alert(_build_evidence())})
+    alert_summary.pending_alerts.append(
+        {"alert": _build_alert(_build_evidence())}
+    )
     alert_summary.termination_event.is_set.return_value = True
 
     assert alert_summary.should_stop() is False
@@ -645,7 +708,9 @@ def test_fallback_summary_contains_local_heuristic_context():
 
     assert "LLM summary unavailable (LLM request timed out.)." in summary
     assert "Local heuristic summary:" in summary
-    assert "Connection to 203.0.113.10 without a preceding DNS lookup." in summary
+    assert (
+        "Connection to 203.0.113.10 without a preceding DNS lookup." in summary
+    )
 
 
 def test_fallback_summary_mentions_recent_history_when_available():
@@ -665,7 +730,10 @@ def test_fallback_summary_mentions_recent_history_when_available():
         "LLM request timed out.",
     )
 
-    assert "Recent related alert history for this source includes 1 prior summarized alerts" in summary
+    assert (
+        "Recent related alert history for this source includes 1 prior summarized alerts"
+        in summary
+    )
     assert "Horizontal port scan to port 443/TCP" in summary
 
 
@@ -712,7 +780,7 @@ def test_operation_log_respects_configured_verbosity(tmp_path, mocker):
         tmp_path / "alerts" / "alerts-summary.log"
     )
     alert_summary.operation_log_path = str(
-        tmp_path / "llm-summary" / "alert_summary.log"
+        tmp_path / "llm_proxy-summary" / "alert_summary.log"
     )
     mocker.patch(
         "modules.alert_summary.alert_summary.utils.drop_root_privs_permanently"
@@ -722,7 +790,9 @@ def test_operation_log_respects_configured_verbosity(tmp_path, mocker):
     alert_summary._log_operation("summary line", verbosity=1)
     alert_summary._log_operation("debug line", verbosity=3)
 
-    with open(alert_summary.operation_log_path, "r", encoding="utf-8") as handle:
+    with open(
+        alert_summary.operation_log_path, "r", encoding="utf-8"
+    ) as handle:
         content = handle.read()
 
     assert "summary line" in content
@@ -737,7 +807,7 @@ def test_shutdown_gracefully_logs_stop_message(tmp_path, mocker):
         tmp_path / "alerts" / "alerts-summary.log"
     )
     alert_summary.operation_log_path = str(
-        tmp_path / "llm-summary" / "alert_summary.log"
+        tmp_path / "llm_proxy-summary" / "alert_summary.log"
     )
     mocker.patch(
         "modules.alert_summary.alert_summary.utils.drop_root_privs_permanently"
@@ -746,7 +816,9 @@ def test_shutdown_gracefully_logs_stop_message(tmp_path, mocker):
     alert_summary.pre_main()
     alert_summary.shutdown_gracefully()
 
-    with open(alert_summary.operation_log_path, "r", encoding="utf-8") as handle:
+    with open(
+        alert_summary.operation_log_path, "r", encoding="utf-8"
+    ) as handle:
         content = handle.read()
 
     assert "AlertSummary module stopped." in content

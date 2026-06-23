@@ -141,7 +141,7 @@ def test_get_disabled_modules_tracks_t_cell_enablement():
     parser = ConfigParser.__new__(ConfigParser)
     parser.config = {
         "modules": {"disable": ["template"]},
-        "llm": {"enabled": True},
+        "llm_proxy": {"enabled": True},
         "regex_generator": {"enabled": True},
         "t_cell": {"enabled": False},
     }

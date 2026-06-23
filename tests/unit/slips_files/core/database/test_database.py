@@ -175,198 +175,6 @@ def test_get_generated_regexes_and_count(tmp_path):
     assert db.get_generated_regexes_count("dns_domain") == 1
 
 
-def test_get_available_llm_backends_returns_empty_dict_when_unset():
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
-    db.r.delete(db.rdb.constants.AVAILABLE_LLM_BACKENDS)
-
-    assert db.get_available_llm_backends() == {
-        "default_backend": "",
-        "backends": {},
-    }
-
-
-def test_set_and_get_available_llm_backends():
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
-
-    db.set_available_llm_backends(
-        {
-            "default_backend": "local_qwen",
-            "backends": {
-                "local_qwen": {
-                    "provider": "ollama",
-                    "model": "qwen2.5:3b",
-                },
-                "openai_default": {
-                    "provider": "openai",
-                    "model": "gpt-4o-mini",
-                },
-            },
-        }
-    )
-
-    assert db.get_available_llm_backends() == {
-        "default_backend": "local_qwen",
-        "backends": {
-            "local_qwen": {
-                "provider": "ollama",
-                "model": "qwen2.5:3b",
-            },
-            "openai_default": {
-                "provider": "openai",
-                "model": "gpt-4o-mini",
-            },
-        },
-    }
-
-
-def test_get_generated_regexes_and_count(tmp_path):
-    db = ModuleFactory().create_db_manager_obj(
-        6379,
-        output_dir=str(tmp_path / "output"),
-        flush_db=True,
-    )
-    db.conf.regex_generator_store_dir = Mock(
-        return_value=str(tmp_path / "regex_generator")
-    )
-    db.conf.regex_generator_seed_benign_samples = Mock(return_value=False)
-
-    storage = db._get_regex_generator_storage()
-    storage.store_generated_regex(
-        {
-            "regex_type": "dns_domain",
-            "regex": r"^xqz[a-z0-9]{8,12}\.invalid$",
-            "regex_hash": "hash-1",
-            "status": "accepted",
-            "rejection_reason": None,
-            "matched_benign_value": None,
-            "backend_alias": "local_qwen",
-            "provider": "ollama",
-            "model": "qwen2.5:3b",
-            "temperature": 1.2,
-            "prompt_version": "regex-generator-v1",
-            "request_id": "req-1",
-            "created_at": 1.0,
-        }
-    )
-
-    regexes = db.get_generated_regexes("dns_domain")
-    assert regexes == [
-        {
-            "id": regexes[0]["id"],
-            "regex_type": "dns_domain",
-            "regex": r"^xqz[a-z0-9]{8,12}\.invalid$",
-            "regex_hash": "hash-1",
-            "status": "accepted",
-            "rejection_reason": None,
-            "matched_benign_value": None,
-            "backend_alias": "local_qwen",
-            "provider": "ollama",
-            "model": "qwen2.5:3b",
-            "temperature": 1.2,
-            "prompt_version": "regex-generator-v1",
-            "request_id": "req-1",
-            "created_at": 1.0,
-        }
-    ]
-    assert db.get_generated_regexes_count("dns_domain") == 1
-
-
-def test_get_available_llm_backends_returns_empty_dict_when_unset():
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
-    db.r.delete(db.rdb.constants.AVAILABLE_LLM_BACKENDS)
-
-    assert db.get_available_llm_backends() == {
-        "default_backend": "",
-        "backends": {},
-    }
-
-
-def test_set_and_get_available_llm_backends():
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
-
-    db.set_available_llm_backends(
-        {
-            "default_backend": "local_qwen",
-            "backends": {
-                "local_qwen": {
-                    "provider": "ollama",
-                    "model": "qwen2.5:3b",
-                },
-                "openai_default": {
-                    "provider": "openai",
-                    "model": "gpt-4o-mini",
-                },
-            },
-        }
-    )
-
-    assert db.get_available_llm_backends() == {
-        "default_backend": "local_qwen",
-        "backends": {
-            "local_qwen": {
-                "provider": "ollama",
-                "model": "qwen2.5:3b",
-            },
-            "openai_default": {
-                "provider": "openai",
-                "model": "gpt-4o-mini",
-            },
-        },
-    }
-
-
-def test_get_generated_regexes_and_count(tmp_path):
-    db = ModuleFactory().create_db_manager_obj(
-        6379,
-        output_dir=str(tmp_path / "output"),
-        flush_db=True,
-    )
-    db.conf.regex_generator_store_dir = Mock(
-        return_value=str(tmp_path / "regex_generator")
-    )
-    db.conf.regex_generator_seed_benign_samples = Mock(return_value=False)
-
-    storage = db._get_regex_generator_storage()
-    storage.store_generated_regex(
-        {
-            "regex_type": "dns_domain",
-            "regex": r"^xqz[a-z0-9]{8,12}\.invalid$",
-            "regex_hash": "hash-1",
-            "status": "accepted",
-            "rejection_reason": None,
-            "matched_benign_value": None,
-            "backend_alias": "local_qwen",
-            "provider": "ollama",
-            "model": "qwen2.5:3b",
-            "temperature": 1.2,
-            "prompt_version": "regex-generator-v1",
-            "request_id": "req-1",
-            "created_at": 1.0,
-        }
-    )
-
-    regexes = db.get_generated_regexes("dns_domain")
-    assert regexes == [
-        {
-            "id": regexes[0]["id"],
-            "regex_type": "dns_domain",
-            "regex": r"^xqz[a-z0-9]{8,12}\.invalid$",
-            "regex_hash": "hash-1",
-            "status": "accepted",
-            "rejection_reason": None,
-            "matched_benign_value": None,
-            "backend_alias": "local_qwen",
-            "provider": "ollama",
-            "model": "qwen2.5:3b",
-            "temperature": 1.2,
-            "prompt_version": "regex-generator-v1",
-            "request_id": "req-1",
-            "created_at": 1.0,
-        }
-    ]
-    assert db.get_generated_regexes_count("dns_domain") == 1
-
-
 def test_profile_moddule_labels():
     """tests set and get_profile_module_label"""
     db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
@@ -498,6 +306,21 @@ def test_store_official_dns_server():
     assert db.is_official_dns_server("192.168.1.53") is True
     assert db.is_official_dns_server("fd00::53") is True
     assert db.is_official_dns_server("not-an-ip") is False
+
+
+def test_tranco_whitelist_stores_ordered_domains_with_limit() -> None:
+    """Test Tranco whitelist storage preserves order and supports limits."""
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+
+    db.store_tranco_whitelisted_domains(
+        ["example.com", "google.com", "github.com"],
+        limit=2,
+    )
+
+    assert db.get_tranco_top_domains() == ["example.com", "google.com"]
+    assert db.get_tranco_top_domains(limit=1) == ["example.com"]
+    assert db.is_whitelisted_tranco_domain("google.com") is True
+    assert db.is_whitelisted_tranco_domain("github.com") is False
 
 
 def test_setup_config_file_uses_isolated_path_and_preserves_save(

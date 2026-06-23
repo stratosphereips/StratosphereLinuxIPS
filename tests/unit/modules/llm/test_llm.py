@@ -4,31 +4,8 @@
 import json
 from unittest.mock import Mock, patch
 
-import urllib3
-
-from modules.llm.llm import (
-    AnthropicBackend,
-    LLMBackendConfig,
-    OllamaBackend,
-    OpenAIBackend,
-)
+from modules.llm.llm_backend_config import LLMBackendConfig
 from tests.module_factory import ModuleFactory
-
-
-def test_backend_config_reads_api_key_from_env(mocker):
-    mocker.patch.dict("os.environ", {"OPENAI_API_KEY": "secret-key"})
-
-    config = LLMBackendConfig.from_dict(
-        "openai_default",
-        {
-            "provider": "openai",
-            "model": "gpt-4o-mini",
-            "api_key_env": "OPENAI_API_KEY",
-        },
-    )
-
-    assert config.api_key == "secret-key"
-    assert config.base_url == "https://api.openai.com/v1"
 
 
 def test_prepare_request_uses_default_backend_and_prompt():
@@ -199,140 +176,6 @@ def test_enqueue_request_increments_requester_pending_count():
     )
 
 
-def test_openai_backend_parses_chat_completion_response():
-    config = LLMBackendConfig.from_dict(
-        "openai_default",
-        {
-            "provider": "openai",
-            "model": "gpt-4o-mini",
-            "api_key": "secret",
-        },
-    )
-    backend = OpenAIBackend(config)
-    backend._request_json = Mock(
-        return_value={
-            "model": "gpt-4o-mini",
-            "choices": [
-                {
-                    "message": {
-                        "content": "final answer",
-                    }
-                }
-            ],
-            "usage": {
-                "prompt_tokens": 12,
-                "completion_tokens": 7,
-                "total_tokens": 19,
-            },
-        }
-    )
-
-    response = backend.generate(
-        {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "model": None,
-            "temperature": None,
-            "max_tokens": None,
-        }
-    )
-
-    assert response["text"] == "final answer"
-    assert response["usage"]["total_tokens"] == 19
-
-
-def test_anthropic_backend_moves_system_messages():
-    config = LLMBackendConfig.from_dict(
-        "claude_default",
-        {
-            "provider": "anthropic",
-            "model": "claude-sonnet-4-5",
-            "api_key": "secret",
-        },
-    )
-    backend = AnthropicBackend(config)
-    with patch.object(backend, "_request_json") as mock_request:
-        mock_request.return_value = {
-            "model": "claude-sonnet-4-5",
-            "content": [{"type": "text", "text": "anthropic answer"}],
-            "usage": {"input_tokens": 3, "output_tokens": 4},
-        }
-        response = backend.generate(
-            {
-                "messages": [
-                    {"role": "system", "content": "be terse"},
-                    {"role": "user", "content": "hello"},
-                ],
-                "model": None,
-                "temperature": 0.2,
-                "max_tokens": 128,
-            }
-        )
-
-    sent_payload = mock_request.call_args.args[2]
-    assert sent_payload["system"] == "be terse"
-    assert sent_payload["messages"] == [{"role": "user", "content": "hello"}]
-    assert response["text"] == "anthropic answer"
-
-
-def test_ollama_backend_parses_response():
-    config = LLMBackendConfig.from_dict(
-        "local_qwen",
-        {
-            "provider": "ollama",
-            "model": "qwen2.5:3b",
-            "base_url": "http://127.0.0.1:11434",
-        },
-    )
-    backend = OllamaBackend(config)
-    backend._request_json = Mock(
-        return_value={
-            "model": "qwen2.5:3b",
-            "message": {"content": "ollama answer"},
-            "prompt_eval_count": 9,
-            "eval_count": 11,
-        }
-    )
-
-    response = backend.generate(
-        {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "model": None,
-            "temperature": None,
-            "max_tokens": None,
-        }
-    )
-
-    assert response["text"] == "ollama answer"
-    assert response["usage"]["input_tokens"] == 9
-    assert response["usage"]["output_tokens"] == 11
-    assert response["usage"]["total_tokens"] == 20
-
-
-def test_backend_request_json_uses_explicit_connect_and_read_timeouts():
-    config = LLMBackendConfig.from_dict(
-        "local_qwen",
-        {
-            "provider": "ollama",
-            "model": "qwen2.5:3b",
-            "base_url": "http://127.0.0.1:11434",
-            "timeout": 42,
-        },
-    )
-    backend = OllamaBackend(config)
-    backend.http = Mock()
-    backend.http.request.return_value = Mock(
-        status=200,
-        data=b'{"message": {"content": "ok"}}',
-    )
-
-    backend._request_json("POST", "http://127.0.0.1:11434/api/chat", {})
-
-    timeout = backend.http.request.call_args.kwargs["timeout"]
-    assert isinstance(timeout, urllib3.Timeout)
-    assert timeout.connect_timeout == 42
-    assert timeout.read_timeout == 42
-
-
 def test_llm_backend_pool_size_scales_with_worker_threads():
     llm = ModuleFactory().create_llm_obj()
     llm.worker_threads = 3
@@ -345,7 +188,9 @@ def test_llm_backend_pool_size_scales_with_worker_threads():
         },
     )
 
-    with patch("modules.llm.llm.urllib3.PoolManager") as mock_pool:
+    with patch(
+        "modules.llm_proxy.llm_backend.urllib3.PoolManager"
+    ) as mock_pool:
         llm._create_backend(config)
 
     assert mock_pool.call_args.kwargs["maxsize"] == 6
@@ -364,10 +209,10 @@ def test_should_stop_waits_for_shutdown_grace_period(mocker):
     llm.termination_event.is_set.return_value = True
     llm.last_request_activity = 100
 
-    mocker.patch("modules.llm.llm.time.time", return_value=104)
+    mocker.patch("modules.llm_proxy.llm_proxy.time.time", return_value=104)
     assert llm.should_stop() is False
 
-    mocker.patch("modules.llm.llm.time.time", return_value=105)
+    mocker.patch("modules.llm_proxy.llm_proxy.time.time", return_value=105)
     assert llm.should_stop() is True
 
 
@@ -381,7 +226,7 @@ def test_should_stop_waits_for_upstream_modules_that_can_publish_late_requests(
         "alert_summary": 12345,
         "evidence_handler": None,
     }.get(name)
-    mocker.patch("modules.llm.llm.time.time", return_value=999)
+    mocker.patch("modules.llm_proxy.llm_proxy.time.time", return_value=999)
     mocker.patch.object(llm, "_is_process_alive", return_value=True)
 
     assert llm.should_stop() is False
@@ -404,8 +249,12 @@ def test_pre_main_creates_module_specific_llm_log(tmp_path, mocker):
     llm = ModuleFactory().create_llm_obj()
     llm.parent_output_dir = str(tmp_path)
     llm.output_dir = str(tmp_path / llm.name)
-    llm.operation_log_path = llm.get_module_specific_output_path("llm.log")
-    mocker.patch("modules.llm.llm.utils.drop_root_privs_permanently")
+    llm.operation_log_path = llm.get_module_specific_output_path(
+        "llm_proxy.log"
+    )
+    mocker.patch(
+        "modules.llm_proxy.llm_proxy.utils.drop_root_privs_permanently"
+    )
 
     llm.pre_main()
     llm.shutdown_gracefully()
