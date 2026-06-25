@@ -121,7 +121,7 @@ class TCell(IModule):
         "uses both PAMP and DAMP danger pressure to escalate to blocking "
         "or memory."
     )
-    authors = ["OpenAI Codex"]
+    authors = ["Sebastian Garcia"]
 
     def init(self):
         self.channels = {}
@@ -131,7 +131,7 @@ class TCell(IModule):
         self.create_log_file = True
         self.log_colors = True
         self.log_verbosity = LOG_VERBOSITY_SUMMARY
-        self.log_file_path = os.path.join(self.output_dir, "t_cell.log")
+        self.log_file_path = self.get_module_specific_output_path("t_cell.log")
         self.decision_trace_mode = TRACE_MODE_OFF
         self.decision_trace_max_evidence = 10
         self.trace_file_path = os.path.join(

@@ -60,7 +60,7 @@ Do not invent missing facts and do not add introductions or meta-commentary.
 class AlertSummary(IModule):
     name = "alert_summary"
     description = "Summarizes alerts for analysts using the shared LLM module"
-    authors = ["OpenAI Codex"]
+    authors = ["Sebastian Garcia"]
 
     def init(self):
         """Initialize channels, queues, and runtime configuration."""

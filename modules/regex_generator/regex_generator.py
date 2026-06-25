@@ -84,7 +84,7 @@ Do not use words such as malware, trojan, virus, exploit, c2, bot, or ransom.
 class RegexGenerator(IModule):
     name = "regex_generator"
     description = "Continuously generates and validates pseudo-random regexes"
-    authors = ["OpenAI Codex"]
+    authors = ["Sebastian Garcia"]
 
     def init(self):
         self.channels = {}
