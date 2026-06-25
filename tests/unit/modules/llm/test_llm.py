@@ -4,7 +4,7 @@
 import json
 from unittest.mock import Mock, patch
 
-from modules.llm.llm_backend_config import LLMBackendConfig
+from modules.llm_proxy.llm_backend_config import LLMBackendConfig
 from tests.module_factory import ModuleFactory
 
 

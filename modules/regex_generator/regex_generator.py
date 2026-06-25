@@ -384,9 +384,6 @@ class RegexGenerator(IModule):
 
         Parameters:
             text: Log message text to append.
-
-        Returns:
-            None
         """
         if not self.log_rotator.create_log_file:
             return

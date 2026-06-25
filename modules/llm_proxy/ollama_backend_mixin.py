@@ -4,7 +4,7 @@
 
 from typing import Any
 
-from modules.llm.llm_backend import LLMBackend
+from modules.llm_proxy.llm_backend import LLMBackend
 
 
 class MixinOllamaBackend(LLMBackend):

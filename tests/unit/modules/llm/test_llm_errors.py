@@ -3,7 +3,7 @@
 
 import pytest
 
-from modules.llm.llm_errors import LLMConfigurationError, LLMRequestError
+from modules.llm_proxy.llm_errors import LLMConfigurationError, LLMRequestError
 from tests.module_factory import ModuleFactory
 
 

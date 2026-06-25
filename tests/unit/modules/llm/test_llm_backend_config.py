@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from modules.llm.llm_backend_config import LLMBackendConfig
-from modules.llm.llm_errors import LLMConfigurationError
+from modules.llm_proxy.llm_backend_config import LLMBackendConfig
+from modules.llm_proxy.llm_errors import LLMConfigurationError
 from tests.module_factory import ModuleFactory
 
 

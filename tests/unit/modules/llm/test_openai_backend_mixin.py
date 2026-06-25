@@ -5,9 +5,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from modules.llm.llm_backend_config import LLMBackendConfig
-from modules.llm.llm_errors import LLMRequestError
-from modules.llm.openai_backend_mixin import MixinOpenAIBackend
+from modules.llm_proxy.llm_backend_config import LLMBackendConfig
+from modules.llm_proxy.llm_errors import LLMRequestError
+from modules.llm_proxy.openai_backend_mixin import MixinOpenAIBackend
 from tests.module_factory import ModuleFactory
 
 

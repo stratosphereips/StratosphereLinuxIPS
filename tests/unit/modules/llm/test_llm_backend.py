@@ -5,8 +5,8 @@ from unittest.mock import Mock
 
 import urllib3
 
-from modules.llm.llm_backend import LLMBackend
-from modules.llm.llm_backend_config import LLMBackendConfig
+from modules.llm_proxy.llm_backend import LLMBackend
+from modules.llm_proxy.llm_backend_config import LLMBackendConfig
 from tests.module_factory import ModuleFactory
 
 

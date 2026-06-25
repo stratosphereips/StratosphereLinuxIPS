@@ -3,8 +3,8 @@
 
 from unittest.mock import patch
 
-from modules.llm.anthropic_backend_mixin import MixinAnthropicBackend
-from modules.llm.llm_backend_config import LLMBackendConfig
+from modules.llm_proxy.anthropic_backend_mixin import MixinAnthropicBackend
+from modules.llm_proxy.llm_backend_config import LLMBackendConfig
 from tests.module_factory import ModuleFactory
 
 

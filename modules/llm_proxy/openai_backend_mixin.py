@@ -4,8 +4,8 @@
 
 from typing import Any
 
-from modules.llm.llm_backend import LLMBackend
-from modules.llm.llm_errors import LLMRequestError
+from modules.llm_proxy.llm_backend import LLMBackend
+from modules.llm_proxy.llm_errors import LLMRequestError
 
 
 class MixinOpenAIBackend(LLMBackend):

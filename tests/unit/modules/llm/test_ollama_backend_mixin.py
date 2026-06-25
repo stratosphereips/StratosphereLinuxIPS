@@ -3,8 +3,8 @@
 
 from unittest.mock import Mock
 
-from modules.llm.llm_backend_config import LLMBackendConfig
-from modules.llm.ollama_backend_mixin import MixinOllamaBackend
+from modules.llm_proxy.llm_backend_config import LLMBackendConfig
+from modules.llm_proxy.ollama_backend_mixin import MixinOllamaBackend
 from tests.module_factory import ModuleFactory
 
 

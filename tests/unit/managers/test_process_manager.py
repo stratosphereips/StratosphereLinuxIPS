@@ -127,6 +127,62 @@ def test_is_ignored_module(module_name, modules_to_ignore, expected):
     assert process_manager.is_disabled_module(module_name) == expected
 
 
+def test_get_disabled_modules_uses_disabled_module_helpers() -> None:
+    """Test disabled modules are returned from the dedicated helper methods."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.get_user_disabled_modules = Mock(return_value=["template"])
+    process_manager.get_runtime_disabled_modules = Mock(
+        return_value=["blocking"]
+    )
+
+    disabled_modules = process_manager.get_disabled_modules()
+
+    assert disabled_modules == (["template"], ["blocking"])
+    process_manager.get_user_disabled_modules.assert_called_once_with()
+    process_manager.get_runtime_disabled_modules.assert_called_once_with()
+
+
+@pytest.mark.parametrize(
+    "configured_modules, expected_modules",
+    [
+        ([" template ", "custom_module"], ["template", "custom_module"]),
+        ([], []),
+    ],
+)
+def test_get_user_disabled_modules(
+    configured_modules: list, expected_modules: list
+) -> None:
+    """Test user-disabled modules are read from config and stripped."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.read_configuration.reset_mock()
+    process_manager.main.conf.read_configuration.side_effect = None
+    process_manager.main.conf.read_configuration.return_value = (
+        configured_modules
+    )
+
+    disabled_modules = process_manager.get_user_disabled_modules()
+
+    assert disabled_modules == expected_modules
+    process_manager.main.conf.read_configuration.assert_called_once_with(
+        "modules", "disable", ["template"]
+    )
+
+
+def test_get_slips_disabled_modules_keeps_runtime_disabled_modules_once() -> (
+    None
+):
+    """Test Slips-disabled modules include existing runtime disables once."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.clearblocking = False
+    process_manager.main.args.blocking = False
+    process_manager.slips_disabled_modules = ["blocking", "runtime_module"]
+
+    disabled_modules = process_manager.get_runtime_disabled_modules()
+
+    assert disabled_modules.count("blocking") == 1
+    assert "runtime_module" in disabled_modules
+
+
 @pytest.mark.parametrize(
     "input_type, argv, export_to, expected_user, expected_slips",
     [
