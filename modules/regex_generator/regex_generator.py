@@ -92,8 +92,8 @@ class RegexGenerator(IModule):
         self.storage = None
         self.enabled = False
         self.create_log_file = False
-        self.log_file_path = os.path.join(
-            self.output_dir, "regex_generator.log"
+        self.log_file_path = self.get_module_specific_output_path(
+            "regex_generator.log"
         )
         self.enable_log_rotation = True
         self.log_rotation_period = 86400
