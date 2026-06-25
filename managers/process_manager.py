@@ -161,48 +161,66 @@ class ProcessManager:
             A tuple containing user-disabled modules and modules disabled by
             Slips runtime rules.
         """
+        return (
+            self.get_user_disabled_modules(),
+            self.get_runtime_disabled_modules(),
+        )
+
+    def get_user_disabled_modules(self) -> List[str]:
+        """
+        Get modules disabled by the user configuration.
+
+        Returns:
+            User-disabled module names stripped of surrounding whitespace.
+        """
         user_disabled_modules: List[str] = self.main.conf.read_configuration(
             "modules", "disable", ["template"]
         )
-        user_disabled_modules = [
-            module.strip() for module in user_disabled_modules
-        ]
+        return [module.strip() for module in user_disabled_modules]
 
+    def get_runtime_disabled_modules(self) -> List[str]:
+        """
+        Get modules disabled by Slips runtime rules.
+
+        Returns:
+            Module names disabled by Slips runtime conditions.
+        """
         is_running_non_stop = self.main.db.is_running_non_stop()
 
-        slips_disabled_modules: List[str] = []
+        disabled_modules: List[str] = []
 
         if not self._is_exporting_module_enabled():
-            slips_disabled_modules.append("exporting_alerts")
+            disabled_modules.append("exporting_alerts")
 
         use_p2p = self.main.conf.use_local_p2p()
         if not (use_p2p and is_running_non_stop):
-            slips_disabled_modules.append("p2p_trust")
+            disabled_modules.append("p2p_trust")
 
         use_global_p2p = self.main.conf.use_global_p2p()
         if not (use_global_p2p and is_running_non_stop):
-            slips_disabled_modules.extend(("fides", "iris"))
+            disabled_modules.extend(("fides", "iris"))
 
         if not (
             self.main.conf.send_to_warden()
             or self.main.conf.receive_from_warden()
         ):
-            slips_disabled_modules.append("cesnet")
+            disabled_modules.append("cesnet")
 
         if not (self.main.args.clearblocking or self.main.args.blocking):
-            slips_disabled_modules.extend(("blocking", "arp_poisoner"))
+            disabled_modules.extend(("blocking", "arp_poisoner"))
 
         if self.main.input_type != InputType.PCAP:
-            slips_disabled_modules.append("leak_detector")
+            disabled_modules.append("leak_detector")
 
         if not self._reading_flows_from_cyst():
-            slips_disabled_modules.append("cyst")
+            disabled_modules.append("cyst")
 
-        for module in self.slips_disabled_modules:
-            if module not in slips_disabled_modules:
-                slips_disabled_modules.append(module)
+        if not self.main.conf.llm_enabled():
+            # the last 2 depend on the disabled llm_proxy module
+            for module in ("llm_proxy", "regex_generator", "t_cell"):
+                disabled_modules.append(module)
 
-        return user_disabled_modules, slips_disabled_modules
+        return disabled_modules
 
     def _is_exporting_module_enabled(self) -> bool:
         """
@@ -221,7 +239,9 @@ class ProcessManager:
         Returns:
             User-disabled modules followed by Slips-disabled modules.
         """
-        return self.user_disabled_modules + self.slips_disabled_modules
+        return list(
+            set(self.user_disabled_modules + self.slips_disabled_modules)
+        )
 
     def declare_that_slips_done_starting_all_children(self):
         self.all_children_started = True
