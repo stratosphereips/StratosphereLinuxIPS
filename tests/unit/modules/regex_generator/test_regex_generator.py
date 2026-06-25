@@ -106,7 +106,7 @@ def test_regex_generator_config_sanitization():
             "store_rejected_regexes": "true",
             "max_stored_rejected_regexes": "bad",
             "seed_benign_samples": "false",
-        }
+        },
     }
 
     assert parser.rotation_period() == "30min"
@@ -184,7 +184,10 @@ def test_select_backend_prefers_allowed_backends(tmp_path):
         {
             "default_backend": "openai_default",
             "backends": {
-                "openai_default": {"provider": "openai", "model": "gpt-4o-mini"},
+                "openai_default": {
+                    "provider": "openai",
+                    "model": "gpt-4o-mini",
+                },
                 "local_qwen": {"provider": "ollama", "model": "qwen2.5:3b"},
             },
         }
@@ -237,16 +240,20 @@ def test_create_log_file_writes_progress_log(tmp_path, mocker):
         store_dir=str(tmp_path / "regex_generator")
     )
     regex_generator.output_dir = str(tmp_path / "output")
-    regex_generator.log_file_path = str(tmp_path / "output" / "regex_generator.log")
-    regex_generator.create_log_file = True
+    regex_generator.log_rotator.log_file_path = str(
+        tmp_path / "output" / "regex_generator.log"
+    )
+    regex_generator.log_rotator.create_log_file = True
     mocker.patch(
         "modules.regex_generator.regex_generator.utils.drop_root_privs_permanently"
     )
 
     regex_generator.pre_main()
-    regex_generator._log_detail("test log line")
+    regex_generator.log_detail("test log line")
 
-    with open(regex_generator.log_file_path, "r", encoding="utf-8") as log_file:
+    with open(
+        regex_generator.log_rotator.log_file_path, "r", encoding="utf-8"
+    ) as log_file:
         log_contents = log_file.read()
 
     assert "RegexGenerator module ready." in log_contents
@@ -260,25 +267,31 @@ def test_log_file_rotates_with_global_rotation_settings(tmp_path, mocker):
     )
     output_dir = tmp_path / "output"
     regex_generator.output_dir = str(output_dir)
-    regex_generator.log_file_path = str(output_dir / "regex_generator.log")
-    regex_generator.create_log_file = True
-    regex_generator.enable_log_rotation = True
-    regex_generator.log_rotation_period = 1
-    regex_generator.last_log_rotation_time = time.time() - 10
+    regex_generator.log_rotator.log_file_path = str(
+        output_dir / "regex_generator.log"
+    )
+    regex_generator.log_rotator.create_log_file = True
+    regex_generator.log_rotator.enable_log_rotation = True
+    regex_generator.log_rotator.log_rotation_period = 1
+    regex_generator.log_rotator.last_log_rotation_time = time.time() - 10
     mocker.patch(
         "modules.regex_generator.regex_generator.utils.drop_root_privs_permanently"
     )
 
     regex_generator.pre_main()
-    with open(regex_generator.log_file_path, "a", encoding="utf-8") as log_file:
+    with open(
+        regex_generator.log_rotator.log_file_path, "a", encoding="utf-8"
+    ) as log_file:
         log_file.write("old line\n")
-    regex_generator.last_log_rotation_time = time.time() - 10
+    regex_generator.log_rotator.last_log_rotation_time = time.time() - 10
 
-    regex_generator._log_detail("new line")
+    regex_generator.log_detail("new line")
 
     rotated_logs = list(output_dir.glob("regex_generator.log.*"))
     assert rotated_logs
-    with open(regex_generator.log_file_path, "r", encoding="utf-8") as log_file:
+    with open(
+        regex_generator.log_rotator.log_file_path, "r", encoding="utf-8"
+    ) as log_file:
         log_contents = log_file.read()
     assert "new line" in log_contents
     regex_generator.shutdown_gracefully()
@@ -308,7 +321,10 @@ def test_clean_host_tw_imports_runtime_benign_strings(tmp_path, mocker):
             },
             {
                 "flow_type": "http",
-                "flow": {"host": "updates.example.org", "uri": "/downloads/setup.msi"},
+                "flow": {
+                    "host": "updates.example.org",
+                    "uri": "/downloads/setup.msi",
+                },
             },
             {
                 "flow_type": "ssl",
@@ -340,7 +356,9 @@ def test_clean_host_tw_imports_runtime_benign_strings(tmp_path, mocker):
     regex_generator.shutdown_gracefully()
 
 
-def test_dirty_host_tw_does_not_import_runtime_benign_strings(tmp_path, mocker):
+def test_dirty_host_tw_does_not_import_runtime_benign_strings(
+    tmp_path, mocker
+):
     regex_generator = ModuleFactory().create_regex_generator_obj(
         store_dir=str(tmp_path / "regex_generator")
     )
@@ -485,7 +503,7 @@ def test_finalize_request_drops_malformed_llm_response_without_error_logging(
         "regex_type": "dns_domain",
         "backend": "local_qwen",
     }
-    regex_generator._log_detail = Mock()
+    regex_generator.log_detail = Mock()
     regex_generator._validate_and_store_regex = Mock()
 
     regex_generator._finalize_request(
@@ -497,7 +515,7 @@ def test_finalize_request_drops_malformed_llm_response_without_error_logging(
     )
 
     regex_generator.print.assert_not_called()
-    regex_generator._log_detail.assert_not_called()
+    regex_generator.log_detail.assert_not_called()
     regex_generator._validate_and_store_regex.assert_not_called()
 
 
@@ -510,7 +528,9 @@ def test_extract_regex_from_llm_text_rejects_invalid_payloads(tmp_path):
         "",
         "invalid_response",
     )
-    assert regex_generator._extract_regex_from_llm_text('{"rationale":"x"}') == (
+    assert regex_generator._extract_regex_from_llm_text(
+        '{"rationale":"x"}'
+    ) == (
         "",
         "missing_regex",
     )
@@ -569,10 +589,7 @@ def test_validate_regex_rejects_unsupported_or_too_broad_patterns(tmp_path):
         regex_generator._validate_regex(r"^(abc)\1$")
         == "unsupported_backreference"
     )
-    assert (
-        regex_generator._validate_regex(r"^(.*a)+$")
-        == "nested_wildcards"
-    )
+    assert regex_generator._validate_regex(r"^(.*a)+$") == "nested_wildcards"
 
 
 def test_validate_and_store_regex_rejects_duplicate_exact(tmp_path):
@@ -704,12 +721,12 @@ def test_storage_resolves_relative_persistent_store_dir_inside_permanent_dir(
 def test_storage_imports_whitelist_domains_into_matching_regex_types(tmp_path):
     whitelist_path = tmp_path / "whitelist.conf"
     whitelist_path.write_text(
-        '\n'.join(
+        "\n".join(
             [
-                '; comment',
-                'domain,example.com,both,alerts',
-                'domain,api.github.com,both,alerts',
-                'ip,1.2.3.4,both,alerts',
+                "; comment",
+                "domain,example.com,both,alerts",
+                "domain,api.github.com,both,alerts",
+                "ip,1.2.3.4,both,alerts",
             ]
         ),
         encoding="utf-8",
@@ -724,7 +741,9 @@ def test_storage_imports_whitelist_domains_into_matching_regex_types(tmp_path):
         12345,
     )
 
-    assert "example.com" in storage.get_benign_examples("dns_domain", limit=100)
+    assert "example.com" in storage.get_benign_examples(
+        "dns_domain", limit=100
+    )
     assert "example.com" in storage.get_benign_examples("tls_sni", limit=100)
     assert "example.com" in storage.get_benign_examples(
         "certificate_cn", limit=100
@@ -737,7 +756,7 @@ def test_storage_imports_whitelist_domains_into_matching_regex_types(tmp_path):
 def test_storage_skips_whitelist_import_when_disabled(tmp_path):
     whitelist_path = tmp_path / "whitelist.conf"
     whitelist_path.write_text(
-        'domain,example.com,both,alerts\n',
+        "domain,example.com,both,alerts\n",
         encoding="utf-8",
     )
     storage = RegexGeneratorStorage(
@@ -757,7 +776,9 @@ def test_storage_skips_whitelist_import_when_disabled(tmp_path):
     storage.close()
 
 
-def test_storage_imports_tranco_top_domains_into_matching_regex_types(tmp_path):
+def test_storage_imports_tranco_top_domains_into_matching_regex_types(
+    tmp_path,
+):
     db = Mock()
     db.get_tranco_top_domains = Mock(
         return_value=["google.com", "github.com", "microsoft.com"]
@@ -843,7 +864,7 @@ def test_benign_corpus_scan_rejects_matching_regex(tmp_path):
 def test_benign_corpus_scan_rejects_regex_matching_whitelist_domain(tmp_path):
     whitelist_path = tmp_path / "whitelist.conf"
     whitelist_path.write_text(
-        'domain,example.com,both,alerts\n',
+        "domain,example.com,both,alerts\n",
         encoding="utf-8",
     )
     storage = RegexGeneratorStorage(
@@ -885,7 +906,9 @@ def test_benign_corpus_scan_rejects_regex_matching_whitelist_domain(tmp_path):
     storage.close()
 
 
-def test_partial_benign_match_can_be_accepted_below_strength_threshold(tmp_path):
+def test_partial_benign_match_can_be_accepted_below_strength_threshold(
+    tmp_path,
+):
     storage = RegexGeneratorStorage(
         Mock(),
         _build_storage_conf(str(tmp_path / "regex_generator")),
@@ -919,7 +942,9 @@ def test_partial_benign_match_can_be_accepted_below_strength_threshold(tmp_path)
     storage.close()
 
 
-def test_match_strength_scores_full_specific_match_higher_than_partial_match(tmp_path):
+def test_match_strength_scores_full_specific_match_higher_than_partial_match(
+    tmp_path,
+):
     regex_generator = ModuleFactory().create_regex_generator_obj(
         store_dir=str(tmp_path / "regex_generator")
     )

@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
-import os
 import random
 import re
 import time
@@ -16,6 +15,7 @@ from modules.regex_generator.match_strength import (
     compute_match_strength,
     measure_regex_specificity,
 )
+from modules.regex_generator.log_rotator import LogRotator
 from modules.regex_generator.regex_errors import _NullTimeout, _SignalTimeout
 from slips_files.core.database.sqlite_db.regex_generator_db import (
     REGEX_TYPES,
@@ -91,13 +91,10 @@ class RegexGenerator(IModule):
         self.subscribe_to_channels()
         self.storage = None
         self.enabled = False
-        self.create_log_file = False
-        self.log_file_path = self.get_module_specific_output_path(
-            "regex_generator.log"
+        self.log_rotator = LogRotator(
+            self.output_dir,
+            self.get_module_specific_output_path("regex_generator.log"),
         )
-        self.enable_log_rotation = True
-        self.log_rotation_period = 86400
-        self.last_log_rotation_time = time.time()
         self.generation_interval_seconds = 5.0
         self.allowed_backends = []
         self.llm_temperature = 1.2
@@ -140,10 +137,12 @@ class RegexGenerator(IModule):
             conf, "default_rotation_interval", None
         ) or getattr(conf, "rotation_period")
         self.enabled = conf.regex_generator_enabled()
-        self.create_log_file = conf.regex_generator_create_log_file()
-        self.enable_log_rotation = conf.rotation()
-        self.log_rotation_period = self._parse_rotation_period_seconds(
-            rotation_period_getter()
+        self.log_rotator.create_log_file = (
+            conf.regex_generator_create_log_file()
+        )
+        self.log_rotator.enable_log_rotation = conf.rotation()
+        self.log_rotator.log_rotation_period = (
+            LogRotator.parse_rotation_period_seconds(rotation_period_getter())
         )
         self.generation_interval_seconds = (
             conf.regex_generator_generation_interval_seconds()
@@ -171,7 +170,8 @@ class RegexGenerator(IModule):
             self.print("RegexGenerator module disabled in config.", 2, 0)
             return True
 
-        self._init_log_file()
+        self.log_rotator.output_dir = self.output_dir
+        self.log_rotator.init_log_file()
         self.storage = RegexGeneratorStorage(
             self.logger,
             self.conf,
@@ -180,13 +180,13 @@ class RegexGenerator(IModule):
             self.db,
         )
         self.next_generation_at = time.time()
-        self._log_detail("RegexGenerator module ready.")
-        self._log_detail(
+        self.log_detail("RegexGenerator module ready.")
+        self.log_detail(
             f"Using storage at {self.storage.store_dir}. "
             f"Benign corpus DB: {self.storage.benign_db.db_path}. "
             f"Generated regex DB: {self.storage.generated_db.db_path}."
         )
-        self._log_detail(
+        self.log_detail(
             "Rejected regex persistence is "
             f"{'enabled' if self.storage.store_rejected_regexes else 'disabled'}."
         )
@@ -212,7 +212,7 @@ class RegexGenerator(IModule):
         available_backends = self.db.get_available_llm_backends()
         backend = self._select_backend(available_backends)
         if not backend:
-            self._log_detail(
+            self.log_detail(
                 "No runtime-ready LLM backend available yet. Waiting for discovery."
             )
             self.print(
@@ -225,7 +225,7 @@ class RegexGenerator(IModule):
             return
 
         regex_type = self._choose_regex_type()
-        self._log_detail(
+        self.log_detail(
             f"Starting generation cycle. regex_type={regex_type} backend={backend}"
         )
         self._send_generation_request(regex_type, backend)
@@ -250,7 +250,7 @@ class RegexGenerator(IModule):
             self.db.get_twid_evidence(profileid, twid) or {}
         )
         anomaly_evidence_count = self._count_anomaly_evidence(evidence)
-        self._log_detail(
+        self.log_detail(
             f"Finished host TW profileid={profileid} twid={twid} "
             f"alerts={len(alerts)} evidence={len(evidence)} "
             f"anomaly_evidence={anomaly_evidence_count}"
@@ -274,7 +274,7 @@ class RegexGenerator(IModule):
                 f"{regex_type}={count}"
                 for regex_type, count in sorted(learned_counts.items())
             )
-            self._log_detail(
+            self.log_detail(
                 f"Imported runtime benign strings from clean host TW "
                 f"profileid={profileid} twid={twid}: {summary}"
             )
@@ -378,79 +378,27 @@ class RegexGenerator(IModule):
             return ""
         return filename
 
-    def _init_log_file(self):
-        if not self.create_log_file:
+    def log_detail(self, text: str) -> None:
+        """
+        Append one timestamped progress line to the regex generator log.
+
+        Parameters:
+            text: Log message text to append.
+
+        Returns:
+            None
+        """
+        if not self.log_rotator.create_log_file:
             return
 
-        os.makedirs(self.output_dir, exist_ok=True)
-        if not os.path.exists(self.log_file_path):
-            with open(self.log_file_path, "w", encoding="utf-8") as log_file:
-                log_file.write("")
-        self.last_log_rotation_time = time.time()
-
-    def _log_detail(self, text: str):
-        if not self.create_log_file:
-            return
-
-        self._rotate_log_file_if_needed()
+        self.log_rotator.rotate_log_file_if_needed()
         human_readable_datetime = utils.convert_ts_format(
             time.time(), utils.alerts_format
         )
-        with open(self.log_file_path, "a", encoding="utf-8") as log_file:
+        with open(
+            self.log_rotator.log_file_path, "a", encoding="utf-8"
+        ) as log_file:
             log_file.write(f"{human_readable_datetime} - {text}\n")
-
-    def _rotate_log_file_if_needed(self):
-        if not self.enable_log_rotation or self.log_rotation_period <= 0:
-            return
-
-        now = time.time()
-        if now - self.last_log_rotation_time < self.log_rotation_period:
-            return
-
-        if (
-            os.path.exists(self.log_file_path)
-            and os.path.getsize(self.log_file_path) > 0
-        ):
-            timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(now))
-            rotated_path = f"{self.log_file_path}.{timestamp}"
-            os.replace(self.log_file_path, rotated_path)
-
-        with open(self.log_file_path, "w", encoding="utf-8") as log_file:
-            log_file.write("")
-        self.last_log_rotation_time = now
-
-    @staticmethod
-    def _parse_rotation_period_seconds(rotation_period) -> int:
-        if isinstance(rotation_period, (int, float)):
-            return max(1, int(rotation_period))
-
-        text = str(rotation_period or "").strip().lower().replace(" ", "")
-        match = re.fullmatch(
-            r"(?P<value>\d+)(?P<unit>sec|secs|second|seconds|min|mins|minute|minutes|hr|hrs|hour|hours|day|days)",
-            text,
-        )
-        if not match:
-            return 86400
-
-        value = int(match.group("value"))
-        unit = match.group("unit")
-        multipliers = {
-            "sec": 1,
-            "secs": 1,
-            "second": 1,
-            "seconds": 1,
-            "min": 60,
-            "mins": 60,
-            "minute": 60,
-            "minutes": 60,
-            "hr": 3600,
-            "hrs": 3600,
-            "hour": 3600,
-            "hours": 3600,
-            "day": 86400,
-            "days": 86400,
-        }
-        return max(1, value * multipliers[unit])
 
     def _select_backend(self, available_backends: dict) -> str:
         available = available_backends.get("backends", {})
@@ -497,7 +445,7 @@ class RegexGenerator(IModule):
             self.db.channels.LLM_REQUEST,
             json.dumps(request),
         )
-        self._log_detail(
+        self.log_detail(
             f"Published llm_request request_id={request_id} "
             f"regex_type={regex_type} backend={backend}"
         )
@@ -545,7 +493,7 @@ class RegexGenerator(IModule):
         if response.get("request_id") != self.pending_request["request_id"]:
             return
 
-        self._log_detail(
+        self.log_detail(
             f"Received matching llm_response request_id={response.get('request_id')}"
         )
         self._finalize_request(response)
@@ -572,7 +520,7 @@ class RegexGenerator(IModule):
             2,
             0,
         )
-        self._log_detail(
+        self.log_detail(
             f"Still waiting for llm_response request_id="
             f"{self.pending_request['request_id']} elapsed={elapsed:.1f}s"
         )
@@ -580,7 +528,7 @@ class RegexGenerator(IModule):
 
     def _finalize_request(self, response: dict):
         if not response.get("success"):
-            self._log_detail(
+            self.log_detail(
                 f"LLM response failed request_id={response.get('request_id')} "
                 f"error={response.get('error', 'unknown')}"
             )
@@ -761,7 +709,7 @@ class RegexGenerator(IModule):
             ) or self.storage.was_rejected_in_current_run(
                 record["regex_hash"]
             ):
-                self._log_detail(
+                self.log_detail(
                     f"Rejected duplicate regex request_id={record['request_id']} "
                     f"regex_type={record['regex_type']} regex={record['regex']}"
                 )
@@ -799,7 +747,7 @@ class RegexGenerator(IModule):
         record["rejection_reason"] = None
         record["matched_benign_value"] = None
         self.storage.store_generated_regex(record)
-        self._log_detail(
+        self.log_detail(
             f"Accepted regex request_id={record['request_id']} "
             f"regex_type={record['regex_type']} regex={record['regex']}"
         )
@@ -822,7 +770,7 @@ class RegexGenerator(IModule):
         )
         if benign_match_score is not None:
             extra += f" benign_match_score={benign_match_score:.2f}"
-        self._log_detail(
+        self.log_detail(
             f"Rejected regex request_id={record['request_id']} "
             f"regex_type={record['regex_type']} reason={rejection_reason}"
             f"{extra} regex={record['regex']}"
