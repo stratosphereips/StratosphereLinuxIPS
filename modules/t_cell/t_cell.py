@@ -242,13 +242,9 @@ class TCell(IModule):
         self._log_detail("T Cell module ready.")
         return False
 
-    def shutdown_gracefully(self):
-        return True
-
     def main(self):
         if msg := self.get_msg("evidence_added"):
             self._process_evidence_message(msg)
-        return False
 
     @staticmethod
     def _normalize_weights(weights: dict) -> dict:
@@ -2843,7 +2839,6 @@ class TCell(IModule):
     def _init_log_file(self):
         if not self.create_log_file:
             return
-        os.makedirs(self.output_dir, exist_ok=True)
         with open(self.log_file_path, "w", encoding="utf-8") as log_file:
             log_file.write("")
 
