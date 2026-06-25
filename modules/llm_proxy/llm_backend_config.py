@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from modules.llm.llm_errors import LLMConfigurationError
+from modules.llm_proxy.llm_errors import LLMConfigurationError
 
 
 @dataclass

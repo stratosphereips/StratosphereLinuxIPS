@@ -12,12 +12,12 @@ from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 
-from modules.llm.anthropic_backend_mixin import MixinAnthropicBackend
-from modules.llm.llm_backend import LLMBackend
-from modules.llm.llm_backend_config import LLMBackendConfig
-from modules.llm.llm_errors import LLMConfigurationError, LLMRequestError
-from modules.llm.ollama_backend_mixin import MixinOllamaBackend
-from modules.llm.openai_backend_mixin import MixinOpenAIBackend
+from modules.llm_proxy.anthropic_backend_mixin import MixinAnthropicBackend
+from modules.llm_proxy.llm_backend import LLMBackend
+from modules.llm_proxy.llm_backend_config import LLMBackendConfig
+from modules.llm_proxy.llm_errors import LLMConfigurationError, LLMRequestError
+from modules.llm_proxy.ollama_backend_mixin import MixinOllamaBackend
+from modules.llm_proxy.openai_backend_mixin import MixinOpenAIBackend
 
 
 AnthropicBackend = MixinAnthropicBackend
@@ -26,7 +26,7 @@ OpenAIBackend = MixinOpenAIBackend
 
 
 class LLMProxy(IModule):
-    name = "LLM"
+    name = "llm_proxy"
     description = (
         "LLM proxy that forwards msgs from Slips modules to "
         "local/remote configured LLMs."
@@ -222,13 +222,13 @@ class LLMProxy(IModule):
     def shutdown_gracefully(self):
         self._store_empty_available_backends_registry()
         self.worker_stop_event.set()
-        for _ in self.workers:
+        for worker in self.workers:
             try:
                 self.request_queue.put_nowait(None)
+                worker.join(timeout=1)
             except queue.Full:
                 break
-        for worker in self.workers:
-            worker.join(timeout=1)
+
         self.db.reset_pending_llm_request_counts()
         self._log_operation("LLM module stopped.")
         if self.operation_log is not None:

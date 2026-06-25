@@ -8,8 +8,8 @@ from typing import Any
 import certifi
 import urllib3
 
-from modules.llm.llm_backend_config import LLMBackendConfig
-from modules.llm.llm_errors import LLMRequestError
+from modules.llm_proxy.llm_backend_config import LLMBackendConfig
+from modules.llm_proxy.llm_errors import LLMRequestError
 
 
 class LLMBackend:
