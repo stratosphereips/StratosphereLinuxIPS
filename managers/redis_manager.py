@@ -772,6 +772,24 @@ class RedisManager:
                 os.remove(tmpfile)
             raise e
 
+    def _get_redis_server_selection(self) -> int:
+        """
+        Read the selected Redis server from stdin.
+
+        Returns:
+            The selected server number, or 0 when stdin is unavailable.
+        """
+        if sys.stdin.isatty():
+            try:
+                return int(input())
+            except EOFError:
+                return 0
+            except ValueError:
+                print("Invalid input.")
+                self.main.terminate_slips()
+
+        return 0
+
     def flush_and_kill(self, pid: int, port):
         """
         raises UserCancelledErr or AlreadyKilledErr if redis isnt killed,
@@ -809,22 +827,11 @@ class RedisManager:
             if not open_servers:
                 self.main.terminate_slips()
 
-            if sys.stdin.isatty():
-                try:
-                    selection = input()
-                except EOFError:
-                    selection = "0"
-            else:
-                selection = "0"
+            server_to_close: int = self._get_redis_server_selection()
 
-            try:
-                server_to_close: int = int(selection)
-            except ValueError:
-                print("Invalid input.")
-                self.main.terminate_slips()
-
-            # close all ports in running_slips_logs.txt and in our supported range
             if server_to_close == 0:
+                # close all ports in running_slips_logs.txt
+                # and in our supported range
                 self.close_all_ports()
                 self.main.terminate_slips()
                 return

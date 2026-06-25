@@ -16,7 +16,6 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     EvidenceSignal,
-    IoCType,
     dict_to_evidence,
 )
 
@@ -116,7 +115,7 @@ class RegexMatch:
 
 
 class TCell(IModule):
-    name = "T Cell"
+    name = "t_cell"
     description = (
         "Immune-style responder that matches PAMP antigens to regexes and "
         "uses both PAMP and DAMP danger pressure to escalate to blocking "
@@ -176,7 +175,11 @@ class TCell(IModule):
         self.channels = {"evidence_added": self.c_evidence}
 
     def read_configuration(self):
-        conf = self.conf if hasattr(self.conf, "t_cell_enabled") else ConfigParser()
+        conf = (
+            self.conf
+            if hasattr(self.conf, "t_cell_enabled")
+            else ConfigParser()
+        )
         self.enabled = conf.t_cell_enabled()
         self.create_log_file = conf.t_cell_create_log_file()
         self.log_colors = conf.t_cell_log_colors()
@@ -290,7 +293,9 @@ class TCell(IModule):
                         raw_value = float(default_value)
                 profile[key] = raw_value
 
-            profile["strength"] = max(0.0, min(1.0, float(profile["strength"])))
+            profile["strength"] = max(
+                0.0, min(1.0, float(profile["strength"]))
+            )
             profile["state_wait_timeout_factor"] = max(
                 0.01, float(profile["state_wait_timeout_factor"])
             )
@@ -413,7 +418,9 @@ class TCell(IModule):
             if match:
                 matched_regexes.append(match.as_dict())
 
-        self.storage.update_observation_matches(observation_id, matched_regexes)
+        self.storage.update_observation_matches(
+            observation_id, matched_regexes
+        )
         self._prune_observations(now)
 
     def _process_candidate(
@@ -486,7 +493,9 @@ class TCell(IModule):
                     observation_id=observation_id,
                     now=now,
                     scores={"anergic_until": now + self.anergy_ttl_seconds},
-                    extra_updates={"anergic_until": now + self.anergy_ttl_seconds},
+                    extra_updates={
+                        "anergic_until": now + self.anergy_ttl_seconds
+                    },
                 )
             else:
                 self._update_cell(
@@ -524,7 +533,9 @@ class TCell(IModule):
         }
         newly_recognized = False
         if cell["state"] == STATE_MATURE:
-            priming_profile = self._build_effective_priming_profile(signal_name)
+            priming_profile = self._build_effective_priming_profile(
+                signal_name
+            )
             cell = self._transition_cell(
                 cell=cell,
                 to_state=STATE_ANTIGEN_RECOGNIZED,
@@ -977,9 +988,7 @@ class TCell(IModule):
         waiting_since = context.get("waiting_since")
         if context.get("waiting_for") != waiting_for or waiting_since is None:
             waiting_since = (
-                cell.get("last_transition_at")
-                or cell.get("created_at")
-                or now
+                cell.get("last_transition_at") or cell.get("created_at") or now
             )
         try:
             waiting_since = float(waiting_since)
@@ -1201,9 +1210,10 @@ class TCell(IModule):
                     verbosity=LOG_VERBOSITY_DECISIONS,
                 )
                 return match
-            elif (
-                cell["state"] == STATE_ANTIGEN_RECOGNIZED
-                and self._state_wait_expired(cell, now)
+            elif cell[
+                "state"
+            ] == STATE_ANTIGEN_RECOGNIZED and self._state_wait_expired(
+                cell, now
             ):
                 self._maybe_trace_co_stimulation(
                     action="co_stimulation_timeout",
@@ -1408,9 +1418,8 @@ class TCell(IModule):
             return match
 
         wait_elapsed = self._get_state_wait_elapsed(cell, now)
-        if (
-            cell["state"] == STATE_ACTIVATED
-            and self._state_wait_expired(cell, now)
+        if cell["state"] == STATE_ACTIVATED and self._state_wait_expired(
+            cell, now
         ):
             self._maybe_trace_context(
                 action="context_timeout",
@@ -1524,7 +1533,9 @@ class TCell(IModule):
             now - self.related_lookback_seconds,
             evidence_signal="DAMP",
         )
-        current_observation = self.storage.get_observation(observation_id) or {}
+        current_observation = (
+            self.storage.get_observation(observation_id) or {}
+        )
         confidence = float(current_observation.get("confidence", 0.0))
         related_exclusions = set(exclude_observation_ids)
         related_exclusions.add(int(observation_id))
@@ -1816,7 +1827,9 @@ class TCell(IModule):
             since_ts,
             evidence_signal="DAMP",
         )
-        current_observation = self.storage.get_observation(observation_id) or {}
+        current_observation = (
+            self.storage.get_observation(observation_id) or {}
+        )
         related_trace = self._build_related_trace(
             pamp_observations,
             candidate,
@@ -1948,9 +1961,13 @@ class TCell(IModule):
                         "pamp_total_raw": pamp_danger_trace["total_raw"],
                         "damp_total_raw": damp_danger_trace["total_raw"],
                         "pamp_contributors": pamp_danger_trace["contributors"],
-                        "pamp_omitted_count": pamp_danger_trace["omitted_count"],
+                        "pamp_omitted_count": pamp_danger_trace[
+                            "omitted_count"
+                        ],
                         "damp_contributors": damp_danger_trace["contributors"],
-                        "damp_omitted_count": damp_danger_trace["omitted_count"],
+                        "damp_omitted_count": damp_danger_trace[
+                            "omitted_count"
+                        ],
                     },
                 },
             },
@@ -2003,7 +2020,9 @@ class TCell(IModule):
         )
         related_exclusions = set(consumed_observation_ids)
         related_exclusions.add(int(observation_id))
-        current_observation = self.storage.get_observation(observation_id) or {}
+        current_observation = (
+            self.storage.get_observation(observation_id) or {}
+        )
         related_trace = self._build_related_trace(
             recent_pamp_observations,
             candidate,
@@ -2186,11 +2205,12 @@ class TCell(IModule):
             "threat_level_value": observation.get(
                 "threat_level_value", float(evidence.threat_level.value)
             ),
-            "danger_contribution": self._observation_danger_contribution(
-                observation
-            )
-            if observation
-            else float(evidence.confidence) * float(evidence.threat_level.value),
+            "danger_contribution": (
+                self._observation_danger_contribution(observation)
+                if observation
+                else float(evidence.confidence)
+                * float(evidence.threat_level.value)
+            ),
         }
 
     def _build_related_trace(
@@ -2321,9 +2341,7 @@ class TCell(IModule):
         now: float,
         exclude_observation_ids: set[int] | None = None,
     ) -> bool:
-        excluded_ids = self._normalize_observation_ids(
-            exclude_observation_ids
-        )
+        excluded_ids = self._normalize_observation_ids(exclude_observation_ids)
         excluded_ids.add(int(observation_id))
         if self.storage.has_memory_for_regex(match.regex_hash):
             return False
@@ -2519,18 +2537,28 @@ class TCell(IModule):
             ).lower()
             if flow_type == "dns" or "query" in flow:
                 self._add_candidate(
-                    candidates, "dns_domain", self._normalize_domain(flow.get("query"))
+                    candidates,
+                    "dns_domain",
+                    self._normalize_domain(flow.get("query")),
                 )
             if flow_type == "http" or "uri" in flow or "host" in flow:
                 self._add_candidate(
-                    candidates, "dns_domain", self._normalize_domain(flow.get("host"))
+                    candidates,
+                    "dns_domain",
+                    self._normalize_domain(flow.get("host")),
                 )
                 uri = self._normalize_uri(flow.get("uri"))
                 self._add_candidate(candidates, "uri", uri)
                 self._add_candidate(
-                    candidates, "filename", self._extract_filename_from_uri(uri)
+                    candidates,
+                    "filename",
+                    self._extract_filename_from_uri(uri),
                 )
-            if flow_type == "ssl" or "server_name" in flow or "subject" in flow:
+            if (
+                flow_type == "ssl"
+                or "server_name" in flow
+                or "subject" in flow
+            ):
                 self._add_candidate(
                     candidates,
                     "tls_sni",
@@ -2559,7 +2587,9 @@ class TCell(IModule):
         elif ioc_type == "URL":
             parsed = urlparse(str(entity.value or "").strip())
             self._add_candidate(
-                candidates, "dns_domain", self._normalize_domain(parsed.hostname)
+                candidates,
+                "dns_domain",
+                self._normalize_domain(parsed.hostname),
             )
             uri = self._normalize_uri(entity.value)
             self._add_candidate(candidates, "uri", uri)
@@ -2568,7 +2598,9 @@ class TCell(IModule):
             )
 
         self._add_candidate(
-            candidates, "tls_sni", self._normalize_domain(getattr(entity, "SNI", ""))
+            candidates,
+            "tls_sni",
+            self._normalize_domain(getattr(entity, "SNI", "")),
         )
 
     @staticmethod
@@ -2630,7 +2662,9 @@ class TCell(IModule):
                 exclude_observation_ids,
             ):
                 continue
-            if self._is_related_observation(observation, candidate, regex_hash):
+            if self._is_related_observation(
+                observation, candidate, regex_hash
+            ):
                 count += 1
         return count
 
@@ -2725,9 +2759,7 @@ class TCell(IModule):
     @staticmethod
     def _get_state_wait_elapsed(cell: dict, now: float) -> float:
         start_ts = (
-            cell.get("last_transition_at")
-            or cell.get("created_at")
-            or now
+            cell.get("last_transition_at") or cell.get("created_at") or now
         )
         try:
             start_ts = float(start_ts)
@@ -2736,13 +2768,14 @@ class TCell(IModule):
         return max(0.0, float(now) - start_ts)
 
     def _state_wait_expired(self, cell: dict, now: float) -> bool:
-        return (
-            self._get_state_wait_elapsed(cell, now)
-            >= self._effective_wait_limit(cell)
-        )
+        return self._get_state_wait_elapsed(
+            cell, now
+        ) >= self._effective_wait_limit(cell)
 
     @staticmethod
-    def _make_cell_key(profile_ip: str, regex_type: str, antigen_value: str) -> str:
+    def _make_cell_key(
+        profile_ip: str, regex_type: str, antigen_value: str
+    ) -> str:
         return f"{profile_ip}|{regex_type}|{antigen_value}"
 
     @staticmethod
@@ -2910,7 +2943,11 @@ class TCell(IModule):
             parts.append(f"value={match.value}")
         if metrics:
             metric_text = ",".join(
-                f"{key}={value:.3f}" if isinstance(value, float) else f"{key}={value}"
+                (
+                    f"{key}={value:.3f}"
+                    if isinstance(value, float)
+                    else f"{key}={value}"
+                )
                 for key, value in metrics.items()
             )
             parts.append(metric_text)

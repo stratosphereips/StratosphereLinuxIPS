@@ -84,7 +84,7 @@ class AlertSummary(IModule):
         self.alert_history_by_profile = defaultdict(deque)
         self.operation_log_path = os.path.join(
             self.parent_output_dir,
-            "llm_proxy-summary",
+            "llm-summary",
             "alert_summary.log",
         )
         self.summary_log_path = os.path.join(
@@ -318,7 +318,10 @@ class AlertSummary(IModule):
         )
 
     def _queue_new_alert(self):
-        """Parse and enqueue a new alert together with its evidence records."""
+        """
+        Parse and enqueue a new alert together with its evidence records.
+        queues alerts to the self.pending_alerts
+        """
         msg = self.get_msg("new_alert")
         if not msg:
             return

@@ -4,7 +4,6 @@ import json
 import os
 import random
 import re
-import signal
 import time
 import uuid
 from hashlib import sha256
@@ -17,6 +16,7 @@ from modules.regex_generator.match_strength import (
     compute_match_strength,
     measure_regex_specificity,
 )
+from modules.regex_generator.regex_errors import _NullTimeout, _SignalTimeout
 from slips_files.core.database.sqlite_db.regex_generator_db import (
     REGEX_TYPES,
     RegexGeneratorStorage,
@@ -81,38 +81,8 @@ Do not use words such as malware, trojan, virus, exploit, c2, bot, or ransom.
 }
 
 
-class _NullTimeout:
-    def __enter__(self):
-        return None
-
-    def __exit__(self, exc_type, exc, exc_tb):
-        return False
-
-
-class _SignalTimeout:
-    def __init__(self, timeout_seconds: float):
-        self.timeout_seconds = timeout_seconds
-        self._previous_handler = None
-
-    def __enter__(self):
-        self._previous_handler = signal.getsignal(signal.SIGALRM)
-        signal.signal(signal.SIGALRM, self._handle_timeout)
-        signal.setitimer(signal.ITIMER_REAL, self.timeout_seconds)
-        return None
-
-    def __exit__(self, exc_type, exc, exc_tb):
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        if self._previous_handler is not None:
-            signal.signal(signal.SIGALRM, self._previous_handler)
-        return False
-
-    @staticmethod
-    def _handle_timeout(signum, frame):
-        raise TimeoutError("regex validation timed out")
-
-
 class RegexGenerator(IModule):
-    name = "RegexGenerator"
+    name = "regex_generator"
     description = "Continuously generates and validates pseudo-random regexes"
     authors = ["OpenAI Codex"]
 
@@ -122,7 +92,9 @@ class RegexGenerator(IModule):
         self.storage = None
         self.enabled = False
         self.create_log_file = False
-        self.log_file_path = os.path.join(self.output_dir, "regex_generator.log")
+        self.log_file_path = os.path.join(
+            self.output_dir, "regex_generator.log"
+        )
         self.enable_log_rotation = True
         self.log_rotation_period = 86400
         self.last_log_rotation_time = time.time()
@@ -291,7 +263,9 @@ class RegexGenerator(IModule):
         learned_counts = {}
         source = f"clean_client_tw:{profileid}:{twid}"
         for regex_type, values in learned.items():
-            inserted = self.storage.add_benign_strings(regex_type, values, source)
+            inserted = self.storage.add_benign_strings(
+                regex_type, values, source
+            )
             if inserted:
                 learned_counts[regex_type] = inserted
 
@@ -350,7 +324,9 @@ class RegexGenerator(IModule):
         self, profileid: str, twid: str
     ) -> dict[str, set[str]]:
         learned = {regex_type: set() for regex_type in REGEX_TYPES}
-        altflows = self.db.get_all_altflows_in_profileid_twid(profileid, twid) or []
+        altflows = (
+            self.db.get_all_altflows_in_profileid_twid(profileid, twid) or []
+        )
         for row in altflows:
             flow = row.get("flow", {})
             flow_type = row.get("flow_type") or flow.get("type_")
@@ -366,7 +342,9 @@ class RegexGenerator(IModule):
                 if filename:
                     learned["filename"].add(filename)
             elif flow_type == "ssl":
-                server_name = self._normalize_domain(flow.get("server_name", ""))
+                server_name = self._normalize_domain(
+                    flow.get("server_name", "")
+                )
                 if server_name:
                     learned["tls_sni"].add(server_name)
                 cn = self._extract_cn(flow.get("subject", ""))
@@ -429,9 +407,10 @@ class RegexGenerator(IModule):
         if now - self.last_log_rotation_time < self.log_rotation_period:
             return
 
-        if os.path.exists(self.log_file_path) and os.path.getsize(
-            self.log_file_path
-        ) > 0:
+        if (
+            os.path.exists(self.log_file_path)
+            and os.path.getsize(self.log_file_path) > 0
+        ):
             timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(now))
             rotated_path = f"{self.log_file_path}.{timestamp}"
             os.replace(self.log_file_path, rotated_path)
@@ -503,7 +482,9 @@ class RegexGenerator(IModule):
             "request_id": request_id,
             "requester": self.name,
             "backend": backend,
-            "messages": self._build_prompt_messages(regex_type, generation_nonce),
+            "messages": self._build_prompt_messages(
+                regex_type, generation_nonce
+            ),
             "temperature": self.llm_temperature,
             "max_tokens": self.llm_max_tokens,
             "metadata": {
@@ -569,7 +550,9 @@ class RegexGenerator(IModule):
         )
         self._finalize_request(response)
         self.pending_request = None
-        self.next_generation_at = time.time() + self.generation_interval_seconds
+        self.next_generation_at = (
+            time.time() + self.generation_interval_seconds
+        )
 
     def _warn_if_llm_is_slow(self, now: float):
         if self.llm_response_timeout_seconds <= 0:
@@ -627,7 +610,9 @@ class RegexGenerator(IModule):
         }
         self._validate_and_store_regex(record)
 
-    def _extract_regex_from_llm_text(self, llm_text: str) -> tuple[str, str | None]:
+    def _extract_regex_from_llm_text(
+        self, llm_text: str
+    ) -> tuple[str, str | None]:
         raw_regex = self._extract_raw_regex_candidate(llm_text)
         if raw_regex:
             return raw_regex, None
@@ -661,7 +646,11 @@ class RegexGenerator(IModule):
             if candidate.lower().startswith("regex:"):
                 candidate = candidate.split(":", 1)[1].strip()
             candidate = candidate.strip().strip('"').strip("'")
-            if candidate.startswith("/") and candidate.endswith("/") and len(candidate) > 1:
+            if (
+                candidate.startswith("/")
+                and candidate.endswith("/")
+                and len(candidate) > 1
+            ):
                 candidate = candidate[1:-1].strip()
             if not candidate or " " in candidate or candidate.startswith("{"):
                 continue
@@ -769,7 +758,9 @@ class RegexGenerator(IModule):
         if self.storage.might_have_generated_regex(record["regex_hash"]):
             if self.storage.get_existing_generated_regex(
                 record["regex_hash"]
-            ) or self.storage.was_rejected_in_current_run(record["regex_hash"]):
+            ) or self.storage.was_rejected_in_current_run(
+                record["regex_hash"]
+            ):
                 self._log_detail(
                     f"Rejected duplicate regex request_id={record['request_id']} "
                     f"regex_type={record['regex_type']} regex={record['regex']}"
@@ -784,10 +775,12 @@ class RegexGenerator(IModule):
         try:
             with self._regex_validation_timeout():
                 compiled_regex = re.compile(record["regex"])
-                matched_benign, benign_match_score = self._find_strong_benign_match(
-                    record["regex_type"],
-                    record["regex"],
-                    compiled_regex,
+                matched_benign, benign_match_score = (
+                    self._find_strong_benign_match(
+                        record["regex_type"],
+                        record["regex"],
+                        compiled_regex,
+                    )
                 )
         except TimeoutError:
             self._store_rejected_regex(record, "regex_validation_timeout")
@@ -884,7 +877,9 @@ class RegexGenerator(IModule):
         if "|" not in stripped_regex:
             return False
 
-        parts = [part.strip("()[]{}?+*.^$") for part in stripped_regex.split("|")]
+        parts = [
+            part.strip("()[]{}?+*.^$") for part in stripped_regex.split("|")
+        ]
         parts = [part for part in parts if part]
         if len(parts) < 4:
             return False

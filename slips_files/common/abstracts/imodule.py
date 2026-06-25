@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import json
 import os
+import re
 import sys
 import traceback
 import warnings
@@ -27,11 +28,46 @@ class IModule(ABC, Process):
     An interface for all slips modules
     """
 
+    _SNAKE_CASE_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
     name = "imodule"
     description = "Template module"
     authors = ["Template Author"]
     # should be filled with the channels each module subscribes to
     channels = {}
+
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        """
+        Validate module metadata when subclasses are defined.
+
+        Args:
+            **kwargs: Keyword arguments passed to parent class hooks.
+
+        Returns:
+            None.
+        """
+        super().__init_subclass__(**kwargs)
+        module_name = getattr(cls, "name", None)
+        if IModule._has_snake_case_module_name(module_name):
+            return
+
+        raise RuntimeError(
+            f"{cls.__name__}.name must be snake_case, got " f"{module_name!r}."
+        )
+
+    @staticmethod
+    def _has_snake_case_module_name(module_name: object) -> bool:
+        """
+        Check whether a module name follows the snake_case contract.
+
+        Args:
+            module_name: Class-level module name attribute.
+
+        Returns:
+            True if the module name is a snake_case string, False otherwise.
+        """
+        return isinstance(module_name, str) and bool(
+            IModule._SNAKE_CASE_NAME_PATTERN.fullmatch(module_name)
+        )
 
     def __init__(
         self,
