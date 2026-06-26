@@ -37,7 +37,7 @@ def test_ollama_backend_mixin_parses_response() -> None:
         }
     )
 
-    assert llm.name == "LLM"
+    assert llm.name == "llm_proxy"
     assert response["text"] == "ollama answer"
     assert response["usage"]["input_tokens"] == 9
     assert response["usage"]["output_tokens"] == 11

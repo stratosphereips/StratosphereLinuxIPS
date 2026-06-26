@@ -23,7 +23,7 @@ def test_backend_config_reads_api_key_from_env(mocker: Any) -> None:
         },
     )
 
-    assert llm.name == "LLM"
+    assert llm.name == "llm_proxy"
     assert config.api_key == "secret-key"
     assert config.base_url == "https://api.openai.com/v1"
 
@@ -50,4 +50,4 @@ def test_backend_config_rejects_invalid_config(
     with pytest.raises(LLMConfigurationError, match=expected_error):
         LLMBackendConfig.from_dict(alias, data)
 
-    assert llm.name == "LLM"
+    assert llm.name == "llm_proxy"

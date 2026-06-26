@@ -19,5 +19,5 @@ def test_llm_errors_are_exceptions(error_cls: type[Exception]) -> None:
 
     error = error_cls("failed")
 
-    assert llm.name == "LLM"
+    assert llm.name == "llm_proxy"
     assert isinstance(error, Exception)

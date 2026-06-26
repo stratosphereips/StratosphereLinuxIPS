@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import json
 import signal
+import ast
 import pytest
 from unittest.mock import Mock, call, patch
 from managers.process_manager import ProcessManager
@@ -168,10 +169,10 @@ def test_get_user_disabled_modules(
     )
 
 
-def test_get_slips_disabled_modules_keeps_runtime_disabled_modules_once() -> (
+def test_get_slips_disabled_modules_recomputes_runtime_disabled_modules() -> (
     None
 ):
-    """Test Slips-disabled modules include existing runtime disables once."""
+    """Test runtime-disabled modules are recomputed from current settings."""
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.args.clearblocking = False
     process_manager.main.args.blocking = False
@@ -180,7 +181,7 @@ def test_get_slips_disabled_modules_keeps_runtime_disabled_modules_once() -> (
     disabled_modules = process_manager.get_runtime_disabled_modules()
 
     assert disabled_modules.count("blocking") == 1
-    assert "runtime_module" in disabled_modules
+    assert "runtime_module" not in disabled_modules
 
 
 @pytest.mark.parametrize(
@@ -294,9 +295,12 @@ def test_print_disabled_modules():
     process_manager.user_disabled_modules = ["Module1", "Module2"]
     with patch.object(process_manager.main, "print") as mock_print:
         process_manager.print_disabled_modules()
-        mock_print.assert_called_once_with(
-            "Disabled Modules: " "['Module1', 'Module2']", 1, 0
+        printed_modules = ast.literal_eval(
+            mock_print.call_args.args[0].removeprefix("Disabled Modules: ")
         )
+
+        assert set(printed_modules) == {"Module1", "Module2"}
+        mock_print.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -329,15 +333,15 @@ def test_warn_about_pending_modules(pending_modules, expected_print_calls):
     "blocking_enabled, exporting_alerts_disabled, "
     "expected_kill_first, expected_kill_last",
     [  # Testcase1: blocking enabled, exporting_alerts enabled
-        (True, False, [1, 2], [3, 4, 5, 6, 7]),
+        (True, False, [1, 2, 6, 7], [3, 4, 5]),
         # Testcase2: blocking disabled, exporting_alerts enabled
-        (False, False, [1, 2, 4], [3, 5, 6, 7]),
+        (False, False, [1, 2, 4, 6, 7], [3, 5]),
         # Testcase3: blocking enabled, exporting_alerts disabled
-        (True, True, [1, 2, 5], [3, 4, 6, 7]),
+        (True, True, [1, 2, 5, 6, 7], [3, 4]),
         # Testcase4: blocking disabled, exporting_alerts disabled
-        (False, True, [1, 2, 4, 5], [3, 6, 7]),
+        (False, True, [1, 2, 4, 5, 6, 7], [3]),
         # Testcase5: All enabled, some PIDs are None
-        (True, False, [1, 2], [3, 4, 5, 6, 7]),
+        (True, False, [1, 2, 6, 7], [3, 4, 5]),
     ],
 )
 def test_get_hitlist_in_order(

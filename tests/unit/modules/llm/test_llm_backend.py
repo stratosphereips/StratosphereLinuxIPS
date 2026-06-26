@@ -33,7 +33,7 @@ def test_backend_request_json_uses_explicit_connect_and_read_timeouts() -> (
     backend._request_json("POST", "http://127.0.0.1:11434/api/chat", {})
 
     timeout = backend.http.request.call_args.kwargs["timeout"]
-    assert llm.name == "LLM"
+    assert llm.name == "llm_proxy"
     assert isinstance(timeout, urllib3.Timeout)
     assert timeout.connect_timeout == 42
     assert timeout.read_timeout == 42
@@ -54,5 +54,5 @@ def test_backend_build_url_avoids_duplicate_v1_prefix() -> None:
 
     url = backend._build_url("/v1/messages")
 
-    assert llm.name == "LLM"
+    assert llm.name == "llm_proxy"
     assert url == "https://api.openai.com/v1/messages"

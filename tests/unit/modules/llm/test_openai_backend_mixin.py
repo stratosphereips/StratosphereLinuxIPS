@@ -49,7 +49,7 @@ def test_openai_backend_mixin_parses_chat_completion_response() -> None:
         }
     )
 
-    assert llm.name == "LLM"
+    assert llm.name == "llm_proxy"
     assert response["text"] == "final answer"
     assert response["usage"]["total_tokens"] == 19
 
@@ -79,4 +79,4 @@ def test_openai_backend_mixin_rejects_empty_choices() -> None:
             }
         )
 
-    assert llm.name == "LLM"
+    assert llm.name == "llm_proxy"

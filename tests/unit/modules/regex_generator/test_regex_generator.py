@@ -437,7 +437,7 @@ def test_send_generation_request_publishes_expected_payload(tmp_path):
     assert request["max_tokens"] == 80
     assert request["metadata"]["regex_type"] == "dns_domain"
     assert request["metadata"]["prompt_version"] == PROMPT_VERSION
-    assert request["request_id"].startswith("RegexGenerator-")
+    assert request["request_id"].startswith("regex_generator-")
 
 
 def test_handle_pending_response_matches_by_request_id(tmp_path, mocker):

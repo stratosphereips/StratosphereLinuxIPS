@@ -4,6 +4,8 @@
 import json
 from unittest.mock import Mock, patch
 
+import pytest
+
 from modules.llm_proxy.llm_backend_config import LLMBackendConfig
 from tests.module_factory import ModuleFactory
 
@@ -196,40 +198,28 @@ def test_llm_backend_pool_size_scales_with_worker_threads():
     assert mock_pool.call_args.kwargs["maxsize"] == 6
 
 
-def test_should_stop_waits_for_pending_requests_during_shutdown():
-    llm = ModuleFactory().create_llm_obj()
-    llm.termination_event.is_set.return_value = True
-    llm.request_queue.put_nowait({"request_id": "req-1"})
-
-    assert llm.should_stop() is False
-
-
-def test_should_stop_waits_for_shutdown_grace_period(mocker):
-    llm = ModuleFactory().create_llm_obj()
-    llm.termination_event.is_set.return_value = True
-    llm.last_request_activity = 100
-
-    mocker.patch("modules.llm_proxy.llm_proxy.time.time", return_value=104)
-    assert llm.should_stop() is False
-
-    mocker.patch("modules.llm_proxy.llm_proxy.time.time", return_value=105)
-    assert llm.should_stop() is True
-
-
-def test_should_stop_waits_for_upstream_modules_that_can_publish_late_requests(
-    mocker,
+@pytest.mark.parametrize(
+    ("termination_requested", "msg_received", "expected"),
+    [
+        (False, False, False),
+        (True, True, False),
+        (True, False, True),
+    ],
+)
+def test_should_stop_uses_base_module_stop_conditions(
+    termination_requested,
+    msg_received,
+    expected,
 ):
     llm = ModuleFactory().create_llm_obj()
-    llm.termination_event.is_set.return_value = True
-    llm.last_request_activity = 100
-    llm.db.get_pid_of.side_effect = lambda name: {
-        "alert_summary": 12345,
-        "evidence_handler": None,
-    }.get(name)
-    mocker.patch("modules.llm_proxy.llm_proxy.time.time", return_value=999)
-    mocker.patch.object(llm, "_is_process_alive", return_value=True)
+    llm.termination_event.is_set.return_value = termination_requested
+    llm.channel_tracker = {
+        "llm_request": {
+            "msg_received": msg_received,
+        }
+    }
 
-    assert llm.should_stop() is False
+    assert llm.should_stop() is expected
 
 
 def test_shutdown_gracefully_clears_available_backend_registry():

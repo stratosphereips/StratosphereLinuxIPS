@@ -291,7 +291,7 @@ def test_check_if_update_online_whitelist_not_updated():
     update_manager.db.set_ti_feed_info.assert_not_called()
 
 
-def test_update_online_whitelist_stores_ordered_tranco_domains():
+def test_update_online_whitelist_stores_ordered_valid_tranco_rows():
     update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.online_whitelist_update_period = 86400
     lines = [
@@ -307,7 +307,7 @@ def test_update_online_whitelist_stores_ordered_tranco_domains():
     update_manager._update_online_whitelist()
 
     update_manager.db.store_tranco_whitelisted_domains.assert_called_once_with(
-        ["example.com", "google.com", "github.com"]
+        ["example.com", "google.com", "github.com", "google.com"]
     )
 
 

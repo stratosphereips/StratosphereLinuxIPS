@@ -38,7 +38,7 @@ def test_anthropic_backend_mixin_moves_system_messages() -> None:
         )
 
     sent_payload = mock_request.call_args.args[2]
-    assert llm.name == "LLM"
+    assert llm.name == "llm_proxy"
     assert sent_payload["system"] == "be terse"
     assert sent_payload["messages"] == [{"role": "user", "content": "hello"}]
     assert response["text"] == "anthropic answer"
