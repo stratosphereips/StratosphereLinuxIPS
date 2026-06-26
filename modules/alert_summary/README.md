@@ -15,7 +15,7 @@ For each alert, the module:
 2. Loads every evidence record referenced by `alert.correl_id`.
 3. Groups similar evidence descriptions into an incident-style digest.
 4. Estimates whether the grouped digest fits the prompt budget.
-5. If it fits, sends the final analyst-summary request to `llm_request`.
+5. If it fits, sends the final analyst-summary request to `llm_request` channel.
 6. If it does not fit, recursively reduces the digest through one or more
    intermediate LLM summaries until the final prompt fits.
 7. Waits for the matching `llm_response`.
@@ -111,26 +111,6 @@ Intermediate reduction prompts use the same incident metadata but ask the model
 to compress one evidence chunk into a shorter digest for the next reduction
 layer or the final summary while preserving those threat-level distinctions.
 
-## Recent alert history
-
-When `history_enabled` is on, the module stores a small in-memory history of
-completed alert summaries per source/profile. Each stored entry contains:
-
-- time window and compact time range
-- accumulated threat level
-- alert confidence
-- a few dominant grouped evidence patterns
-- the final summary text
-
-That history is added only to the final analyst-summary prompt, not to
-intermediate reduction prompts. The current alert evidence remains the primary
-source of truth, but repeated aligned alerts are meant to be treated as
-cumulative supporting context. In other words, recurrence should not replace
-the current alert evidence, but it can strengthen the assessment of risk,
-urgency, and likely true-positive status when the current alert matches the
-historical pattern. To avoid recursive contamination, the prompt renders
-structured historical patterns and metrics rather than past free-text LLM
-summaries.
 
 ## Recent alert history
 
@@ -182,7 +162,7 @@ Reduction requests also include `metadata.chunk_index` and
 Analyst summaries are written to:
 
 ```text
-output/alerts/alerts-summary.log
+<output-dir>/alerts/alerts-summary.log
 ```
 
 Alert-summary operational logs are written to:
@@ -194,7 +174,7 @@ Alert-summary operational logs are written to:
 Shared LLM runtime logs are written to:
 
 ```text
-<output-dir>/LLM/llm.log
+<output-dir>/llm_proxy/llm_proxy.log
 ```
 
 The alert-summary log records queueing, prompt-budget decisions, reduction

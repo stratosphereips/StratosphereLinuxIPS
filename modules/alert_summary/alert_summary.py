@@ -80,7 +80,6 @@ class AlertSummary(IModule):
         self.summary_log = None
         self.operation_log = None
         self.last_logged_pending_llm_requests = None
-        self.waiting_for_evidence_handler_logged = False
         self.alert_history_by_profile = defaultdict(deque)
         self.operation_log_path = os.path.join(
             self.parent_output_dir,
@@ -141,62 +140,6 @@ class AlertSummary(IModule):
             f"prompt_version={PROMPT_VERSION}",
             verbosity=LOG_VERBOSITY_SUMMARY,
         )
-
-    def should_stop(self) -> bool:
-        """
-        Stop once shutdown starts and this module has no actionable work left.
-
-        We wait for both local work and the shared LLM service's requester-level
-        in-flight counter. That keeps the module alive until every
-        `requester=alert_summary` response has been published, even if local
-        channel-tracker state is stale or replies were produced out of order.
-        """
-        if not self.termination_event.is_set():
-            return False
-
-        if self._has_pending_work():
-            return False
-
-        if self._should_wait_for_evidence_handler():
-            if not self.waiting_for_evidence_handler_logged:
-                evidence_handler_pid = self.db.get_pid_of("evidence_handler")
-                self._log_operation(
-                    "Waiting for evidence_handler to finish generating alerts "
-                    f"before shutdown pid={evidence_handler_pid}",
-                    verbosity=LOG_VERBOSITY_SUMMARY,
-                )
-                self.waiting_for_evidence_handler_logged = True
-            return False
-
-        self.waiting_for_evidence_handler_logged = False
-
-        pending_llm_requests = self.db.get_pending_llm_request_count(self.name)
-        if pending_llm_requests > 0:
-            if self.last_logged_pending_llm_requests != pending_llm_requests:
-                self._log_operation(
-                    "Waiting for shared LLM responses before shutdown "
-                    f"requester={self.name} pending_requests={pending_llm_requests}",
-                    verbosity=LOG_VERBOSITY_SUMMARY,
-                )
-                self.last_logged_pending_llm_requests = pending_llm_requests
-            return False
-
-        self.last_logged_pending_llm_requests = None
-
-        return not self.channel_tracker.get("new_alert", {}).get(
-            "msg_received", False
-        )
-
-    def _should_wait_for_evidence_handler(self) -> bool:
-        """
-        Keep alert_summary alive while evidence_handler may still emit alerts.
-
-        :return: True when evidence_handler is still alive during shutdown.
-        """
-        evidence_handler_pid = self.db.get_pid_of("evidence_handler")
-        if not evidence_handler_pid:
-            return False
-        return self._is_process_alive(evidence_handler_pid)
 
     @staticmethod
     def _is_process_alive(pid: int) -> bool:
@@ -1595,16 +1538,6 @@ class AlertSummary(IModule):
         """
         normalized = " ".join(str(text or "").split())
         return normalized.strip()
-
-    def _has_pending_work(self) -> bool:
-        """
-        Return True when alert summaries still require processing.
-
-        :return: True while alerts are queued or in-flight.
-        """
-        return bool(
-            self.pending_alerts or self.active_job or self.pending_request
-        )
 
     def _fail_active_job(self, reason: str):
         """
