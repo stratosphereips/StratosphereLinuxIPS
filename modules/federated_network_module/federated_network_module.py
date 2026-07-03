@@ -439,9 +439,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "time_window_width", default=1200
         )
 
-        # Random per-instance sub-window offset to desynchronize peers (≤ half window width)
-        self._time_offset: float = random.uniform(
-            0, self.window_size_seconds / 2.0
+        # Random per-instance sub-window offset to desynchronize peers (0–5 minutes)
+        self._time_offset: float = random.uniform(0, 300)
+        self.print(
+            f"Time window offset (random per-peer): {self._time_offset:.1f}s "
+            f"(max 300s = 5 min)",
+            1,
+            0,
         )
 
         # Sub-window tracking
@@ -1099,6 +1103,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # Initialize sub-window start skewed by random offset
             if self.window_start_ts is None:
                 self.window_start_ts = flow_ts - self._time_offset
+                self.print(
+                    f"Sub-window started at UNIX {flow_ts:.0f} with offset "
+                    f"{self._time_offset:.0f}s (effective start: {self.window_start_ts:.0f})",
+                    2,
+                    0,
+                )
 
             # Check if sub-window has expired
             if flow_ts - self.window_start_ts >= self.window_size_seconds:
