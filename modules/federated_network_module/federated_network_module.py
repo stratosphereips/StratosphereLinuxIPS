@@ -439,11 +439,19 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "time_window_width", default=1200
         )
 
-        # Random per-instance sub-window offset to desynchronize peers (0–5 minutes)
-        self._time_offset: float = random.uniform(0, 300)
+        # Deterministic per-instance sub-window offset (0–5 minutes).
+        # Uses hostname hash to avoid all peers getting the same offset
+        # when containers start simultaneously (same system-time random seed).
+        import hashlib
+
+        seed = int(hashlib.md5(self.my_peer_id.encode()).hexdigest(), 16) % (
+            2**31
+        )
+        rng = random.Random(seed)
+        self._time_offset: float = rng.uniform(0, 300)
         self.print(
-            f"Time window offset (random per-peer): {self._time_offset:.1f}s "
-            f"(max 300s = 5 min)",
+            f"Time window offset (seed={seed}, peer={self.my_peer_id}): "
+            f"{self._time_offset:.1f}s (max 300s = 5 min)",
             1,
             0,
         )
