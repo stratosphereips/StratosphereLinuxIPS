@@ -193,8 +193,10 @@ class ModuleLogger:
                 "merged_train",
                 "merged_test",
                 "comp_inferred_gt",
+                "comp_merged_inferred_gt",
                 "comp_test_inferred",
                 "comp_test_gt",
+                "comp_merged_test_gt",
                 "merging_data",
                 "training_network",
             ]:
@@ -1317,6 +1319,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         f"Mal/Ben: {mal_inf}/{ben_inf} vs {mal_gt}/{ben_gt} | "
                         f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
                     )
+                    if self._using_merged_model:
+                        self.logger.log_comp_line(
+                            "comp_merged_inferred_gt",
+                            f"inferred vs GT: {len(gt_labels)} samples | "
+                            f"Mal/Ben: {mal_inf}/{ben_inf} vs {mal_gt}/{ben_gt} | "
+                            f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
+                        )
 
                 # Collect test-time preds with inferred labels and GT in one pass
                 pred_data = []
@@ -1409,6 +1418,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                             f"Mal/Ben: {mal_pvg}/{ben_pvg} vs {mal_gt2}/{ben_gt2} | "
                             f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
                         )
+                        if self._using_merged_model:
+                            self.logger.log_comp_line(
+                                "comp_merged_test_gt",
+                                f"pred vs GT: {len(pvg_preds)} samples | "
+                                f"Mal/Ben: {mal_pvg}/{ben_pvg} vs {mal_gt2}/{ben_gt2} | "
+                                f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
+                            )
 
                 self._training_trigger = "alert"
                 if len(self.training_buffer_x) >= self.min_training_samples:
@@ -1619,6 +1635,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                             f"Mal/Ben: {mal_pvg}/{ben_pvg} vs {mal_gt2}/{ben_gt2} | "
                             f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
                         )
+                        if self._using_merged_model:
+                            self.logger.log_comp_line(
+                                "comp_merged_test_gt",
+                                f"pred vs GT: {len(pvg_preds)} samples | "
+                                f"Mal/Ben: {mal_pvg}/{ben_pvg} vs {mal_gt2}/{ben_gt2} | "
+                                f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
+                            )
 
                 self._training_trigger = "twclose"
                 if len(self.training_buffer_x) >= self.min_training_samples:
