@@ -3,31 +3,33 @@
 """
 Federated Network Module - Federated Learning with Model Sharing
 
-Architecture: input(N features, dynamic) -> RandomProjection(64,frozen,shared) -> Linear(64->16)+ReLU [fc1] -> Linear(16->2) [head]
+Architecture: input(N features, fixed 18) -> RandomProjection(256,frozen,shared) -> Linear(256->16)+ReLU [fc1] -> Linear(16->2) [head]
 
 Training Flow:
-1. Local Training (on alert or window close):
-   - Label flows (malicious from alert evidence, rest benign)
-   - Train fc1 + head ONCE on training buffer
+1. Local Training (on wall-clock window close every 5 minutes):
+   - Buffer flows and alerts during the window
+   - Label flows using all evidence from buffered alerts; rest benign
+   - Train fc1 + head for local_training_epochs
+   - Save the head produced by local training as "head_before"
+   - Freeze fc1, fine-tune head for merge_finetune_epochs (local_head_train.log)
    - Save as latest_local model
    - Send to peers via P2P
 
-2. Head Alignment (periodic):
-   - Freeze fc1
-   - Train head ONLY on alignment buffer (all accumulated flows)
-   - Unfreeze fc1
-
-3. Model Merging (periodic or event-based):
+2. Model Merging (event-based, after own local training):
    - Collect all peer models + own latest local
    - Aggregate fc1 weights (AVERAGE)
-   - Retrain head ONCE on alignment buffer (fc1 frozen)
+   - Restore "head_before" (head from local full training)
+   - Fine-tune head for merge_finetune_epochs (merged_train.log) with fc1 frozen
    - Save as merged_N model (merged models NOT used in future merges)
 
+This makes local and merged models directly comparable: both heads start from
+identical weights and receive the same head-only fine-tuning; only fc1 differs.
+
 Key Features:
-- Dynamic input dimension (detected from first flow)
-- Two buffers: training (small, for local training) and alignment (large, for head alignment)
+- Fixed 18-feature input
+- Single training buffer per wall-clock window
 - Model separation: latest_local (own data only) vs merged (aggregated)
-- Off-sync windows: random time offset per peer to avoid network pulses
+- Off-sync windows: random time offset per peer to avoid synchronized pulses
 - Graceful shutdown: saves latest_local and latest merged model
 
 Artifact Paths:
@@ -178,6 +180,16 @@ class SimpleFederatedNet(nn.Module):
         for param in self.fc1.parameters():
             param.requires_grad = True
 
+    def freeze_head(self):
+        """Freeze head layer for fc1-only training."""
+        for param in self.head.parameters():
+            param.requires_grad = False
+
+    def unfreeze_head(self):
+        """Unfreeze head layer for normal/head-only training."""
+        for param in self.head.parameters():
+            param.requires_grad = True
+
 
 class ModuleLogger:
     """Centralized logging for training, testing, and label comparison."""
@@ -189,6 +201,7 @@ class ModuleLogger:
             os.makedirs(output_dir, exist_ok=True)
             for name in [
                 "local_train",
+                "local_head_train",
                 "local_test",
                 "merged_train",
                 "merged_test",
@@ -384,6 +397,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             set()
         )  # flows already in training buffer
 
+        # Alerts buffered during a training window (evidence IDs + IPs)
+        self.pending_alerts: list = []
+
         # Peer models storage
         self.peer_models: Dict[str, dict] = (
             {}
@@ -410,6 +426,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         # Training counters
         self.training_count_alert: int = 0
         self.training_count_twclose: int = 0
+        self.training_count_window: int = 0
         self._training_trigger: str = ""
 
         # Track whether current model is merged (affects testing log target)
@@ -458,8 +475,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             0,
         )
 
-        # Sub-window tracking
-        self.window_start_ts: Optional[float] = None
+        # Wall-clock training window tracking (independent of Slips global windows)
+        # First trigger is offset by _time_offset so peers train out of phase.
+        self.training_window_start: float = time.time() - self._time_offset
 
         # Load existing local model if present and not training from scratch
         train_from_scratch = self._read_module_config_bool(
@@ -469,17 +487,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self._load_local_model()
 
     def subscribe_to_channels(self):
-        """Subscribe to flows, alerts, TW close, and P2P channels."""
+        """Subscribe to flows, alerts, and P2P channels."""
         self.c_flows = self.db.subscribe("new_flow")
         self.c_alerts = self.db.subscribe("new_alert")
         self.channels = {
             "new_flow": self.c_flows,
             "new_alert": self.c_alerts,
         }
-        if self.mode == "train":
-            c_tw = self.db.subscribe("tw_closed")
-            if c_tw and c_tw is not True:
-                self.channels["tw_closed"] = c_tw
+        # Training uses an independent wall-clock window; Slips tw_closed is ignored.
         self._p2p_connected = False
 
     def _try_p2p_subscribe(self):
@@ -797,16 +812,20 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         Note: This implementation uses internal config values for epochs.
         For head-only training, set _freeze_fc1_for_training=True before calling.
+        For fc1-only training, set _freeze_head_for_training=True before calling.
 
         Args:
             x_train: Normalized features
             y_train: Labels (BENIGN/MALICIOUS)
             classes: List of class labels (unused, kept for compatibility)
-            train_target: Logger target ("local" for "local_train", "merged" for "merged_train")
+            train_target: Logger target ("local" for "local_train",
+                          "local_head" for "local_head_train",
+                          "merged" for "merged_train")
         """
         self.print("fit_incremental_model: entering", 1, 1)
 
         freeze_fc1 = getattr(self, "_freeze_fc1_for_training", False)
+        freeze_head = getattr(self, "_freeze_head_for_training", False)
         epochs = (
             self.merge_finetune_epochs
             if freeze_fc1
@@ -837,11 +856,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         if freeze_fc1:
             self.model.freeze_fc1()
-            self.optimizer = None  # manual Adam, fork-safe
+            self.model.unfreeze_head()
+        elif freeze_head:
+            self.model.unfreeze_fc1()
+            self.model.freeze_head()
         else:
             self.model.unfreeze_fc1()
-            if self.optimizer is None:
-                self.optimizer = None  # manual Adam, fork-safe
+            self.model.unfreeze_head()
+        self.optimizer = None  # manual Adam, fork-safe
 
         self.print(
             f"fit_incremental_model: creating tensors, x_shape={x_train.shape}",
@@ -1007,14 +1029,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         return True
 
     def _main_training(self) -> bool:
-        """Training main loop: buffer flows, train on alerts/sub-windows, test if model ready."""
+        """Training main loop: buffer flows, close wall-clock windows, test if model ready."""
         try:
             if msg := self.get_msg("new_flow"):
                 data = json.loads(msg["data"])
                 flow = data["flow"]
                 flow_ts = float(data.get("stime", 0))
 
-                # Buffer flow for later training
+                # Buffer flow for the next training window
                 self.handle_new_flow(flow, flow_ts)
 
                 # Test with local model (if fitted)
@@ -1068,6 +1090,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             elif not self._p2p_connected:
                 self._try_p2p_subscribe()
 
+            # Wall-clock training window trigger (independent of Slips windows)
+            if (
+                time.time() - self.training_window_start
+                >= self.window_size_seconds
+            ):
+                self._close_training_window()
+
             time.sleep(0.1)
             return False
         except Exception:
@@ -1105,31 +1134,21 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             return None
 
     def handle_new_flow(self, flow: dict, flow_ts: float = 0.0):
-        """Store flow in current sub-window, close window on timestamp-based expiry."""
+        """Store flow in the current training window.
+
+        Training windows are closed on a wall-clock timer (see _main_training),
+        not on flow timestamps, to keep time independent of Slips global windows.
+        """
         flow_id = self._get_flow_id(flow)
         self.window_flows[flow_id] = flow
 
-        if flow_ts > 0:
-            # Initialize sub-window start skewed by random offset
-            if self.window_start_ts is None:
-                self.window_start_ts = flow_ts - self._time_offset
-                self.print(
-                    f"Sub-window started at UNIX {flow_ts:.0f} with offset "
-                    f"{self._time_offset:.0f}s (effective start: {self.window_start_ts:.0f})",
-                    2,
-                    0,
-                )
-
-            # Check if sub-window has expired
-            if flow_ts - self.window_start_ts >= self.window_size_seconds:
-                self._close_sub_window()
-                self.window_start_ts = flow_ts - self._time_offset
-                # Re-add current flow to new window
-                self.window_flows[flow_id] = flow
-
     def handle_new_alert(self, alert: dict):
         """
-        Handle new alert: label connected flows as MALICIOUS, rest as BENIGN, train ONCE.
+        Buffer alert evidence for the next wall-clock training window.
+
+        Flows are not labeled or trained immediately. All alerts received
+        during a window are aggregated and used to label flows when the
+        window closes (see _close_training_window).
 
         Alert structure:
         - profile: {"ip": "..."}
@@ -1139,12 +1158,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         - id: alert ID
         """
         try:
-            self.print("Alert received, preparing training batch", 1, 1)
+            self.print("Alert received, buffering evidence", 1, 1)
             self.logger.log_timeline(
                 "ALERT", f"alert_{self.training_count_alert}"
             )
 
-            # Extract alert components
             profile_ip = alert.get("profile", {}).get("ip")
             tw_number = alert.get("timewindow", {}).get("number")
             if not profile_ip or not tw_number:
@@ -1155,11 +1173,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 )
                 return
 
-            # Get evidence IDs from correl_id or last_evidence
             correl_id = alert.get("correl_id", [])
             last_evidence = alert.get("last_evidence", {})
 
-            # Collect all evidence IDs
             evidence_ids = set()
             if correl_id:
                 evidence_ids.update(correl_id)
@@ -1170,16 +1186,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 self.print("No evidence IDs in alert, skipping", 1, 1)
                 return
 
-            self._last_alert_evidence_ids = list(evidence_ids)
-
-            # Collect all potential malicious flow identifiers from evidence
-            matched_uids: set = set()
-            for evid_id in evidence_ids:
-                uids = self.db.get_flows_causing_evidence(evid_id)
-                if uids:
-                    matched_uids.update(uids)
-
-            # Also extract IPs from evidence for fallback matching
             attacker_ip = (
                 last_evidence.get("attacker", {}).get("ip")
                 if isinstance(last_evidence.get("attacker"), dict)
@@ -1191,261 +1197,301 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 else None
             )
 
-            # Build malicious flows from current window only:
-            # - match by evidence uid
-            # - match by attacker/victim IP (flows involving that IP in window)
-            malicious_flows = []
-            malicious_flow_ids = set()
-            for flow_id, flow in self.window_flows.items():
-                # uid-based match from evidence
-                flow_uid = (flow.get("uid") or "").strip()
-                if flow_uid and flow_uid in matched_uids:
-                    malicious_flows.append(flow)
-                    malicious_flow_ids.add(flow_id)
-                    continue
-                # IP-based fallback match
-                saddr = str(flow.get("saddr", ""))
-                daddr = str(flow.get("daddr", ""))
-                if (
-                    attacker_ip
-                    and (saddr == attacker_ip or daddr == attacker_ip)
-                ) or (
-                    victim_ip and (saddr == victim_ip or daddr == victim_ip)
-                ):
-                    malicious_flows.append(flow)
-                    malicious_flow_ids.add(flow_id)
+            self.pending_alerts.append(
+                {
+                    "evidence_ids": list(evidence_ids),
+                    "attacker_ip": attacker_ip,
+                    "victim_ip": victim_ip,
+                }
+            )
+            self.training_count_alert += 1
+            self.print(
+                f"Buffered alert {self.training_count_alert} with "
+                f"{len(evidence_ids)} evidence IDs",
+                1,
+                1,
+            )
 
-            # Collect all other flows in window as benign
-            benign_flows = []
-            for flow_id, flow in self.window_flows.items():
-                if flow_id not in malicious_flow_ids:
-                    benign_flows.append(flow)
+        except Exception:
+            self.print(f"Error handling alert: {traceback.format_exc()}", 1, 1)
+
+    def _label_window_flows(self):
+        """
+        Label flows in the current window using all buffered alerts.
+
+        Returns:
+            tuple: (malicious_flows, benign_flows, malicious_flow_ids,
+                    alert_count, evidence_count)
+        """
+        matched_uids: set = set()
+        all_attacker_ips: set = set()
+        all_victim_ips: set = set()
+        all_evidence_ids: set = set()
+
+        for alert in self.pending_alerts:
+            for evid_id in alert.get("evidence_ids", []):
+                all_evidence_ids.add(evid_id)
+                uids = self.db.get_flows_causing_evidence(evid_id)
+                if uids:
+                    matched_uids.update(uids)
+            attacker_ip = alert.get("attacker_ip")
+            victim_ip = alert.get("victim_ip")
+            if attacker_ip:
+                all_attacker_ips.add(attacker_ip)
+            if victim_ip:
+                all_victim_ips.add(victim_ip)
+
+        malicious_flows = []
+        malicious_flow_ids = set()
+        for flow_id, flow in self.window_flows.items():
+            flow_uid = (flow.get("uid") or "").strip()
+            if flow_uid and flow_uid in matched_uids:
+                malicious_flows.append(flow)
+                malicious_flow_ids.add(flow_id)
+                continue
+
+            saddr = str(flow.get("saddr", ""))
+            daddr = str(flow.get("daddr", ""))
+            if (
+                saddr in all_attacker_ips
+                or daddr in all_attacker_ips
+                or saddr in all_victim_ips
+                or daddr in all_victim_ips
+            ):
+                malicious_flows.append(flow)
+                malicious_flow_ids.add(flow_id)
+
+        benign_flows = [
+            flow
+            for flow_id, flow in self.window_flows.items()
+            if flow_id not in malicious_flow_ids
+        ]
+
+        return (
+            malicious_flows,
+            benign_flows,
+            malicious_flow_ids,
+            len(self.pending_alerts),
+            len(all_evidence_ids),
+        )
+
+    def _add_flows_to_buffers(self, flows: list, label: str):
+        """
+        Add flows to training and alignment buffers if not already present.
+
+        Args:
+            flows: List of flow dictionaries to add.
+            label: BENIGN or MALICIOUS label to assign.
+        """
+        for flow in flows:
+            fid = self._get_flow_id(flow)
+            if fid in self._buffered_flow_ids:
+                continue
+            x, _ = self._process_flow(flow, label)
+            if x is not None:
+                self.training_buffer_x.append(x)
+                self.training_buffer_y.append(label)
+                self.alignment_buffer_x.append(x)
+                self.alignment_buffer_y.append(label)
+                self._buffered_flow_ids.add(fid)
+
+    def _log_window_comparisons(
+        self,
+        malicious_flows: list,
+        benign_flows: list,
+        malicious_flow_ids: set,
+        window_header: str,
+    ):
+        """
+        Log inferred-vs-GT and prediction-vs-label comparisons for the window.
+
+        Args:
+            malicious_flows: Flows labeled MALICIOUS.
+            benign_flows: Flows labeled BENIGN.
+            malicious_flow_ids: Set of flow IDs labeled MALICIOUS.
+            window_header: Header string for comparison logs.
+        """
+        self.logger.log_comp_header("comp_inferred_gt", window_header)
+        self.logger.log_comp_header("comp_test_inferred", window_header)
+        self.logger.log_comp_header("comp_test_gt", window_header)
+
+        all_flows = malicious_flows + benign_flows
+
+        # inferred vs GT
+        gt_labels = []
+        inferred_labels = []
+        for i, flow in enumerate(all_flows):
+            if i >= len(self.training_buffer_y):
+                break
+            gt_norm = self._get_simulated_gt(flow)
+            if gt_norm is None:
+                continue
+            inferred_labels.append(self.training_buffer_y[i])
+            gt_labels.append(gt_norm)
+
+        if len(gt_labels) > 0:
+            inf_arr = np.array(inferred_labels)
+            gt_arr = np.array(gt_labels)
+            mal_inf = int(np.sum(inf_arr == MALICIOUS))
+            ben_inf = int(np.sum(inf_arr == BENIGN))
+            mal_gt = int(np.sum(gt_arr == MALICIOUS))
+            ben_gt = int(np.sum(gt_arr == BENIGN))
+            tp = int(np.sum((inf_arr == MALICIOUS) & (gt_arr == MALICIOUS)))
+            fp = int(np.sum((inf_arr == MALICIOUS) & (gt_arr == BENIGN)))
+            tn = int(np.sum((inf_arr == BENIGN) & (gt_arr == BENIGN)))
+            fn = int(np.sum((inf_arr == BENIGN) & (gt_arr == MALICIOUS)))
+            acc = (tp + tn) / len(gt_labels) if len(gt_labels) > 0 else 0.0
+            self.logger.log_comp_line(
+                "comp_inferred_gt",
+                f"inferred vs GT: {len(gt_labels)} samples | "
+                f"Mal/Ben: {mal_inf}/{ben_inf} vs {mal_gt}/{ben_gt} | "
+                f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
+            )
+            if self._using_merged_model:
+                self.logger.log_comp_line(
+                    "comp_merged_inferred_gt",
+                    f"inferred vs GT: {len(gt_labels)} samples | "
+                    f"Mal/Ben: {mal_inf}/{ben_inf} vs {mal_gt}/{ben_gt} | "
+                    f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
+                )
+
+        # pred vs inferred and pred vs GT
+        pred_data = []
+        for flow in all_flows:
+            fid = self._get_flow_id(flow)
+            pred = self.test_time_predictions.pop(fid, None)
+            if pred is not None:
+                inferred = MALICIOUS if fid in malicious_flow_ids else BENIGN
+                gt_norm = self._get_simulated_gt(flow)
+                pred_data.append((pred, inferred, gt_norm))
+
+        if len(pred_data) > 0:
+            pred_labels = [p for p, _, _ in pred_data]
+            pred_inferred_labels = [i for _, i, _ in pred_data]
+
+            pred_arr = np.array(pred_labels)
+            pinf_arr = np.array(pred_inferred_labels)
+            mal_pred = int(np.sum(pred_arr == MALICIOUS))
+            ben_pred = int(np.sum(pred_arr == BENIGN))
+            mal_pinf = int(np.sum(pinf_arr == MALICIOUS))
+            ben_pinf = int(np.sum(pinf_arr == BENIGN))
+            tp = int(np.sum((pred_arr == MALICIOUS) & (pinf_arr == MALICIOUS)))
+            fp = int(np.sum((pred_arr == MALICIOUS) & (pinf_arr == BENIGN)))
+            tn = int(np.sum((pred_arr == BENIGN) & (pinf_arr == BENIGN)))
+            fn = int(np.sum((pred_arr == BENIGN) & (pinf_arr == MALICIOUS)))
+            acc = (tp + tn) / len(pred_labels) if len(pred_labels) > 0 else 0.0
+            self.logger.log_comp_line(
+                "comp_test_inferred",
+                f"pred vs inferred: {len(pred_labels)} samples | "
+                f"Mal/Ben: {mal_pred}/{ben_pred} vs {mal_pinf}/{ben_pinf} | "
+                f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
+            )
+
+            pvg_pairs = [(p, g) for p, _, g in pred_data if g is not None]
+            if len(pvg_pairs) > 0:
+                pvg_preds = [p for p, _ in pvg_pairs]
+                pvg_gts = [g for _, g in pvg_pairs]
+                pvg_arr = np.array(pvg_preds)
+                gt_arr2 = np.array(pvg_gts)
+                mal_pvg = int(np.sum(pvg_arr == MALICIOUS))
+                ben_pvg = int(np.sum(pvg_arr == BENIGN))
+                mal_gt2 = int(np.sum(gt_arr2 == MALICIOUS))
+                ben_gt2 = int(np.sum(gt_arr2 == BENIGN))
+                tp = int(
+                    np.sum((pvg_arr == MALICIOUS) & (gt_arr2 == MALICIOUS))
+                )
+                fp = int(np.sum((pvg_arr == MALICIOUS) & (gt_arr2 == BENIGN)))
+                tn = int(np.sum((pvg_arr == BENIGN) & (gt_arr2 == BENIGN)))
+                fn = int(np.sum((pvg_arr == BENIGN) & (gt_arr2 == MALICIOUS)))
+                acc = (tp + tn) / len(pvg_preds) if len(pvg_preds) > 0 else 0.0
+                self.logger.log_comp_line(
+                    "comp_test_gt",
+                    f"pred vs GT: {len(pvg_preds)} samples | "
+                    f"Mal/Ben: {mal_pvg}/{ben_pvg} vs {mal_gt2}/{ben_gt2} | "
+                    f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
+                )
+                if self._using_merged_model:
+                    self.logger.log_comp_line(
+                        "comp_merged_test_gt",
+                        f"pred vs GT: {len(pvg_preds)} samples | "
+                        f"Mal/Ben: {mal_pvg}/{ben_pvg} vs {mal_gt2}/{ben_gt2} | "
+                        f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
+                    )
+
+    def _close_training_window(self):
+        """
+        Close the current wall-clock training window.
+
+        Labels flows using all buffered alerts, adds them to the training
+        buffer, logs comparisons, and trains if min_training_samples is met.
+        """
+        try:
+            self.training_count_window += 1
+            window_n = self.training_count_window
+            self.print(
+                f"Training window {window_n} closed, preparing batch", 1, 1
+            )
+
+            (
+                malicious_flows,
+                benign_flows,
+                malicious_flow_ids,
+                alert_count,
+                evidence_count,
+            ) = self._label_window_flows()
 
             self.print(
-                f"Found {len(malicious_flows)} malicious, {len(benign_flows)} benign flows",
+                f"Window {window_n}: {len(malicious_flows)} malicious, "
+                f"{len(benign_flows)} benign flows from {alert_count} alerts",
                 0,
                 1,
             )
 
-            # Skip training if no flows labeled
-            if len(malicious_flows) + len(benign_flows) == 0:
-                self.print(
-                    "No flows to train on, skipping training",
-                    0,
-                    1,
-                )
+            total_labeled = len(malicious_flows) + len(benign_flows)
+            if total_labeled == 0:
+                self.print(f"No flows in window {window_n}, skipping", 0, 1)
+                self.window_flows.clear()
+                self.pending_alerts.clear()
+                self.test_time_predictions.clear()
+                self.training_window_start += self.window_size_seconds
                 return
 
-            # Prepare training data — accumulate across deferred alerts
-            for flow in malicious_flows:
-                fid = self._get_flow_id(flow)
-                if fid in self._buffered_flow_ids:
-                    continue
-                x, _ = self._process_flow(flow, MALICIOUS)
-                if x is not None:
-                    self.training_buffer_x.append(x)
-                    self.training_buffer_y.append(MALICIOUS)
-                    self.alignment_buffer_x.append(x)
-                    self.alignment_buffer_y.append(MALICIOUS)
-                    self._buffered_flow_ids.add(fid)
+            self._add_flows_to_buffers(malicious_flows, MALICIOUS)
+            self._add_flows_to_buffers(benign_flows, BENIGN)
 
-            for flow in benign_flows:
-                fid = self._get_flow_id(flow)
-                if fid in self._buffered_flow_ids:
-                    continue
-                x, _ = self._process_flow(flow, BENIGN)
-                if x is not None:
-                    self.training_buffer_x.append(x)
-                    self.training_buffer_y.append(BENIGN)
-                    self.alignment_buffer_x.append(x)
-                    self.alignment_buffer_y.append(BENIGN)
-                    self._buffered_flow_ids.add(fid)
+            connected_count = len(malicious_flows)
+            total_batch = total_labeled
+            header = (
+                f"window_{window_n} | "
+                f"{alert_count} alerts, {evidence_count} evidence. "
+                f"{connected_count} malicious connected to evidence, "
+                f"{len(benign_flows)} benign, "
+                f"{total_batch} total"
+            )
+            self._log_window_comparisons(
+                malicious_flows, benign_flows, malicious_flow_ids, header
+            )
 
-            # 3-way label comparison block
-            self.training_count_alert += 1
-            if len(self.training_buffer_x) > 0:
-                evidence_ids_count = len(evidence_ids)
-                connected_count = len(malicious_flows)
-                total_batch = len(malicious_flows) + len(benign_flows)
+            self._training_trigger = "window"
+            if len(self.training_buffer_x) >= self.min_training_samples:
+                self._train_batch()
 
-                header = (
-                    f"alert_{self.training_count_alert} | "
-                    f"{evidence_ids_count} evidence data. "
-                    f"{connected_count} malicious connected to evidence, "
-                    f"{len(benign_flows)} benign, "
-                    f"{total_batch} total"
+                self.malware_metrics = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
+                self.seen_labels = {MALICIOUS: 0, BENIGN: 0}
+                self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
+
+                target = (
+                    "merged_test" if self._using_merged_model else "local_test"
                 )
-                self.logger.log_comp_header("comp_inferred_gt", header)
-                self.logger.log_comp_header("comp_test_inferred", header)
-                self.logger.log_comp_header("comp_test_gt", header)
+                self.logger.log_test_marker(
+                    target,
+                    f"New local model ({self._training_trigger}_{window_n})",
+                )
 
-                # inferred vs GT
-                gt_labels = []
-                inferred_labels = []
-                all_flows = malicious_flows + benign_flows
-                for i, flow in enumerate(all_flows):
-                    if i >= len(self.training_buffer_y):
-                        break
-                    gt_norm = self._get_simulated_gt(flow)
-                    if gt_norm is None:
-                        continue
-                    inferred_labels.append(self.training_buffer_y[i])
-                    gt_labels.append(gt_norm)
-                if len(gt_labels) > 0:
-                    inf_arr = np.array(inferred_labels)
-                    gt_arr = np.array(gt_labels)
-                    mal_inf = int(np.sum(inf_arr == MALICIOUS))
-                    ben_inf = int(np.sum(inf_arr == BENIGN))
-                    mal_gt = int(np.sum(gt_arr == MALICIOUS))
-                    ben_gt = int(np.sum(gt_arr == BENIGN))
-                    tp = int(
-                        np.sum((inf_arr == MALICIOUS) & (gt_arr == MALICIOUS))
-                    )
-                    fp = int(
-                        np.sum((inf_arr == MALICIOUS) & (gt_arr == BENIGN))
-                    )
-                    tn = int(np.sum((inf_arr == BENIGN) & (gt_arr == BENIGN)))
-                    fn = int(
-                        np.sum((inf_arr == BENIGN) & (gt_arr == MALICIOUS))
-                    )
-                    acc = (
-                        (tp + tn) / len(gt_labels)
-                        if len(gt_labels) > 0
-                        else 0.0
-                    )
-                    self.logger.log_comp_line(
-                        "comp_inferred_gt",
-                        f"inferred vs GT: {len(gt_labels)} samples | "
-                        f"Mal/Ben: {mal_inf}/{ben_inf} vs {mal_gt}/{ben_gt} | "
-                        f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
-                    )
-                    if self._using_merged_model:
-                        self.logger.log_comp_line(
-                            "comp_merged_inferred_gt",
-                            f"inferred vs GT: {len(gt_labels)} samples | "
-                            f"Mal/Ben: {mal_inf}/{ben_inf} vs {mal_gt}/{ben_gt} | "
-                            f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
-                        )
-
-                # Collect test-time preds with inferred labels and GT in one pass
-                pred_data = []
-                for flow in all_flows:
-                    fid = self._get_flow_id(flow)
-                    pred = self.test_time_predictions.pop(fid, None)
-                    if pred is not None:
-                        inferred = (
-                            MALICIOUS if fid in malicious_flow_ids else BENIGN
-                        )
-                        gt_norm = self._get_simulated_gt(flow)
-                        pred_data.append((pred, inferred, gt_norm))
-
-                if len(pred_data) > 0:
-                    pred_labels = [p for p, _, _ in pred_data]
-                    pred_inferred_labels = [i for _, i, _ in pred_data]
-
-                    # pred vs inferred
-                    pred_arr = np.array(pred_labels)
-                    pinf_arr = np.array(pred_inferred_labels)
-                    mal_pred = int(np.sum(pred_arr == MALICIOUS))
-                    ben_pred = int(np.sum(pred_arr == BENIGN))
-                    mal_pinf = int(np.sum(pinf_arr == MALICIOUS))
-                    ben_pinf = int(np.sum(pinf_arr == BENIGN))
-                    tp = int(
-                        np.sum(
-                            (pred_arr == MALICIOUS) & (pinf_arr == MALICIOUS)
-                        )
-                    )
-                    fp = int(
-                        np.sum((pred_arr == MALICIOUS) & (pinf_arr == BENIGN))
-                    )
-                    tn = int(
-                        np.sum((pred_arr == BENIGN) & (pinf_arr == BENIGN))
-                    )
-                    fn = int(
-                        np.sum((pred_arr == BENIGN) & (pinf_arr == MALICIOUS))
-                    )
-                    acc = (
-                        (tp + tn) / len(pred_labels)
-                        if len(pred_labels) > 0
-                        else 0.0
-                    )
-                    self.logger.log_comp_line(
-                        "comp_test_inferred",
-                        f"pred vs inferred: {len(pred_labels)} samples | "
-                        f"Mal/Ben: {mal_pred}/{ben_pred} vs {mal_pinf}/{ben_pinf} | "
-                        f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
-                    )
-
-                    # pred vs GT (only flows with GT available)
-                    pvg_pairs = [
-                        (p, g) for p, _, g in pred_data if g is not None
-                    ]
-                    if len(pvg_pairs) > 0:
-                        pvg_preds = [p for p, _ in pvg_pairs]
-                        pvg_gts = [g for _, g in pvg_pairs]
-                        pvg_arr = np.array(pvg_preds)
-                        gt_arr2 = np.array(pvg_gts)
-                        mal_pvg = int(np.sum(pvg_arr == MALICIOUS))
-                        ben_pvg = int(np.sum(pvg_arr == BENIGN))
-                        mal_gt2 = int(np.sum(gt_arr2 == MALICIOUS))
-                        ben_gt2 = int(np.sum(gt_arr2 == BENIGN))
-                        tp = int(
-                            np.sum(
-                                (pvg_arr == MALICIOUS) & (gt_arr2 == MALICIOUS)
-                            )
-                        )
-                        fp = int(
-                            np.sum(
-                                (pvg_arr == MALICIOUS) & (gt_arr2 == BENIGN)
-                            )
-                        )
-                        tn = int(
-                            np.sum((pvg_arr == BENIGN) & (gt_arr2 == BENIGN))
-                        )
-                        fn = int(
-                            np.sum(
-                                (pvg_arr == BENIGN) & (gt_arr2 == MALICIOUS)
-                            )
-                        )
-                        acc = (
-                            (tp + tn) / len(pvg_preds)
-                            if len(pvg_preds) > 0
-                            else 0.0
-                        )
-                        self.logger.log_comp_line(
-                            "comp_test_gt",
-                            f"pred vs GT: {len(pvg_preds)} samples | "
-                            f"Mal/Ben: {mal_pvg}/{ben_pvg} vs {mal_gt2}/{ben_gt2} | "
-                            f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
-                        )
-                        if self._using_merged_model:
-                            self.logger.log_comp_line(
-                                "comp_merged_test_gt",
-                                f"pred vs GT: {len(pvg_preds)} samples | "
-                                f"Mal/Ben: {mal_pvg}/{ben_pvg} vs {mal_gt2}/{ben_gt2} | "
-                                f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
-                            )
-
-                self._training_trigger = "alert"
-                if len(self.training_buffer_x) >= self.min_training_samples:
-                    self._train_batch()
-
-                    self.malware_metrics = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
-                    self.seen_labels = {MALICIOUS: 0, BENIGN: 0}
-                    self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
-
-                    target = (
-                        "merged_test"
-                        if self._using_merged_model
-                        else "local_test"
-                    )
-                    self.logger.log_test_marker(
-                        target,
-                        f"New local model ({self._training_trigger}_{self.training_count_alert})",
-                    )
-
-                    # Discard window after training batch
-                    self.window_flows.clear()
+            self.window_flows.clear()
+            self.pending_alerts.clear()
+            self.test_time_predictions.clear()
+            self.training_window_start += self.window_size_seconds
 
             if (
                 self.testing_flows_since_last_log > 0
@@ -1454,219 +1500,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 self.flush_testing_results()
 
         except Exception:
-            self.print(f"Error handling alert: {traceback.format_exc()}", 1, 1)
-
-    def _close_sub_window(self):
-        """
-        Close current sub-window: label all remaining flows as BENIGN, train ONCE.
-
-        Called when flow timestamps indicate our sub-window has expired.
-        Independent of Slips' global time windows.
-        """
-        try:
-            self.print("Sub-window closed, preparing training batch", 1, 1)
-            self.logger.log_timeline(
-                "TW_CLOSE", f"twclose_{self.training_count_twclose + 1}"
-            )
-
-            # All remaining flows are benign
-            remaining_flows = list(self.window_flows.values())
-
-            if not remaining_flows:
-                self.print(
-                    "No unlabeled flows in closed window, skipping training",
-                    0,
-                    1,
-                )
-                # Still clear window for next iteration
-                for fid in list(self.window_flows.keys()):
-                    self.test_time_predictions.pop(fid, None)
-                self.window_flows.clear()
-                return
-
             self.print(
-                f"Training on {len(remaining_flows)} benign flows", 1, 1
-            )
-
-            # Prepare training data — accumulate across deferred windows
-            for flow in remaining_flows:
-                fid = self._get_flow_id(flow)
-                if fid in self._buffered_flow_ids:
-                    continue
-                x, _ = self._process_flow(flow, BENIGN)
-                if x is not None:
-                    self.training_buffer_x.append(x)
-                    self.training_buffer_y.append(BENIGN)
-                    self.alignment_buffer_x.append(x)
-                    self.alignment_buffer_y.append(BENIGN)
-                    self._buffered_flow_ids.add(fid)
-
-            # 3-way label comparison block (no evidence count for twclose)
-            self.training_count_twclose += 1
-            if len(self.training_buffer_x) > 0:
-                header = f"twclose_{self.training_count_twclose} | {len(remaining_flows)} benign flows"
-                self.logger.log_comp_header("comp_inferred_gt", header)
-                self.logger.log_comp_header("comp_test_inferred", header)
-                self.logger.log_comp_header("comp_test_gt", header)
-
-                # inferred vs GT
-                gt_labels = []
-                inferred_labels = []
-                for i, flow in enumerate(remaining_flows):
-                    if i >= len(self.training_buffer_y):
-                        break
-                    gt_norm = self._get_simulated_gt(flow)
-                    if gt_norm is None:
-                        continue
-                    inferred_labels.append(self.training_buffer_y[i])
-                    gt_labels.append(gt_norm)
-                if len(gt_labels) > 0:
-                    inf_arr = np.array(inferred_labels)
-                    gt_arr = np.array(gt_labels)
-                    mal_inf = int(np.sum(inf_arr == MALICIOUS))
-                    ben_inf = int(np.sum(inf_arr == BENIGN))
-                    mal_gt = int(np.sum(gt_arr == MALICIOUS))
-                    ben_gt = int(np.sum(gt_arr == BENIGN))
-                    tp = int(
-                        np.sum((inf_arr == MALICIOUS) & (gt_arr == MALICIOUS))
-                    )
-                    fp = int(
-                        np.sum((inf_arr == MALICIOUS) & (gt_arr == BENIGN))
-                    )
-                    tn = int(np.sum((inf_arr == BENIGN) & (gt_arr == BENIGN)))
-                    fn = int(
-                        np.sum((inf_arr == BENIGN) & (gt_arr == MALICIOUS))
-                    )
-                    acc = (
-                        (tp + tn) / len(gt_labels)
-                        if len(gt_labels) > 0
-                        else 0.0
-                    )
-                    self.logger.log_comp_line(
-                        "comp_inferred_gt",
-                        f"inferred vs GT: {len(gt_labels)} samples | "
-                        f"Mal/Ben: {mal_inf}/{ben_inf} vs {mal_gt}/{ben_gt} | "
-                        f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
-                    )
-
-                # Collect test-time preds with inferred labels and GT in one pass
-                pred_data = []
-                for i, flow in enumerate(remaining_flows):
-                    fid = self._get_flow_id(flow)
-                    pred = self.test_time_predictions.pop(fid, None)
-                    if pred is not None:
-                        gt_norm = self._get_simulated_gt(flow)
-                        pred_data.append((pred, gt_norm))
-
-                if len(pred_data) > 0:
-                    pred_labels = [p for p, _ in pred_data]
-                    pred_inferred_labels = [BENIGN] * len(pred_data)
-
-                    # pred vs inferred
-                    pred_arr = np.array(pred_labels)
-                    pinf_arr = np.array(pred_inferred_labels)
-                    mal_pred = int(np.sum(pred_arr == MALICIOUS))
-                    ben_pred = int(np.sum(pred_arr == BENIGN))
-                    mal_pinf = int(np.sum(pinf_arr == MALICIOUS))
-                    ben_pinf = int(np.sum(pinf_arr == BENIGN))
-                    tp = int(
-                        np.sum(
-                            (pred_arr == MALICIOUS) & (pinf_arr == MALICIOUS)
-                        )
-                    )
-                    fp = int(
-                        np.sum((pred_arr == MALICIOUS) & (pinf_arr == BENIGN))
-                    )
-                    tn = int(
-                        np.sum((pred_arr == BENIGN) & (pinf_arr == BENIGN))
-                    )
-                    fn = int(
-                        np.sum((pred_arr == BENIGN) & (pinf_arr == MALICIOUS))
-                    )
-                    acc = (
-                        (tp + tn) / len(pred_labels)
-                        if len(pred_labels) > 0
-                        else 0.0
-                    )
-                    self.logger.log_comp_line(
-                        "comp_test_inferred",
-                        f"pred vs inferred: {len(pred_labels)} samples | "
-                        f"Mal/Ben: {mal_pred}/{ben_pred} vs {mal_pinf}/{ben_pinf} | "
-                        f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
-                    )
-
-                    # pred vs GT (only flows with GT available)
-                    pvg_pairs = [(p, g) for p, g in pred_data if g is not None]
-                    if len(pvg_pairs) > 0:
-                        pvg_preds = [p for p, _ in pvg_pairs]
-                        pvg_gts = [g for _, g in pvg_pairs]
-                        pvg_arr = np.array(pvg_preds)
-                        gt_arr2 = np.array(pvg_gts)
-                        mal_pvg = int(np.sum(pvg_arr == MALICIOUS))
-                        ben_pvg = int(np.sum(pvg_arr == BENIGN))
-                        mal_gt2 = int(np.sum(gt_arr2 == MALICIOUS))
-                        ben_gt2 = int(np.sum(gt_arr2 == BENIGN))
-                        tp = int(
-                            np.sum(
-                                (pvg_arr == MALICIOUS) & (gt_arr2 == MALICIOUS)
-                            )
-                        )
-                        fp = int(
-                            np.sum(
-                                (pvg_arr == MALICIOUS) & (gt_arr2 == BENIGN)
-                            )
-                        )
-                        tn = int(
-                            np.sum((pvg_arr == BENIGN) & (gt_arr2 == BENIGN))
-                        )
-                        fn = int(
-                            np.sum(
-                                (pvg_arr == BENIGN) & (gt_arr2 == MALICIOUS)
-                            )
-                        )
-                        acc = (
-                            (tp + tn) / len(pvg_preds)
-                            if len(pvg_preds) > 0
-                            else 0.0
-                        )
-                        self.logger.log_comp_line(
-                            "comp_test_gt",
-                            f"pred vs GT: {len(pvg_preds)} samples | "
-                            f"Mal/Ben: {mal_pvg}/{ben_pvg} vs {mal_gt2}/{ben_gt2} | "
-                            f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
-                        )
-                        if self._using_merged_model:
-                            self.logger.log_comp_line(
-                                "comp_merged_test_gt",
-                                f"pred vs GT: {len(pvg_preds)} samples | "
-                                f"Mal/Ben: {mal_pvg}/{ben_pvg} vs {mal_gt2}/{ben_gt2} | "
-                                f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
-                            )
-
-                self._training_trigger = "twclose"
-                if len(self.training_buffer_x) >= self.min_training_samples:
-                    self._train_batch()
-
-                    self.malware_metrics = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
-                    self.seen_labels = {MALICIOUS: 0, BENIGN: 0}
-                    self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
-
-                    target = (
-                        "merged_test"
-                        if self._using_merged_model
-                        else "local_test"
-                    )
-                    self.logger.log_test_marker(
-                        target,
-                        f"New local model ({self._training_trigger}_{self.training_count_twclose})",
-                    )
-
-                    # Clear window for next iteration
-                    self.window_flows.clear()
-
-        except Exception:
-            self.print(
-                f"Error handling tw_closed: {traceback.format_exc()}", 0, 1
+                f"Error closing training window: {traceback.format_exc()}",
+                0,
+                1,
             )
 
     def handle_p2p_model(self, model_data: dict):
@@ -1703,8 +1540,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"Error handling P2P model: {traceback.format_exc()}", 0, 1
             )
 
+    def _reset_head_adam_state(self):
+        """Reset Adam state for head parameters before head-only fine-tuning."""
+        for name, state in self._adam_state.items():
+            if "head" in name:
+                state["m"].zero_()
+                state["v"].zero_()
+                state["step"] = 0
+
     def _train_batch(self):
-        """Train on accumulated training buffer with configured epochs, log metrics."""
+        """Train on accumulated training buffer: local fc1+head, local head, merge head."""
         try:
             self.print("_train_batch: entering", 1, 1)
             if len(self.training_buffer_x) == 0:
@@ -1723,16 +1568,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             mal_count = int(np.sum(y == MALICIOUS))
             ben_count = int(np.sum(y == BENIGN))
 
-            evidence_count = 0
-            counter = (
-                self.training_count_alert
-                if self._training_trigger == "alert"
-                else self.training_count_twclose
-            )
-            if self._training_trigger == "alert":
-                evidence_count = len(
-                    getattr(self, "_last_alert_evidence_ids", [])
-                )
+            counter = self.training_count_window
 
             self.logger.log_timeline(
                 "TRAIN_START",
@@ -1741,43 +1577,65 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             self.logger.log_train_header(
                 "local_train",
-                f"{self._training_trigger}_{counter} | {mal_count} mal ({evidence_count} evidence), {ben_count} ben",
+                f"{self._training_trigger}_{counter} | {mal_count} mal, {ben_count} ben",
             )
 
             self.update_preprocessor(pd.DataFrame(X))
             X_scaled = self.scaler.transform(X)
 
+            # Save scaled batch for both local and merge head fine-tuning
+            self._last_train_X = X_scaled.copy()
+            self._last_train_Y = y.copy()
+
             self.print(
                 f"[TIMELINE] TRAIN {self._training_trigger}_{counter}: "
-                f"{epochs} epochs, {len(y)} samples ({mal_count} mal, {ben_count} ben), "
-                f"{evidence_count} evidence",
+                f"{epochs} epochs, {len(y)} samples ({mal_count} mal, {ben_count} ben)",
                 1,
                 1,
             )
+
+            # Phase 1: local full training (fc1 + head together)
             self.fit_incremental_model(X_scaled, y, train_target="local")
             self.logger.log_timeline(
                 "TRAIN_DONE",
                 f"{self._training_trigger}_{counter} samples={len(y)}",
             )
 
+            # Capture the head produced by local training; merge will start from here too
+            head_before_w, head_before_b = self.model.get_head_weights()
+
+            # Phase 2: local head fine-tuning (fc1 frozen)
+            self.logger.log_train_header(
+                "local_head_train",
+                f"{self._training_trigger}_{counter} | {mal_count} mal, {ben_count} ben",
+            )
+            self._reset_head_adam_state()
+            self._freeze_fc1_for_training = True
+            self.fit_incremental_model(
+                self._last_train_X,
+                self._last_train_Y,
+                train_target="local_head",
+            )
+            self._freeze_fc1_for_training = False
+
             self._save_local_model()
 
             self._using_merged_model = False
             self._is_fitted = True
-            # Save training data for potential merge fine-tuning
-            self._last_train_X = X_scaled.copy()
-            self._last_train_Y = y.copy()
             self.print("[DEBUG] _train_batch done, about to send model", 1, 1)
 
             self.print("_train_batch: calling send_model_to_peers", 1, 1)
             self.send_model_to_peers()
-            self.print("_train_batch: fit_incremental_model returned", 1, 1)
-            # After own training, try merge if we have pending peer models
+            self.print("_train_batch: send_model_to_peers returned", 1, 1)
+
+            # After own training, try merge if we have pending peer models.
+            # Merge averages fc1, then fine-tunes the SAME pre-local head
+            # (before the 5-epoch local head tuning) under identical conditions.
             if len(self.peer_models) >= 1:
                 self.print(
                     "_train_batch: pending peer models, triggering merge", 1, 1
                 )
-                self.trigger_merge()
+                self.trigger_merge(head_before_w, head_before_b)
 
             self.training_buffer_x.clear()
             self.training_buffer_y.clear()
@@ -1790,11 +1648,22 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"Error in _train_batch: {traceback.format_exc()}", 1, 1
             )
 
-    def trigger_merge(self):
+    def trigger_merge(
+        self,
+        head_before_w: Optional[torch.Tensor] = None,
+        head_before_b: Optional[torch.Tensor] = None,
+    ):
         """
         Merge all peer models + own latest, retrain head, save merged model.
 
-        Only uses latest local models from each peer (not previous merges).
+        Averages fc1 across peers + own model, then fine-tunes the head
+        starting from the head produced by local full training (before any
+        head-only fine-tuning). This makes local and merged models differ
+        only in the origin of fc1.
+
+        Args:
+            head_before_w: Head weight tensor from after local full training.
+            head_before_b: Head bias tensor from after local full training.
         """
         try:
             self.print("trigger_merge: entering", 1, 1)
@@ -1868,6 +1737,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             if self.model:
                 self.model.set_fc1_weights(merged_fc1_weight, merged_fc1_bias)
 
+            # Start merge head fine-tuning from the same head used for local
+            # head fine-tuning, so local and merged differ only in fc1 origin.
+            if head_before_w is not None and head_before_b is not None:
+                self.model.set_head_weights(head_before_w, head_before_b)
+                self._reset_head_adam_state()
+
             self.print("trigger_merge: calling _align_head_on_buffer", 1, 1)
             self._align_head_on_buffer(self._last_train_X, self._last_train_Y)
 
@@ -1889,7 +1764,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
     def _align_head_on_buffer(self, X: np.ndarray, y: np.ndarray):
         """
-        Freeze fc1, train head ONLY on alignment buffer with configured epochs.
+        Freeze fc1, train head ONLY on the provided batch with configured epochs.
         """
         try:
             if len(X) == 0:

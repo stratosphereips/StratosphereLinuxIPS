@@ -5,13 +5,17 @@ Federated learning module for Slips with model sharing across peers. Uses frozen
 
 ## Core Workflow
 
-### 1. Local Training (Triggered by Alert or Window Close)
+### 1. Local Training (Wall-Clock Window Close)
 ```
-Alert/Window Close
+Buffer flows and alerts for 5 minutes (with per-peer offset)
     ↓
-Label flows (malicious from evidence, rest benign)
+Close window: label flows from all buffered alerts' evidence
     ↓
-Train fc1 + head ONCE on training buffer
+Train fc1 + head for local_training_epochs
+    ↓
+Save head produced by local training as "head_before"
+    ↓
+Freeze fc1, fine-tune head for merge_finetune_epochs (local_head_train.log)
     ↓
 Save as latest_local model
     ↓
@@ -24,16 +28,19 @@ Receive peer models
     ↓
 Aggregate fc1 weights (AVERAGE)
     ↓
-Freeze fc1, retrain head on alignment buffer
+Restore "head_before" (head from local full training)
+    ↓
+Freeze fc1, fine-tune head for merge_finetune_epochs (merged_train.log)
     ↓
 Save as merged_N model
 ```
 
 ### 3. Key Design Decisions
-- **Two buffers**: training (cleared after each train) + alignment (accumulates all flows)
-- **Model separation**: latest_local (own data only, sent to peers unchanged) vs merged (aggregated, used for inference)
-- **Merged models NOT reused**: Each merge uses only latest local models from peers, not previous merges
-- **Off-sync windows**: Random time offset per peer to avoid network pulses
+- **Comparable local and merged models**: both heads are fine-tuned for the same number of epochs from the same starting head; only fc1 differs (local-only vs averaged).
+- **Wall-clock training windows**: windows close every 5 minutes, independent of Slips global time windows, with a per-peer random offset.
+- **Buffered alerts**: alerts are not processed immediately; all evidence from a window is used together to label flows at window close.
+- **Merged models NOT reused**: Each merge uses only latest local models from peers, not previous merges.
+- **Off-sync windows**: Random time offset per peer to avoid synchronized training pulses.
 
 ## Artifact Structure
 ```
@@ -50,9 +57,9 @@ artifacts/
 ```
 
 ## P2P Integration
-- **Sending**: After each local training, publish model weights to `p2p_model_outgoing` channel
-- **Receiving**: Subscribe to `p2p_model_received`, store latest per peer in memory
-- **Merge trigger**: When new peer model received or periodic interval
+- **Sending**: After each local training, publish model weights to `p2p_pygo` channel
+- **Receiving**: Subscribe to `p2p_gopy`, store latest per peer in memory
+- **Merge trigger**: After own local training if any peer models are pending
 
 ## Base Class Integration
 - Use `store_testing_results()` for TP/FP/TN/FN metrics
