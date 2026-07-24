@@ -29,7 +29,7 @@ pytest-mock==3.15.1
 pytest-xdist==3.8.0
 scipy==1.15.1
 scikit-learn==1.7.2
-GitPython==3.1.50
+GitPython==3.1.54
 protobuf==5.29.6
 exclusiveprocess==0.9.4
 pytest-dependency==0.6.0
