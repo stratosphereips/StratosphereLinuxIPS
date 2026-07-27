@@ -211,6 +211,8 @@ class EvidenceHandlerWorker(IModule):
         self.evidence_logger_q.put({"to_log": data, "where": "alerts.log"})
 
     def log_alert(self, alert: Alert, blocked=False):
+        """logs the given alert to alerts.log and alerts.json only.
+        doesnt log it to cli"""
         now = utils.get_human_readable_datetime()
 
         alert_description = (

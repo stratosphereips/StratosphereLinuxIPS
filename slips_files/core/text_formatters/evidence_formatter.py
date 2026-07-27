@@ -18,6 +18,9 @@ from slips_files.core.structures.evidence import (
 from slips_files.core.structures.alerts import (
     Alert,
 )
+from slips_files.core.structures.risk_weights import (
+    convert_float_to_risk_weight,
+)
 
 
 class EvidenceFormatter:
@@ -88,6 +91,16 @@ class EvidenceFormatter:
             f"detected as malicious in timewindow {alert.timewindow.number} "
             f"(start {twid_start_time}, stop {tw_stop_time})"
         )
+        if not getattr(self, "is_running_non_stop", False):
+            self.is_running_non_stop = self.db.is_running_non_stop()
+
+        current_risk_weight = self.db.get_max_seen_risk_weight(
+            str(alert.profile), 0
+        )
+        current_risk_weight = convert_float_to_risk_weight(current_risk_weight)
+
+        if self.is_running_non_stop:
+            alert_to_print += f"(risk weight: {current_risk_weight})"
 
         return alert_to_print
 
