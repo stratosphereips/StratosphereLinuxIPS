@@ -423,7 +423,7 @@ class AlertHandler:
         """
         # Do not store huge values beyond the largest configured weight.
         capped_risk_weight = max(
-            0.0, min(float(risk_weight), RiskWeight.LOW.upper_bound)
+            0.0, min(float(risk_weight), RiskWeight.HIGH.lower_bound)
         )
         self.r.hset(
             self.constants.MAX_RISK_WEIGHT_OF_ALL_PROFILES,
@@ -455,14 +455,16 @@ class AlertHandler:
         }
 
     def get_max_seen_risk_weight(
-        self, profileid: str, risk_weight: float
+        self, profileid: str, candidate_risk_weight: float
     ) -> float:
         """
         Store and return the max seen risk weight across all profiles.
+        If the given candidate risk weight is the max slips has seen so
+        far, slips sets it as the cur risk weight. if not, slips doesnt use it.
 
         Parameters:
             profileid: Profile that owns the candidate risk weight.
-            risk_weight: Candidate risk weight value.
+            candidate_risk_weight: Candidate risk weight value.
 
         Return value:
             Max seen risk weight across all profiles.
@@ -470,8 +472,11 @@ class AlertHandler:
         max_seen_risk_weight = self._get_max_seen_risk_weight()
         old_risk_weight = float(max_seen_risk_weight["risk_weight"])
         candidate_risk_weight = max(
-            0.0, min(float(risk_weight), RiskWeight.LOW.upper_bound)
+            float(candidate_risk_weight), old_risk_weight
         )
+        if candidate_risk_weight == 0:
+            candidate_risk_weight = RiskWeight.LOW.upper_bound
+
         if old_risk_weight < candidate_risk_weight:
             self._set_max_seen_risk_weight(profileid, candidate_risk_weight)
             return candidate_risk_weight
