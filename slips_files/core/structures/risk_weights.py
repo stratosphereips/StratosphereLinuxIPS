@@ -1,75 +1,111 @@
 from enum import Enum
-from typing import Tuple
 
-from slips_files.common.parsers.config_parser import ConfigParser
-
-
-def _read_configured_risk_weight(config_name: str) -> float:
-    """
-    Read a risk weight boundary from slips.yaml.
-
-    Parameters:
-        config_name: Detection configuration key to read.
-
-    Return value:
-        Configured risk weight boundary as a float.
-    """
-    risk_weight = ConfigParser().read_configuration(
-        "detection", config_name, None
-    )
-    if risk_weight is None:
-        raise ValueError(f"Missing detection.{config_name} in slips.yaml.")
-
-    return float(risk_weight)
+from slips_files.core.helpers.risk_weights_config_parser import (
+    read_risk_weights_config,
+)
 
 
-LOW_RISK_WEIGHT = _read_configured_risk_weight("low_risk_weight")
-MEDIUM_RISK_WEIGHT = _read_configured_risk_weight("medium_risk_weight")
-HIGH_RISK_WEIGHT = _read_configured_risk_weight("high_risk_weight")
+config = read_risk_weights_config()
+
+LOW_SENSITIVITY_WEIGHT = config.low_sensitivity_weight
+MEDIUM_SENSITIVITY_WEIGHT = config.medium_sensitivity_weight
+HIGH_SENSITIVITY_WEIGHT = config.high_sensitivity_weight
+RATL_THRESHOLD = config.ratl_threshold
+
+LOW_ATL_BOUNDARY = RATL_THRESHOLD / LOW_SENSITIVITY_WEIGHT
+MEDIUM_ATL_BOUNDARY = RATL_THRESHOLD / MEDIUM_SENSITIVITY_WEIGHT
+HIGH_ATL_BOUNDARY = RATL_THRESHOLD / HIGH_SENSITIVITY_WEIGHT
 
 
 class RiskWeight(Enum):
     """
-    This risk weight determines the sensitivity of slips.
-    the more risk -> the more sensitive slips is -> the more alerts are generated
+    Sensitivity bucket used by live risk-weighted alerting.
+
+    Each level stores `(minimum_atl, maximum_atl, sensitivity_weight)`.
     """
 
-    LOW = (0.0, LOW_RISK_WEIGHT)
-    MEDIUM = (LOW_RISK_WEIGHT, MEDIUM_RISK_WEIGHT)
-    HIGH = (MEDIUM_RISK_WEIGHT, HIGH_RISK_WEIGHT)
+    LOW = (LOW_ATL_BOUNDARY, float("inf"), LOW_SENSITIVITY_WEIGHT)
+    MEDIUM = (
+        MEDIUM_ATL_BOUNDARY,
+        LOW_ATL_BOUNDARY,
+        MEDIUM_SENSITIVITY_WEIGHT,
+    )
+    HIGH = (0.0, MEDIUM_ATL_BOUNDARY, HIGH_SENSITIVITY_WEIGHT)
 
     @property
-    def lower_bound(self) -> float:
+    def minimum_atl(self) -> float:
         return self.value[0]
 
     @property
-    def upper_bound(self) -> float:
+    def maximum_atl(self) -> float:
         return self.value[1]
 
+    @property
+    def sensitivity_weight(self) -> float:
+        """
+        Return the multiplier used in `RATL = ATL * sensitivity_weight`.
 
-def convert_float_to_risk_weight(value: float) -> RiskWeight:
+        Return value:
+            Configured sensitivity weight for this bucket.
+        """
+        return self.value[2]
+
+    @property
+    def alertable_atl_boundary(self) -> float:
+        """
+        Return the minimum ATL that can alert in this bucket.
+
+        Return value:
+            Minimum alertable ATL for this sensitivity bucket.
+        """
+        return RATL_THRESHOLD / self.sensitivity_weight
+
+
+def convert_sensitivity_weight_to_risk_weight(value: float) -> RiskWeight:
     """
-    Convert a numeric value to the matching risk weight bucket from
-    RiskWeight Enum
+    Convert a configured sensitivity weight to the matching bucket.
 
     Parameters:
-        value: Numeric value to classify.
+        value: Numeric sensitivity weight to classify.
 
     Return value:
         Matching risk weight bucket.
     """
     value = float(value)
-    fallback = RiskWeight.LOW
-
     if value < 0:
         return RiskWeight.LOW
 
-    if value > RiskWeight.HIGH.upper_bound:
+    if value <= LOW_SENSITIVITY_WEIGHT:
+        return RiskWeight.LOW
+
+    if value <= MEDIUM_SENSITIVITY_WEIGHT:
+        return RiskWeight.MEDIUM
+
+    return RiskWeight.HIGH
+
+
+def get_sensitivity_for_accumulated_threat_level(
+    accumulated_threat_level: float,
+) -> RiskWeight:
+    """
+    in which sensitivity is slips based on the given accumulated threat
+    level?
+
+    Parameters:
+        accumulated_threat_level: Current accumulated threat level.
+
+    Return value:
+        Matching sensitivity bucket for the accumulated threat level.
+    """
+    accumulated_threat_level = max(float(accumulated_threat_level), 0.0)
+
+    if accumulated_threat_level >= RiskWeight.LOW.minimum_atl:
+        return RiskWeight.LOW
+
+    if accumulated_threat_level >= RiskWeight.MEDIUM.minimum_atl:
+        return RiskWeight.MEDIUM
+
+    if accumulated_threat_level < RiskWeight.HIGH.maximum_atl:
         return RiskWeight.HIGH
 
-    for weight in RiskWeight:
-        weight_boundaries: Tuple[float, float] = weight.value
-        if weight_boundaries[0] <= value < weight_boundaries[1]:
-            return weight
-
-    return fallback
+    return RiskWeight.LOW
