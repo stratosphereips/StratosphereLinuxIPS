@@ -415,6 +415,7 @@ class EvidenceHandlerWorker(IModule):
         risk_weight: RiskWeight = convert_float_to_risk_weight(
             accumulated_threat_level
         )
+        # avoid using inf when the risk weight is high.
         if risk_weight.upper_bound == float("inf"):
             float_risk_weight = risk_weight.lower_bound
         else:
