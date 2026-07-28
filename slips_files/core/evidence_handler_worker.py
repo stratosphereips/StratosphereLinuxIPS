@@ -25,8 +25,9 @@ from slips_files.core.structures.evidence import (
     dict_to_evidence,
 )
 from slips_files.core.structures.risk_weights import (
-    RiskWeight,
-    convert_float_to_risk_weight,
+    Sensitivity,
+    convert_sensitivity_weight_to_risk_weight,
+    get_sensitivity_for_accumulated_threat_level,
 )
 from slips_files.core.text_formatters.evidence_formatter import (
     EvidenceFormatter,
@@ -223,17 +224,21 @@ class EvidenceHandlerWorker(IModule):
         else:
             alert_description += "Generated an alert "
 
-        current_risk_weight = self.db.get_max_seen_risk_weight(
+        current_sensitivity_weight = self.db.get_max_seen_risk_weight(
             str(alert.profile), 0
         )
-        current_risk_weight = convert_float_to_risk_weight(current_risk_weight)
+        current_sensitivity = convert_sensitivity_weight_to_risk_weight(
+            current_sensitivity_weight
+        )
 
         alert_description += (
             f"given enough evidence on timewindow "
             f"{alert.timewindow.number}. (real time: {now})"
         )
         if self.is_running_non_stop:
-            alert_description += f"(risk weight: {current_risk_weight})"
+            alert_description += (
+                f"(current sensitivity:" f" {current_sensitivity})"
+            )
 
         self.add_to_log_file(alert_description)
         self.add_alert_to_json_log_file(alert)
@@ -412,15 +417,12 @@ class EvidenceHandlerWorker(IModule):
         Return value:
             Numeric risk weight used to calculate RATL.
         """
-        risk_weight: RiskWeight = convert_float_to_risk_weight(
-            accumulated_threat_level
+        sensitivity: Sensitivity = (
+            get_sensitivity_for_accumulated_threat_level(
+                accumulated_threat_level
+            )
         )
-        # avoid using inf when the risk weight is high.
-        if risk_weight.upper_bound == float("inf"):
-            float_risk_weight = risk_weight.lower_bound
-        else:
-            float_risk_weight = risk_weight.upper_bound
-        return float_risk_weight
+        return sensitivity.sensitivity_weight
 
     def get_accumulated_threat_level(
         self, profileid, twid, evidence: Evidence

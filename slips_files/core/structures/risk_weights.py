@@ -17,7 +17,7 @@ MEDIUM_ATL_BOUNDARY = RATL_THRESHOLD / MEDIUM_SENSITIVITY_WEIGHT
 HIGH_ATL_BOUNDARY = RATL_THRESHOLD / HIGH_SENSITIVITY_WEIGHT
 
 
-class RiskWeight(Enum):
+class Sensitivity(Enum):
     """
     Sensitivity bucket used by live risk-weighted alerting.
 
@@ -61,7 +61,7 @@ class RiskWeight(Enum):
         return RATL_THRESHOLD / self.sensitivity_weight
 
 
-def convert_sensitivity_weight_to_risk_weight(value: float) -> RiskWeight:
+def convert_sensitivity_weight_to_risk_weight(value: float) -> Sensitivity:
     """
     Convert a configured sensitivity weight to the matching bucket.
 
@@ -69,24 +69,24 @@ def convert_sensitivity_weight_to_risk_weight(value: float) -> RiskWeight:
         value: Numeric sensitivity weight to classify.
 
     Return value:
-        Matching risk weight bucket.
+        Matching sensitivity bucket.
     """
     value = float(value)
     if value < 0:
-        return RiskWeight.LOW
+        return Sensitivity.LOW
 
     if value <= LOW_SENSITIVITY_WEIGHT:
-        return RiskWeight.LOW
+        return Sensitivity.LOW
 
     if value <= MEDIUM_SENSITIVITY_WEIGHT:
-        return RiskWeight.MEDIUM
+        return Sensitivity.MEDIUM
 
-    return RiskWeight.HIGH
+    return Sensitivity.HIGH
 
 
 def get_sensitivity_for_accumulated_threat_level(
     accumulated_threat_level: float,
-) -> RiskWeight:
+) -> Sensitivity:
     """
     in which sensitivity is slips based on the given accumulated threat
     level?
@@ -99,13 +99,13 @@ def get_sensitivity_for_accumulated_threat_level(
     """
     accumulated_threat_level = max(float(accumulated_threat_level), 0.0)
 
-    if accumulated_threat_level >= RiskWeight.LOW.minimum_atl:
-        return RiskWeight.LOW
+    if accumulated_threat_level >= Sensitivity.LOW.minimum_atl:
+        return Sensitivity.LOW
 
-    if accumulated_threat_level >= RiskWeight.MEDIUM.minimum_atl:
-        return RiskWeight.MEDIUM
+    if accumulated_threat_level >= Sensitivity.MEDIUM.minimum_atl:
+        return Sensitivity.MEDIUM
 
-    if accumulated_threat_level < RiskWeight.HIGH.maximum_atl:
-        return RiskWeight.HIGH
+    if accumulated_threat_level < Sensitivity.HIGH.maximum_atl:
+        return Sensitivity.HIGH
 
-    return RiskWeight.LOW
+    return Sensitivity.LOW
