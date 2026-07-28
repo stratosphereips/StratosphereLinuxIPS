@@ -21,6 +21,7 @@ from slips_files.core.structures.evidence import (
 )
 from tests.module_factory import ModuleFactory
 from slips_files.core.structures.alerts import Alert
+from slips_files.core.structures.risk_weights import Sensitivity
 
 
 @pytest.mark.parametrize(
@@ -578,6 +579,24 @@ def test_get_flows_causing_evidence(
         "flows_causing_evidence", evidence_ID
     )
     assert result == expected_result
+
+
+def test_set_max_seen_risk_weight_caps_to_high_weight() -> None:
+    alert_handler = ModuleFactory().create_alert_handler_obj()
+    alert_handler.r = MagicMock()
+
+    alert_handler._set_max_seen_risk_weight(
+        "profile_192.168.1.1", Sensitivity.HIGH.sensitivity_weight + 5
+    )
+
+    alert_handler.r.hset.assert_called_once_with(
+        alert_handler.constants.MAX_RISK_WEIGHT_OF_ALL_PROFILES,
+        mapping={
+            "risk_weight": Sensitivity.HIGH.sensitivity_weight,
+            "risk_weight_str": "high",
+            "profile": "profile_192.168.1.1",
+        },
+    )
 
 
 @pytest.mark.parametrize(

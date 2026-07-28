@@ -17,6 +17,12 @@ from slips_files.core.structures.evidence import (
     ThreatLevel,
     TimeWindow,
 )
+from slips_files.core.structures.risk_weights import (
+    HIGH_SENSITIVITY_WEIGHT,
+    LOW_SENSITIVITY_WEIGHT,
+    MEDIUM_SENSITIVITY_WEIGHT,
+    Sensitivity,
+)
 from tests.module_factory import ModuleFactory
 
 
@@ -281,7 +287,7 @@ def test_add_evidence_to_json_log_file_adds_accumulated_ratl(
     logged_evidence = worker.evidence_logger_q.put.call_args[0][0]["to_log"]
     note = json.loads(logged_evidence["Note"])
     assert note["accumulated_threat_level"] == accumulated_threat_level
-    assert note["accumulated_ratl"] == accumulated_ratl
+    assert note["risk_accumulated_threat_level"] == accumulated_ratl
 
 
 def test_show_popup():
@@ -293,6 +299,26 @@ def test_show_popup():
     worker.show_popup(alert)
 
     worker.notify.show_popup.assert_called_once_with("alert_time_desc")
+
+
+@pytest.mark.parametrize(
+    "accumulated_threat_level, expected_risk_weight",
+    [
+        (0.0, HIGH_SENSITIVITY_WEIGHT),
+        (Sensitivity.HIGH.maximum_atl - 0.01, HIGH_SENSITIVITY_WEIGHT),
+        (Sensitivity.MEDIUM.minimum_atl, MEDIUM_SENSITIVITY_WEIGHT),
+        (Sensitivity.LOW.minimum_atl, LOW_SENSITIVITY_WEIGHT),
+    ],
+)
+def test_get_float_risk_weight(
+    accumulated_threat_level: float, expected_risk_weight: float
+) -> None:
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+
+    assert (
+        worker.get_float_risk_weight(accumulated_threat_level)
+        == expected_risk_weight
+    )
 
 
 def test_send_to_exporting_module():
