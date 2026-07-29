@@ -5,14 +5,21 @@ from slips_files.core.helpers.risk_weights_config_parser import (
 )
 
 
+# we have 2 sets of values one for each of the following steps:
+#
+# Step1: Slips needs to determine in which risk level is it now.
+# -> this depends on the ATL buckets. aka (RiskWeight Enum)
+#
+#
+# Step2: Slips needs a multiplier for each sensitivity level, to control how fast/slow an alert is generated.
+# -> this is determined from the values in the config LOW_RISK_WEIGHT,
+# MEDIUM_RISK_WEIGHT, HIGH_RISK_WEIGHT
+
 config = read_risk_weights_config()
 
-# this is the multiplier used here
-# RATL_THRESHOLD = ATL_boundary * risk_weight
 LOW_RISK_WEIGHT = config.low_risk_weight
 MEDIUM_RISK_WEIGHT = config.medium_risk_weight
 HIGH_RISK_WEIGHT = config.high_risk_weight
-RATL_THRESHOLD = config.ratl_threshold
 
 
 class RiskWeight(Enum):
@@ -82,6 +89,7 @@ def get_risk_weight_for_accumulated_threat_level(
     Return value:
         Matching risk-weight bucket for the accumulated threat level.
     """
+    # ensure no negative values
     accumulated_threat_level = max(float(accumulated_threat_level), 0.0)
 
     if accumulated_threat_level < RiskWeight.MEDIUM.minimum_atl:

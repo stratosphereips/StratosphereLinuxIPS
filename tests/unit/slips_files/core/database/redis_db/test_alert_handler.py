@@ -600,6 +600,32 @@ def test_set_max_seen_risk_weight_caps_to_high_weight() -> None:
 
 
 @pytest.mark.parametrize(
+    "stored_value, expected_result",
+    [
+        (
+            {
+                "risk_weight": RiskWeight.MEDIUM.risk_weight,
+                "risk_weight_str": "medium",
+                "profile": "profile_10.0.0.1",
+            },
+            "medium",
+        ),
+        ({}, "low"),
+    ],
+)
+def test_get_max_seen_risk_weight_str(
+    stored_value: dict, expected_result: str
+) -> None:
+    alert_handler = ModuleFactory().create_alert_handler_obj()
+    alert_handler.r = MagicMock()
+    alert_handler.r.hgetall.return_value = stored_value
+
+    result = alert_handler.get_max_seen_risk_weight_str()
+
+    assert result == expected_result
+
+
+@pytest.mark.parametrize(
     "profileid, twid, alert_id, expected_alert",
     [
         # Testcase 1: Alert exists in the database

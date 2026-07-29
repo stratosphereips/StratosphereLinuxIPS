@@ -389,10 +389,12 @@ class Main:
         profiles_len = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
         flow_per_min = self.db.get_flows_analyzed_per_minute()
+        current_risk_weight = self.db.get_max_seen_risk_weight_str()
         stats = (
             f"\r[{now}] Total analyzed IPs: {green(profiles_len)}. "
             f"{self.get_analyzed_flows_percentage()}"
             f"Evidence: {green(evidence_number)}. "
+            f"Current risk weight: {green(current_risk_weight)}. "
             f"Number of IPs seen in the last ({self.twid_width}):"
             f" {green(modified_ips_in_the_last_tw)}. "
             f"Analyzed {green(flow_per_min)} flows/min."

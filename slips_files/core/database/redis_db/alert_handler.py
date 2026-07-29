@@ -442,16 +442,24 @@ class AlertHandler:
         Return the max seen risk weight across all profiles.
 
         Return value:
-            Dictionary with risk_weight as float and profile as string.
+            Dictionary with risk_weight as float, risk_weight_str as string,
+            and profile as string.
         """
         current_risk_weight = self.r.hgetall(
             self.constants.MAX_RISK_WEIGHT_OF_ALL_PROFILES
         )
         if not current_risk_weight:
-            return {"risk_weight": 0.0, "profile": ""}
+            return {
+                "risk_weight": 0.0,
+                "risk_weight_str": "low",
+                "profile": "",
+            }
 
         return {
             "risk_weight": float(current_risk_weight.get("risk_weight", 0.0)),
+            "risk_weight_str": current_risk_weight.get(
+                "risk_weight_str", "low"
+            ),
             "profile": current_risk_weight.get("profile", ""),
         }
 
@@ -483,6 +491,16 @@ class AlertHandler:
             return candidate_risk_weight
 
         return previous_risk_weight
+
+    def get_max_seen_risk_weight_str(self) -> str:
+        """
+        Return the current max seen risk-weight bucket as a string.
+
+        Return value:
+            Lowercase risk-weight bucket name.
+        """
+        max_seen_risk_weight = self._get_max_seen_risk_weight()
+        return str(max_seen_risk_weight["risk_weight_str"])
 
     def update_accumulated_threat_level(
         self, profileid: str, twid: str, update_val: float

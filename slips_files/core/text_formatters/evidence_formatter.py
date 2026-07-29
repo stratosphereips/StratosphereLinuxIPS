@@ -102,7 +102,7 @@ class EvidenceFormatter:
         )
 
         if self.is_running_non_stop:
-            alert_to_print += f"({current_risk_weight_bucket})"
+            alert_to_print += f" ({current_risk_weight_bucket})"
 
         return alert_to_print
 
