@@ -451,7 +451,7 @@ class AlertHandler:
             return {"sensitivity": 0.0, "profile": ""}
 
         return {
-            "risk_weight": float(
+            "sensitivity": float(
                 current_sensitivity_weight.get("sensitivity", 0.0)
             ),
             "profile": current_sensitivity_weight.get("profile", ""),

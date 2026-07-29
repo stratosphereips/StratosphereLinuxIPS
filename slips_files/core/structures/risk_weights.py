@@ -7,10 +7,13 @@ from slips_files.core.helpers.risk_weights_config_parser import (
 
 config = read_risk_weights_config()
 
+# this is the multiplier used here
+# RATL_THRESHOLD = ATL_boundary * risk_weight
 LOW_SENSITIVITY_WEIGHT = config.low_sensitivity_weight
 MEDIUM_SENSITIVITY_WEIGHT = config.medium_sensitivity_weight
 HIGH_SENSITIVITY_WEIGHT = config.high_sensitivity_weight
 RATL_THRESHOLD = config.ratl_threshold
+
 
 LOW_ATL_BOUNDARY = RATL_THRESHOLD / LOW_SENSITIVITY_WEIGHT
 MEDIUM_ATL_BOUNDARY = RATL_THRESHOLD / MEDIUM_SENSITIVITY_WEIGHT
