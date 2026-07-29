@@ -26,7 +26,6 @@ from slips_files.core.structures.evidence import (
 )
 from slips_files.core.structures.risk_weights import (
     RiskWeight,
-    convert_float_to_risk_weight,
     get_risk_weight_for_accumulated_threat_level,
 )
 from slips_files.core.text_formatters.evidence_formatter import (
@@ -224,21 +223,16 @@ class EvidenceHandlerWorker(IModule):
         else:
             alert_description += "Generated an alert "
 
-        current_risk_weight = self.db.get_max_seen_risk_weight(
-            str(alert.profile), 0
-        )
-        current_risk_weight_bucket = convert_float_to_risk_weight(
-            current_risk_weight
-        )
+        current_risk_weight = self.db.get_max_seen_risk_weight()[
+            "risk_weight"
+        ].name.lower()
 
         alert_description += (
             f"given enough evidence on timewindow "
             f"{alert.timewindow.number}. (real time: {now})"
         )
         if self.is_running_non_stop:
-            alert_description += (
-                f"(current risk weight:" f" {current_risk_weight_bucket})"
-            )
+            alert_description += f" (risk weight:" f" {current_risk_weight})"
 
         self.add_to_log_file(alert_description)
         self.add_alert_to_json_log_file(alert)
@@ -407,23 +401,6 @@ class EvidenceHandlerWorker(IModule):
         alert_description = self.formatter.get_printable_alert(alert)
         self.notify.show_popup(alert_description)
 
-    def get_float_risk_weight(self, accumulated_threat_level: float) -> float:
-        """
-        Return the dynamic risk weight for the accumulated threat level.
-
-        Parameters:
-            accumulated_threat_level: Current accumulated threat level.
-
-        Return value:
-            Numeric risk weight used to calculate RATL.
-        """
-        risk_weight_bucket: RiskWeight = (
-            get_risk_weight_for_accumulated_threat_level(
-                accumulated_threat_level
-            )
-        )
-        return risk_weight_bucket.risk_weight
-
     def get_accumulated_threat_level(
         self, profileid, twid, evidence: Evidence
     ) -> float:
@@ -495,13 +472,17 @@ class EvidenceHandlerWorker(IModule):
         )
 
         # Use the max risk weight seen by any profiler as the current weight.
-        risk_weight: float = self.get_float_risk_weight(
+        risk_weight: RiskWeight = get_risk_weight_for_accumulated_threat_level(
             accumulated_threat_level
         )
-        risk_weight = self.db.get_max_seen_risk_weight(profileid, risk_weight)
+        max_seen_risk_weight = self.db.update_max_seen_risk_weight(
+            profileid, risk_weight
+        )
 
         # this is profile-specific RATL = ATL * RW
-        risk_accumulated_threat_level = accumulated_threat_level * risk_weight
+        risk_accumulated_threat_level = (
+            accumulated_threat_level * max_seen_risk_weight.weight
+        )
 
         self.add_evidence_to_json_log_file(
             evidence,

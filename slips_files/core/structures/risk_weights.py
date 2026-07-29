@@ -1,3 +1,4 @@
+import math
 from enum import Enum
 
 from slips_files.core.helpers.risk_weights_config_parser import (
@@ -36,20 +37,17 @@ class RiskWeight(Enum):
     HIGH = (15, float("inf"), HIGH_RISK_WEIGHT)
 
     @property
-    def minimum_atl(self) -> float:
+    def lower_bound(self) -> float:
         return self.value[0]
 
     @property
-    def maximum_atl(self) -> float:
+    def upper_bound(self) -> float:
         return self.value[1]
 
     @property
-    def risk_weight(self) -> float:
+    def weight(self) -> float:
         """
-        Return the multiplier used in `RATL = ATL * risk_weight`.
-
-        Return value:
-            Configured risk weight for this bucket.
+        Returns the multiplier used in `RATL = ATL * risk_weight`.
         """
         return self.value[2]
 
@@ -77,6 +75,25 @@ def convert_float_to_risk_weight(value: float) -> RiskWeight:
     return RiskWeight.HIGH
 
 
+def convert_weight_to_risk_weight_enum_member(weight: float) -> RiskWeight:
+    """
+    Return the enum member matching the configured risk weight value.
+
+    Parameters:
+        weight: Stored numeric risk weight.
+
+    Return value:
+        Matching risk-weight enum member.
+    """
+    normalized_weight = float(weight)
+
+    for risk_weight in RiskWeight:
+        if math.isclose(risk_weight.weight, normalized_weight):
+            return risk_weight
+
+    return RiskWeight.LOW
+
+
 def get_risk_weight_for_accumulated_threat_level(
     accumulated_threat_level: float,
 ) -> RiskWeight:
@@ -92,10 +109,12 @@ def get_risk_weight_for_accumulated_threat_level(
     # ensure no negative values
     accumulated_threat_level = max(float(accumulated_threat_level), 0.0)
 
-    if accumulated_threat_level < RiskWeight.MEDIUM.minimum_atl:
-        return RiskWeight.HIGH
-
-    if accumulated_threat_level < RiskWeight.HIGH.minimum_atl:
-        return RiskWeight.MEDIUM
+    for risk_weight in RiskWeight:
+        if (
+            risk_weight.lower_bound
+            <= accumulated_threat_level
+            < (risk_weight.upper_bound)
+        ):
+            return risk_weight
 
     return RiskWeight.LOW

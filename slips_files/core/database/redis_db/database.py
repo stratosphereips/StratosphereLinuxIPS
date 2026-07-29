@@ -46,6 +46,8 @@ from typing import (
     Set,
 )
 
+from slips_files.core.structures.risk_weights import RiskWeight
+
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 LOCALHOST = "127.0.0.1"
 VERSION = utils.get_current_version()
@@ -343,7 +345,7 @@ class RedisDB(
 
     def incr_current_timewindow(self) -> None:
         self.r.incr(self.constants.CURRENT_TIMEWINDOW)
-        self._set_max_seen_risk_weight("", 0.0)
+        self._set_max_seen_risk_weight(None, RiskWeight.LOW)
 
     @classmethod
     def get_current_timewindow(cls) -> Optional[str]:
