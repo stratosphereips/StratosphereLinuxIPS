@@ -25,9 +25,9 @@ from slips_files.core.structures.evidence import (
     dict_to_evidence,
 )
 from slips_files.core.structures.risk_weights import (
-    Sensitivity,
-    convert_sensitivity_weight_to_risk_weight,
-    get_sensitivity_for_accumulated_threat_level,
+    RiskWeight,
+    convert_float_to_risk_weight,
+    get_risk_weight_for_accumulated_threat_level,
 )
 from slips_files.core.text_formatters.evidence_formatter import (
     EvidenceFormatter,
@@ -224,11 +224,11 @@ class EvidenceHandlerWorker(IModule):
         else:
             alert_description += "Generated an alert "
 
-        current_sensitivity_weight = self.db.get_max_seen_risk_weight(
+        current_risk_weight = self.db.get_max_seen_risk_weight(
             str(alert.profile), 0
         )
-        current_sensitivity = convert_sensitivity_weight_to_risk_weight(
-            current_sensitivity_weight
+        current_risk_weight_bucket = convert_float_to_risk_weight(
+            current_risk_weight
         )
 
         alert_description += (
@@ -237,7 +237,7 @@ class EvidenceHandlerWorker(IModule):
         )
         if self.is_running_non_stop:
             alert_description += (
-                f"(current sensitivity:" f" {current_sensitivity})"
+                f"(current risk weight:" f" {current_risk_weight_bucket})"
             )
 
         self.add_to_log_file(alert_description)
@@ -417,12 +417,12 @@ class EvidenceHandlerWorker(IModule):
         Return value:
             Numeric risk weight used to calculate RATL.
         """
-        sensitivity: Sensitivity = (
-            get_sensitivity_for_accumulated_threat_level(
+        risk_weight_bucket: RiskWeight = (
+            get_risk_weight_for_accumulated_threat_level(
                 accumulated_threat_level
             )
         )
-        return sensitivity.sensitivity_weight
+        return risk_weight_bucket.risk_weight
 
     def get_accumulated_threat_level(
         self, profileid, twid, evidence: Evidence
@@ -516,7 +516,7 @@ class EvidenceHandlerWorker(IModule):
             )
 
         if self.is_running_non_stop:
-            # here we use tha RATL to dynamically change the sensitivity of
+            # here we use the RATL to dynamically change the risk weight of
             # slips
             score = risk_accumulated_threat_level
         else:

@@ -24,8 +24,8 @@ from slips_files.core.structures.evidence import (
     Attacker,
 )
 from slips_files.core.structures.risk_weights import (
-    Sensitivity,
-    convert_sensitivity_weight_to_risk_weight,
+    RiskWeight,
+    convert_float_to_risk_weight,
 )
 
 
@@ -422,16 +422,16 @@ class AlertHandler:
             risk_weight: Max seen risk weight of that profile to store.
         """
         # Do not store huge values beyond the largest configured weight.
-        capped_sensitivity_weight = max(
+        capped_risk_weight = max(
             0.0,
-            min(float(risk_weight), Sensitivity.HIGH.sensitivity_weight),
+            min(float(risk_weight), RiskWeight.HIGH.risk_weight),
         )
         self.r.hset(
             self.constants.MAX_RISK_WEIGHT_OF_ALL_PROFILES,
             mapping={
-                "sensitivity": capped_sensitivity_weight,
-                "sensitivity_str": convert_sensitivity_weight_to_risk_weight(
-                    capped_sensitivity_weight
+                "risk_weight": capped_risk_weight,
+                "risk_weight_str": convert_float_to_risk_weight(
+                    capped_risk_weight
                 ).name.lower(),
                 "profile": profileid,
             },
@@ -444,17 +444,15 @@ class AlertHandler:
         Return value:
             Dictionary with risk_weight as float and profile as string.
         """
-        current_sensitivity_weight = self.r.hgetall(
+        current_risk_weight = self.r.hgetall(
             self.constants.MAX_RISK_WEIGHT_OF_ALL_PROFILES
         )
-        if not current_sensitivity_weight:
-            return {"sensitivity": 0.0, "profile": ""}
+        if not current_risk_weight:
+            return {"risk_weight": 0.0, "profile": ""}
 
         return {
-            "sensitivity": float(
-                current_sensitivity_weight.get("sensitivity", 0.0)
-            ),
-            "profile": current_sensitivity_weight.get("profile", ""),
+            "risk_weight": float(current_risk_weight.get("risk_weight", 0.0)),
+            "profile": current_risk_weight.get("profile", ""),
         }
 
     def get_max_seen_risk_weight(
@@ -472,23 +470,19 @@ class AlertHandler:
         Return value:
             Max seen risk weight across all profiles.
         """
-        max_seen_sensitivity_weight = self._get_max_seen_risk_weight()
-        previous_sensitivity_weight = float(
-            max_seen_sensitivity_weight["sensitivity"]
+        max_seen_risk_weight = self._get_max_seen_risk_weight()
+        previous_risk_weight = float(max_seen_risk_weight["risk_weight"])
+        candidate_risk_weight = max(
+            float(candidate_risk_weight), previous_risk_weight
         )
-        candidate_sensitivity_weight = max(
-            float(candidate_risk_weight), previous_sensitivity_weight
-        )
-        if candidate_sensitivity_weight == 0:
-            candidate_sensitivity_weight = Sensitivity.LOW.sensitivity_weight
+        if candidate_risk_weight == 0:
+            candidate_risk_weight = RiskWeight.LOW.risk_weight
 
-        if previous_sensitivity_weight < candidate_sensitivity_weight:
-            self._set_max_seen_risk_weight(
-                profileid, candidate_sensitivity_weight
-            )
-            return candidate_sensitivity_weight
+        if previous_risk_weight < candidate_risk_weight:
+            self._set_max_seen_risk_weight(profileid, candidate_risk_weight)
+            return candidate_risk_weight
 
-        return previous_sensitivity_weight
+        return previous_risk_weight
 
     def update_accumulated_threat_level(
         self, profileid: str, twid: str, update_val: float

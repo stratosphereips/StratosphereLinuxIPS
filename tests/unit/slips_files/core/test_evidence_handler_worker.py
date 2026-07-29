@@ -21,7 +21,7 @@ from slips_files.core.structures.risk_weights import (
     HIGH_SENSITIVITY_WEIGHT,
     LOW_SENSITIVITY_WEIGHT,
     MEDIUM_SENSITIVITY_WEIGHT,
-    Sensitivity,
+    RiskWeight,
 )
 from tests.module_factory import ModuleFactory
 
@@ -305,9 +305,9 @@ def test_show_popup():
     "accumulated_threat_level, expected_risk_weight",
     [
         (0.0, HIGH_SENSITIVITY_WEIGHT),
-        (Sensitivity.HIGH.maximum_atl - 0.01, HIGH_SENSITIVITY_WEIGHT),
-        (Sensitivity.MEDIUM.minimum_atl, MEDIUM_SENSITIVITY_WEIGHT),
-        (Sensitivity.LOW.minimum_atl, LOW_SENSITIVITY_WEIGHT),
+        (RiskWeight.HIGH.maximum_atl - 0.01, HIGH_SENSITIVITY_WEIGHT),
+        (RiskWeight.MEDIUM.minimum_atl, MEDIUM_SENSITIVITY_WEIGHT),
+        (RiskWeight.LOW.minimum_atl, LOW_SENSITIVITY_WEIGHT),
     ],
 )
 def test_get_float_risk_weight(

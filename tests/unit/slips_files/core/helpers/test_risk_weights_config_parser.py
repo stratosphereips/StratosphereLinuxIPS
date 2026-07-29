@@ -15,11 +15,11 @@ def test_read_risk_weights_config() -> None:
 
     config = read_risk_weights_config()
 
-    assert config.low_sensitivity_weight > 0
+    assert config.low_risk_weight > 0
     assert (
-        config.low_sensitivity_weight
-        < config.medium_sensitivity_weight
-        < config.high_sensitivity_weight
+        config.low_risk_weight
+        < config.medium_risk_weight
+        < config.high_risk_weight
     )
     assert config.ratl_threshold > 0
 

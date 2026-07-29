@@ -7,34 +7,34 @@ from slips_files.common.parsers.config_parser import ConfigParser
 
 @dataclass(frozen=True)
 class RiskWeightsConfig:
-    low_sensitivity_weight: float
-    medium_sensitivity_weight: float
-    high_sensitivity_weight: float
+    low_risk_weight: float
+    medium_risk_weight: float
+    high_risk_weight: float
     ratl_threshold: float
 
 
-def _read_configured_sensitivity_weight(
-    sensitivity_weight: float | None, config_name: str
+def _read_configured_risk_weight(
+    risk_weight: float | None, config_name: str
 ) -> float:
     """
-    Read a configured sensitivity weight from slips.yaml.
+    Read a configured risk weight from slips.yaml.
 
     Parameters:
-        sensitivity_weight: Parsed sensitivity weight value.
+        risk_weight: Parsed risk weight value.
         config_name: Detection configuration key to read.
 
     Return value:
-        Configured sensitivity weight as a float.
+        Configured risk weight as a float.
     """
-    if sensitivity_weight is None:
+    if risk_weight is None:
         raise ValueError(f"Missing detection.{config_name} in slips.yaml.")
 
-    if sensitivity_weight <= 0:
+    if risk_weight <= 0:
         raise ValueError(
             f"detection.{config_name} must be greater than 0 in slips.yaml."
         )
 
-    return sensitivity_weight
+    return risk_weight
 
 
 def _read_ratl_threshold(config_parser: ConfigParser) -> float:
@@ -61,7 +61,7 @@ def _validate_risk_weights_config(
     config: RiskWeightsConfig,
 ) -> RiskWeightsConfig:
     """
-    Validate the configured sensitivity weights and RATL threshold.
+    Validate the configured risk weights and RATL threshold.
 
     Parameters:
         config: Parsed risk-weight configuration.
@@ -70,12 +70,12 @@ def _validate_risk_weights_config(
         The validated configuration.
     """
     if not (
-        config.low_sensitivity_weight
-        < config.medium_sensitivity_weight
-        < config.high_sensitivity_weight
+        config.low_risk_weight
+        < config.medium_risk_weight
+        < config.high_risk_weight
     ):
         raise ValueError(
-            "Configured sensitivity weights must satisfy "
+            "Configured risk weights must satisfy "
             "low_risk_weight < medium_risk_weight < high_risk_weight."
         )
 
@@ -97,15 +97,15 @@ def read_risk_weights_config() -> RiskWeightsConfig:
     """
     config_parser = ConfigParser()
     config = RiskWeightsConfig(
-        low_sensitivity_weight=_read_configured_sensitivity_weight(
+        low_risk_weight=_read_configured_risk_weight(
             config_parser.low_risk_weight(),
             "low_risk_weight",
         ),
-        medium_sensitivity_weight=_read_configured_sensitivity_weight(
+        medium_risk_weight=_read_configured_risk_weight(
             config_parser.medium_risk_weight(),
             "medium_risk_weight",
         ),
-        high_sensitivity_weight=_read_configured_sensitivity_weight(
+        high_risk_weight=_read_configured_risk_weight(
             config_parser.high_risk_weight(),
             "high_risk_weight",
         ),

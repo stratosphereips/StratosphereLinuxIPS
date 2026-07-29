@@ -19,7 +19,7 @@ from slips_files.core.structures.alerts import (
     Alert,
 )
 from slips_files.core.structures.risk_weights import (
-    convert_sensitivity_weight_to_risk_weight,
+    convert_float_to_risk_weight,
 )
 
 
@@ -94,15 +94,15 @@ class EvidenceFormatter:
         if not getattr(self, "is_running_non_stop", False):
             self.is_running_non_stop = self.db.is_running_non_stop()
 
-        current_sensitivity_weight = self.db.get_max_seen_risk_weight(
+        current_risk_weight = self.db.get_max_seen_risk_weight(
             str(alert.profile), 0
         )
-        current_sensitivity = convert_sensitivity_weight_to_risk_weight(
-            current_sensitivity_weight
+        current_risk_weight_bucket = convert_float_to_risk_weight(
+            current_risk_weight
         )
 
         if self.is_running_non_stop:
-            alert_to_print += f"(current sensitivity: {current_sensitivity})"
+            alert_to_print += f"({current_risk_weight_bucket})"
 
         return alert_to_print
 
