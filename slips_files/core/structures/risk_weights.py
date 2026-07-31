@@ -12,7 +12,8 @@ from slips_files.core.helpers.risk_weights_config_parser import (
 # -> this depends on the ATL buckets. aka (RiskWeight Enum)
 #
 #
-# Step2: Slips needs a multiplier for each sensitivity level, to control how fast/slow an alert is generated.
+# Step2: Slips needs a multiplier for each sensitivity level, to control how
+# fast/slow an alert is generated.
 # -> this is determined from the values in the config LOW_RISK_WEIGHT,
 # MEDIUM_RISK_WEIGHT, HIGH_RISK_WEIGHT
 
@@ -32,9 +33,9 @@ class RiskWeight(Enum):
     risk weight.
     """
 
-    LOW = (0, 4, LOW_RISK_WEIGHT)
-    MEDIUM = (4, 15, MEDIUM_RISK_WEIGHT)
-    HIGH = (15, float("inf"), HIGH_RISK_WEIGHT)
+    LOW = (0, 47, LOW_RISK_WEIGHT)
+    MEDIUM = (47, 60, MEDIUM_RISK_WEIGHT)
+    HIGH = (60, float("inf"), HIGH_RISK_WEIGHT)
 
     @property
     def lower_bound(self) -> float:
@@ -50,29 +51,6 @@ class RiskWeight(Enum):
         Returns the multiplier used in `RATL = ATL * risk_weight`.
         """
         return self.value[2]
-
-
-def convert_float_to_risk_weight(value: float) -> RiskWeight:
-    """
-    Convert a configured risk weight to the matching bucket.
-
-    Parameters:
-        value: Numeric risk weight to classify.
-
-    Return value:
-        Matching risk-weight bucket.
-    """
-    value = float(value)
-    if value < 0:
-        return RiskWeight.LOW
-
-    if value <= LOW_RISK_WEIGHT:
-        return RiskWeight.LOW
-
-    if value <= MEDIUM_RISK_WEIGHT:
-        return RiskWeight.MEDIUM
-
-    return RiskWeight.HIGH
 
 
 def convert_weight_to_risk_weight_enum_member(weight: float) -> RiskWeight:
@@ -113,7 +91,7 @@ def get_risk_weight_for_accumulated_threat_level(
         if (
             risk_weight.lower_bound
             <= accumulated_threat_level
-            < (risk_weight.upper_bound)
+            < risk_weight.upper_bound
         ):
             return risk_weight
 
