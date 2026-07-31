@@ -19,6 +19,9 @@ from slips_files.core.structures.evidence import (
     ThreatLevel,
     EvidenceType,
 )
+from slips_files.core.structures.risk_weights import (
+    get_risk_weight_for_accumulated_threat_level,
+)
 
 
 class IDMEFv2Status(Enum):
@@ -130,7 +133,7 @@ class IDMEFv2:
 
     def convert_to_idmef_alert(self, alert: Alert) -> Message:
         """
-        converts the given alert to IDMEFv2 alert
+        converts the given alert to IDMEFv2 alert aka Incident
         """
         try:
             now = datetime.now(utils.local_tz).isoformat("T")
@@ -159,6 +162,11 @@ class IDMEFv2:
                         {
                             "accumulated_threat_level": alert.accumulated_threat_level,
                             "accumulated_ratl": alert.accumulated_ratl,
+                            "risk_weight": (
+                                get_risk_weight_for_accumulated_threat_level(
+                                    alert.accumulated_threat_level
+                                ).name.lower()
+                            ),
                             "timewindow": alert.timewindow.number,
                             # temporary. there's an issue with the imefv2 python
                             # library validator, it doesn't recognize the endtime
