@@ -16,6 +16,7 @@ from typing import (
 )
 
 from slips_files.common.slips_utils import utils
+from slips_files.core.structures.risk_weights import RiskWeight
 
 
 # IMPORTANT: remember to update dict_to_evidence() function based on the
@@ -295,6 +296,7 @@ class Evidence:
     confidence: float = field(
         default=0.0, metadata={"validate": lambda x: 0 <= x <= 1}
     )
+    risk_level: Optional[RiskWeight] = field(default=None)
     # uuid4 of a related evidence, for example CC client and server
     # evidence are related.
     rel_id: List[str] = field(
@@ -332,6 +334,7 @@ class Evidence:
             f"  Source Port: {self.src_port},\n"
             f"  ID: {self.id},\n"
             f"  Confidence: {self.confidence},\n"
+            f"  Risk Level: {self.risk_level},\n"
             f"  Related ID: {self.rel_id}\n"
             f")"
         )
@@ -372,6 +375,11 @@ def dict_to_evidence(evidence: dict) -> Evidence:
         "id": evidence["id"],
         "rel_id": evidence["rel_id"],
         "confidence": evidence["confidence"],
+        "risk_level": (
+            RiskWeight[evidence["risk_level"]]
+            if "risk_level" in evidence and evidence["risk_level"]
+            else None
+        ),
         "method": Method[evidence["method"].upper()],
     }
 
