@@ -134,22 +134,24 @@ class EvidenceHandlerWorker(IModule):
             return
 
         try:
-            idmef_evidence.update(
+            note = (
+                json.loads(idmef_evidence["Note"])
+                if idmef_evidence.get("Note")
+                else {}
+            )
+            note.update(
                 {
-                    "Note": json.dumps(
-                        {
-                            "uids": evidence.uid,
-                            "accumulated_threat_level": accumulated_threat_level,
-                            "risk_accumulated_threat_level": risk_accumulated_threat_level,
-                            "threat_level": str(evidence.threat_level),
-                            "confidence": utils.evidence_confidence_to_string(
-                                evidence.confidence
-                            ),
-                            "timewindow": evidence.timewindow.number,
-                        }
-                    )
+                    "uids": evidence.uid,
+                    "accumulated_threat_level": accumulated_threat_level,
+                    "risk_accumulated_threat_level": risk_accumulated_threat_level,
+                    "threat_level": str(evidence.threat_level),
+                    "confidence": utils.evidence_confidence_to_string(
+                        evidence.confidence
+                    ),
+                    "timewindow": evidence.timewindow.number,
                 }
             )
+            idmef_evidence.update({"Note": json.dumps(note)})
             self.add_latency_to_csv(idmef_evidence)
             self.evidence_logger_q.put(
                 {
@@ -478,6 +480,7 @@ class EvidenceHandlerWorker(IModule):
         max_seen_risk_weight = self.db.update_max_seen_risk_weight(
             profileid, risk_weight
         )
+        evidence.risk_level = max_seen_risk_weight
 
         # this is profile-specific RATL = ATL * RW
         risk_accumulated_threat_level = (
@@ -521,6 +524,7 @@ class EvidenceHandlerWorker(IModule):
             accumulated_threat_level=accumulated_threat_level,
             accumulated_ratl=risk_accumulated_threat_level,
             correl_id=list(tw_evidence.keys()),
+            risk_level=max_seen_risk_weight,
         )
         self.handle_new_alert(alert, tw_evidence)
 

@@ -19,9 +19,6 @@ from slips_files.core.structures.evidence import (
     ThreatLevel,
     EvidenceType,
 )
-from slips_files.core.structures.risk_weights import (
-    get_risk_weight_for_accumulated_threat_level,
-)
 
 
 class IDMEFv2Status(Enum):
@@ -162,10 +159,10 @@ class IDMEFv2:
                         {
                             "accumulated_threat_level": alert.accumulated_threat_level,
                             "accumulated_ratl": alert.accumulated_ratl,
-                            "risk_weight": (
-                                get_risk_weight_for_accumulated_threat_level(
-                                    alert.accumulated_threat_level
-                                ).name.lower()
+                            "risk_level": (
+                                alert.risk_level.name.lower()
+                                if alert.risk_level
+                                else None
                             ),
                             "timewindow": alert.timewindow.number,
                             # temporary. there's an issue with the imefv2 python
@@ -225,6 +222,15 @@ class IDMEFv2:
                     "CreateTime": now,
                     "Confidence": evidence.confidence,
                     "Description": evidence.description,
+                    "Note": json.dumps(
+                        {
+                            "risk_level": (
+                                evidence.risk_level.name.lower()
+                                if evidence.risk_level
+                                else None
+                            )
+                        }
+                    ),
                     "Source": [{attacker_type: attacker, "Note": {}}],
                 }
             )
@@ -319,8 +325,6 @@ class IDMEFv2:
                     # remove the note field since its empty
                     del msg["Target"][0]["Note"]
 
-            # PS: The "Note" field is added by the evidencehandler before
-            # logging the evidence to alerts.json
             msg.validate()
             return msg
 
