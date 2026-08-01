@@ -390,18 +390,28 @@ class Main:
         evidence_number = self.db.get_evidence_number() or 0
         flow_per_min = self.db.get_flows_analyzed_per_minute()
 
-        max_seen_risk_weight = self.db.get_max_seen_risk_weight()
-        current_risk_weight = max_seen_risk_weight["risk_weight"].name.lower()
+        current_risk_weight = None
+        if self.db.is_running_non_stop():
+            max_seen_risk_weight = self.db.get_max_seen_risk_weight()
+            current_risk_weight = max_seen_risk_weight[
+                "risk_weight"
+            ].name.lower()
 
         stats = (
             f"\r[{now}] Total analyzed IPs: {green(profiles_len)}. "
             f"{self.get_analyzed_flows_percentage()}"
             f"Evidence: {green(evidence_number)}. "
-            f"Current risk: {green(current_risk_weight)}. "
+        )
+
+        if current_risk_weight:
+            stats += f"Current risk: {green(current_risk_weight)}. "
+
+        stats += (
             f"Number of IPs seen in the last ({self.twid_width}):"
             f" {green(modified_ips_in_the_last_tw)}. "
             f"Analyzed {green(flow_per_min)} flows/min."
         )
+
         self.print(stats)
         sys.stdout.flush()  # Make sure the output is displayed immediately
 
