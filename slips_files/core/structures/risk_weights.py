@@ -33,9 +33,22 @@ class RiskWeight(Enum):
     risk weight.
     """
 
-    LOW = (0, 47, LOW_RISK_WEIGHT)
-    MEDIUM = (47, 60, MEDIUM_RISK_WEIGHT)
-    HIGH = (60, float("inf"), HIGH_RISK_WEIGHT)
+    # to alert:  ATL * RW >= RATL_threshold
+    # given:  LOW_RISK_WEIGHT = 0.32, RATL_threshold = 5  (from config)
+    # so the minimum needed ATL to be able to alert in the low bucket when
+    # the threshold is 5 is:  ATL >= 15/0.32
+    # ATL >= 15.625
+    # any value of atl that is less than 15.625 will not generate an alert
+    # SO. the low bucket MUST be more than 15.625 for slips to be able to
+    # generate an alert in the low bucket.
+    # SO. from when atl is from 0 -> 15.6 (slips will never generate an alert)
+    # when atl is from 15.6 -> 20 slips will gen an alert in the low risk
+    # weight.
+    # from 20 -> 30 slips will gen an alert in the medium risk weight.
+    # from 30 -> inf slips will gen an alert in the high risk weight.
+    LOW = (0, 20, LOW_RISK_WEIGHT)
+    MEDIUM = (20, 30, MEDIUM_RISK_WEIGHT)
+    HIGH = (30, float("inf"), HIGH_RISK_WEIGHT)
 
     @property
     def lower_bound(self) -> float:
