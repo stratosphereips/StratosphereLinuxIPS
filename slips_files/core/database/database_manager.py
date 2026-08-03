@@ -545,6 +545,12 @@ class DBManager:
     def update_max_seen_risk_weight(self, *args, **kwargs):
         return self.rdb.update_max_seen_risk_weight(*args, **kwargs)
 
+    def get_risk_weight_of_last_alert(self, *args, **kwargs):
+        return self.rdb.get_risk_weight_of_last_alert(*args, **kwargs)
+
+    def set_risk_weight_of_last_alert(self, *args, **kwargs):
+        return self.rdb.set_risk_weight_of_last_alert(*args, **kwargs)
+
     def update_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.update_accumulated_threat_level(*args, **kwargs)
 

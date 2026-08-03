@@ -22,6 +22,7 @@ from slips_files.core.structures.evidence import (
     Victim,
     IoCType,
     Attacker,
+    TimeWindow,
 )
 from slips_files.core.structures.risk_weights import (
     RiskWeight,
@@ -469,6 +470,28 @@ class AlertHandler:
             return candidate_risk_weight
 
         return max_seen_risk_weight["risk_weight"]
+
+    def get_risk_weight_of_last_alert(
+        self, timewindow: TimeWindow
+    ) -> RiskWeight:
+        risk_weight: float = self.r.hget(
+            self.constants.RISK_WEIGHT_OF_LAST_ALERT, timewindow.number
+        )
+        if not risk_weight:
+            return {}
+
+        # risk levels are shared accross all profiles in the current
+        # timewindow.
+        return convert_weight_to_risk_weight_enum_member(risk_weight)
+
+    def set_risk_weight_of_last_alert(
+        self, risk_weight: RiskWeight, timewindow: TimeWindow
+    ):
+        self.r.hset(
+            self.constants.RISK_WEIGHT_OF_LAST_ALERT,
+            timewindow.number,
+            risk_weight.weight,
+        )
 
     def update_accumulated_threat_level(
         self, profileid: str, twid: str, update_val: float

@@ -54,6 +54,7 @@ class Constants:
     CURRENT_TIMEWINDOW = "current_timewindow"
     CURRENT_RISK_WEIGHT = "current_risk_weight"
     MAX_RISK_WEIGHT_OF_ALL_PROFILES = "max_risk_weight_of_all_profiles"
+    RISK_WEIGHT_OF_LAST_ALERT = "risk_weight_of_last_alert"
     USED_FTP_PORTS = "used_ftp_ports"
     SLIPS_INTERNAL_TIME = "slips_internal_time"
     IS_RUNNING_AS_AP = "is_slips_running_as_an_ap"
