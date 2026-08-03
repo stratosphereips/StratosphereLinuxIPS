@@ -225,9 +225,7 @@ class EvidenceHandlerWorker(IModule):
         else:
             alert_description += "Generated an alert "
 
-        current_risk_weight = self.db.get_max_seen_risk_weight()[
-            "risk_weight"
-        ].name.lower()
+        current_risk_weight = alert.risk_level.name.lower()
 
         alert_description += (
             f"given enough evidence on timewindow "
@@ -347,21 +345,21 @@ class EvidenceHandlerWorker(IModule):
         within 1 timewindow, Slips never decreses risk levels, it can only
         go up.
         """
+        next_level: RiskWeight = increase_risk_weight(alert.risk_level)
         risk_weight_of_last_alert: RiskWeight = (
             self.db.get_risk_weight_of_last_alert(alert.timewindow)
         )
+
         if not risk_weight_of_last_alert:
-            self.db.set_risk_weight_of_last_alert(
-                alert.risk_level, alert.timewindow
-            )
-            return alert
+            # dont escalate the risk weight, this alert is the first one in
+            # this tw, it should be low.
+            pass
+        elif risk_weight_of_last_alert == alert.risk_level:
+            alert.risk_level = next_level
 
-        if risk_weight_of_last_alert == alert.risk_level:
-            alert.risk_level = increase_risk_weight(alert.risk_level)
-            self.db.update_max_seen_risk_weight(
-                str(alert.profile), alert.risk_level
-            )
-
+        # whether this aler is low/med, slips should now be in the next
+        # risk level.
+        self.db.update_max_seen_risk_weight(str(alert.profile), next_level)
         self.db.set_risk_weight_of_last_alert(
             alert.risk_level, alert.timewindow
         )

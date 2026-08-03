@@ -91,9 +91,7 @@ class EvidenceFormatter:
         if not getattr(self, "is_running_non_stop", False):
             self.is_running_non_stop = self.db.is_running_non_stop()
 
-        current_risk_weight = self.db.get_max_seen_risk_weight()[
-            "risk_weight"
-        ].name.lower()
+        current_risk_weight = alert.risk_level.name.lower()
 
         if self.is_running_non_stop:
             alert_to_print += f" (Risk Weight: {current_risk_weight})"
