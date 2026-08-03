@@ -85,6 +85,25 @@ def convert_weight_to_risk_weight_enum_member(weight: float) -> RiskWeight:
     return RiskWeight.LOW
 
 
+def increase_risk_weight(risk_weight: RiskWeight) -> RiskWeight:
+    """
+    Increase a risk-weight bucket by one level.
+
+    Parameters:
+        risk_weight: Current risk-weight bucket.
+
+    Return value:
+        Next risk-weight bucket, capped at the high bucket.
+    """
+    if risk_weight == RiskWeight.LOW:
+        return RiskWeight.MEDIUM
+
+    if risk_weight == RiskWeight.MEDIUM:
+        return RiskWeight.HIGH
+
+    return RiskWeight.HIGH
+
+
 def get_risk_weight_for_accumulated_threat_level(
     accumulated_threat_level: float,
 ) -> RiskWeight:
