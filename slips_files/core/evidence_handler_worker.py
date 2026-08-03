@@ -27,6 +27,7 @@ from slips_files.core.structures.evidence import (
 from slips_files.core.structures.risk_weights import (
     RiskWeight,
     get_risk_weight_for_accumulated_threat_level,
+    increase_risk_weight,
 )
 from slips_files.core.text_formatters.evidence_formatter import (
     EvidenceFormatter,
@@ -338,11 +339,32 @@ class EvidenceHandlerWorker(IModule):
             self.is_running_non_stop or custom_flows
         ) and blocking_module_enabled
 
+    def escalate_risk_level(self, alert: Alert):
+        """
+        If the last alert in this timewindow was low, then this one should
+        be medium, and the next one should be high.
+        This is a design decision so that slips is able to p
+        """
+        risk_weight_of_last_alert: float = (
+            self.db.get_risk_weight_of_last_alert(alert.timewindow)
+        )
+        if not risk_weight_of_last_alert:
+            # first alert in the current timewindow probably
+            return alert
+
+        if risk_weight_of_last_alert == alert.risk_level.weight:
+            # escalate
+            alert.risk_level = increase_risk_weight(alert.risk_level)
+            self.db.set_risk_weight_of_last_alert(alert.risk_level)
+
+        return alert
+
     def handle_new_alert(
         self,
         alert: Alert,
         evidence_causing_the_alert,
     ):
+        alert = self.escalate_risk_level(alert)
         self.db.set_alert(alert, evidence_causing_the_alert)
         is_blocked: bool = self.decide_blocking(
             alert.profile.ip, alert.timewindow

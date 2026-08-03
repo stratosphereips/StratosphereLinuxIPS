@@ -493,6 +493,12 @@ class AlertHandler:
             risk_weight.weight,
         )
 
+        self.r.hexpire(
+            self.constants.RISK_WEIGHT_OF_LAST_ALERT,
+            self.default_ttl,
+            timewindow.number,
+        )
+
     def update_accumulated_threat_level(
         self, profileid: str, twid: str, update_val: float
     ):
