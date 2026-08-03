@@ -6,64 +6,29 @@ from slips_files.core.helpers.risk_weights_config_parser import (
 )
 
 
-# we have 2 sets of values one for each of the following steps:
-#
-# Step1: Slips needs to determine in which risk level is it now.
-# -> this depends on the ATL buckets. aka (RiskWeight Enum)
-#
-#
-# Step2: Slips needs a multiplier for each sensitivity level, to control how
-# fast/slow an alert is generated.
-# -> this is determined from the values in the config LOW_RISK_WEIGHT,
-# MEDIUM_RISK_WEIGHT, HIGH_RISK_WEIGHT
-
 config = read_risk_weights_config()
 
 LOW_RISK_WEIGHT = config.low_risk_weight
 MEDIUM_RISK_WEIGHT = config.medium_risk_weight
 HIGH_RISK_WEIGHT = config.high_risk_weight
+RATL_THRESHOLD = config.ratl_threshold
 
 
 class RiskWeight(Enum):
     """
-    Risk-weight bucket used by live risk-weighted alerting.
-
-    Each level stores `(minimum_atl, maximum_atl, risk_weight)`.
-    minimum_atl, maximum_atl: min and max atl value to get slips into this
-    risk weight.
+    Configured risk-weight multiplier used by live alerting.
     """
 
-    # to alert:  ATL * RW >= RATL_threshold
-    # given:  LOW_RISK_WEIGHT = 0.32, RATL_threshold = 5  (from config)
-    # so the minimum needed ATL to be able to alert in the low bucket when
-    # the threshold is 5 is:  ATL >= 15/0.32
-    # ATL >= 15.625
-    # any value of atl that is less than 15.625 will not generate an alert
-    # SO. the low bucket MUST be more than 15.625 for slips to be able to
-    # generate an alert in the low bucket.
-    # SO. from when atl is from 0 -> 15.6 (slips will never generate an alert)
-    # when atl is from 15.6 -> 20 slips will gen an alert in the low risk
-    # weight.
-    # from 20 -> 30 slips will gen an alert in the medium risk weight.
-    # from 30 -> inf slips will gen an alert in the high risk weight.
-    LOW = (0, 20, LOW_RISK_WEIGHT)
-    MEDIUM = (20, 30, MEDIUM_RISK_WEIGHT)
-    HIGH = (30, float("inf"), HIGH_RISK_WEIGHT)
-
-    @property
-    def lower_bound(self) -> float:
-        return self.value[0]
-
-    @property
-    def upper_bound(self) -> float:
-        return self.value[1]
+    LOW = LOW_RISK_WEIGHT
+    MEDIUM = MEDIUM_RISK_WEIGHT
+    HIGH = HIGH_RISK_WEIGHT
 
     @property
     def weight(self) -> float:
         """
         Returns the multiplier used in `RATL = ATL * risk_weight`.
         """
-        return self.value[2]
+        return float(self.value)
 
 
 def convert_weight_to_risk_weight_enum_member(weight: float) -> RiskWeight:
@@ -87,13 +52,13 @@ def convert_weight_to_risk_weight_enum_member(weight: float) -> RiskWeight:
 
 def increase_risk_weight(risk_weight: RiskWeight) -> RiskWeight:
     """
-    Increase a risk-weight bucket by one level.
+    Increase a risk-weight level by one step.
 
     Parameters:
-        risk_weight: Current risk-weight bucket.
+        risk_weight: Current risk-weight level.
 
     Return value:
-        Next risk-weight bucket, capped at the high bucket.
+        Next risk-weight level, capped at the high level.
     """
     if risk_weight == RiskWeight.LOW:
         return RiskWeight.MEDIUM
@@ -108,23 +73,13 @@ def get_risk_weight_for_accumulated_threat_level(
     accumulated_threat_level: float,
 ) -> RiskWeight:
     """
-    Return the configured risk-weight bucket for the given ATL.
+    Return the base risk-weight level.
 
     Parameters:
         accumulated_threat_level: Current accumulated threat level.
 
     Return value:
-        Matching risk-weight bucket for the accumulated threat level.
+        Base risk-weight level. ATL no longer selects the risk weight.
     """
-    # ensure no negative values
-    accumulated_threat_level = max(float(accumulated_threat_level), 0.0)
-
-    for risk_weight in RiskWeight:
-        if (
-            risk_weight.lower_bound
-            <= accumulated_threat_level
-            < risk_weight.upper_bound
-        ):
-            return risk_weight
-
+    _ = accumulated_threat_level
     return RiskWeight.LOW

@@ -26,7 +26,6 @@ from slips_files.core.structures.evidence import (
 )
 from slips_files.core.structures.risk_weights import (
     RiskWeight,
-    get_risk_weight_for_accumulated_threat_level,
     increase_risk_weight,
 )
 from slips_files.core.text_formatters.evidence_formatter import (
@@ -343,20 +342,29 @@ class EvidenceHandlerWorker(IModule):
         """
         If the last alert in this timewindow was low, then this one should
         be medium, and the next one should be high.
-        This is a design decision so that slips is able to p
+        This is a design decision so that slips is able to move between
+        risk levels in 1 timewindow.
+        within 1 timewindow, Slips never decreses risk levels, it can only
+        go up.
         """
-        risk_weight_of_last_alert: float = (
+        risk_weight_of_last_alert: RiskWeight = (
             self.db.get_risk_weight_of_last_alert(alert.timewindow)
         )
         if not risk_weight_of_last_alert:
-            # first alert in the current timewindow probably
+            self.db.set_risk_weight_of_last_alert(
+                alert.risk_level, alert.timewindow
+            )
             return alert
 
-        if risk_weight_of_last_alert == alert.risk_level.weight:
-            # escalate
+        if risk_weight_of_last_alert == alert.risk_level:
             alert.risk_level = increase_risk_weight(alert.risk_level)
-            self.db.set_risk_weight_of_last_alert(alert.risk_level)
+            self.db.update_max_seen_risk_weight(
+                str(alert.profile), alert.risk_level
+            )
 
+        self.db.set_risk_weight_of_last_alert(
+            alert.risk_level, alert.timewindow
+        )
         return alert
 
     def handle_new_alert(
@@ -364,7 +372,10 @@ class EvidenceHandlerWorker(IModule):
         alert: Alert,
         evidence_causing_the_alert,
     ):
+        # if last alert was low, or medium, escalate the risk level by 1
+        # level.
         alert = self.escalate_risk_level(alert)
+
         self.db.set_alert(alert, evidence_causing_the_alert)
         is_blocked: bool = self.decide_blocking(
             alert.profile.ip, alert.timewindow
@@ -495,18 +506,14 @@ class EvidenceHandlerWorker(IModule):
             profileid, twid, evidence
         )
 
-        # Use the max risk weight seen by any profiler as the current weight.
-        risk_weight: RiskWeight = get_risk_weight_for_accumulated_threat_level(
-            accumulated_threat_level
-        )
-        max_seen_risk_weight = self.db.update_max_seen_risk_weight(
-            profileid, risk_weight
-        )
-        evidence.risk_level = max_seen_risk_weight
+        current_risk_weight: RiskWeight = self.db.get_max_seen_risk_weight()[
+            "risk_weight"
+        ]
+        evidence.risk_level = current_risk_weight
 
         # this is profile-specific RATL = ATL * RW
         risk_accumulated_threat_level = (
-            accumulated_threat_level * max_seen_risk_weight.weight
+            accumulated_threat_level * current_risk_weight.weight
         )
 
         self.add_evidence_to_json_log_file(
@@ -546,7 +553,7 @@ class EvidenceHandlerWorker(IModule):
             accumulated_threat_level=accumulated_threat_level,
             accumulated_ratl=risk_accumulated_threat_level,
             correl_id=list(tw_evidence.keys()),
-            risk_level=max_seen_risk_weight,
+            risk_level=current_risk_weight,
         )
         self.handle_new_alert(alert, tw_evidence)
 
