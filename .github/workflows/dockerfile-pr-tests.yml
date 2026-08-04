@@ -1,0 +1,90 @@
+# Runs Dockerfile-based unit and integration tests on pull requests to master.
+# External contributors must pass the external-pr-approval environment gate
+# before tests execute, to avoid running untrusted PR code automatically.
+
+name: dockerfile-pr-tests
+
+on:
+  pull_request:
+    branches:
+      - 'master'
+      - '!develop'
+
+permissions:
+  contents: read
+
+jobs:
+  external-pr-approval:
+    name: External PR approval
+    if: ${{ !contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) }}
+    runs-on: ubuntu-latest
+    environment:
+      name: external-pr-approval
+    steps:
+      - name: Confirm approval
+        run: echo "External pull request approved for Dockerfile test execution."
+
+  build-docker-image:
+    name: Build Docker image
+    if: ${{ always() && (needs.external-pr-approval.result == 'success' || needs.external-pr-approval.result == 'skipped') }}
+    needs: external-pr-approval
+    runs-on: ubuntu-22.04
+    outputs:
+      docker_image_artifact_name: ${{ steps.image.outputs.artifact_name }}
+      docker_image_tag: ${{ steps.image.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Prepare Docker image metadata
+        id: image
+        run: |
+          image_tag="slips-dockerfile-pr-tests:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          artifact_name="slips-dockerfile-pr-tests-image-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image
+        uses: ./.github/workflows/reusable/build-docker-image
+        with:
+          artifact_name: ${{ steps.image.outputs.artifact_name }}
+          image_tag: ${{ steps.image.outputs.image_tag }}
+
+  unit-tests:
+    if: ${{ always() && needs.build-docker-image.result == 'success' }}
+    needs:
+      - external-pr-approval
+      - build-docker-image
+    uses: ./.github/workflows/test-suite.yml
+    with:
+      test_suite_name: unit-tests
+      test_dir: tests/unit
+      test_path_prefix: tests/unit/
+      pytest_workers: "5"
+      timeout_minutes: 120
+      output_path: output/unit_tests
+      artifact_name_prefix: test_slips-output-
+      container_prefix: slips-unit
+      docker_image_artifact_name: ${{ needs.build-docker-image.outputs.docker_image_artifact_name }}
+      docker_image_tag: ${{ needs.build-docker-image.outputs.docker_image_tag }}
+
+  integration-tests:
+    if: ${{ always() && needs.build-docker-image.result == 'success' }}
+    needs:
+      - external-pr-approval
+      - build-docker-image
+    uses: ./.github/workflows/test-suite.yml
+    with:
+      test_suite_name: integration-tests
+      test_dir: tests/integration
+      output_prefix: integration/
+      test_path_prefix: tests/
+      pytest_workers: "3"
+      timeout_minutes: 1800
+      output_path: output/integration_tests
+      artifact_name_suffix: -integration-output
+      container_prefix: slips-integration
+      docker_image_artifact_name: ${{ needs.build-docker-image.outputs.docker_image_artifact_name }}
+      docker_image_tag: ${{ needs.build-docker-image.outputs.docker_image_tag }}

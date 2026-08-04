@@ -1,0 +1,53 @@
+name: "Build Docker Image"
+description: "Build docker/Dockerfile, export it as an artifact, and expose the image tag"
+inputs:
+  artifact_name:
+    description: "Artifact name for the exported Docker image tarball"
+    required: true
+  dockerfile:
+    description: "Path to the Dockerfile"
+    required: false
+    default: "docker/Dockerfile"
+  image_tag:
+    description: "Docker image tag to build and export"
+    required: true
+outputs:
+  artifact_name:
+    description: "Artifact name for the exported Docker image tarball"
+    value: ${{ inputs.artifact_name }}
+  image_tag:
+    description: "Docker image tag that was built"
+    value: ${{ inputs.image_tag }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout repository with submodules
+      uses: actions/checkout@v7
+      with:
+        ref: ${{ github.ref }}
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: Validate Docker build context
+      shell: bash
+      run: |
+        test -f iris/go.mod
+        test -f iris/go.sum
+        test -f p2p4slips/go.mod
+        test -f p2p4slips/go.sum
+
+    - name: Build Docker image
+      shell: bash
+      env:
+        DOCKERFILE: ${{ inputs.dockerfile }}
+        IMAGE_TAG: ${{ inputs.image_tag }}
+      run: |
+        docker build -t "$IMAGE_TAG" -f "$DOCKERFILE" .
+        docker save -o docker-image.tar "$IMAGE_TAG"
+
+    - name: Upload Docker image
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.artifact_name }}
+        path: docker-image.tar

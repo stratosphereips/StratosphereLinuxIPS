@@ -88,7 +88,7 @@ class IPInfo(IAsyncModule):
             "check_jarm_hash": self.c4,
         }
 
-    async def open_dbs(self):
+    def open_dbs(self) -> None:
         """Function to open the different offline databases used in this
         module. ASN, Country etc.."""
         # Open the maxminddb ASN offline db
@@ -116,7 +116,18 @@ class IPInfo(IAsyncModule):
                 "https://dev.maxmind.com/geoip/geolite2-free-geolocation-data?lang=en. "
                 "Please note it must be the MaxMind DB version."
             )
-        self.create_task(self.read_mac_db)
+        self._start_mac_db_reader()
+
+    def _start_mac_db_reader(self) -> None:
+        """
+        Schedule the MAC vendor database reader on the active event loop.
+        """
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return
+
+        self.reading_mac_db_task = self.create_task(self.read_mac_db)
 
     async def read_mac_db(self):
         """
@@ -496,7 +507,6 @@ class IPInfo(IAsyncModule):
             return
 
         interfaces: List[str] = utils.get_all_interfaces(self.args)
-
         gw_ips = {}
         for interface in interfaces:
             try:
@@ -518,6 +528,9 @@ class IPInfo(IAsyncModule):
 
     def _get_wifi_interface_if_ap(self) -> str | None:
         ap_interfaces: str = self.db.get_wifi_interface()
+        if not ap_interfaces:
+            return None
+
         try:
             # we're now sure that we're running in AP mode
             wifi_interface = ap_interfaces["wifi_interface"]
@@ -733,18 +746,12 @@ class IPInfo(IAsyncModule):
         )
         return True
 
-    def wait_for_dbs(self):
+    def wait_for_dbs(self) -> None:
         """
         wait for update manager to finish updating the mac db and open the
         rest of dbs before starting this module
         """
-        # this is the loop that controls tasks running on open_dbs
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        # run open_dbs in the background so we don't have
-        # to wait for update manager to finish updating the mac db to start
-        # this module
-        loop.run_until_complete(self.open_dbs())
+        self.open_dbs()
 
     def set_evidence_malicious_jarm_hash(
         self,
@@ -808,7 +815,7 @@ class IPInfo(IAsyncModule):
 
         self.db.set_evidence(evidence)
 
-    def pre_main(self):
+    def pre_main(self) -> None:
         utils.drop_root_privs_permanently()
         self.wait_for_dbs()
         # the following method only works when running on an interface

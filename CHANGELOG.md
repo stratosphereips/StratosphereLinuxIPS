@@ -1,3 +1,11 @@
+1.1.22 (Jul 3rd, 2026)
+
+* Improve Slips local-network detection.
+* Reduce false positives for DNS, DHCP, multicast, and broadcast traffic.
+* Improve IPv6 and Zeek input handling for local-network checks and profiler processing.
+* Add support the latest version of IDMEFv2.
+* Update Slips dependencies and golang version used in Docker files.
+
 1.1.21 (Jun 1st, 2026)
 
 * Improve Slips security by updating dependencies, reducing shipped build tools, sanitizing inputs, and improving permissions.

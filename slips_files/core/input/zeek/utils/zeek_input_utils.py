@@ -4,6 +4,7 @@
 import datetime
 import json
 import os
+import shlex
 import signal
 import subprocess
 import threading
@@ -645,8 +646,8 @@ class ZeekInputUtils:
         safe_zeek_logs_dir = utils.validate_safe_path(
             zeek_logs_dir, must_exist=True
         )
-        str_cmd = " ".join(command)
-        self.input.print(f"Zeek command: {str_cmd}", 3, 0)
+        str_cmd = shlex.join(command)
+        self.input.print(f"Zeek command: {str_cmd}", log_to_logfiles_only=True)
         return command, safe_zeek_logs_dir
 
     def _start_zeek_process(self, command, zeek_logs_dir) -> subprocess.Popen:

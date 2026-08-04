@@ -8,6 +8,7 @@ from unittest.mock import Mock, mock_open, patch
 
 import pytest
 import requests
+from pytest_mock.plugin import MockerFixture
 
 from slips_files.common.timer_manager import PeriodicUpdateTimer
 from tests.module_factory import ModuleFactory
@@ -183,6 +184,39 @@ def test_download_file(
 
     mock_requests.assert_called_once_with(url, timeout=5, verify=False)
     assert response.text == "file content"
+
+
+@pytest.mark.parametrize(
+    "request_failure",
+    [
+        requests.exceptions.ReadTimeout,
+        requests.exceptions.ConnectionError,
+        requests.exceptions.ChunkedEncodingError,
+    ],
+)
+def test_download_file_logs_transient_failures_as_warnings(
+    mocker: MockerFixture,
+    request_failure: type[requests.exceptions.RequestException],
+) -> None:
+    """Test transient feed download failures are not logged as errors.
+
+    Parameters:
+        request_failure: Request exception raised by the mocked download.
+
+    Return:
+        None.
+    """
+    update_manager = ModuleFactory().create_update_manager_obj()
+    update_manager.print = Mock()
+    url = "https://example.com/file.txt"
+    mock_requests = mocker.patch("requests.get", side_effect=request_failure)
+
+    assert update_manager.download_file(url) is False
+    assert mock_requests.call_count == 5
+    update_manager.print.assert_called_once()
+    _, verbose, debug = update_manager.print.call_args.args
+    assert verbose == 1
+    assert debug == 0
 
 
 @pytest.mark.parametrize(

@@ -291,6 +291,7 @@ def test_is_running_removes_stale_pidfile():
 def test_start_updates_slips_pid():
     daemon = ModuleFactory().create_daemon_object()
     daemon.pid = None
+    daemon_module = sys.modules[daemon.__class__.__module__]
 
     def mock_daemonize():
         daemon.pid = "23456"
@@ -299,6 +300,8 @@ def test_start_updates_slips_pid():
         daemon, "daemonize", side_effect=mock_daemonize
     ), patch.object(daemon, "print"), patch("builtins.print"), patch(
         "os.getpid", return_value=23456
+    ), patch.object(
+        daemon_module, "Lock"
     ):
         daemon.start()
 

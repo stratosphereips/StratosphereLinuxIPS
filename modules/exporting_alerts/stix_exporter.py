@@ -649,6 +649,10 @@ class StixExporter(IExporter):
         if src_port:
             custom_properties["x_slips_src_port"] = src_port
 
+        immune_type = evidence.get("immune_type")
+        if immune_type:
+            custom_properties["x_slips_immune_type"] = src_port
+
         return {
             key: value
             for key, value in custom_properties.items()
@@ -656,6 +660,8 @@ class StixExporter(IExporter):
         }
 
     def _build_indicator(self, evidence: dict):
+        """this is where a single evidence is converted from slips format
+        to STIX format"""
         attacker = (evidence.get("attacker") or {}).get("value")
         if not attacker:
             attacker = (evidence.get("profile") or {}).get("ip")

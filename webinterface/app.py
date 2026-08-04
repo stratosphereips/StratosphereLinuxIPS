@@ -192,6 +192,17 @@ def index() -> str:
     )
 
 
+@app.route("/favicon.ico")
+def favicon() -> Tuple[str, int]:
+    """
+    Return an empty favicon response to avoid browser 404 noise.
+
+    Return:
+    Empty response body and HTTP 204 status code.
+    """
+    return "", 204
+
+
 @app.route("/db/<int:new_port>", methods=["POST"])
 def get_post_javascript_data(new_port: int) -> object:
     """

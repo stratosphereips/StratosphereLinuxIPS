@@ -1,0 +1,20 @@
+name: "Start Redis"
+description: "Start Redis in background"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Start redis in background
+      shell: bash
+      run: |
+        redis-server --daemonize yes
+
+    - name: Wait for redis
+      shell: bash
+      run: |
+        for i in {1..20}; do
+          redis-cli ping && exit 0
+          sleep 0.5
+        done
+        echo "Redis did not start" >&2
+        exit 1

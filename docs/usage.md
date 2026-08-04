@@ -249,9 +249,9 @@ analysis and detected malicious behaviour can be analyzed as following:
 
 ### The Web Interface
 
-You can use Slips' web interface by running slips with ```-w``` or running:
+You can use Slips' web interface by running Slips with ```-w```:
 
-   ./webinteface.sh
+   ./slips.py -e 1 -f dataset/test7-malicious.pcap -o output_dir -w
 
 Then navigate to ```http://localhost:55000/``` from your browser.
 

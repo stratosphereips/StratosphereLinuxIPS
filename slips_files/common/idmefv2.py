@@ -42,7 +42,8 @@ class IDMEFv2:
     Class to convert Slips evidence and alerts to
     The Incident Detection Message Exchange Format version 2 (IDMEFv2 format).
     More Details about it here:
-    https://www.ietf.org/id/draft-lehmann-idmefv2-03.html#name-the-alert-class
+    https://datatracker.ietf.org/doc/draft-lehmann-idmefv2/#:~:text=Site%22%0A%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%5D%0A%20%20%20%7D%0A%0AAppendix%20C.-,JSON%20Validation%20Schema%20(Non%2Dnormative),-Listing%205%20contains
+
     """
 
     name = "idmefv2"
@@ -193,7 +194,7 @@ class IDMEFv2:
         The Incident Detection Message Exchange Format version 2
         (IDMEFv2 format).
         More Details about it here:
-        https://www.ietf.org/id/draft-lehmann-idmefv2-03.html#name-the-alert-class
+        https://datatracker.ietf.org/doc/draft-lehmann-idmefv2/#:~:text=Site%22%0A%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%5D%0A%20%20%20%7D%0A%0AAppendix%20C.-,JSON%20Validation%20Schema%20(Non%2Dnormative),-Listing%205%20contains
         """
         try:
             now = datetime.now(utils.local_tz).isoformat("T")

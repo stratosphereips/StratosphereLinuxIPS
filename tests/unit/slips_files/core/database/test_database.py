@@ -423,6 +423,32 @@ def test_save_rdb_with_redis_cli_writes_requested_file(tmp_path: Path) -> None:
     mock_run.assert_called_once()
 
 
+def test_start_redis_server_logs_command_to_logfiles_only(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Test Redis startup command logging is restricted to log files."""
+    conf_file = tmp_path / "redis server.conf"
+    conf_file.write_text("port 6379\n", encoding="utf-8")
+    printer = Mock()
+    process = Mock(returncode=0)
+    process.communicate.return_value = (b"", b"")
+
+    monkeypatch.setattr(RedisDB, "_conf_file", str(conf_file))
+    monkeypatch.setattr(RedisDB, "_options", {}, raising=False)
+    monkeypatch.setattr(RedisDB, "redis_port", 6379, raising=False)
+    monkeypatch.setattr(RedisDB, "printer", printer, raising=False)
+
+    with patch("subprocess.Popen", return_value=process) as popen:
+        assert RedisDB._start_redis_server() is True
+
+    printer.print.assert_called_once_with(
+        f"Redis command: redis-server '{conf_file}' --port 6379 "
+        "--bind 127.0.0.1 --daemonize yes",
+        log_to_logfiles_only=True,
+    )
+    popen.assert_called_once()
+
+
 def test_init_p2p_trust_db_uses_permanent_dir(tmp_path, monkeypatch):
     db = ModuleFactory().create_db_manager_obj(6386)
     monkeypatch.chdir(tmp_path)

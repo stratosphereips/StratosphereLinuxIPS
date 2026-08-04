@@ -31,6 +31,7 @@ from slips_files.core.database.redis_db.cleanup_mixin import CleanupMixin
 
 import os
 import redis
+import shlex
 import time
 import json
 import subprocess
@@ -64,6 +65,7 @@ class RedisDB(
     ScanDetectionsHandler,
     Publisher,
 ):
+    name = "redis_db"
     # this db is a singelton per port. meaning no 2 instances
     # should be created for the same port at the same time
     _obj = None
@@ -477,6 +479,10 @@ class RedisDB(
             "--daemonize",
             "yes",
         ]
+        cls.printer.print(
+            f"Redis command: {shlex.join(cmd)}",
+            log_to_logfiles_only=True,
+        )
         process = subprocess.Popen(
             cmd,
             cwd=os.getcwd(),

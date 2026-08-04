@@ -395,6 +395,7 @@ def test_get_gateway_info_sets_mac_and_ip(
     profiler = ModuleFactory().create_profiler_worker_obj()
     profiler.is_gw_info_detected = Mock(side_effect=[False, False])
     profiler.get_gw_ip_using_gw_mac = Mock(return_value="8.8.8.1")
+    profiler.gw_ip_belongs_to_localnet = Mock(return_value=True)
     mock_is_private_ip.return_value = True
     mock_is_ignored_ip.return_value = False
     flow = make_conn(dmac="00:11:22:33:44:55")
@@ -426,6 +427,42 @@ def test_get_gateway_info_does_not_set_gateway_for_non_private_source(_mock):
     profiler.get_gateway_info(make_conn(dmac="00:11:22:33:44:55"))
 
     profiler.db.set_default_gateway.assert_not_called()
+
+
+def test_get_gateway_info_uses_detected_gateway_mac_for_ip_lookup():
+    profiler = ModuleFactory().create_profiler_worker_obj()
+    profiler.gw_macs = {"eth0": "00:11:22:33:44:55"}
+    profiler.is_gw_info_detected = Mock(side_effect=[True, False])
+    profiler.get_gw_ip_using_gw_mac = Mock(return_value="192.168.1.1")
+    profiler.gw_ip_belongs_to_localnet = Mock(return_value=True)
+
+    profiler.get_gateway_info(make_conn(dmac="66:77:88:99:aa:bb"))
+
+    profiler.get_gw_ip_using_gw_mac.assert_called_once_with(
+        "00:11:22:33:44:55"
+    )
+    profiler.db.set_default_gateway.assert_called_once_with(
+        "IP", "192.168.1.1", "eth0"
+    )
+
+
+@pytest.mark.parametrize(
+    "gw_ip, local_net, expected",
+    [
+        ("192.168.1.1", "192.168.1.0/24", True),
+        ("10.0.0.1", "192.168.1.0/24", False),
+        ("not-an-ip", "192.168.1.0/24", False),
+    ],
+)
+@patch("slips_files.core.profiler_worker.utils.get_all_interfaces")
+def test_gw_ip_belongs_to_localnet_handles_string_ips(
+    mock_get_all_interfaces, gw_ip, local_net, expected
+):
+    profiler = ModuleFactory().create_profiler_worker_obj()
+    mock_get_all_interfaces.return_value = ["eth0"]
+    profiler.db.get_local_network.return_value = local_net
+
+    assert profiler.gw_ip_belongs_to_localnet(gw_ip) is expected
 
 
 def test_get_gw_ip_using_gw_mac_prefers_ipv4():

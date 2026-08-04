@@ -3,71 +3,18 @@ name: integration-tests
 on:
   pull_request:
     branches:
-      - 'master'
+      - '!master'
       - 'develop'
 
 jobs:
-  list-integration-tests:
-    runs-on: ubuntu-latest
-    outputs:
-      test_files: ${{ steps.list.outputs.test_files }}
-    steps:
-      - uses: actions/checkout@v6
-      - id: list
-        uses: ./.github/actions/list-tests-dir
-        with:
-          test_dir: tests/integration
-          output_prefix: integration/
-
   integration-tests:
-    needs: list-integration-tests
-    runs-on: ubuntu-22.04
-    timeout-minutes: 1800
-
-    container:
-      image: stratosphereips/slips_dependencies
-      # TensorFlow + multiprocessing + pytest -n can hit /dev/shm limits.
-      options: --shm-size=2g
-
-
-    # suppress tensorflow warnings
-    env:
-      TF_CPP_MIN_LOG_LEVEL: 3
-      TF_ENABLE_ONEDNN_OPTS: 0
-
-    strategy:
-      fail-fast: false
-      matrix:
-        test_file: ${{ fromJson(needs.list-integration-tests.outputs.test_files) }}
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.ref }}
-          fetch-depth: 0
-
-      - name: Start Redis
-        uses: ./.github/actions/start-redis
-
-      - name: Run Integration Tests for ${{ matrix.test_file }}
-        run: |
-          python3 -m pytest tests/${{ matrix.test_file }} -p no:warnings -vv -s -n 3
-
-      - name: Build Artifact Name
-        # built names, otherwise we get numeric names for the artifacts and we dont know which is which
-        # always() here because when the pytest step fails, GitHub skips the name-building step, so steps.artifact-name.outputs.name is empty
-        # and upload-artifact rejects it.
-        if: always()
-        id: artifact-name
-        run: |
-          sanitized_test_file="${{ matrix.test_file }}"
-          sanitized_test_file=$(printf '%s\n' "$sanitized_test_file" | tr '/' '_')
-          echo "name=${sanitized_test_file}-integration-output" >> "$GITHUB_OUTPUT"
-
-      - name: Upload Artifacts
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ steps.artifact-name.outputs.name }}
-          path: |
-            output/integration_tests
+    uses: ./.github/workflows/test-suite.yml
+    with:
+      test_suite_name: integration-tests
+      test_dir: tests/integration
+      output_prefix: integration/
+      test_path_prefix: tests/
+      pytest_workers: "3"
+      timeout_minutes: 1800
+      output_path: output/integration_tests
+      artifact_name_suffix: -integration-output

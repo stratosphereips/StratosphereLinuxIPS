@@ -394,6 +394,27 @@ class ProfilerWorker(IModule):
         # all of them are ipv6, return the first
         return gw_ips[0]
 
+    def gw_ip_belongs_to_localnet(self, gw_ip: str) -> bool:
+        """checks if the given detected gw_ip belongs to the detected local
+        network"""
+        try:
+            gw_ip_obj = ipaddress.ip_address(gw_ip)
+        except ValueError:
+            return False
+
+        for interface in utils.get_all_interfaces(self.args):
+            local_net = self.db.get_local_network(interface)
+            if not local_net:
+                continue
+            try:
+                local_net_obj = ipaddress.ip_network(local_net, strict=False)
+            except ValueError:
+                continue
+
+            if gw_ip_obj in local_net_obj:
+                return True
+        return False
+
     def get_gateway_info(self, flow):
         """
         Gets the IP and MAC of the gateway and stores them in the db
@@ -412,7 +433,7 @@ class ProfilerWorker(IModule):
         if not gw_mac_found:
             # we didnt get the MAC of the GW of this flow's interface
             # ok consider the GW MAC = any dst MAC of a flow
-            # going from a private srcip -> a public ip
+            # going from a private srcip -> a public dstip
             if (
                 utils.is_private_ip(flow.saddr)
                 and not utils.is_ignored_ip(flow.daddr)
@@ -428,8 +449,12 @@ class ProfilerWorker(IModule):
 
         # we need the mac to be set to be able to find the ip using it
         if not self.is_gw_info_detected("ip", flow.interface) and gw_mac_found:
-            gw_ip: Optional[str] = self.get_gw_ip_using_gw_mac(flow.dmac)
-            if gw_ip:
+            gw_mac: Optional[str] = self.gw_macs.get(flow.interface)
+            if not gw_mac:
+                return
+
+            gw_ip: Optional[str] = self.get_gw_ip_using_gw_mac(gw_mac)
+            if gw_ip and self.gw_ip_belongs_to_localnet(gw_ip):
                 self.gw_ips[flow.interface] = gw_ip
                 self.db.set_default_gateway("IP", gw_ip, flow.interface)
                 self.print(

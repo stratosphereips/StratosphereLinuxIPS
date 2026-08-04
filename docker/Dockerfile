@@ -1,5 +1,5 @@
-# Build Iris.
-FROM golang:1.26.3 AS build-iris
+# Build Iris with a Go toolchain that matches iris/go.mod.
+FROM golang:1.22.2 AS build-iris
 
 # Set Go modules to "on" to avoid issues with GOPATH
 ENV GO111MODULE=on
@@ -13,7 +13,7 @@ RUN go mod download
 COPY iris/cmd ./cmd
 COPY iris/pkg ./pkg
 
-RUN CGO_ENABLED=0 go build -buildvcs=false -o /artifacts/iris cmd/peercli.go
+RUN go build -buildvcs=false -o /artifacts/iris cmd/peercli.go
 
 
 FROM golang:1.26.3 AS build-p2p

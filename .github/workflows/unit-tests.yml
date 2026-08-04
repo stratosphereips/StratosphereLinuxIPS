@@ -3,61 +3,17 @@ name: unit-tests
 on:
   pull_request:
     branches:
-      - 'master'
+      - '!master'
       - 'develop'
 
 jobs:
-  # This job finds all test files and creates a JSON array for the matrix
-  list-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    outputs:
-      test_files: ${{ steps.list.outputs.test_files }}
-    steps:
-      - uses: actions/checkout@v6
-      - id: list
-        uses: ./.github/actions/list-tests-dir
-        with:
-          test_dir: tests/unit
-
   unit-tests:
-    needs: list-tests
-    runs-on: ubuntu-22.04
-    timeout-minutes: 120
-
-    # Do not stop other tests if one file fails
-    strategy:
-      fail-fast: false
-      matrix:
-        test_file: ${{ fromJson(needs.list-tests.outputs.test_files) }}
-
-    container:
-      image: stratosphereips/slips_dependencies
-      # TensorFlow + multiprocessing + pytest -n can hit /dev/shm limits.
-      options: --shm-size=2g
-
-    env:
-      TF_CPP_MIN_LOG_LEVEL: 3
-      TF_ENABLE_ONEDNN_OPTS: 0
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.ref }}
-          fetch-depth: 0
-
-      - name: Start Redis
-        uses: ./.github/actions/start-redis
-
-      - name: Run Unit Tests for ${{ matrix.test_file }}
-        run: |
-          # The path is reconstructed here using the matrix variable
-          python3 -m pytest tests/unit/${{ matrix.test_file }} -p no:warnings -vv -s -n 5
-
-      - name: Upload Artifacts
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test_slips-output-${{ strategy.job-index }}
-          path: |
-            output/unit_tests
+    uses: ./.github/workflows/test-suite.yml
+    with:
+      test_suite_name: unit-tests
+      test_dir: tests/unit
+      test_path_prefix: tests/unit/
+      pytest_workers: "5"
+      timeout_minutes: 120
+      output_path: output/unit_tests
+      artifact_name_prefix: test_slips-output-
