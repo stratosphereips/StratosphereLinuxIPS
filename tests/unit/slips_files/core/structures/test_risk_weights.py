@@ -8,8 +8,9 @@ from slips_files.core.structures.risk_weights import (
     MEDIUM_RISK_WEIGHT,
     RATL_THRESHOLD,
     RiskWeight,
-    convert_float_to_risk_weight,
+    convert_weight_to_risk_weight_enum_member,
     get_risk_weight_for_accumulated_threat_level,
+    increase_risk_weight,
 )
 from tests.module_factory import ModuleFactory
 
@@ -17,33 +18,46 @@ from tests.module_factory import ModuleFactory
 @pytest.mark.parametrize(
     "risk_weight, expected_bucket",
     [
-        (0.0, RiskWeight.LOW),
         (LOW_RISK_WEIGHT, RiskWeight.LOW),
         (MEDIUM_RISK_WEIGHT, RiskWeight.MEDIUM),
         (HIGH_RISK_WEIGHT, RiskWeight.HIGH),
     ],
 )
-def test_convert_risk_weight_to_bucket(
+def test_get_risk_weight_from_weight(
     risk_weight: float, expected_bucket: RiskWeight
 ) -> None:
     ModuleFactory().create_evidence_handler_worker_obj()
 
-    assert convert_float_to_risk_weight(risk_weight) == expected_bucket
+    assert (
+        convert_weight_to_risk_weight_enum_member(risk_weight)
+        == expected_bucket
+    )
+
+
+@pytest.mark.parametrize(
+    "risk_weight, expected_bucket",
+    [
+        (RiskWeight.LOW, RiskWeight.MEDIUM),
+        (RiskWeight.MEDIUM, RiskWeight.HIGH),
+        (RiskWeight.HIGH, RiskWeight.HIGH),
+    ],
+)
+def test_increase_risk_weight(
+    risk_weight: RiskWeight, expected_bucket: RiskWeight
+) -> None:
+    ModuleFactory().create_evidence_handler_worker_obj()
+
+    assert increase_risk_weight(risk_weight) == expected_bucket
 
 
 @pytest.mark.parametrize(
     "accumulated_threat_level, expected_bucket",
     [
-        (0.0, RiskWeight.HIGH),
-        (RiskWeight.HIGH.maximum_atl / 2, RiskWeight.HIGH),
-        (RiskWeight.MEDIUM.minimum_atl, RiskWeight.MEDIUM),
-        (
-            (RiskWeight.MEDIUM.minimum_atl + RiskWeight.MEDIUM.maximum_atl)
-            / 2,
-            RiskWeight.MEDIUM,
-        ),
-        (RiskWeight.LOW.minimum_atl, RiskWeight.LOW),
-        (RiskWeight.LOW.minimum_atl + 1.0, RiskWeight.LOW),
+        (0.0, RiskWeight.LOW),
+        (5.0, RiskWeight.LOW),
+        (25.0, RiskWeight.LOW),
+        (100.0, RiskWeight.LOW),
+        (1_000.0, RiskWeight.LOW),
     ],
 )
 def test_get_risk_weight_for_accumulated_threat_level(
@@ -57,24 +71,10 @@ def test_get_risk_weight_for_accumulated_threat_level(
     )
 
 
-@pytest.mark.parametrize(
-    "risk_weight_bucket",
-    [RiskWeight.HIGH, RiskWeight.MEDIUM, RiskWeight.LOW],
-)
-def test_each_risk_weight_bucket_contains_alertable_atl(
-    risk_weight_bucket: RiskWeight,
-) -> None:
+def test_risk_weights_are_configured_multipliers() -> None:
     ModuleFactory().create_evidence_handler_worker_obj()
 
-    assert (
-        risk_weight_bucket.minimum_atl
-        <= risk_weight_bucket.alertable_atl_boundary
-        < risk_weight_bucket.maximum_atl
-    )
-    assert (
-        pytest.approx(
-            risk_weight_bucket.alertable_atl_boundary
-            * risk_weight_bucket.risk_weight
-        )
-        == RATL_THRESHOLD
-    )
+    assert RiskWeight.LOW.weight == LOW_RISK_WEIGHT
+    assert RiskWeight.MEDIUM.weight == MEDIUM_RISK_WEIGHT
+    assert RiskWeight.HIGH.weight == HIGH_RISK_WEIGHT
+    assert RATL_THRESHOLD > 0

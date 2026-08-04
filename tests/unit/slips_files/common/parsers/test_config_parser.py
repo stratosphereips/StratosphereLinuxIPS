@@ -40,3 +40,48 @@ def test_risk_weight_methods_return_none_for_invalid_values(
     config_parser.read_configuration = Mock(return_value=configured_value)
 
     assert config_parser.low_risk_weight() is None
+
+
+@pytest.mark.parametrize(
+    ("configured_value", "default_value", "expected_value"),
+    [
+        ("1.25", None, 1.25),
+        (None, 0.5, 0.5),
+        ("invalid", 0.5, 0.5),
+    ],
+)
+def test_read_detection_float_returns_parsed_or_default(
+    configured_value: str | None,
+    default_value: float | None,
+    expected_value: float | None,
+) -> None:
+    ModuleFactory().create_notify_obj()
+
+    config_parser = object.__new__(ConfigParser)
+    config_parser.read_configuration = Mock(return_value=configured_value)
+
+    assert (
+        config_parser._read_detection_float(
+            "risk_accumulated_threat_level", default_value
+        )
+        == expected_value
+    )
+
+
+@pytest.mark.parametrize(
+    ("configured_value", "expected_value"),
+    [
+        ("20", 20.0),
+        ("invalid", 15.0),
+        (None, 15.0),
+    ],
+)
+def test_risk_accumulated_threat_level_returns_float_or_default(
+    configured_value: str | None, expected_value: float
+) -> None:
+    ModuleFactory().create_notify_obj()
+
+    config_parser = object.__new__(ConfigParser)
+    config_parser.read_configuration = Mock(return_value=configured_value)
+
+    assert config_parser.risk_accumulated_threat_level() == expected_value

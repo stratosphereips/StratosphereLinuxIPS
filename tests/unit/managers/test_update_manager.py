@@ -6,6 +6,7 @@ import pytest
 from git import GitCommandError
 
 from managers.update_manager import UpdateManager
+from tests.module_factory import ModuleFactory
 
 
 def create_update_manager():
@@ -611,3 +612,49 @@ def test_git_pull_branch_fetches_and_checks_out_configured_branch():
     update_manager.print.assert_called_once_with(
         "Done pulling new version and checking out origin/develop branch."
     )
+
+
+@pytest.mark.parametrize(
+    ("auto_update_enabled", "day_passed", "should_update", "expected_result"),
+    [
+        (False, True, True, False),
+        (True, False, True, False),
+        (True, True, True, True),
+        (True, True, False, False),
+    ],
+)
+def test_check_for_slips_new_version_every_1_day(
+    auto_update_enabled,
+    day_passed,
+    should_update,
+    expected_result,
+):
+    ModuleFactory().create_main_obj()
+
+    update_manager = create_update_manager()
+    update_manager.auto_update_slips_enabled = auto_update_enabled
+    update_manager._did_1d_pass_since_last_update = Mock(
+        return_value=day_passed
+    )
+    update_manager.should_update_slips = Mock(return_value=should_update)
+    update_manager.print = Mock()
+
+    assert (
+        update_manager.check_for_slips_new_version_every_1_day()
+        == expected_result
+    )
+
+    if not auto_update_enabled:
+        update_manager._did_1d_pass_since_last_update.assert_not_called()
+        update_manager.should_update_slips.assert_not_called()
+        update_manager.print.assert_not_called()
+        return
+
+    update_manager._did_1d_pass_since_last_update.assert_called_once_with()
+    if not day_passed:
+        update_manager.should_update_slips.assert_not_called()
+        update_manager.print.assert_not_called()
+        return
+
+    update_manager.should_update_slips.assert_called_once_with()
+    update_manager.print.assert_called_once()

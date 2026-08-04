@@ -14,6 +14,7 @@ from slips_files.core.structures.evidence import (
     Direction,
     ThreatLevel,
 )
+from slips_files.core.structures.risk_weights import RiskWeight
 from tests.module_factory import ModuleFactory
 
 
@@ -209,6 +210,7 @@ def test_get_printable_alert(
 ):
     formatter = ModuleFactory().create_evidence_formatter_obj()
     formatter.db.get_hostname_from_profile.return_value = hostname
+    formatter.db.is_running_non_stop.return_value = False
     formatter.width = 300
     alert = Alert(
         profile=profileid,
@@ -217,6 +219,7 @@ def test_get_printable_alert(
         accumulated_threat_level=123,
         id="123",
         last_flow_datetime="",
+        risk_level=RiskWeight.LOW,
     )
     with patch(
         "slips_files.common.slips_utils.utils.convert_ts_format"
