@@ -18,6 +18,7 @@ from slips_files.core.structures.evidence import (
     ThreatLevel,
     dict_to_evidence,
 )
+from slips_files.core.structures.risk_weights import RiskWeight
 
 
 def is_valid_correl_id(correl_id: List[str]) -> bool:
@@ -51,6 +52,8 @@ class Alert:
     last_evidence: Evidence
     # accumulated threat level of all evidence in this alert
     accumulated_threat_level: float
+    # risk-weighted accumulated threat level of all evidence in this alert
+    accumulated_ratl: float = 0
     # every alert should have an ID according to the IDMEF format
     id: str = field(default_factory=lambda: str(uuid4()))
     # basically the last evidence that triggered the threshold for this alert
@@ -62,6 +65,8 @@ class Alert:
     last_flow_datetime: str = ""
     threat_level: ThreatLevel = ThreatLevel.CRITICAL
     confidence: float = 0
+    # exists only in interface mode.
+    risk_level: RiskWeight | None = None
 
     def __post_init__(self):
         if self.correl_id:
@@ -108,6 +113,7 @@ def dict_to_alert(alert: dict) -> Alert:
         ),
         last_evidence=dict_to_evidence(alert["last_evidence"]),
         accumulated_threat_level=alert.get("accumulated_threat_level"),
+        accumulated_ratl=alert.get("accumulated_ratl", 0),
         id=alert.get("id", ""),
         correl_id=alert.get("correl_id"),
         last_flow_datetime=utils.convert_ts_format(
@@ -115,6 +121,11 @@ def dict_to_alert(alert: dict) -> Alert:
         ),
         threat_level=ThreatLevel[alert["threat_level"].upper()],
         confidence=alert.get("confidence"),
+        risk_level=(
+            RiskWeight[alert["risk_level"]]
+            if alert.get("risk_level")
+            else None
+        ),
     )
 
 
@@ -132,9 +143,11 @@ def alert_to_dict(alert: Alert) -> dict:
         },
         "last_evidence": evidence_to_send,
         "accumulated_threat_level": alert.accumulated_threat_level,
+        "accumulated_ratl": alert.accumulated_ratl,
         "id": alert.id,
         "correl_id": alert.correl_id,
         "last_flow_datetime": alert.last_flow_datetime,
         "threat_level": alert.threat_level.name,
         "confidence": alert.confidence,
+        "risk_level": alert.risk_level.name if alert.risk_level else None,
     }

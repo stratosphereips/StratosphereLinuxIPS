@@ -51,6 +51,10 @@ class Constants:
     P2P_REPORTS = "p2p_reports"
     ORGANIZATIONS_PORTS = "organization_port"
     SLIPS_START_TIME = "slips_start_time"
+    CURRENT_TIMEWINDOW = "current_timewindow"
+    CURRENT_RISK_WEIGHT = "current_risk_weight"
+    MAX_RISK_WEIGHT_OF_ALL_PROFILES = "max_risk_weight_of_all_profiles"
+    RISK_WEIGHT_OF_LAST_ALERT = "risk_weight_of_last_alert"
     USED_FTP_PORTS = "used_ftp_ports"
     SLIPS_INTERNAL_TIME = "slips_internal_time"
     IS_RUNNING_AS_AP = "is_slips_running_as_an_ap"
@@ -118,6 +122,7 @@ class Constants:
     FLOWS_PER_MINUTE_MODULES = "flows_per_minute_modules"
     FLOWS_PER_MINUTE_LAST_LOGGED = "flows_per_minute_last_logged"
     FLOWS_PER_MINUTE_LOG_LOCK = "flows_per_minute_log_lock"
+    DETECTED_DOING_PORTSCAN = "detected_doing_port_scan"
 
 
 class Channels:

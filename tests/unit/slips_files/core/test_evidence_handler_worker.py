@@ -1,10 +1,12 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import json
 from datetime import datetime
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
+from slips_files.common.slips_utils import utils
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.evidence import (
     Attacker,
@@ -15,6 +17,11 @@ from slips_files.core.structures.evidence import (
     ProfileID,
     ThreatLevel,
     TimeWindow,
+)
+from slips_files.core.structures.risk_weights import (
+    LOW_RISK_WEIGHT,
+    RiskWeight,
+    get_risk_weight_for_accumulated_threat_level,
 )
 from tests.module_factory import ModuleFactory
 
@@ -241,6 +248,154 @@ def test_add_evidence_to_json_log_file_maps_confidence_to_string(
     assert f'"confidence": "{expected_output}"' in note
 
 
+@pytest.mark.parametrize(
+    "accumulated_threat_level, accumulated_ratl",
+    [
+        (3.5, 7.0),
+        (0, 0),
+    ],
+)
+def test_add_evidence_to_json_log_file_adds_accumulated_ratl(
+    accumulated_threat_level, accumulated_ratl
+):
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    worker.idmefv2.convert_to_idmef_event = Mock(
+        return_value={"ID": "e1", "Note": json.dumps({"risk_level": "medium"})}
+    )
+    worker.evidence_logger_q.put = Mock()
+    worker.add_latency_to_csv = Mock()
+    evidence = Evidence(
+        evidence_type=EvidenceType.ARP_SCAN,
+        description="ARP scan detected",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="192.168.1.20",
+        ),
+        threat_level=ThreatLevel.INFO,
+        confidence=0.8,
+        profile=ProfileID("192.168.1.20"),
+        timewindow=TimeWindow(1),
+        uid=["uid1"],
+        timestamp="2024/10/04 15:45:30.123456+0000",
+        risk_level=RiskWeight.MEDIUM,
+    )
+
+    worker.add_evidence_to_json_log_file(
+        evidence,
+        accumulated_threat_level,
+        accumulated_ratl,
+    )
+
+    logged_evidence = worker.evidence_logger_q.put.call_args[0][0]["to_log"]
+    note = json.loads(logged_evidence["Note"])
+    assert note["accumulated_threat_level"] == accumulated_threat_level
+    assert note["risk_accumulated_threat_level"] == accumulated_ratl
+    assert note["risk_level"] == "medium"
+
+
+def test_handle_evidence_added_message_sets_risk_level_on_objects() -> None:
+    module_factory = ModuleFactory()
+    worker = module_factory.create_evidence_handler_worker_obj()
+    evidence = Evidence(
+        evidence_type=EvidenceType.ARP_SCAN,
+        description="ARP scan detected",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="192.168.1.20",
+        ),
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.8,
+        profile=ProfileID("192.168.1.20"),
+        timewindow=TimeWindow(1),
+        uid=["uid1"],
+        timestamp="2024/10/04 15:45:30.123456+0000",
+    )
+    worker.whitelist.is_whitelisted_evidence.return_value = False
+    worker.is_running_non_stop = False
+    worker.formatter.add_threat_level_to_evidence_description = Mock(
+        return_value=evidence
+    )
+    worker.formatter.get_evidence_to_log = Mock(return_value="evidence_log")
+    worker.add_to_log_file = Mock()
+    worker.get_accumulated_threat_level = Mock(return_value=55.0)
+    worker.db.get_max_seen_risk_weight = Mock(
+        return_value={"risk_weight": RiskWeight.HIGH, "profile": ""}
+    )
+    worker.add_evidence_to_json_log_file = Mock()
+    worker.give_evidence_to_exporting_modules = Mock()
+    worker.get_evidence_for_tw = Mock(return_value={"e1": evidence})
+    worker.db.get_tw_limits = Mock(
+        return_value=(
+            "2024-10-04T15:00:00+00:00",
+            "2024-10-04T16:00:00+00:00",
+        )
+    )
+    worker.handle_new_alert = Mock()
+    worker.detection_threshold_in_this_width = 10.0
+
+    worker.handle_evidence_added_message(
+        {"data": json.dumps(utils.to_dict(evidence))}
+    )
+
+    logged_evidence = worker.add_evidence_to_json_log_file.call_args[0][0]
+    assert logged_evidence.risk_level == RiskWeight.HIGH
+
+    logged_alert = worker.handle_new_alert.call_args[0][0]
+    assert logged_alert.risk_level == RiskWeight.HIGH
+
+
+def test_escalate_risk_level_stores_current_weight_for_first_alert() -> None:
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    worker.db.get_risk_weight_of_last_alert = Mock(return_value={})
+    worker.db.set_risk_weight_of_last_alert = Mock()
+    worker.db.update_max_seen_risk_weight = Mock()
+    alert = Alert(
+        profile=ProfileID("1.2.3.4"),
+        timewindow=TimeWindow(1),
+        last_evidence=Mock(),
+        accumulated_threat_level=12.2,
+        last_flow_datetime="2024/10/04 15:45:30.123456+0000",
+        risk_level=RiskWeight.LOW,
+    )
+
+    escalated_alert = worker.escalate_risk_level(alert)
+
+    assert escalated_alert.risk_level == RiskWeight.LOW
+    worker.db.update_max_seen_risk_weight.assert_called_once_with(
+        "profile_1.2.3.4", RiskWeight.MEDIUM
+    )
+    worker.db.set_risk_weight_of_last_alert.assert_called_once_with(
+        RiskWeight.LOW, alert.timewindow
+    )
+
+
+def test_escalate_risk_level_increases_matching_weight() -> None:
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    worker.db.get_risk_weight_of_last_alert = Mock(return_value=RiskWeight.LOW)
+    worker.db.set_risk_weight_of_last_alert = Mock()
+    worker.db.update_max_seen_risk_weight = Mock()
+    alert = Alert(
+        profile=ProfileID("1.2.3.4"),
+        timewindow=TimeWindow(1),
+        last_evidence=Mock(),
+        accumulated_threat_level=12.2,
+        last_flow_datetime="2024/10/04 15:45:30.123456+0000",
+        risk_level=RiskWeight.LOW,
+    )
+
+    escalated_alert = worker.escalate_risk_level(alert)
+
+    assert escalated_alert.risk_level == RiskWeight.MEDIUM
+    worker.db.update_max_seen_risk_weight.assert_called_once_with(
+        "profile_1.2.3.4", RiskWeight.MEDIUM
+    )
+    worker.db.set_risk_weight_of_last_alert.assert_called_once_with(
+        RiskWeight.MEDIUM, alert.timewindow
+    )
+
+
 def test_show_popup():
     worker = ModuleFactory().create_evidence_handler_worker_obj()
     worker.notify = Mock()
@@ -250,6 +405,47 @@ def test_show_popup():
     worker.show_popup(alert)
 
     worker.notify.show_popup.assert_called_once_with("alert_time_desc")
+
+
+@pytest.mark.parametrize(
+    ("is_running_non_stop", "expected_threshold"),
+    [
+        (True, 15),
+        (False, 15.0),
+    ],
+)
+def test_get_detection_threshold_uses_runtime_mode(
+    is_running_non_stop: bool, expected_threshold: float
+) -> None:
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    worker.is_running_non_stop = is_running_non_stop
+    worker.risk_accumulated_threat_level_threshold = 15
+    worker.detection_threshold = 0.25
+    worker.width = 3600
+
+    assert worker._get_detection_threshold() == expected_threshold
+
+
+@pytest.mark.parametrize(
+    "accumulated_threat_level, expected_risk_weight",
+    [
+        (0.0, LOW_RISK_WEIGHT),
+        (5.0, LOW_RISK_WEIGHT),
+        (25.0, LOW_RISK_WEIGHT),
+        (50.0, LOW_RISK_WEIGHT),
+    ],
+)
+def test_get_float_risk_weight(
+    accumulated_threat_level: float, expected_risk_weight: float
+) -> None:
+    ModuleFactory().create_evidence_handler_worker_obj()
+
+    assert (
+        get_risk_weight_for_accumulated_threat_level(
+            accumulated_threat_level
+        ).weight
+        == expected_risk_weight
+    )
 
 
 def test_send_to_exporting_module():
@@ -446,6 +642,7 @@ def test_log_alert(
         last_evidence=Mock(),
         accumulated_threat_level=accumulated_threat_level,
         last_flow_datetime=flow_datetime,
+        risk_level=RiskWeight.LOW,
     )
 
     worker.log_alert(alert, blocked=blocked)

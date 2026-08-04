@@ -539,6 +539,18 @@ class DBManager:
     def get_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.get_accumulated_threat_level(*args, **kwargs)
 
+    def get_max_seen_risk_weight(self, *args, **kwargs):
+        return self.rdb.get_max_seen_risk_weight(*args, **kwargs)
+
+    def update_max_seen_risk_weight(self, *args, **kwargs):
+        return self.rdb.update_max_seen_risk_weight(*args, **kwargs)
+
+    def get_risk_weight_of_last_alert(self, *args, **kwargs):
+        return self.rdb.get_risk_weight_of_last_alert(*args, **kwargs)
+
+    def set_risk_weight_of_last_alert(self, *args, **kwargs):
+        return self.rdb.set_risk_weight_of_last_alert(*args, **kwargs)
+
     def update_accumulated_threat_level(self, *args, **kwargs):
         return self.rdb.update_accumulated_threat_level(*args, **kwargs)
 
@@ -1093,8 +1105,8 @@ class DBManager:
     def get_current_timewindow(self, *args, **kwargs):
         return self.rdb.get_current_timewindow(*args, **kwargs)
 
-    def set_current_timewindow(self, *args, **kwargs):
-        return self.rdb.set_current_timewindow(*args, **kwargs)
+    def incr_current_timewindow(self, *args, **kwargs):
+        return self.rdb.incr_current_timewindow(*args, **kwargs)
 
     def add_out_http(self, *args, **kwargs):
         return self.rdb.add_out_http(*args, **kwargs)
@@ -1151,9 +1163,6 @@ class DBManager:
 
     def get_total_flows(self, *args, **kwargs):
         return self.rdb.get_total_flows(*args, **kwargs)
-
-    def get_info_about_icmp_flows_using_sport(self, *args, **kwargs):
-        return self.rdb.get_info_about_icmp_flows_using_sport(*args, **kwargs)
 
     def increment_processed_flows(self, *args, **kwargs):
         return self.rdb.increment_processed_flows(*args, **kwargs)
@@ -1337,12 +1346,6 @@ class DBManager:
 
     def get_separator(self):
         return self.rdb.separator
-
-    def get_icmp_attack_info_to_single_host(self, *args, **kwargs):
-        return self.rdb.get_icmp_attack_info_to_single_host(*args, **kwargs)
-
-    def get_icmp_attack_info_to_several_hosts(self, *args, **kwargs):
-        return self.rdb.get_icmp_attack_info_to_several_hosts(*args, **kwargs)
 
     def init_tables(self, *args, **kwargs):
         return self.sqlite.init_tables(*args, **kwargs)

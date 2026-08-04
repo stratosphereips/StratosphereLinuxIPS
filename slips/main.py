@@ -20,6 +20,7 @@ from managers.metadata_manager import MetadataManager
 from managers.process_manager import ProcessManager
 from managers.profilers_manager import ProfilersManager
 from managers.redis_manager import RedisManager
+from managers.timewindow_manager import TimewindowManager
 from managers.ui_manager import UIManager
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_paths import get_performance_plots_dir
@@ -49,6 +50,7 @@ class Main:
         self.redis_man = RedisManager(self)
         self.conf = ConfigParser()
         self.metadata_man = MetadataManager(self)
+        self.timewindow_man = TimewindowManager(self)
         self.ui_man = UIManager(self)
         self.version = utils.get_slips_version()
         # will be filled later
@@ -387,14 +389,29 @@ class Main:
         profiles_len = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
         flow_per_min = self.db.get_flows_analyzed_per_minute()
+
+        current_risk_weight = None
+        if self.db.is_running_non_stop():
+            max_seen_risk_weight = self.db.get_max_seen_risk_weight()
+            current_risk_weight = max_seen_risk_weight[
+                "risk_weight"
+            ].name.lower()
+
         stats = (
             f"\r[{now}] Total analyzed IPs: {green(profiles_len)}. "
             f"{self.get_analyzed_flows_percentage()}"
             f"Evidence: {green(evidence_number)}. "
+        )
+
+        if current_risk_weight:
+            stats += f"Current risk: {green(current_risk_weight)}. "
+
+        stats += (
             f"Number of IPs seen in the last ({self.twid_width}):"
             f" {green(modified_ips_in_the_last_tw)}. "
             f"Analyzed {green(flow_per_min)} flows/min."
         )
+
         self.print(stats)
         sys.stdout.flush()  # Make sure the output is displayed immediately
 
@@ -719,6 +736,7 @@ class Main:
                 self.ui_man.check_if_webinterface_started()
 
                 self.update_stats()
+                self.timewindow_man.update_current_timewindow_if_due()
                 self.db.check_tw_to_close()
                 self.db.ping()
 
@@ -727,7 +745,7 @@ class Main:
                 )
 
                 self.host_ip_man.update_host_ip(host_ips, modified_profiles)
-                if self.update_man.check_for_update_every_1_day():
+                if self.update_man.check_for_slips_new_version_every_1_day():
                     self.update_man.update_slips()
 
         except KeyboardInterrupt:

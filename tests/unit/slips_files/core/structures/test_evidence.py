@@ -3,7 +3,10 @@
 from tests.module_factory import ModuleFactory
 import pytest
 from slips_files.common.slips_utils import utils
-from slips_files.core.structures.evidence import validate_timestamp
+from slips_files.core.structures.evidence import (
+    dict_to_evidence,
+    validate_timestamp,
+)
 from slips_files.core.structures.evidence import (
     Attacker,
     Direction,
@@ -15,6 +18,7 @@ from slips_files.core.structures.evidence import (
     ThreatLevel,
     TimeWindow,
 )
+from slips_files.core.structures.risk_weights import RiskWeight
 
 
 @pytest.mark.parametrize(
@@ -258,6 +262,38 @@ def test_evidence_to_dict(
     assert evidence_dict["dst_port"] == port
     assert evidence_dict["id"] == id
     assert evidence_dict["confidence"] == confidence
+
+
+def test_dict_to_evidence_preserves_risk_level() -> None:
+    module_factory = ModuleFactory()
+    evidence = Evidence(
+        evidence_type=EvidenceType.ARP_SCAN,
+        description="ARP scan detected",
+        attacker=module_factory.create_attacker_obj(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="192.168.1.1",
+        ),
+        threat_level=ThreatLevel.LOW,
+        victim=module_factory.create_victim_obj(
+            direction=Direction.DST,
+            ioc_type=IoCType.IP,
+            value="192.168.1.2",
+        ),
+        profile=module_factory.create_profileid_obj(ip="192.168.1.3"),
+        timewindow=module_factory.create_timewindow_obj(number=1),
+        uid=["flow1"],
+        timestamp="2023/10/26 10:10:10.000000+0000",
+        proto=Proto.TCP,
+        dst_port=80,
+        id="d4afbe1a-1cb9-4db4-9fac-74f2da6f5f34",
+        confidence=0.8,
+        risk_level=RiskWeight.MEDIUM,
+    )
+
+    restored_evidence = dict_to_evidence(utils.to_dict(evidence))
+
+    assert restored_evidence.risk_level == RiskWeight.MEDIUM
 
 
 def test_validate_timestamp():

@@ -540,11 +540,7 @@ class ProfilerWorker(IModule):
         self.print(f"Storing data in the profile: {profileid}", 3, 0)
         flow.starttime = flow_starttime
 
-        # Create profiles for all ips we see
         self.db.add_profile(profileid, flow.starttime)
-
-        # For this 'forward' profile, find the id in the
-        # database of the tw where the flow belongs.
         twid = self.db.get_timewindow(flow.starttime, profileid)
 
         self.store_features_going_out(flow, profileid, twid)

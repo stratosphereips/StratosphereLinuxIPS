@@ -16,6 +16,7 @@ import pytest
 from slips_files.core.flows.zeek import Conn
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.database.redis_db.database import RedisDB
+from slips_files.core.structures.risk_weights import RiskWeight
 from tests.module_factory import ModuleFactory
 
 
@@ -210,6 +211,29 @@ def test_store_official_dns_server():
     assert db.is_official_dns_server("192.168.1.53") is True
     assert db.is_official_dns_server("fd00::53") is True
     assert db.is_official_dns_server("not-an-ip") is False
+
+
+def test_current_timewindow_wrappers_delegate_to_redis_db():
+    """Test current-timewindow getters and increment delegation."""
+    db = ModuleFactory().create_db_manager_obj(6385, flush_db=True)
+    redis_mock = Mock()
+    redis_mock.get.return_value = "7"
+
+    with (
+        patch.object(type(db.rdb), "r", redis_mock),
+        patch.object(type(db.rdb), "_set_max_seen_risk_weight") as mock_set,
+    ):
+        assert db.get_current_timewindow() == "7"
+        redis_mock.get.assert_called_once_with(
+            db.rdb.constants.CURRENT_TIMEWINDOW
+        )
+
+        db.incr_current_timewindow()
+
+        redis_mock.incr.assert_called_once_with(
+            db.rdb.constants.CURRENT_TIMEWINDOW
+        )
+        mock_set.assert_called_once_with(None, RiskWeight.LOW)
 
 
 def test_setup_config_file_uses_isolated_path_and_preserves_save(
@@ -426,7 +450,7 @@ def test_start_redis_server_logs_command_to_logfiles_only(
 
 
 def test_init_p2p_trust_db_uses_permanent_dir(tmp_path, monkeypatch):
-    db = ModuleFactory().create_db_manager_obj(6379)
+    db = ModuleFactory().create_db_manager_obj(6386)
     monkeypatch.chdir(tmp_path)
     db.init_p2p_trust_db = DBManager.init_p2p_trust_db.__get__(db, DBManager)
     monkeypatch.setattr(

@@ -88,6 +88,13 @@ class EvidenceFormatter:
             f"detected as malicious in timewindow {alert.timewindow.number} "
             f"(start {twid_start_time}, stop {tw_stop_time})"
         )
+        if not getattr(self, "is_running_non_stop", False):
+            self.is_running_non_stop = self.db.is_running_non_stop()
+
+        current_risk_weight = alert.risk_level.name.lower()
+
+        if self.is_running_non_stop:
+            alert_to_print += f" (Risk Weight: {current_risk_weight})"
 
         return alert_to_print
 

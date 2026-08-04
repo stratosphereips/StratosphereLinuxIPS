@@ -145,6 +145,62 @@ class ConfigParser(object):
             threshold = default_value
         return threshold
 
+    def risk_accumulated_threat_level(self) -> float:
+        default_value = 15.0
+        threshold = self.read_configuration(
+            "detection", "risk_accumulated_threat_level", default_value
+        )
+        try:
+            return float(threshold)
+        except (TypeError, ValueError):
+            return default_value
+
+    def _read_detection_float(
+        self, name: str, default_value: Optional[float]
+    ) -> Optional[float]:
+        """
+        Read a floating-point value from the detection configuration section.
+
+        Parameters:
+            name: Detection configuration key to read.
+            default_value: Value returned when the key is unset or invalid.
+
+        Return value:
+            Parsed float value, or the provided default.
+        """
+        value = self.read_configuration("detection", name, default_value)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default_value
+
+    def low_risk_weight(self) -> Optional[float]:
+        """
+        Read the configured low-risk weight.
+
+        Return value:
+            Parsed low-risk weight, or None when unset or invalid.
+        """
+        return self._read_detection_float("low_risk_weight", None)
+
+    def medium_risk_weight(self) -> Optional[float]:
+        """
+        Read the configured medium-risk weight.
+
+        Return value:
+            Parsed medium-risk weight, or None when unset or invalid.
+        """
+        return self._read_detection_float("medium_risk_weight", None)
+
+    def high_risk_weight(self) -> Optional[float]:
+        """
+        Read the configured high-risk weight.
+
+        Return value:
+            Parsed high-risk weight, or None when unset or invalid.
+        """
+        return self._read_detection_float("high_risk_weight", None)
+
     def packet_filter(self):
         return self.read_configuration("parameters", "pcapfilter", False)
 

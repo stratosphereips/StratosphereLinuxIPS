@@ -788,6 +788,56 @@ def test_kill_process_tree_kills_descendants_before_parent():
     ]
 
 
+def test_shutdown_interactive_signals_evidence_handler_after_other_modules_stop():
+    """Delay the evidence-handler shutdown signal until earlier modules stop."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    first_process = Mock()
+    last_process = Mock()
+
+    with patch.object(
+        process_manager,
+        "wait_for_processes_to_finish",
+        side_effect=[[], []],
+    ) as mock_wait, patch.object(
+        process_manager.evidence_handler_termination_event, "set"
+    ) as mock_set:
+        result = process_manager.shutdown_interactive(
+            [first_process], [last_process]
+        )
+
+    assert result == (None, None)
+    assert mock_wait.call_args_list == [
+        call([first_process]),
+        call([last_process]),
+    ]
+    mock_set.assert_called_once_with()
+
+
+def test_shutdown_interactive_does_not_signal_evidence_handler_while_modules_are_pending():
+    """Keep the evidence handler running while earlier modules are pending."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    pending_process = Mock()
+    last_process = Mock()
+
+    with patch.object(
+        process_manager,
+        "wait_for_processes_to_finish",
+        return_value=[pending_process],
+    ) as mock_wait, patch.object(
+        process_manager, "warn_about_pending_modules"
+    ) as mock_warn, patch.object(
+        process_manager.evidence_handler_termination_event, "set"
+    ) as mock_set:
+        result = process_manager.shutdown_interactive(
+            [pending_process], [last_process]
+        )
+
+    assert result == ([pending_process], [last_process])
+    mock_wait.assert_called_once_with([pending_process])
+    mock_warn.assert_called_once_with([pending_process, last_process])
+    mock_set.assert_not_called()
+
+
 def test_start_profiler_process():
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.bloom_filters_man = Mock()
