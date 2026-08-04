@@ -165,6 +165,17 @@ detection:
    # Slips can show a popup/notification with every alert.
    popup_alerts : False
 
+   # these risk weights define different sensitivity levels in slips.
+   # the higher the risk weight, the more sensitive slips is, the more alerts
+   # slips will generate.
+   low_risk_weight : 0.32
+   medium_risk_weight : 1
+   high_risk_weight : 1.72
+
+   # When the accumulated evidence weights reach this threshold, slips creates
+   # an alert.
+   risk_accumulated_threat_level : 5
+
 #############################
 modules:
    # List of modules to ignore. By default we always ignore the template! do not remove it from the list
