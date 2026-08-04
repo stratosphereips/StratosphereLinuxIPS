@@ -1,8 +1,19 @@
 # Risk Levels in Slips
 
 ## Table of contents
-
-
+* [Overview](#overview)
+* [Goal](#goal)
+* [Old Design](#old-design)
+* [New Design: Risk Levels](#new-design--risk-levels)
+  + [Experiments](#experiments)
+  + [Algorithm](#algorithm)
+  + [Decided thresholds](#decided-thresholds)
+  + [Why risk levels reset every timewindow](#why-risk-levels-reset-every-timewindow)
+  + [Why risk levels are only implemented in live traffic](#why-risk-levels-are-only-implemented-in-live-traffic)
+* [Logs](#logs)
+* [How to configure your own risk levels](#how-to-configure-your-own-risk-levels)
+* [Demo](#demo)
+* [How to use it](#how-to-use-it)
 
 ## Overview
 
@@ -38,39 +49,43 @@ This is how alerts and blocking in Slips were done before the introduction of ri
 
 For example:
 If slips detects an SMTP login bruteforce evidence. Slips assigns this evidence threat_level = `high`, and confidence= `1.0`.
+The high threat level has a score of 0.8.
 That score would contribute `0.8 * 1.0 = 0.8` to the accumulated_threat_level of all evidence in the current timewindow, and would then be compared to `evidence_detection_threshold` from the config to see if slips set an alert or not.
 With the current default config, that threshold is `15` for the default 1 hour timewindow.
+So in this design, whether slips sees 10 attacks or a 100, the accumulated scores of each evidence must sum up to 15 for an alert to be generated.
+Nothing speeds up the alert generation, and nothing slows it down. it's static.
 
 This old design is not adaptive. slips maintains the same level of sensitivity whether it's heavily under attack or if the host is stable.
 
 ## New Design: Risk Levels
 
 
-Our goal in this new design in to make slips adapt to the risk levels it is currently in when analyzing live traffic.
+Our goal in this new design in to make slips dynamically adapt to the risk levels it is currently in when analyzing live traffic.
 Be more sensitive when under attack, less sensitive when not under attack, and automatically decide which level Slips is in based on the generated evidence.
 
-
+### Experiments
 Based on the following experiments
 
-![](../images/immune/c9/experiments_to_determine_RATL_threshold.jpg)
+<img src="../images/immune/c9/experiments_to_determine_RATL_threshold.jpg" width="420">
 
 And the detailed experiment graphs:
 
 1. malicious experiments
 
-![](../images/immune/c9/experiments/mal1.jpg)
-![](../images/immune/c9/experiments/mal2.jpg)
-![](../images/immune/c9/experiments/mal3.jpg)
-![](../images/immune/c9/experiments/mal4.jpg)
+<img src="../images/immune/c9/experiments/mal1.jpg" width="220">
+<img src="../images/immune/c9/experiments/mal2.jpg" width="220">
+<img src="../images/immune/c9/experiments/mal3.jpg" width="220">
+<img src="../images/immune/c9/experiments/mal4.jpg" width="220">
 
 2. mixed experiments
 
-![](../images/immune/c9/experiments/mixed1.jpg)
+<img src="../images/immune/c9/experiments/mixed1.jpg" width="220">
 
 3. benign experiments
 
-![](../images/immune/c9/experiments/ben1.jpg)
-![](../images/immune/c9/experiments/ben2.jpg)
+<img src="../images/immune/c9/experiments/ben1.jpg" width="220">
+<img src="../images/immune/c9/experiments/ben2.jpg" width="220">
+
 
 
 And given the current design of evidence weights (As of August 4, 2026):
@@ -84,6 +99,8 @@ And given the current design of evidence weights (As of August 4, 2026):
 ![](../images/immune/c9/slips_current_evidence_weights_dynamic.png)
 
 We came up with the following algorithm
+
+### Algorithm
 
 1. each generated evidence has a score = threat_level * confidence
 2. each score contributes to the accumulated threat levels of all evidence generated in a given timewindow
@@ -103,53 +120,48 @@ the accumulated threat level = the score of evidence1 + the score of evidence2
 - Within one timewindow, Slips does not move down again.
 6. once a new timewindow starts, slips resets the risk level to low again.
 
+### Decided thresholds
+
 and we came up with the following thresholds:
 
-# TODO put thresholds from the config file here.
-
-
-### Notes:
-
-- risk levels include:
-  - `low`, which is the baseline
-  - `medium` makes the same amount of evidence count more
-  - `high` makes Slips very sensitive, and alerts easier to reach
-
-each evidence and alert logged to alerts.json now has the following values to allow analysts to inspect the current state:
-- accumulated_threat_level
-- risk_accumulated_threat_level
-- risk_level
-e.g
-```json
-{"Version": "2.D.V03", "Analyzer": {"IP": "192.168.1.21", "Name": "Slips", "Model": "1.1.21", "Category": ["NIDS"], "Data": ["Flow", "Network"], "Method": ["Statistical"]}, "Status": "Event", "ID": "fd225e1b-aaa8-4081-9e9e-d9897c763cdc", "Priority": "Low", "StartTime": "2026-08-04T00:17:12.064347+03:00", "CreateTime": "2026-08-04T00:17:12.673591+03:00", "Confidence": 0.5356, "Description": "HTTPS anomaly: type=flow; confidence=low (0.536); reason=New Server; value=mirostatic.com; why=not seen before in this host baseline. Threat level: low.", "Note": "{\"risk_level\": \"high\", \"uids\": [\"Cv54Gg4VIF2ogmcU3g\"], \"accumulated_threat_level\": 0.26712, \"risk_accumulated_threat_level\": 0.45944640000000003, \"threat_level\": \"low\", \"confidence\": \"low\", \"timewindow\": 1}", "Source": [{"IP": "192.168.1.21", "Port": [35618], "Protocol": ["TCP"]}], "Target": [{"Hostname": "mirostatic.com", "Note": "{\"SNI\": \"mirostatic.com\"}", "Port": [443]}]}
-```
+- `low_risk_weight = 0.32`, which is the baseline
+- `medium_risk_weight = 1`, makes the same amount of evidence reach an alert faster
+- `high_risk_weight = 1.72`, makes Slips very sensitive, and alerts easier to reach
+- `risk_accumulated_threat_level = 5`, decided based on monitorin the malicious and normal traffic and how much each evidence weights.
 
 
 
 ### Why risk levels reset every timewindow
 
-- Risk levels reset every timewindow.
-- This matches how Slips correlates evidence:
+1. This matches how Slips correlates evidence:
   - evidence is grouped and evaluated per timewindow
   - alerts are built from evidence inside that timewindow
-- Resetting avoids carrying old tension into fresh traffic.
-- Without a reset, a noisy or malicious past window could permanently bias the next window and make new evidence look more severe than it really is.
-- The reset keeps each timewindow interpretable:
-  - each window starts from the same baseline
-  - escalation has to be earned again by current activity
+2. Resetting avoids carrying old tension into fresh traffic. Without a reset, a noisy or malicious past window could permanently bias the next window and make new evidence look more severe than it really is.
+3. The reset keeps each timewindow interpretable: each window starts from the same baseline and escalation has to be earned again by current activity
 
 
 ### Why risk levels are only implemented in live traffic
 
 Because risk levels only reset to low every 1h (1 timewindow) and tws are read and registered very fast in PCAPs. Slips might read a zeek log file with a month-worth of traffic in minutes. this fast reading of the flows results in new registering of timewindows very fast (as soon as slips reads them) hence, there's no time to advance risk levels or properly detect in which one we're in, slips is constantly changing timewindows.
 
-
-
 Risk levels reset to low only once per hour (one time window). When processing PCAPs or zeek logs, Slips can read and register time windows much faster than real time. For example, it may process a Zeek log containing one month of traffic in only a few minutes.
 
 Because new time windows are registered as soon as their flows are read, Slips moves between timewindows very quickly. This does not leave enough time for the risk level to advance normally or for Slips to correctly determine the current risk level.
 
 So risk levels (the current design) are only applicable in live traffic.
+
+
+## Logs
+
+- each evidence and alert logged to alerts.json now has the following values to allow analysts to inspect the current state:
+  - accumulated_threat_level
+  - risk_accumulated_threat_level
+  - risk_level
+  e.g
+```json
+{"Version": "2.D.V03", "Analyzer": {"IP": "192.168.1.21", "Name": "Slips", "Model": "1.1.21", "Category": ["NIDS"], "Data": ["Flow", "Network"], "Method": ["Statistical"]}, "Status": "Event", "ID": "fd225e1b-aaa8-4081-9e9e-d9897c763cdc", "Priority": "Low", "StartTime": "2026-08-04T00:17:12.064347+03:00", "CreateTime": "2026-08-04T00:17:12.673591+03:00", "Confidence": 0.5356, "Description": "HTTPS anomaly: type=flow; confidence=low (0.536); reason=New Server; value=mirostatic.com; why=not seen before in this host baseline. Threat level: low.", "Note": "{\"risk_level\": \"high\", \"uids\": [\"Cv54Gg4VIF2ogmcU3g\"], \"accumulated_threat_level\": 0.26712, \"risk_accumulated_threat_level\": 0.45944640000000003, \"threat_level\": \"low\", \"confidence\": \"low\", \"timewindow\": 1}", "Source": [{"IP": "192.168.1.21", "Port": [35618], "Protocol": ["TCP"]}], "Target": [{"Hostname": "mirostatic.com", "Note": "{\"SNI\": \"mirostatic.com\"}", "Port": [443]}]}
+```
+
 
 
 ## How to configure your own risk levels
@@ -178,3 +190,16 @@ NOTE: Keep the ordering:
 - This graph shows how slips
   - generated evidence (events) until the threshold (5) is reached
   - escalates if malicious activity keeps building
+
+
+## How to use it
+
+1. run slips normally on your interface
+```
+./slips.py -i en01
+```
+2. Slips will report the current risk level every 5s.
+![](../images/immune/c9/stats.png)
+3. attack your other devices for the risk levels to go up.
+4. wait for the end of the timewindow ffor the risk level to reset to low.
+5. for more details while running, monitor alerts.json.
