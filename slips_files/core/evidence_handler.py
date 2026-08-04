@@ -39,6 +39,7 @@ from slips_files.core.evidence_handler_worker import EvidenceHandlerWorker
 
 
 DEFAULT_EVIDENCE_HANDLER_WORKERS = 3
+EVIDENCE_HANDLER_SHUTDOWN_GRACE_PERIOD_SECONDS = 30
 
 
 # Evidence Process
@@ -145,25 +146,58 @@ class EvidenceHandler(ICore):
 
     def should_stop(self) -> bool:
         """
-        Overrides imodule's should_stop() to make sure thi smodule only
-        stops after 1 minute of the last received evidence.
+        Determine whether the evidence handler can stop safely.
+
+        Return value:
+            True when shutdown was requested and no new evidence arrived
+            during the grace period.
         """
         if not self.termination_event.is_set():
             return False
 
-        if self.is_msg_received_in_any_channel():
-            self.last_msg_received_time = time.time()
-            return False
-
-        # no new msgs are received in any of the channels here
         # wait some extra time for new evidence to arrive
         # without this, slips has problems processing the last evidence
         # sent by some of the modules.
-        if time.time() - self.last_msg_received_time < 30:
+        if (
+            time.time() - self.last_msg_received_time
+            < EVIDENCE_HANDLER_SHUTDOWN_GRACE_PERIOD_SECONDS
+        ):
             return False
 
-        # 1 min passed since the last evidence with no new msgs. stop.
+        # the grace period passed since the last evidence with no new msgs.
         return True
+
+    def queue_incoming_messages(self) -> bool:
+        """
+        Drain one message from each subscribed channel into the worker queue.
+
+        Return value:
+            True when at least one message was forwarded to a worker.
+        """
+        received_message = False
+
+        if msg := self.get_msg("evidence_added"):
+            self.evidence_worker_queue.put(
+                {
+                    "channel": "evidence_added",
+                    "message": msg,
+                }
+            )
+            received_message = True
+
+        if msg := self.get_msg("new_blame"):
+            self.evidence_worker_queue.put(
+                {
+                    "channel": "new_blame",
+                    "message": msg,
+                }
+            )
+            received_message = True
+
+        if received_message:
+            self.last_msg_received_time = time.time()
+
+        return received_message
 
     def pre_main(self):
         self.print(f"Using threshold: {green(self.detection_threshold)}")
@@ -171,19 +205,7 @@ class EvidenceHandler(ICore):
             self.start_evidence_worker(worker_id)
 
     def main(self):
-        while not self.should_stop():
-            if msg := self.get_msg("evidence_added"):
-                self.evidence_worker_queue.put(
-                    {
-                        "channel": "evidence_added",
-                        "message": msg,
-                    }
-                )
-
-            if msg := self.get_msg("new_blame"):
-                self.evidence_worker_queue.put(
-                    {
-                        "channel": "new_blame",
-                        "message": msg,
-                    }
-                )
+        while True:
+            self.queue_incoming_messages()
+            if self.should_stop():
+                return
