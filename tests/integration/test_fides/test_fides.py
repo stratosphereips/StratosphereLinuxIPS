@@ -7,6 +7,7 @@ import json
 import shutil
 from pathlib import PosixPath, Path
 import signal
+import socket
 
 import redis
 
@@ -218,6 +219,111 @@ def wait_for_runtime_message_count(
     )
 
 
+def start_test_redis_server(redis_port: int, output_dir: Path) -> None:
+    """
+    Start the Redis server used by an integration test.
+
+    Parameters:
+        redis_port: Redis port allocated for the test.
+        output_dir: Test output directory used by the Redis DB manager.
+    """
+    redis_dir = output_dir / "redis"
+    redis_dir.mkdir(parents=True, exist_ok=True)
+
+    command = [
+        "redis-server",
+        "config/redis.conf.template",
+        "--port",
+        str(redis_port),
+        "--bind",
+        "127.0.0.1",
+        "--dir",
+        str(redis_dir),
+        "--dbfilename",
+        "dump.rdb",
+        "--logfile",
+        f"redis-server-port-{redis_port}.log",
+    ]
+
+    process = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if process.returncode != 0 and not is_tcp_port_open(redis_port):
+        raise RuntimeError(
+            "Failed to start redis-server for integration test "
+            f"on port {redis_port}: {process.stderr or process.stdout}"
+        )
+
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        if is_tcp_port_open(redis_port):
+            return
+        time.sleep(0.2)
+
+    raise RuntimeError(
+        f"Timed out waiting for redis-server on port {redis_port}."
+    )
+
+
+def allocate_started_redis_port(
+    integration_port_factory, output_dir: Path, max_attempts: int = 5
+) -> int:
+    """
+    Allocate a Redis port and retry with a new port when startup fails.
+
+    Parameters:
+        integration_port_factory: Callable that allocates integration-test
+            ports.
+        output_dir: Test output directory used by the Redis DB manager.
+        max_attempts: Maximum number of Redis startup attempts.
+
+    Returns:
+        int: Redis port that was successfully started.
+    """
+    last_error = None
+
+    for _ in range(max_attempts):
+        redis_port = integration_port_factory("redis")
+        try:
+            start_test_redis_server(redis_port, output_dir)
+            return redis_port
+        except RuntimeError as error:
+            last_error = error
+            print(
+                "Failed to start redis-server for integration test on "
+                f"port {redis_port}. Retrying with a new port."
+            )
+
+    raise RuntimeError(
+        "Failed to start redis-server for integration test after "
+        f"{max_attempts} attempts: {last_error}"
+    )
+
+
+def is_tcp_port_open(port: int) -> bool:
+    """
+    Check whether a localhost TCP port is accepting connections.
+
+    Parameters:
+        port: TCP port to probe.
+
+    Returns:
+        bool: True when the port is accepting connections.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.2)
+        try:
+            sock.connect(("127.0.0.1", port))
+        except OSError:
+            return False
+
+    return True
+
+
 def get_main_interface():
     try:
         out = subprocess.check_output(
@@ -291,8 +397,10 @@ def test_conf_file2(path, output_dir, integration_port_factory):
     """
     In this test we're using the local fides integration config file.
     """
-    redis_port = integration_port_factory("redis")
     output_dir: PosixPath = create_output_dir(output_dir)
+    redis_port = allocate_started_redis_port(
+        integration_port_factory, output_dir
+    )
     db_name = f"{output_dir.name}_fides_p2p_db.sqlite"
     slips_config, test_db = create_runtime_fides_configs(output_dir, db_name)
     output_file = os.path.join(output_dir, "slips_output.txt")
@@ -401,8 +509,10 @@ def test_trust_recommendation_response(
         - Run Slips (includes Fides Module) in a thread and wait for all
          modules to start
     """
-    redis_port = integration_port_factory("redis")
     output_dir: PosixPath = create_output_dir(output_dir)
+    redis_port = allocate_started_redis_port(
+        integration_port_factory, output_dir
+    )
     db_name = f"{output_dir.name}_fides_test_database.sqlite"
     print(f"db_name: {db_name}")
 
