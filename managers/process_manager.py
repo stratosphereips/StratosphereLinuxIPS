@@ -235,7 +235,7 @@ class ProcessManager:
             True when at least one supported alert exporter is enabled.
         """
         export_to = self.main.conf.export_to()
-        return "stix" in export_to or "slack" in export_to
+        return len(export_to) != 0
 
     def get_all_disabled_modules(self) -> List[str]:
         """

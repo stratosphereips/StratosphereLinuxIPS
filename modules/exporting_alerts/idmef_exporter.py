@@ -194,7 +194,6 @@ class IdmefExporter(IExporter):
                 self.client.close()
             except Exception:
                 pass
-        self.print("Done exporting to IDMEFv2 manager.")
 
     def should_export(self) -> bool:
         """Determines whether to export or not"""
