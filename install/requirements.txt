@@ -53,3 +53,4 @@ pytest-asyncio
 vulture
 detect-secrets
 idmefv2==0.8
+httpx==0.28.1
