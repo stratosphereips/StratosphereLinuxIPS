@@ -550,6 +550,37 @@ class ConfigParser(object):
             "exporting_alerts", "sensor_name", False
         )
 
+    def idmef_manager_config(self) -> dict:
+        """
+        Returns the nested 'idmef_manager' mapping from the exporting_alerts
+        section (url, client_certificate, client_private_key, trusted_ca,
+        timeout), or an empty dict if it's not configured.
+        """
+        conf = self.read_configuration("exporting_alerts", "idmef_manager", {})
+        return conf if isinstance(conf, dict) else {}
+
+    def idmef_manager_url(self):
+        return self.idmef_manager_config().get(
+            "url", "https://localhost:8443/"
+        )
+
+    def idmef_manager_client_certificate(self):
+        return self.idmef_manager_config().get("client_certificate", "")
+
+    def idmef_manager_client_private_key(self):
+        return self.idmef_manager_config().get("client_private_key", "")
+
+    def idmef_manager_trusted_ca(self):
+        return self.idmef_manager_config().get("trusted_ca", "")
+
+    def idmef_manager_timeout(self):
+        timeout = self.idmef_manager_config().get("timeout", 10)
+        try:
+            timeout = float(timeout)
+        except (ValueError, TypeError):
+            timeout = 10
+        return max(1.0, timeout)
+
     def taxii_server(self):
         taxii_server = self.read_configuration(
             "exporting_alerts", "TAXII_server", False
