@@ -153,21 +153,13 @@ class ProcessManager:
         custom_flows = self.main.args.input_module
         return "cyst" in str(custom_flows)
 
-    def get_disabled_modules(self) -> Tuple[List[str], List[str]]:
+    def get_runtime_disabled_modules(self) -> List[str]:
         """
-        Get user-disabled modules and Slips-disabled modules.
+        Get modules disabled by Slips runtime rules.
 
         Returns:
-            A tuple containing user-disabled modules and modules disabled by
-            Slips runtime rules.
+            Modules disabled automatically based on runtime conditions.
         """
-        user_disabled_modules: List[str] = self.main.conf.read_configuration(
-            "modules", "disable", ["template"]
-        )
-        user_disabled_modules = [
-            module.strip() for module in user_disabled_modules
-        ]
-
         is_running_non_stop = self.main.db.is_running_non_stop()
 
         slips_disabled_modules: List[str] = []
@@ -202,7 +194,38 @@ class ProcessManager:
             if module not in slips_disabled_modules:
                 slips_disabled_modules.append(module)
 
-        return user_disabled_modules, slips_disabled_modules
+        return slips_disabled_modules
+
+    def get_user_dsiabled_modules(self) -> List[str]:
+        """
+        Get modules disabled by the user configuration.
+
+        Returns:
+            Modules disabled from the user configuration.
+        """
+        user_disabled_modules: List[str] = self.main.conf.read_configuration(
+            "modules", "disable", ["template"]
+        )
+        return [module.strip() for module in user_disabled_modules]
+
+    def get_disabled_modules(self) -> Tuple[List[str], List[str]]:
+        """
+        Get user-disabled modules and Slips-disabled modules.
+
+        - Slips-disabled modules are the ones that cant run because of a
+        logical error, like trying to run the leak_detector on a zeek dir (
+        they are yara rules that must run on a PCAP), so slips
+        automatically disables these modules.
+        - user-disabled modules are the one disabled from the slips.yaml.
+
+        Returns:
+            A tuple containing user-disabled modules and modules disabled by
+            Slips runtime rules.
+        """
+        return (
+            self.get_user_dsiabled_modules(),
+            self.get_runtime_disabled_modules(),
+        )
 
     def _is_exporting_module_enabled(self) -> bool:
         """
