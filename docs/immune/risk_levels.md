@@ -14,6 +14,7 @@
 * [How to configure your own risk levels](#how-to-configure-your-own-risk-levels)
 * [Demo](#demo)
 * [How to use it](#how-to-use-it)
+* [How AI was used here](#how-ai-was-used-here)
 
 ## Overview
 
@@ -206,6 +207,6 @@ NOTE: Keep the ordering:
 
 ## How AI was used here
 - Helped with brainstorming the algorithm and debugging
-- generating the plots, csv files and traffic generation for testing,
-- structuring of this report,
+- helped with generating the plots, csv files and traffic generation scripts for testing.
+- helped with the structuring of this report
 - and fixing unit tests.
