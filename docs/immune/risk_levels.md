@@ -203,3 +203,9 @@ NOTE: Keep the ordering:
 3. attack your other devices for the risk levels to go up.
 4. wait for the end of the timewindow ffor the risk level to reset to low.
 5. for more details while running, monitor alerts.json.
+
+## How AI was used here
+- Helped with brainstorming the algorithm and debugging
+- generating the plots, csv files and traffic generation for testing,
+- structuring of this report,
+- and fixing unit tests.
