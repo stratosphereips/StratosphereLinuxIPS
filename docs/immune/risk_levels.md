@@ -67,27 +67,9 @@ Be more sensitive when under attack, less sensitive when not under attack, and a
 ### Experiments
 Based on the following experiments
 
-<img src="../images/immune/c9/experiments_to_determine_RATL_threshold.jpg" width="420">
+![](../images/immune/c9/experiments_to_determine_RATL_threshold.jpg)
 
-And the detailed experiment graphs:
-
-1. malicious experiments
-
-<img src="../images/immune/c9/experiments/mal1.jpg" width="220">
-<img src="../images/immune/c9/experiments/mal2.jpg" width="220">
-<img src="../images/immune/c9/experiments/mal3.jpg" width="220">
-<img src="../images/immune/c9/experiments/mal4.jpg" width="220">
-
-2. mixed experiments
-
-<img src="../images/immune/c9/experiments/mixed1.jpg" width="220">
-
-3. benign experiments
-
-<img src="../images/immune/c9/experiments/ben1.jpg" width="220">
-<img src="../images/immune/c9/experiments/ben2.jpg" width="220">
-
-
+and the malicious, benign, and mixed experiment graphs are available [here](https://github.com/stratosphereips/StratosphereLinuxIPS/tree/develop/docs/images/immune/c9/experiments).
 
 And given the current design of evidence weights (As of August 4, 2026):
 
