@@ -6,6 +6,7 @@ import threading
 import time
 from typing import Optional, Tuple
 
+from modules.exporting_alerts.idmef_exporter import IdmefExporter
 from modules.exporting_alerts.slack_exporter import SlackExporter
 from modules.exporting_alerts.stix_exporter import StixExporter
 from slips_files.common.slips_utils import utils
@@ -20,12 +21,13 @@ class ExportingAlerts(IModule):
     """
 
     name = "exporting_alerts"
-    description = "Export alerts to slack or STIX format"
+    description = "Export alerts to slack, STIX or an IDMEFv2 manager"
     authors = ["Alya Gomaa"]
 
     def init(self):
         self.slack = SlackExporter(self.logger, self.db)
         self.stix = StixExporter(self.logger, self.db)
+        self.idmef = IdmefExporter(self.logger, self.db)
         self.direct_export_stop = None
         self.direct_export_workers = []
         self.direct_export_start_lock = threading.Lock()
@@ -317,6 +319,7 @@ class ExportingAlerts(IModule):
 
     def shutdown_gracefully(self):
         self.slack.shutdown_gracefully()
+        self.idmef.shutdown_gracefully()
         if self.direct_export_stop:
             self.direct_export_stop.set()
             for worker in self.direct_export_workers:
@@ -330,8 +333,9 @@ class ExportingAlerts(IModule):
 
         export_to_slack = self.slack.should_export()
         export_to_stix = self.stix.should_export()
+        export_to_idmef = self.idmef.should_export()
 
-        if not export_to_slack and not export_to_stix:
+        if not export_to_slack and not export_to_stix and not export_to_idmef:
             self.print(
                 "exporting_alerts module disabled (no export targets configured).",
                 0,
@@ -377,6 +381,9 @@ class ExportingAlerts(IModule):
                 srcip = evidence["profile"]["ip"]
                 msg_to_send = f"Src IP {srcip} Detected {description}"
                 self.slack.export(msg_to_send)
+
+            if self.idmef.should_export():
+                self.idmef.export(evidence)
 
             if self.stix.should_export():
                 if self.stix.direct_export:

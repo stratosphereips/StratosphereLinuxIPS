@@ -454,10 +454,32 @@ flow_alerts:
 exporting_alerts:
 
   # Configuer all the methods Slips will export data with
-  # Available options are slack or stix
+  # Available options are slack, stix or idmef_manager
   # export_to : [stix] (And a TAXII server)
   # export_to : [slack]
+  # export_to : [idmef_manager] (IDMEFv2 HTTPS Server)
   export_to: []
+
+  # IDMEFv2 Manager
+  # When "idmef_manager" is in export_to, Slips acts as an IDMEFv2 Analyzer
+  # and POSTs each evidence to a Manager over mutual TLS 1.3.
+  # For details on the transport and how to set up the certificates, see:
+  # https://datatracker.ietf.org/doc/draft-lehmann-idmefv2-https-transport/
+  idmef_manager:
+    # URL of the IDMEFv2 Manager that Slips should send alerts to.
+    url: https://localhost:8443/
+
+    # Mutual TLS material (required). The Manager requires the Analyzer (Slips)
+    # to present a client certificate, and Slips validates the Manager against
+    # trusted_ca. Certificates must use DNS subjectAltName entries (no
+    # wildcards), per the draft. Provide absolute paths (there are no
+    # defaults); if any file is missing, IDMEFv2 export is disabled.
+    client_certificate: "/path/to/idmef/analyzer.crt"
+    client_private_key: "/path/to/idmef/analyzer.key"
+    trusted_ca: "/path/to/idmef/ca.crt"
+
+    # Timeout (seconds) for each HTTPS request to the IDMEFv2 Manager.
+    timeout: 10
 
   # Slack
   # In case of Slack export, use this channel to send alerts

@@ -6,6 +6,7 @@ For now the supported systems are:
 
 - Slack
 - TAXII Servers (STIX format)
+- IDMEFv2 Managers (over HTTPS)
 - Warden servers
 - IDEA JSON format
 - Logstash
@@ -82,6 +83,60 @@ exact STIX objects that were pushed.
 If running on a file, Slips will export once before shutdown.
 If running on an interface, Slips will export to the server every
 ```push_delay``` seconds (default 1 hour).
+
+## IDMEFv2 Manager
+
+Slips can export alerts to an IDMEFv2 Manager over HTTPS,
+In this setup Slips acts as an IDMEFv2 **Analyzer** (the HTTP client) and the
+Manager is the HTTP server. Each alert is converted to a single IDMEFv2 JSON
+message and sent as its own `POST` request (normally to `/`). A `2xx` response
+means the Manager safely stored or handed off the alert.
+
+To enable it, add ```idmef_manager```  to the ```export_to``` list. and fill the cert paths in the idmef_manager block
+
+```yaml
+exporting_alerts:
+  export_to: [idmef_manager]
+
+  idmef_manager:
+    url: https://localhost:8443/
+    client_certificate: "/path/to/idmef/analyzer.crt"
+    client_private_key: "/path/to/idmef/analyzer.key"
+    trusted_ca: "/path/to/idmef/ca.crt"
+    timeout: 10
+```
+
+The settings under `idmef_manager` are:
+
+```url```: URL of the IDMEFv2 Manager (default `https://localhost:8443/`).
+
+```client_certificate```: path to the analyzer client certificate that
+Slips presents to the Manager. **Required.**
+
+```client_private_key```: path to the private key for the client certificate.
+**Required.**
+
+```trusted_ca```: path to the CA certificate used to validate the Manager's
+certificate. **Required.**
+
+```timeout```: per-request timeout in seconds (default `10`).
+
+The transport requires **mutual TLS 1.3**: Slips validates the Manager against
+`trusted_ca` and presents its own `client_certificate` / `client_private_key`,
+and the Manager authenticates Slips in return. Certificates must use DNS
+`subjectAltName` entries (wildcards are prohibited by the draft), and the
+Manager URL hostname is validated against the Manager certificate's SAN.
+
+There are no default certificate paths: the three certificate/key paths are
+required, and must point to existing files. If any of them is unset or missing,
+IDMEFv2 export is disabled and a message is logged.
+
+For details on the transport, the mutual-TLS requirements, and how to set up
+the certificates, see the specification:
+[draft-lehmann-idmefv2-https-transport](https://datatracker.ietf.org/doc/draft-lehmann-idmefv2-https-transport/).
+
+Because the export happens per evidence as alerts are generated, this exporting
+works both when Slips runs on a file and on an interface.
 
 ## JSON format
 

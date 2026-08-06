@@ -194,6 +194,48 @@ def test_get_disabled_modules(
     assert slips_disabled_modules == expected_slips
 
 
+def test_get_user_dsiabled_modules_strips_configured_entries() -> None:
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.read_configuration.side_effect = None
+    process_manager.main.conf.read_configuration.return_value = [
+        " template ",
+        " custom_module",
+    ]
+
+    assert process_manager.get_user_dsiabled_modules() == [
+        "template",
+        "custom_module",
+    ]
+
+
+def test_get_runtime_disabled_modules_uses_runtime_rules() -> None:
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.db.is_running_non_stop.return_value = False
+    process_manager.main.conf.export_to.return_value = []
+    process_manager.main.conf.use_local_p2p.return_value = False
+    process_manager.main.conf.use_global_p2p.return_value = False
+    process_manager.main.conf.send_to_warden.return_value = False
+    process_manager.main.conf.receive_from_warden.return_value = False
+    process_manager.main.args.clearblocking = False
+    process_manager.main.args.blocking = False
+    process_manager.main.input_type = InputType.ZEEK
+    process_manager.main.args.input_module = ""
+    process_manager.slips_disabled_modules = ["custom_runtime_module"]
+
+    assert process_manager.get_runtime_disabled_modules() == [
+        "exporting_alerts",
+        "p2p_trust",
+        "fides",
+        "iris",
+        "cesnet",
+        "blocking",
+        "arp_poisoner",
+        "leak_detector",
+        "cyst",
+        "custom_runtime_module",
+    ]
+
+
 @pytest.mark.parametrize(
     "bootstrapping_node, use_global_p2p, expected",
     [
