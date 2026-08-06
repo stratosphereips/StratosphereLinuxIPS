@@ -102,6 +102,7 @@ class ProcessManager:
         # to make sure we only warn the user once about
         # the pending modules
         self.warning_printed_once = False
+        self.llm_dependency_warning_printed = False
         # this one has its own termination event because we want it to
         # shutdown at the very end of all other slips modules.
         self.evidence_handler_termination_event = Event()
@@ -202,16 +203,70 @@ class ProcessManager:
         if not self._reading_flows_from_cyst():
             slips_disabled_modules.append("cyst")
 
-        if not self.main.conf.llm_enabled():
-            # the last 2 depend on the disabled llm_proxy module
-            for module in ("llm_proxy", "regex_generator", "t_cell"):
-                slips_disabled_modules.append(module)
-
-        for module in self.slips_disabled_modules:
-            if module not in slips_disabled_modules:
+        if not self._is_llm_proxy_enabled_and_configured():
+            self._warn_about_llm_dependency_misconfiguration()
+            for module in (
+                "llm_proxy",
+                "alert_summary",
+                "regex_generator",
+                "t_cell",
+            ):
                 slips_disabled_modules.append(module)
 
         return slips_disabled_modules
+
+    def _is_llm_proxy_enabled_and_configured(self) -> bool:
+        """
+        Check whether llm_proxy is enabled and has backend configuration.
+
+        Returns:
+            True when llm_proxy is enabled and at least one backend is
+            configured.
+        """
+        backends = self.main.conf.llm_backends()
+        if not isinstance(backends, dict):
+            return False
+
+        return self.main.conf.llm_enabled() and any(
+            isinstance(alias, str) and alias.strip()
+            for alias in backends.keys()
+        )
+
+    def _get_enabled_llm_dependent_modules(self) -> List[str]:
+        """
+        Get enabled modules that rely on llm_proxy configuration.
+        these modules wont be able to work without the llm proxy configuration
+        """
+        enabled_modules: List[str] = []
+        llm_dependents: Tuple[Tuple[str, Callable[[], bool]], ...] = (
+            ("alert_summary", self.main.conf.alert_summary_enabled),
+            ("regex_generator", self.main.conf.regex_generator_enabled),
+            ("t_cell", self.main.conf.t_cell_enabled),
+        )
+
+        for module_name, is_enabled in llm_dependents:
+            if is_enabled():
+                enabled_modules.append(module_name)
+
+        return enabled_modules
+
+    def _warn_about_llm_dependency_misconfiguration(self) -> None:
+        """
+        Warn once when LLM-dependent modules are enabled without llm_proxy.
+        """
+        if self.llm_dependency_warning_printed:
+            return
+
+        enabled_modules = self._get_enabled_llm_dependent_modules()
+        if not enabled_modules:
+            return
+
+        self.main.print(
+            "Warning: The following modules are enabled in the config, "
+            "but llm_proxy is not enabled and configured: "
+            f"{enabled_modules}"
+        )
+        self.llm_dependency_warning_printed = True
 
     def get_user_dsiabled_modules(self) -> List[str]:
         """
@@ -240,7 +295,7 @@ class ProcessManager:
             Slips runtime rules.
         """
         return (
-            self.get_user_dsiabled_modules(),
+            self.get_user_disabled_modules(),
             self.get_runtime_disabled_modules(),
         )
 
