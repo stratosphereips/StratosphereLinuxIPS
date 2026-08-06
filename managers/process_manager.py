@@ -153,19 +153,6 @@ class ProcessManager:
         custom_flows = self.main.args.input_module
         return "cyst" in str(custom_flows)
 
-    def get_disabled_modules(self) -> Tuple[List[str], List[str]]:
-        """
-        Get user-disabled modules and Slips-disabled modules.
-
-        Returns:
-            A tuple containing user-disabled modules and modules disabled by
-            Slips runtime rules.
-        """
-        return (
-            self.get_user_disabled_modules(),
-            self.get_runtime_disabled_modules(),
-        )
-
     def get_user_disabled_modules(self) -> List[str]:
         """
         Get modules disabled by the user configuration.
@@ -187,40 +174,75 @@ class ProcessManager:
         """
         is_running_non_stop = self.main.db.is_running_non_stop()
 
-        disabled_modules: List[str] = []
+        slips_disabled_modules: List[str] = []
 
         if not self._is_exporting_module_enabled():
-            disabled_modules.append("exporting_alerts")
+            slips_disabled_modules.append("exporting_alerts")
 
         use_p2p = self.main.conf.use_local_p2p()
         if not (use_p2p and is_running_non_stop):
-            disabled_modules.append("p2p_trust")
+            slips_disabled_modules.append("p2p_trust")
 
         use_global_p2p = self.main.conf.use_global_p2p()
         if not (use_global_p2p and is_running_non_stop):
-            disabled_modules.extend(("fides", "iris"))
+            slips_disabled_modules.extend(("fides", "iris"))
 
         if not (
             self.main.conf.send_to_warden()
             or self.main.conf.receive_from_warden()
         ):
-            disabled_modules.append("cesnet")
+            slips_disabled_modules.append("cesnet")
 
         if not (self.main.args.clearblocking or self.main.args.blocking):
-            disabled_modules.extend(("blocking", "arp_poisoner"))
+            slips_disabled_modules.extend(("blocking", "arp_poisoner"))
 
         if self.main.input_type != InputType.PCAP:
-            disabled_modules.append("leak_detector")
+            slips_disabled_modules.append("leak_detector")
 
         if not self._reading_flows_from_cyst():
-            disabled_modules.append("cyst")
+            slips_disabled_modules.append("cyst")
 
         if not self.main.conf.llm_enabled():
             # the last 2 depend on the disabled llm_proxy module
             for module in ("llm_proxy", "regex_generator", "t_cell"):
-                disabled_modules.append(module)
+                slips_disabled_modules.append(module)
 
-        return disabled_modules
+        for module in self.slips_disabled_modules:
+            if module not in slips_disabled_modules:
+                slips_disabled_modules.append(module)
+
+        return slips_disabled_modules
+
+    def get_user_dsiabled_modules(self) -> List[str]:
+        """
+        Get modules disabled by the user configuration.
+
+        Returns:
+            Modules disabled from the user configuration.
+        """
+        user_disabled_modules: List[str] = self.main.conf.read_configuration(
+            "modules", "disable", ["template"]
+        )
+        return [module.strip() for module in user_disabled_modules]
+
+    def get_disabled_modules(self) -> Tuple[List[str], List[str]]:
+        """
+        Get user-disabled modules and Slips-disabled modules.
+
+        - Slips-disabled modules are the ones that cant run because of a
+        logical error, like trying to run the leak_detector on a zeek dir (
+        they are yara rules that must run on a PCAP), so slips
+        automatically disables these modules.
+        - user-disabled modules are the one disabled from the slips.yaml.
+
+        Returns:
+            A tuple containing user-disabled modules and modules disabled by
+            Slips runtime rules.
+        """
+        return (
+            self.get_user_dsiabled_modules(),
+            self.get_runtime_disabled_modules(),
+        )
 
     def _is_exporting_module_enabled(self) -> bool:
         """
@@ -230,7 +252,7 @@ class ProcessManager:
             True when at least one supported alert exporter is enabled.
         """
         export_to = self.main.conf.export_to()
-        return "stix" in export_to or "slack" in export_to
+        return len(export_to) != 0
 
     def get_all_disabled_modules(self) -> List[str]:
         """

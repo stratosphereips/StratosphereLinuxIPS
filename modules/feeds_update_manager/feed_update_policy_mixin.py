@@ -14,8 +14,17 @@ import requests
 class FeedUpdatePolicyMixin:
     """Decide whether cached feeds need refreshing."""
 
-    def download_file(self, file_to_download):
-        # Retry 3 times to get the TI file if an error occured
+    def download_file(self, file_to_download: str) -> requests.Response | bool:
+        """Download a remote feed with retries.
+
+        Parameters:
+            file_to_download: Remote feed URL to download.
+
+        Return:
+            The response when the download succeeds, otherwise False.
+        """
+        error = ""
+        # Retry 5 times to get the TI file if an error occurred.
         for _try in range(5):
             try:
                 response = requests.get(
@@ -44,7 +53,7 @@ class FeedUpdatePolicyMixin:
                 )
 
         if error:
-            self.print(error, 0, 1)
+            self.print(f"Warning: {error}", 1, 0)
             return False
 
     def get_last_modified(self, response) -> str:

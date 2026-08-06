@@ -251,6 +251,48 @@ def test_get_disabled_modules(
     assert slips_disabled_modules == expected_slips
 
 
+def test_get_user_dsiabled_modules_strips_configured_entries() -> None:
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.read_configuration.side_effect = None
+    process_manager.main.conf.read_configuration.return_value = [
+        " template ",
+        " custom_module",
+    ]
+
+    assert process_manager.get_user_dsiabled_modules() == [
+        "template",
+        "custom_module",
+    ]
+
+
+def test_get_runtime_disabled_modules_uses_runtime_rules() -> None:
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.db.is_running_non_stop.return_value = False
+    process_manager.main.conf.export_to.return_value = []
+    process_manager.main.conf.use_local_p2p.return_value = False
+    process_manager.main.conf.use_global_p2p.return_value = False
+    process_manager.main.conf.send_to_warden.return_value = False
+    process_manager.main.conf.receive_from_warden.return_value = False
+    process_manager.main.args.clearblocking = False
+    process_manager.main.args.blocking = False
+    process_manager.main.input_type = InputType.ZEEK
+    process_manager.main.args.input_module = ""
+    process_manager.slips_disabled_modules = ["custom_runtime_module"]
+
+    assert process_manager.get_runtime_disabled_modules() == [
+        "exporting_alerts",
+        "p2p_trust",
+        "fides",
+        "iris",
+        "cesnet",
+        "blocking",
+        "arp_poisoner",
+        "leak_detector",
+        "cyst",
+        "custom_runtime_module",
+    ]
+
+
 @pytest.mark.parametrize(
     "bootstrapping_node, use_global_p2p, expected",
     [
@@ -850,6 +892,56 @@ def test_kill_process_tree_kills_descendants_before_parent():
         call(456, signal.SIGKILL),
         call(123, signal.SIGKILL),
     ]
+
+
+def test_shutdown_interactive_signals_evidence_handler_after_other_modules_stop():
+    """Delay the evidence-handler shutdown signal until earlier modules stop."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    first_process = Mock()
+    last_process = Mock()
+
+    with patch.object(
+        process_manager,
+        "wait_for_processes_to_finish",
+        side_effect=[[], []],
+    ) as mock_wait, patch.object(
+        process_manager.evidence_handler_termination_event, "set"
+    ) as mock_set:
+        result = process_manager.shutdown_interactive(
+            [first_process], [last_process]
+        )
+
+    assert result == (None, None)
+    assert mock_wait.call_args_list == [
+        call([first_process]),
+        call([last_process]),
+    ]
+    mock_set.assert_called_once_with()
+
+
+def test_shutdown_interactive_does_not_signal_evidence_handler_while_modules_are_pending():
+    """Keep the evidence handler running while earlier modules are pending."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    pending_process = Mock()
+    last_process = Mock()
+
+    with patch.object(
+        process_manager,
+        "wait_for_processes_to_finish",
+        return_value=[pending_process],
+    ) as mock_wait, patch.object(
+        process_manager, "warn_about_pending_modules"
+    ) as mock_warn, patch.object(
+        process_manager.evidence_handler_termination_event, "set"
+    ) as mock_set:
+        result = process_manager.shutdown_interactive(
+            [pending_process], [last_process]
+        )
+
+    assert result == ([pending_process], [last_process])
+    mock_wait.assert_called_once_with([pending_process])
+    mock_warn.assert_called_once_with([pending_process, last_process])
+    mock_set.assert_not_called()
 
 
 def test_start_profiler_process():

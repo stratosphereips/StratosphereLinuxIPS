@@ -4,11 +4,14 @@
 from datetime import datetime
 import json
 
+from slips_files.core.evidence_handler import (
+    DEFAULT_EVIDENCE_HANDLER_WORKERS,
+    EVIDENCE_HANDLER_SHUTDOWN_GRACE_PERIOD_SECONDS,
+)
 import pytest
 from unittest.mock import Mock, patch, call
 
 from slips_files.core.structures.alerts import Alert
-from slips_files.core.evidence_handler import DEFAULT_EVIDENCE_HANDLER_WORKERS
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -100,31 +103,38 @@ def test_should_stop_returns_false_if_termination_not_set():
 
 
 @patch("slips_files.core.evidence_handler.time.time", return_value=100.0)
-def test_should_stop_waits_when_messages_are_still_arriving(_mock_time):
+def test_queue_incoming_messages_updates_last_message_time(_mock_time):
     handler = ModuleFactory().create_evidence_handler_obj()
-    handler.termination_event.is_set.return_value = True
-    handler.is_msg_received_in_any_channel = Mock(return_value=True)
+    handler.get_msg = Mock(side_effect=[{"data": "evidence"}, None])
+    handler.evidence_worker_queue = Mock()
     handler.last_msg_received_time = 10.0
 
-    assert handler.should_stop() is False
+    assert handler.queue_incoming_messages() is True
     assert handler.last_msg_received_time == 100.0
+    handler.evidence_worker_queue.put.assert_called_once_with(
+        {
+            "channel": "evidence_added",
+            "message": {"data": "evidence"},
+        }
+    )
 
 
 @patch("slips_files.core.evidence_handler.time.time", return_value=120.0)
 def test_should_stop_waits_for_grace_period(_mock_time):
     handler = ModuleFactory().create_evidence_handler_obj()
     handler.termination_event.is_set.return_value = True
-    handler.is_msg_received_in_any_channel = Mock(return_value=False)
     handler.last_msg_received_time = 100.0
 
     assert handler.should_stop() is False
 
 
-@patch("slips_files.core.evidence_handler.time.time", return_value=131.0)
+@patch(
+    "slips_files.core.evidence_handler.time.time",
+    return_value=(100.0 + EVIDENCE_HANDLER_SHUTDOWN_GRACE_PERIOD_SECONDS + 1),
+)
 def test_should_stop_after_grace_period(_mock_time):
     handler = ModuleFactory().create_evidence_handler_obj()
     handler.termination_event.is_set.return_value = True
-    handler.is_msg_received_in_any_channel = Mock(return_value=False)
     handler.last_msg_received_time = 100.0
 
     assert handler.should_stop() is True
@@ -144,16 +154,33 @@ def test_pre_main_starts_default_workers():
 
 def test_main_queues_received_messages():
     handler = ModuleFactory().create_evidence_handler_obj()
+    handler.queue_incoming_messages = Mock(side_effect=[True, False])
     handler.should_stop = Mock(side_effect=[False, True])
+
+    handler.main()
+
+    assert handler.queue_incoming_messages.call_count == 2
+    assert handler.should_stop.call_count == 2
+
+
+@patch(
+    "slips_files.core.evidence_handler.time.time",
+    side_effect=[200.0, 200.0, 231.0],
+)
+def test_main_drains_new_messages_before_shutdown(_mock_time):
+    handler = ModuleFactory().create_evidence_handler_obj()
     handler.evidence_worker_queue = Mock()
+    handler.termination_event.is_set.return_value = True
+    handler.last_msg_received_time = 100.0
 
     def get_msg(channel):
-        if channel == "evidence_added":
-            return {"data": "evidence"}
-        if channel == "new_blame":
-            return {"data": "blame"}
+        calls = get_msg.calls.setdefault(channel, 0)
+        get_msg.calls[channel] = calls + 1
+        if channel == "evidence_added" and calls == 0:
+            return {"data": "late-evidence"}
         return None
 
+    get_msg.calls = {}
     handler.get_msg = Mock(side_effect=get_msg)
 
     handler.main()
@@ -162,15 +189,9 @@ def test_main_queues_received_messages():
         call(
             {
                 "channel": "evidence_added",
-                "message": {"data": "evidence"},
+                "message": {"data": "late-evidence"},
             }
-        ),
-        call(
-            {
-                "channel": "new_blame",
-                "message": {"data": "blame"},
-            }
-        ),
+        )
     ]
 
 

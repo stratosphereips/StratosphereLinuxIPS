@@ -1,0 +1,127 @@
+name: "Run Test File"
+description: "Run one pytest file with Redis and upload its output artifacts"
+inputs:
+  execution_mode:
+    description: "Where to run tests: runner or docker"
+    required: false
+    default: "runner"
+  test_file:
+    description: "Test file path relative to the configured pytest path prefix"
+    required: true
+  test_path_prefix:
+    description: "Prefix prepended to test_file for pytest"
+    required: true
+  pytest_workers:
+    description: "pytest-xdist worker count"
+    required: true
+  output_path:
+    description: "Path to upload as the test output artifact"
+    required: true
+  artifact_name:
+    description: "Explicit artifact name. If empty, test_file plus artifact_name_suffix is used."
+    required: false
+    default: ""
+  artifact_name_suffix:
+    description: "Suffix for generated artifact names"
+    required: false
+    default: ""
+  image_tag:
+    description: "Docker image tag for docker execution mode"
+    required: false
+    default: ""
+  container_prefix:
+    description: "Docker container name prefix for docker execution mode"
+    required: false
+    default: "slips-test"
+  job_index:
+    description: "Matrix job index for unique Docker container names"
+    required: false
+    default: "0"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Start Redis
+      if: ${{ inputs.execution_mode == 'runner' }}
+      uses: ./.github/workflows/reusable/start-redis
+
+    - name: Run ${{ inputs.test_file }}
+      if: ${{ inputs.execution_mode == 'runner' }}
+      shell: bash
+      env:
+        TEST_FILE: ${{ inputs.test_file }}
+        TEST_PATH_PREFIX: ${{ inputs.test_path_prefix }}
+        PYTEST_WORKERS: ${{ inputs.pytest_workers }}
+      run: |
+        python3 -m pytest "${TEST_PATH_PREFIX}${TEST_FILE}" -p no:warnings -vv -s -n "$PYTEST_WORKERS"
+
+    - name: Run ${{ inputs.test_file }} in Docker
+      if: ${{ inputs.execution_mode == 'docker' }}
+      shell: bash
+      env:
+        IMAGE_TAG: ${{ inputs.image_tag }}
+        TEST_FILE: ${{ inputs.test_file }}
+        TEST_PATH_PREFIX: ${{ inputs.test_path_prefix }}
+        PYTEST_WORKERS: ${{ inputs.pytest_workers }}
+        OUTPUT_PATH: ${{ inputs.output_path }}
+        CONTAINER_PREFIX: ${{ inputs.container_prefix }}
+        JOB_INDEX: ${{ inputs.job_index }}
+      run: |
+        mkdir -p "$OUTPUT_PATH"
+        container_name="${CONTAINER_PREFIX}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${JOB_INDEX}"
+        docker rm -f "$container_name" >/dev/null 2>&1 || true
+        docker create \
+          --name "$container_name" \
+          --shm-size=2g \
+          -e TF_CPP_MIN_LOG_LEVEL="$TF_CPP_MIN_LOG_LEVEL" \
+          -e TF_ENABLE_ONEDNN_OPTS="$TF_ENABLE_ONEDNN_OPTS" \
+          -e TEST_FILE="$TEST_FILE" \
+          -e TEST_PATH_PREFIX="$TEST_PATH_PREFIX" \
+          -e PYTEST_WORKERS="$PYTEST_WORKERS" \
+          "$IMAGE_TAG" \
+          bash -lc '
+            set -e
+            redis-server --daemonize yes
+            for i in {1..20}; do
+              if redis-cli ping; then
+                break
+              fi
+              if [ "$i" = "20" ]; then
+                echo "Redis did not start" >&2
+                exit 1
+              fi
+              sleep 0.5
+            done
+            python3 -m pytest "${TEST_PATH_PREFIX}${TEST_FILE}" -p no:warnings -vv -s -n "$PYTEST_WORKERS"
+          '
+
+        status=0
+        docker start -a "$container_name" || status=$?
+        docker cp "$container_name:StratosphereLinuxIPS/${OUTPUT_PATH}/." "$OUTPUT_PATH" || true
+        docker rm -f "$container_name"
+        exit "$status"
+
+    - name: Build Artifact Name
+      if: always()
+      id: artifact-name
+      shell: bash
+      env:
+        ARTIFACT_NAME: ${{ inputs.artifact_name }}
+        ARTIFACT_NAME_SUFFIX: ${{ inputs.artifact_name_suffix }}
+        TEST_FILE: ${{ inputs.test_file }}
+      run: |
+        if [ -n "$ARTIFACT_NAME" ]; then
+          echo "name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        sanitized_test_file=$(printf '%s\n' "$TEST_FILE" | tr '/' '_')
+        echo "name=${sanitized_test_file}${ARTIFACT_NAME_SUFFIX}" >> "$GITHUB_OUTPUT"
+
+    - name: Upload Artifacts
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ steps.artifact-name.outputs.name }}
+        path: |
+          ${{ inputs.output_path }}

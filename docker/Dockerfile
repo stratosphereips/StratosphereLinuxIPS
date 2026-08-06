@@ -1,6 +1,5 @@
-# Build Iris. Iris is currently pinned to the legacy quic-go/libp2p stack,
-# which does not compile with modern Go toolchains.
-FROM golang:1.17 AS build-iris
+# Build Iris with a Go toolchain that matches iris/go.mod.
+FROM golang:1.22.2 AS build-iris
 
 # Set Go modules to "on" to avoid issues with GOPATH
 ENV GO111MODULE=on

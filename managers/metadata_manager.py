@@ -170,6 +170,7 @@ class MetadataManager:
         # or if we don't have modified tw since the last slips_internal_time
         if last_modified_tw_time != 0:
             self.main.db.set_slips_internal_time(last_modified_tw_time)
+
         return modified_ips_in_the_last_tw, modified_profiles
 
     def add_metadata_if_enabled(self):

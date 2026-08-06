@@ -146,6 +146,62 @@ class ConfigParser(object):
             threshold = default_value
         return threshold
 
+    def risk_accumulated_threat_level(self) -> float:
+        default_value = 15.0
+        threshold = self.read_configuration(
+            "detection", "risk_accumulated_threat_level", default_value
+        )
+        try:
+            return float(threshold)
+        except (TypeError, ValueError):
+            return default_value
+
+    def _read_detection_float(
+        self, name: str, default_value: Optional[float]
+    ) -> Optional[float]:
+        """
+        Read a floating-point value from the detection configuration section.
+
+        Parameters:
+            name: Detection configuration key to read.
+            default_value: Value returned when the key is unset or invalid.
+
+        Return value:
+            Parsed float value, or the provided default.
+        """
+        value = self.read_configuration("detection", name, default_value)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default_value
+
+    def low_risk_weight(self) -> Optional[float]:
+        """
+        Read the configured low-risk weight.
+
+        Return value:
+            Parsed low-risk weight, or None when unset or invalid.
+        """
+        return self._read_detection_float("low_risk_weight", None)
+
+    def medium_risk_weight(self) -> Optional[float]:
+        """
+        Read the configured medium-risk weight.
+
+        Return value:
+            Parsed medium-risk weight, or None when unset or invalid.
+        """
+        return self._read_detection_float("medium_risk_weight", None)
+
+    def high_risk_weight(self) -> Optional[float]:
+        """
+        Read the configured high-risk weight.
+
+        Return value:
+            Parsed high-risk weight, or None when unset or invalid.
+        """
+        return self._read_detection_float("high_risk_weight", None)
+
     def packet_filter(self):
         return self.read_configuration("parameters", "pcapfilter", False)
 
@@ -532,6 +588,37 @@ class ConfigParser(object):
         return self.read_configuration(
             "exporting_alerts", "sensor_name", False
         )
+
+    def idmef_manager_config(self) -> dict:
+        """
+        Returns the nested 'idmef_manager' mapping from the exporting_alerts
+        section (url, client_certificate, client_private_key, trusted_ca,
+        timeout), or an empty dict if it's not configured.
+        """
+        conf = self.read_configuration("exporting_alerts", "idmef_manager", {})
+        return conf if isinstance(conf, dict) else {}
+
+    def idmef_manager_url(self):
+        return self.idmef_manager_config().get(
+            "url", "https://localhost:8443/"
+        )
+
+    def idmef_manager_client_certificate(self):
+        return self.idmef_manager_config().get("client_certificate", "")
+
+    def idmef_manager_client_private_key(self):
+        return self.idmef_manager_config().get("client_private_key", "")
+
+    def idmef_manager_trusted_ca(self):
+        return self.idmef_manager_config().get("trusted_ca", "")
+
+    def idmef_manager_timeout(self):
+        timeout = self.idmef_manager_config().get("timeout", 10)
+        try:
+            timeout = float(timeout)
+        except (ValueError, TypeError):
+            timeout = 10
+        return max(1.0, timeout)
 
     def taxii_server(self):
         taxii_server = self.read_configuration(

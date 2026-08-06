@@ -1,5 +1,5 @@
 name: "List Test Files"
-description: "Build JSON matrix of test files"
+description: "Auto discovery of integration and unit tests - Build JSON matrix of test files"
 inputs:
   test_dir:
     description: "Directory to search for test_*.py files"

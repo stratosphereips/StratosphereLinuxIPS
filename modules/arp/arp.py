@@ -292,7 +292,7 @@ class ARP(IModule):
             confidence: float = 0.6
             threat_level: ThreatLevel = ThreatLevel.LOW
             description: str = (
-                f"{flow.saddr} sending ARP packet to a destination "
+                f"sending ARP packet to a destination "
                 f"address outside of local network: {flow.daddr}. "
             )
 
@@ -408,25 +408,20 @@ class ARP(IModule):
         # with another IP (original_IP)?
         if flow.saddr != original_ip:
             # From our db we know that:
-            # original_IP has src_MAC
-            # now saddr has src_MAC and saddr isn't the same as original_IP
+            # original_IP has flow.smac
+            # now saddr has flow.smac and saddr isn't the same as original_IP
             # so this is either a MITM arp attack or the IP
-            # address of this src_mac simply changed
+            # address of this flow.smac has simply changed
             # todo how to find out which one is it??
-            # Assuming that 'threat_level' and 'category'
-            # are from predefined enums or constants
+
             confidence: float = 0.2  # low confidence for now
             threat_level: ThreatLevel = ThreatLevel.CRITICAL
 
-            attackers_ip = flow.saddr
-            victims_ip = original_ip
+            attackers_ip = original_ip
+            victims_ip = flow.saddr
 
             gateway_ip = self.db.get_gateway_ip(flow.interface)
             gateway_mac = self.db.get_gateway_mac(flow.interface)
-            if flow.saddr == gateway_ip:
-                saddr = f"The gateway {flow.saddr}"
-            else:
-                saddr = flow.saddr
 
             if flow.smac == gateway_mac:
                 src_mac = f"of the gateway {flow.smac}"
@@ -448,9 +443,12 @@ class ARP(IModule):
                 ioc_type=IoCType.IP,
                 value=victims_ip,
             )
-
+            if flow.saddr == gateway_ip:
+                saddr = f"The gateway {flow.saddr}"
+            else:
+                saddr = flow.saddr
             description = (
-                f"{saddr} performing a MITM ARP attack. "
+                f"{attackers_ip} performing a MITM ARP attack. "
                 f"The MAC {src_mac}, now belonging to "
                 f"{saddr}, was seen before for {original_ip}."
             )

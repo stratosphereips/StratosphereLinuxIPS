@@ -6,6 +6,7 @@ This is the main guide to the documentation related to the changes done to Slips
 
 - [Main Architecture of Slips Immune](https://stratospherelinuxips.readthedocs.io/en/develop/immune/immune_architecture.html)
 - [Immunology-inspired Model for Slips](https://stratospherelinuxips.readthedocs.io/en/develop/immune/immunology_model.html)
+- [Automatic threshold adaptation using risk levels](https://stratospherelinuxips.readthedocs.io/en/develop/immune/risk_levels.html)
 
 ###  RPI performance
 - [Research RPI Limitations](https://stratospherelinuxips.readthedocs.io/en/develop/immune/research_rpi_limitations_and_define_acceptable_performance_benchmarks.html)
@@ -25,6 +26,7 @@ This is the main guide to the documentation related to the changes done to Slips
 
 - [ARP Poisoning](https://stratospherelinuxips.readthedocs.io/en/develop/immune/arp_poisoning.html)
 - [ARP Poisoning Risks](https://stratospherelinuxips.readthedocs.io/en/develop/immune/arp_poisoning_risks.html)
+- [Risk Levels in Slips](https://stratospherelinuxips.readthedocs.io/en/develop/immune/risk_levels.html)
 - [Blocking with Slips as an Access Point](https://stratospherelinuxips.readthedocs.io/en/develop/immune/blocking_in_slips.html)
 - [IDS-in-the-middle Traffic routing](https://stratospherelinuxips.readthedocs.io/en/develop/immune/ids_in_the_middle_traffic_routing.html)
 - [RPI Failover Mechanisms](https://stratospherelinuxips.readthedocs.io/en/develop/immune/failover_mechanisms.html)

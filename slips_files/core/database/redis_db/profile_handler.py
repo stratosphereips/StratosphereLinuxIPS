@@ -694,7 +694,6 @@ class ProfileHandler:
         """
         try:
             if not self.r.zscore(f"tws{profileid}", timewindow):
-                # Add the new TW to the index of TW
                 self.zadd_but_keep_n_entries(
                     f"tws{profileid}", {timewindow: float(startoftw)}, 50
                 )

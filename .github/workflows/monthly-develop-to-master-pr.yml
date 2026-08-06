@@ -1,0 +1,50 @@
+name: monthly develop to master PR
+
+on:
+  schedule:
+    - cron: '0 7 30 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Create monthly PR
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.PR_AUTOMATION_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "PR_AUTOMATION_TOKEN must be configured so PR-triggered workflows run automatically." >&2
+            exit 1
+          fi
+
+          ahead_by="$(gh api "repos/$GH_REPO/compare/master...develop" --jq '.ahead_by')"
+          if [ "$ahead_by" = "0" ]; then
+            echo "develop has no commits ahead of master. Skipping PR creation."
+            exit 0
+          fi
+
+          existing_pr="$(gh pr list \
+            --repo "$GH_REPO" \
+            --base master \
+            --head develop \
+            --state open \
+            --json number \
+            --jq '.[0].number')"
+
+          if [ -n "$existing_pr" ]; then
+            echo "PR #$existing_pr from develop to master already exists. Skipping PR creation."
+            exit 0
+          fi
+
+          gh pr create \
+            --repo "$GH_REPO" \
+            --base master \
+            --head develop \
+            --title "Slips new version" \
+            --body "Automated monthly PR from develop to master."

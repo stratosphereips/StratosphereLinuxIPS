@@ -86,9 +86,6 @@ class VerticalPortscan:
         )
 
         self.db.set_evidence(evidence)
-        # to be able to avoid setting "unknown port" evidence for each
-        # scanned port from this attacker
-        self.db.mark_ip_as_port_scanner(saddr, str_twid)
 
     def check_if_enough_dports_to_trigger_an_evidence(
         self, profileid, twid, dstip, amount_of_dports: int
@@ -170,6 +167,11 @@ class VerticalPortscan:
                 # todo use this later
                 # last_seen = self.db.get_ip_last_seen_ts(
                 #     profileid, twid, dstip)
+
+                if amount_of_dports > self.minimum_dports_to_set_evidence:
+                    # to be able to avoid setting "unknown port" evidence for each
+                    # scanned port from this attacker
+                    self.db.mark_ip_as_port_scanner(profileid.ip, str(twid))
 
                 if self.should_set_evidence(
                     amount_of_dports,

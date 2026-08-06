@@ -22,6 +22,7 @@ from slips_files.core.structures.evidence import (
 )
 from tests.module_factory import ModuleFactory
 from slips_files.core.structures.alerts import Alert
+from slips_files.core.structures.risk_weights import RiskWeight
 
 
 @pytest.mark.parametrize(
@@ -597,6 +598,131 @@ def test_get_flows_causing_evidence(
     alert_handler.r.hget.assert_called_once_with(
         "flows_causing_evidence", evidence_ID
     )
+    assert result == expected_result
+
+
+def test_set_max_seen_risk_weight_caps_to_high_weight() -> None:
+    alert_handler = ModuleFactory().create_alert_handler_obj()
+    alert_handler.r = MagicMock()
+
+    alert_handler._set_max_seen_risk_weight(
+        "profile_192.168.1.1", RiskWeight.HIGH
+    )
+
+    alert_handler.r.hset.assert_called_once_with(
+        alert_handler.constants.MAX_RISK_WEIGHT_OF_ALL_PROFILES,
+        mapping={
+            "risk_weight": RiskWeight.HIGH.weight,
+            "profile": "profile_192.168.1.1",
+        },
+    )
+
+
+def test_get_max_seen_risk_weight_returns_stored_value() -> None:
+    alert_handler = ModuleFactory().create_alert_handler_obj()
+    alert_handler.r = MagicMock()
+    alert_handler.r.hgetall.return_value = {
+        "risk_weight": RiskWeight.MEDIUM.weight,
+        "profile": "profile_10.0.0.1",
+    }
+
+    result = alert_handler.get_max_seen_risk_weight()
+
+    assert result == {
+        "risk_weight": RiskWeight.MEDIUM,
+        "profile": "profile_10.0.0.1",
+    }
+
+
+def test_get_max_seen_risk_weight_returns_enum_internally() -> None:
+    alert_handler = ModuleFactory().create_alert_handler_obj()
+    alert_handler.r = MagicMock()
+    alert_handler.r.hgetall.return_value = {
+        "risk_weight": RiskWeight.MEDIUM.weight,
+        "profile": "profile_10.0.0.1",
+    }
+
+    result = alert_handler.get_max_seen_risk_weight()
+
+    assert result == {
+        "risk_weight": RiskWeight.MEDIUM,
+        "profile": "profile_10.0.0.1",
+    }
+
+
+@pytest.mark.parametrize(
+    "stored_value, candidate_risk_weight, expected_result, should_update",
+    [
+        (
+            {
+                "risk_weight": RiskWeight.MEDIUM.weight,
+                "profile": "profile_10.0.0.1",
+            },
+            RiskWeight.HIGH,
+            RiskWeight.HIGH,
+            True,
+        ),
+        (
+            {
+                "risk_weight": RiskWeight.HIGH.weight,
+                "profile": "profile_10.0.0.1",
+            },
+            RiskWeight.MEDIUM,
+            RiskWeight.HIGH,
+            False,
+        ),
+        ({}, RiskWeight.LOW, RiskWeight.LOW, False),
+    ],
+)
+def test_update_max_seen_risk_weight(
+    stored_value: dict,
+    candidate_risk_weight: RiskWeight,
+    expected_result: RiskWeight,
+    should_update: bool,
+) -> None:
+    alert_handler = ModuleFactory().create_alert_handler_obj()
+    alert_handler.r = MagicMock()
+    alert_handler.r.hgetall.return_value = stored_value
+    alert_handler._set_max_seen_risk_weight = MagicMock()
+
+    result = alert_handler.update_max_seen_risk_weight(
+        "profile_192.168.1.1", candidate_risk_weight
+    )
+
+    assert result == expected_result
+    if should_update:
+        alert_handler._set_max_seen_risk_weight.assert_called_once_with(
+            "profile_192.168.1.1", candidate_risk_weight
+        )
+    else:
+        alert_handler._set_max_seen_risk_weight.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "stored_value, expected_result",
+    [
+        (
+            {
+                "risk_weight": RiskWeight.MEDIUM.weight,
+                "profile": "profile_10.0.0.1",
+            },
+            {
+                "risk_weight": RiskWeight.MEDIUM,
+                "profile": "profile_10.0.0.1",
+            },
+        ),
+        ({}, {"risk_weight": RiskWeight.LOW, "profile": ""}),
+    ],
+)
+def test_get_max_seen_risk_weight_defaults(
+    stored_value: dict, expected_result: dict
+) -> None:
+    alert_handler = ModuleFactory().create_alert_handler_obj()
+    alert_handler.r = MagicMock()
+    alert_handler.r.hgetall.return_value = stored_value
+
+    result = alert_handler.get_max_seen_risk_weight()
+
     assert result == expected_result
 
 
