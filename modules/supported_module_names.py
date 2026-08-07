@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
+"""Hardcoded runtime module names shared across Slips."""
+
+from enum import StrEnum
+from typing import Dict
+
+
+class Modules(StrEnum):
+    """Supported Slips runtime module names."""
+
+    ALERT_SUMMARY = "alert_summary"
+    ANOMALY_DETECTION_HTTPS = "anomaly_detection_https"
+    ARP = "arp"
+    ARP_POISONER = "arp_poisoner"
+    BLOCKING = "blocking"
+    BRUTE_FORCE_DETECTOR = "brute_force_detector"
+    CESNET = "cesnet"
+    CYST = "cyst"
+    EXPORTING_ALERTS = "exporting_alerts"
+    FEEDS_UPDATE_MANAGER = "feeds_update_manager"
+    FIDES = "fides"
+    FLOW_ALERTS = "flow_alerts"
+    FLOW_ML_DETECTION = "flow_ml_detection"
+    HTTP_ANALYZER = "http_analyzer"
+    IP_INFO = "ip_info"
+    IRIS = "iris"
+    LEAK_DETECTOR = "leak_detector"
+    LLM_PROXY = "llm_proxy"
+    NETWORK_DISCOVERY = "network_discovery"
+    P2P_TRUST = "p2p_trust"
+    REGEX_GENERATOR = "regex_generator"
+    RISK_IQ = "risk_iq"
+    RNN_CC_DETECTION = "rnn_cc_detection"
+    T_CELL = "t_cell"
+    TEMPLATE = "template"
+    THREAT_INTELLIGENCE = "threat_intelligence"
+    TIMELINE = "timeline"
+    VIRUSTOTAL = "virustotal"
+
+
+SUPPORTED_MODULE_NAME_BY_FILE: Dict[str, str] = {
+    module: module for module in Modules
+}
+
+__all__ = ["Modules", "SUPPORTED_MODULE_NAME_BY_FILE"]
