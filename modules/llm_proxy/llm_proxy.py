@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+import logging
 import os
 import queue
 import threading
@@ -50,6 +51,7 @@ class LLMProxy(IModule):
             "llm_proxy.log"
         )
         self.waiting_for_upstream_modules_logged = False
+        logging.getLogger("urllib3.connectionpool").setLevel(logging.ERROR)
         self.read_configuration()
 
     def subscribe_to_channels(self):
@@ -229,7 +231,7 @@ class LLMProxy(IModule):
             self.db.increment_pending_llm_request_count(
                 payload.get("requester", "")
             )
-            self._record_request_activity()
+            self._record_request_activity_ts()
             self._log_operation(
                 "Queued llm_request "
                 f"request_id={payload['request_id']} "
@@ -265,12 +267,12 @@ class LLMProxy(IModule):
                 self.request_queue.task_done()
                 return
 
-            self._record_request_activity()
+            self._record_request_activity_ts()
             try:
                 self._handle_request(payload)
             finally:
                 self.request_queue.task_done()
-                self._record_request_activity()
+                self._record_request_activity_ts()
 
     def _handle_request(self, payload: dict):
         request_id = payload["request_id"]
@@ -338,7 +340,8 @@ class LLMProxy(IModule):
                 "Completed llm_request "
                 f"request_id={request_id} "
                 f"backend={payload.get('backend')} "
-                f"success=False error=Unexpected LLM error: {exc}"
+                f"success=False "
+                f"error=Unexpected LLM error: {exc}"
             )
 
         self._publish_response(response)
@@ -430,7 +433,7 @@ class LLMProxy(IModule):
                     f"requester={requester} remaining={remaining}"
                 )
 
-    def _record_request_activity(self):
+    def _record_request_activity_ts(self):
         """Update the timestamp used to keep the LLM service alive."""
         self.last_request_activity = time.time()
 
