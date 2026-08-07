@@ -193,6 +193,7 @@ class RegexGenerator(IModule):
         self.print("RegexGenerator module ready.", 2, 0)
 
     def shutdown_gracefully(self):
+        self.print("Shutting down.")
         if self.storage:
             self.storage.close()
         return True

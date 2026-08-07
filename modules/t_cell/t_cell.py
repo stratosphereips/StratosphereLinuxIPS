@@ -116,8 +116,9 @@ class RegexMatch:
 
 class TCell(IModule):
     name = "t_cell"
+    # PS: this module relies on the output of the RegexGenerator module
     description = (
-        "Immune-style responder that matches PAMP antigens to regexes and "
+        "Immune responder that matches PAMP antigens to regexes and "
         "uses both PAMP and DAMP danger pressure to escalate to blocking "
         "or memory."
     )

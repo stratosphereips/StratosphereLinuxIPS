@@ -13,6 +13,7 @@ from typing import (
 import yaml
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 
+from modules.supported_module_names import Modules
 from slips_files.common.parsers.arg_parser import ArgumentParser
 from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
@@ -1808,7 +1809,7 @@ class ConfigParser(object):
         # are we reading custom flows from cyst module?
         for param in ("--input-module", "-im"):
             try:
-                if "cyst" in sys.argv[sys.argv.index(param) + 1]:
+                if Modules.CYST in sys.argv[sys.argv.index(param) + 1]:
                     return True
             except ValueError:
                 # param isn't used
@@ -1826,16 +1827,16 @@ class ConfigParser(object):
         # Ignore exporting alerts module if export_to is empty
         export_to = self.export_to()
         if "stix" not in export_to and "slack" not in export_to:
-            to_ignore.append("exporting_alerts")
+            to_ignore.append(Modules.EXPORTING_ALERTS)
 
         use_p2p = self.use_local_p2p()
         if not (use_p2p and "-i" in sys.argv):
-            to_ignore.append("p2p_trust")
+            to_ignore.append(Modules.P2P_TRUST)
 
         use_global_p2p = self.use_global_p2p()
         if not (use_global_p2p and ("-i" in sys.argv)):
-            to_ignore.append("fides")
-            to_ignore.append("iris")
+            to_ignore.append(Modules.FIDES)
+            to_ignore.append(Modules.IRIS)
 
         # ignore CESNET sharing module if send and receive are
         # disabled in slips.yaml
@@ -1843,28 +1844,28 @@ class ConfigParser(object):
         receive_from_warden = self.receive_from_warden()
 
         if not send_to_warden and not receive_from_warden:
-            to_ignore.append("cesnet")
+            to_ignore.append(Modules.CESNET)
 
         # don't run blocking module unless specified
         if not ("-cb" in sys.argv or "-p" in sys.argv):
-            to_ignore.append("blocking")
-            to_ignore.append("arp_poisoner")
+            to_ignore.append(Modules.BLOCKING)
+            to_ignore.append(Modules.ARP_POISONER)
 
         # leak detector only works on pcap files
         if input_type != InputType.PCAP:
-            to_ignore.append("leak_detector")
+            to_ignore.append(Modules.LEAK_DETECTOR)
 
         if not self.reading_flows_from_cyst():
-            to_ignore.append("cyst")
+            to_ignore.append(Modules.CYST)
 
         if not self.llm_enabled():
-            to_ignore.append("llm_proxy")
+            to_ignore.append(Modules.LLM_PROXY)
 
         if not self.regex_generator_enabled():
-            to_ignore.append("regex_generator")
+            to_ignore.append(Modules.REGEX_GENERATOR)
 
         if not self.t_cell_enabled():
-            to_ignore.append("t_cell")
+            to_ignore.append(Modules.T_CELL)
 
         return to_ignore
 

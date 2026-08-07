@@ -17,6 +17,7 @@ from stix2 import Bundle, Indicator, parse
 from taxii2client.v21 import Server
 from xml.sax.saxutils import escape
 
+from modules.supported_module_names import Modules
 from slips_files.common.abstracts.iexporter import IExporter
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -142,7 +143,7 @@ class StixExporter(IExporter):
         Falls back to the current working directory if the DB does not
         have an output directory set yet.
         """
-        output_dir = self.get_output_path(module_name="exporting_alerts")
+        output_dir = self.get_output_path(module_name=Modules.EXPORTING_ALERTS)
         if not output_dir:
             output_dir = os.getcwd()
         output_dir = os.path.abspath(output_dir)

@@ -161,6 +161,7 @@ class AlertSummary(IModule):
 
     def shutdown_gracefully(self):
         """Flush unresolved work to the summary file and close log handles."""
+        self.print("Shutting down.")
         if self.active_job:
             alert = self.active_job["alert"]
             self._write_summary_entry(
@@ -1608,7 +1609,7 @@ class AlertSummary(IModule):
         entry = (
             f"{alert_time}: "
             f"Src IP {profile}. "
-            f"Alert {alert.id} on timewindow {alert.timewindow.number}. "
+            f"Alert {alert.id} on timewindow {alert.timewindow.number}.\n"
             f"{summary_text}"
         )
         self.summary_log.write(f"{entry}\n")

@@ -37,6 +37,7 @@ from managers.update_manager import UpdateManager
 from modules.feeds_update_manager.feeds_update_manager import (
     FeedsUpdateManager,
 )
+from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import (
     IModule,
@@ -152,7 +153,7 @@ class ProcessManager:
             True when CYST is configured as the input module.
         """
         custom_flows = self.main.args.input_module
-        return "cyst" in str(custom_flows)
+        return Modules.CYST in str(custom_flows)
 
     def get_user_disabled_modules(self) -> List[str]:
         """
@@ -178,38 +179,48 @@ class ProcessManager:
         slips_disabled_modules: List[str] = []
 
         if not self._is_exporting_module_enabled():
-            slips_disabled_modules.append("exporting_alerts")
+            slips_disabled_modules.append(Modules.EXPORTING_ALERTS)
 
         use_p2p = self.main.conf.use_local_p2p()
         if not (use_p2p and is_running_non_stop):
-            slips_disabled_modules.append("p2p_trust")
+            slips_disabled_modules.append(Modules.P2P_TRUST)
 
         use_global_p2p = self.main.conf.use_global_p2p()
         if not (use_global_p2p and is_running_non_stop):
-            slips_disabled_modules.extend(("fides", "iris"))
+            slips_disabled_modules.extend(
+                (
+                    Modules.FIDES,
+                    Modules.IRIS,
+                )
+            )
 
         if not (
             self.main.conf.send_to_warden()
             or self.main.conf.receive_from_warden()
         ):
-            slips_disabled_modules.append("cesnet")
+            slips_disabled_modules.append(Modules.CESNET)
 
         if not (self.main.args.clearblocking or self.main.args.blocking):
-            slips_disabled_modules.extend(("blocking", "arp_poisoner"))
+            slips_disabled_modules.extend(
+                (
+                    Modules.BLOCKING,
+                    Modules.ARP_POISONER,
+                )
+            )
 
         if self.main.input_type != InputType.PCAP:
-            slips_disabled_modules.append("leak_detector")
+            slips_disabled_modules.append(Modules.LEAK_DETECTOR)
 
         if not self._reading_flows_from_cyst():
-            slips_disabled_modules.append("cyst")
+            slips_disabled_modules.append(Modules.CYST)
 
         if not self._is_llm_proxy_enabled_and_configured():
             self._warn_about_llm_dependency_misconfiguration()
             for module in (
-                "llm_proxy",
-                "alert_summary",
-                "regex_generator",
-                "t_cell",
+                Modules.LLM_PROXY,
+                Modules.ALERT_SUMMARY,
+                Modules.REGEX_GENERATOR,
+                Modules.T_CELL,
             ):
                 slips_disabled_modules.append(module)
 
@@ -239,9 +250,15 @@ class ProcessManager:
         """
         enabled_modules: List[str] = []
         llm_dependents: Tuple[Tuple[str, Callable[[], bool]], ...] = (
-            ("alert_summary", self.main.conf.alert_summary_enabled),
-            ("regex_generator", self.main.conf.regex_generator_enabled),
-            ("t_cell", self.main.conf.t_cell_enabled),
+            (
+                Modules.ALERT_SUMMARY,
+                self.main.conf.alert_summary_enabled,
+            ),
+            (
+                Modules.REGEX_GENERATOR,
+                self.main.conf.regex_generator_enabled,
+            ),
+            (Modules.T_CELL, self.main.conf.t_cell_enabled),
         )
 
         for module_name, is_enabled in llm_dependents:
@@ -632,7 +649,10 @@ class ProcessManager:
         `blocking`) to load them before the rest of the modules
         so they can receive msgs sent from other modules
         """
-        blocking_modules = ("blocking", "arp_poisoner")
+        blocking_modules = (
+            Modules.BLOCKING,
+            Modules.ARP_POISONER,
+        )
 
         at_least_one_blocking_module_is_loaded = False
         for module in blocking_modules:
@@ -658,12 +678,12 @@ class ProcessManager:
         # cyst sends slips the flows,
         # but the inputprocess didn't even start yet so the flows are lost
         # to fix this, change the order of the CYST module (load it last)
-        if "cyst" not in plugins:
+        if Modules.CYST not in plugins:
             return plugins
 
         ordered = OrderedDict(plugins)
         ordered.move_to_end(
-            "cyst", last=True
+            Modules.CYST, last=True
         )  # last=True to move to the end of the dict
         plugins.clear()
         plugins.update(ordered)
@@ -816,7 +836,7 @@ class ProcessManager:
         )
 
         # check if update manager is still alive
-        if "feeds_update_manager" in pending_module_names:
+        if Modules.FEEDS_UPDATE_MANAGER in pending_module_names:
             self.main.print(
                 "feeds_update_manager may take several minutes "
                 "to finish updating 45+ TI files."
@@ -842,12 +862,14 @@ class ProcessManager:
         ]
 
         if self.main.args.blocking:
-            pids_to_kill_last.append(self.main.db.get_pid_of("blocking"))
-            pids_to_kill_last.append(self.main.db.get_pid_of("arp_poisoner"))
-
-        if "exporting_alerts" not in self.main.db.get_disabled_modules():
+            pids_to_kill_last.append(self.main.db.get_pid_of(Modules.BLOCKING))
             pids_to_kill_last.append(
-                self.main.db.get_pid_of("exporting_alerts")
+                self.main.db.get_pid_of(Modules.ARP_POISONER)
+            )
+
+        if Modules.EXPORTING_ALERTS not in self.main.db.get_disabled_modules():
+            pids_to_kill_last.append(
+                self.main.db.get_pid_of(Modules.EXPORTING_ALERTS)
             )
         # remove all None PIDs. this happens when a module in that list
         # isnt started in the current run. e.g. virustotal module starts then
