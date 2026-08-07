@@ -69,6 +69,15 @@ class IModule(ABC, Process):
             IModule._SNAKE_CASE_NAME_PATTERN.fullmatch(module_name)
         )
 
+    @staticmethod
+    def _is_module_name_registered(module_name: object) -> bool:
+        """
+        Check whether a module name is registered as a supported module.
+        """
+        from modules.supported_module_names import Modules
+
+        return str(module_name) in Modules._value2member_map_
+
     def __init__(
         self,
         logger: Output,
@@ -82,6 +91,11 @@ class IModule(ABC, Process):
         **kwargs,
     ):
         Process.__init__(self)
+        if not self._is_module_name_registered(self.name):
+            raise RuntimeError(
+                f"{type(self).__name__}.name={self.name!r} is not registered "
+                "in modules.supported_module_names.Modules. Please register it."
+            )
         self.redis_port = redis_port
         self.parent_output_dir = output_dir
         self.output_dir = os.path.join(output_dir, self.name)
