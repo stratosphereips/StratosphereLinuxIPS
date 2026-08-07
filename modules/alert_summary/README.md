@@ -5,7 +5,7 @@ Slips alert.
 
 It listens for `new_alert`, loads the correlated evidence that triggered the
 alert, uses the shared `LLM` module to build an analyst summary, and writes the
-result to `output/alerts/alerts-summary.log`.
+result to `output/alerts/alerts_summary.log`.
 
 ## What it does
 
@@ -19,7 +19,7 @@ For each alert, the module:
 6. If it does not fit, recursively reduces the digest through one or more
    intermediate LLM summaries until the final prompt fits.
 7. Waits for the matching `llm_response`.
-8. Writes one plain-text paragraph per alert to `output/alerts/alerts-summary.log`.
+8. Writes one plain-text paragraph per alert to `output/alerts/alerts_summary.log`.
 
 If the LLM pipeline fails, the module writes a local heuristic fallback summary
 instead of leaving the alert without analyst context.
@@ -162,7 +162,7 @@ Reduction requests also include `metadata.chunk_index` and
 Analyst summaries are written to:
 
 ```text
-<output-dir>/alerts/alerts-summary.log
+<output-dir>/alerts/alerts_summary.log
 ```
 
 Alert-summary operational logs are written to:

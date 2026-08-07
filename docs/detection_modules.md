@@ -183,7 +183,7 @@ service.
 
 It listens on `new_alert`, loads the evidence records referenced by the alert,
 sends that structured context to the shared `LLM` module, and writes one
-paragraph per alert to `output/alerts/alerts-summary.log`.
+paragraph per alert to `output/alerts/alerts_summary.log`.
 
 The generated paragraph is meant to help a human analyst quickly judge whether
 the alert looks real, how strong the evidence is, and what operational risk it

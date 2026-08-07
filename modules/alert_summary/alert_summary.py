@@ -83,12 +83,12 @@ class AlertSummary(IModule):
         self.alert_history_by_profile = defaultdict(deque)
         self.operation_log_path = os.path.join(
             self.parent_output_dir,
-            "llm-summary",
+            self.name,
             "alert_summary.log",
         )
         self.summary_log_path = os.path.join(
             get_alerts_path_inside_output_dir(self.parent_output_dir),
-            "alerts-summary.log",
+            "alerts_summary.log",
         )
         self.read_configuration()
 
@@ -245,7 +245,7 @@ class AlertSummary(IModule):
         )
 
     def _init_summary_log_file(self):
-        """Create or clear alerts-summary.log for the current Slips run."""
+        """Create or clear alerts_summary.log for the current Slips run."""
         os.makedirs(os.path.dirname(self.summary_log_path), exist_ok=True)
         utils.initialize_logfile(
             self.summary_log_path,
@@ -1588,7 +1588,7 @@ class AlertSummary(IModule):
             )
 
     def _write_summary_entry(self, alert, summary_text: str):
-        """Append one human-readable summary line to alerts-summary.log."""
+        """Append one human-readable summary line to alerts_summary.log."""
         if self.summary_log is None:
             return
 

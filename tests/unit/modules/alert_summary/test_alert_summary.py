@@ -459,7 +459,7 @@ def test_handle_pending_response_writes_one_paragraph_summary(
     alert_summary = ModuleFactory().create_alert_summary_obj()
     alert_summary.parent_output_dir = str(tmp_path)
     alert_summary.summary_log_path = str(
-        tmp_path / "alerts" / "alerts-summary.log"
+        tmp_path / "alerts" / "alerts_summary.log"
     )
     alert_summary.operation_log_path = str(
         tmp_path / "llm_proxy-summary" / "alert_summary.log"
@@ -528,7 +528,7 @@ def test_handle_pending_response_does_not_timeout_during_shutdown(
     alert_summary = ModuleFactory().create_alert_summary_obj()
     alert_summary.parent_output_dir = str(tmp_path)
     alert_summary.summary_log_path = str(
-        tmp_path / "alerts" / "alerts-summary.log"
+        tmp_path / "alerts" / "alerts_summary.log"
     )
     alert_summary.operation_log_path = str(
         tmp_path / "llm_proxy-summary" / "alert_summary.log"
@@ -588,7 +588,7 @@ def test_main_flushes_pending_alerts_without_backend_on_shutdown(
     alert_summary = ModuleFactory().create_alert_summary_obj()
     alert_summary.parent_output_dir = str(tmp_path)
     alert_summary.summary_log_path = str(
-        tmp_path / "alerts" / "alerts-summary.log"
+        tmp_path / "alerts" / "alerts_summary.log"
     )
     alert_summary.operation_log_path = str(
         tmp_path / "llm_proxy-summary" / "alert_summary.log"
@@ -777,7 +777,7 @@ def test_operation_log_respects_configured_verbosity(tmp_path, mocker):
     alert_summary.log_verbosity = 1
     alert_summary.parent_output_dir = str(tmp_path)
     alert_summary.summary_log_path = str(
-        tmp_path / "alerts" / "alerts-summary.log"
+        tmp_path / "alerts" / "alerts_summary.log"
     )
     alert_summary.operation_log_path = str(
         tmp_path / "llm_proxy-summary" / "alert_summary.log"
@@ -804,7 +804,7 @@ def test_shutdown_gracefully_logs_stop_message(tmp_path, mocker):
     alert_summary = ModuleFactory().create_alert_summary_obj()
     alert_summary.parent_output_dir = str(tmp_path)
     alert_summary.summary_log_path = str(
-        tmp_path / "alerts" / "alerts-summary.log"
+        tmp_path / "alerts" / "alerts_summary.log"
     )
     alert_summary.operation_log_path = str(
         tmp_path / "llm_proxy-summary" / "alert_summary.log"

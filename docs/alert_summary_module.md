@@ -2,7 +2,7 @@
 
 The `AlertSummary` module creates one analyst-facing summary paragraph for every Slips alert.
 
-It listens for generated alerts, gathers the evidence that caused each alert, queries the shared `LLM` module, and writes one summary line per alert to `output/alerts/alerts-summary.log`.
+It listens for generated alerts, gathers the evidence that caused each alert, queries the shared `LLM` module, and writes one summary line per alert to `output/alerts/alerts_summary.log`.
 
 ## What it does
 
@@ -128,7 +128,7 @@ in-flight request.
 Analyst summaries are written to:
 
 ```text
-output/alerts/alerts-summary.log
+output/alerts/alerts_summary.log
 ```
 
 Operational logs for this module are written to:
