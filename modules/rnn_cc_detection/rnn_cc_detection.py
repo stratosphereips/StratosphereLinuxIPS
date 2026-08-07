@@ -1,11 +1,14 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import os
 import warnings
 import json
 from typing import Dict
 from uuid import uuid4
 
 import numpy as np
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 from tensorflow.keras.models import load_model
 
 from slips_files.common.slips_utils import utils
