@@ -59,13 +59,13 @@ llm:
       provider: openai
       model: gpt-4o-mini
       base_url: https://api.openai.com/v1
-      api_key_env: OPENAI_API_KEY
+      api_key_file: config/openai_api_key
       timeout: 60
     claude_default:
       provider: anthropic
       model: claude-sonnet-4-5
       base_url: https://api.anthropic.com
-      api_key_env: ANTHROPIC_API_KEY
+      api_key_file: config/anthropic_api_key
       timeout: 60
 ```
 
@@ -85,7 +85,9 @@ Per-backend options:
 - `timeout`: HTTP timeout in seconds.
 - `api_key`: optional inline API key for `openai` or `anthropic`.
 - `api_key_env`: optional environment variable containing the API key.
-- `api_key_file`: optional file path containing the API key.
+- `api_key_file`: optional file path containing the API key. The default
+  sample config uses ignored placeholder files such as `config/openai_api_key`
+  and `config/anthropic_api_key`.
 - `anthropic_version`: optional Anthropic API version header. Default is
   `2023-06-01`.
 

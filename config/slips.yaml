@@ -266,11 +266,11 @@ llm_proxy:
   # Maximum number of pending requests kept in memory.
   queue_size: 100
 
-  # Each backend is a named connection that other modules select by alias
-  # through the request field backend.
+  # Each backend is a named connection that other modules select by alias through the request field backend.
   backends:
     slips-goldilock:
-      # slips-goldilock is the fine-tunned model in Slips for general summary and detection. It is fast enough and good enough
+      # slips-goldilock is the fine-tunned model in Slips for general summary and detection.
+      # It is fast enough and good enough
       provider: ollama
       # Default model for this backend alias. Caller modules may override the
       # model in an individual request while still using this connection.
@@ -316,20 +316,21 @@ llm_proxy:
       base_url: https://api.openai.com/v1
       # Provide one of api_key, api_key_env, or api_key_file for providers
       # that require authentication.
-      api_key_env: OPENAI_API_KEY
+      api_key_file: config/openai_api_key  # pragma: allowlist secret
       timeout: 60
 
     claude_default:
       provider: anthropic
       model: claude-sonnet-4-5
       base_url: https://api.anthropic.com
-      api_key_env: ANTHROPIC_API_KEY
+      api_key_file: config/anthropic_api_key   # pragma: allowlist secret
       # Optional Anthropic API version header.
       anthropic_version: 2023-06-01
       timeout: 60
 
 #############################
 alert_summary:
+  # the llm_proxy parameter must be enabled and configured for alert summaries.
   # Enable the analyst-facing alert summary module.
   enabled: true
 
@@ -377,7 +378,6 @@ alert_summary:
 #############################
 regex_generator:
   # Enable the shared regex generator module.
-  enabled: true
   enabled: false
 
   # Create output/regex_generator.log with detailed internal progress logs.
