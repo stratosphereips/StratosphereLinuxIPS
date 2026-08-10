@@ -696,7 +696,7 @@ class Main:
 
             self.db.store_pid("main", int(self.pid))
 
-            self.proc_man.declare_that_slips_done_starting_all_children()
+            self.proc_man.declare_that_slips_is_done_starting_all_children()
 
             self.metadata_man.set_input_metadata()
 
