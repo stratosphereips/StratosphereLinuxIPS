@@ -2,10 +2,16 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # ConfigMixin groups configuration reads, feature gating, and module
 # enable/disable decisions for ProcessManager.
-from typing import Callable, List, Tuple
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Set
+
+import yaml
 
 from modules.supported_module_names import Modules
 from slips_files.common.input_type import InputType
+
+
+ModuleDependencyMap = Dict[Modules, Tuple[Modules, ...]]
 
 
 class ConfigMixin:
@@ -22,6 +28,60 @@ class ConfigMixin:
         self.use_global_p2p = self.main.conf.read_configuration(
             "global_p2p", "use_global_p2p", False
         )
+        self.module_dependencies = self._read_module_dependencies()
+
+    def _read_module_dependencies(self) -> ModuleDependencyMap:
+        """
+        parses modules/dependencies.yaml
+
+        Returns:
+            Mapping of module names to the tuple of modules they depend on.
+        """
+        dependencies_path = Path("modules") / "dependencies.yaml"
+        try:
+            with dependencies_path.open(encoding="utf-8") as source:
+                dependency_data = yaml.safe_load(source) or {}
+        except (FileNotFoundError, TypeError, yaml.YAMLError):
+            return {}
+
+        raw_modules = dependency_data.get("modules", {})
+        if not isinstance(raw_modules, dict):
+            return {}
+
+        module_dependencies: ModuleDependencyMap = {}
+        for module_name, module_config in raw_modules.items():
+            if not isinstance(module_name, str):
+                continue
+
+            supported_module_name = self._convert_to_modules_enum_member(
+                module_name
+            )
+            if not supported_module_name:
+                continue
+
+            depends_on: List[Modules] = []
+            if isinstance(module_config, dict):
+                raw_dependencies = module_config.get("depends_on", [])
+                if isinstance(raw_dependencies, list):
+                    for dependency in raw_dependencies:
+                        if not isinstance(dependency, str):
+                            continue
+
+                        stripped_dependency = dependency.strip()
+                        if not stripped_dependency:
+                            continue
+
+                        supported_dependency = (
+                            self._convert_to_modules_enum_member(
+                                stripped_dependency
+                            )
+                        )
+                        if supported_dependency:
+                            depends_on.append(supported_dependency)
+
+            module_dependencies[supported_module_name] = tuple(depends_on)
+
+        return module_dependencies
 
     def _reading_flows_from_cyst(self) -> bool:
         """
@@ -35,13 +95,8 @@ class ConfigMixin:
 
     def _normalize_module_name(self, module_name: str) -> str:
         """
-        Normalize a module name for fuzzy matching.
-
-        Parameters:
-            module_name: Module name to normalize.
-
-        Returns:
-            Lower-cased module name without spaces, underscores, or hyphens.
+        removes _, - and spaces from the given module name, and converts it
+        to lowercase
         """
         return (
             module_name.replace(" ", "")
@@ -50,142 +105,161 @@ class ConfigMixin:
             .lower()
         )
 
-    def get_user_disabled_modules(self) -> List[str]:
+    def _convert_to_modules_enum_member(
+        self, module_name: str
+    ) -> Optional[Modules]:
+        """
+        converts the given module name to a Modules enum member
+
+        Parameters:
+            module_name: Module name from config or runtime input.
+
+        Returns:
+            Matching supported module enum value, if one exists.
+        """
+        normalized_module_name = self._normalize_module_name(module_name)
+        for supported_module in Modules:
+            if (
+                self._normalize_module_name(supported_module)
+                == normalized_module_name
+            ):
+                return supported_module
+        return None
+
+    def get_user_disabled_modules(self) -> Set[Modules]:
         """
         Get modules disabled by the user configuration.
 
         Returns:
-            User-disabled module names stripped of surrounding whitespace.
+            User-disabled module names as supported module enums when
+            available, otherwise stripped strings.
         """
-        user_disabled_modules: List[str] = self.main.conf.read_configuration(
-            "modules", "disable", ["template"]
+        config_user_disabled_modules: List[str] = (
+            self.main.conf.read_configuration(
+                "modules", "disable", ["template"]
+            )
         )
-        return [module.strip() for module in user_disabled_modules]
+        user_disabled_modules: Set[Modules] = set()
+        for module_name in config_user_disabled_modules:
+            stripped_module_name: str = module_name.strip()
+            supported_module: Modules = self._convert_to_modules_enum_member(
+                stripped_module_name
+            )
+            user_disabled_modules.add(supported_module)
 
-    def get_runtime_disabled_modules(self) -> List[str]:
+        return user_disabled_modules
+
+    def get_runtime_disabled_modules(self) -> Set[Modules]:
         """
         Get modules disabled by Slips runtime rules.
 
         Returns:
-            Module names disabled by Slips runtime conditions.
+            Supported module enums disabled by Slips runtime conditions and
+            by dependency resolution.
         """
         is_running_non_stop = self.main.db.is_running_non_stop()
-        slips_disabled_modules: List[str] = []
+        runtime_disabled_modules: Set[Modules] = set()
 
         if not self._is_exporting_module_enabled():
-            slips_disabled_modules.append(Modules.EXPORTING_ALERTS)
+            runtime_disabled_modules.add(Modules.EXPORTING_ALERTS)
 
         use_p2p = self.main.conf.use_local_p2p()
         if not (use_p2p and is_running_non_stop):
-            slips_disabled_modules.append(Modules.P2P_TRUST)
+            runtime_disabled_modules.add(Modules.P2P_TRUST)
 
         use_global_p2p = self.main.conf.use_global_p2p()
         if not (use_global_p2p and is_running_non_stop):
-            slips_disabled_modules.extend((Modules.FIDES, Modules.IRIS))
+            runtime_disabled_modules.extend((Modules.FIDES, Modules.IRIS))
 
         if not (
             self.main.conf.send_to_warden()
             or self.main.conf.receive_from_warden()
         ):
-            slips_disabled_modules.append(Modules.CESNET)
+            runtime_disabled_modules.add(Modules.CESNET)
 
         if not (self.main.args.clearblocking or self.main.args.blocking):
-            slips_disabled_modules.extend(
+            runtime_disabled_modules.extend(
                 (Modules.BLOCKING, Modules.ARP_POISONER)
             )
 
         if self.main.input_type != InputType.PCAP:
-            slips_disabled_modules.append(Modules.LEAK_DETECTOR)
+            runtime_disabled_modules.add(Modules.LEAK_DETECTOR)
 
         if not self._reading_flows_from_cyst():
-            slips_disabled_modules.append(Modules.CYST)
+            runtime_disabled_modules.add(Modules.CYST)
 
-        if not self._is_llm_proxy_enabled_and_configured():
-            self._warn_about_llm_dependency_misconfiguration()
-            for module in (
-                Modules.LLM_PROXY,
-                Modules.T_CELL,
-                Modules.ALERT_SUMMARY,
-                Modules.REGEX_GENERATOR,
-            ):
-                slips_disabled_modules.append(module)
+        dependency_disabled_modules: Set[Modules] = (
+            self._get_dependency_disabled_modules(runtime_disabled_modules)
+        )
 
-        return slips_disabled_modules
+        return runtime_disabled_modules | dependency_disabled_modules
 
-    def _is_llm_proxy_enabled_and_configured(self) -> bool:
+    def _get_dependency_disabled_modules(
+        self, runtime_disabled_modules: Set[Modules]
+    ) -> Set[Modules]:
         """
-        Check whether llm_proxy is enabled and has backend configuration.
+        Resolve transitive disables caused by missing module dependencies.
+
+        Parameters:
+            runtime_disabled_modules: modules slips decided to disable
+            based on runtime rules.
 
         Returns:
-            True when llm_proxy is enabled and at least one backend is
-            configured.
+            Set of canonical module names disabled by dependency rules.
         """
-        backends = self.main.conf.llm_backends()
-        if not isinstance(backends, dict):
-            return False
-
-        return self.main.conf.llm_enabled() and any(
-            isinstance(alias, str) and alias.strip()
-            for alias in backends.keys()
+        dependency_disabled_modules: Set[Modules] = set()
+        all_disabled_modules: Set[Modules] = (
+            set(self.user_disabled_modules) | runtime_disabled_modules
         )
 
-    def _get_enabled_llm_dependent_modules(self) -> List[str]:
+        for module in self.module_dependencies:
+            if self._has_missing_dependency(module, all_disabled_modules):
+                dependency_disabled_modules.add(module)
+
+        return dependency_disabled_modules
+
+    def _has_missing_dependency(
+        self,
+        module_name: Modules,
+        disabled_modules: Set[Modules],
+    ) -> bool:
         """
-        Get enabled modules that rely on llm_proxy configuration.
+        Check whether any dependency of the given module is disabled in
+        slips.yaml or by slips runtime.
+
+        Parameters:
+            module: module name to check its dependencies
+            disabled_modules: user and runtime disable modules
 
         Returns:
-            Enabled modules that depend on llm_proxy.
+            True when at least one dependency is unavailable.
         """
-        enabled_modules: List[str] = []
-        # these modules wont be able to work without the llm proxy
-        # configuration
-        llm_dependents: Tuple[Tuple[str, Callable[[], bool]], ...] = (
-            (
-                Modules.ALERT_SUMMARY,
-                self.main.conf.alert_summary_enabled,
-            ),
-            (
-                Modules.REGEX_GENERATOR,
-                self.main.conf.regex_generator_enabled,
-            ),
-            (Modules.T_CELL, self.main.conf.t_cell_enabled),
+        for dependency in self.module_dependencies[module_name]:
+            if dependency in disabled_modules:
+                return True
+
+            dependency = dependency.strip().lower()
+            enabled = bool(
+                self.main.conf.read_configuration(dependency, "enabled", True)
+            )
+            if not enabled:
+                return True
+
+        return False
+
+    def get_disabled_modules(
+        self,
+    ) -> Tuple[Set[Modules], Set[Modules]]:
+        """
+        returns user-disabled modules and Slips-disabled modules.
+        """
+        self.user_disabled_modules: Set[Modules] = (
+            self.get_user_disabled_modules()
         )
-
-        for module_name, is_enabled in llm_dependents:
-            if is_enabled():
-                enabled_modules.append(module_name)
-
-        return enabled_modules
-
-    def _warn_about_llm_dependency_misconfiguration(self) -> None:
-        """
-        Warn once when LLM-dependent modules are enabled without llm_proxy.
-        """
-        if self.llm_dependency_warning_printed:
-            return
-
-        enabled_modules = self._get_enabled_llm_dependent_modules()
-        if not enabled_modules:
-            return
-
-        self.main.print(
-            "Warning: The following modules are enabled in the config, "
-            "but llm_proxy is not enabled and configured: "
-            f"{enabled_modules}"
+        self.slips_disabled_modules: Set[Modules] = (
+            self.get_runtime_disabled_modules()
         )
-        self.llm_dependency_warning_printed = True
-
-    def get_disabled_modules(self) -> Tuple[List[str], List[str]]:
-        """
-        Get user-disabled modules and Slips-disabled modules.
-
-        Returns:
-            User-disabled modules and modules disabled by runtime rules.
-        """
-        return (
-            self.get_user_disabled_modules(),
-            self.get_runtime_disabled_modules(),
-        )
+        return self.user_disabled_modules, self.slips_disabled_modules
 
     def _is_exporting_module_enabled(self) -> bool:
         """
@@ -197,16 +271,8 @@ class ConfigMixin:
         export_to = self.main.conf.export_to()
         return len(export_to) != 0
 
-    def get_all_disabled_modules(self) -> List[str]:
-        """
-        Get all disabled modules as a single list.
-
-        Returns:
-            User-disabled modules followed by Slips-disabled modules.
-        """
-        return list(
-            set(self.user_disabled_modules + self.slips_disabled_modules)
-        )
+    def get_user_and_runtime_disabled_modules(self) -> Set[Modules]:
+        return self.user_disabled_modules | self.slips_disabled_modules
 
     def is_disabled_module(self, module_name: str) -> bool:
         """
@@ -219,7 +285,7 @@ class ConfigMixin:
             True when the module is disabled.
         """
         normalized_module_name = self._normalize_module_name(module_name)
-        for ignored_module in self.get_all_disabled_modules():
+        for ignored_module in self.get_user_and_runtime_disabled_modules():
             normalized_ignored_module = self._normalize_module_name(
                 ignored_module
             )
@@ -248,8 +314,14 @@ class ConfigMixin:
             if normalized_bootstrap_module in normalized_module_name:
                 return True
 
-        disabled_module = module_name.split(".")[-1]
-        if disabled_module not in self.slips_disabled_modules:
+        disabled_module_name = module_name.split(".")[-1]
+        disabled_module = self._convert_to_modules_enum_member(
+            disabled_module_name
+        )
+        if (
+            disabled_module
+            and disabled_module not in self.slips_disabled_modules
+        ):
             self.slips_disabled_modules.append(disabled_module)
         return False
 
