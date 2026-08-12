@@ -104,3 +104,4 @@ class ProcessManager(
         self.read_config()
         self.all_children_started = False
         self.core_module_failure = False
+        self.disabled_warning_printed = False

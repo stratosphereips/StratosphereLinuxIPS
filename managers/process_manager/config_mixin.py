@@ -191,12 +191,6 @@ class ConfigMixin:
         dependency_disabled_modules: Set[Modules] = (
             self._get_dependency_disabled_modules(runtime_disabled_modules)
         )
-        if dependency_disabled_modules:
-            self.main.print(
-                f"Warning: The following modules are disabled due"
-                f" to missing dependencies: "
-                f"{dependency_disabled_modules}"
-            )
 
         return runtime_disabled_modules | dependency_disabled_modules
 
@@ -221,8 +215,40 @@ class ConfigMixin:
         for module in self.module_dependencies:
             if self._has_missing_dependency(module, all_disabled_modules):
                 dependency_disabled_modules.add(module)
+        self._print_dependency_disabled_modules(
+            dependency_disabled_modules, all_disabled_modules
+        )
 
         return dependency_disabled_modules
+
+    def _print_dependency_disabled_modules(
+        self,
+        dependency_disabled_modules: Set[Modules],
+        disabled_modules: Set[Modules],
+    ) -> None:
+        """
+        Print modules disabled because one of their dependencies is disabled.
+        """
+        if self.disabled_warning_printed:
+            return
+        if not dependency_disabled_modules:
+            return
+        self.disabled_warning_printed = True
+
+        disabled_dependencies = "\n".join(
+            f"  - {module} -> requires {dependency}"
+            for module in sorted(dependency_disabled_modules)
+            if (
+                dependency := self._get_disabled_dependency(
+                    module, disabled_modules
+                )
+            )
+        )
+        self.main.print(
+            "Warning: The following modules are disabled due"
+            " to missing dependencies:\n"
+            f"{disabled_dependencies}"
+        )
 
     def _has_missing_dependency(
         self,
@@ -252,6 +278,35 @@ class ConfigMixin:
                 return True
 
         return False
+
+    def _get_disabled_dependency(
+        self,
+        module_name: Modules,
+        disabled_modules: Set[Modules],
+    ) -> Optional[Modules]:
+        """
+        Get the first disabled dependency for a module.
+
+        Parameters:
+            module_name: Module name to inspect.
+            disabled_modules: User and runtime disabled modules.
+
+        Returns:
+            First disabled dependency that caused the module to be disabled.
+        """
+        for dependency in self.module_dependencies[module_name]:
+            if dependency in disabled_modules:
+                return dependency
+
+            enabled = bool(
+                self.main.conf.read_configuration(
+                    dependency.strip().lower(), "enabled", True
+                )
+            )
+            if not enabled:
+                return dependency
+
+        return None
 
     def get_disabled_modules(
         self,

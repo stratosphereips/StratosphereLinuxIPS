@@ -166,6 +166,12 @@ class LLMProxy(IModule):
             )
             self.default_backend = ""
 
+        self.print(
+            f"Using backed: {self.default_backend}",
+            1,
+            0,
+        )
+
         for idx in range(self.worker_threads):
             worker = threading.Thread(
                 target=self._worker_loop,
