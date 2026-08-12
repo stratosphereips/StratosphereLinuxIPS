@@ -5,10 +5,6 @@ modules:
   llm_proxy:
     depends_on: []
 
-  t_cell:
-    depends_on:
-      - regex_generator
-
   regex_generator:
     depends_on:
       - llm_proxy
