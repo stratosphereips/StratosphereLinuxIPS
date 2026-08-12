@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Hardcoded runtime module names shared across Slips."""
 
-from enum import StrEnum
+from enum import Enum
 from typing import Dict
 
 
-class Modules(StrEnum):
+class Modules(str, Enum):
     """Supported Slips runtime module names."""
 
     ALERT_SUMMARY = "alert_summary"

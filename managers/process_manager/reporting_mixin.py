@@ -41,7 +41,7 @@ class ReportingMixin:
             module_description: Human-readable module description.
         """
         self.main.print(
-            f"\t\tStarting {green(module_name)} module "
+            f"\t\tStarting {green(module_name.value)} module "
             f"({module_description}) "
             f"[PID {green(module_pid)}]",
             1,
