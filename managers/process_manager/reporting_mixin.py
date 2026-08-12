@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # ReportingMixin groups user-facing and log-facing output helpers used by
 # ProcessManager during startup and shutdown.
-from typing import Callable, Optional
+from typing import Callable, Optional, Set
 
+from modules.supported_module_names import Modules
 from slips_files.common.style import green
 
 
@@ -14,15 +15,22 @@ class ReportingMixin:
         """
         Print the current disabled module list.
         """
+        disabled_modules: Set[Modules] = (
+            self.get_user_and_runtime_disabled_modules()
+        )
+        printable_modules = [module.value for module in disabled_modules]
         print("-" * 27)
         self.main.print(
-            f"Disabled Modules: {self.get_all_disabled_modules()}",
+            f"Disabled Modules: {printable_modules}",
             1,
             0,
         )
 
     def print_started_module(
-        self, module_name: str, module_pid: int, module_description: str
+        self,
+        module_name: Modules,
+        module_pid: int,
+        module_description: str,
     ) -> None:
         """
         Print a module startup message.
@@ -41,7 +49,7 @@ class ReportingMixin:
         )
 
     def print_stopped_module(
-        self, module: str, total_modules: Optional[int] = None
+        self, module: Modules, total_modules: Optional[int] = None
     ) -> None:
         """
         Log that a module stopped and report the number still running.
@@ -51,21 +59,22 @@ class ReportingMixin:
             total_modules: Number of modules being stopped. Uses active
                 children when omitted.
         """
-        if module.casefold() in (
+        module_name = str(module)
+        if module_name.casefold() in (
             stopped_module.casefold()
             for stopped_module in self.stopped_modules
         ):
             return
 
-        self.stopped_modules.append(module)
+        self.stopped_modules.append(module_name)
         total_modules = (
             len(self.children) if total_modules is None else total_modules
         )
         modules_left = total_modules - len(self.stopped_modules)
         # to vertically align them when printing
-        module += " " * (20 - len(module))
+        module_name += " " * (20 - len(module_name))
         self.main.print(
-            f"\t{green(module)} \tStopped. {green(modules_left)} left."
+            f"\t{green(module_name)} \tStopped. {green(modules_left)} left."
         )
 
     def get_print_function(self) -> Callable:

@@ -109,7 +109,7 @@ class MetadataManager:
             user_disabled_modules,
             slips_disabled_modules,
         ) = self.main.proc_man.get_disabled_modules()
-        disabled_modules = user_disabled_modules + slips_disabled_modules
+        disabled_modules = user_disabled_modules | slips_disabled_modules
         self.main.proc_man.user_disabled_modules = user_disabled_modules
         self.main.proc_man.slips_disabled_modules = slips_disabled_modules
         info = {

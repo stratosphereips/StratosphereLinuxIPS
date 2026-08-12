@@ -169,7 +169,8 @@ class ConfigMixin:
 
         use_global_p2p = self.main.conf.use_global_p2p()
         if not (use_global_p2p and is_running_non_stop):
-            runtime_disabled_modules.extend((Modules.FIDES, Modules.IRIS))
+            runtime_disabled_modules.add(Modules.FIDES)
+            runtime_disabled_modules.add(Modules.IRIS)
 
         if not (
             self.main.conf.send_to_warden()
@@ -178,9 +179,8 @@ class ConfigMixin:
             runtime_disabled_modules.add(Modules.CESNET)
 
         if not (self.main.args.clearblocking or self.main.args.blocking):
-            runtime_disabled_modules.extend(
-                (Modules.BLOCKING, Modules.ARP_POISONER)
-            )
+            runtime_disabled_modules.add(Modules.BLOCKING)
+            runtime_disabled_modules.add(Modules.ARP_POISONER)
 
         if self.main.input_type != InputType.PCAP:
             runtime_disabled_modules.add(Modules.LEAK_DETECTOR)
@@ -191,6 +191,12 @@ class ConfigMixin:
         dependency_disabled_modules: Set[Modules] = (
             self._get_dependency_disabled_modules(runtime_disabled_modules)
         )
+        if dependency_disabled_modules:
+            self.main.print(
+                f"Warning: The following modules are disabled due"
+                f" to missing dependencies: "
+                f"{dependency_disabled_modules}"
+            )
 
         return runtime_disabled_modules | dependency_disabled_modules
 

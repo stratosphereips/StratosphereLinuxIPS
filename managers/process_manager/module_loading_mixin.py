@@ -15,7 +15,7 @@ from modules.supported_module_names import Modules
 from slips_files.common.abstracts.imodule import IModule
 
 
-PluginMap = Dict[str, Dict[str, Any]]
+PluginMap = Dict[Modules, Dict[str, Any]]
 
 
 class ModuleLoadingMixin:
@@ -92,7 +92,11 @@ class ModuleLoadingMixin:
             if ispkg:
                 continue  # skip if current item is a package
 
-            dir_name, file_name = module_name.split(".")[1:3]
+            module_parts = module_name.split(".")
+            if len(module_parts) < 3:
+                continue
+
+            dir_name, file_name = module_parts[1:3]
             # to avoid loading everything in the dir,
             # only load modules that have the same name as the dir name
             if dir_name == file_name:
@@ -156,7 +160,8 @@ class ModuleLoadingMixin:
                 if issubclass(
                     member_object, IModule
                 ) and not self.is_abstract_module(member_object):
-                    plugins[member_object.name] = {
+                    module_name = Modules(member_object.name)
+                    plugins[module_name] = {
                         "obj": member_object,
                         "description": member_object.description,
                     }

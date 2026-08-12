@@ -94,7 +94,7 @@ class IModule(ABC, Process):
         if not self._is_module_name_registered(self.name):
             raise RuntimeError(
                 f"{type(self).__name__}.name={self.name!r} is not registered "
-                "in modules.supported_module_names.Modules. Please register it."
+                "in modules/supported_module_names.py Please register it."
             )
         self.redis_port = redis_port
         self.parent_output_dir = output_dir

@@ -3,6 +3,8 @@
 from multiprocessing import Event, Process, Queue, Semaphore
 from typing import List
 
+from modules.supported_module_names import Modules
+
 from .config_mixin import ConfigMixin
 from .module_loading_mixin import ModuleLoadingMixin
 from .reporting_mixin import ReportingMixin
@@ -71,7 +73,6 @@ class ProcessManager(
         # to make sure we only warn the user once about
         # the pending modules
         self.warning_printed_once = False
-        self.llm_dependency_warning_printed = False
         # this one has its own termination event because we want it to
         # shutdown at the very end of all other slips modules.
         self.evidence_handler_termination_event = Event()
@@ -98,8 +99,8 @@ class ProcessManager(
         # is set by the input process when it stops because of a failure.
         self.is_input_failed_event = Event()
         self.is_slips_live_updating_event = Event()
-        self.user_disabled_modules: List[str] = []
-        self.slips_disabled_modules: List[str] = []
+        self.user_disabled_modules: List[Modules] = []
+        self.slips_disabled_modules: List[Modules] = []
         self.read_config()
         self.all_children_started = False
         self.core_module_failure = False

@@ -17,7 +17,7 @@ import logging
 from managers.host_ip_manager import HostIPManager
 from managers.ap_manager import APManager
 from managers.metadata_manager import MetadataManager
-from managers.process_manager import ProcessManager
+from managers.process_manager.process_manager import ProcessManager
 from managers.profilers_manager import ProfilersManager
 from managers.redis_manager import RedisManager
 from managers.timewindow_manager import TimewindowManager
