@@ -126,6 +126,28 @@ class ConfigMixin:
                 return supported_module
         return None
 
+    def get_module_dependencies(self, module_name: str) -> Tuple[Modules, ...]:
+        """
+        Get a module dependencies from dependencies.yaml.
+
+        Parameters:
+            module_name: Module name or fully qualified module path.
+
+        Returns:
+            Tuple of canonical module dependencies, or an empty tuple when the
+            module is unknown or has no configured dependencies.
+        """
+        supported_module = self._convert_to_modules_enum_member(module_name)
+        if not supported_module and "." in module_name:
+            supported_module = self._convert_to_modules_enum_member(
+                module_name.split(".")[-1]
+            )
+
+        if not supported_module:
+            return ()
+
+        return self.module_dependencies.get(supported_module, ())
+
     def get_user_disabled_modules(self) -> Set[Modules]:
         """
         Get modules disabled by the user configuration.
