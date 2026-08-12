@@ -739,6 +739,7 @@ class Main:
                 self.timewindow_man.update_current_timewindow_if_due()
                 self.db.check_tw_to_close()
                 self.db.ping()
+                self.proc_man.health_check_modules()
 
                 modified_profiles: Set[str] = (
                     self.metadata_man.update_slips_stats_in_the_db()[1]

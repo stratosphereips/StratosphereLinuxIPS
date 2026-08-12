@@ -44,7 +44,7 @@ class ShutdownMixin:
 
     def kill_all_children(self) -> None:
         """
-        Kill all tracked child processes that are still running.
+        Kills all slips child processes.
         """
         for process in self.children:
             module_name: str = self.main.db.get_name_of_module_at(process.pid)
@@ -323,6 +323,90 @@ class ShutdownMixin:
             return to_kill_first, alive_processes
 
         return None, None
+
+    def _stop_llm_stack_if_llm_module_stopped(self):
+        """
+        Stop modules that depend on the shared LLM proxy after it dies.
+        """
+        if self.termination_event.is_set() or not self.main.conf.llm_enabled():
+            # other parts of slips will take care of stopping the llm stack
+            # now
+            return
+
+        llm_pid = self.main.db.get_pid_of(Modules.LLM_PROXY)
+        if llm_pid is None:
+            return
+
+        try:
+            # non distructive signal, checks if the pid is up
+            os.kill(llm_pid, 0)
+            # llm modules is up, dont shutdown stack.
+            return
+        except PermissionError:
+            return
+        except (ProcessLookupError, OSError):
+            pass
+
+        impacted_modules: List[Modules] = []
+        stopped_modules = {Modules.LLM_PROXY}
+
+        while True:
+            modules_with_stopped_dependencies: List[Modules] = []
+            for module_that_has_a_dependency in self.module_dependencies:
+                if module_that_has_a_dependency in stopped_modules:
+                    continue
+
+                dependencies = self.get_module_dependencies(
+                    module_that_has_a_dependency
+                )
+                # did any of the module's dependencies stop?
+                if any(
+                    dependency in stopped_modules
+                    for dependency in dependencies
+                ):
+                    modules_with_stopped_dependencies.append(
+                        module_that_has_a_dependency
+                    )
+
+            if not modules_with_stopped_dependencies:
+                break
+
+            for (
+                module_that_has_a_stopped_dependency
+            ) in modules_with_stopped_dependencies:
+                stopped_modules.add(module_that_has_a_stopped_dependency)
+                impacted_modules.append(module_that_has_a_stopped_dependency)
+
+        # now actually stop the modules that have stopped dependencies
+        stopped_module_names: List[str] = []
+        for module_that_has_a_dependency in impacted_modules:
+            if module_that_has_a_dependency.casefold() in (
+                stopped_module.casefold()
+                for stopped_module in self.stopped_modules
+            ):
+                continue
+
+            module_pid = self.main.db.get_pid_of(module_that_has_a_dependency)
+            if module_pid is None:
+                continue
+
+            self.kill_process_tree(module_pid)
+            self.stopped_modules.append(str(module_that_has_a_dependency))
+            stopped_module_names.append(str(module_that_has_a_dependency))
+
+        if not stopped_module_names:
+            return
+
+        self.stopped_modules.append(str(Modules.LLM_PROXY))
+        self.main.print(
+            "Stopping modules because llm_proxy stopped: "
+            f"{stopped_module_names}"
+        )
+
+    def health_check_modules(self):
+        """checks for modules that should be stopped due to different
+        conditions"""
+        self._stop_llm_stack_if_llm_module_stopped()
 
     def can_acquire_semaphore(self, semaphore: object) -> bool:
         """
