@@ -237,6 +237,19 @@ class TCell(IModule):
             self.print("T Cell module disabled in config.", 2, 0)
             return True
 
+        enabled_modules = self.db.get_enabled_modules() or []
+        regex_generator_enabled = "regex_generator" in enabled_modules
+        regex_store_count = self.db.get_generated_regexes_count()
+        if not regex_generator_enabled and regex_store_count == 0:
+            self.print(
+                "Warning: T Cell module is shutting down because "
+                "regex_generator module is disabled and the regex "
+                "store is empty.",
+                0,
+                1,
+            )
+            return 1
+
         self.storage = self.db.get_t_cell_storage()
         self._init_log_file()
         self._init_trace_file()
