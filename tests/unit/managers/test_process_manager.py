@@ -152,7 +152,11 @@ def test_get_disabled_modules_uses_disabled_module_helpers() -> None:
 @pytest.mark.parametrize(
     "configured_modules, expected_modules",
     [
-        ([" template ", "custom_module"], {Modules.TEMPLATE, None}),
+        ([" template ", "custom_module"], {Modules.TEMPLATE, "custom_module"}),
+        (
+            [" template ", " feeds_update_manager "],
+            {Modules.TEMPLATE, Modules.FEEDS_UPDATE_MANAGER},
+        ),
         ([], set()),
     ],
 )
@@ -200,7 +204,7 @@ def test_get_slips_disabled_modules_recomputes_runtime_disabled_modules() -> (
             InputType.PCAP,
             ["slips.py", "-f", "dataset/test.pcap"],
             [],
-            {Modules.TEMPLATE, None},
+            {Modules.TEMPLATE, "custom_module"},
             {
                 Modules.EXPORTING_ALERTS,
                 Modules.P2P_TRUST,
@@ -216,7 +220,7 @@ def test_get_slips_disabled_modules_recomputes_runtime_disabled_modules() -> (
             InputType.ZEEK,
             ["slips.py", "-f", "dataset/conn.log"],
             ["stix"],
-            {Modules.TEMPLATE, None},
+            {Modules.TEMPLATE, "custom_module"},
             {
                 Modules.P2P_TRUST,
                 Modules.FIDES,
@@ -294,7 +298,7 @@ def test_get_user_disabled_modules_strips_configured_entries() -> None:
 
     assert process_manager.get_user_disabled_modules() == {
         Modules.TEMPLATE,
-        None,
+        "custom_module",
     }
 
 

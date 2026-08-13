@@ -110,10 +110,13 @@ class MetadataManager:
             user_disabled_modules,
             slips_disabled_modules,
         ) = self.main.proc_man.get_disabled_modules()
-        disabled_modules: Set[Modules] = (
+        disabled_modules: Set[str | Modules] = (
             user_disabled_modules | slips_disabled_modules
         )
-        disabled_modules_list = [module.value for module in disabled_modules]
+        disabled_modules_list = [
+            module.value if isinstance(module, Modules) else str(module)
+            for module in disabled_modules
+        ]
         self.main.proc_man.user_disabled_modules = user_disabled_modules
         self.main.proc_man.slips_disabled_modules = slips_disabled_modules
         info = {

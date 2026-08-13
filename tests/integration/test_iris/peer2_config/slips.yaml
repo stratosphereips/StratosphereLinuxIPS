@@ -87,7 +87,7 @@ local_p2p:
 modules:
   disable:
   - template
-  - updatemanager
+  - feeds_update_manager
   timeline_human_timestamp: true
 output:
   logs: slips.log

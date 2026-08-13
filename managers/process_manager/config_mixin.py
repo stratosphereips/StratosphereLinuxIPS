@@ -93,13 +93,16 @@ class ConfigMixin:
         custom_flows = self.main.args.input_module
         return Modules.CYST in str(custom_flows)
 
-    def _normalize_module_name(self, module_name: str) -> str:
+    def _normalize_module_name(self, module_name: Optional[str]) -> str:
         """
         removes _, - and spaces from the given module name, and converts it
         to lowercase
         """
+        if module_name is None:
+            return ""
         return (
-            module_name.replace(" ", "")
+            str(module_name)
+            .replace(" ", "")
             .replace("_", "")
             .replace("-", "")
             .lower()
@@ -118,6 +121,9 @@ class ConfigMixin:
             Matching supported module enum value, if one exists.
         """
         normalized_module_name = self._normalize_module_name(module_name)
+        if not normalized_module_name:
+            return None
+
         for supported_module in Modules:
             if (
                 self._normalize_module_name(supported_module)
@@ -148,7 +154,7 @@ class ConfigMixin:
 
         return self.module_dependencies.get(supported_module, ())
 
-    def get_user_disabled_modules(self) -> Set[Modules]:
+    def get_user_disabled_modules(self) -> Set[str | Modules]:
         """
         Get modules disabled by the user configuration.
 
@@ -161,13 +167,19 @@ class ConfigMixin:
                 "modules", "disable", ["template"]
             )
         )
-        user_disabled_modules: Set[Modules] = set()
+        user_disabled_modules: Set[str | Modules] = set()
         for module_name in config_user_disabled_modules:
             stripped_module_name: str = module_name.strip()
+            if not stripped_module_name:
+                continue
+
             supported_module: Modules = self._convert_to_modules_enum_member(
                 stripped_module_name
             )
-            user_disabled_modules.add(supported_module)
+            if supported_module:
+                user_disabled_modules.add(supported_module)
+            else:
+                user_disabled_modules.add(stripped_module_name)
 
         return user_disabled_modules
 
@@ -332,11 +344,11 @@ class ConfigMixin:
 
     def get_disabled_modules(
         self,
-    ) -> Tuple[Set[Modules], Set[Modules]]:
+    ) -> Tuple[Set[str | Modules], Set[Modules]]:
         """
         returns user-disabled modules and Slips-disabled modules.
         """
-        self.user_disabled_modules: Set[Modules] = (
+        self.user_disabled_modules: Set[str | Modules] = (
             self.get_user_disabled_modules()
         )
         self.slips_disabled_modules: Set[Modules] = (
@@ -354,8 +366,16 @@ class ConfigMixin:
         export_to = self.main.conf.export_to()
         return len(export_to) != 0
 
-    def get_user_and_runtime_disabled_modules(self) -> Set[Modules]:
-        return self.user_disabled_modules | self.slips_disabled_modules
+    def get_user_and_runtime_disabled_modules(self) -> Set[str | Modules]:
+        """
+        Return all disabled modules regardless of their origin.
+
+        Returns:
+            Set containing user-configured and runtime-disabled modules.
+        """
+        return set(self.user_disabled_modules) | set(
+            self.slips_disabled_modules
+        )
 
     def is_disabled_module(self, module_name: str) -> bool:
         """
@@ -405,7 +425,7 @@ class ConfigMixin:
             disabled_module
             and disabled_module not in self.slips_disabled_modules
         ):
-            self.slips_disabled_modules.append(disabled_module)
+            self.slips_disabled_modules.add(disabled_module)
         return False
 
     def is_bootstrapping_node(self) -> bool:

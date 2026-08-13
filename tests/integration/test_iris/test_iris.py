@@ -329,7 +329,7 @@ def prepare_and_start_peer1(
                 "use_global_p2p": True,
                 "iris_conf": str(peer1_iris_config_path),
             },
-            "modules": {"disable": ["template", "updatemanager"]},
+            "modules": {"disable": ["template", "feeds_update_manager"]},
         },
     )
 
@@ -408,7 +408,7 @@ def prepare_and_start_peer2(
                 "use_global_p2p": True,
                 "iris_conf": str(peer2_iris_config_path),
             },
-            "modules": {"disable": ["template", "updatemanager"]},
+            "modules": {"disable": ["template", "feeds_update_manager"]},
         },
     )
     modify_yaml_config(

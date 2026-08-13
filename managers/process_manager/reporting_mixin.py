@@ -15,10 +15,13 @@ class ReportingMixin:
         """
         Print the current disabled module list.
         """
-        disabled_modules: Set[Modules] = (
+        disabled_modules: Set[str | Modules] = (
             self.get_user_and_runtime_disabled_modules()
         )
-        printable_modules = [module.value for module in disabled_modules]
+        printable_modules = [
+            module.value if isinstance(module, Modules) else str(module)
+            for module in disabled_modules
+        ]
         print("-" * 27)
         self.main.print(
             f"Disabled Modules: {printable_modules}",

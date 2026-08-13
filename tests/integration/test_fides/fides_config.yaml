@@ -181,8 +181,8 @@ modules:
    # List of modules to ignore. By default we always ignore the template! do not remove it from the list
    # Names of other modules that you can disable (they all should be lowercase with no special characters):
    # threatintelligence, blocking, networkdiscovery, timeline, virustotal,
-   # rnnccdetection, flow_ml_detection, updatemanager
-   disable: [template, updatemanager]
+   # rnnccdetection, flow_ml_detection, feeds_update_manager
+   disable: [template, feeds_update_manager]
 
    # For each line in timeline file there is a timestamp.
    # By default the timestamp is seconds in unix time. However
