@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import pytest
 from slips_files.common.input_type import InputType
+from slips_files.core.input.input import Input
 from tests.module_factory import ModuleFactory
 from unittest.mock import (
     patch,
@@ -472,7 +473,7 @@ def test_mark_self_as_done_processing_waits_for_profiler_workers() -> None:
     input_process.is_profiler_done_event = Mock()
     input_process.done_processing = Mock()
 
-    input_process.mark_self_as_done_processing()
+    Input.mark_self_as_done_processing(input_process)
 
     input_process.is_profiler_done_starting_initial_workers_event.wait.assert_called_once_with(
         30
