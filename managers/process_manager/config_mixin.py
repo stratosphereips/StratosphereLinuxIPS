@@ -277,6 +277,8 @@ class ConfigMixin:
         )
 
         for module in self.module_dependencies:
+            if module in all_disabled_modules:
+                continue
             if self._has_missing_dependency(module, all_disabled_modules):
                 dependency_disabled_modules.add(module)
         self._print_dependency_disabled_modules(

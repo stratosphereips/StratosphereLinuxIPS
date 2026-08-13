@@ -165,6 +165,9 @@ class StartupMixin:
             is_input_done_event=self.is_input_done_event,
             is_input_failed_event=self.is_input_failed_event,
             is_slips_live_updating_event=(self.is_slips_live_updating_event),
+            is_profiler_done_starting_initial_workers_event=(
+                self.is_profiler_done_starting_initial_workers_event
+            ),
         )
         input_process.start()
         self.main.print(
