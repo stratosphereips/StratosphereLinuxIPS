@@ -165,6 +165,9 @@ def test_get_user_disabled_modules(
 ) -> None:
     """Test user-disabled modules are read from config and stripped."""
     process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.llm_enabled.return_value = True
+    process_manager.main.conf.alert_summary_enabled.return_value = True
+    process_manager.main.conf.regex_generator_enabled.return_value = True
     process_manager.main.conf.read_configuration.reset_mock()
     process_manager.main.conf.read_configuration.side_effect = None
     process_manager.main.conf.read_configuration.return_value = (
@@ -243,6 +246,9 @@ def test_get_disabled_modules(
 ) -> None:
     """Test disabled modules are split by user and Slips runtime rules."""
     process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.llm_enabled.return_value = True
+    process_manager.main.conf.alert_summary_enabled.return_value = True
+    process_manager.main.conf.regex_generator_enabled.return_value = True
     process_manager.main.input_type = input_type
     process_manager.main.args.clearblocking = False
     process_manager.main.args.blocking = False
@@ -290,6 +296,9 @@ def test_get_hitlist_in_order_uses_supported_module_name_values() -> None:
 
 def test_get_user_disabled_modules_strips_configured_entries() -> None:
     process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.llm_enabled.return_value = True
+    process_manager.main.conf.alert_summary_enabled.return_value = True
+    process_manager.main.conf.regex_generator_enabled.return_value = True
     process_manager.main.conf.read_configuration.side_effect = None
     process_manager.main.conf.read_configuration.return_value = [
         " template ",
@@ -300,6 +309,45 @@ def test_get_user_disabled_modules_strips_configured_entries() -> None:
         Modules.TEMPLATE,
         "custom_module",
     }
+
+
+@pytest.mark.parametrize(
+    "llm_enabled, alert_summary_enabled, regex_generator_enabled, expected",
+    [
+        (False, True, True, {Modules.LLM_PROXY}),
+        (True, False, True, {Modules.ALERT_SUMMARY}),
+        (True, True, False, {Modules.REGEX_GENERATOR}),
+        (
+            False,
+            False,
+            False,
+            {
+                Modules.LLM_PROXY,
+                Modules.ALERT_SUMMARY,
+                Modules.REGEX_GENERATOR,
+            },
+        ),
+    ],
+)
+def test_get_user_disabled_modules_includes_feature_toggled_modules(
+    llm_enabled: bool,
+    alert_summary_enabled: bool,
+    regex_generator_enabled: bool,
+    expected: set[Modules],
+) -> None:
+    """Test dedicated enabled flags disable LLM-related modules at startup."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.read_configuration.side_effect = None
+    process_manager.main.conf.read_configuration.return_value = []
+    process_manager.main.conf.llm_enabled.return_value = llm_enabled
+    process_manager.main.conf.alert_summary_enabled.return_value = (
+        alert_summary_enabled
+    )
+    process_manager.main.conf.regex_generator_enabled.return_value = (
+        regex_generator_enabled
+    )
+
+    assert process_manager.get_user_disabled_modules() == expected
 
 
 def test_get_runtime_disabled_modules_uses_runtime_rules() -> None:
@@ -458,7 +506,7 @@ def test_should_load_module(
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.bootstrapping_modules = ["fides", "iris"]
     process_manager.user_disabled_modules = set(disabled_modules)
-    process_manager.slips_disabled_modules = []
+    process_manager.slips_disabled_modules = set()
     process_manager.is_bootstrapping_node = Mock(return_value=should_bootstrap)
 
     assert process_manager._should_load_module(module_name) is expected

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # ConfigMixin groups configuration reads, feature gating, and module
 # enable/disable decisions for ProcessManager.
+from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Set
 
@@ -16,6 +17,12 @@ ModuleDependencyMap = Dict[Modules, Tuple[Modules, ...]]
 
 class ConfigMixin:
     """Provide configuration and module selection helpers."""
+
+    FEATURE_TOGGLED_MODULES: Tuple[Tuple[Modules, str], ...] = (
+        (Modules.LLM_PROXY, "llm_enabled"),
+        (Modules.ALERT_SUMMARY, "alert_summary_enabled"),
+        (Modules.REGEX_GENERATOR, "regex_generator_enabled"),
+    )
 
     def read_config(self) -> None:
         """
@@ -100,6 +107,8 @@ class ConfigMixin:
         """
         if module_name is None:
             return ""
+        if isinstance(module_name, Enum):
+            module_name = module_name.value
         return (
             str(module_name)
             .replace(" ", "")
@@ -181,7 +190,28 @@ class ConfigMixin:
             else:
                 user_disabled_modules.add(stripped_module_name)
 
+        user_disabled_modules.update(
+            self._get_feature_toggled_disabled_modules()
+        )
         return user_disabled_modules
+
+    def _get_feature_toggled_disabled_modules(self) -> Set[Modules]:
+        """
+        modules that have enabled:false in slips.yaml
+
+        Returns:
+            Supported module names whose config accessors evaluate to False.
+        """
+        disabled_modules: Set[Modules] = set()
+        for module_name, accessor_name in self.FEATURE_TOGGLED_MODULES:
+            accessor = getattr(self.main.conf, accessor_name, None)
+            if not callable(accessor):
+                continue
+
+            if not bool(accessor()):
+                disabled_modules.add(module_name)
+
+        return disabled_modules
 
     def get_runtime_disabled_modules(self) -> Set[Modules]:
         """
@@ -300,7 +330,7 @@ class ConfigMixin:
         Returns:
             True when at least one dependency is unavailable.
         """
-        for dependency in self.module_dependencies[module_name]:
+        for dependency in self.module_dependencies.get(module_name, ()):
             if dependency in disabled_modules:
                 return True
 
@@ -328,7 +358,7 @@ class ConfigMixin:
         Returns:
             First disabled dependency that caused the module to be disabled.
         """
-        for dependency in self.module_dependencies[module_name]:
+        for dependency in self.module_dependencies.get(module_name, ()):
             if dependency in disabled_modules:
                 return dependency
 

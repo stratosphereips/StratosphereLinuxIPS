@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from multiprocessing import Event, Process, Queue, Semaphore
-from typing import List
+from typing import List, Set
 
 from modules.supported_module_names import Modules
 
@@ -99,8 +99,8 @@ class ProcessManager(
         # is set by the input process when it stops because of a failure.
         self.is_input_failed_event = Event()
         self.is_slips_live_updating_event = Event()
-        self.user_disabled_modules: List[Modules] = []
-        self.slips_disabled_modules: List[Modules] = []
+        self.user_disabled_modules: Set[str | Modules] = set()
+        self.slips_disabled_modules: Set[Modules] = set()
         self.read_config()
         self.all_children_started = False
         self.core_module_failure = False
