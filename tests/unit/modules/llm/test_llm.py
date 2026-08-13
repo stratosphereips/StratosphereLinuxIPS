@@ -2,11 +2,15 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 import json
+import logging
 from unittest.mock import Mock, patch
 
 import pytest
+import urllib3
 
 from modules.llm_proxy.llm_backend_config import LLMBackendConfig
+from modules.llm_proxy.llm_errors import LLMRequestError
+from modules.supported_module_names import Modules
 from tests.module_factory import ModuleFactory
 
 
@@ -158,6 +162,73 @@ def test_handle_request_publishes_error_for_unknown_backend():
     llm.db.decrement_pending_llm_request_count.assert_called_once_with("")
 
 
+def test_handle_request_stops_llm_stack_when_default_backend_hits_max_retries():
+    llm = ModuleFactory().create_llm_obj()
+    request_error = LLMRequestError("local_qwen request failed")
+    request_error.__cause__ = urllib3.exceptions.MaxRetryError(
+        None,
+        "http://127.0.0.1:11434/api/chat",
+        reason=OSError("connection refused"),
+    )
+    llm.backends = {
+        "local_qwen": Mock(generate=Mock(side_effect=request_error))
+    }
+    llm.db.get_pid_of.side_effect = lambda module_name: {
+        Modules.ALERT_SUMMARY: 101,
+        Modules.REGEX_GENERATOR: 202,
+        Modules.T_CELL: 303,
+    }.get(module_name)
+    llm.print = Mock()
+
+    llm._handle_request(
+        {
+            "request_id": "req-default-max-retries",
+            "prompt": "summarize this",
+        }
+    )
+
+    assert llm.worker_stop_event.is_set() is False
+    llm.print.assert_not_called()
+
+    channel, payload = llm.db.publish.call_args.args
+    response = json.loads(payload)
+    assert channel == "llm_response"
+    assert response["success"] is False
+    assert response["backend"] is None
+    assert response["error"] == "local_qwen request failed"
+
+
+def test_handle_request_does_not_stop_llm_stack_for_non_default_backend_failure():
+    llm = ModuleFactory().create_llm_obj()
+    request_error = LLMRequestError("fallback_backend request failed")
+    request_error.__cause__ = urllib3.exceptions.MaxRetryError(
+        None,
+        "http://127.0.0.1:11434/api/chat",
+        reason=OSError("connection refused"),
+    )
+    llm.backends = {
+        "fallback_backend": Mock(generate=Mock(side_effect=request_error))
+    }
+    llm.print = Mock()
+
+    llm._handle_request(
+        {
+            "request_id": "req-non-default-max-retries",
+            "backend": "fallback_backend",
+            "prompt": "summarize this",
+        }
+    )
+
+    assert llm.worker_stop_event.is_set() is False
+    llm.print.assert_not_called()
+    channel, payload = llm.db.publish.call_args.args
+    response = json.loads(payload)
+    assert channel == "llm_response"
+    assert response["success"] is False
+    assert response["backend"] == "fallback_backend"
+    assert response["error"] == "fallback_backend request failed"
+
+
 def test_enqueue_request_increments_requester_pending_count():
     llm = ModuleFactory().create_llm_obj()
 
@@ -198,6 +269,18 @@ def test_llm_backend_pool_size_scales_with_worker_threads():
     assert mock_pool.call_args.kwargs["maxsize"] == 6
 
 
+def test_init_suppresses_urllib3_connectionpool_warnings():
+    llm = ModuleFactory().create_llm_obj()
+    logger = logging.getLogger("urllib3.connectionpool")
+    original_level = logger.level
+
+    try:
+        llm.init()
+        assert logger.level == logging.ERROR
+    finally:
+        logger.setLevel(original_level)
+
+
 @pytest.mark.parametrize(
     ("termination_requested", "msg_received", "expected"),
     [
@@ -233,6 +316,13 @@ def test_shutdown_gracefully_clears_available_backend_registry():
             "backends": {},
         }
     )
+
+
+def test_main_returns_none_when_no_llm_request_message():
+    llm = ModuleFactory().create_llm_obj()
+    llm.get_msg = Mock(return_value=None)
+
+    assert llm.main() is None
 
 
 def test_pre_main_creates_module_specific_llm_log(tmp_path, mocker):

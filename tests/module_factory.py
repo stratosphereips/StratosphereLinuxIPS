@@ -411,6 +411,11 @@ class ModuleFactory:
             bloom_filters_manager=Mock(),
         )
         t_cell.db.get_generated_regexes.return_value = []
+        t_cell.db.get_generated_regexes_count.return_value = 0
+        t_cell.db.get_enabled_modules.return_value = [
+            "t_cell",
+            "regex_generator",
+        ]
         t_cell.db.get_altflow_from_uid.return_value = {}
         t_cell.db.get_pid_of.return_value = None
         t_cell.db.publish = Mock()
@@ -1445,7 +1450,7 @@ class ModuleFactory:
         return handler
 
     def create_process_manager_obj(self):
-        from managers.process_manager import ProcessManager
+        from managers.process_manager.process_manager import ProcessManager
 
         main_mock = Mock()
         # main_mock.conf.get_bootstrapping_setting.return_value = (False, [])
@@ -1462,6 +1467,16 @@ class ModuleFactory:
         main_mock.conf.send_to_warden.return_value = False
         main_mock.conf.receive_from_warden.return_value = False
         main_mock.conf.generate_performance_plots.return_value = False
+        main_mock.conf.llm_enabled.return_value = True
+        main_mock.conf.llm_backends.return_value = {
+            "local_qwen": {
+                "provider": "ollama",
+                "model": "qwen2.5:3b",
+            }
+        }
+        main_mock.conf.alert_summary_enabled.return_value = False
+        main_mock.conf.regex_generator_enabled.return_value = False
+        main_mock.conf.t_cell_enabled.return_value = False
         main_mock.input_type = InputType.PCAP
         main_mock.mode = "normal"
         main_mock.stdout = ""

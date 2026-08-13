@@ -1,5 +1,8 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+from unittest.mock import patch
+
+from modules.supported_module_names import Modules
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.input_type import InputType
 
@@ -147,8 +150,19 @@ def test_get_disabled_modules_tracks_t_cell_enablement():
     }
 
     disabled = parser.get_disabled_modules(InputType.PCAP)
-    assert "t_cell" in disabled
+    assert Modules.T_CELL in disabled
 
     parser.config["t_cell"]["enabled"] = True
     disabled = parser.get_disabled_modules(InputType.PCAP)
-    assert "t_cell" not in disabled
+    assert Modules.T_CELL not in disabled
+
+
+@patch(
+    "slips_files.common.parsers.config_parser.sys.argv",
+    ["slips.py", "-im", "cyst"],
+)
+def test_reading_flows_from_cyst_matches_supported_module_name() -> None:
+    """Test CYST input detection uses the shared supported module name."""
+    parser = ConfigParser.__new__(ConfigParser)
+
+    assert parser.reading_flows_from_cyst() is True

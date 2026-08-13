@@ -8,6 +8,7 @@ from unittest.mock import (
     call,
     Mock,
 )
+from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 from tests.module_factory import ModuleFactory
 
@@ -154,7 +155,7 @@ def test_set_input_metadata_uses_process_manager_disabled_modules() -> None:
     """Test input metadata stores disabled modules from ProcessManager."""
     metadata_manager = ModuleFactory().create_metadata_manager_obj()
     metadata_manager.main.proc_man.get_disabled_modules = Mock(
-        return_value=(["template"], ["exporting_alerts"])
+        return_value=({Modules.TEMPLATE}, {Modules.EXPORTING_ALERTS})
     )
     metadata_manager.main.args.interface = False
     metadata_manager.main.args.filepath = False
@@ -169,10 +170,10 @@ def test_set_input_metadata_uses_process_manager_disabled_modules() -> None:
 
     metadata_manager.main.db.set_input_metadata.assert_called_once()
     metadata = metadata_manager.main.db.set_input_metadata.call_args.args[0]
-    assert json.loads(metadata["disabled_modules"]) == [
+    assert set(json.loads(metadata["disabled_modules"])) == {
         "template",
         "exporting_alerts",
-    ]
+    }
 
 
 @pytest.mark.parametrize(

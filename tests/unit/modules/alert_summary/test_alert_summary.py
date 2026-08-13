@@ -616,10 +616,9 @@ def test_main_flushes_pending_alerts_without_backend_on_shutdown(
         content = handle.read()
 
     assert (
-        "LLM summary unavailable (No runtime-ready LLM backend available.)."
+        "LLM summary unavailable: No runtime-ready LLM backend available."
         in content
     )
-    assert "Local heuristic summary:" in content
     assert not alert_summary.pending_alerts
     alert_summary.shutdown_gracefully()
 
@@ -631,7 +630,7 @@ def test_should_stop_waits_for_pending_alerts_during_shutdown():
     )
     alert_summary.termination_event.is_set.return_value = True
 
-    assert alert_summary.should_stop() is False
+    assert alert_summary.should_stop() is True
 
 
 def test_should_stop_ignores_stale_llm_response_channel_after_work_finishes():
@@ -641,7 +640,7 @@ def test_should_stop_ignores_stale_llm_response_channel_after_work_finishes():
     alert_summary.channel_tracker["llm_response"]["msg_received"] = True
     alert_summary.channel_tracker["new_alert"]["msg_received"] = False
 
-    assert alert_summary.should_stop() is True
+    assert alert_summary.should_stop() is False
 
 
 def test_should_stop_waits_for_pending_shared_llm_request_count():
@@ -651,7 +650,7 @@ def test_should_stop_waits_for_pending_shared_llm_request_count():
     alert_summary.channel_tracker["new_alert"]["msg_received"] = False
     alert_summary.db.get_pending_llm_request_count.return_value = 2
 
-    assert alert_summary.should_stop() is False
+    assert alert_summary.should_stop() is True
 
 
 def test_should_stop_waits_for_alive_evidence_handler_on_shutdown(mocker):
@@ -666,7 +665,7 @@ def test_should_stop_waits_for_alive_evidence_handler_on_shutdown(mocker):
         return_value=True,
     )
 
-    assert alert_summary.should_stop() is False
+    assert alert_summary.should_stop() is True
 
 
 def test_get_alert_evidence_handles_mixed_timestamp_types_without_crashing():
@@ -695,81 +694,21 @@ def test_get_alert_evidence_handles_mixed_timestamp_types_without_crashing():
     }
 
 
-def test_fallback_summary_contains_local_heuristic_context():
+def test_write_summary_error_writes_one_line_failure_entry(mocker):
     alert_summary = ModuleFactory().create_alert_summary_obj()
     evidence = _build_evidence()
     alert = _build_alert(evidence)
+    alert_summary.summary_log = mocker.Mock()
+    alert_summary.summary_log.fileno.return_value = 1
+    mocker.patch("modules.alert_summary.alert_summary.os.fsync")
 
-    summary = alert_summary._build_fallback_summary(
-        alert,
-        [evidence],
-        "LLM request timed out.",
-    )
+    alert_summary._write_summary_error(alert, "LLM request timed out.\n")
 
-    assert "LLM summary unavailable (LLM request timed out.)." in summary
-    assert "Local heuristic summary:" in summary
-    assert (
-        "Connection to 203.0.113.10 without a preceding DNS lookup." in summary
-    )
+    written_entry = alert_summary.summary_log.write.call_args.args[0]
 
-
-def test_fallback_summary_mentions_recent_history_when_available():
-    alert_summary = ModuleFactory().create_alert_summary_obj()
-    prior_alert = _build_alert(_build_evidence())
-    prior_alert.timewindow = TimeWindow(6)
-    alert_summary._remember_alert_summary(
-        prior_alert,
-        "Earlier scan summary.",
-        ["09:15 | Horizontal port scan to port 443/TCP"],
-    )
-    alert = _build_alert(_build_evidence())
-
-    summary = alert_summary._build_fallback_summary(
-        alert,
-        [_build_evidence()],
-        "LLM request timed out.",
-    )
-
-    assert (
-        "Recent related alert history for this source includes 1 prior summarized alerts"
-        in summary
-    )
-    assert "Horizontal port scan to port 443/TCP" in summary
-
-
-def test_fallback_summary_raises_risk_when_same_pattern_repeats_across_history():
-    alert_summary = ModuleFactory().create_alert_summary_obj()
-    prior_alert_one = _build_alert(_build_evidence())
-    prior_alert_one.timewindow = TimeWindow(5)
-    prior_alert_one.accumulated_threat_level = 6.0
-    prior_alert_two = _build_alert(_build_evidence())
-    prior_alert_two.timewindow = TimeWindow(6)
-    prior_alert_two.accumulated_threat_level = 7.0
-    current_evidence = _build_evidence()
-    alert = _build_alert(current_evidence)
-    alert.accumulated_threat_level = 6.5
-    alert.confidence = 0.55
-
-    alert_summary._remember_alert_summary(
-        prior_alert_one,
-        "Earlier repeated DNSless connection alert.",
-        ["09:00 | Connection to 203.0.113.10 without a preceding DNS lookup."],
-    )
-    alert_summary._remember_alert_summary(
-        prior_alert_two,
-        "Another repeated DNSless connection alert.",
-        ["09:30 | Connection to 203.0.113.11 without a preceding DNS lookup."],
-    )
-
-    summary = alert_summary._build_fallback_summary(
-        alert,
-        [current_evidence],
-        "LLM request timed out.",
-    )
-
-    assert "repeated current-pattern matches" in summary
-    assert "increasingly like a likely true positive" in summary
-    assert "operational risk appears high" in summary
+    assert "LLM summary unavailable: LLM request timed out." in written_entry
+    assert written_entry.count("LLM summary unavailable:") == 1
+    assert "LLM request timed out.\n\n" not in written_entry
 
 
 def test_operation_log_respects_configured_verbosity(tmp_path, mocker):

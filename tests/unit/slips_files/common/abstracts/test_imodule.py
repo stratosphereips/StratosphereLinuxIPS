@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+from unittest.mock import Mock
 
 import pytest
 
@@ -61,6 +62,40 @@ def test_imodule_rejects_non_snake_case_name(module_name):
             name = module_name
 
     assert module_factory.logger is not None
+
+
+def test_imodule_init_rejects_unsupported_module_name():
+    """Ensure IModule init rejects names missing from the supported enum."""
+    module_factory = ModuleFactory()
+
+    class UnsupportedModule(IModule):
+        """Test module with a missing supported module enum entry."""
+
+        name = "module1"
+
+        def init(self, **kwargs):
+            pass
+
+        def subscribe_to_channels(self):
+            pass
+
+        def main(self):
+            pass
+
+    with pytest.raises(
+        RuntimeError,
+        match="UnsupportedModule.name='module1' is not registered",
+    ):
+        UnsupportedModule(
+            logger=module_factory.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=1234,
+            bloom_filters_manager=Mock(),
+        )
 
 
 def test_get_msg_discards_messages_with_different_version():

@@ -73,6 +73,24 @@ def test_t_cell_uses_lowercase_underscore_output_dir():
     )
 
 
+def test_pre_main_shuts_down_when_regex_generator_disabled_and_store_empty():
+    """T Cell should stop when no regex source is available."""
+    t_cell = ModuleFactory().create_t_cell_obj()
+    t_cell.db.get_enabled_modules.return_value = ["t_cell"]
+    t_cell.db.get_generated_regexes_count.return_value = 0
+
+    with patch("modules.t_cell.t_cell.utils.drop_root_privs_permanently"):
+        assert t_cell.pre_main() == 1
+
+    t_cell.print.assert_called_with(
+        "Warning: T Cell module is shutting down because "
+        "regex_generator module is disabled and the regex store is empty.",
+        0,
+        1,
+    )
+    t_cell.db.get_t_cell_storage.assert_not_called()
+
+
 def _build_evidence(
     evidence_id: str,
     signal: EvidenceSignal = EvidenceSignal.PAMP,
@@ -119,11 +137,7 @@ def _process_evidence_at(t_cell, evidence: Evidence, ts: float):
 
 def _read_trace_entries(trace_path):
     with open(trace_path, encoding="utf-8") as trace_file:
-        return [
-            json.loads(line)
-            for line in trace_file
-            if line.strip()
-        ]
+        return [json.loads(line) for line in trace_file if line.strip()]
 
 
 def _insert_observation(
@@ -359,7 +373,9 @@ def test_t_cell_damp_priming_uses_stricter_co_stimulation_threshold(tmp_path):
     t_cell, storage = _prepare_t_cell(tmp_path)
     fixed_now = 2_200.0
     profile_ip = "10.0.0.77"
-    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
     t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
         "damp-threshold-regex"
     )
@@ -544,7 +560,9 @@ def test_t_cell_effector_publishes_blocking_and_respects_cooldown(tmp_path):
     t_cell, storage = _prepare_t_cell(tmp_path)
     fixed_now = 10_000.0
     profile_ip = "10.0.0.60"
-    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
     evidence_1 = _build_evidence(
         "effector-1", profile_ip=profile_ip, uids=["dns-1"]
     )
@@ -561,7 +579,9 @@ def test_t_cell_effector_publishes_blocking_and_respects_cooldown(tmp_path):
     t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
         "live-effector"
     )
-    t_cell.db.get_pid_of.side_effect = lambda name: 123 if name == "Blocking" else None
+    t_cell.db.get_pid_of.side_effect = lambda name: (
+        123 if name == "Blocking" else None
+    )
     _seed_recent_related_observations(
         storage, profile_ip, antigen, fixed_now, count=4
     )
@@ -609,7 +629,9 @@ def test_t_cell_simulates_effector_without_blocking_modules(tmp_path):
     t_cell, storage = _prepare_t_cell(tmp_path)
     fixed_now = 11_000.0
     profile_ip = "10.0.0.61"
-    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
     evidence_1 = _build_evidence(
         "simulate-1", profile_ip=profile_ip, uids=["dns-1"]
     )
@@ -645,7 +667,9 @@ def test_t_cell_moves_to_memory_and_stores_context(tmp_path):
     t_cell, storage = _prepare_t_cell(tmp_path)
     fixed_now = 12_000.0
     profile_ip = "10.0.0.62"
-    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
     evidence_1 = _build_evidence(
         "memory-1",
         profile_ip=profile_ip,
@@ -726,7 +750,9 @@ def test_t_cell_does_not_repeat_memory_events_for_same_cell(tmp_path):
     t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=3)
     fixed_now = 12_500.0
     profile_ip = "10.0.0.66"
-    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
     evidence_1 = _build_evidence(
         "memory-repeat-1",
         profile_ip=profile_ip,
@@ -808,9 +834,14 @@ def test_t_cell_does_not_repeat_memory_events_for_same_cell(tmp_path):
     cell = storage.get_all_cells()[0]
     transitions = storage.get_transitions(cell["cell_key"])
     assert cell["state"] == STATE_MEMORY
-    assert sum(
-        1 for transition in transitions if transition["reason"] == "context_memory"
-    ) == 1
+    assert (
+        sum(
+            1
+            for transition in transitions
+            if transition["reason"] == "context_memory"
+        )
+        == 1
+    )
 
     with open(t_cell.log_file_path, encoding="utf-8") as log_file:
         log_contents = log_file.read()
@@ -872,7 +903,9 @@ def test_t_cell_damp_observations_raise_co_stimulation(tmp_path):
     t_cell, storage = _prepare_t_cell(tmp_path)
     fixed_now = 14_000.0
     profile_ip = "10.0.0.64"
-    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
     evidence_pamp = _build_evidence(
         "damp-costim-1",
         profile_ip=profile_ip,
@@ -935,7 +968,9 @@ def test_t_cell_damp_observations_raise_context_pressure(tmp_path):
     t_cell, storage = _prepare_t_cell(tmp_path)
     fixed_now = 15_000.0
     profile_ip = "10.0.0.65"
-    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
     evidence_1 = _build_evidence(
         "damp-context-1",
         profile_ip=profile_ip,
@@ -964,8 +999,8 @@ def test_t_cell_damp_observations_raise_context_pressure(tmp_path):
     t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
         "damp-context-regex"
     )
-    t_cell.db.get_pid_of.side_effect = (
-        lambda name: 123 if name == "Blocking" else None
+    t_cell.db.get_pid_of.side_effect = lambda name: (
+        123 if name == "Blocking" else None
     )
     _seed_recent_related_observations(
         storage,
@@ -1113,7 +1148,9 @@ def test_t_cell_damp_reverifies_waiting_context_cells(tmp_path):
     t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=2)
     fixed_now = 14_800.0
     profile_ip = "10.0.0.81"
-    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
     evidence_pamp_1 = _build_evidence(
         "damp-reverify-context-pamp",
         profile_ip=profile_ip,
@@ -1142,8 +1179,8 @@ def test_t_cell_damp_reverifies_waiting_context_cells(tmp_path):
     t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
         "damp-reverify-context-regex"
     )
-    t_cell.db.get_pid_of.side_effect = (
-        lambda name: 123 if name == "Blocking" else None
+    t_cell.db.get_pid_of.side_effect = lambda name: (
+        123 if name == "Blocking" else None
     )
     _seed_recent_related_observations(
         storage,
@@ -1205,7 +1242,9 @@ def test_t_cell_uses_responsible_attacker_ip_for_cell_and_blocking(tmp_path):
     fixed_now = 16_000.0
     responsible_ip = "138.68.100.107"
     related_profile_ip = "147.32.80.37"
-    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
     evidence_1 = _build_evidence(
         "responsible-ip-1",
         profile_ip=related_profile_ip,
@@ -1258,8 +1297,8 @@ def test_t_cell_uses_responsible_attacker_ip_for_cell_and_blocking(tmp_path):
     t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
         "responsible-ip-regex"
     )
-    t_cell.db.get_pid_of.side_effect = (
-        lambda name: 123 if name == "Blocking" else None
+    t_cell.db.get_pid_of.side_effect = lambda name: (
+        123 if name == "Blocking" else None
     )
     _seed_recent_related_observations(
         storage, responsible_ip, antigen, fixed_now, count=4
@@ -1316,7 +1355,9 @@ def test_t_cell_transition_trace_lists_contributing_evidence(tmp_path):
     )
     fixed_now = 17_000.0
     profile_ip = "10.0.0.67"
-    antigen = AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
     evidence_1 = _build_evidence(
         "trace-transition-1",
         profile_ip=profile_ip,
@@ -1339,8 +1380,8 @@ def test_t_cell_transition_trace_lists_contributing_evidence(tmp_path):
     t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
         "trace-transition-regex"
     )
-    t_cell.db.get_pid_of.side_effect = (
-        lambda name: 123 if name == "Blocking" else None
+    t_cell.db.get_pid_of.side_effect = lambda name: (
+        123 if name == "Blocking" else None
     )
     _seed_recent_related_observations(
         storage, profile_ip, antigen, fixed_now, count=4
@@ -1361,7 +1402,9 @@ def test_t_cell_transition_trace_lists_contributing_evidence(tmp_path):
         for entry in entries
         if entry["action"] == "co_stimulation_threshold_met"
     )
-    assert co_stim_entry["formula"]["components"]["related_pamps"]["count"] == 4
+    assert (
+        co_stim_entry["formula"]["components"]["related_pamps"]["count"] == 4
+    )
     related_ids = {
         item["evidence_id"]
         for item in co_stim_entry["formula"]["components"]["related_pamps"][
