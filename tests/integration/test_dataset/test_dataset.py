@@ -9,6 +9,7 @@ from tests.common_test_utils import (
     run_slips,
     is_evidence_present,
     create_output_dir,
+    allocate_started_redis_port,
     assert_no_errors,
     get_total_analyzed_ips_from_output,
     get_slips_test_command,
@@ -67,8 +68,10 @@ def test_binetflow(
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",), binaries=("redis-server",)
     )
-    redis_port = integration_port_factory("redis")
     output_dir = create_output_dir(output_dir)
+    redis_port = allocate_started_redis_port(
+        integration_port_factory, output_dir
+    )
     success = False
     try:
         output_file = os.path.join(output_dir, "slips_output.txt")
@@ -115,8 +118,10 @@ def test_suricata(
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",), binaries=("redis-server",)
     )
-    redis_port = integration_port_factory("redis")
     output_dir = create_output_dir(output_dir)
+    redis_port = allocate_started_redis_port(
+        integration_port_factory, output_dir
+    )
     success = False
     try:
         output_file = os.path.join(output_dir, "slips_output.txt")
@@ -159,8 +164,10 @@ def test_nfdump(nfdump_path, output_dir, integration_port_factory):
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",), binaries=("redis-server",)
     )
-    redis_port = integration_port_factory("redis")
     output_dir = create_output_dir(output_dir)
+    redis_port = allocate_started_redis_port(
+        integration_port_factory, output_dir
+    )
     success = False
     try:
         # expected_evidence = 'Connection to unknown destination port 902/TCP'

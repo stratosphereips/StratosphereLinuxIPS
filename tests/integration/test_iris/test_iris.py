@@ -12,6 +12,7 @@ import redis
 
 from tests.common_test_utils import (
     create_output_dir,
+    allocate_started_redis_port,
     assert_no_errors,
     modify_yaml_config,
 )
@@ -523,8 +524,6 @@ def test_messaging(
     which extends the standard use case of connecting to such P2P network.
     """
     default_interface = get_default_interface()
-    redis_port = integration_port_factory("peer1 redis")
-    peer_redis_port = integration_port_factory("peer2 redis")
     server_port = integration_port_factory("peer1 iris")
     peer_server_port = integration_port_factory("peer2 iris")
 
@@ -537,6 +536,16 @@ def test_messaging(
     # Prepare output dir for the peer2
     output_dir_peer: PosixPath = create_output_dir(peer_output_dir)
     output_file_peer = os.path.join(output_dir_peer, "slips_output.txt")
+
+    # Open a redis server for each peer before starting Slips. If a port
+    # can't be opened, another port is allocated and the server is opened
+    # there instead.
+    redis_port = allocate_started_redis_port(
+        integration_port_factory, output_dir, port_label="peer1 redis"
+    )
+    peer_redis_port = allocate_started_redis_port(
+        integration_port_factory, output_dir_peer, port_label="peer2 redis"
+    )
     peer2_key_path = None
     success = False
     try:

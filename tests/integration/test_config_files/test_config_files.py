@@ -13,6 +13,7 @@ import pytest
 from tests.common_test_utils import (
     is_evidence_present,
     create_output_dir,
+    allocate_started_redis_port,
     assert_no_errors,
     check_for_text,
     get_total_analyzed_ips_from_output,
@@ -51,7 +52,10 @@ def test_conf_file(
         binaries=("redis-server",),
         require_zeek_or_bro=True,
     )
-    redis_port = integration_port_factory("redis")
+    output_dir = create_output_dir(output_dir)
+    redis_port = allocate_started_redis_port(
+        integration_port_factory, output_dir
+    )
     CONFIG_FILES_DIR.mkdir(parents=True, exist_ok=True)
     config_file = modify_yaml_config(
         output_filename=f"config_test_{redis_port}.yaml",
@@ -79,7 +83,6 @@ def test_conf_file(
             },
         },
     )
-    output_dir = create_output_dir(output_dir)
     success = False
     try:
         output_file = os.path.join(output_dir, "slips_output.txt")
@@ -161,7 +164,10 @@ def test_conf_file2(
         binaries=("redis-server",),
         require_zeek_or_bro=True,
     )
-    redis_port = integration_port_factory("redis")
+    output_dir = create_output_dir(output_dir)
+    redis_port = allocate_started_redis_port(
+        integration_port_factory, output_dir
+    )
     CONFIG_FILES_DIR.mkdir(parents=True, exist_ok=True)
     config_file = modify_yaml_config(
         output_filename=f"config_test2_{redis_port}.yaml",
@@ -183,7 +189,6 @@ def test_conf_file2(
         },
     )
 
-    output_dir = create_output_dir(output_dir)
     success = False
     try:
         output_file = os.path.join(output_dir, "slips_output.txt")
