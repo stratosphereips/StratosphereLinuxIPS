@@ -460,6 +460,29 @@ def test_shutdown_gracefully_delegates_to_handler():
     input_process.active_handler.shutdown_gracefully.assert_called_once()
 
 
+def test_mark_self_as_done_processing_waits_for_profiler_workers() -> None:
+    """Test input waits for profiler startup before sending stop sentinels."""
+    input_process = ModuleFactory().create_input_obj(
+        "", InputType.ZEEK_LOG_FILE
+    )
+    input_process.is_profiler_done_starting_initial_workers_event = Mock()
+    input_process.db.get_profiler_workers_started = Mock(return_value=3)
+    input_process.profiler_queue = Mock()
+    input_process.is_input_done_event = Mock()
+    input_process.is_profiler_done_event = Mock()
+    input_process.done_processing = Mock()
+
+    input_process.mark_self_as_done_processing()
+
+    input_process.is_profiler_done_starting_initial_workers_event.wait.assert_called_once_with(
+        30
+    )
+    assert input_process.profiler_queue.put.call_count == 3
+    input_process.is_input_done_event.set.assert_called_once_with()
+    input_process.is_profiler_done_event.wait.assert_called_once_with()
+    input_process.done_processing.release.assert_called_once_with()
+
+
 def test_zeek_log_file_shutdown_closes_handles():
     """Test zeek log file shutdown closes open handles and marks done."""
     input_process = ModuleFactory().create_input_obj(

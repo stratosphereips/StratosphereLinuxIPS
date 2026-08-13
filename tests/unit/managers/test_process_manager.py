@@ -75,6 +75,9 @@ def test_start_input_process(
             is_slips_live_updating_event=(
                 process_manager.is_slips_live_updating_event
             ),
+            is_profiler_done_starting_initial_workers_event=(
+                process_manager.is_profiler_done_starting_initial_workers_event
+            ),
         )
         mock_input_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()
@@ -470,6 +473,23 @@ def test_get_dependency_disabled_modules_disables_llm_dependents() -> None:
         Modules.REGEX_GENERATOR,
         Modules.ALERT_SUMMARY,
     }
+
+
+def test_get_dependency_disabled_modules_ignores_disabled_dependents() -> None:
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.user_disabled_modules = {
+        Modules.LLM_PROXY,
+        Modules.REGEX_GENERATOR,
+        Modules.ALERT_SUMMARY,
+    }
+    process_manager.main.conf.read_configuration.side_effect = (
+        lambda section, name, default_value: default_value
+    )
+
+    with patch.object(process_manager.main, "print") as mock_print:
+        assert process_manager._get_dependency_disabled_modules(set()) == set()
+
+    mock_print.assert_not_called()
 
 
 @pytest.mark.parametrize(
