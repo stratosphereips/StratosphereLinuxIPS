@@ -164,13 +164,9 @@ class AlertSummary(IModule):
         self.print("Shutting down.")
         if self.active_job:
             alert = self.active_job["alert"]
-            self._write_summary_entry(
+            self._write_summary_error(
                 alert,
-                self._build_fallback_summary(
-                    alert,
-                    self.active_job["evidences"],
-                    "Module stopped before the LLM reply was processed.",
-                ),
+                "Module stopped before the LLM reply was processed.",
             )
             self._log_operation(
                 f"Shutdown flushed active alert_id={alert.id}.",
@@ -1542,7 +1538,7 @@ class AlertSummary(IModule):
 
     def _fail_active_job(self, reason: str):
         """
-        Write a fallback summary for the active alert and clear its state.
+        Write an error entry for the active alert and clear its state.
 
         :param reason: Why the LLM pipeline failed.
         :return: None
@@ -1551,20 +1547,7 @@ class AlertSummary(IModule):
             return
 
         alert = self.active_job["alert"]
-        summary_text = self._build_fallback_summary(
-            alert,
-            self.active_job["evidences"],
-            reason,
-        )
-        self._write_summary_entry(alert, summary_text)
-        self._remember_alert_summary(
-            alert,
-            summary_text,
-            self.active_job.get("initial_grouped_items")
-            or self._build_grouped_evidence_items(
-                self.active_job["evidences"]
-            ),
-        )
+        self._write_summary_error(alert, reason)
         self.pending_request = None
         self.active_job = None
 
@@ -1572,17 +1555,7 @@ class AlertSummary(IModule):
         """Write failure notes for queued alerts when shutdown happens first."""
         while self.pending_alerts:
             queued_alert = self.pending_alerts.popleft()
-            summary_text = self._build_fallback_summary(
-                queued_alert["alert"],
-                queued_alert["evidences"],
-                reason,
-            )
-            self._write_summary_entry(queued_alert["alert"], summary_text)
-            self._remember_alert_summary(
-                queued_alert["alert"],
-                summary_text,
-                self._build_grouped_evidence_items(queued_alert["evidences"]),
-            )
+            self._write_summary_error(queued_alert["alert"], reason)
             self._log_operation(
                 f"Flushed alert_id={queued_alert['alert'].id}: {reason}",
                 verbosity=LOG_VERBOSITY_SUMMARY,
@@ -1621,6 +1594,22 @@ class AlertSummary(IModule):
             verbosity=LOG_VERBOSITY_REQUESTS,
         )
 
+    def _write_summary_error(self, alert, reason: str):
+        """
+        Append one single-line failure entry to alerts_summary.log.
+
+        :param alert: Alert whose summary failed.
+        :param reason: Why the summary could not be produced.
+        :return: None
+        """
+        error_reason = self._normalize_summary_text(reason) or (
+            "Unknown LLM summary failure."
+        )
+        self._write_summary_entry(
+            alert,
+            f"LLM summary unavailable: {error_reason}",
+        )
+
     def _log_operation(
         self, message: str, verbosity: int = LOG_VERBOSITY_REQUESTS
     ):
@@ -1634,178 +1623,6 @@ class AlertSummary(IModule):
         self.operation_log.write(f"{timestamp} {message}\n")
         self.operation_log.flush()
         os.fsync(self.operation_log.fileno())
-
-    def _build_fallback_summary(
-        self,
-        alert,
-        evidences: list,
-        reason: str,
-    ) -> str:
-        """
-        Generate a local one-paragraph summary when the LLM path fails.
-
-        :param alert: Alert being summarized.
-        :param evidences: Evidence records correlated with the alert.
-        :param reason: Why the LLM summary was unavailable.
-        :return: Single-paragraph fallback summary.
-        """
-        severity_counts = {"high": 0, "medium": 0, "low": 0, "info": 0}
-        for evidence in evidences:
-            severity = str(getattr(evidence, "threat_level", "info")).lower()
-            severity_counts[severity] = severity_counts.get(severity, 0) + 1
-
-        grouped_items = self._build_grouped_evidence_items(evidences)
-        strongest_indicators = "; ".join(grouped_items[:3]) or (
-            "the correlated evidence set"
-        )
-        history_analysis = self._analyze_recent_history(
-            alert,
-            self._get_recent_alert_history(alert),
-            grouped_items,
-        )
-
-        verdict = self._classify_alert_verdict(
-            alert,
-            evidences,
-            severity_counts,
-            history_analysis,
-        )
-        risk = self._classify_alert_risk(
-            alert, severity_counts, history_analysis
-        )
-        history_context = self._build_fallback_history_clause(
-            alert, history_analysis
-        )
-        return (
-            f"LLM summary unavailable ({reason}). "
-            f"Local heuristic summary: this alert correlates {len(evidences)} "
-            f"evidence records for source IP {alert.profile.ip}, with the "
-            f"strongest indicators being {strongest_indicators}. "
-            f"{history_context}"
-            f"The evidence mix includes {severity_counts.get('high', 0)} high, "
-            f"{severity_counts.get('medium', 0)} medium, "
-            f"{severity_counts.get('low', 0)} low, and "
-            f"{severity_counts.get('info', 0)} informational findings. "
-            f"Based on the accumulated threat level "
-            f"{alert.accumulated_threat_level:.2f} and confidence "
-            f"{alert.confidence:.2f}, this looks {verdict} and the "
-            f"operational risk appears {risk}."
-        )
-
-    def _classify_alert_verdict(
-        self,
-        alert,
-        evidences: list,
-        severity_counts: dict,
-        history_analysis: dict,
-    ) -> str:
-        """
-        Estimate the analyst verdict for a fallback summary.
-
-        :param alert: Alert being summarized.
-        :param evidences: Evidence records correlated with the alert.
-        :param severity_counts: Count of evidence severities.
-        :param history_analysis: Recent-history alignment metrics.
-        :return: Human-readable verdict label.
-        """
-        if (
-            history_analysis.get("matching_alert_count", 0) >= 2
-            and history_analysis.get("repeated_pattern_count", 0) >= 1
-        ):
-            return "increasingly like a likely true positive because the same pattern has repeated across prior alerts"
-        if severity_counts.get("high", 0) >= 3 or alert.confidence >= 0.8:
-            return "like a likely true positive"
-        if (
-            evidences
-            and severity_counts.get("info", 0) >= len(evidences)
-            and alert.confidence < 0.4
-        ):
-            return "uncertain and may be a false positive"
-        if alert.confidence >= 0.5 or severity_counts.get("medium", 0) >= 2:
-            return "concerning but still somewhat uncertain"
-        return "uncertain"
-
-    def _build_fallback_history_clause(
-        self, alert, history_analysis: dict
-    ) -> str:
-        """
-        Build one short history sentence for heuristic summaries.
-
-        :param alert: Alert being summarized.
-        :param history_analysis: Recent-history alignment metrics.
-        :return: Short history clause or an empty string.
-        """
-        recent_history = self._get_recent_alert_history(alert)
-        if not recent_history:
-            return ""
-
-        top_history_patterns = []
-        for entry in recent_history[:2]:
-            for pattern in entry.get("top_patterns") or []:
-                normalized = self._normalize_summary_text(pattern)
-                if normalized in top_history_patterns:
-                    continue
-                top_history_patterns.append(normalized)
-                if len(top_history_patterns) >= 2:
-                    break
-            if len(top_history_patterns) >= 2:
-                break
-
-        if top_history_patterns:
-            pattern_text = "; ".join(top_history_patterns)
-            return (
-                f"Recent related alert history for this source includes "
-                f"{len(recent_history)} prior summarized alerts, with "
-                f"{history_analysis.get('matching_alert_count', 0)} prior alerts "
-                f"showing overlapping dominant patterns and "
-                f"{history_analysis.get('repeated_pattern_count', 0)} repeated "
-                f"current-pattern matches. The repeated history most recently "
-                f"showed {pattern_text}, so recurrence should be treated as "
-                f"additional supporting context when the current evidence aligns. "
-            )
-
-        return (
-            f"Recent related alert history for this source includes "
-            f"{len(recent_history)} prior summarized alerts, which should be "
-            f"treated as cumulative context for the current assessment. "
-        )
-
-    def _classify_alert_risk(
-        self,
-        alert,
-        severity_counts: dict,
-        history_analysis: dict,
-    ) -> str:
-        """
-        Estimate operational risk for a fallback summary.
-
-        :param alert: Alert being summarized.
-        :param severity_counts: Count of evidence severities.
-        :param history_analysis: Recent-history alignment metrics.
-        :return: Risk label for the summary paragraph.
-        """
-        if (
-            history_analysis.get("matching_alert_count", 0) >= 2
-            and history_analysis.get("repeated_pattern_count", 0) >= 1
-        ):
-            if (
-                history_analysis.get("threat_trend") == "rising"
-                or severity_counts.get("high", 0) >= 1
-                or alert.accumulated_threat_level >= 5
-            ):
-                return "high"
-            return "medium-to-high"
-        if (
-            severity_counts.get("high", 0) >= 3
-            or alert.accumulated_threat_level >= 10
-        ):
-            return "high"
-        if (
-            severity_counts.get("medium", 0) >= 2
-            or alert.accumulated_threat_level >= 5
-        ):
-            return "medium"
-        return "low"
 
     def _remember_alert_summary(
         self,

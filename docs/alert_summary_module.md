@@ -19,8 +19,8 @@ For each alert, the module:
 8. Normalizes the last reply into one plain-text paragraph and appends it to
    the alert summary log.
 
-If the LLM pipeline fails, the module writes a local heuristic fallback summary
-for the alert instead of leaving the run without output.
+If the LLM pipeline fails, the module writes a one-line error entry for that
+alert instead of generating a local fallback summary.
 
 ## Recursive summary hierarchy
 
@@ -65,7 +65,8 @@ Configuration reference:
   analyst-oriented.
 - `llm_max_tokens`: output budget for the final analyst paragraph.
 - `llm_response_timeout_seconds`: hard timeout for one in-flight shared-LLM
-  request. If set to `0`, the module waits indefinitely.
+  request. If set to `0`, the module waits indefinitely. On timeout, the
+  module writes a one-line failure entry to `alerts_summary.log`.
 
 ## Prompt design
 

@@ -21,8 +21,9 @@ For each alert, the module:
 7. Waits for the matching `llm_response`.
 8. Writes one plain-text paragraph per alert to `output/alerts/alerts_summary.log`.
 
-If the LLM pipeline fails, the module writes a local heuristic fallback summary
-instead of leaving the alert without analyst context.
+If the LLM pipeline fails, the module writes a one-line error entry to
+`output/alerts/alerts_summary.log` instead of generating a local fallback
+summary.
 
 The module can also keep a bounded recent-history memory per source/profile.
 When enabled, that history is added to the final analyst-summary prompt as
@@ -80,7 +81,8 @@ Configuration reference:
   analyst-oriented.
 - `llm_max_tokens`: output budget for the final analyst paragraph.
 - `llm_response_timeout_seconds`: hard timeout for one in-flight shared-LLM
-  request. If set to `0`, the module waits indefinitely.
+  request. If set to `0`, the module waits indefinitely. On timeout, the
+  module writes a one-line failure entry to `alerts_summary.log`.
 - `history_enabled`: keeps recent prior alert summaries in memory and adds
   them to the final prompt for the same source/profile.
 - `history_max_alerts`: maximum number of prior summarized alerts kept per
