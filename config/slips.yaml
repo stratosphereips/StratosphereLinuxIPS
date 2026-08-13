@@ -252,7 +252,7 @@ modules:
 #############################
 llm_proxy:
   # Enable the shared LLM service module.
-  enabled: true
+  enabled: false
 
   # If a request does not specify a backend alias, this one is used.
   # The value must match one of the keys under backends: below.
@@ -332,7 +332,7 @@ llm_proxy:
 alert_summary:
   # the llm_proxy parameter must be enabled and configured for alert summaries.
   # Enable the analyst-facing alert summary module.
-  enabled: true
+  enabled: false
 
   # Write operational logs for this module to:
   # <output-dir>/llm_proxy-summary/alert_summary.log
@@ -358,7 +358,7 @@ alert_summary:
   # Hard timeout in seconds for one in-flight shared-LLM request.
   # Large alerts may require several internal reduction requests before the
   # final summary request. If a request times out, the module writes a
-  # heuristic fallback summary for that alert. Set to 0 to wait indefinitely.
+  # one-line error entry for that alert. Set to 0 to wait indefinitely.
   llm_response_timeout_seconds: 300
 
   # Include recent alert history for the same source/profile as extra context
