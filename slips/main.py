@@ -436,6 +436,8 @@ class Main:
         except ZeroDivisionError:
             return ""
 
+        percentage = min(100.0, percentage)  # cap at 100%
+
         # in very large pcaps, thousands of flows are nothing compared to
         # the tot flows, so if the percentage is int, slips would print 0%
         # for a while, so we take the first number after the floating point
@@ -444,8 +446,6 @@ class Main:
             percentage = f"{percentage:.1f}"
         else:
             percentage = int(percentage)
-
-        percentage = min(100, percentage)  # cap at 100%
         return f"Analyzed Flows: {green(percentage)}{green('%')}. "
 
     def is_total_flows_unknown(self) -> bool:

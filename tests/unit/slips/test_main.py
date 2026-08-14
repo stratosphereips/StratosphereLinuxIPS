@@ -120,6 +120,31 @@ def test_update_stats(mode, time_diff, expected_calls):
 
 
 @pytest.mark.parametrize(
+    "processed, total_flows, expected_percentage",
+    [
+        (1, 576, "0.2"),
+        (576, 576, "100"),
+        (700, 576, "100"),
+    ],
+)
+def test_get_analyzed_flows_percentage_caps_and_formats(
+    processed, total_flows, expected_percentage
+):
+    main = ModuleFactory().create_main_obj()
+    main.args = MagicMock(input_module=False)
+    main.input_type = InputType.ZEEK_LOG_FILE
+    main.db = MagicMock()
+    main.db.is_running_non_stop.return_value = False
+    main.db.get_total_flows.return_value = total_flows
+    main.db.get_flows_analyzed_by_the_profiler_so_far.return_value = processed
+
+    assert (
+        main.get_analyzed_flows_percentage()
+        == f"Analyzed Flows: {expected_percentage}%. "
+    )
+
+
+@pytest.mark.parametrize(
     "args_verbose, conf_verbose, args_debug, conf_debug, "
     "expected_verbose, expected_debug",
     [  # Testcase1: Use config values

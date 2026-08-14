@@ -56,7 +56,9 @@ class WorkerManagerMixin:
         # ensure we don't block forever waiting for workers that will never
         # receive the stop sentinel
         if self.is_input_done_event is not None:
-            self.is_input_done_event.wait()
+            while not self.is_input_done_event.wait(timeout=1):
+                if self.input_failed_event.is_set():
+                    break
 
         for process in self.profiler_child_processes:
             try:
