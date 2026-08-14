@@ -60,6 +60,7 @@ jobs:
       container_prefix: slips-unit
       docker_image_artifact_name: ${{ needs.build-docker-image.outputs.docker_image_artifact_name }}
       docker_image_tag: ${{ needs.build-docker-image.outputs.docker_image_tag }}
+      setup_venv: true
 
   integration-tests:
     if: ${{ always() && needs.build-docker-image.result == 'success' }}
@@ -78,3 +79,4 @@ jobs:
       container_prefix: slips-integration
       docker_image_artifact_name: ${{ needs.build-docker-image.outputs.docker_image_artifact_name }}
       docker_image_tag: ${{ needs.build-docker-image.outputs.docker_image_tag }}
+      setup_venv: true

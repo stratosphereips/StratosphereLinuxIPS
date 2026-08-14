@@ -86,6 +86,11 @@ on:
         required: false
         default: ""
         type: string
+      setup_venv:
+        description: "Inside the test container, create a fresh python3.10 venv, install install/requirements.txt into it, and run the tests with it"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   list-tests:
@@ -260,3 +265,4 @@ jobs:
           image_tag: ${{ inputs.docker_image_tag }}
           container_prefix: ${{ inputs.container_prefix }}
           job_index: ${{ strategy.job-index }}
+          setup_venv: ${{ inputs.setup_venv }}
