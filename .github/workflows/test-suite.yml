@@ -139,7 +139,7 @@ jobs:
 
   dependency-image-tests:
     # runs slips tests inside a pre-built slips dependency docker image at stratosphereips/slips_dependencies
-    name: "${{ matrix.test_file && format('{0} (dependency image: {1})', inputs.test_suite_name, matrix.test_file) || format('{0} (dependency image)', inputs.test_suite_name) }}"
+    name: "${{ matrix.display_name && format('{0} / {1}', inputs.test_suite_name, matrix.display_name) || format('{0} (dependency image)', inputs.test_suite_name) }}"
     if: ${{ !inputs.build_dockerfile && inputs.docker_image_artifact_name == '' && inputs.docker_image_tag == '' }}
     needs: list-tests
     runs-on: ubuntu-22.04
@@ -157,7 +157,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test_file: ${{ fromJson(needs.list-tests.outputs.test_files) }}
+        include: ${{ fromJson(needs.list-tests.outputs.test_files) }}
 
     steps:
       - uses: actions/checkout@v7
@@ -179,7 +179,7 @@ jobs:
 
   dockerfile-image-tests:
     # runs slips tests inside a newly built img from the "build-docker-image" step.
-    name: "${{ matrix.test_file && format('{0} (build dockerfile: {1})', inputs.test_suite_name, matrix.test_file) || format('{0} (build dockerfile)', inputs.test_suite_name) }}"
+    name: "${{ matrix.display_name && format('{0} / {1}', inputs.test_suite_name, matrix.display_name) || format('{0} (build dockerfile)', inputs.test_suite_name) }}"
     if: ${{ inputs.build_dockerfile }}
     needs:
       - list-tests
@@ -194,7 +194,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test_file: ${{ fromJson(needs.list-tests.outputs.test_files) }}
+        include: ${{ fromJson(needs.list-tests.outputs.test_files) }}
 
     steps:
       - uses: actions/checkout@v7
@@ -226,7 +226,7 @@ jobs:
 
   prebuilt-docker-image-tests:
     # runs slips tests inside a Docker image built by the caller and passed as an artifact
-    name: "${{ matrix.test_file && format('{0} (prebuilt image: {1})', inputs.test_suite_name, matrix.test_file) || format('{0} (prebuilt image)', inputs.test_suite_name) }}"
+    name: "${{ matrix.display_name && format('{0} / {1}', inputs.test_suite_name, matrix.display_name) || format('{0} (prebuilt image)', inputs.test_suite_name) }}"
     if: ${{ !inputs.build_dockerfile && inputs.docker_image_artifact_name != '' && inputs.docker_image_tag != '' }}
     needs: list-tests
     runs-on: ubuntu-22.04
@@ -239,7 +239,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test_file: ${{ fromJson(needs.list-tests.outputs.test_files) }}
+        include: ${{ fromJson(needs.list-tests.outputs.test_files) }}
 
     steps:
       - uses: actions/checkout@v7
