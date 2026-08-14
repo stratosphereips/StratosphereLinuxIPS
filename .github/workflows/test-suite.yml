@@ -208,7 +208,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download Docker Image
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.build-docker-image.outputs.artifact_name }}
 
@@ -253,7 +253,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download Docker Image
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.docker_image_artifact_name }}
 
