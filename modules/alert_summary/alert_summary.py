@@ -1,0 +1,1688 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
+import json
+import os
+import re
+import time
+import uuid
+from collections import defaultdict, deque
+from datetime import datetime
+
+from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.output_paths import get_alerts_path_inside_output_dir
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+from slips_files.core.structures.alerts import dict_to_alert
+from slips_files.core.structures.evidence import dict_to_evidence
+
+
+PROMPT_VERSION = "alert-summary-v4"
+LOG_VERBOSITY_SUMMARY = 1
+LOG_VERBOSITY_REQUESTS = 2
+LOG_VERBOSITY_DEBUG = 3
+APPROX_CHARS_PER_TOKEN = 4
+FINAL_PROMPT_INPUT_TOKEN_BUDGET = 3200
+REDUCTION_PROMPT_INPUT_TOKEN_BUDGET = 2400
+REDUCTION_MAX_TOKENS = 180
+MAX_REDUCTION_DEPTH = 6
+MAX_SAMPLE_VALUES = 5
+DEFAULT_HISTORY_MAX_ALERTS = 3
+DEFAULT_HISTORY_MAX_TOKENS = 700
+DEFAULT_HISTORY_PATTERNS_PER_ALERT = 2
+SYSTEM_PROMPT = """
+You are a very professional and senior cybersecurity researcher and incident analyst.
+Use only the provided alert and evidence data.
+If recent alert history is provided, use it as cumulative context for the current alert.
+If the current alert evidence aligns with repeated historical alerts, treat that recurrence as additional support that can increase confidence and urgency.
+Do not treat historical activity as proof of the current alert when the current alert evidence conflicts with it.
+Describe the current alert only from the current alert evidence digest.
+Do not restate ports, IPs, destinations, or behaviors from historical context as if they happened in the current alert unless they also appear in the current alert evidence digest.
+Evidence threat levels matter. Treat informational (`info`) evidence as context only, not as a security finding by itself.
+Give analytical weight to low, medium, high, and critical evidence, with higher threat levels carrying more weight.
+Do not let informational evidence inflate the verdict, confidence, urgency, or risk unless it is supported by non-info evidence.
+Write exactly one paragraph of plain text for a human analyst.
+Explain the main suspicious behavior, what evidence most strongly supports or weakens the alert,
+whether it looks like a likely true positive, likely false positive, or uncertain, and how risky it appears.
+If the evidence is weak, incomplete, or conflicting, say that clearly.
+Do not use bullet points, markdown, headings, or JSON.
+Do not invent missing facts.
+""".strip()
+REDUCTION_SYSTEM_PROMPT = """
+You are compressing raw security evidence into a compact intermediate digest for a later analyst summary.
+Use only the provided evidence subset.
+Write exactly one plain-text paragraph.
+Preserve concrete behaviors, time ranges, counts, suspicious indicators, and false-positive clues when they matter.
+Preserve threat-level distinctions. Informational (`info`) evidence is context only and should not be described as a threat indicator by itself.
+Do not invent missing facts and do not add introductions or meta-commentary.
+""".strip()
+
+
+class AlertSummary(IModule):
+    name = "alert_summary"
+    description = "Summarizes alerts for analysts using the shared LLM module"
+    authors = ["Sebastian Garcia"]
+
+    def init(self):
+        """Initialize channels, queues, and runtime configuration."""
+        self.enabled = False
+        self.allowed_backends = []
+        self.llm_temperature = 0.2
+        self.llm_max_tokens = 220
+        self.llm_response_timeout_seconds = 120
+        self.log_verbosity = LOG_VERBOSITY_REQUESTS
+        self.history_enabled = False
+        self.history_max_alerts = DEFAULT_HISTORY_MAX_ALERTS
+        self.history_max_tokens = DEFAULT_HISTORY_MAX_TOKENS
+        self.history_patterns_per_alert = DEFAULT_HISTORY_PATTERNS_PER_ALERT
+        self.pending_alerts = deque()
+        self.active_job = None
+        self.pending_request = None
+        self.summary_log = None
+        self.operation_log = None
+        self.last_logged_pending_llm_requests = None
+        self.alert_history_by_profile = defaultdict(deque)
+        self.operation_log_path = os.path.join(
+            self.parent_output_dir,
+            self.name,
+            "alert_summary.log",
+        )
+        self.summary_log_path = os.path.join(
+            get_alerts_path_inside_output_dir(self.parent_output_dir),
+            "alerts_summary.log",
+        )
+        self.read_configuration()
+
+    def subscribe_to_channels(self):
+        """Subscribe to alert and shared LLM response channels."""
+        self.c_alert = self.db.subscribe("new_alert")
+        self.c_llm = self.db.subscribe(self.db.channels.LLM_RESPONSE)
+        self.channels = {
+            "new_alert": self.c_alert,
+            self.db.channels.LLM_RESPONSE: self.c_llm,
+        }
+
+    def read_configuration(self):
+        """Read alert summary settings from the active Slips configuration."""
+        conf = (
+            self.conf
+            if hasattr(self.conf, "alert_summary_enabled")
+            else ConfigParser()
+        )
+        self.enabled = conf.alert_summary_enabled()
+        self.allowed_backends = conf.alert_summary_allowed_backends()
+        self.llm_temperature = conf.alert_summary_llm_temperature()
+        self.llm_max_tokens = conf.alert_summary_llm_max_tokens()
+        self.llm_response_timeout_seconds = (
+            conf.alert_summary_llm_response_timeout_seconds()
+        )
+        self.log_verbosity = conf.alert_summary_log_verbosity()
+        self.history_enabled = conf.alert_summary_history_enabled()
+        self.history_max_alerts = conf.alert_summary_history_max_alerts()
+        self.history_max_tokens = conf.alert_summary_history_max_tokens()
+        self.history_patterns_per_alert = (
+            conf.alert_summary_history_patterns_per_alert()
+        )
+
+    def pre_main(self):
+        """Drop privileges and initialize the output files if enabled."""
+        utils.drop_root_privs_permanently()
+
+        if not self.enabled:
+            self.print("AlertSummary module disabled in config.", 2, 0)
+            return True
+
+        self._init_operation_log_file()
+        self._init_summary_log_file()
+        self._log_operation(
+            "AlertSummary module ready. "
+            f"summary_log={self.summary_log_path} "
+            f"operation_log={self.operation_log_path} "
+            f"prompt_version={PROMPT_VERSION}",
+            verbosity=LOG_VERBOSITY_SUMMARY,
+        )
+
+    @staticmethod
+    def _is_process_alive(pid: int) -> bool:
+        """
+        Check whether a process PID is still alive.
+
+        :param pid: Process ID.
+        :return: True when the PID is alive.
+        """
+        try:
+            os.kill(int(pid), 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+        return True
+
+    def shutdown_gracefully(self):
+        """Flush unresolved work to the summary file and close log handles."""
+        self.print("Shutting down.")
+        if self.active_job:
+            alert = self.active_job["alert"]
+            self._write_summary_error(
+                alert,
+                "Module stopped before the LLM reply was processed.",
+            )
+            self._log_operation(
+                f"Shutdown flushed active alert_id={alert.id}.",
+                verbosity=LOG_VERBOSITY_SUMMARY,
+            )
+            self.active_job = None
+            self.pending_request = None
+
+        if self.pending_alerts:
+            self._flush_queued_alerts_without_backend(
+                "Module stopped before pending alerts were summarized."
+            )
+
+        self._log_operation(
+            "AlertSummary module stopped.",
+            verbosity=LOG_VERBOSITY_SUMMARY,
+        )
+        if self.summary_log is not None:
+            self.summary_log.close()
+        if self.operation_log is not None:
+            self.operation_log.close()
+
+    def main(self):
+        """Queue alerts, process LLM replies, and advance the active job."""
+        self._queue_new_alert()
+
+        if self.pending_request:
+            self._handle_pending_response()
+            if self.pending_request:
+                return
+
+        if self.active_job:
+            self._advance_active_job()
+            if self.pending_request:
+                return
+
+        if not self.pending_alerts:
+            return
+
+        available_backends = self.db.get_available_llm_backends()
+        backend = self._select_backend(available_backends)
+        if not backend:
+            if self.termination_event.is_set():
+                self._flush_queued_alerts_without_backend(
+                    "No runtime-ready LLM backend available."
+                )
+            elif self.pending_alerts:
+                self._log_operation(
+                    "No runtime-ready LLM backend available yet. "
+                    f"queued_alerts={len(self.pending_alerts)}",
+                    verbosity=LOG_VERBOSITY_REQUESTS,
+                )
+            return
+
+        self._start_next_alert_job(backend)
+
+    def _init_operation_log_file(self):
+        """Create or clear the per-run alert summary operation log file."""
+        os.makedirs(os.path.dirname(self.operation_log_path), exist_ok=True)
+        utils.initialize_logfile(
+            self.operation_log_path,
+            getattr(self.args, "is_slips_started_by_an_update", False),
+        )
+        self.operation_log = open(
+            self.operation_log_path, "a", encoding="utf-8"
+        )
+
+        conf = ConfigParser()
+        utils.change_logfiles_ownership(
+            self.operation_log_path,
+            conf.get_UID(),
+            conf.get_GID(),
+        )
+
+    def _init_summary_log_file(self):
+        """Create or clear alerts_summary.log for the current Slips run."""
+        os.makedirs(os.path.dirname(self.summary_log_path), exist_ok=True)
+        utils.initialize_logfile(
+            self.summary_log_path,
+            getattr(self.args, "is_slips_started_by_an_update", False),
+        )
+        self.summary_log = open(self.summary_log_path, "a", encoding="utf-8")
+
+        conf = ConfigParser()
+        utils.change_logfiles_ownership(
+            self.summary_log_path,
+            conf.get_UID(),
+            conf.get_GID(),
+        )
+
+    def _queue_new_alert(self):
+        """
+        Parse and enqueue a new alert together with its evidence records.
+        queues alerts to the self.pending_alerts
+        """
+        msg = self.get_msg("new_alert")
+        if not msg:
+            return
+
+        try:
+            alert = dict_to_alert(json.loads(msg["data"]))
+        except (TypeError, ValueError, KeyError, json.JSONDecodeError) as exc:
+            self.print(f"Unable to parse new_alert payload: {exc}", 0, 1)
+            self._log_operation(
+                f"Unable to parse new_alert payload: {exc}",
+                verbosity=LOG_VERBOSITY_SUMMARY,
+            )
+            return
+
+        evidences = self._get_alert_evidence(alert)
+        self.pending_alerts.append(
+            {
+                "alert": alert,
+                "evidences": evidences,
+            }
+        )
+        self._log_operation(
+            f"Queued alert_id={alert.id} "
+            f"profileid={alert.profile} "
+            f"timewindow={alert.timewindow} "
+            f"evidence_count={len(evidences)} "
+            f"queue_size={len(self.pending_alerts)}",
+            verbosity=LOG_VERBOSITY_REQUESTS,
+        )
+
+    def _get_alert_evidence(self, alert) -> list:
+        """Load and normalize all evidence records referenced by the alert."""
+        profileid = str(alert.profile)
+        twid = str(alert.timewindow)
+        raw_evidence = self.db.get_twid_evidence(profileid, twid) or {}
+
+        evidence_records = []
+        for evidence_id in alert.correl_id:
+            payload = raw_evidence.get(evidence_id)
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
+
+            if not isinstance(payload, dict):
+                continue
+
+            try:
+                evidence_records.append(dict_to_evidence(payload))
+            except (KeyError, TypeError, ValueError):
+                continue
+
+        if not evidence_records:
+            evidence_records = [alert.last_evidence]
+
+        evidence_records.sort(key=self._get_evidence_sort_key)
+        return evidence_records
+
+    def _get_evidence_sort_key(self, evidence) -> tuple:
+        """Build a stable sort key even when evidence timestamps vary in type."""
+        timestamp = getattr(evidence, "timestamp", "")
+
+        if isinstance(timestamp, (int, float)):
+            return (0, float(timestamp))
+
+        try:
+            return (
+                0,
+                float(utils.convert_ts_format(timestamp, "unixtimestamp")),
+            )
+        except (TypeError, ValueError):
+            return (1, str(timestamp))
+
+    def _select_backend(self, available_backends: dict) -> str:
+        """Choose a runtime-ready backend using module preferences first."""
+        available = available_backends.get("backends", {})
+        if not available:
+            return ""
+
+        for backend in self.allowed_backends:
+            if backend in available:
+                return backend
+
+        default_backend = available_backends.get("default_backend", "")
+        if default_backend in available:
+            return default_backend
+
+        if self.allowed_backends:
+            return ""
+
+        return sorted(available)[0]
+
+    def _start_next_alert_job(self, backend: str):
+        """Create a multi-step summary job for the next queued alert."""
+        queued_alert = self.pending_alerts.popleft()
+        alert = queued_alert["alert"]
+        evidences = queued_alert["evidences"]
+        grouped_items = self._build_grouped_evidence_items(evidences)
+        self.active_job = {
+            "alert": alert,
+            "evidences": evidences,
+            "backend": backend,
+            "grouped_item_count": len(grouped_items),
+            "initial_grouped_items": list(grouped_items),
+            "current_items": grouped_items,
+            "reduction_layer": 0,
+            "current_chunks": [],
+            "completed_chunk_summaries": [],
+        }
+        self._log_operation(
+            f"Started alert summary job alert_id={alert.id} "
+            f"backend={backend} evidence_count={len(evidences)} "
+            f"grouped_items={len(grouped_items)}",
+            verbosity=LOG_VERBOSITY_REQUESTS,
+        )
+        self._advance_active_job()
+
+    def _advance_active_job(self):
+        """Dispatch the next LLM request for the active alert summary job."""
+        if not self.active_job or self.pending_request:
+            return
+
+        job = self.active_job
+        alert = job["alert"]
+        final_messages = self._build_prompt_messages(
+            alert,
+            job["current_items"],
+            len(job["evidences"]),
+            job["grouped_item_count"],
+            job["reduction_layer"],
+        )
+        final_token_estimate = self._estimate_messages_tokens(final_messages)
+        self._log_operation(
+            f"Evaluated final summary prompt alert_id={alert.id} "
+            f"estimated_input_tokens={final_token_estimate} "
+            f"budget={FINAL_PROMPT_INPUT_TOKEN_BUDGET} "
+            f"reduction_layer={job['reduction_layer']} "
+            f"digest_items={len(job['current_items'])}",
+            verbosity=LOG_VERBOSITY_DEBUG,
+        )
+        if self._messages_fit(final_messages, FINAL_PROMPT_INPUT_TOKEN_BUDGET):
+            self._dispatch_llm_request(
+                phase="final_summary",
+                messages=final_messages,
+                max_tokens=self.llm_max_tokens,
+                metadata={
+                    "alert_id": alert.id,
+                    "profileid": str(alert.profile),
+                    "timewindow": str(alert.timewindow),
+                    "evidence_count": len(job["evidences"]),
+                    "grouped_item_count": job["grouped_item_count"],
+                    "digest_item_count": len(job["current_items"]),
+                    "reduction_layer": job["reduction_layer"],
+                    "prompt_version": PROMPT_VERSION,
+                },
+            )
+            return
+
+        if job["reduction_layer"] >= MAX_REDUCTION_DEPTH:
+            self._fail_active_job(
+                "Prompt remained too large after recursive evidence reduction."
+            )
+            return
+
+        chunks = self._chunk_items_for_reduction(
+            alert,
+            job["current_items"],
+            job["reduction_layer"],
+        )
+        if not chunks:
+            self._fail_active_job(
+                "Unable to build reduction chunks for alert summary."
+            )
+            return
+
+        job["current_chunks"] = chunks
+        job["completed_chunk_summaries"] = []
+        self._log_operation(
+            f"Starting reduction layer={job['reduction_layer'] + 1} "
+            f"for alert_id={alert.id} chunks={len(chunks)} "
+            f"source_items={len(job['current_items'])}",
+            verbosity=LOG_VERBOSITY_REQUESTS,
+        )
+        self._dispatch_reduction_chunk(0)
+
+    def _dispatch_reduction_chunk(self, chunk_index: int):
+        """Send one evidence chunk for intermediate summarization."""
+        job = self.active_job
+        if not job:
+            return
+
+        chunk_items = job["current_chunks"][chunk_index]
+        messages = self._build_reduction_messages(
+            job["alert"],
+            chunk_items,
+            job["reduction_layer"] + 1,
+            chunk_index + 1,
+            len(job["current_chunks"]),
+            len(job["current_items"]),
+        )
+        self._dispatch_llm_request(
+            phase="reduction",
+            messages=messages,
+            max_tokens=REDUCTION_MAX_TOKENS,
+            metadata={
+                "alert_id": job["alert"].id,
+                "profileid": str(job["alert"].profile),
+                "timewindow": str(job["alert"].timewindow),
+                "evidence_count": len(job["evidences"]),
+                "grouped_item_count": job["grouped_item_count"],
+                "digest_item_count": len(job["current_items"]),
+                "reduction_layer": job["reduction_layer"] + 1,
+                "chunk_index": chunk_index + 1,
+                "chunk_count": len(job["current_chunks"]),
+                "prompt_version": PROMPT_VERSION,
+            },
+        )
+
+    def _dispatch_llm_request(
+        self,
+        phase: str,
+        messages: list,
+        max_tokens: int,
+        metadata: dict,
+    ):
+        """Publish one LLM request for either reduction or final summarization."""
+        if not self.active_job:
+            return
+
+        request_id = f"{self.name}-{uuid.uuid4()}"
+        request = {
+            "request_id": request_id,
+            "requester": self.name,
+            "backend": self.active_job["backend"],
+            "messages": messages,
+            "temperature": self.llm_temperature,
+            "max_tokens": max_tokens,
+            "metadata": metadata,
+        }
+        self.pending_request = {
+            "request_id": request_id,
+            "backend": self.active_job["backend"],
+            "alert": self.active_job["alert"],
+            "evidences": self.active_job["evidences"],
+            "phase": phase,
+            "sent_at": time.time(),
+            "metadata": metadata,
+        }
+
+        try:
+            self.db.publish(self.db.channels.LLM_REQUEST, json.dumps(request))
+        except Exception:
+            self.pending_request = None
+            raise
+
+        self._log_operation(
+            f"Published llm_request request_id={request_id} "
+            f"alert_id={self.active_job['alert'].id} "
+            f"phase={phase} "
+            f"backend={self.active_job['backend']} "
+            f"max_tokens={max_tokens} "
+            f"metadata={json.dumps(metadata, sort_keys=True)}",
+            verbosity=LOG_VERBOSITY_REQUESTS,
+        )
+
+    def _build_prompt_messages(
+        self,
+        alert,
+        evidence_items: list[str],
+        evidence_count: int,
+        grouped_item_count: int,
+        reduction_layer: int,
+    ) -> list:
+        """
+        Create the final analyst-summary prompt for one alert.
+
+        :param alert: Alert being summarized.
+        :param evidence_items: Grouped evidence lines or reduced digest items.
+        :param evidence_count: Total evidence records attached to the alert.
+        :param grouped_item_count: Count of grouped evidence patterns.
+        :param reduction_layer: Number of prior reduction layers applied.
+        :return: Chat messages for the shared LLM module.
+        """
+        history_context = self._build_recent_history_text(
+            alert, evidence_items
+        )
+        user_prompt = (
+            "You are a security analyst. Translate this Slips alert into one "
+            "clear, concise paragraph for a human analyst.\n\n"
+            f"{self._build_alert_metadata_text(alert, evidence_count, grouped_item_count, reduction_layer)}\n\n"
+            f"{history_context}"
+            "CURRENT ALERT EVIDENCE DIGEST:\n"
+            f"{self._format_digest_items(evidence_items)}\n\n"
+            "YOUR TASK:\n"
+            "1. Explain the main suspicious behavior in plain language.\n"
+            "2. Identify the strongest evidence that supports or weakens the alert.\n"
+            "3. State whether it looks like a likely true positive, likely false positive, or uncertain.\n"
+            "4. State the likely operational risk or urgency.\n"
+            "5. If recent alert history is present, explicitly explain whether the current alert looks like a continuation, escalation, repetition, diversification, or a different pattern.\n"
+            "6. If recent alert history shows repeated aligned alerts, explicitly state whether that recurrence raises, lowers, or does not materially change confidence and urgency.\n\n"
+            "OUTPUT RULES:\n"
+            "- Write exactly one paragraph.\n"
+            "- Use plain text only.\n"
+            "- Base the assessment only on the provided data.\n"
+            "- Describe the current alert using only details from CURRENT ALERT EVIDENCE DIGEST.\n"
+            "- Do not present historical-only details as part of the current alert.\n"
+            "- If you mention history-specific details, mark them explicitly as historical or prior activity.\n"
+            "- Weigh evidence according to threat level.\n"
+            "- Treat informational (`info`) evidence as context only, not as suspicious evidence by itself.\n"
+            "- Use recent alert history as cumulative context when it aligns with the current alert evidence.\n"
+            "- Do not use recent alert history as replacement evidence when the current alert evidence is weak or conflicting.\n"
+            "- When recent alert history is present, include one explicit clause about how recurrence affects confidence or risk.\n"
+            "- If the evidence is repetitive, weak, incomplete, or contradictory, say so clearly.\n"
+            f"- Prompt version: {PROMPT_VERSION}"
+        )
+        return [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+
+    def _build_reduction_messages(
+        self,
+        alert,
+        evidence_items: list[str],
+        reduction_layer: int,
+        chunk_index: int,
+        chunk_count: int,
+        source_item_count: int,
+    ) -> list:
+        """
+        Create an intermediate reduction prompt for one evidence chunk.
+
+        :param alert: Alert being summarized.
+        :param evidence_items: Chunk items to compress further.
+        :param reduction_layer: One-based reduction layer number.
+        :param chunk_index: One-based chunk position in this layer.
+        :param chunk_count: Total chunk count in this layer.
+        :param source_item_count: Number of digest items before chunking.
+        :return: Chat messages for the shared LLM module.
+        """
+        user_prompt = (
+            "Compress this alert evidence subset into a compact intermediate "
+            "digest for a later final analyst summary.\n\n"
+            f"{self._build_alert_metadata_text(alert, len(self.active_job['evidences']), self.active_job['grouped_item_count'], reduction_layer - 1)}\n"
+            f"Reduction layer: {reduction_layer}\n"
+            f"Chunk: {chunk_index}/{chunk_count}\n"
+            f"Source digest items in this layer: {source_item_count}\n\n"
+            "EVIDENCE SUBSET:\n"
+            f"{self._format_digest_items(evidence_items)}\n\n"
+            "OUTPUT RULES:\n"
+            "- Write exactly one paragraph.\n"
+            "- Keep it shorter than the source evidence subset.\n"
+            "- Preserve the most important behaviors, time ranges, counts, indicators, and false-positive clues.\n"
+            "- Preserve threat-level distinctions and keep informational (`info`) evidence as context only.\n"
+            "- Do not include introductions, bullet points, markdown, or JSON.\n"
+            "- Do not make a final analyst verdict for the whole alert.\n"
+            f"- Prompt version: {PROMPT_VERSION}"
+        )
+        return [
+            {"role": "system", "content": REDUCTION_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+
+    def _build_alert_metadata_text(
+        self,
+        alert,
+        evidence_count: int,
+        grouped_item_count: int,
+        reduction_layer: int,
+    ) -> str:
+        """
+        Format the alert metadata section used by both prompt types.
+
+        :param alert: Alert being summarized.
+        :param evidence_count: Total evidence records attached to the alert.
+        :param grouped_item_count: Count of grouped evidence patterns.
+        :param reduction_layer: Number of completed reduction layers.
+        :return: Multi-line metadata block.
+        """
+        profileid = str(alert.profile)
+        hostname = self.db.get_hostname_from_profile(profileid) or ""
+        profile = alert.profile.ip
+        if hostname:
+            profile = f"{profile} ({hostname})"
+
+        start_time = self._format_timestamp_for_prompt(
+            getattr(alert.timewindow, "start_time", "")
+        )
+        end_time = self._format_timestamp_for_prompt(
+            getattr(alert.timewindow, "end_time", "")
+        )
+        if start_time and end_time:
+            time_range = f"{start_time} to {end_time}"
+        else:
+            time_range = start_time or end_time or "Unknown"
+
+        return (
+            "INCIDENT METADATA:\n"
+            f"- Alert ID: {alert.id}\n"
+            f"- Source IP: {profile}\n"
+            f"- Timewindow: {alert.timewindow.number}\n"
+            f"- Time Range: {time_range}\n"
+            f"- Accumulated Threat Level: {alert.accumulated_threat_level}\n"
+            f"- Alert Confidence: {alert.confidence:.2f}\n"
+            f"- Correlated Evidence Records: {evidence_count}\n"
+            f"- Grouped Evidence Patterns: {grouped_item_count}\n"
+            f"- Completed Reduction Layers: {reduction_layer}"
+        )
+
+    def _format_digest_items(self, evidence_items: list[str]) -> str:
+        """
+        Render grouped evidence or digest items for a prompt body.
+
+        :param evidence_items: Items to format.
+        :return: Multi-line evidence block.
+        """
+        if not evidence_items:
+            return "- No evidence details were available."
+        return "\n".join(f"- {item}" for item in evidence_items)
+
+    def _build_recent_history_text(
+        self, alert, current_items: list[str]
+    ) -> str:
+        """
+        Render bounded recent alert history for the same profile.
+
+        :param alert: Alert being summarized.
+        :param current_items: Current grouped digest items.
+        :return: Prompt section or an empty string when history is unavailable.
+        """
+        recent_history = self._get_recent_alert_history(alert)
+        if not recent_history:
+            return ""
+
+        history_analysis = self._analyze_recent_history(
+            alert, recent_history, current_items
+        )
+        lines = []
+        remaining_tokens = self.history_max_tokens
+        header_lines = [
+            "HISTORICAL PROGRESSION ONLY (same source/profile, context for the current alert):",
+            f"- Prior summarized alerts: {history_analysis['prior_alert_count']}",
+            f"- Prior alerts with overlapping dominant patterns: {history_analysis['matching_alert_count']}",
+            f"- Repeated dominant current patterns seen before: {history_analysis['repeated_pattern_count']}",
+            f"- Same-timewindow prior alerts: {history_analysis['same_timewindow_alert_count']}",
+            f"- Threat trend versus recent history: {history_analysis['threat_trend']}",
+            f"- Confidence trend versus recent history: {history_analysis['confidence_trend']}",
+            "- Guidance: if the current alert matches the repeated prior pattern, treat recurrence as cumulative supporting context that can raise confidence and urgency.",
+            "- Guidance: do not restate ports, IPs, destinations, or behaviors from this history as current-alert facts unless they also appear in CURRENT ALERT EVIDENCE DIGEST.",
+        ]
+        header_text = "\n".join(header_lines)
+        header_tokens = self._estimate_text_tokens(header_text)
+        if header_tokens >= remaining_tokens:
+            return ""
+        remaining_tokens -= header_tokens
+
+        for entry in recent_history:
+            line = self._format_history_entry(entry)
+            line_tokens = self._estimate_text_tokens(line)
+            if line_tokens > remaining_tokens:
+                if lines:
+                    break
+                line = self._truncate_text_to_budget(line, remaining_tokens)
+                line_tokens = self._estimate_text_tokens(line)
+            lines.append(f"- {line}")
+            remaining_tokens -= line_tokens
+            if remaining_tokens <= 0:
+                break
+
+        if not lines:
+            return ""
+
+        return (
+            header_text
+            + "\nRECENT ALERT HISTORY (most recent first):\n"
+            + "\n".join(lines)
+            + "\n\n"
+        )
+
+    def _get_recent_alert_history(self, alert) -> list[dict]:
+        """
+        Return recent stored summaries for the same profile, newest first.
+
+        :param alert: Alert being summarized.
+        :return: List of history entries.
+        """
+        if (
+            not self.history_enabled
+            or self.history_max_alerts <= 0
+            or self.history_max_tokens <= 0
+        ):
+            return []
+
+        profileid = str(alert.profile)
+        history = list(self.alert_history_by_profile.get(profileid, []))
+        if not history:
+            return []
+        return list(reversed(history[-self.history_max_alerts :]))
+
+    def _format_history_entry(self, entry: dict) -> str:
+        """
+        Convert one stored history entry into prompt text.
+
+        :param entry: Stored history entry.
+        :return: Single-line history description.
+        """
+        top_patterns = entry.get("top_patterns") or []
+        pattern_text = (
+            "; ".join(top_patterns)
+            or "No dominant historical patterns stored."
+        )
+        return (
+            f"TW {entry.get('timewindow', '?')} | "
+            f"{entry.get('time_range', 'Unknown')} | "
+            f"threat={entry.get('accumulated_threat_level', 0.0):.2f} | "
+            f"conf={entry.get('confidence', 0.0):.2f} | "
+            f"historical patterns: {pattern_text}"
+        )
+
+    def _analyze_recent_history(
+        self,
+        alert,
+        recent_history: list[dict],
+        current_items: list[str],
+    ) -> dict:
+        """
+        Summarize how recent history aligns with the current alert.
+
+        :param alert: Alert being summarized.
+        :param recent_history: Stored recent alert history entries.
+        :param current_items: Current grouped digest items.
+        :return: History alignment metrics.
+        """
+        current_signatures = set(self._build_pattern_signatures(current_items))
+        matching_alert_count = 0
+        repeated_signatures = set()
+        same_timewindow_alert_count = 0
+        prior_threat_values = []
+        prior_confidence_values = []
+        current_timewindow = str(getattr(alert.timewindow, "number", "?"))
+
+        for entry in recent_history:
+            prior_threat_values.append(
+                float(entry.get("accumulated_threat_level", 0.0) or 0.0)
+            )
+            prior_confidence_values.append(
+                float(entry.get("confidence", 0.0) or 0.0)
+            )
+            if str(entry.get("timewindow", "?")) == current_timewindow:
+                same_timewindow_alert_count += 1
+
+            entry_signatures = set(entry.get("pattern_signatures") or [])
+            overlap = current_signatures & entry_signatures
+            if overlap:
+                matching_alert_count += 1
+                repeated_signatures.update(overlap)
+
+        average_prior_threat = (
+            sum(prior_threat_values) / len(prior_threat_values)
+            if prior_threat_values
+            else 0.0
+        )
+        average_prior_confidence = (
+            sum(prior_confidence_values) / len(prior_confidence_values)
+            if prior_confidence_values
+            else 0.0
+        )
+
+        return {
+            "prior_alert_count": len(recent_history),
+            "matching_alert_count": matching_alert_count,
+            "repeated_pattern_count": len(repeated_signatures),
+            "same_timewindow_alert_count": same_timewindow_alert_count,
+            "threat_trend": self._classify_history_trend(
+                float(getattr(alert, "accumulated_threat_level", 0.0) or 0.0),
+                average_prior_threat,
+                0.75,
+            ),
+            "confidence_trend": self._classify_history_trend(
+                float(getattr(alert, "confidence", 0.0) or 0.0),
+                average_prior_confidence,
+                0.05,
+            ),
+        }
+
+    def _build_pattern_signatures(self, grouped_items: list[str]) -> list[str]:
+        """
+        Derive normalized pattern signatures from grouped digest items.
+
+        :param grouped_items: Grouped digest items.
+        :return: Deduplicated normalized signatures.
+        """
+        signatures = []
+        seen = set()
+        for item in grouped_items or []:
+            signature = self._extract_pattern_signature(item)
+            if not signature or signature in seen:
+                continue
+            seen.add(signature)
+            signatures.append(signature)
+        return signatures
+
+    def _extract_pattern_signature(self, grouped_item: str) -> str:
+        """
+        Strip timing and examples from one grouped item for overlap matching.
+
+        :param grouped_item: One grouped digest item.
+        :return: Normalized signature.
+        """
+        normalized = self._normalize_summary_text(grouped_item)
+        if "|" in normalized:
+            normalized = normalized.split("|", 1)[1].strip()
+        normalized = re.sub(r"\s+\([^)]*\)$", "", normalized)
+        normalized = self._normalize_pattern(normalized)
+        return self._normalize_summary_text(normalized).lower()
+
+    def _classify_history_trend(
+        self,
+        current_value: float,
+        average_prior_value: float,
+        tolerance: float,
+    ) -> str:
+        """
+        Compare the current value against recent history.
+
+        :param current_value: Current alert value.
+        :param average_prior_value: Average prior value.
+        :param tolerance: Minimum delta to call the trend changed.
+        :return: rising, falling, or stable.
+        """
+        if current_value > average_prior_value + tolerance:
+            return "rising"
+        if current_value < average_prior_value - tolerance:
+            return "falling"
+        return "stable"
+
+    def _build_grouped_evidence_items(self, evidences: list) -> list[str]:
+        """
+        Group similar evidence descriptions into prompt-friendly digest lines.
+
+        :param evidences: Evidence records for one alert.
+        :return: Ordered list of grouped evidence lines.
+        """
+        grouped_evidences = defaultdict(list)
+        for evidence in evidences:
+            description = str(
+                getattr(evidence, "description", "") or ""
+            ).strip()
+            grouped_evidences[self._normalize_pattern(description)].append(
+                evidence
+            )
+
+        summaries = []
+        for _, group in grouped_evidences.items():
+            group.sort(key=self._get_evidence_sort_key)
+            first = group[0]
+            first_time = self._format_short_time(first.timestamp)
+            last_time = self._format_short_time(group[-1].timestamp)
+            time_range = (
+                f"{first_time}-{last_time}"
+                if first_time and last_time and first_time != last_time
+                else first_time or last_time or "time-unknown"
+            )
+
+            description = str(getattr(first, "description", "") or "").strip()
+            sample_values = self._extract_sample_values(
+                [
+                    str(getattr(evidence, "description", "") or "")
+                    for evidence in group[:3]
+                ]
+            )
+            severity_counts = self._count_group_severities(group)
+            severity_text = self._format_severity_counts(severity_counts)
+
+            if len(group) == 1:
+                line = f"{time_range} | {description}"
+            else:
+                line = (
+                    f"{time_range} | {description} " f"({len(group)}x similar"
+                )
+                if severity_text:
+                    line += f", severities: {severity_text}"
+                if sample_values:
+                    line += ", samples: " + ", ".join(
+                        sample_values[:MAX_SAMPLE_VALUES]
+                    )
+                line += ")"
+
+            summaries.append(
+                {
+                    "count": len(group),
+                    "line": self._normalize_summary_text(line),
+                    "sort_key": self._get_evidence_sort_key(first),
+                }
+            )
+
+        summaries.sort(key=lambda item: (-item["count"], item["sort_key"]))
+        return [item["line"] for item in summaries]
+
+    def _normalize_pattern(self, description: str) -> str:
+        """
+        Normalize variable values in descriptions before grouping.
+
+        :param description: Raw evidence description.
+        :return: Normalized grouping key.
+        """
+        pattern = description
+        pattern = re.sub(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", "<IP>", pattern)
+        pattern = re.sub(
+            r"\b\d+/(TCP|UDP)\b", r"<PORT>/\1", pattern, flags=re.IGNORECASE
+        )
+        pattern = re.sub(
+            r"port[s]?:?\s*\d+(?:-\d+)?",
+            "port <PORT>",
+            pattern,
+            flags=re.IGNORECASE,
+        )
+        pattern = re.sub(r"\b\d+\b", "<NUM>", pattern)
+        return pattern
+
+    def _extract_sample_values(self, descriptions: list[str]) -> list[str]:
+        """
+        Extract useful IP and port examples from grouped descriptions.
+
+        :param descriptions: Raw evidence descriptions from one group.
+        :return: Deduplicated example values.
+        """
+        sample_values = []
+        for description in descriptions:
+            sample_values.extend(
+                re.findall(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", description)
+            )
+            sample_values.extend(
+                [
+                    f"{port}/{proto.upper()}"
+                    for port, proto in re.findall(
+                        r"\b(\d+)/(TCP|UDP)\b",
+                        description,
+                        flags=re.IGNORECASE,
+                    )
+                ]
+            )
+
+        unique_samples = []
+        seen = set()
+        for value in sample_values:
+            if value in seen:
+                continue
+            seen.add(value)
+            unique_samples.append(value)
+        return unique_samples
+
+    def _count_group_severities(self, evidences: list) -> dict:
+        """
+        Count threat levels inside one grouped evidence set.
+
+        :param evidences: Evidence records in the group.
+        :return: Severity count mapping.
+        """
+        severity_counts = {}
+        for evidence in evidences:
+            severity = str(getattr(evidence, "threat_level", "info")).lower()
+            severity_counts[severity] = severity_counts.get(severity, 0) + 1
+        return severity_counts
+
+    def _format_severity_counts(self, severity_counts: dict) -> str:
+        """
+        Format grouped severity counts for prompt readability.
+
+        :param severity_counts: Severity count mapping.
+        :return: Human-readable summary string.
+        """
+        ordered = ["critical", "high", "medium", "low", "info"]
+        parts = []
+        for severity in ordered:
+            count = severity_counts.get(severity, 0)
+            if count:
+                parts.append(f"{severity}={count}")
+        return ", ".join(parts)
+
+    def _format_short_time(self, timestamp) -> str:
+        """
+        Convert a timestamp into HH:MM when possible.
+
+        :param timestamp: Timestamp value in any Slips-supported format.
+        :return: Short human-readable time.
+        """
+        iso_timestamp = self._convert_timestamp_to_iso(timestamp)
+        if not iso_timestamp:
+            return str(timestamp or "")
+
+        try:
+            parsed = datetime.fromisoformat(iso_timestamp)
+        except ValueError:
+            return str(timestamp or "")
+        return parsed.strftime("%H:%M")
+
+    def _format_timestamp_for_prompt(self, timestamp) -> str:
+        """
+        Convert a timestamp into the long prompt-friendly format.
+
+        :param timestamp: Timestamp value in any Slips-supported format.
+        :return: Prompt-friendly timestamp string.
+        """
+        iso_timestamp = self._convert_timestamp_to_iso(timestamp)
+        if not iso_timestamp:
+            return str(timestamp or "")
+
+        try:
+            parsed = datetime.fromisoformat(iso_timestamp)
+        except ValueError:
+            return str(timestamp or "")
+        return parsed.strftime("%Y-%m-%d %H:%M:%S")
+
+    def _convert_timestamp_to_iso(self, timestamp) -> str:
+        """
+        Convert a timestamp into ISO format when possible.
+
+        :param timestamp: Timestamp value in any Slips-supported format.
+        :return: ISO timestamp string or an empty string.
+        """
+        if timestamp in ("", None):
+            return ""
+        try:
+            return str(utils.convert_ts_format(timestamp, "iso"))
+        except (TypeError, ValueError):
+            return ""
+
+    def _chunk_items_for_reduction(
+        self,
+        alert,
+        items: list[str],
+        reduction_layer: int,
+    ) -> list[list[str]]:
+        """
+        Split digest items into chunks that fit the reduction prompt budget.
+
+        :param alert: Alert being summarized.
+        :param items: Current digest items to reduce.
+        :param reduction_layer: Zero-based current reduction layer.
+        :return: List of chunks, each chunk being a list of digest items.
+        """
+        expanded_items = []
+        for item in items:
+            if self._single_item_fits_reduction_prompt(
+                alert, item, reduction_layer
+            ):
+                expanded_items.append(item)
+                continue
+
+            split_items = self._split_item_for_reduction(
+                alert,
+                item,
+                reduction_layer,
+            )
+            self._log_operation(
+                f"Split oversized digest item for alert_id={alert.id} "
+                f"layer={reduction_layer + 1} "
+                f"parts={len(split_items)}",
+                verbosity=LOG_VERBOSITY_REQUESTS,
+            )
+            expanded_items.extend(split_items)
+
+        chunks = []
+        current_chunk = []
+        for item in expanded_items:
+            trial_chunk = current_chunk + [item]
+            if current_chunk and not self._chunk_fits_reduction_prompt(
+                alert,
+                trial_chunk,
+                reduction_layer,
+                len(items),
+            ):
+                chunks.append(current_chunk)
+                current_chunk = [item]
+                continue
+            current_chunk = trial_chunk
+
+        if current_chunk:
+            chunks.append(current_chunk)
+        return chunks
+
+    def _single_item_fits_reduction_prompt(
+        self,
+        alert,
+        item: str,
+        reduction_layer: int,
+    ) -> bool:
+        """
+        Check whether one digest item fits in a reduction prompt.
+
+        :param alert: Alert being summarized.
+        :param item: One digest item to test.
+        :param reduction_layer: Zero-based current reduction layer.
+        :return: True when the item fits without splitting.
+        """
+        return self._chunk_fits_reduction_prompt(
+            alert,
+            [item],
+            reduction_layer,
+            1,
+        )
+
+    def _chunk_fits_reduction_prompt(
+        self,
+        alert,
+        items: list[str],
+        reduction_layer: int,
+        source_item_count: int,
+    ) -> bool:
+        """
+        Estimate whether a chunk fits the reduction prompt budget.
+
+        :param alert: Alert being summarized.
+        :param items: Candidate chunk items.
+        :param reduction_layer: Zero-based current reduction layer.
+        :param source_item_count: Number of source digest items in this layer.
+        :return: True when the prompt estimate fits the configured budget.
+        """
+        messages = self._build_reduction_messages(
+            alert,
+            items,
+            reduction_layer + 1,
+            1,
+            1,
+            source_item_count,
+        )
+        return self._messages_fit(
+            messages, REDUCTION_PROMPT_INPUT_TOKEN_BUDGET
+        )
+
+    def _split_item_for_reduction(
+        self,
+        alert,
+        item: str,
+        reduction_layer: int,
+    ) -> list[str]:
+        """
+        Split one oversized digest item into smaller parts without truncating.
+
+        :param alert: Alert being summarized.
+        :param item: Oversized digest item text.
+        :param reduction_layer: Zero-based current reduction layer.
+        :return: List of smaller digest items.
+        """
+        empty_messages = self._build_reduction_messages(
+            alert,
+            [],
+            reduction_layer + 1,
+            1,
+            1,
+            1,
+        )
+        overhead_tokens = self._estimate_messages_tokens(empty_messages)
+        available_tokens = max(
+            120,
+            REDUCTION_PROMPT_INPUT_TOKEN_BUDGET - overhead_tokens - 64,
+        )
+        parts = self._split_text_to_budget(item, available_tokens)
+        if len(parts) == 1:
+            return parts
+        return [
+            f"{part} (continued segment {index}/{len(parts)})"
+            for index, part in enumerate(parts, start=1)
+        ]
+
+    def _split_text_to_budget(
+        self,
+        text: str,
+        token_budget: int,
+    ) -> list[str]:
+        """
+        Split a text block by sentence and word boundaries to fit a budget.
+
+        :param text: Input text to split.
+        :param token_budget: Approximate token budget per part.
+        :return: Ordered list of text parts.
+        """
+        normalized = self._normalize_summary_text(text)
+        if self._estimate_text_tokens(normalized) <= token_budget:
+            return [normalized]
+
+        for separator in ("\n", "; ", ". ", ", "):
+            parts = self._split_text_by_separator(
+                normalized,
+                separator,
+                token_budget,
+            )
+            if len(parts) > 1 and all(
+                self._estimate_text_tokens(part) <= token_budget
+                for part in parts
+            ):
+                return parts
+
+        return self._split_text_by_words(normalized, token_budget)
+
+    def _split_text_by_separator(
+        self,
+        text: str,
+        separator: str,
+        token_budget: int,
+    ) -> list[str]:
+        """
+        Try to split a text block on one separator while honoring a budget.
+
+        :param text: Input text to split.
+        :param separator: Separator to preserve between pieces.
+        :param token_budget: Approximate token budget per part.
+        :return: Split text parts.
+        """
+        raw_parts = [
+            part.strip() for part in text.split(separator) if part.strip()
+        ]
+        if len(raw_parts) <= 1:
+            return [text]
+
+        merged_parts = []
+        current = ""
+        for part in raw_parts:
+            candidate = part if not current else f"{current}{separator}{part}"
+            if self._estimate_text_tokens(candidate) <= token_budget:
+                current = candidate
+                continue
+            if current:
+                merged_parts.append(current)
+            current = part
+
+        if current:
+            merged_parts.append(current)
+        return merged_parts
+
+    def _split_text_by_words(
+        self,
+        text: str,
+        token_budget: int,
+    ) -> list[str]:
+        """
+        Split a text block by words when coarser separators are not enough.
+
+        :param text: Input text to split.
+        :param token_budget: Approximate token budget per part.
+        :return: Split text parts.
+        """
+        words = text.split()
+        if not words:
+            return [text]
+
+        parts = []
+        current_words = []
+        for word in words:
+            candidate_words = current_words + [word]
+            candidate = " ".join(candidate_words)
+            if (
+                current_words
+                and self._estimate_text_tokens(candidate) > token_budget
+            ):
+                parts.append(" ".join(current_words))
+                current_words = [word]
+                continue
+            current_words = candidate_words
+
+        if current_words:
+            parts.append(" ".join(current_words))
+        return parts
+
+    def _estimate_messages_tokens(self, messages: list[dict]) -> int:
+        """
+        Estimate the input token count for a message list.
+
+        :param messages: Chat messages to estimate.
+        :return: Approximate token count.
+        """
+        token_count = 0
+        for message in messages:
+            token_count += 12
+            token_count += self._estimate_text_tokens(
+                message.get("content", "")
+            )
+        return token_count
+
+    def _estimate_text_tokens(self, text: str) -> int:
+        """
+        Estimate token count from text length using a conservative heuristic.
+
+        :param text: Input text to estimate.
+        :return: Approximate token count.
+        """
+        normalized = str(text or "")
+        return max(
+            1,
+            (len(normalized) + APPROX_CHARS_PER_TOKEN - 1)
+            // APPROX_CHARS_PER_TOKEN,
+        )
+
+    def _truncate_text_to_budget(self, text: str, token_budget: int) -> str:
+        """
+        Trim text to an approximate token budget without splitting mid-word.
+
+        :param text: Text to trim.
+        :param token_budget: Approximate token budget.
+        :return: Trimmed text.
+        """
+        normalized = self._normalize_summary_text(text)
+        if token_budget <= 0:
+            return ""
+        if self._estimate_text_tokens(normalized) <= token_budget:
+            return normalized
+
+        words = normalized.split()
+        kept_words = []
+        for word in words:
+            candidate = " ".join(kept_words + [word])
+            if self._estimate_text_tokens(candidate) >= token_budget:
+                break
+            kept_words.append(word)
+
+        trimmed = " ".join(kept_words).strip()
+        if not trimmed:
+            return normalized[: max(1, token_budget * APPROX_CHARS_PER_TOKEN)]
+        return f"{trimmed} ..."
+
+    def _messages_fit(self, messages: list[dict], budget: int) -> bool:
+        """
+        Return True when the prompt estimate fits the chosen budget.
+
+        :param messages: Chat messages to estimate.
+        :param budget: Maximum estimated input tokens.
+        :return: True when the prompt should fit.
+        """
+        return self._estimate_messages_tokens(messages) <= budget
+
+    def _handle_pending_response(self):
+        """Consumes LLM responses published in the
+        self.db.channels.LLM_RESPONSE channel.
+        Each of these responses
+        """
+        msg = self.get_msg(self.db.channels.LLM_RESPONSE)
+        if msg:
+            try:
+                response = json.loads(msg["data"])
+            except (TypeError, json.JSONDecodeError):
+                self._log_operation(
+                    "Received malformed llm_response payload. Ignoring.",
+                    verbosity=LOG_VERBOSITY_DEBUG,
+                )
+                return
+
+            if (
+                response.get("request_id")
+                != self.pending_request["request_id"]
+            ):
+                return
+
+            self._finalize_request(response)
+            return
+
+        if not self._is_response_timed_out():
+            return
+
+        if self.termination_event.is_set():
+            if not self.pending_request.get("shutdown_wait_logged", False):
+                self._log_operation(
+                    "Shutdown is in progress; keeping alert_summary alive "
+                    f"for in-flight request_id={self.pending_request['request_id']} "
+                    "until the shared LLM module replies.",
+                    verbosity=LOG_VERBOSITY_SUMMARY,
+                )
+                self.pending_request["shutdown_wait_logged"] = True
+            return
+
+        self._finalize_request(
+            {
+                "request_id": self.pending_request["request_id"],
+                "backend": self.pending_request["backend"],
+                "success": False,
+                "error": "LLM summary request timed out.",
+                "text": "",
+            }
+        )
+
+    def _is_response_timed_out(self) -> bool:
+        """Return True when the active request exceeded the configured timeout."""
+        if not self.pending_request or self.llm_response_timeout_seconds <= 0:
+            return False
+
+        elapsed = time.time() - self.pending_request["sent_at"]
+        return elapsed >= self.llm_response_timeout_seconds
+
+    def _finalize_request(self, response: dict):
+        """
+        Continue the reduction pipeline or write the final alert summary.
+
+        :param response: Shared LLM response payload.
+        :return: None
+        """
+        request = self.pending_request
+        job = self.active_job
+        if not request or not job:
+            return
+
+        phase = request["phase"]
+        usage = response.get("usage") or {}
+        usage_suffix = (
+            " " f"usage={json.dumps(usage, sort_keys=True)}" if usage else ""
+        )
+
+        if response.get("success") and str(response.get("text", "")).strip():
+            text = self._normalize_summary_text(response["text"])
+            if phase == "final_summary":
+                self._write_summary_entry(job["alert"], f"LLM summary: {text}")
+                self._remember_alert_summary(
+                    job["alert"],
+                    text,
+                    job.get("initial_grouped_items")
+                    or job.get("current_items")
+                    or [],
+                )
+                self._log_operation(
+                    f"Received successful llm_response request_id={request['request_id']} "
+                    f"alert_id={job['alert'].id} phase={phase}{usage_suffix}",
+                    verbosity=LOG_VERBOSITY_REQUESTS,
+                )
+                self.pending_request = None
+                self.active_job = None
+                return
+
+            job["completed_chunk_summaries"].append(text)
+            chunk_index = int(request["metadata"].get("chunk_index", 1))
+            chunk_count = int(request["metadata"].get("chunk_count", 1))
+            self._log_operation(
+                f"Received reduction digest request_id={request['request_id']} "
+                f"alert_id={job['alert'].id} "
+                f"layer={request['metadata'].get('reduction_layer')} "
+                f"chunk={chunk_index}/{chunk_count}{usage_suffix}",
+                verbosity=LOG_VERBOSITY_REQUESTS,
+            )
+            self.pending_request = None
+
+            if chunk_index < chunk_count:
+                self._dispatch_reduction_chunk(chunk_index)
+                return
+
+            job["current_items"] = job["completed_chunk_summaries"]
+            job["completed_chunk_summaries"] = []
+            job["current_chunks"] = []
+            job["reduction_layer"] += 1
+            self._log_operation(
+                f"Completed reduction layer={job['reduction_layer']} "
+                f"for alert_id={job['alert'].id} "
+                f"resulting_digest_items={len(job['current_items'])}",
+                verbosity=LOG_VERBOSITY_REQUESTS,
+            )
+            self._advance_active_job()
+            return
+
+        error = str(response.get("error", "Unknown LLM summary failure."))
+        self._log_operation(
+            f"LLM request failed for alert_id={job['alert'].id} "
+            f"phase={phase}: {error}",
+            verbosity=LOG_VERBOSITY_SUMMARY,
+        )
+        self._fail_active_job(error)
+
+    def _normalize_summary_text(self, text: str) -> str:
+        """
+        Collapse any multi-line reply into one plain-text paragraph.
+
+        :param text: Raw model response.
+        :return: Single-paragraph normalized text.
+        """
+        normalized = " ".join(str(text or "").split())
+        return normalized.strip()
+
+    def _fail_active_job(self, reason: str):
+        """
+        Write an error entry for the active alert and clear its state.
+
+        :param reason: Why the LLM pipeline failed.
+        :return: None
+        """
+        if not self.active_job:
+            return
+
+        alert = self.active_job["alert"]
+        self._write_summary_error(alert, reason)
+        self.pending_request = None
+        self.active_job = None
+
+    def _flush_queued_alerts_without_backend(self, reason: str):
+        """Write failure notes for queued alerts when shutdown happens first."""
+        while self.pending_alerts:
+            queued_alert = self.pending_alerts.popleft()
+            self._write_summary_error(queued_alert["alert"], reason)
+            self._log_operation(
+                f"Flushed alert_id={queued_alert['alert'].id}: {reason}",
+                verbosity=LOG_VERBOSITY_SUMMARY,
+            )
+
+    def _write_summary_entry(self, alert, summary_text: str):
+        """Append one human-readable summary line to alerts_summary.log."""
+        if self.summary_log is None:
+            return
+
+        profileid = str(alert.profile)
+        hostname = self.db.get_hostname_from_profile(profileid) or ""
+        profile = alert.profile.ip
+        if hostname:
+            profile = f"{profile} ({hostname})"
+
+        try:
+            alert_time = utils.convert_ts_format(
+                alert.last_flow_datetime, utils.alerts_format
+            )
+        except (TypeError, ValueError):
+            alert_time = alert.last_flow_datetime
+
+        entry = (
+            f"{alert_time}: "
+            f"Src IP {profile}. "
+            f"Alert {alert.id} on timewindow {alert.timewindow.number}.\n"
+            f"{summary_text}"
+        )
+        self.summary_log.write(f"{entry}\n")
+        self.summary_log.flush()
+        os.fsync(self.summary_log.fileno())
+        self._log_operation(
+            f"Wrote summary entry for alert_id={alert.id} "
+            f"timewindow={alert.timewindow.number}",
+            verbosity=LOG_VERBOSITY_REQUESTS,
+        )
+
+    def _write_summary_error(self, alert, reason: str):
+        """
+        Append one single-line failure entry to alerts_summary.log.
+
+        :param alert: Alert whose summary failed.
+        :param reason: Why the summary could not be produced.
+        :return: None
+        """
+        error_reason = self._normalize_summary_text(reason) or (
+            "Unknown LLM summary failure."
+        )
+        self._write_summary_entry(
+            alert,
+            f"LLM summary unavailable: {error_reason}",
+        )
+
+    def _log_operation(
+        self, message: str, verbosity: int = LOG_VERBOSITY_REQUESTS
+    ):
+        """Append one line to the module operation log."""
+        if self.operation_log is None:
+            return
+        if verbosity > self.log_verbosity:
+            return
+
+        timestamp = utils.get_human_readable_datetime()
+        self.operation_log.write(f"{timestamp} {message}\n")
+        self.operation_log.flush()
+        os.fsync(self.operation_log.fileno())
+
+    def _remember_alert_summary(
+        self,
+        alert,
+        summary_text: str,
+        grouped_items: list[str],
+    ):
+        """
+        Store one completed alert summary for later prompt context.
+
+        :param alert: Alert that was summarized.
+        :param summary_text: Final summary text without file-log prefix handling.
+        :param grouped_items: Original grouped patterns for this alert.
+        :return: None
+        """
+        if not self.history_enabled or self.history_max_alerts <= 0:
+            return
+
+        profileid = str(alert.profile)
+        history = self.alert_history_by_profile[profileid]
+        top_patterns = [
+            self._normalize_summary_text(item)
+            for item in (grouped_items or [])[
+                : self.history_patterns_per_alert
+            ]
+        ]
+        pattern_signatures = self._build_pattern_signatures(top_patterns)
+        history.append(
+            {
+                "timewindow": getattr(alert.timewindow, "number", "?"),
+                "time_range": self._build_history_time_range(alert),
+                "accumulated_threat_level": float(
+                    getattr(alert, "accumulated_threat_level", 0.0) or 0.0
+                ),
+                "confidence": float(getattr(alert, "confidence", 0.0) or 0.0),
+                "top_patterns": top_patterns,
+                "pattern_signatures": pattern_signatures,
+                "summary_text": self._normalize_summary_text(summary_text),
+            }
+        )
+        while len(history) > self.history_max_alerts:
+            history.popleft()
+
+    def _build_history_time_range(self, alert) -> str:
+        """
+        Format one compact time-range label for stored alert history.
+
+        :param alert: Alert being summarized.
+        :return: Compact time range.
+        """
+        start_time = self._format_short_time(
+            getattr(alert.timewindow, "start_time", "")
+        )
+        end_time = self._format_short_time(
+            getattr(alert.timewindow, "end_time", "")
+        )
+        if start_time and end_time:
+            return (
+                f"{start_time}-{end_time}"
+                if start_time != end_time
+                else start_time
+            )
+        return start_time or end_time or "time-unknown"

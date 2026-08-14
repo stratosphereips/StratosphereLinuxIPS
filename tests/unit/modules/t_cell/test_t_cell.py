@@ -1,0 +1,1454 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
+import json
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+from modules.t_cell.t_cell import (
+    STATE_ACTIVATED,
+    STATE_ANERGIC,
+    STATE_ANTIGEN_RECOGNIZED,
+    STATE_EFFECTOR,
+    STATE_MATURE,
+    STATE_MEMORY,
+    AntigenCandidate,
+    RegexMatch,
+)
+from slips_files.common.slips_utils import utils
+from slips_files.core.database.sqlite_db.t_cell_db import TCellStorage
+from slips_files.core.structures.evidence import (
+    Attacker,
+    Direction,
+    Evidence,
+    EvidenceSignal,
+    EvidenceType,
+    IoCType,
+    Method,
+    ProfileID,
+    Proto,
+    ThreatLevel,
+    TimeWindow,
+    Victim,
+)
+from tests.module_factory import ModuleFactory
+
+TEST_TS = utils.convert_ts_format(1700000000, utils.alerts_format)
+
+
+def _build_storage(tmp_path):
+    conf = Mock()
+    conf.t_cell_store_dir = Mock(return_value="output/t_cell")
+    conf.t_cell_persistent_store_dir = Mock(return_value="")
+    return TCellStorage(Mock(), conf, str(tmp_path), 12345)
+
+
+def _prepare_t_cell(
+    tmp_path,
+    log_verbosity: int = 3,
+    trace_mode: int = 0,
+    trace_max_evidence: int = 10,
+):
+    t_cell = ModuleFactory().create_t_cell_obj()
+    t_cell.output_dir = str(tmp_path)
+    t_cell.log_file_path = str(tmp_path / "t_cell.log")
+    t_cell.trace_file_path = str(tmp_path / "t_cell_trace.jsonl")
+    storage = _build_storage(tmp_path)
+    t_cell.db.get_t_cell_storage.return_value = storage
+    with patch("modules.t_cell.t_cell.utils.drop_root_privs_permanently"):
+        assert t_cell.pre_main() is False
+    t_cell.log_verbosity = log_verbosity
+    t_cell.decision_trace_mode = trace_mode
+    t_cell.decision_trace_max_evidence = trace_max_evidence
+    t_cell._init_trace_file()
+    return t_cell, storage
+
+
+def test_t_cell_uses_lowercase_underscore_output_dir():
+    """T Cell should use a lowercase underscore module output directory."""
+    t_cell = ModuleFactory().create_t_cell_obj()
+
+    assert t_cell.output_dir == str(Path("dummy_output_dir") / "t_cell")
+    assert t_cell.log_file_path == str(
+        Path("dummy_output_dir") / "t_cell" / "t_cell.log"
+    )
+
+
+def test_pre_main_shuts_down_when_regex_generator_disabled_and_store_empty():
+    """T Cell should stop when no regex source is available."""
+    t_cell = ModuleFactory().create_t_cell_obj()
+    t_cell.db.get_enabled_modules.return_value = ["t_cell"]
+    t_cell.db.get_generated_regexes_count.return_value = 0
+
+    with patch("modules.t_cell.t_cell.utils.drop_root_privs_permanently"):
+        assert t_cell.pre_main() == 1
+
+    t_cell.print.assert_called_with(
+        "Warning: T Cell module is shutting down because "
+        "regex_generator module is disabled and the regex store is empty.",
+        0,
+        1,
+    )
+    t_cell.db.get_t_cell_storage.assert_not_called()
+
+
+def _build_evidence(
+    evidence_id: str,
+    signal: EvidenceSignal = EvidenceSignal.PAMP,
+    attacker=None,
+    victim=None,
+    uids=None,
+    profile_ip: str = "10.0.0.50",
+    threat_level: ThreatLevel = ThreatLevel.HIGH,
+    confidence: float = 1.0,
+):
+    attacker = attacker or Attacker(
+        direction=Direction.SRC,
+        ioc_type=IoCType.IP,
+        value=profile_ip,
+    )
+    evidence = Evidence(
+        evidence_type=EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_DOMAIN,
+        description="test evidence",
+        attacker=attacker,
+        victim=victim,
+        threat_level=threat_level,
+        profile=ProfileID(ip=profile_ip),
+        timewindow=TimeWindow(number=1),
+        uid=uids or ["uid-1"],
+        timestamp=TEST_TS,
+        proto=Proto.TCP,
+        dst_port=443,
+        method=Method.HEURISTIC,
+        id=evidence_id,
+        confidence=confidence,
+    )
+    evidence.evidence_signal = signal
+    return evidence
+
+
+def _message_for(evidence: Evidence) -> dict:
+    return {"data": json.dumps(utils.to_dict(evidence))}
+
+
+def _process_evidence_at(t_cell, evidence: Evidence, ts: float):
+    with patch("modules.t_cell.t_cell.time.time", return_value=ts):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+
+def _read_trace_entries(trace_path):
+    with open(trace_path, encoding="utf-8") as trace_file:
+        return [json.loads(line) for line in trace_file if line.strip()]
+
+
+def _insert_observation(
+    storage,
+    evidence_id: str,
+    profile_ip: str,
+    antigens: list[dict],
+    observed_at: float,
+    confidence: float,
+    threat_level_value: float,
+    threat_level: str = "high",
+    matched_regexes: list[dict] | None = None,
+    evidence_signal: str = "PAMP",
+):
+    return storage.insert_observation(
+        {
+            "evidence_id": evidence_id,
+            "evidence_type": "THREAT_INTELLIGENCE_BLACKLISTED_DOMAIN",
+            "evidence_signal": evidence_signal,
+            "profile_ip": profile_ip,
+            "timewindow_number": 1,
+            "timestamp": TEST_TS,
+            "observed_at": observed_at,
+            "confidence": confidence,
+            "threat_level": threat_level,
+            "threat_level_value": threat_level_value,
+            "interface": "default",
+            "uids": [f"{evidence_id}-uid"],
+            "antigen_count": len(antigens),
+            "antigens": antigens,
+            "matched_regexes": matched_regexes or [],
+            "raw_evidence": {},
+        }
+    )
+
+
+def _seed_recent_related_observations(
+    storage,
+    profile_ip: str,
+    antigen: AntigenCandidate,
+    fixed_now: float,
+    count: int,
+    confidence: float = 1.0,
+    threat_level_value: float = 0.8,
+    age_seconds: int = 300,
+):
+    for index in range(count):
+        _insert_observation(
+            storage=storage,
+            evidence_id=f"hist-recent-{index}",
+            profile_ip=profile_ip,
+            antigens=[antigen.as_dict()],
+            observed_at=fixed_now - age_seconds - index,
+            confidence=confidence,
+            threat_level_value=threat_level_value,
+        )
+
+
+def _accepted_domain_regex(regex_hash: str = "regex-hash") -> list[dict]:
+    return [
+        {
+            "regex_type": "dns_domain",
+            "regex": r"^bad\.example\.com$",
+            "regex_hash": regex_hash,
+            "created_at": 10,
+        }
+    ]
+
+
+def test_extract_antigen_candidates_from_entities_and_altflows(tmp_path):
+    t_cell, _ = _prepare_t_cell(tmp_path)
+    attacker = Attacker(
+        direction=Direction.SRC,
+        ioc_type=IoCType.URL,
+        value="https://download.bad.example.com/payload/run.exe?stage=2",
+    )
+    victim = Victim(
+        direction=Direction.DST,
+        ioc_type=IoCType.DOMAIN,
+        value="victim.bad.example.com",
+        SNI="sni.bad.example.com",
+    )
+    evidence = _build_evidence(
+        "extract-1",
+        attacker=attacker,
+        victim=victim,
+        uids=["dns-1", "http-1", "ssl-1"],
+    )
+    t_cell.db.get_altflow_from_uid.side_effect = lambda uid: {
+        "dns-1": {"type_": "dns", "query": "dns.bad.example.com"},
+        "http-1": {
+            "type_": "http",
+            "host": "http.bad.example.com",
+            "uri": "/dropper/setup.exe",
+        },
+        "ssl-1": {
+            "type_": "ssl",
+            "server_name": "tls.bad.example.com",
+            "subject": "C=US,O=Test,CN=cn.bad.example.com",
+        },
+    }[uid]
+
+    extracted = {
+        (item.regex_type, item.value)
+        for item in t_cell._extract_antigen_candidates(evidence)
+    }
+
+    assert ("dns_domain", "download.bad.example.com") in extracted
+    assert ("dns_domain", "victim.bad.example.com") in extracted
+    assert ("dns_domain", "dns.bad.example.com") in extracted
+    assert ("dns_domain", "http.bad.example.com") in extracted
+    assert ("uri", "/payload/run.exe?stage=2") in extracted
+    assert ("uri", "/dropper/setup.exe") in extracted
+    assert ("filename", "run.exe") in extracted
+    assert ("filename", "setup.exe") in extracted
+    assert ("tls_sni", "sni.bad.example.com") in extracted
+    assert ("tls_sni", "tls.bad.example.com") in extracted
+    assert ("certificate_cn", "cn.bad.example.com") in extracted
+
+
+def test_t_cell_stores_damp_evidence_and_checks_waiting_cells(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    evidence = _build_evidence("damp-1", signal=EvidenceSignal.DAMP)
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=2000.0):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    observations = storage.get_recent_observations(evidence.profile.ip, 0)
+    assert len(observations) == 1
+    assert observations[0]["evidence_signal"] == "DAMP"
+    assert storage.get_all_cells() == []
+    t_cell.db.publish.assert_not_called()
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        log_contents = log_file.read()
+    assert "damp_reverification" in log_contents
+    assert "reevaluated_cells=0" in log_contents
+    assert "signal=DAMP" in log_contents
+
+
+def test_t_cell_antigen_log_includes_evidence_signal(tmp_path):
+    t_cell, _ = _prepare_t_cell(tmp_path)
+    evidence = _build_evidence(
+        "damp-antigen-1",
+        signal=EvidenceSignal.DAMP,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.URL,
+            value="https://download.bad.example.com/payload/run.exe",
+        ),
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=2050.0):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        log_lines = log_file.read().splitlines()
+
+    antigen_line = next(
+        line for line in log_lines if "action=antigens_extracted" in line
+    )
+    assert "signal=DAMP" in antigen_line
+
+
+def test_t_cell_damp_can_prime_antigen_recognized_cell(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    evidence = _build_evidence(
+        "damp-prime-1",
+        signal=EvidenceSignal.DAMP,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.DOMAIN,
+            value="bad.example.com",
+        ),
+    )
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "damp-prime-regex"
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=2100.0):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    cell = storage.get_all_cells()[0]
+    assert cell["state"] == STATE_ANTIGEN_RECOGNIZED
+    assert cell["context"]["waiting_for"] == "co_stimulation"
+    assert cell["context"]["priming_signal"] == "DAMP"
+    assert cell["context"]["priming_label"] == "damp-primed"
+    assert cell["context"]["priming_strength"] == 0.6
+    assert (
+        cell["context"]["priming_profile"]["co_stimulation_threshold"]
+        > t_cell.co_stimulation_threshold
+    )
+    assert (
+        cell["context"]["priming_profile"]["state_wait_timeout_seconds"]
+        < t_cell.state_wait_timeout_seconds
+    )
+    transition = storage.get_transitions(cell["cell_key"])[0]
+    assert transition["reason"] == "antigen_recognized"
+    assert transition["scores"]["priming_signal"] == "DAMP"
+    assert transition["scores"]["co_stimulation_threshold"] == 0.8
+    assert transition["scores"]["effector_threshold"] == 0.8
+    assert transition["scores"]["memory_threshold"] == 0.65
+
+
+def test_t_cell_damp_no_regex_match_becomes_anergic(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    evidence = _build_evidence(
+        "damp-no-match-1",
+        signal=EvidenceSignal.DAMP,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.DOMAIN,
+            value="unknown.example.com",
+        ),
+    )
+    t_cell.db.get_generated_regexes.return_value = []
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=2150.0):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    cell = storage.get_all_cells()[0]
+    assert cell["state"] == STATE_ANERGIC
+    assert cell["anergic_until"] == 2150.0 + t_cell.anergy_ttl_seconds
+    transitions = storage.get_transitions(cell["cell_key"])
+    assert len(transitions) == 1
+    assert transitions[0]["reason"] == "no_regex_match"
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        log_contents = log_file.read()
+    assert "action=no_regex_match" in log_contents
+    assert "state=2 - anergic" in log_contents
+
+
+def test_t_cell_damp_priming_uses_stricter_co_stimulation_threshold(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    fixed_now = 2_200.0
+    profile_ip = "10.0.0.77"
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "damp-threshold-regex"
+    )
+
+    damp_prime = _build_evidence(
+        "damp-threshold-1",
+        signal=EvidenceSignal.DAMP,
+        profile_ip=profile_ip,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.DOMAIN,
+            value="bad.example.com",
+        ),
+    )
+    low_costim = _build_evidence(
+        "damp-threshold-2",
+        profile_ip=profile_ip,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.DOMAIN,
+            value="bad.example.com",
+        ),
+        confidence=0.5,
+    )
+    high_costim = _build_evidence(
+        "damp-threshold-3",
+        profile_ip=profile_ip,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.DOMAIN,
+            value="bad.example.com",
+        ),
+        confidence=0.7,
+    )
+
+    _seed_recent_related_observations(
+        storage,
+        profile_ip,
+        antigen,
+        fixed_now,
+        count=4,
+    )
+
+    _process_evidence_at(t_cell, damp_prime, fixed_now)
+    _process_evidence_at(t_cell, low_costim, fixed_now + 1)
+
+    cell = storage.get_all_cells()[0]
+    assert cell["state"] == STATE_ANTIGEN_RECOGNIZED
+    assert abs(cell["last_co_stimulation"] - 0.775) < 1e-9
+    assert cell["context"]["co_stimulation"]["threshold"] == 0.8
+
+    _process_evidence_at(t_cell, high_costim, fixed_now + 2)
+
+    cell = storage.get_all_cells()[0]
+    transitions = storage.get_transitions(cell["cell_key"])
+    assert cell["state"] == STATE_ACTIVATED
+    assert any(
+        transition["reason"] == "co_stimulation_threshold_met"
+        and transition["evidence_id"] == high_costim.id
+        for transition in transitions
+    )
+
+
+def test_t_cell_skips_pamp_without_antigens(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    evidence = _build_evidence("no-antigen-1")
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=3000.0):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    assert storage.get_all_cells() == []
+    assert t_cell.db.publish.call_count == 0
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        assert "no_antigen_extracted" in log_file.read()
+
+
+def test_t_cell_no_match_becomes_anergic_and_expires(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    evidence = _build_evidence("anergy-1", uids=["http-1"])
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "http",
+        "host": "bad.example.com",
+        "uri": "/setup.exe",
+    }
+    t_cell.db.get_generated_regexes.return_value = []
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=4000.0):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    cell = storage.get_all_cells()[0]
+    assert cell["state"] == STATE_ANERGIC
+    assert cell["anergic_until"] == 4000.0 + t_cell.anergy_ttl_seconds
+
+    evidence2 = _build_evidence("anergy-2", uids=["http-1"])
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex()
+    with patch(
+        "modules.t_cell.t_cell.time.time",
+        return_value=4000.0 + t_cell.anergy_ttl_seconds + 1,
+    ):
+        t_cell._process_evidence_message(_message_for(evidence2))
+
+    cell = storage.get_all_cells()[0]
+    transitions = [
+        transition["reason"]
+        for transition in storage.get_transitions(cell["cell_key"])
+    ]
+    assert "anergy_expired" in transitions
+    assert cell["state"] == STATE_ANTIGEN_RECOGNIZED
+
+
+def test_t_cell_co_stimulation_times_out_after_one_tw(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=2)
+    t_cell.state_wait_timeout_seconds = 100.0
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "timeout-regex"
+    )
+
+    first = _build_evidence(
+        "costim-timeout-1",
+        uids=["dns-1"],
+        threat_level=ThreatLevel.LOW,
+        confidence=0.1,
+    )
+    second = _build_evidence(
+        "costim-timeout-2",
+        uids=["dns-1"],
+        threat_level=ThreatLevel.LOW,
+        confidence=0.1,
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=5_000.0):
+        t_cell._process_evidence_message(_message_for(first))
+    with patch("modules.t_cell.t_cell.time.time", return_value=5_101.0):
+        t_cell._process_evidence_message(_message_for(second))
+
+    cell = storage.get_all_cells()[0]
+    transitions = [
+        transition["reason"]
+        for transition in storage.get_transitions(cell["cell_key"])
+    ]
+    assert "co_stimulation_timeout" in transitions
+    assert cell["state"] == STATE_ANERGIC
+    assert cell["anergic_until"] == 5_101.0 + t_cell.anergy_ttl_seconds
+
+
+def test_find_best_regex_match_prefers_specificity_and_newest(tmp_path):
+    t_cell, _ = _prepare_t_cell(tmp_path)
+    t_cell.db.get_generated_regexes.return_value = [
+        {
+            "regex_type": "dns_domain",
+            "regex": r"example\.com$",
+            "regex_hash": "broad",
+            "created_at": 1,
+        },
+        {
+            "regex_type": "dns_domain",
+            "regex": r"^bad\.example\.com$",
+            "regex_hash": "specific-old",
+            "created_at": 2,
+        },
+        {
+            "regex_type": "dns_domain",
+            "regex": r"^bad\.example\.com$",
+            "regex_hash": "specific-new",
+            "created_at": 3,
+        },
+    ]
+
+    match = t_cell._find_best_regex_match(
+        AntigenCandidate(regex_type="dns_domain", value="bad.example.com")
+    )
+
+    assert match.regex_hash == "specific-new"
+    assert match.regex == r"^bad\.example\.com$"
+
+
+def test_t_cell_effector_publishes_blocking_and_respects_cooldown(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    fixed_now = 10_000.0
+    profile_ip = "10.0.0.60"
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
+    evidence_1 = _build_evidence(
+        "effector-1", profile_ip=profile_ip, uids=["dns-1"]
+    )
+    evidence_2 = _build_evidence(
+        "effector-2", profile_ip=profile_ip, uids=["dns-1"]
+    )
+    evidence_3 = _build_evidence(
+        "effector-3", profile_ip=profile_ip, uids=["dns-1"]
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "live-effector"
+    )
+    t_cell.db.get_pid_of.side_effect = lambda name: (
+        123 if name == "Blocking" else None
+    )
+    _seed_recent_related_observations(
+        storage, profile_ip, antigen, fixed_now, count=4
+    )
+
+    _process_evidence_at(t_cell, evidence_1, fixed_now)
+    _process_evidence_at(t_cell, evidence_2, fixed_now + 1)
+    _process_evidence_at(t_cell, evidence_3, fixed_now + 2)
+
+    assert t_cell.db.publish.call_count == 1
+    channel, payload = t_cell.db.publish.call_args.args
+    assert channel == "new_blocking"
+    assert json.loads(payload) == {
+        "ip": profile_ip,
+        "block": True,
+        "tw": 1,
+        "interface": None,
+    }
+
+    cell = storage.get_all_cells()[0]
+    assert cell["state"] == STATE_EFFECTOR
+    match = RegexMatch(
+        regex_type="dns_domain",
+        value="bad.example.com",
+        regex_hash="live-effector",
+        regex=r"^bad\.example\.com$",
+        created_at=10,
+        specificity=10.0,
+    )
+    with patch("modules.t_cell.t_cell.time.time", return_value=fixed_now + 3):
+        t_cell._apply_effector(
+            cell,
+            evidence_3,
+            match,
+            {"effector_score": 0.95},
+            fixed_now + 3,
+            profile_ip,
+        )
+
+    assert t_cell.db.publish.call_count == 1
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        assert "effector_cooldown" in log_file.read()
+
+
+def test_t_cell_simulates_effector_without_blocking_modules(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    fixed_now = 11_000.0
+    profile_ip = "10.0.0.61"
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
+    evidence_1 = _build_evidence(
+        "simulate-1", profile_ip=profile_ip, uids=["dns-1"]
+    )
+    evidence_2 = _build_evidence(
+        "simulate-2", profile_ip=profile_ip, uids=["dns-1"]
+    )
+    evidence_3 = _build_evidence(
+        "simulate-3", profile_ip=profile_ip, uids=["dns-1"]
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "sim-effector"
+    )
+    t_cell.db.get_pid_of.return_value = None
+    _seed_recent_related_observations(
+        storage, profile_ip, antigen, fixed_now, count=4
+    )
+
+    _process_evidence_at(t_cell, evidence_1, fixed_now)
+    _process_evidence_at(t_cell, evidence_2, fixed_now + 1)
+    _process_evidence_at(t_cell, evidence_3, fixed_now + 2)
+
+    assert t_cell.db.publish.call_count == 0
+    assert storage.get_all_cells()[0]["state"] == STATE_EFFECTOR
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        assert "effector_simulated" in log_file.read()
+
+
+def test_t_cell_moves_to_memory_and_stores_context(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    fixed_now = 12_000.0
+    profile_ip = "10.0.0.62"
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
+    evidence_1 = _build_evidence(
+        "memory-1",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.5,
+    )
+    evidence_2 = _build_evidence(
+        "memory-2",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.5,
+    )
+    evidence_3 = _build_evidence(
+        "memory-3",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.5,
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "memory-regex"
+    )
+    t_cell.db.get_pid_of.return_value = None
+
+    for index in range(5):
+        _insert_observation(
+            storage=storage,
+            evidence_id=f"hist-old-{index}",
+            profile_ip=profile_ip,
+            antigens=[antigen.as_dict()],
+            observed_at=fixed_now - 2400 - index,
+            confidence=1.0,
+            threat_level_value=0.8,
+        )
+    for index in range(3):
+        _insert_observation(
+            storage=storage,
+            evidence_id=f"hist-new-{index}",
+            profile_ip=profile_ip,
+            antigens=[antigen.as_dict()],
+            observed_at=fixed_now - 300 - index,
+            confidence=0.5,
+            threat_level_value=0.5,
+            threat_level="medium",
+        )
+    storage.upsert_memory(
+        {
+            "cell_key": "old-memory-cell",
+            "profile_ip": "10.0.0.1",
+            "regex_type": "dns_domain",
+            "antigen_value": "bad.example.com",
+            "regex_hash": "memory-regex",
+            "regex": r"^bad\.example\.com$",
+            "matched_value": "bad.example.com",
+            "context": {"seeded": True},
+            "created_at": fixed_now - 100,
+            "updated_at": fixed_now - 100,
+        }
+    )
+
+    _process_evidence_at(t_cell, evidence_1, fixed_now)
+    _process_evidence_at(t_cell, evidence_2, fixed_now + 1)
+    _process_evidence_at(t_cell, evidence_3, fixed_now + 2)
+
+    cell = storage.get_all_cells()[0]
+    memories = storage.get_memories()
+    assert cell["state"] == STATE_MEMORY
+    assert any(memory["cell_key"] == cell["cell_key"] for memory in memories)
+
+
+def test_t_cell_does_not_repeat_memory_events_for_same_cell(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=3)
+    fixed_now = 12_500.0
+    profile_ip = "10.0.0.66"
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
+    evidence_1 = _build_evidence(
+        "memory-repeat-1",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.5,
+    )
+    evidence_2 = _build_evidence(
+        "memory-repeat-2",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.5,
+    )
+    evidence_3 = _build_evidence(
+        "memory-repeat-3",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.5,
+    )
+    evidence_4 = _build_evidence(
+        "memory-repeat-4",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.5,
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "memory-repeat-regex"
+    )
+    t_cell.db.get_pid_of.return_value = None
+
+    for index in range(5):
+        _insert_observation(
+            storage=storage,
+            evidence_id=f"hist-old-repeat-{index}",
+            profile_ip=profile_ip,
+            antigens=[antigen.as_dict()],
+            observed_at=fixed_now - 2400 - index,
+            confidence=1.0,
+            threat_level_value=0.8,
+        )
+    for index in range(3):
+        _insert_observation(
+            storage=storage,
+            evidence_id=f"hist-new-repeat-{index}",
+            profile_ip=profile_ip,
+            antigens=[antigen.as_dict()],
+            observed_at=fixed_now - 300 - index,
+            confidence=0.5,
+            threat_level_value=0.5,
+            threat_level="medium",
+        )
+    storage.upsert_memory(
+        {
+            "cell_key": "seeded-memory-cell",
+            "profile_ip": "10.0.0.1",
+            "regex_type": "dns_domain",
+            "antigen_value": "bad.example.com",
+            "regex_hash": "memory-repeat-regex",
+            "regex": r"^bad\.example\.com$",
+            "matched_value": "bad.example.com",
+            "context": {"seeded": True},
+            "created_at": fixed_now - 100,
+            "updated_at": fixed_now - 100,
+        }
+    )
+
+    _process_evidence_at(t_cell, evidence_1, fixed_now)
+    _process_evidence_at(t_cell, evidence_2, fixed_now + 1)
+    _process_evidence_at(t_cell, evidence_3, fixed_now + 2)
+    _process_evidence_at(t_cell, evidence_4, fixed_now + 10)
+
+    cell = storage.get_all_cells()[0]
+    transitions = storage.get_transitions(cell["cell_key"])
+    assert cell["state"] == STATE_MEMORY
+    assert (
+        sum(
+            1
+            for transition in transitions
+            if transition["reason"] == "context_memory"
+        )
+        == 1
+    )
+
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        log_contents = log_file.read()
+
+    assert log_contents.count("action=memory_stored") == 1
+    assert "action=memory_retained" in log_contents
+
+
+def test_t_cell_context_times_out_after_one_tw(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=2)
+    t_cell.state_wait_timeout_seconds = 100.0
+    profile_ip = "10.0.0.63"
+    evidence_1 = _build_evidence(
+        "context-timeout-1", profile_ip=profile_ip, uids=["dns-1"]
+    )
+    evidence_2 = _build_evidence(
+        "context-timeout-2", profile_ip=profile_ip, uids=["dns-1"]
+    )
+    evidence_3 = _build_evidence(
+        "context-timeout-3", profile_ip=profile_ip, uids=["dns-1"]
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "context-timeout-regex"
+    )
+    for index in range(4):
+        _insert_observation(
+            storage=storage,
+            evidence_id=f"danger-{index}",
+            profile_ip=profile_ip,
+            antigens=[
+                {
+                    "regex_type": "dns_domain",
+                    "value": f"other-{index}.example.com",
+                }
+            ],
+            observed_at=5_800.0 - index,
+            confidence=1.0,
+            threat_level_value=0.8,
+        )
+
+    _process_evidence_at(t_cell, evidence_1, 6_000.0)
+    _process_evidence_at(t_cell, evidence_2, 6_001.0)
+    _process_evidence_at(t_cell, evidence_3, 6_102.0)
+
+    cell = storage.get_all_cells()[0]
+    transitions = [
+        transition["reason"]
+        for transition in storage.get_transitions(cell["cell_key"])
+    ]
+    assert "context_timeout" in transitions
+    assert cell["state"] == STATE_MATURE
+
+
+def test_t_cell_damp_observations_raise_co_stimulation(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    fixed_now = 14_000.0
+    profile_ip = "10.0.0.64"
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
+    evidence_pamp = _build_evidence(
+        "damp-costim-1",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.7,
+    )
+    evidence_damp = _build_evidence(
+        "damp-costim-2",
+        signal=EvidenceSignal.DAMP,
+        profile_ip=profile_ip,
+        threat_level=ThreatLevel.CRITICAL,
+        confidence=1.0,
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "damp-costim-regex"
+    )
+    t_cell.db.get_pid_of.return_value = None
+    _seed_recent_related_observations(
+        storage,
+        profile_ip,
+        antigen,
+        fixed_now,
+        count=2,
+        confidence=0.5,
+        threat_level_value=0.5,
+    )
+    _insert_observation(
+        storage=storage,
+        evidence_id="damp-pressure-1",
+        profile_ip=profile_ip,
+        antigens=[],
+        observed_at=fixed_now - 30,
+        confidence=1.0,
+        threat_level_value=1.0,
+        threat_level="critical",
+        evidence_signal="DAMP",
+    )
+
+    _process_evidence_at(t_cell, evidence_pamp, fixed_now)
+    _process_evidence_at(t_cell, evidence_damp, fixed_now + 10)
+
+    cell = storage.get_all_cells()[0]
+    transitions = storage.get_transitions(cell["cell_key"])
+    assert cell["state"] == STATE_ACTIVATED
+    assert any(
+        transition["reason"] == "co_stimulation_threshold_met"
+        and transition["evidence_id"] == evidence_damp.id
+        and transition["scores"]["damp_danger_score"] > 0
+        for transition in transitions
+    )
+    assert t_cell.db.publish.call_count == 0
+
+
+def test_t_cell_damp_observations_raise_context_pressure(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path)
+    fixed_now = 15_000.0
+    profile_ip = "10.0.0.65"
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
+    evidence_1 = _build_evidence(
+        "damp-context-1",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.LOW,
+        confidence=1.0,
+    )
+    evidence_2 = _build_evidence(
+        "damp-context-2",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.LOW,
+        confidence=1.0,
+    )
+    evidence_3 = _build_evidence(
+        "damp-context-3",
+        signal=EvidenceSignal.DAMP,
+        profile_ip=profile_ip,
+        threat_level=ThreatLevel.CRITICAL,
+        confidence=1.0,
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "damp-context-regex"
+    )
+    t_cell.db.get_pid_of.side_effect = lambda name: (
+        123 if name == "Blocking" else None
+    )
+    _seed_recent_related_observations(
+        storage,
+        profile_ip,
+        antigen,
+        fixed_now,
+        count=4,
+        confidence=1.0,
+        threat_level_value=0.2,
+        age_seconds=120,
+    )
+    _insert_observation(
+        storage=storage,
+        evidence_id="damp-pressure-2",
+        profile_ip=profile_ip,
+        antigens=[],
+        observed_at=fixed_now - 20,
+        confidence=1.0,
+        threat_level_value=1.0,
+        threat_level="critical",
+        evidence_signal="DAMP",
+    )
+
+    _process_evidence_at(t_cell, evidence_1, fixed_now)
+    _process_evidence_at(t_cell, evidence_2, fixed_now + 1)
+    _process_evidence_at(t_cell, evidence_3, fixed_now + 10)
+
+    cell = storage.get_all_cells()[0]
+    transitions = storage.get_transitions(cell["cell_key"])
+    assert cell["state"] == STATE_EFFECTOR
+    assert any(
+        transition["reason"] == "context_effector"
+        and transition["evidence_id"] == evidence_3.id
+        and transition["scores"]["recent_damp_pressure"] > 0
+        for transition in transitions
+    )
+    assert t_cell.db.publish.call_count == 1
+
+
+def test_t_cell_summary_log_hides_waiting_for_co_stimulation(tmp_path):
+    t_cell, _ = _prepare_t_cell(tmp_path, log_verbosity=1)
+    evidence = _build_evidence("pending-1", uids=["dns-1"])
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "pending-regex"
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=13_000.0):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        log_contents = log_file.read()
+
+    assert "action=antigen_recognized" in log_contents
+    assert "waiting_for_co_stimulation" not in log_contents
+
+
+def test_t_cell_decision_log_explains_waiting_for_co_stimulation(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=2)
+    evidence = _build_evidence("pending-2", uids=["dns-1"])
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "pending-regex"
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=13_500.0):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        log_contents = log_file.read()
+
+    cell = storage.get_all_cells()[0]
+    assert cell["context"]["waiting_for"] == "co_stimulation"
+    assert "waiting_for_co_stimulation" in log_contents
+    assert "waiting=waiting for co-stimulation" in log_contents
+    assert "consumed_observation_id=" in log_contents
+    assert "consumed_evidence_id=pending-2" in log_contents
+
+
+def test_t_cell_damp_reverifies_waiting_co_stimulation_cells(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=2)
+    fixed_now = 14_500.0
+    profile_ip = "10.0.0.80"
+    evidence_pamp = _build_evidence(
+        "damp-reverify-costim-pamp",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.LOW,
+        confidence=1.0,
+    )
+    evidence_damp = _build_evidence(
+        "damp-reverify-costim-damp",
+        signal=EvidenceSignal.DAMP,
+        profile_ip=profile_ip,
+        threat_level=ThreatLevel.CRITICAL,
+        confidence=1.0,
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "damp-reverify-costim-regex"
+    )
+    _insert_observation(
+        storage=storage,
+        evidence_id="seed-damp-1",
+        profile_ip=profile_ip,
+        antigens=[],
+        observed_at=fixed_now - 20,
+        confidence=1.0,
+        threat_level_value=1.0,
+        threat_level="critical",
+        evidence_signal="DAMP",
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=fixed_now):
+        t_cell._process_evidence_message(_message_for(evidence_pamp))
+
+    first_cell = storage.get_all_cells()[0]
+    assert first_cell["state"] == STATE_ANTIGEN_RECOGNIZED
+    assert first_cell["context"]["waiting_for"] == "co_stimulation"
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=fixed_now + 10):
+        t_cell._process_evidence_message(_message_for(evidence_damp))
+
+    cell = storage.get_all_cells()[0]
+    transitions = storage.get_transitions(cell["cell_key"])
+    assert cell["state"] == STATE_ACTIVATED
+    assert cell["context"]["waiting_for"] == "context"
+    assert any(
+        transition["reason"] == "co_stimulation_threshold_met"
+        and transition["evidence_id"] == evidence_damp.id
+        for transition in transitions
+    )
+
+
+def test_t_cell_damp_reverifies_waiting_context_cells(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=2)
+    fixed_now = 14_800.0
+    profile_ip = "10.0.0.81"
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
+    evidence_pamp_1 = _build_evidence(
+        "damp-reverify-context-pamp",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.LOW,
+        confidence=1.0,
+    )
+    evidence_pamp_2 = _build_evidence(
+        "damp-reverify-context-pamp-2",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+        threat_level=ThreatLevel.LOW,
+        confidence=1.0,
+    )
+    evidence_damp = _build_evidence(
+        "damp-reverify-context-damp",
+        signal=EvidenceSignal.DAMP,
+        profile_ip=profile_ip,
+        threat_level=ThreatLevel.CRITICAL,
+        confidence=1.0,
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "damp-reverify-context-regex"
+    )
+    t_cell.db.get_pid_of.side_effect = lambda name: (
+        123 if name == "Blocking" else None
+    )
+    _seed_recent_related_observations(
+        storage,
+        profile_ip,
+        antigen,
+        fixed_now,
+        count=5,
+        confidence=1.0,
+        threat_level_value=0.1,
+        age_seconds=120,
+    )
+
+    _process_evidence_at(t_cell, evidence_pamp_1, fixed_now)
+
+    first_cell = storage.get_all_cells()[0]
+    assert first_cell["state"] == STATE_ANTIGEN_RECOGNIZED
+    assert first_cell["context"]["waiting_for"] == "co_stimulation"
+
+    _process_evidence_at(t_cell, evidence_pamp_2, fixed_now + 1)
+    activated_cell = storage.get_all_cells()[0]
+    assert activated_cell["state"] == STATE_ACTIVATED
+    assert activated_cell["context"]["waiting_for"] == "context"
+
+    _process_evidence_at(t_cell, evidence_damp, fixed_now + 10)
+
+    cell = storage.get_all_cells()[0]
+    transitions = storage.get_transitions(cell["cell_key"])
+    assert cell["state"] == STATE_EFFECTOR
+    assert "waiting_for" not in cell["context"]
+    assert any(
+        transition["reason"] == "context_effector"
+        and transition["evidence_id"] == evidence_damp.id
+        for transition in transitions
+    )
+    assert t_cell.db.publish.call_count == 1
+
+
+def test_t_cell_log_file_contains_color_codes(tmp_path):
+    t_cell, _ = _prepare_t_cell(tmp_path)
+    evidence = _build_evidence("log-1")
+
+    t_cell._log_event(
+        action="test_log",
+        state=STATE_EFFECTOR,
+        evidence=evidence,
+        metrics={"score": 0.95},
+        verbosity=3,
+    )
+
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        log_contents = log_file.read()
+
+    assert "\033[" in log_contents
+    assert "4 - effector" in log_contents
+
+
+def test_t_cell_uses_responsible_attacker_ip_for_cell_and_blocking(tmp_path):
+    t_cell, storage = _prepare_t_cell(tmp_path, log_verbosity=3)
+    fixed_now = 16_000.0
+    responsible_ip = "138.68.100.107"
+    related_profile_ip = "147.32.80.37"
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
+    evidence_1 = _build_evidence(
+        "responsible-ip-1",
+        profile_ip=related_profile_ip,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value=responsible_ip,
+        ),
+        victim=Victim(
+            direction=Direction.DST,
+            ioc_type=IoCType.IP,
+            value=related_profile_ip,
+        ),
+        uids=["dns-1"],
+    )
+    evidence_2 = _build_evidence(
+        "responsible-ip-2",
+        profile_ip=related_profile_ip,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value=responsible_ip,
+        ),
+        victim=Victim(
+            direction=Direction.DST,
+            ioc_type=IoCType.IP,
+            value=related_profile_ip,
+        ),
+        uids=["dns-1"],
+    )
+    evidence_3 = _build_evidence(
+        "responsible-ip-3",
+        profile_ip=related_profile_ip,
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value=responsible_ip,
+        ),
+        victim=Victim(
+            direction=Direction.DST,
+            ioc_type=IoCType.IP,
+            value=related_profile_ip,
+        ),
+        uids=["dns-1"],
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "responsible-ip-regex"
+    )
+    t_cell.db.get_pid_of.side_effect = lambda name: (
+        123 if name == "Blocking" else None
+    )
+    _seed_recent_related_observations(
+        storage, responsible_ip, antigen, fixed_now, count=4
+    )
+
+    _process_evidence_at(t_cell, evidence_1, fixed_now)
+    _process_evidence_at(t_cell, evidence_2, fixed_now + 1)
+    _process_evidence_at(t_cell, evidence_3, fixed_now + 2)
+
+    cell = storage.get_all_cells()[0]
+    assert cell["cell_key"].startswith(f"{responsible_ip}|")
+    assert cell["profile_ip"] == responsible_ip
+
+    channel, payload = t_cell.db.publish.call_args.args
+    assert channel == "new_blocking"
+    assert json.loads(payload) == {
+        "ip": responsible_ip,
+        "block": True,
+        "tw": 1,
+        "interface": None,
+    }
+
+    with open(t_cell.log_file_path, encoding="utf-8") as log_file:
+        log_contents = log_file.read()
+
+    assert f"profile={related_profile_ip}" in log_contents
+    assert f"responsible={responsible_ip}" in log_contents
+    assert f"target={related_profile_ip}" in log_contents
+
+
+def test_t_cell_falls_back_to_src_side_ip_when_attacker_is_not_ip(tmp_path):
+    t_cell, _ = _prepare_t_cell(tmp_path)
+    evidence = _build_evidence(
+        "src-fallback-1",
+        profile_ip="203.0.113.50",
+        attacker=Attacker(
+            direction=Direction.DST,
+            ioc_type=IoCType.DOMAIN,
+            value="bad.example.com",
+        ),
+        victim=Victim(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="10.0.0.50",
+        ),
+    )
+
+    assert t_cell._get_responsible_ip(evidence) == "10.0.0.50"
+
+
+def test_t_cell_transition_trace_lists_contributing_evidence(tmp_path):
+    t_cell, storage = _prepare_t_cell(
+        tmp_path, trace_mode=1, trace_max_evidence=10
+    )
+    fixed_now = 17_000.0
+    profile_ip = "10.0.0.67"
+    antigen = AntigenCandidate(
+        regex_type="dns_domain", value="bad.example.com"
+    )
+    evidence_1 = _build_evidence(
+        "trace-transition-1",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+    )
+    evidence_2 = _build_evidence(
+        "trace-transition-2",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+    )
+    evidence_3 = _build_evidence(
+        "trace-transition-3",
+        profile_ip=profile_ip,
+        uids=["dns-1"],
+    )
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "trace-transition-regex"
+    )
+    t_cell.db.get_pid_of.side_effect = lambda name: (
+        123 if name == "Blocking" else None
+    )
+    _seed_recent_related_observations(
+        storage, profile_ip, antigen, fixed_now, count=4
+    )
+
+    _process_evidence_at(t_cell, evidence_1, fixed_now)
+    _process_evidence_at(t_cell, evidence_2, fixed_now + 1)
+    _process_evidence_at(t_cell, evidence_3, fixed_now + 2)
+
+    entries = _read_trace_entries(t_cell.trace_file_path)
+    actions = [entry["action"] for entry in entries]
+
+    assert "co_stimulation_threshold_met" in actions
+    assert "context_effector" in actions
+
+    co_stim_entry = next(
+        entry
+        for entry in entries
+        if entry["action"] == "co_stimulation_threshold_met"
+    )
+    assert (
+        co_stim_entry["formula"]["components"]["related_pamps"]["count"] == 4
+    )
+    related_ids = {
+        item["evidence_id"]
+        for item in co_stim_entry["formula"]["components"]["related_pamps"][
+            "contributors"
+        ]
+    }
+    assert "hist-recent-0" in related_ids
+    pamp_danger_ids = {
+        item["evidence_id"]
+        for item in co_stim_entry["formula"]["components"]["danger"][
+            "pamp_contributors"
+        ]
+    }
+    assert evidence_2.id in pamp_danger_ids
+    assert evidence_1.id not in pamp_danger_ids
+
+
+def test_t_cell_all_trace_includes_waiting_evaluations(tmp_path):
+    t_cell, _ = _prepare_t_cell(tmp_path, trace_mode=2)
+    evidence = _build_evidence("trace-wait-1", uids=["dns-1"])
+    t_cell.db.get_altflow_from_uid.return_value = {
+        "type_": "dns",
+        "query": "bad.example.com",
+    }
+    t_cell.db.get_generated_regexes.return_value = _accepted_domain_regex(
+        "trace-wait-regex"
+    )
+
+    with patch("modules.t_cell.t_cell.time.time", return_value=18_000.0):
+        t_cell._process_evidence_message(_message_for(evidence))
+
+    entries = _read_trace_entries(t_cell.trace_file_path)
+    assert entries == []
+
+
+def test_t_cell_trace_file_is_forced_inside_output_dir(tmp_path):
+    t_cell = ModuleFactory().create_t_cell_obj()
+    t_cell.output_dir = str(tmp_path / "selected-output")
+    t_cell.conf.t_cell_decision_trace_file.return_value = (
+        "/tmp/escape/outside_trace.jsonl"
+    )
+
+    t_cell.read_configuration()
+
+    assert t_cell.trace_file_path == str(
+        tmp_path / "selected-output" / "outside_trace.jsonl"
+    )

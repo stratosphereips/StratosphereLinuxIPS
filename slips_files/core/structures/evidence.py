@@ -86,6 +86,7 @@ class EvidenceType(Enum):
     BAD_SMTP_LOGIN = auto()
     SMTP_LOGIN_BRUTEFORCE = auto()
     MALICIOUS_SSL_CERT = auto()
+    ANOMALOUS_FLOW = auto()
     MALICIOUS_FLOW = auto()
     SUSPICIOUS_USER_AGENT = auto()
     EMPTY_CONNECTIONS = auto()
@@ -145,6 +146,14 @@ class ThreatLevel(Enum):
 
     def __str__(self):
         return self.name.lower()
+
+
+class EvidenceSignal(Enum):
+    PAMP = "PAMP"
+    DAMP = "DAMP"
+
+    def __str__(self):
+        return self.name
 
 
 class Proto(Enum):
@@ -313,6 +322,7 @@ class Evidence:
             )
         },
     )
+    evidence_signal: EvidenceSignal = field(default=EvidenceSignal.PAMP)
 
     def __post_init__(self):
         if not isinstance(self.uid, list) or not all(
@@ -342,6 +352,7 @@ class Evidence:
             f"  Confidence: {self.confidence},\n"
             f"  Risk Level: {self.risk_level},\n"
             f"  Related ID: {self.rel_id}\n"
+            f"  Evidence Signal: {self.evidence_signal}\n"
             f")"
         )
 
@@ -352,6 +363,13 @@ def dict_to_evidence(evidence: dict) -> Evidence:
     :param evidence: Dictionary with evidence details.
     returns an instance of the Evidence class.
     """
+    try:
+        evidence_signal = EvidenceSignal[
+            str(evidence.get("evidence_signal", "PAMP")).upper()
+        ]
+    except KeyError:
+        evidence_signal = EvidenceSignal.PAMP
+
     evidence_attributes = {
         "evidence_type": EvidenceType[evidence["evidence_type"]],
         "description": evidence["description"],
@@ -387,6 +405,7 @@ def dict_to_evidence(evidence: dict) -> Evidence:
             else None
         ),
         "method": Method[evidence["method"].upper()],
+        "evidence_signal": evidence_signal,
     }
 
     return Evidence(**evidence_attributes)

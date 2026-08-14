@@ -71,6 +71,13 @@ class ModuleFactory:
         conf = Mock()
         conf.delete_prev_db = Mock(return_value=False)
         conf.disabled_detections = Mock(return_value=[])
+        conf.evidence_signal_default = Mock(return_value="PAMP")
+        conf.evidence_signal_overrides = Mock(
+            return_value={
+                "ANOMALOUS_FLOW": "DAMP",
+                "MALICIOUS_FLOW": "DAMP",
+            }
+        )
         conf.get_tw_width_as_float = Mock(return_value=3600.0)
         conf.get_tw_width_in_seconds = Mock(return_value=3600)
         conf.get_args = Mock(return_value=Mock(killall=False))
@@ -78,6 +85,20 @@ class ModuleFactory:
         conf.use_local_p2p = Mock(return_value=False)
         conf.permanent_dir = Mock(return_value="permanent")
         conf.width = Mock(return_value=3600)
+        conf.regex_generator_store_dir = Mock(
+            return_value=os.path.join(output_dir, "regex_generator")
+        )
+        conf.regex_generator_persistent_store_dir = Mock(return_value="")
+        conf.regex_generator_store_rejected_regexes = Mock(return_value=False)
+        conf.regex_generator_max_stored_rejected_regexes = Mock(
+            return_value=10000
+        )
+        conf.regex_generator_seed_benign_samples = Mock(return_value=True)
+        conf.t_cell_store_dir = Mock(
+            return_value=os.path.join(output_dir, "t_cell")
+        )
+        conf.t_cell_persistent_store_dir = Mock(return_value="")
+        conf.tranco_top_benign_limit = Mock(return_value=1000)
 
         with (
             # to prevent config/redis.conf from being overwritten
@@ -151,6 +172,255 @@ class ModuleFactory:
         )
         http_analyzer.print = Mock()
         return http_analyzer
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_llm_obj(self, mock_db):
+        from modules.llm_proxy.llm_proxy import LLMProxy
+
+        conf = Mock()
+        conf.llm_enabled = Mock(return_value=True)
+        conf.llm_default_backend = Mock(return_value="local_qwen")
+        conf.llm_worker_threads = Mock(return_value=1)
+        conf.llm_queue_size = Mock(return_value=10)
+        conf.llm_backends = Mock(
+            return_value={
+                "local_qwen": {
+                    "provider": "ollama",
+                    "model": "qwen2.5:3b",
+                    "base_url": "http://127.0.0.1:11434",
+                    "timeout": 60,
+                }
+            }
+        )
+
+        llm = LLMProxy(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=conf,
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
+        )
+        llm.db.channels.LLM_REQUEST = "llm_request"
+        llm.db.channels.LLM_RESPONSE = "llm_response"
+        llm.channels = {"llm_request": llm.c1}
+        llm.db.reset_pending_llm_request_counts = Mock()
+        llm.db.increment_pending_llm_request_count = Mock(return_value=1)
+        llm.db.decrement_pending_llm_request_count = Mock(return_value=0)
+        llm.db.get_pid_of = Mock(return_value=None)
+        llm.print = Mock()
+        return llm
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_regex_generator_obj(
+        self, mock_db, store_dir="dummy_output_dir/regex_generator"
+    ):
+        from modules.regex_generator.regex_generator import RegexGenerator
+
+        conf = Mock()
+        conf.regex_generator_enabled = Mock(return_value=True)
+        conf.regex_generator_create_log_file = Mock(return_value=False)
+        conf.regex_generator_generation_interval_seconds = Mock(return_value=5)
+        conf.regex_generator_allowed_backends = Mock(
+            return_value=["local_qwen"]
+        )
+        conf.regex_generator_llm_temperature = Mock(return_value=1.2)
+        conf.regex_generator_llm_max_tokens = Mock(return_value=80)
+        conf.regex_generator_llm_response_timeout_seconds = Mock(
+            return_value=90
+        )
+        conf.regex_generator_recent_history_size = Mock(return_value=0)
+        conf.regex_generator_max_regex_length = Mock(return_value=180)
+        conf.regex_generator_regex_validation_timeout_seconds = Mock(
+            return_value=2
+        )
+        conf.regex_generator_benign_match_strength_threshold = Mock(
+            return_value=75
+        )
+        conf.regex_generator_type_weights = Mock(
+            return_value={
+                "dns_domain": 1,
+                "uri": 1,
+                "filename": 1,
+                "tls_sni": 1,
+                "certificate_cn": 1,
+            }
+        )
+        conf.regex_generator_store_dir = Mock(return_value=store_dir)
+        conf.regex_generator_persistent_store_dir = Mock(return_value="")
+        conf.regex_generator_store_rejected_regexes = Mock(return_value=False)
+        conf.regex_generator_max_stored_rejected_regexes = Mock(
+            return_value=10000
+        )
+        conf.regex_generator_seed_benign_samples = Mock(return_value=True)
+        conf.tranco_top_benign_limit = Mock(return_value=1000)
+        conf.rotation = Mock(return_value=True)
+        conf.default_rotation_interval = Mock(return_value="1day")
+        conf.rotation_period = Mock(return_value="1day")
+
+        regex_generator = RegexGenerator(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=conf,
+            ppid=12345,
+            bloom_filters_manager=Mock(),
+        )
+        regex_generator.db.channels.LLM_REQUEST = "llm_request"
+        regex_generator.db.channels.LLM_RESPONSE = "llm_response"
+        regex_generator.channels = {
+            "llm_response": regex_generator.c_llm,
+            "tw_closed": regex_generator.c_tw_closed,
+        }
+        regex_generator.print = Mock()
+        return regex_generator
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_alert_summary_obj(self, mock_db):
+        from modules.alert_summary.alert_summary import AlertSummary
+
+        conf = Mock()
+        conf.alert_summary_enabled = Mock(return_value=True)
+        conf.alert_summary_allowed_backends = Mock(return_value=["local_qwen"])
+        conf.alert_summary_log_verbosity = Mock(return_value=2)
+        conf.alert_summary_llm_temperature = Mock(return_value=0.2)
+        conf.alert_summary_llm_max_tokens = Mock(return_value=220)
+        conf.alert_summary_llm_response_timeout_seconds = Mock(
+            return_value=120
+        )
+        conf.alert_summary_history_enabled = Mock(return_value=True)
+        conf.alert_summary_history_max_alerts = Mock(return_value=3)
+        conf.alert_summary_history_max_tokens = Mock(return_value=700)
+        conf.alert_summary_history_patterns_per_alert = Mock(return_value=2)
+
+        args = Mock()
+        args.is_slips_started_by_an_update = False
+
+        alert_summary = AlertSummary(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=args,
+            conf=conf,
+            ppid=12345,
+            bloom_filters_manager=Mock(),
+        )
+        alert_summary.db.channels.LLM_REQUEST = "llm_request"
+        alert_summary.db.channels.LLM_RESPONSE = "llm_response"
+        alert_summary.subscribe_to_channels()
+        alert_summary.db.get_available_llm_backends = Mock(
+            return_value={
+                "default_backend": "local_qwen",
+                "backends": {
+                    "local_qwen": {
+                        "provider": "ollama",
+                        "model": "qwen2.5:3b",
+                    }
+                },
+            }
+        )
+        alert_summary.db.get_pending_llm_request_count = Mock(return_value=0)
+        alert_summary.db.get_twid_evidence = Mock(return_value={})
+        alert_summary.db.get_hostname_from_profile = Mock(return_value="")
+        alert_summary.db.get_pid_of = Mock(return_value=None)
+        alert_summary.print = Mock()
+        return alert_summary
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_t_cell_obj(self, mock_db):
+        from modules.t_cell.t_cell import TCell
+
+        conf = Mock()
+        conf.t_cell_enabled = Mock(return_value=True)
+        conf.t_cell_create_log_file = Mock(return_value=True)
+        conf.t_cell_log_colors = Mock(return_value=True)
+        conf.t_cell_log_verbosity = Mock(return_value=1)
+        conf.t_cell_decision_trace_mode = Mock(return_value=0)
+        conf.t_cell_decision_trace_file = Mock(
+            return_value="t_cell_trace.jsonl"
+        )
+        conf.t_cell_decision_trace_max_evidence = Mock(return_value=10)
+        conf.get_tw_width_in_seconds = Mock(return_value=3600.0)
+        conf.t_cell_store_dir = Mock(return_value="dummy_output_dir/t_cell")
+        conf.t_cell_persistent_store_dir = Mock(return_value="")
+        conf.t_cell_observation_retention_seconds = Mock(return_value=604800)
+        conf.t_cell_anergy_ttl_seconds = Mock(return_value=21600)
+        conf.t_cell_related_lookback_seconds = Mock(return_value=3600)
+        conf.t_cell_related_pamps_saturation = Mock(return_value=5.0)
+        conf.t_cell_danger_saturation = Mock(return_value=2.5)
+        conf.t_cell_damp_danger_weight = Mock(return_value=1.5)
+        conf.t_cell_co_stimulation_threshold = Mock(return_value=0.65)
+        conf.t_cell_co_stimulation_weights = Mock(
+            return_value={
+                "confidence": 0.35,
+                "related_pamps": 0.25,
+                "danger": 0.40,
+            }
+        )
+        conf.t_cell_priming_profiles = Mock(
+            return_value={
+                "PAMP": {
+                    "strength": 1.0,
+                    "co_stimulation_threshold_offset": 0.0,
+                    "effector_threshold_offset": 0.0,
+                    "memory_threshold_offset": 0.0,
+                    "state_wait_timeout_factor": 1.0,
+                    "effector_min_related_count_offset": 0,
+                    "memory_min_related_count_offset": 0,
+                },
+                "DAMP": {
+                    "strength": 0.6,
+                    "co_stimulation_threshold_offset": 0.15,
+                    "effector_threshold_offset": 0.10,
+                    "memory_threshold_offset": 0.05,
+                    "state_wait_timeout_factor": 0.5,
+                    "effector_min_related_count_offset": 1,
+                    "memory_min_related_count_offset": 1,
+                },
+            }
+        )
+        conf.t_cell_novelty_window_seconds = Mock(return_value=86400)
+        conf.t_cell_context_recent_window_seconds = Mock(return_value=1800)
+        conf.t_cell_effector_threshold = Mock(return_value=0.70)
+        conf.t_cell_effector_min_related_count = Mock(return_value=4)
+        conf.t_cell_effector_cooldown_seconds = Mock(return_value=1800)
+        conf.t_cell_memory_threshold = Mock(return_value=0.60)
+        conf.t_cell_memory_trend_ratio_max = Mock(return_value=0.60)
+        conf.t_cell_memory_min_related_count = Mock(return_value=3)
+        conf.t_cell_simulate_effector_without_blocking = Mock(
+            return_value=True
+        )
+
+        args = Mock()
+        args.interface = None
+        args.access_point = False
+
+        t_cell = TCell(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=args,
+            conf=conf,
+            ppid=12345,
+            bloom_filters_manager=Mock(),
+        )
+        t_cell.db.get_generated_regexes.return_value = []
+        t_cell.db.get_generated_regexes_count.return_value = 0
+        t_cell.db.get_enabled_modules.return_value = [
+            "t_cell",
+            "regex_generator",
+        ]
+        t_cell.db.get_altflow_from_uid.return_value = {}
+        t_cell.db.get_pid_of.return_value = None
+        t_cell.db.publish = Mock()
+        t_cell.print = Mock()
+        return t_cell
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_fides_obj(self, mock_db):
@@ -1136,6 +1406,11 @@ class ModuleFactory:
         alert_handler.constants = Constants()
         alert_handler.default_ttl = 3600
         alert_handler.extended_ttl = 3600
+        alert_handler.default_evidence_signal = "PAMP"
+        alert_handler.evidence_signal_overrides = {
+            "ANOMALOUS_FLOW": "DAMP",
+            "MALICIOUS_FLOW": "DAMP",
+        }
         alert_handler.set_profileid_field = Mock()
         return alert_handler
 
@@ -1175,7 +1450,7 @@ class ModuleFactory:
         return handler
 
     def create_process_manager_obj(self):
-        from managers.process_manager import ProcessManager
+        from managers.process_manager.process_manager import ProcessManager
 
         main_mock = Mock()
         # main_mock.conf.get_bootstrapping_setting.return_value = (False, [])
@@ -1192,6 +1467,16 @@ class ModuleFactory:
         main_mock.conf.send_to_warden.return_value = False
         main_mock.conf.receive_from_warden.return_value = False
         main_mock.conf.generate_performance_plots.return_value = False
+        main_mock.conf.llm_enabled.return_value = True
+        main_mock.conf.llm_backends.return_value = {
+            "local_qwen": {
+                "provider": "ollama",
+                "model": "qwen2.5:3b",
+            }
+        }
+        main_mock.conf.alert_summary_enabled.return_value = False
+        main_mock.conf.regex_generator_enabled.return_value = False
+        main_mock.conf.t_cell_enabled.return_value = False
         main_mock.input_type = InputType.PCAP
         main_mock.mode = "normal"
         main_mock.stdout = ""

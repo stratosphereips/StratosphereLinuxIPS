@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import Mock, patch
 
 from modules.arp.filter import ARPEvidenceFilter
+from modules.supported_module_names import Modules
 from tests.module_factory import ModuleFactory
 
 
@@ -40,7 +41,9 @@ def test_is_slips_peer(p2p_enabled, is_private, peer_trust, expected):
 )
 def test_is_self_defense(ip, our_ips, blocking, has_poisoner, expected):
     db = Mock()
-    db.get_pids.return_value = {"arp_poisoner": 123} if has_poisoner else {}
+    db.get_pids.return_value = (
+        {Modules.ARP_POISONER: 123} if has_poisoner else {}
+    )
     args = Mock()
     args.blocking = blocking
 

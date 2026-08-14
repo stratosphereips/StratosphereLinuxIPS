@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import json
 import signal
+import ast
 import pytest
 from unittest.mock import Mock, call, patch
-from managers.process_manager import ProcessManager
+from managers.process_manager.process_manager import ProcessManager
+from modules.supported_module_names import Modules
 from tests.module_factory import ModuleFactory
 from slips_files.common.slips_utils import utils
 from slips_files.common.input_type import InputType
@@ -43,7 +45,7 @@ def test_start_input_process(
     process_manager.main.line_type = line_type
     process_manager.main.bloom_filters_man = Mock()
 
-    with patch("managers.process_manager.Input") as mock_input:
+    with patch("managers.process_manager.startup_mixin.Input") as mock_input:
         mock_input_process = Mock()
         mock_input.return_value = mock_input_process
         mock_input_process.pid = 54321
@@ -72,6 +74,9 @@ def test_start_input_process(
             is_input_failed_event=process_manager.is_input_failed_event,
             is_slips_live_updating_event=(
                 process_manager.is_slips_live_updating_event
+            ),
+            is_profiler_done_starting_initial_workers_event=(
+                process_manager.is_profiler_done_starting_initial_workers_event
             ),
         )
         mock_input_process.start.assert_called_once()
@@ -123,8 +128,79 @@ def test_init_sets_live_update_event_for_update_start(
 )
 def test_is_ignored_module(module_name, modules_to_ignore, expected):
     process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.user_disabled_modules = modules_to_ignore
+    process_manager.user_disabled_modules = set(modules_to_ignore)
+    process_manager.slips_disabled_modules = set()
     assert process_manager.is_disabled_module(module_name) == expected
+
+
+def test_get_disabled_modules_uses_disabled_module_helpers() -> None:
+    """Test disabled modules are returned from the dedicated helper methods."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.get_user_disabled_modules = Mock(
+        return_value={Modules.TEMPLATE}
+    )
+    process_manager.get_runtime_disabled_modules = Mock(
+        return_value={Modules.BLOCKING}
+    )
+
+    disabled_modules = process_manager.get_disabled_modules()
+
+    assert disabled_modules == ({Modules.TEMPLATE}, {Modules.BLOCKING})
+    assert process_manager.user_disabled_modules == {Modules.TEMPLATE}
+    assert process_manager.slips_disabled_modules == {Modules.BLOCKING}
+    process_manager.get_user_disabled_modules.assert_called_once_with()
+    process_manager.get_runtime_disabled_modules.assert_called_once_with()
+
+
+@pytest.mark.parametrize(
+    "configured_modules, expected_modules",
+    [
+        ([" template ", "custom_module"], {Modules.TEMPLATE, "custom_module"}),
+        (
+            [" template ", " feeds_update_manager "],
+            {Modules.TEMPLATE, Modules.FEEDS_UPDATE_MANAGER},
+        ),
+        ([], set()),
+    ],
+)
+def test_get_user_disabled_modules(
+    configured_modules: list, expected_modules: set
+) -> None:
+    """Test user-disabled modules are read from config and stripped."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.llm_enabled.return_value = True
+    process_manager.main.conf.alert_summary_enabled.return_value = True
+    process_manager.main.conf.regex_generator_enabled.return_value = True
+    process_manager.main.conf.read_configuration.reset_mock()
+    process_manager.main.conf.read_configuration.side_effect = None
+    process_manager.main.conf.read_configuration.return_value = (
+        configured_modules
+    )
+
+    disabled_modules = process_manager.get_user_disabled_modules()
+
+    assert disabled_modules == expected_modules
+    process_manager.main.conf.read_configuration.assert_called_once_with(
+        "modules", "disable", ["template"]
+    )
+
+
+def test_get_slips_disabled_modules_recomputes_runtime_disabled_modules() -> (
+    None
+):
+    """Test runtime-disabled modules are recomputed from current settings."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.clearblocking = False
+    process_manager.main.args.blocking = False
+    process_manager.slips_disabled_modules = {
+        Modules.BLOCKING,
+        Modules.ARP_POISONER,
+    }
+
+    disabled_modules = process_manager.get_runtime_disabled_modules()
+
+    assert Modules.BLOCKING in disabled_modules
+    assert Modules.ARP_POISONER in disabled_modules
 
 
 @pytest.mark.parametrize(
@@ -134,33 +210,33 @@ def test_is_ignored_module(module_name, modules_to_ignore, expected):
             InputType.PCAP,
             ["slips.py", "-f", "dataset/test.pcap"],
             [],
-            ["template", "custom_module"],
-            [
-                "exporting_alerts",
-                "p2p_trust",
-                "fides",
-                "iris",
-                "cesnet",
-                "blocking",
-                "arp_poisoner",
-                "cyst",
-            ],
+            {Modules.TEMPLATE, "custom_module"},
+            {
+                Modules.EXPORTING_ALERTS,
+                Modules.P2P_TRUST,
+                Modules.FIDES,
+                Modules.IRIS,
+                Modules.CESNET,
+                Modules.BLOCKING,
+                Modules.ARP_POISONER,
+                Modules.CYST,
+            },
         ),
         (
             InputType.ZEEK,
             ["slips.py", "-f", "dataset/conn.log"],
             ["stix"],
-            ["template", "custom_module"],
-            [
-                "p2p_trust",
-                "fides",
-                "iris",
-                "cesnet",
-                "blocking",
-                "arp_poisoner",
-                "leak_detector",
-                "cyst",
-            ],
+            {Modules.TEMPLATE, "custom_module"},
+            {
+                Modules.P2P_TRUST,
+                Modules.FIDES,
+                Modules.IRIS,
+                Modules.CESNET,
+                Modules.BLOCKING,
+                Modules.ARP_POISONER,
+                Modules.LEAK_DETECTOR,
+                Modules.CYST,
+            },
         ),
     ],
 )
@@ -168,11 +244,14 @@ def test_get_disabled_modules(
     input_type: InputType,
     argv: list,
     export_to: list,
-    expected_user: list,
-    expected_slips: list,
+    expected_user: set,
+    expected_slips: set,
 ) -> None:
     """Test disabled modules are split by user and Slips runtime rules."""
     process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.llm_enabled.return_value = True
+    process_manager.main.conf.alert_summary_enabled.return_value = True
+    process_manager.main.conf.regex_generator_enabled.return_value = True
     process_manager.main.input_type = input_type
     process_manager.main.args.clearblocking = False
     process_manager.main.args.blocking = False
@@ -185,27 +264,93 @@ def test_get_disabled_modules(
     )
     process_manager.main.conf.export_to.return_value = export_to
 
-    with patch("managers.process_manager.sys.argv", argv):
-        user_disabled_modules, slips_disabled_modules = (
-            process_manager.get_disabled_modules()
-        )
+    user_disabled_modules, slips_disabled_modules = (
+        process_manager.get_disabled_modules()
+    )
 
     assert user_disabled_modules == expected_user
     assert slips_disabled_modules == expected_slips
 
 
-def test_get_user_dsiabled_modules_strips_configured_entries() -> None:
+def test_get_hitlist_in_order_uses_supported_module_name_values() -> None:
+    """Test hitlist lookups use the shared supported module names enum."""
     process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.blocking = True
+    process_manager.main.db.get_disabled_modules.return_value = []
+    process_manager.main.db.get_pid_of.side_effect = lambda module_name: {
+        "evidence_handler": 10,
+        Modules.BLOCKING: 20,
+        Modules.ARP_POISONER: 30,
+        Modules.EXPORTING_ALERTS: 40,
+    }.get(module_name)
+    process_manager.children = [
+        Mock(pid=10),
+        Mock(pid=20),
+        Mock(pid=30),
+        Mock(pid=40),
+        Mock(pid=50),
+    ]
+
+    to_kill_first, to_kill_last = process_manager.get_hitlist_in_order()
+
+    assert [process.pid for process in to_kill_first] == [50]
+    assert [process.pid for process in to_kill_last] == [10, 20, 30, 40]
+
+
+def test_get_user_disabled_modules_strips_configured_entries() -> None:
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.llm_enabled.return_value = True
+    process_manager.main.conf.alert_summary_enabled.return_value = True
+    process_manager.main.conf.regex_generator_enabled.return_value = True
     process_manager.main.conf.read_configuration.side_effect = None
     process_manager.main.conf.read_configuration.return_value = [
         " template ",
         " custom_module",
     ]
 
-    assert process_manager.get_user_dsiabled_modules() == [
-        "template",
+    assert process_manager.get_user_disabled_modules() == {
+        Modules.TEMPLATE,
         "custom_module",
-    ]
+    }
+
+
+@pytest.mark.parametrize(
+    "llm_enabled, alert_summary_enabled, regex_generator_enabled, expected",
+    [
+        (False, True, True, {Modules.LLM_PROXY}),
+        (True, False, True, {Modules.ALERT_SUMMARY}),
+        (True, True, False, {Modules.REGEX_GENERATOR}),
+        (
+            False,
+            False,
+            False,
+            {
+                Modules.LLM_PROXY,
+                Modules.ALERT_SUMMARY,
+                Modules.REGEX_GENERATOR,
+            },
+        ),
+    ],
+)
+def test_get_user_disabled_modules_includes_feature_toggled_modules(
+    llm_enabled: bool,
+    alert_summary_enabled: bool,
+    regex_generator_enabled: bool,
+    expected: set[Modules],
+) -> None:
+    """Test dedicated enabled flags disable LLM-related modules at startup."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.read_configuration.side_effect = None
+    process_manager.main.conf.read_configuration.return_value = []
+    process_manager.main.conf.llm_enabled.return_value = llm_enabled
+    process_manager.main.conf.alert_summary_enabled.return_value = (
+        alert_summary_enabled
+    )
+    process_manager.main.conf.regex_generator_enabled.return_value = (
+        regex_generator_enabled
+    )
+
+    assert process_manager.get_user_disabled_modules() == expected
 
 
 def test_get_runtime_disabled_modules_uses_runtime_rules() -> None:
@@ -220,20 +365,131 @@ def test_get_runtime_disabled_modules_uses_runtime_rules() -> None:
     process_manager.main.args.blocking = False
     process_manager.main.input_type = InputType.ZEEK
     process_manager.main.args.input_module = ""
-    process_manager.slips_disabled_modules = ["custom_runtime_module"]
+    process_manager.slips_disabled_modules = set()
 
-    assert process_manager.get_runtime_disabled_modules() == [
-        "exporting_alerts",
-        "p2p_trust",
-        "fides",
-        "iris",
-        "cesnet",
-        "blocking",
-        "arp_poisoner",
-        "leak_detector",
-        "cyst",
-        "custom_runtime_module",
-    ]
+    assert process_manager.get_runtime_disabled_modules() == {
+        Modules.EXPORTING_ALERTS,
+        Modules.P2P_TRUST,
+        Modules.FIDES,
+        Modules.IRIS,
+        Modules.CESNET,
+        Modules.BLOCKING,
+        Modules.ARP_POISONER,
+        Modules.LEAK_DETECTOR,
+        Modules.CYST,
+    }
+
+
+def test_get_disabled_modules_keeps_unrelated_modules_enabled() -> None:
+    """Test disabling regex_generator does not disable unrelated modules."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.read_configuration.side_effect = (
+        lambda section, name, default_value: (
+            [Modules.REGEX_GENERATOR]
+            if (section, name) == ("modules", "disable")
+            else default_value
+        )
+    )
+
+    _, slips_disabled_modules = process_manager.get_disabled_modules()
+
+    assert Modules.T_CELL not in slips_disabled_modules
+    assert Modules.T_CELL not in process_manager.slips_disabled_modules
+
+
+@pytest.mark.parametrize(
+    "disabled_modules, enabled_value, expected",
+    [
+        ({Modules.LLM_PROXY}, True, True),
+        (set(), False, False),
+        (set(), True, False),
+    ],
+)
+def test_has_missing_dependency_respects_disabled_and_configured_dependencies(
+    disabled_modules: set[Modules],
+    enabled_value: bool,
+    expected: bool,
+) -> None:
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.read_configuration.side_effect = (
+        lambda section, name, default_value: (
+            enabled_value
+            if section == "llmproxy" and name == "enabled"
+            else default_value
+        )
+    )
+
+    assert (
+        process_manager._has_missing_dependency(
+            Modules.REGEX_GENERATOR, disabled_modules
+        )
+        is expected
+    )
+
+
+def test_read_config_parses_module_dependencies() -> None:
+    module_factory = ModuleFactory()
+    process_manager = module_factory.create_process_manager_obj()
+
+    assert process_manager.module_dependencies == {
+        Modules.LLM_PROXY: (),
+        Modules.REGEX_GENERATOR: (Modules.LLM_PROXY,),
+        Modules.ALERT_SUMMARY: (Modules.LLM_PROXY,),
+    }
+
+
+@pytest.mark.parametrize(
+    "module_name, expected_dependencies",
+    [
+        (Modules.LLM_PROXY, ()),
+        ("regex_generator", (Modules.LLM_PROXY,)),
+        (
+            "modules.alert_summary.alert_summary",
+            (Modules.LLM_PROXY,),
+        ),
+        ("unknown_module", ()),
+    ],
+)
+def test_get_module_dependencies(
+    module_name: str, expected_dependencies: tuple
+) -> None:
+    module_factory = ModuleFactory()
+    process_manager = module_factory.create_process_manager_obj()
+
+    assert (
+        process_manager.get_module_dependencies(module_name)
+        == expected_dependencies
+    )
+
+
+def test_get_dependency_disabled_modules_disables_llm_dependents() -> None:
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.user_disabled_modules = {Modules.LLM_PROXY}
+    process_manager.main.conf.read_configuration.side_effect = (
+        lambda section, name, default_value: default_value
+    )
+
+    assert process_manager._get_dependency_disabled_modules(set()) == {
+        Modules.REGEX_GENERATOR,
+        Modules.ALERT_SUMMARY,
+    }
+
+
+def test_get_dependency_disabled_modules_ignores_disabled_dependents() -> None:
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.user_disabled_modules = {
+        Modules.LLM_PROXY,
+        Modules.REGEX_GENERATOR,
+        Modules.ALERT_SUMMARY,
+    }
+    process_manager.main.conf.read_configuration.side_effect = (
+        lambda section, name, default_value: default_value
+    )
+
+    with patch.object(process_manager.main, "print") as mock_print:
+        assert process_manager._get_dependency_disabled_modules(set()) == set()
+
+    mock_print.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -269,7 +525,8 @@ def test_should_load_module(
     """Test module loading respects bootstrapping and disabled modules."""
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.bootstrapping_modules = ["fides", "iris"]
-    process_manager.user_disabled_modules = disabled_modules
+    process_manager.user_disabled_modules = set(disabled_modules)
+    process_manager.slips_disabled_modules = set()
     process_manager.is_bootstrapping_node = Mock(return_value=should_bootstrap)
 
     assert process_manager._should_load_module(module_name) is expected
@@ -277,26 +534,39 @@ def test_should_load_module(
 
 def test_print_disabled_modules():
     process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.user_disabled_modules = ["Module1", "Module2"]
+    process_manager.user_disabled_modules = {Modules.TEMPLATE, Modules.FIDES}
+    process_manager.slips_disabled_modules = set()
     with patch.object(process_manager.main, "print") as mock_print:
         process_manager.print_disabled_modules()
-        mock_print.assert_called_once_with(
-            "Disabled Modules: " "['Module1', 'Module2']", 1, 0
+        printed_modules = ast.literal_eval(
+            mock_print.call_args.args[0].removeprefix("Disabled Modules: ")
         )
+
+        assert set(printed_modules) == {"template", "fides"}
+        mock_print.assert_called_once()
 
 
 @pytest.mark.parametrize(
-    "pending_modules, expected_print_calls",
+    "pending_module_names, expected_print_calls",
     [
         # Test case 1: No pending modules, no additional print calls
         ([], 1),
         # Test case 2: Pending modules without feeds_update_manager, one additional print call
-        ([Mock(name="Module1"), Mock(name="Module2")], 1),
+        (["Module1", "Module2"], 1),
+        # Test case 3: Pending update manager prints the extra warning
+        ([Modules.FEEDS_UPDATE_MANAGER], 2),
     ],
 )
-def test_warn_about_pending_modules(pending_modules, expected_print_calls):
+def test_warn_about_pending_modules(
+    pending_module_names, expected_print_calls
+):
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.warning_printed_once = False
+    pending_modules = []
+    for module_name in pending_module_names:
+        pending_module = Mock()
+        pending_module.name = module_name
+        pending_modules.append(pending_module)
 
     with patch.object(process_manager.main, "print") as mock_print:
         process_manager.warn_about_pending_modules(pending_modules)
@@ -311,19 +581,27 @@ def test_warn_about_pending_modules(pending_modules, expected_print_calls):
         mock_print.assert_not_called()
 
 
+def test_reading_flows_from_cyst_uses_supported_module_name() -> None:
+    """Test CYST input detection relies on the shared module-name enum."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.input_module = Modules.CYST.value
+
+    assert process_manager._reading_flows_from_cyst() is True
+
+
 @pytest.mark.parametrize(
     "blocking_enabled, exporting_alerts_disabled, "
     "expected_kill_first, expected_kill_last",
     [  # Testcase1: blocking enabled, exporting_alerts enabled
-        (True, False, [1, 2], [3, 4, 5]),
+        (True, False, [1, 2, 6, 7], [3, 4, 5]),
         # Testcase2: blocking disabled, exporting_alerts enabled
-        (False, False, [1, 2, 4], [3, 5]),
+        (False, False, [1, 2, 4, 6, 7], [3, 5]),
         # Testcase3: blocking enabled, exporting_alerts disabled
-        (True, True, [1, 2, 5], [3, 4]),
+        (True, True, [1, 2, 5, 6, 7], [3, 4]),
         # Testcase4: blocking disabled, exporting_alerts disabled
-        (False, True, [1, 2, 4, 5], [3]),
+        (False, True, [1, 2, 4, 5, 6, 7], [3]),
         # Testcase5: All enabled, some PIDs are None
-        (True, False, [1, 2], [3, 4, 5]),
+        (True, False, [1, 2, 6, 7], [3, 4, 5]),
     ],
 )
 def test_get_hitlist_in_order(
@@ -339,12 +617,16 @@ def test_get_hitlist_in_order(
         Mock(pid=3, name="evidence_handler"),
         Mock(pid=4, name="blocking"),
         Mock(pid=5, name="exporting_alerts"),
+        Mock(pid=6, name="alert_summary"),
+        Mock(pid=7, name="LLM"),
     ]
 
     process_manager.main.db.get_pid_of = lambda x: {
         "evidence_handler": 3,
         "blocking": 4,
         "exporting_alerts": 5,
+        "alert_summary": 6,
+        "LLM": 7,
     }.get(x)
     process_manager.main.args.blocking = blocking_enabled
     process_manager.main.db.get_disabled_modules = lambda: (
@@ -542,6 +824,87 @@ def test_is_done_receiving_new_flows(
     assert process_manager.is_done_receiving_new_flows() == expected_result
 
 
+def test_stop_llm_stack_if_llm_module_stopped_kills_dependents() -> None:
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.module_dependencies = {
+        Modules.LLM_PROXY: (),
+        Modules.REGEX_GENERATOR: (Modules.LLM_PROXY,),
+        Modules.ALERT_SUMMARY: (Modules.LLM_PROXY,),
+    }
+    process_manager.main.db.get_pid_of.side_effect = lambda module_name: {
+        Modules.LLM_PROXY: 100,
+        Modules.REGEX_GENERATOR: 101,
+        Modules.ALERT_SUMMARY: 102,
+    }.get(module_name)
+
+    with patch(
+        "managers.process_manager.shutdown_mixin.os.kill",
+        side_effect=ProcessLookupError,
+    ), patch.object(
+        process_manager, "kill_process_tree"
+    ) as mock_kill_process_tree, patch.object(
+        process_manager.main, "print"
+    ) as mock_print:
+        process_manager._stop_llm_stack_if_llm_module_stopped()
+
+    assert mock_kill_process_tree.call_args_list == [call(101), call(102)]
+    assert process_manager.stopped_modules == [
+        str(Modules.REGEX_GENERATOR),
+        str(Modules.ALERT_SUMMARY),
+        str(Modules.LLM_PROXY),
+    ]
+    mock_print.assert_called_once_with(
+        "Stopping modules because llm_proxy stopped: "
+        "['Modules.REGEX_GENERATOR', 'Modules.ALERT_SUMMARY']"
+    )
+
+
+@pytest.mark.parametrize(
+    "llm_enabled, os_kill_side_effect, stopped_modules",
+    [
+        (False, None, []),
+        (True, None, []),
+        (True, ProcessLookupError, [str(Modules.REGEX_GENERATOR)]),
+    ],
+)
+def test_stop_llm_stack_if_llm_module_stopped_skips_unneeded_shutdown(
+    llm_enabled: bool,
+    os_kill_side_effect: type[BaseException] | None,
+    stopped_modules: list[str],
+) -> None:
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.module_dependencies = {
+        Modules.LLM_PROXY: (),
+        Modules.REGEX_GENERATOR: (Modules.LLM_PROXY,),
+    }
+    process_manager.main.conf.llm_enabled.return_value = llm_enabled
+    process_manager.main.db.get_pid_of.side_effect = lambda module_name: {
+        Modules.LLM_PROXY: 100,
+        Modules.REGEX_GENERATOR: 101,
+    }.get(module_name)
+    process_manager.stopped_modules = stopped_modules
+
+    with patch(
+        "managers.process_manager.shutdown_mixin.os.kill",
+        side_effect=os_kill_side_effect,
+    ), patch.object(
+        process_manager, "kill_process_tree"
+    ) as mock_kill_process_tree, patch.object(
+        process_manager.main, "print"
+    ) as mock_print:
+        process_manager._stop_llm_stack_if_llm_module_stopped()
+
+    if llm_enabled and os_kill_side_effect is ProcessLookupError:
+        mock_kill_process_tree.assert_called_once_with(101)
+        mock_print.assert_called_once_with(
+            "Stopping modules because llm_proxy stopped: "
+            "['Modules.REGEX_GENERATOR']"
+        )
+    else:
+        mock_kill_process_tree.assert_not_called()
+        mock_print.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "live_update, stop_received, done_receiving, expected_result",
     [
@@ -723,7 +1086,7 @@ def test_shutdown_gracefully_handles_core_module_failure() -> None:
     )
 
     with patch(
-        "managers.process_manager.multiprocessing.active_children",
+        "managers.process_manager.shutdown_mixin.multiprocessing.active_children",
         return_value=[],
     ):
         process_manager.shutdown_gracefully()
@@ -769,7 +1132,7 @@ def test_print_stopped_module():
     process_manager.stopped_modules = []
 
     with patch(
-        "managers.process_manager.green",
+        "managers.process_manager.reporting_mixin.green",
         side_effect=["green_module_name", "green_count"],
     ), patch.object(process_manager.main, "print") as mock_print:
         process_manager.print_stopped_module("TestModule")
@@ -819,9 +1182,9 @@ def test_kill_process_tree_kills_descendants_before_parent():
     child_children.read.return_value = ""
 
     with patch(
-        "managers.process_manager.os.popen",
+        "managers.process_manager.shutdown_mixin.os.popen",
         side_effect=[parent_children, child_children],
-    ), patch("managers.process_manager.os.kill") as mock_kill:
+    ), patch("managers.process_manager.shutdown_mixin.os.kill") as mock_kill:
         process_manager.kill_process_tree(123)
 
     assert mock_kill.call_args_list == [
@@ -884,7 +1247,7 @@ def test_start_profiler_process():
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.bloom_filters_man = Mock()
     with patch(
-        "managers.process_manager.Profiler"
+        "managers.process_manager.startup_mixin.Profiler"
     ) as mock_profiler, patch.object(
         process_manager.is_profiler_done_starting_initial_workers_event,
         "wait",
@@ -951,7 +1314,7 @@ def test_start_profiler_process_waits_for_initial_workers(
     )
 
     with patch(
-        "managers.process_manager.Profiler"
+        "managers.process_manager.startup_mixin.Profiler"
     ) as mock_profiler, patch.object(wait_event, "wait") as mock_wait:
         mock_profiler_process = Mock()
         mock_profiler.return_value = mock_profiler_process
@@ -980,7 +1343,9 @@ def test_start_evidence_process(output_dir, redis_port):
     process_manager.main.args.output = output_dir
     process_manager.main.redis_port = redis_port
 
-    with patch("managers.process_manager.EvidenceHandler") as mock_evidence:
+    with patch(
+        "managers.process_manager.startup_mixin.EvidenceHandler"
+    ) as mock_evidence:
         mock_evidence_process = Mock()
         mock_evidence.return_value = mock_evidence_process
         mock_evidence_process.pid = 13579
@@ -1008,10 +1373,11 @@ def test_start_evidence_process(output_dir, redis_port):
 def test_print_started_module():
     process_manager = ModuleFactory().create_process_manager_obj()
     with patch(
-        "managers.process_manager.green", return_value="green_module_name"
+        "managers.process_manager.reporting_mixin.green",
+        return_value="green_module_name",
     ), patch.object(process_manager.main, "print") as mock_print:
         process_manager.print_started_module(
-            "TestModule", 12345, "Test description"
+            Modules.CESNET, 12345, "Test description"
         )
 
         mock_print.assert_called_once_with(
@@ -1036,7 +1402,7 @@ def test_print_started_module():
     ],
 )
 @patch("asyncio.run")
-@patch("managers.process_manager.Lock")
+@patch("managers.process_manager.startup_mixin.Lock")
 def test_start_update_manager(
     mock_lock,
     mock_asyncio_run,
@@ -1055,7 +1421,7 @@ def test_start_update_manager(
 
     mock_update_manager = Mock()
     with patch(
-        "managers.process_manager.FeedsUpdateManager",
+        "managers.process_manager.startup_mixin.FeedsUpdateManager",
         return_value=mock_update_manager,
     ):
         process_manager.start_update_manager(

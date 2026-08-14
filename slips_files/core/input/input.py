@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
-import time
+import multiprocessing
 
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -25,7 +25,6 @@ from slips_files.common.abstracts.icore import ICore
 from slips_files.common.input_type import InputType
 
 from slips_files.common.parsers.config_parser import ConfigParser
-import multiprocessing
 
 from slips_files.core.input.binetflow.binetflow_input import BinetflowInput
 from slips_files.core.input.binetflow.binetflow_tabs_input import (
@@ -60,6 +59,7 @@ class Input(ICore):
         is_input_done_event: multiprocessing.Event = None,
         is_input_failed_event: multiprocessing.Event = None,
         is_slips_live_updating_event: multiprocessing.Event = None,
+        is_profiler_done_starting_initial_workers_event: multiprocessing.Event = None,
     ):
         self.input_type = input_type
         self.profiler_queue = profiler_queue
@@ -93,6 +93,9 @@ class Input(ICore):
         # is set by this proc to indicate it stopped because of a failure.
         self.is_input_failed_event = is_input_failed_event
         self.is_slips_live_updating_event = is_slips_live_updating_event
+        self.is_profiler_done_starting_initial_workers_event = (
+            is_profiler_done_starting_initial_workers_event
+        )
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.input_handlers = self._build_input_handlers()
         self.active_handler = None
@@ -129,27 +132,19 @@ class Input(ICore):
             log_to_logfiles_only=True,
         )
 
-        # ok this very terrible solution is to prevent the race condition
+        # ok this solution is to prevent the race condition
         # that happens when the analyzed file is extremely small, that the
         # input reads it, sends to the profiler queue, and reaches here,
-        # before the workers all start!! so we end up sending 0 stop msgs
-        # because 0 workers has started. this race condition causes slips
+        # before the profiler workers all start!! so we end up sending 0 stop
+        # msgs because 0 workers has started. this race condition causes slips
         # to stay up forever waiting for stop msgs that will never be recvd
         # in the profiler.
-        # this says " if the input took less than 3mins to reach this line,
-        # give slips extra 10s justt o make sure profilers are started
-        # before sending the stop msgs"
-        max_time_slips_can_take_to_start_all_processes = 60 * 3
-        if (
-            time.time()
-            < float(self.db.get_slips_start_time())
-            + max_time_slips_can_take_to_start_all_processes
-        ):
+        if self.is_profiler_done_starting_initial_workers_event is not None:
             self.print(
-                "Giving Slips time to start all profilers.",
+                "Waiting for profiler workers to finish starting.",
                 log_to_logfiles_only=True,
             )
-            time.sleep(20)
+            self.is_profiler_done_starting_initial_workers_event.wait(30)
 
         started_workers: int = self.db.get_profiler_workers_started()
         self.print(

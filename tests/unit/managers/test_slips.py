@@ -9,7 +9,7 @@ from tests.module_factory import ModuleFactory
 
 def test_load_modules():
     proc_manager = ModuleFactory().create_process_manager_obj()
-    disabled_modules = ["template", "mldetection-1", "fides"]
+    disabled_modules = ["template", "fides"]
     proc_manager.main.conf.read_configuration.side_effect = (
         lambda section, name, default_value: (
             disabled_modules

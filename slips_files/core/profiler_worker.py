@@ -605,6 +605,9 @@ class ProfilerWorker(IModule):
 
             msg = self.get_msg_from_queue(self.profiler_queue)
             if not msg:
+                if self.is_input_done_event.is_set():
+                    gc.collect()
+                    return 1
                 return
 
             if self.is_stop_msg(msg):

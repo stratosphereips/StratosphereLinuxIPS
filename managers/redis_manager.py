@@ -6,6 +6,7 @@ import redis
 import os
 import psutil
 import socket
+import sys
 import time
 import subprocess
 from typing import Dict, Union
@@ -166,6 +167,10 @@ class RedisManager:
                         "Save the DB\n"
                     )
 
+                db = getattr(self.main, "db", None)
+                zeek_dir = '""'
+                if db:
+                    zeek_dir = db.get_zeek_output_dir()
                 zeek_dir = self.main.args.output
 
                 f.write(
@@ -598,9 +603,13 @@ class RedisManager:
                 f"being used.\nAre you sure you want to {alter} it? ["
                 f"y/n]\n> "
             )
+            if not sys.stdin.isatty():
+                return True
             answer = input(msg)
             if answer.lower() == "y":
                 return True
+        except EOFError:
+            return True
         except KeyboardInterrupt:
             pass
 
@@ -624,8 +633,14 @@ class RedisManager:
         return False
 
     def _get_dbmanager_without_starting_a_new_server(self, port):
+        logger = getattr(self.main, "logger", None)
+        if logger is None:
+            logger = Output(
+                create_logfiles=False,
+                slips_args=getattr(self.main, "args", None),
+            )
         return DBManager(
-            Output(),
+            logger,
             self.main.args.output,
             port,
             self.main.conf,
@@ -757,6 +772,24 @@ class RedisManager:
                 os.remove(tmpfile)
             raise e
 
+    def _get_redis_server_selection(self) -> int:
+        """
+        Read the selected Redis server from stdin.
+
+        Returns:
+            The selected server number, or 0 when stdin is unavailable.
+        """
+        if sys.stdin.isatty():
+            try:
+                return int(input())
+            except EOFError:
+                return 0
+            except ValueError:
+                print("Invalid input.")
+                self.main.terminate_slips()
+
+        return 0
+
     def flush_and_kill(self, pid: int, port):
         """
         raises UserCancelledErr or AlreadyKilledErr if redis isnt killed,
@@ -794,14 +827,11 @@ class RedisManager:
             if not open_servers:
                 self.main.terminate_slips()
 
-            try:
-                server_to_close: int = int(input())
-            except ValueError:
-                print("Invalid input.")
-                self.main.terminate_slips()
+            server_to_close: int = self._get_redis_server_selection()
 
-            # close all ports in running_slips_logs.txt and in our supported range
             if server_to_close == 0:
+                # close all ports in running_slips_logs.txt
+                # and in our supported range
                 self.close_all_ports()
                 self.main.terminate_slips()
                 return

@@ -14,6 +14,7 @@ import base64
 import sys
 import socket
 import threading
+import time
 from typing import (
     Dict,
     Optional,
@@ -227,6 +228,121 @@ def allocate_integration_test_port(test_name: str, port_label: str) -> int:
     port = get_available_integration_test_port()
     print(f"[integration-test] {test_name} using {port_label} port {port}")
     return port
+
+
+def is_tcp_port_open(port: int) -> bool:
+    """
+    Check whether a localhost TCP port is accepting connections.
+
+    :param port: TCP port to probe
+    :return: True when the port is accepting connections
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.2)
+        try:
+            sock.connect(("127.0.0.1", port))
+        except OSError:
+            return False
+
+    return True
+
+
+def start_test_redis_server(redis_port: int, output_dir) -> None:
+    """
+    Start the Redis server used by an integration test.
+
+    The server is daemonized (see config/redis.conf.template), so this
+    function returns once the server is confirmed to be listening.
+
+    :param redis_port: Redis port allocated for the test
+    :param output_dir: Test output directory, redis logs/data are stored in
+        an output_dir/redis subdirectory
+    :raises RuntimeError: When the server fails to start or never listens
+    """
+    output_dir = Path(output_dir)
+    redis_dir = output_dir / "redis"
+    redis_dir.mkdir(parents=True, exist_ok=True)
+
+    command = [
+        "redis-server",
+        "config/redis.conf.template",
+        "--port",
+        str(redis_port),
+        "--bind",
+        "127.0.0.1",
+        "--dir",
+        str(redis_dir),
+        "--dbfilename",
+        "dump.rdb",
+        "--logfile",
+        f"redis-server-port-{redis_port}.log",
+    ]
+
+    process = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if process.returncode != 0 and not is_tcp_port_open(redis_port):
+        raise RuntimeError(
+            "Failed to start redis-server for integration test "
+            f"on port {redis_port}: {process.stderr or process.stdout}"
+        )
+
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        if is_tcp_port_open(redis_port):
+            return
+        time.sleep(0.2)
+
+    raise RuntimeError(
+        f"Timed out waiting for redis-server on port {redis_port}."
+    )
+
+
+def allocate_started_redis_port(
+    integration_port_factory,
+    output_dir,
+    port_label: str = "redis",
+    max_attempts: int = 5,
+) -> int:
+    """
+    Allocate a Redis port, start a Redis server on it, and retry with a new
+    port when startup fails.
+
+    This is the entrypoint integration tests should use: it guarantees a
+    listening Redis server before the test (and Slips) tries to connect. If a
+    server can't be opened on the allocated port, another port is allocated
+    and the server is opened there instead.
+
+    :param integration_port_factory: Callable that allocates integration-test
+        ports (the ``integration_port_factory`` fixture)
+    :param output_dir: Test output directory used to store redis logs/data
+    :param port_label: Label describing the allocated port
+    :param max_attempts: Maximum number of Redis startup attempts
+    :return: Redis port that was successfully started
+    :raises RuntimeError: When no server could be started after max_attempts
+    """
+    last_error = None
+
+    for _ in range(max_attempts):
+        redis_port = integration_port_factory(port_label)
+        try:
+            start_test_redis_server(redis_port, output_dir)
+            return redis_port
+        except RuntimeError as error:
+            last_error = error
+            print(
+                "Failed to start redis-server for integration test on "
+                f"port {redis_port}. Retrying with a new port."
+            )
+
+    raise RuntimeError(
+        "Failed to start redis-server for integration test after "
+        f"{max_attempts} attempts: {last_error}"
+    )
 
 
 def get_slips_test_command(arguments):

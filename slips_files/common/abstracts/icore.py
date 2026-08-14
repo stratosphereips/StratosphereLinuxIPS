@@ -15,7 +15,7 @@ class ICore(IModule, Process):
     Interface for all Core files placed in slips_files/core/
     """
 
-    name = ""
+    name = "icore"
     description = "Short description of the core class purpose"
     authors = ["Name of the author creating the class"]
 

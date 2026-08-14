@@ -119,6 +119,8 @@ class RedisDB(
         "slips2fides",
         "iris_internal",
         "new_zeek_fields_line",
+        "llm_request",
+        "llm_response",
     }
 
     separator = "_"
@@ -325,6 +327,8 @@ class RedisDB(
         # By default False. Meaning we don't DELETE the DB by default.
         cls.config_flush_db: bool = conf.delete_prev_db()
         cls.disabled_detections: List[str] = conf.disabled_detections()
+        cls.default_evidence_signal: str = conf.evidence_signal_default()
+        cls.evidence_signal_overrides: dict = conf.evidence_signal_overrides()
         cls.width = conf.get_tw_width_in_seconds()
         cls.client_ips: List[str] = conf.client_ips()
 
@@ -772,6 +776,124 @@ class RedisDB(
         """
         return self.r.hkeys(self.constants.PIDS)
 
+    @staticmethod
+    def _empty_available_llm_backends() -> dict:
+        return {"default_backend": "", "backends": {}}
+
+    def set_available_llm_backends(self, registry: dict):
+        normalized = self._normalize_available_llm_backends_registry(registry)
+        self.r.set(
+            self.constants.AVAILABLE_LLM_BACKENDS, json.dumps(normalized)
+        )
+
+    def get_available_llm_backends(self) -> dict:
+        if registry := self.r.get(self.constants.AVAILABLE_LLM_BACKENDS):
+            try:
+                registry = json.loads(registry)
+            except json.JSONDecodeError:
+                return self._empty_available_llm_backends()
+            return self._normalize_available_llm_backends_registry(registry)
+
+        return self._empty_available_llm_backends()
+
+    def reset_pending_llm_request_counts(self):
+        """
+        Clear requester-level in-flight LLM request counters.
+
+        The shared LLM service owns this key and resets it on startup and
+        shutdown so stale counts from earlier runs do not block modules.
+        """
+        self.r.delete(self.constants.PENDING_LLM_REQUESTS_BY_REQUESTER)
+
+    def increment_pending_llm_request_count(self, requester: str):
+        """
+        Increment the in-flight shared-LLM request count for one requester.
+
+        :param requester: Caller module name.
+        :return: New counter value or 0 when requester is empty.
+        """
+        requester = str(requester or "").strip()
+        if not requester:
+            return 0
+        return self.r.hincrby(
+            self.constants.PENDING_LLM_REQUESTS_BY_REQUESTER,
+            requester,
+            1,
+        )
+
+    def decrement_pending_llm_request_count(self, requester: str):
+        """
+        Decrement the in-flight shared-LLM request count for one requester.
+
+        :param requester: Caller module name.
+        :return: Updated non-negative counter value.
+        """
+        requester = str(requester or "").strip()
+        if not requester:
+            return 0
+
+        key = self.constants.PENDING_LLM_REQUESTS_BY_REQUESTER
+        value = self.r.hincrby(key, requester, -1)
+        if value <= 0:
+            self.r.hdel(key, requester)
+            return 0
+        return value
+
+    def get_pending_llm_request_count(self, requester: str) -> int:
+        """
+        Return the in-flight shared-LLM request count for one requester.
+
+        :param requester: Caller module name.
+        :return: Non-negative count.
+        """
+        requester = str(requester or "").strip()
+        if not requester:
+            return 0
+        value = self.r.hget(
+            self.constants.PENDING_LLM_REQUESTS_BY_REQUESTER,
+            requester,
+        )
+        try:
+            return max(0, int(value or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    def _normalize_available_llm_backends_registry(
+        self, registry: dict
+    ) -> dict:
+        if not isinstance(registry, dict):
+            return self._empty_available_llm_backends()
+
+        backends = registry.get("backends")
+        if not isinstance(backends, dict):
+            backends = {}
+
+        normalized_backends = {}
+        for alias, metadata in backends.items():
+            if not isinstance(alias, str) or not alias.strip():
+                continue
+            if not isinstance(metadata, dict):
+                continue
+
+            provider = str(metadata.get("provider", "")).strip()
+            model = str(metadata.get("model", "")).strip()
+            if not provider or not model:
+                continue
+
+            normalized_backends[alias.strip()] = {
+                "provider": provider,
+                "model": model,
+            }
+
+        default_backend = str(registry.get("default_backend", "")).strip()
+        if default_backend not in normalized_backends:
+            default_backend = ""
+
+        return {
+            "default_backend": default_backend,
+            "backends": normalized_backends,
+        }
+
     def get_disabled_modules(self) -> List[str]:
         if disabled_modules := self.r.hget(
             self.constants.ANALYSIS, "disabled_modules"
@@ -1189,35 +1311,47 @@ class RedisDB(
         return self.separator
 
     def store_tranco_whitelisted_domains(
-        self, domains: List[str], ttl: Optional[int] = None
-    ):
+        self,
+        domains: List[str],
+        limit: Optional[int] = None,
+    ) -> None:
         """
-        store whitelisted domains from tranco whitelist in the db
+        Store ordered tranco domains in the db.
+
+        Parameters:
+            domains: Ordered Tranco domains to store. they must be ordered.
+            limit: Optional maximum number of domains to store.
         """
-        # the reason we store tranco whitelisted domains in the cache db
-        # instead of the main db is, we don't want them cleared on every new
-        # instance of slips
-        self.rcache.sadd(self.constants.TRANCO_WHITELISTED_DOMAINS, *domains)
-        if ttl and ttl > 0:
-            self.rcache.expire(
-                self.constants.TRANCO_WHITELISTED_DOMAINS, int(ttl)
+        if limit is not None:
+            if limit <= 0:
+                return
+            domains = domains[:limit]
+
+        with self.rcache.pipeline() as pipe:
+            if domains:
+                pipe.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
+                pipe.zadd(
+                    self.constants.TRANCO_WHITELISTED_DOMAINS,
+                    {domain: rank for rank, domain in enumerate(domains)},
+                )
+            pipe.execute()
+
+    def get_tranco_top_domains(self, limit: Optional[int] = None) -> List[str]:
+        end = -1 if limit is None or limit <= 0 else limit - 1
+        return (
+            self.rcache.zrange(
+                self.constants.TRANCO_WHITELISTED_DOMAINS, 0, end
             )
-
-    def is_tranco_whitelist_expired(self) -> bool:
-        """
-        checks if tranco whitelist is expired based on Redis TTL
-        """
-        ttl = self.rcache.ttl(self.constants.TRANCO_WHITELISTED_DOMAINS)
-        # -2: key does not exist, -1: no expire
-        return ttl <= 0
-
-    def is_whitelisted_tranco_domain(self, domain):
-        return self.rcache.sismember(
-            self.constants.TRANCO_WHITELISTED_DOMAINS, domain
+            or []
         )
 
-    def delete_tranco_whitelist(self):
-        return self.rcache.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
+    def is_whitelisted_tranco_domain(self, domain: str) -> bool:
+        return (
+            self.rcache.zscore(
+                self.constants.TRANCO_WHITELISTED_DOMAINS, domain
+            )
+            is not None
+        )
 
     def get_asn_info(self, ip: str) -> Optional[Dict[str, str]]:
         """

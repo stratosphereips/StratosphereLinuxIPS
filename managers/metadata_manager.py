@@ -11,6 +11,7 @@ from typing import (
     Set,
 )
 
+from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 
 
@@ -109,14 +110,20 @@ class MetadataManager:
             user_disabled_modules,
             slips_disabled_modules,
         ) = self.main.proc_man.get_disabled_modules()
-        disabled_modules = user_disabled_modules + slips_disabled_modules
+        disabled_modules: Set[str | Modules] = (
+            user_disabled_modules | slips_disabled_modules
+        )
+        disabled_modules_list = [
+            module.value if isinstance(module, Modules) else str(module)
+            for module in disabled_modules
+        ]
         self.main.proc_man.user_disabled_modules = user_disabled_modules
         self.main.proc_man.slips_disabled_modules = slips_disabled_modules
         info = {
             "slips_version": self.main.version,
             "name": self.main.input_information,
             "analysis_start": now,
-            "disabled_modules": json.dumps(disabled_modules),
+            "disabled_modules": json.dumps(disabled_modules_list),
             "output_dir": self.main.args.output,
             "input_type": self.main.input_type,
             "evidence_detection_threshold": self.main.conf.evidence_detection_threshold(),

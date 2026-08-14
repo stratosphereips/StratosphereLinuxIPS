@@ -18,6 +18,12 @@ This documentation gives an overview how Slips works, how to use it and how to h
 - **Detection modules**. Explanation of detection modules in Slips, types of input and output. See :doc:`Detection modules <detection_modules>`.
 
 - **brute_force_detector**. Dedicated documentation for the SSH brute force detector module. See :doc:`brute_force_detector <brute_force_detector>`.
+- **LLM module**. Shared access to configured LLM backends from other Slips modules. See :doc:`LLM module <llm_module>`.
+- **Alert Summary module**. Analyst-facing one-paragraph summaries for alerts using the shared LLM service. See :doc:`Alert Summary module <alert_summary_module>`.
+
+- **Regex Generator module**. Shared service that generates and validates pseudo-random regexes for later Zeek-side use. See :doc:`Regex Generator module <regex_generator_module>`.
+
+- **T Cell module**. Immune-style responder that consumes PAMP evidence, regex matches, and context to decide blocking or memory. See :doc:`T Cell module <t_cell_module>`.
 
 - **HTTPS anomaly detection**. Detailed design and behavior of the HTTPS anomaly detector. See :doc:`HTTPS anomaly detection <https_anomaly_detection>`.
 
@@ -28,6 +34,8 @@ This documentation gives an overview how Slips works, how to use it and how to h
 - **Detections per Flow**. Explanation on how Slips works to make detections on each flow with different techniques. See :doc:`flow_alerts <flow_alerts>`.
 
 - **Exporting**. The exporting module allows Slips to export to Slack and STIX servers. See :doc:`Exporting <exporting>`.
+
+- **Evidence signals**. Central PAMP/DAMP classification for evidence, configuration overrides, and the current evidence inventory. See :doc:`Evidence signals <evidence_signals>`.
 
 - **Slips in Action**. Example of using slips to analyze different PCAPs See :doc:`Slips in action <slips_in_action>`.
 
@@ -54,11 +62,16 @@ This documentation gives an overview how Slips works, how to use it and how to h
    architecture
    detection_modules
    brute_force_detector
+   llm_module
+   alert_summary_module
+   regex_generator_module
+   t_cell_module
    https_anomaly_detection
    flow_alerts
    features
    training
    exporting
+   evidence_signals
    P2P
    fides
    create_new_module

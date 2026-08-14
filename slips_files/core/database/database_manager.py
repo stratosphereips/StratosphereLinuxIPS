@@ -67,9 +67,11 @@ class DBManager:
         self.conf = conf
         self.output_dir = output_dir
         self.redis_port = redis_port
+        self.main_pid = main_pid
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
-
+        self.regex_generator_storage = None
+        self.t_cell_storage = None
         # only the main process should ever flush the Redis DB. to avoid
         # children overwriting values set at the very start of slips
         if os.getpid() != main_pid:
@@ -217,6 +219,22 @@ class DBManager:
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
+
+    def reset_pending_llm_request_counts(self):
+        """Clear requester-level in-flight shared-LLM request counters."""
+        return self.rdb.reset_pending_llm_request_counts()
+
+    def increment_pending_llm_request_count(self, requester: str):
+        """Increment the in-flight shared-LLM request count for one requester."""
+        return self.rdb.increment_pending_llm_request_count(requester)
+
+    def decrement_pending_llm_request_count(self, requester: str):
+        """Decrement the in-flight shared-LLM request count for one requester."""
+        return self.rdb.decrement_pending_llm_request_count(requester)
+
+    def get_pending_llm_request_count(self, requester: str) -> int:
+        """Return the in-flight shared-LLM request count for one requester."""
+        return self.rdb.get_pending_llm_request_count(requester)
 
     @classmethod
     def read_configuration(cls):
@@ -620,14 +638,11 @@ class DBManager:
     def store_tranco_whitelisted_domains(self, *args, **kwargs):
         return self.rdb.store_tranco_whitelisted_domains(*args, **kwargs)
 
+    def get_tranco_top_domains(self, *args, **kwargs):
+        return self.rdb.get_tranco_top_domains(*args, **kwargs)
+
     def is_whitelisted_tranco_domain(self, *args, **kwargs):
         return self.rdb.is_whitelisted_tranco_domain(*args, **kwargs)
-
-    def delete_tranco_whitelist(self, *args, **kwargs):
-        return self.rdb.delete_tranco_whitelist(*args, **kwargs)
-
-    def is_tranco_whitelist_expired(self, *args, **kwargs):
-        return self.rdb.is_tranco_whitelist_expired(*args, **kwargs)
 
     def get_ip_identification(self, *args, **kwargs):
         return self.rdb.get_ip_identification(*args, **kwargs)
@@ -1072,6 +1087,12 @@ class DBManager:
     def get_enabled_modules(self, *args, **kwargs):
         return self.rdb.get_enabled_modules(*args, **kwargs)
 
+    def set_available_llm_backends(self, *args, **kwargs):
+        return self.rdb.set_available_llm_backends(*args, **kwargs)
+
+    def get_available_llm_backends(self, *args, **kwargs):
+        return self.rdb.get_available_llm_backends(*args, **kwargs)
+
     def get_msgs_received_at_runtime(self, *args, **kwargs):
         return self.rdb.get_msgs_received_at_runtime(*args, **kwargs)
 
@@ -1125,6 +1146,9 @@ class DBManager:
 
     def get_all_flows_in_profileid_twid(self, *args, **kwargs):
         return self.sqlite.get_all_flows_in_profileid_twid(*args, **kwargs)
+
+    def get_all_altflows_in_profileid_twid(self, *args, **kwargs):
+        return self.sqlite.get_all_altflows_in_profileid_twid(*args, **kwargs)
 
     def get_all_flows_in_profileid(self, *args, **kwargs):
         return self.sqlite.get_all_flows_in_profileid(*args, **kwargs)
@@ -1347,6 +1371,53 @@ class DBManager:
     def get_separator(self):
         return self.rdb.separator
 
+    def _get_regex_generator_storage(self):
+        if self.regex_generator_storage is None:
+            from slips_files.core.database.sqlite_db.regex_generator_db import (
+                RegexGeneratorStorage,
+            )
+
+            self.regex_generator_storage = RegexGeneratorStorage(
+                self.logger,
+                self.conf,
+                self.output_dir,
+                self.main_pid,
+            )
+        return self.regex_generator_storage
+
+    def get_generated_regexes(self, *args, **kwargs):
+        return self._get_regex_generator_storage().get_generated_regexes(
+            *args, **kwargs
+        )
+
+    def get_generated_regexes_count(self, *args, **kwargs):
+        return self._get_regex_generator_storage().get_generated_regexes_count(
+            *args, **kwargs
+        )
+
+    def _get_t_cell_storage(self):
+        if self.t_cell_storage is None:
+            from slips_files.core.database.sqlite_db.t_cell_db import (
+                TCellStorage,
+            )
+
+            self.t_cell_storage = TCellStorage(
+                self.logger,
+                self.conf,
+                self.output_dir,
+                self.main_pid,
+            )
+        return self.t_cell_storage
+
+    def get_t_cell_storage(self):
+        return self._get_t_cell_storage()
+
+    def get_icmp_attack_info_to_single_host(self, *args, **kwargs):
+        return self.rdb.get_icmp_attack_info_to_single_host(*args, **kwargs)
+
+    def get_icmp_attack_info_to_several_hosts(self, *args, **kwargs):
+        return self.rdb.get_icmp_attack_info_to_several_hosts(*args, **kwargs)
+
     def init_tables(self, *args, **kwargs):
         return self.sqlite.init_tables(*args, **kwargs)
 
@@ -1435,6 +1506,10 @@ class DBManager:
         # when stopping the daemon using -S, slips doesn't start the sqlite db
         if self.sqlite:
             self.sqlite.close(*args, **kwargs)
+        if self.regex_generator_storage:
+            self.regex_generator_storage.close()
+        if self.t_cell_storage:
+            self.t_cell_storage.close()
 
     def close_all_dbs(self):
         self.rdb.r.close()

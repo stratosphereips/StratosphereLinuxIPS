@@ -17,7 +17,7 @@ import logging
 from managers.host_ip_manager import HostIPManager
 from managers.ap_manager import APManager
 from managers.metadata_manager import MetadataManager
-from managers.process_manager import ProcessManager
+from managers.process_manager.process_manager import ProcessManager
 from managers.profilers_manager import ProfilersManager
 from managers.redis_manager import RedisManager
 from managers.timewindow_manager import TimewindowManager
@@ -436,6 +436,8 @@ class Main:
         except ZeroDivisionError:
             return ""
 
+        percentage = min(100.0, percentage)  # cap at 100%
+
         # in very large pcaps, thousands of flows are nothing compared to
         # the tot flows, so if the percentage is int, slips would print 0%
         # for a while, so we take the first number after the floating point
@@ -444,8 +446,6 @@ class Main:
             percentage = f"{percentage:.1f}"
         else:
             percentage = int(percentage)
-
-        percentage = min(100, percentage)  # cap at 100%
         return f"Analyzed Flows: {green(percentage)}{green('%')}. "
 
     def is_total_flows_unknown(self) -> bool:
@@ -696,7 +696,7 @@ class Main:
 
             self.db.store_pid("main", int(self.pid))
 
-            self.proc_man.declare_that_slips_done_starting_all_children()
+            self.proc_man.declare_that_slips_is_done_starting_all_children()
 
             self.metadata_man.set_input_metadata()
 
@@ -739,6 +739,7 @@ class Main:
                 self.timewindow_man.update_current_timewindow_if_due()
                 self.db.check_tw_to_close()
                 self.db.ping()
+                self.proc_man.health_check_modules()
 
                 modified_profiles: Set[str] = (
                     self.metadata_man.update_slips_stats_in_the_db()[1]

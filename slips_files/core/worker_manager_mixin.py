@@ -49,15 +49,7 @@ class WorkerManagerMixin:
     def stop_profiler_workers(self) -> None:
         """
         Wait as long as needed for each worker to stop.
-
-        Return:
-        None.
         """
-        # ensure we don't block forever waiting for workers that will never
-        # receive the stop sentinel
-        if self.is_input_done_event is not None:
-            self.is_input_done_event.wait()
-
         for process in self.profiler_child_processes:
             try:
                 process.join()

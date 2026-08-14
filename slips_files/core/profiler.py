@@ -214,8 +214,16 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         input_handler_cls = SUPPORTED_INPUT_TYPES[input_type](self.db)
         return input_handler_cls
 
+    def wait_for_input_proc_to_stop(self):
+        if self.is_input_done_event is not None:
+            while not self.is_input_done_event.wait(timeout=1):
+                if self.is_input_failed_event.is_set():
+                    break
+        return
+
     def shutdown_gracefully(self):
         try:
+            self.wait_for_input_proc_to_stop()
             # wait for all flows to be processed by the profiler processes.
             self.stop_profiler_workers()
 

@@ -17,6 +17,7 @@ from stix2 import Bundle, Indicator, parse
 from taxii2client.v21 import Server
 from xml.sax.saxutils import escape
 
+from modules.supported_module_names import Modules
 from slips_files.common.abstracts.iexporter import IExporter
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -142,7 +143,7 @@ class StixExporter(IExporter):
         Falls back to the current working directory if the DB does not
         have an output directory set yet.
         """
-        output_dir = self.get_output_path(module_name="exporting_alerts")
+        output_dir = self.get_output_path(module_name=Modules.EXPORTING_ALERTS)
         if not output_dir:
             output_dir = os.getcwd()
         output_dir = os.path.abspath(output_dir)
@@ -626,6 +627,8 @@ class StixExporter(IExporter):
         custom_properties: Dict[str, object] = {
             "x_slips_evidence_id": evidence.get("id"),
             "x_slips_threat_level": evidence.get("threat_level"),
+            "x_slips_evidence_signal": evidence.get("evidence_signal")
+            or "PAMP",
             "x_slips_profile_ip": profile.get("ip"),
             "x_slips_timewindow": timewindow.get("number"),
             "x_slips_attacker_direction": attacker.get("direction"),
@@ -783,6 +786,7 @@ class StixExporter(IExporter):
         threat_level = evidence.get("threat_level")
         if threat_level:
             meta["threat_level"] = threat_level
+        meta["evidence_signal"] = evidence.get("evidence_signal") or "PAMP"
         victim_value = (evidence.get("victim") or {}).get("value")
         if victim_value:
             meta["victim"] = victim_value

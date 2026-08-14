@@ -63,6 +63,7 @@ These rules MUST be followed:
 - Docstring must be the first statement in a file (if present)
 - Avoid using environment variables, use variables from slips/config.yaml instead.
 - Use type annotations for all functions and methods parameters and return types.
+- Use utils.start_thread whenever you need to start a new thread.
 
 ### Paths:
 - NEVER use absolute paths

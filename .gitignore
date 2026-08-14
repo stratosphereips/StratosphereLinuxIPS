@@ -178,7 +178,9 @@ dataset-private/*
 appendonly.aof
 /p2p_db.sqlite
 old-pipeline/
-
-
+databases/regex_store/
+utils/immune_web_sim/runs/
+config/redis.conf
+.vscode/launch.json
 # permanen p2p dbs and encryption keys
 permanent/
