@@ -8,6 +8,9 @@ on:
 
 jobs:
   integration-tests:
+    # Dependabot PRs to develop are handled by dependabot-develop-tests.yml,
+    # which runs the tests on a freshly built Docker image instead.
+    if: ${{ github.actor != 'dependabot[bot]' }}
     uses: ./.github/workflows/test-suite.yml
     with:
       test_suite_name: integration-tests
