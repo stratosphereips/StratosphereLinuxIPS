@@ -41,6 +41,20 @@ from slips_files.core.input.zeek.zeek_log_file_input import ZeekLogFileInput
 from slips_files.core.input.zeek.utils.zeek_input_utils import ZeekInputUtils
 
 
+SUPPORTED_INPUT_HANDLERS = {
+    InputType.STDIN: StdinInput,
+    InputType.ZEEK_FOLDER: ZeekDirInput,
+    InputType.ZEEK_LOG_FILE: ZeekLogFileInput,
+    InputType.NFDUMP: NfdumpInput,
+    InputType.BINETFLOW: BinetflowInput,
+    InputType.BINETFLOW_TABS: BinetflowTabsInput,
+    InputType.PCAP: PcapInput,
+    InputType.INTERFACE: InterfaceInput,
+    InputType.SURICATA: SuricataInput,
+    InputType.CYST: CystInput,
+}
+
+
 class Input(ICore):
     """A class process to run the process of the flows"""
 
@@ -97,26 +111,11 @@ class Input(ICore):
             is_profiler_done_starting_initial_workers_event
         )
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
-        self.input_handlers = self._build_input_handlers()
         self.active_handler = None
 
     def subscribe_to_channels(self):
         self.channels = {
             "remove_old_files": self.db.subscribe("remove_old_files"),
-        }
-
-    def _build_input_handlers(self):
-        return {
-            InputType.STDIN: StdinInput(self),
-            InputType.ZEEK_FOLDER: ZeekDirInput(self),
-            InputType.ZEEK_LOG_FILE: ZeekLogFileInput(self),
-            InputType.NFDUMP: NfdumpInput(self),
-            InputType.BINETFLOW: BinetflowInput(self),
-            InputType.BINETFLOW_TABS: BinetflowTabsInput(self),
-            InputType.PCAP: PcapInput(self),
-            InputType.INTERFACE: InterfaceInput(self),
-            InputType.SURICATA: SuricataInput(self),
-            InputType.CYST: CystInput(self),
         }
 
     def mark_self_as_done_processing(self):
@@ -254,7 +253,9 @@ class Input(ICore):
 
     def main(self):
         try:
-            self.active_handler = self.input_handlers[self.input_type]
+            self.active_handler = SUPPORTED_INPUT_HANDLERS[self.input_type](
+                self
+            )
             if self.active_handler.run() is False:
                 self.mark_input_as_failed()
                 self.db.publish_stop()
