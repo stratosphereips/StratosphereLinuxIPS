@@ -35,10 +35,8 @@ class UIManager:
             f"Slips {green('web interface')} running on "
             f"http://localhost:{self.web_interface_port}/ "
             f"[PID {green(self.web_interface_pid)}]\n"
-            f"The port will stay open after slips is done with the "
-            f"analysis unless you manually kill it.\n"
-            f"You need to kill it to be able to start the web interface "
-            f"again."
+            f"The web interface on this port will remain open after slips is "
+            f"done with the analysis unless you manually kill it.\n"
         )
         delattr(self, "webinterface_return_value")
 
