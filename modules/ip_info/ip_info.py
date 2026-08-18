@@ -66,6 +66,7 @@ class IPInfo(IAsyncModule):
         self.failed_rdns_lookups = {}
         self.failed_whois_lookups = {}
         self.failed_mac_vendor_lookups = {}
+        self.mac_vendor_db_loaded = False
         self.asn = ASN(self.db)
         self.JARM = JARM()
         self.classifier = FlowClassifier()
@@ -143,9 +144,8 @@ class IPInfo(IAsyncModule):
                 return
 
             try:
-                self.mac_vendor_index = self._load_mac_vendor_index(
-                    "databases/macaddress-db.json"
-                )
+                utils.load_mac_vendor_index("databases/macaddress-db.json")
+                self.mac_vendor_db_loaded = True
                 return True
             except OSError:
                 # update manager hasn't downloaded it yet
@@ -154,29 +154,6 @@ class IPInfo(IAsyncModule):
                     trials += 1
                 except KeyboardInterrupt:
                     return False
-
-    @staticmethod
-    def _load_mac_vendor_index(db_path: str) -> dict[str, str]:
-        """
-        Load the MAC vendor database into a dictionary keyed by OUI.
-
-        :param db_path: Relative path to the JSON lines MAC vendor database.
-        :return: Mapping of OUI prefixes to vendor names.
-        """
-        vendor_index = {}
-        with open(db_path, "r") as mac_db:
-            for line in mac_db:
-                try:
-                    mac_entry = json.loads(line)
-                except json.decoder.JSONDecodeError:
-                    continue
-
-                assignment = mac_entry.get("macPrefix")
-                vendor_name = mac_entry.get("vendorName")
-                if assignment and vendor_name:
-                    vendor_index[assignment.upper()] = vendor_name
-
-        return vendor_index
 
     # GeoInfo functions
     def get_geocountry(self, ip) -> dict:
@@ -299,17 +276,18 @@ class IPInfo(IAsyncModule):
         """
         Gets vendor from Slips' offline database at databases/macaddr-db.json.
         """
-        if (
-            not hasattr(self, "mac_vendor_index")
-            or self.mac_vendor_index is None
-        ):
+        if not getattr(self, "mac_vendor_db_loaded", False):
             # when update manager is done updating the mac db, we should ask
             # the db for all these pending queries
             self.pending_mac_queries.put((mac_addr, profileid))
             return False
 
-        oui = mac_addr[:8].upper()
-        return self.mac_vendor_index.get(oui, False)
+        try:
+            return utils.get_mac_vendor_from_mac_addr(mac_addr) or False
+        except OSError:
+            self.mac_vendor_db_loaded = False
+            self.pending_mac_queries.put((mac_addr, profileid))
+            return False
 
     async def get_vendor_async(self, mac_addr: str, profileid: str) -> dict:
         """
@@ -588,7 +566,7 @@ class IPInfo(IAsyncModule):
         downloaded it yet for whatever reason.
         queries are taken from the pending_mac_queries queue.
         """
-        if not hasattr(self, "mac_vendor_index"):
+        if not getattr(self, "mac_vendor_db_loaded", False):
             return
 
         if self.pending_mac_queries.empty():

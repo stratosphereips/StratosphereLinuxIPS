@@ -88,6 +88,7 @@ class Utils(object):
         self.local_tz = self.get_local_timezone()
         self.aid = aid_hash.AID()
         self.used_inetrface = None
+        self.mac_vendor_indexes: dict[str, dict[str, str]] = {}
 
     def generate_uid(self):
         """Generates a UID similar to what Zeek uses."""
@@ -153,6 +154,92 @@ class Utils(object):
         if score >= 0.55:
             return "Medium"
         return "low"
+
+    def load_mac_vendor_index(
+        self, db_path: str = "databases/macaddress-db.json"
+    ) -> dict[str, str]:
+        """
+        Load the MAC vendor database and cache it by path.
+
+        Parameters:
+        db_path: Relative path to the JSON lines MAC vendor database.
+
+        Return:
+        Mapping of MAC OUIs to vendor names.
+        """
+        if db_path in self.mac_vendor_indexes:
+            return self.mac_vendor_indexes[db_path]
+
+        vendor_index: dict[str, str] = {}
+        with open(db_path, "r") as mac_db:
+            for line in mac_db:
+                try:
+                    mac_entry = json.loads(line)
+                except json.decoder.JSONDecodeError:
+                    continue
+
+                assignment = mac_entry.get("macPrefix")
+                vendor_name = mac_entry.get("vendorName")
+                if assignment and vendor_name:
+                    vendor_index[assignment.upper()] = vendor_name
+
+        self.mac_vendor_indexes[db_path] = vendor_index
+        return vendor_index
+
+    @staticmethod
+    def get_mac_oui(mac_addr: str) -> Optional[str]:
+        """
+        Extract the OUI prefix from a MAC address.
+
+        Parameters:
+        mac_addr: MAC address to parse.
+
+        Return:
+        Uppercase OUI prefix or None when the value is unavailable.
+        """
+        if not mac_addr or len(mac_addr) < 8:
+            return None
+
+        return mac_addr[:8].upper()
+
+    def get_mac_vendor_from_mac_addr(
+        self, mac_addr: str, db_path: str = "databases/macaddress-db.json"
+    ) -> Optional[str]:
+        """
+        Resolve a MAC vendor from the offline OUI database.
+
+        Parameters:
+        mac_addr: MAC address to resolve.
+        db_path: Relative path to the JSON lines MAC vendor database.
+
+        Return:
+        Vendor name when available, otherwise None.
+        """
+        oui = self.get_mac_oui(mac_addr)
+        if not oui:
+            return None
+
+        return self.load_mac_vendor_index(db_path).get(oui)
+
+    def get_profile_mac_vendor(
+        self, profileid: str, db, db_path: str = "databases/macaddress-db.json"
+    ) -> Optional[str]:
+        """
+        Resolve a profile MAC vendor through its stored MAC address.
+
+        Parameters:
+        profileid: Profile whose MAC vendor should be resolved.
+        db: Database manager or handler that can return the profile MAC.
+        db_path: Relative path to the JSON lines MAC vendor database.
+
+        Return:
+        Vendor name when available, otherwise None.
+        """
+        mac_addr = db.get_mac_addr_from_profile(profileid)
+        if not mac_addr:
+            return None
+
+        return self.get_mac_vendor_from_mac_addr(mac_addr, db_path)
 
     @staticmethod
     def log10(n: int) -> int:
