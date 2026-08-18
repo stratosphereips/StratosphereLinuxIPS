@@ -1346,7 +1346,6 @@ class ProfileHandler:
         """
         Returns a str MAC vendor of  the given profile or None
         """
-
         return self.r.hget(profileid, self.constants.MAC_VENDOR)
 
     def get_hostname_from_profile(self, profileid: str) -> Optional[str]:
