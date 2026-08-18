@@ -1,3 +1,6 @@
+# List of official known ports used to control false positives in slips.
+# Format:
+# name, port, proto, description
 ftp-data,20,tcp,File Transfer [Default Data]
 ftp-data,20,udp,File Transfer [Default Data]
 ftp-data,20,sctp,FTP
@@ -76,7 +79,7 @@ https,443,sctp,HTTPS
 microsoft-ds,445,tcp,Microsoft-DS
 microsoft-ds,445,udp,Microsoft-DS
 login,513,tcp,remote login a la telnet
-who,513,udp,maintains data bases showing who's logged in 
+who,513,udp,maintains data bases showing who's logged in
 shell,514,tcp,cmd like exec
 syslog,514,udp,
 printer,515,tcp,spooler
@@ -125,8 +128,8 @@ ssdp,1900,udp,Simple Service Discovery Protocol
 gnunet,2086,tcp,GNUnet
 gnunet,2086,udp,GNUnet
 telnet-alt,2323,tcp,Telnet Alternative
-rdp,3389,udp,Microsoft Terminal Server (RDP) 
-rdp,3389,tcp,Microsoft Terminal Server (RDP) 
+rdp,3389,udp,Microsoft Terminal Server (RDP)
+rdp,3389,tcp,Microsoft Terminal Server (RDP)
 Web Services Discovery (WSD) UPNP,3702,tcp,Web Services Discovery (WSD)
 Web Services Discovery (WSD) UPNP,3702,udp,Web Services Discovery (WSD)
 XMPP Chat. Google Talk. Telegram or Whatsapp,5222,tcp,XMPP Chat. Google Talk, Telegram or Whatsapp
