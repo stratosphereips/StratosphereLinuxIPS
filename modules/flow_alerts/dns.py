@@ -28,6 +28,7 @@ from slips_files.common.abstracts.iflowalerts_analyzer import (
     IFlowalertsAnalyzer,
 )
 from slips_files.common.flow_classifier import FlowClassifier
+from slips_files.common.ips import LOCALHOST_HOSTNAME
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import Direction
@@ -468,7 +469,7 @@ class DNS(IFlowalertsAnalyzer):
         for answer in flow.answers:
             if (
                 utils.is_private_ip(answer)
-                and flow.query != "localhost"
+                and flow.query != LOCALHOST_HOSTNAME
                 # mDNS
                 and not flow.query.endswith(".local")
                 # arpa queries are rDNS of ipv6 queries. they may return

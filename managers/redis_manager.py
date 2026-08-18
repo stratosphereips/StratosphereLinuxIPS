@@ -11,6 +11,7 @@ import time
 import subprocess
 from typing import Dict, Union
 
+from slips_files.common.ips import IPV4_LOCALHOST, LOCALHOST_HOSTNAME
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
@@ -20,7 +21,7 @@ from slips_files.common.output_paths import (
 )
 from slips_files.core.database.database_manager import DBManager
 
-LOCALHOST = "127.0.0.1"
+LOCALHOST = IPV4_LOCALHOST
 
 
 class AlreadyKilledErr(Exception):
@@ -260,7 +261,7 @@ class RedisManager:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
                 # Attempt to bind to the port
-                sock.bind(("localhost", port))
+                sock.bind((LOCALHOST_HOSTNAME, port))
                 # Close the socket if successful
                 sock.close()
                 return port
@@ -278,7 +279,9 @@ class RedisManager:
         return False
 
     def clear_redis_cache_database(
-        self, redis_host="localhost", redis_port=DEFAULT_REDIS_PORT
+        self,
+        redis_host=LOCALHOST_HOSTNAME,
+        redis_port=DEFAULT_REDIS_PORT,
     ) -> bool:
         """
         Clear cache database

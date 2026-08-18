@@ -269,7 +269,9 @@ class ZeekInputUtils:
 
         # comes here if we're done with all conn.log flows and it's time to
         # process other files
-        earliest_line = self.cache_lines[file_with_earliest_flow]
+        earliest_line: Dict[str, str] = self.cache_lines[
+            file_with_earliest_flow
+        ]
         return earliest_line, file_with_earliest_flow
 
     def _print_update_msg(self) -> None:

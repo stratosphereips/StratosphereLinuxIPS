@@ -14,6 +14,7 @@ import yaml
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 
 from modules.supported_module_names import Modules
+from slips_files.common.ips import LOCALHOST_HOSTNAME
 from slips_files.common.parsers.arg_parser import ArgumentParser
 from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
@@ -601,7 +602,7 @@ class ConfigParser(object):
 
     def idmef_manager_url(self):
         return self.idmef_manager_config().get(
-            "url", "https://localhost:8443/"
+            "url", f"https://{LOCALHOST_HOSTNAME}:8443/"
         )
 
     def idmef_manager_client_certificate(self):

@@ -8,6 +8,7 @@ import os
 import time
 from typing import IO, Optional, Tuple
 
+from slips_files.common.ips import IPV4_ANY
 from slips_files.common.slips_utils import utils
 
 
@@ -175,7 +176,7 @@ class TIFeedParserMixin:
                 break
         else:
             # no separator of the above was found
-            if "0.0.0.0 " in line:
+            if f"{IPV4_ANY} " in line:
                 sep = " "
                 # anudeepND/blacklist file
                 line_fields = [line[line.index(" ") + 1 :].replace("\n", "")]
@@ -223,7 +224,7 @@ class TIFeedParserMixin:
         """
         Returns the ip/ip range/domain and it's description from the given line
         """
-        if "0.0.0.0 " in line:
+        if f"{IPV4_ANY} " in line:
             # anudeepND/blacklist file
             data = line[line.index(" ") + 1 :].replace("\n", "")
         else:

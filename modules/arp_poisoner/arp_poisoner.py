@@ -13,6 +13,7 @@ from scapy.sendrecv import sendp, srp
 import random
 
 from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.ips import BROADCAST_MAC, NULL_MAC
 from modules.arp_poisoner.unblocker import ARPUnblocker
 from slips_files.common.slips_utils import utils
 
@@ -245,7 +246,7 @@ class ARPPoisoner(IModule):
     def _get_mac_using_arp(self, ip) -> str | None:
         """sends an arp asking for the mac of the given ip"""
         arp = ARP(pdst=ip)
-        ether = Ether(dst="ff:ff:ff:ff:ff:ff")
+        ether = Ether(dst=BROADCAST_MAC)
         packet = ether / arp
 
         # send the packet and receive response
@@ -263,10 +264,10 @@ class ARPPoisoner(IModule):
         at fake_mac using unsolicited arp replies.
         """
         # send gratuitous arp request to update caches
-        gratuitous_pkt = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(
+        gratuitous_pkt = Ether(dst=BROADCAST_MAC) / ARP(
             op=1,
             pdst=target_ip,
-            hwdst="00:00:00:00:00:00",
+            hwdst=NULL_MAC,
             psrc=target_ip,
             hwsrc=fake_mac,
         )

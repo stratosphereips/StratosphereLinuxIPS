@@ -9,6 +9,7 @@ from typing import Tuple
 from uuid import uuid4
 import jsonschema
 
+from slips_files.common.ips import IPV4_ANY
 from slips_files.common.printer import Printer
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.output import Output
@@ -34,7 +35,7 @@ class IDMEFv2PriorityEnum(Enum):
     HIGH = "High"
 
 
-DEFAULT_ADDRESS = "0.0.0.0"
+DEFAULT_ADDRESS = IPV4_ANY
 
 
 class IDMEFv2:

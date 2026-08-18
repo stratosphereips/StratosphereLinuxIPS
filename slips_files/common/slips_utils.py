@@ -27,11 +27,12 @@ from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 from dataclasses import is_dataclass, asdict
 from enum import Enum
 
+from slips_files.common.ips import IPV4_BROADCAST, LOCALHOST_HOSTNAME
 from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
 
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
-BROADCAST_ADDR = "255.255.255.255"
+BROADCAST_ADDR = IPV4_BROADCAST
 
 
 class Utils(object):
@@ -765,7 +766,7 @@ class Utils(object):
         return True if the given port is used by another app
         """
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        if sock.connect_ex(("localhost", port)) != 0:
+        if sock.connect_ex((LOCALHOST_HOSTNAME, port)) != 0:
             # not used
             sock.close()
             return False

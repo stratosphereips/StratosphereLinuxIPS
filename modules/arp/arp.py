@@ -10,6 +10,7 @@ from typing import List
 
 from modules.arp.filter import ARPEvidenceFilter
 from slips_files.common.flow_classifier import FlowClassifier
+from slips_files.common.ips import BROADCAST_MAC, IPV4_ANY, NULL_MAC
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
@@ -150,10 +151,7 @@ class ARP(IModule):
         """
 
         # ARP scans are always requests always? mostly? from 00:00:00:00:00:00
-        if (
-            "request" not in flow.operation
-            or "00:00:00:00:00:00" not in flow.dst_hw
-        ):
+        if "request" not in flow.operation or NULL_MAC not in flow.dst_hw:
             return False
 
         def get_uids():
@@ -174,7 +172,7 @@ class ARP(IModule):
             return False
 
         # What is this?
-        if flow.saddr == "0.0.0.0":
+        if flow.saddr == IPV4_ANY:
             return False
 
         daddr_info = {flow.daddr: {"uids": [flow.uid], "ts": flow.starttime}}
@@ -269,7 +267,7 @@ class ARP(IModule):
     def check_dstip_outside_localnet(self, twid, flow):
         """Function to setEvidence when daddr is outside the local network"""
 
-        if "0.0.0.0" in flow.saddr or "0.0.0.0" in flow.daddr:
+        if IPV4_ANY in flow.saddr or IPV4_ANY in flow.daddr:
             # this is the case of arp probe, not an
             # arp outside of local network, don't alert
             return False
@@ -336,10 +334,10 @@ class ARP(IModule):
         arp caches but can also be used in arp spoofing
         """
         if (
-            flow.dmac == "ff:ff:ff:ff:ff:ff"
-            and flow.dst_hw == "ff:ff:ff:ff:ff:ff"
-            and flow.smac != "00:00:00:00:00:00"
-            and flow.src_hw != "00:00:00:00:00:00"
+            flow.dmac == BROADCAST_MAC
+            and flow.dst_hw == BROADCAST_MAC
+            and flow.smac != NULL_MAC
+            and flow.src_hw != NULL_MAC
         ):
             # We're sure this is unsolicited arp
             # it may be arp spoofing
@@ -497,8 +495,8 @@ class ARP(IModule):
         # It should be a reply
         # The dst_mac should be ff:ff:ff:ff:ff:ff or 00:00:00:00:00:00
         return "reply" in flow.operation and flow.dst_hw in [
-            "ff:ff:ff:ff:ff:ff",
-            "00:00:00:00:00:00",
+            BROADCAST_MAC,
+            NULL_MAC,
         ]
 
     def clear_arp_logfile(self):

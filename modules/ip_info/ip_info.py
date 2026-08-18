@@ -27,6 +27,7 @@ from functools import lru_cache, partial
 
 from modules.ip_info.jarm import JARM
 from slips_files.common.flow_classifier import FlowClassifier
+from slips_files.common.ips import BROADCAST_MAC, NULL_MAC
 from slips_files.common.style import green
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from .asn_info import ASN
@@ -316,14 +317,11 @@ class IPInfo(IAsyncModule):
         either from an offline or an online database
         """
         if not utils.is_ignored_ip(profileid.split("_")[-1]):
-            # dont try to get the MAC vendor of private profiles, the MAC
+            # dont try to get the MAC vendor of public ips, the MAC
             # here is irrelevant (might be the gateway's)
             return False
 
-        if (
-            "ff:ff:ff:ff:ff:ff" in mac_addr.lower()
-            or "00:00:00:00:00:00" in mac_addr.lower()
-        ):
+        if BROADCAST_MAC in mac_addr.lower() or NULL_MAC in mac_addr.lower():
             return False
 
         # don't look for the vendor again if we already have it for this
@@ -355,10 +353,7 @@ class IPInfo(IAsyncModule):
         if not utils.is_ignored_ip(profileid.split("_")[-1]):
             return False
 
-        if (
-            "ff:ff:ff:ff:ff:ff" in mac_addr.lower()
-            or "00:00:00:00:00:00" in mac_addr.lower()
-        ):
+        if BROADCAST_MAC in mac_addr.lower() or NULL_MAC in mac_addr.lower():
             return False
 
         if self.db.get_mac_vendor_from_profile(profileid):

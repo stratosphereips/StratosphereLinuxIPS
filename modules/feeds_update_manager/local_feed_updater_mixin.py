@@ -81,6 +81,8 @@ class LocalFeedUpdaterMixin:
             elif "services.csv" in file_path:
                 with open(file_path, "r") as f:
                     for line in f:
+                        if line.startswith("#"):
+                            continue
                         name = line.split(",")[0]
                         port = line.split(",")[1]
                         proto = line.split(",")[2]

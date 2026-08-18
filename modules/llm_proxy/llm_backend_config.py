@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
+from slips_files.common.ips import IPV4_LOCALHOST
 from modules.llm_proxy.llm_errors import LLMConfigurationError
 
 
@@ -56,7 +57,7 @@ class LLMBackendConfig:
         base_url = str(data.get("base_url", "")).strip()
         if not base_url:
             base_url = {
-                "ollama": "http://127.0.0.1:11434",
+                "ollama": f"http://{IPV4_LOCALHOST}:11434",
                 "openai": "https://api.openai.com/v1",
                 "anthropic": "https://api.anthropic.com",
             }[provider]
