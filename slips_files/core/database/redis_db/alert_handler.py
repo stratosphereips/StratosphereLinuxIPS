@@ -155,16 +155,6 @@ class AlertHandler:
         uids = self.r.hget(self.constants.FLOWS_CAUSING_EVIDENCE, evidence_id)
         return json.loads(uids) if uids else []
 
-    def get_victim(self, profileid, attacker):
-        saddr = profileid.split("_")[-1]
-        if saddr not in attacker:
-            return saddr
-        # if the saddr is the attacker, then the victim should be
-        # passed as a param to this function
-        # there's no 1 victim in this case. for example in ARP scans,
-        # the victim is the whole network
-        return ""
-
     def set_blocked_ip(self, ip: str):
         """
         Adds the given IP to the blocked IPs sorted set with the current timestamp as score.
@@ -209,25 +199,6 @@ class AlertHandler:
 
         twid_end_time: float = twid_start_time + self.width
         return twid_start_time, twid_end_time
-
-    def get_ti(self, to_lookup: Union[Victim, Attacker]) -> Optional[str]:
-        """
-        if the victim/attacker's ip/domain was part of a ti feed,
-        this function returns the name of the feed
-        """
-        if isinstance(to_lookup, Victim):
-            ioc_type = to_lookup.ioc_type.name
-        else:
-            ioc_type = to_lookup.ioc_type.name
-
-        cases = {
-            IoCType.IP.name: self.is_blacklisted_ip,
-            IoCType.DOMAIN.name: self.is_blacklisted_domain,
-        }
-        try:
-            return cases[ioc_type](to_lookup.value)["source"]
-        except (KeyError, TypeError):
-            return
 
     def _get_more_info_about_evidence(self, evidence) -> Evidence:
         """

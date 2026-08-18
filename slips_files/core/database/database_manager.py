@@ -1368,9 +1368,6 @@ class DBManager:
     def get_the_other_ip_version(self, *args, **kwargs):
         return self.rdb.get_the_other_ip_version(*args, **kwargs)
 
-    def get_separator(self):
-        return self.rdb.separator
-
     def _get_regex_generator_storage(self):
         if self.regex_generator_storage is None:
             from slips_files.core.database.sqlite_db.regex_generator_db import (

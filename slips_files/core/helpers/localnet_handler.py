@@ -4,6 +4,7 @@ from typing import Dict, List, Union
 
 import netifaces
 
+from slips_files.common.ips import IPV4_ANY
 from slips_files.common.slips_utils import utils
 
 
@@ -149,7 +150,7 @@ class LocalnetHandler:
             # localnet of it
             return False
 
-        if flow.saddr == "0.0.0.0":
+        if flow.saddr == IPV4_ANY:
             return False
 
         if self._private_client_ips:
