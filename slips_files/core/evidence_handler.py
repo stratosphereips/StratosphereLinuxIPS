@@ -32,7 +32,7 @@ from slips_files.common.idmefv2 import IDMEFv2
 from slips_files.common.abstracts.icore import ICore
 from slips_files.common.output_paths import get_alerts_path_inside_output_dir
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.slips_utils import IS_IN_A_DOCKER_CONTAINER, utils
+from slips_files.common.slips_utils import utils
 from slips_files.common.style import (
     green,
 )
@@ -102,12 +102,9 @@ class EvidenceHandler(ICore):
         self.exporting_modules_enabled = (
             conf.export_to() or conf.send_to_warden()
         )
+        self.notify = None
         if self.popup_alerts:
             self.notify = Notify()
-            if self.notify.bin_found:
-                self.notify.setup_notifications()
-            else:
-                self.popup_alerts = False
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("evidence_added")
@@ -134,8 +131,8 @@ class EvidenceHandler(ICore):
 
         self.popup_alerts = conf.popup_alerts()
         # In docker, disable alerts no matter what slips.yaml says
-        if IS_IN_A_DOCKER_CONTAINER:
-            self.popup_alerts = False
+        # if IS_IN_A_DOCKER_CONTAINER:
+        #     self.popup_alerts = False
 
     def handle_unable_to_log(self, failed_log, error=None):
         self.print(f"Error logging evidence/alert: {error}. {failed_log}.")
@@ -265,6 +262,7 @@ class EvidenceHandler(ICore):
                         "Killing it.",
                         0,
                         1,
+                        log_to_logfiles_only=True,
                     )
                     process.kill()
                     process.join(timeout=1)
@@ -285,6 +283,7 @@ class EvidenceHandler(ICore):
             name=worker_name,
             evidence_queue=self.evidence_worker_queue,
             evidence_logger_q=self.evidence_logger_q,
+            notify=self.notify,
         )
         worker.start()
         self.evidence_worker_child_processes.append(worker)
