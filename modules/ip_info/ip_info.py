@@ -300,7 +300,6 @@ class IPInfo(IAsyncModule):
         if not utils.is_ignored_ip(profileid.split("_")[-1]):
             # dont try to get the MAC vendor of public ips, the MAC
             # here is irrelevant (might be the gateway's)
-            self.print(f"@@@@@@@@@@@@@@@@ ignored {profileid} {mac_addr}")
             return False
 
         if BROADCAST_MAC in mac_addr.lower() or NULL_MAC in mac_addr.lower():
@@ -308,11 +307,7 @@ class IPInfo(IAsyncModule):
 
         # don't look for the vendor again if we already have it for this
         # profileid
-        if v := self.db.get_mac_vendor_from_profile(profileid):
-            self.print(
-                f"@@@@@@@@@@@@@@@@ we already know th evendor of "
-                f"{profileid} .. {v}"
-            )
+        if self.db.get_mac_vendor_from_profile(profileid):
             return True
 
         mac_info: dict = {"MAC": mac_addr}
@@ -320,15 +315,12 @@ class IPInfo(IAsyncModule):
         if vendor := self.get_vendor_offline(mac_addr, profileid):
             mac_info["Vendor"] = vendor
             self.db.set_mac_vendor_to_profile(profileid, mac_addr, vendor)
-            self.print("@@@@@@@@@@@@@@@@ got it offline")
         elif vendor := await self.run_lookup(self.get_vendor_online, mac_addr):
             mac_info["Vendor"] = vendor
             self.db.set_mac_vendor_to_profile(profileid, mac_addr, vendor)
-            self.print("@@@@@@@@@@@@@@@@ got it online")
         else:
             mac_info["Vendor"] = "Unknown"
 
-        self.print(f"@@@@@@@@@@@@@@@@ vdor of {mac_addr} is {mac_info}")
         return mac_info
 
     def has_cached_info(self, domain) -> bool:
