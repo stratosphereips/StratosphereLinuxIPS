@@ -43,6 +43,7 @@ class EvidenceHandlerWorker(IModule):
         name: str,
         evidence_queue: Queue,
         evidence_logger_q: Queue,
+        notify: Notify,
     ):
         self.name = name
         self.evidence_queue = evidence_queue
@@ -50,13 +51,7 @@ class EvidenceHandlerWorker(IModule):
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.idmefv2 = IDMEFv2(self.logger, self.db)
         self.read_configuration()
-        if self.popup_alerts:
-            self.notify = Notify()
-            if self.notify.bin_found:
-                self.notify.setup_notifications()
-            else:
-                self.popup_alerts = False
-
+        self.notify = notify
         self.is_running_non_stop = self.db.is_running_non_stop()
         self.detection_threshold_in_this_width = (
             self._get_detection_threshold()
@@ -85,7 +80,6 @@ class EvidenceHandlerWorker(IModule):
             2,
             0,
         )
-        self.popup_alerts = conf.popup_alerts()
         self.use_p2p: bool = conf.use_local_p2p() or conf.use_global_p2p()
         self.exporting_modules_enabled: bool = (
             conf.export_to() or conf.send_to_warden()
@@ -93,8 +87,8 @@ class EvidenceHandlerWorker(IModule):
         self.generate_performance_plots = (
             conf.generate_performance_plots() is True
         )
-        if IS_IN_A_DOCKER_CONTAINER:
-            self.popup_alerts = False
+        # if IS_IN_A_DOCKER_CONTAINER:
+        #     self.popup_alerts = False
 
     def _get_detection_threshold(self) -> float:
         if self.is_running_non_stop:
@@ -391,7 +385,7 @@ class EvidenceHandlerWorker(IModule):
         )
         self.print(f"{alert_to_print}", 1, 0)
 
-        if self.popup_alerts:
+        if self.notify and self.notify.enabled:
             self.show_popup(alert)
 
         if is_blocked:
