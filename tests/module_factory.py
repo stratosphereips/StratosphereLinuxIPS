@@ -1213,16 +1213,20 @@ class ModuleFactory:
     def create_evidence_handler_obj(self, mock_db):
         from slips_files.core.evidence_handler import EvidenceHandler
 
-        handler = EvidenceHandler(
-            logger=Mock(),
-            output_dir="/tmp",
-            redis_port=6379,
-            termination_event=Mock(),
-            slips_args=Mock(),
-            conf=Mock(),
-            ppid=Mock(),
-            bloom_filters_manager=Mock(),
-        )
+        with patch(
+            "slips_files.core.evidence_handler.Notify",
+            return_value=Mock(enabled=True),
+        ):
+            handler = EvidenceHandler(
+                logger=Mock(),
+                output_dir="/tmp",
+                redis_port=6379,
+                termination_event=Mock(),
+                slips_args=Mock(),
+                conf=Mock(),
+                ppid=Mock(),
+                bloom_filters_manager=Mock(),
+            )
         handler.db = mock_db
         return handler
 
@@ -1236,7 +1240,6 @@ class ModuleFactory:
             worker.width = 3600
             worker.detection_threshold = 0.25
             worker.risk_accumulated_threat_level_threshold = 15
-            worker.popup_alerts = False
             worker.use_p2p = False
             worker.exporting_modules_enabled = False
             worker.generate_performance_plots = False
@@ -1249,10 +1252,6 @@ class ModuleFactory:
             patch(
                 "slips_files.core.evidence_handler_worker.IDMEFv2",
                 return_value=Mock(),
-            ),
-            patch(
-                "slips_files.core.evidence_handler_worker.Notify",
-                return_value=Mock(bin_found=False),
             ),
             patch(
                 "slips_files.core.evidence_handler_worker."
@@ -1276,6 +1275,7 @@ class ModuleFactory:
                 name="evidence_handler_worker_process_0",
                 evidence_queue=Mock(),
                 evidence_logger_q=Mock(),
+                notify=None,
             )
 
         worker.db = mock_db

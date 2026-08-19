@@ -82,7 +82,9 @@ def test_get_evidence_that_were_part_of_a_past_alert(
 
 def setup_worker(popup_enabled, blocked, mark_blocked=None):
     worker = ModuleFactory().create_evidence_handler_worker_obj()
-    worker.popup_alerts = popup_enabled
+    # popups are only shown when the parent process handed the worker a
+    # usable Notify obj
+    worker.notify = Mock(enabled=True) if popup_enabled else None
 
     alert = Alert(
         profile=ProfileID("1.2.3.4"),
@@ -394,6 +396,17 @@ def test_escalate_risk_level_increases_matching_weight() -> None:
     worker.db.set_risk_weight_of_last_alert.assert_called_once_with(
         RiskWeight.MEDIUM, alert.timewindow
     )
+
+
+def test_handle_new_alert_doesnt_show_popup_when_notify_is_disabled():
+    worker, alert, evidence = setup_worker(
+        popup_enabled=True, blocked=False, mark_blocked=True
+    )
+    worker.notify.enabled = False
+
+    worker.handle_new_alert(alert, evidence)
+
+    worker.show_popup.assert_not_called()
 
 
 def test_show_popup():

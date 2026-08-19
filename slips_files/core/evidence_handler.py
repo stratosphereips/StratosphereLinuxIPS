@@ -262,6 +262,7 @@ class EvidenceHandler(ICore):
                         "Killing it.",
                         0,
                         1,
+                        log_to_logfiles_only=True,
                     )
                     process.kill()
                     process.join(timeout=1)

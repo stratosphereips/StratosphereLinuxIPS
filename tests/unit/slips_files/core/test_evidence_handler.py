@@ -7,6 +7,7 @@ import json
 from slips_files.core.evidence_handler import (
     DEFAULT_EVIDENCE_HANDLER_WORKERS,
     EVIDENCE_HANDLER_SHUTDOWN_GRACE_PERIOD_SECONDS,
+    EvidenceHandler,
 )
 import pytest
 from unittest.mock import Mock, patch, call
@@ -24,6 +25,53 @@ from slips_files.core.structures.evidence import (
     ThreatLevel,
 )
 from tests.module_factory import ModuleFactory
+
+
+@pytest.mark.parametrize(
+    "popup_alerts, expect_notify_obj",
+    [
+        # Testcase 1: popups enabled, one Notify obj is created and shared
+        # with all the workers
+        (True, True),
+        # Testcase 2: popups disabled, no Notify obj is created
+        (False, False),
+    ],
+)
+def test_init_creates_notify_obj_only_when_popups_are_enabled(
+    popup_alerts, expect_notify_obj
+):
+    conf = Mock()
+    conf.popup_alerts.return_value = popup_alerts
+    conf.get_tw_width_in_seconds.return_value = 3600
+    conf.evidence_detection_threshold.return_value = 0.25
+    conf.export_to.return_value = False
+    conf.send_to_warden.return_value = False
+
+    with patch(
+        "slips_files.core.evidence_handler.Notify",
+        return_value=Mock(enabled=True),
+    ) as mock_notify_cls, patch(
+        "slips_files.core.evidence_handler.ConfigParser", return_value=conf
+    ), patch(
+        "slips_files.common.abstracts.imodule.DBManager"
+    ):
+        handler = EvidenceHandler(
+            logger=Mock(),
+            output_dir="/tmp",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=conf,
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
+        )
+
+    if expect_notify_obj:
+        mock_notify_cls.assert_called_once()
+        assert handler.notify is mock_notify_cls.return_value
+    else:
+        mock_notify_cls.assert_not_called()
+        assert handler.notify is None
 
 
 def test_shutdown_gracefully():
@@ -90,6 +138,7 @@ def test_start_evidence_worker(mock_worker_cls):
         name="evidence_handler_worker_process_7",
         evidence_queue=handler.evidence_worker_queue,
         evidence_logger_q=handler.evidence_logger_q,
+        notify=handler.notify,
     )
     worker.start.assert_called_once()
     assert handler.evidence_worker_child_processes == [worker]
