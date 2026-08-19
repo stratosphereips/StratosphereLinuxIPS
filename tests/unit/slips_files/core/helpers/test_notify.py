@@ -174,7 +174,11 @@ def test_notifications_are_disabled_in_docker():
     ],
 )
 def test_show_popup(system, notify_cmd, alert, expected_command):
-    with patch("platform.system", return_value=system), patch(
+    # the CI image sets IS_IN_A_DOCKER_CONTAINER, which makes show_popup()
+    # return early, so patch the module constant to test the actual popup
+    with patch(
+        "slips_files.core.helpers.notify.IS_IN_A_DOCKER_CONTAINER", False
+    ), patch("platform.system", return_value=system), patch(
         "os.system"
     ) as mock_system:
 
