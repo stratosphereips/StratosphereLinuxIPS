@@ -148,27 +148,32 @@ def test_notifications_are_disabled_in_docker():
 
 
 @pytest.mark.parametrize(
-    "system, notify_cmd, alert, expected_partial_command",
+    "system, notify_cmd, alert, expected_command",
     [
         # Testcase 1: Linux system
         (
             "Linux",
             "notify-send -t 5000 ",
             "Test alert",
-            '"Slips" "Test alert"',
+            'notify-send -t 5000  "Slips" "Test alert"',
         ),
         # Testcase 2: macOS (Darwin) system
         (
             "Darwin",
             "",
             "Test alert",
-            'display notification "Test alert" ' 'with title "Slips"',
+            'osascript -e \'display notification "Test alert" with title "Slips"\' ',
         ),
         # Testcase 3: Linux system with custom notify command
-        ("Linux", "custom_notify_cmd ", "Test alert", '"Slips" "Test alert"'),
+        (
+            "Linux",
+            "custom_notify_cmd ",
+            "Test alert",
+            'custom_notify_cmd  "Slips" "Test alert"',
+        ),
     ],
 )
-def test_show_popup(system, notify_cmd, alert, expected_partial_command):
+def test_show_popup(system, notify_cmd, alert, expected_command):
     with patch("platform.system", return_value=system), patch(
         "os.system"
     ) as mock_system:
@@ -178,11 +183,4 @@ def test_show_popup(system, notify_cmd, alert, expected_partial_command):
         mock_system.reset_mock()
 
         notify.show_popup(alert)
-        print(f"Calls to os.system: {mock_system.call_args_list}")
-        assert any(
-            expected_partial_command in str(call)
-            for call in mock_system.call_args_list
-        ), (
-            f"Expected command containing '{expected_partial_command}' "
-            f"not found in calls to os.system"
-        )
+        mock_system.assert_called_once_with(expected_command)
