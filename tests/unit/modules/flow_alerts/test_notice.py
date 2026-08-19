@@ -184,7 +184,7 @@ def test_check_password_guessing(mocker, flow, expected_call_count):
                 )
             },
             True,
-            {"vertical": 1, "horizontal": 1, "password": 0},
+            {"vertical": 1, "horizontal": 1, "password": 1},
         ),
     ],
 )

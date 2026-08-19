@@ -47,10 +47,11 @@ from typing import (
     Set,
 )
 
+from slips_files.common.ips import IPV4_ANY, IPV4_LOCALHOST, LOCALHOST_HOSTNAME
 from slips_files.core.structures.risk_weights import RiskWeight
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
-LOCALHOST = "127.0.0.1"
+LOCALHOST = IPV4_LOCALHOST
 VERSION = utils.get_current_version()
 
 
@@ -1066,9 +1067,9 @@ class RedisDB(
         # sometimes adservers are resolved to 0.0.0.0 or "127.0.0.1" to
         # block the domain.
         # don't store this as a valid dns resolution
-        if query != "localhost":
+        if query != LOCALHOST_HOSTNAME:
             for answer in answers:
-                if answer in (LOCALHOST, "0.0.0.0"):
+                if answer in (LOCALHOST, IPV4_ANY):
                     return False
 
         return True

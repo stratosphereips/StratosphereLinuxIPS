@@ -26,21 +26,6 @@ from slips_files.core.structures.risk_weights import RiskWeight
 
 
 @pytest.mark.parametrize(
-    "profileid, attacker, expected_victim",
-    [
-        # Testcase 1: Victim is not the attacker
-        ("profile_10.0.0.1", "profile_10.0.0.2", "10.0.0.1"),
-        # Testcase 2: Victim is the attacker
-        ("profile_10.0.0.1", "profile_10.0.0.1", ""),
-    ],
-)
-def test_get_victim(profileid, attacker, expected_victim):
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    result = alert_handler.get_victim(profileid, attacker)
-    assert result == expected_victim
-
-
-@pytest.mark.parametrize(
     "all_evidence, expected_result, side_effect",
     [
         # Testcase 1: All evidence is whitelisted

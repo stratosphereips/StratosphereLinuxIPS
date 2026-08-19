@@ -1,0 +1,27 @@
+"""Shared network address constants used across Slips."""
+
+from .ips import (
+    BROADCAST_MAC,
+    IPV4_ANY,
+    IPV4_BROADCAST,
+    IPV4_LOCALHOST,
+    IPV6_LOCALHOST,
+    LOCALHOST_HOSTNAME,
+    LOCALHOST_IPS,
+    NULL_MAC,
+    SPECIAL_IPV4_ADDRESSES,
+    SPECIAL_MAC_ADDRESSES,
+)
+
+__all__ = [
+    "BROADCAST_MAC",
+    "IPV4_ANY",
+    "IPV4_BROADCAST",
+    "IPV4_LOCALHOST",
+    "IPV6_LOCALHOST",
+    "LOCALHOST_HOSTNAME",
+    "LOCALHOST_IPS",
+    "NULL_MAC",
+    "SPECIAL_IPV4_ADDRESSES",
+    "SPECIAL_MAC_ADDRESSES",
+]

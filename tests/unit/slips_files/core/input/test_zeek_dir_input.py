@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 from tests.module_factory import ModuleFactory
 from slips_files.common.input_type import InputType
+from slips_files.core.input.input import SUPPORTED_INPUT_HANDLERS
 
 
 def test_zeek_dir_input_reads_directory(tmp_path):
@@ -21,7 +22,7 @@ def test_zeek_dir_input_reads_directory(tmp_path):
 
     (tmp_path / "conn.log").write_text("#fields\nline1\n", encoding="utf-8")
 
-    handler = input_process.input_handlers[InputType.ZEEK_FOLDER]
+    handler = SUPPORTED_INPUT_HANDLERS[InputType.ZEEK_FOLDER](input_process)
     handler.observer.start = MagicMock()
     handler.db.add_zeek_file = MagicMock()
     with patch(

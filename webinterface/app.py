@@ -9,6 +9,7 @@ from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 
+from slips_files.common.ips import IPV4_LOCALHOST
 from slips_files.common.parsers.config_parser import ConfigParser
 from .database.database import db, db_obj
 from .database.signals import message_sent
@@ -242,4 +243,4 @@ if __name__ == "__main__":
     app.register_blueprint(analysis, url_prefix="/analysis")
     app.register_blueprint(general, url_prefix="/general")
     app.register_blueprint(documentation, url_prefix="/documentation")
-    app.run(host="127.0.0.1", port=ConfigParser().web_interface_port)
+    app.run(host=IPV4_LOCALHOST, port=ConfigParser().web_interface_port)

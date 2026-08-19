@@ -9,9 +9,10 @@ import signal
 import subprocess
 import threading
 import time
+from io import TextIOWrapper
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional
 from re import split
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from slips_files.common.slips_utils import utils
 from slips_files.core.input.zeek.utils.dos_protector import DoSProtector
@@ -19,17 +20,17 @@ from slips_files.core.zeek_cmd_builder import ZeekCommandBuilder
 
 
 class ZeekInputUtils:
-    def __init__(self, input_process):
+    def __init__(self, input_process: Any) -> None:
         self.input = input_process
-        self.open_file_handles = {}
+        self.open_file_handles: Dict[str, TextIOWrapper] = {}
         self.open_file_handlers_lock = threading.RLock()
-        self.cache_lines = {}
-        self.file_time = {}
-        self.last_updated_file_time = None
+        self.cache_lines: Dict[str, Dict[str, Any]] = {}
+        self.file_time: Dict[str, float] = {}
+        self.last_updated_file_time: Optional[datetime.datetime] = None
         self.rotated_files_to_delete: List[Tuple[str, float]] = []
-        self.zeek_files = {}
-        self.zeek_threads = []
-        self.zeek_pids = []
+        self.zeek_files: Dict[str, str] = {}
+        self.zeek_threads: List[threading.Thread] = []
+        self.zeek_pids: List[int] = []
         # is set by zeek_input_utils if slips is live updating and
         # requesting to stop the zeek proc.
         self.zeek_shutdown_requested = False
@@ -39,7 +40,7 @@ class ZeekInputUtils:
         self.update_msg_printed = False
         self.is_running_non_stop = self.input.db.is_running_non_stop()
 
-    def check_if_time_to_del_rotated_files(self):
+    def check_if_time_to_del_rotated_files(self) -> bool:
         """
         After a specific period (keep_rotated_files_for), slips deletes all rotated files
         Check if it's time to do so
@@ -64,8 +65,8 @@ class ZeekInputUtils:
                 pass
 
     def schedule_rotated_file_deletion(
-        self, file_path: str, rotated_at: float = None
-    ):
+        self, file_path: str, rotated_at: Optional[float] = None
+    ) -> None:
         """
         Schedule a rotated Zeek logfile for deletion after the configured delay.
 
@@ -79,7 +80,7 @@ class ZeekInputUtils:
         delete_after = rotated_at + self.input.keep_rotated_files_for
         self.rotated_files_to_delete.append((file_path, delete_after))
 
-    def close_rotated_file_handle(self, filename: str):
+    def close_rotated_file_handle(self, filename: str) -> None:
         """
         closes the given file's handle and removes it from
         self.open_file_handlers
@@ -92,7 +93,7 @@ class ZeekInputUtils:
         if file_handler is not None:
             file_handler.close()
 
-    def get_file_handle(self, filename: str):
+    def get_file_handle(self, filename: str) -> Union[TextIOWrapper, bool]:
         with self.open_file_handlers_lock:
             file_handle = self.open_file_handles.get(filename)
 
@@ -118,7 +119,9 @@ class ZeekInputUtils:
                 return False
         return file_handle
 
-    def get_ts_from_line(self, zeek_line: str):
+    def get_ts_from_line(
+        self, zeek_line: str
+    ) -> Tuple[Union[float, bool], Union[str, Dict[str, Any], bool]]:
         """
         used only by zeek log files
         :param line: can be a json or a json serialized dict
@@ -146,7 +149,7 @@ class ZeekInputUtils:
 
         return timestamp, nline
 
-    def cache_nxt_line_in_file(self, filename: str, interface: str):
+    def cache_nxt_line_in_file(self, filename: str, interface: str) -> bool:
         """
         reads 1 line of the given file and stores in queue for sending to the
         profiler
@@ -231,7 +234,7 @@ class ZeekInputUtils:
                 return True
         return False
 
-    def close_all_handles(self):
+    def close_all_handles(self) -> None:
         # We reach here after the break that happens
         # if no zeek files are being updated.
         # No more files to read. Close the files
@@ -243,7 +246,9 @@ class ZeekInputUtils:
                 self.input.print(f"Closing file {file}", 2, 0)
                 handle.close()
 
-    def get_earliest_line(self):
+    def get_earliest_line(
+        self,
+    ) -> Tuple[Union[Dict[str, Any], bool], Union[str, bool]]:
         """
         loops through all the caches lines and returns the line with the
         earliest ts
@@ -264,10 +269,12 @@ class ZeekInputUtils:
 
         # comes here if we're done with all conn.log flows and it's time to
         # process other files
-        earliest_line = self.cache_lines[file_with_earliest_flow]
+        earliest_line: Dict[str, str] = self.cache_lines[
+            file_with_earliest_flow
+        ]
         return earliest_line, file_with_earliest_flow
 
-    def _print_update_msg(self):
+    def _print_update_msg(self) -> None:
         if not self.update_msg_printed:
             self.print(
                 "Slips is live updating. Slips will stop receiving new "
@@ -407,11 +414,11 @@ class ZeekInputUtils:
 
     def init_zeek_and_start_the_zeek_thread(
         self,
-        observer,
+        observer: Any,
         zeek_dir: str,
         pcap_or_interface: str,
-        tcpdump_filter=None,
-    ):
+        tcpdump_filter: Optional[str] = None,
+    ) -> bool:
         """
         Start Zeek and return whether startup succeeded.
 
@@ -485,11 +492,11 @@ class ZeekInputUtils:
 
     def init_zeek(
         self,
-        observer,
+        observer: Any,
         zeek_dir: str,
         pcap_or_interface: str,
-        tcpdump_filter=None,
-    ):
+        tcpdump_filter: Optional[str] = None,
+    ) -> bool:
         """
         Backward-compatible wrapper for Zeek initialization.
 
@@ -509,7 +516,9 @@ class ZeekInputUtils:
             tcpdump_filter=tcpdump_filter,
         )
 
-    def _construct_zeek_cmd(self, pcap_or_interface: str, tcpdump_filter=None):
+    def _construct_zeek_cmd(
+        self, pcap_or_interface: str, tcpdump_filter: Optional[str] = None
+    ) -> List[str]:
         """
         constructs the zeek command based on the user given
         pcap/interface/packet filter/etc.
@@ -528,12 +537,12 @@ class ZeekInputUtils:
 
     def run_zeek(
         self,
-        zeek_logs_dir,
-        pcap_or_interface,
+        zeek_logs_dir: str,
+        pcap_or_interface: str,
         startup_finished_event: threading.Event,
         startup_status: Dict[str, Optional[str]],
-        tcpdump_filter=None,
-    ):
+        tcpdump_filter: Optional[str] = None,
+    ) -> None:
         """
         Start Zeek and monitor its output. runs in its own thread.
 
@@ -583,7 +592,10 @@ class ZeekInputUtils:
             return
 
     def _prep_and_start_the_zeek_proc(
-        self, zeek_logs_dir, pcap_or_interface, tcpdump_filter=None
+        self,
+        zeek_logs_dir: str,
+        pcap_or_interface: str,
+        tcpdump_filter: Optional[str] = None,
     ) -> subprocess.Popen:
         """
         Prepare the Zeek command and start the Zeek process.
@@ -629,7 +641,10 @@ class ZeekInputUtils:
         return True
 
     def _get_zeek_cmd_and_logs_dir(
-        self, zeek_logs_dir, pcap_or_interface, tcpdump_filter=None
+        self,
+        zeek_logs_dir: str,
+        pcap_or_interface: str,
+        tcpdump_filter: Optional[str] = None,
     ) -> Tuple[List[str], str]:
         """
         Build the Zeek command and validate the working directory.
@@ -650,7 +665,9 @@ class ZeekInputUtils:
         self.input.print(f"Zeek command: {str_cmd}", log_to_logfiles_only=True)
         return command, safe_zeek_logs_dir
 
-    def _start_zeek_process(self, command, zeek_logs_dir) -> subprocess.Popen:
+    def _start_zeek_process(
+        self, command: List[str], zeek_logs_dir: str
+    ) -> subprocess.Popen:
         """
         Start Zeek and store its PID for shutdown handling.
 
@@ -673,7 +690,9 @@ class ZeekInputUtils:
         self.zeek_pids.append(zeek.pid)
         return zeek
 
-    def _did_zeek_stop_bc_slips_asked_it_to(self, zeek) -> bool:
+    def _did_zeek_stop_bc_slips_asked_it_to(
+        self, zeek: subprocess.Popen
+    ) -> bool:
         """
         Check whether Zeek exited because slips asked it to stop.
 
@@ -686,7 +705,11 @@ class ZeekInputUtils:
         return self.zeek_shutdown_requested and zeek.returncode is not None
 
     def _handle_zeek_process_result(
-        self, zeek, stdout, stderr, startup_status
+        self,
+        zeek: subprocess.Popen,
+        stdout: Optional[bytes],
+        stderr: Optional[bytes],
+        startup_status: Dict[str, Optional[str]],
     ) -> bool:
         """
         Process Zeek output and stop SLIPS when Zeek fails.
@@ -729,8 +752,8 @@ class ZeekInputUtils:
     def _report_zeek_error_and_stop_slips(
         self,
         error_message: str,
-        startup_status,
-    ):
+        startup_status: Optional[Dict[str, Optional[str]]],
+    ) -> None:
         """
         Store and report a Zeek failure.
 
@@ -744,7 +767,7 @@ class ZeekInputUtils:
         self.input.mark_input_as_failed()
         self.input.db.publish_stop()
 
-    def shutdown_zeek_runtime(self):
+    def shutdown_zeek_runtime(self) -> None:
         self.zeek_shutdown_requested = True
         try:
             for zeek_thread in self.zeek_threads:

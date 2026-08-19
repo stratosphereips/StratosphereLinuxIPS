@@ -1342,7 +1342,32 @@ class DBManager:
         return self.rdb.set_ipv4_of_profile(*args, **kwargs)
 
     def get_mac_vendor_from_profile(self, *args, **kwargs):
-        return self.rdb.get_mac_vendor_from_profile(*args, **kwargs)
+        """returns the mac vendor from the  offline vendors
+        db if not found in the redis db"""
+        mac_vendor = self.rdb.get_mac_vendor_from_profile(*args, **kwargs)
+        if mac_vendor:
+            return mac_vendor
+
+        try:
+            profileid = args[0]
+        except IndexError:
+            profileid = kwargs.get("profileid")
+
+        if not profileid:
+            return mac_vendor
+
+        mac_addr = self.rdb.get_mac_addr_from_profile(profileid)
+        if not mac_addr:
+            return mac_vendor
+
+        try:
+            mac_vendor = utils.get_mac_vendor_from_mac_addr(mac_addr)
+        except OSError:
+            return None
+
+        if mac_vendor:
+            self.rdb.set_mac_vendor_to_profile(profileid, mac_addr, mac_vendor)
+        return mac_vendor
 
     def set_mac_vendor_to_profile(self, *args, **kwargs):
         return self.rdb.set_mac_vendor_to_profile(*args, **kwargs)
@@ -1367,9 +1392,6 @@ class DBManager:
 
     def get_the_other_ip_version(self, *args, **kwargs):
         return self.rdb.get_the_other_ip_version(*args, **kwargs)
-
-    def get_separator(self):
-        return self.rdb.separator
 
     def _get_regex_generator_storage(self):
         if self.regex_generator_storage is None:

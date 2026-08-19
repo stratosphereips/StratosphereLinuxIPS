@@ -198,13 +198,6 @@ class CCDetection(IModule):
         # self.print(f'Post Padded Seq sent: {pre_behavioral_model}. Shape: {pre_behavioral_model.shape}')
         return pre_behavioral_model
 
-    def get_confidence(self, pre_behavioral_model):
-        threshold_confidence = 100
-        if len(pre_behavioral_model) >= threshold_confidence:
-            return 1
-
-        return len(pre_behavioral_model) / threshold_confidence
-
     def handle_new_letters(self, msg: Dict):
         """handles msgs from the tw_closed channel"""
 

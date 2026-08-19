@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import pytest
 from slips_files.common.input_type import InputType
+from slips_files.core.input.input import SUPPORTED_INPUT_HANDLERS
 from tests.module_factory import ModuleFactory
 
 
@@ -15,7 +16,7 @@ def test_binetflow_input_runs_and_sends_lines(tmp_path):
     input_process.testing = False
     input_process.mark_self_as_done_processing = lambda: None
 
-    handler = input_process.input_handlers[InputType.BINETFLOW]
+    handler = SUPPORTED_INPUT_HANDLERS[InputType.BINETFLOW](input_process)
     assert handler.run() is True
 
     assert input_process.total_flows == 2
@@ -38,7 +39,7 @@ def test_binetflow_input_detects_line_type(tmp_path, header, expected_type):
     input_process.testing = True
     input_process.mark_self_as_done_processing = lambda: None
 
-    handler = input_process.input_handlers[InputType.BINETFLOW]
+    handler = SUPPORTED_INPUT_HANDLERS[InputType.BINETFLOW](input_process)
     assert handler.run() is True
 
     line_sent = input_process.profiler_queue.get()

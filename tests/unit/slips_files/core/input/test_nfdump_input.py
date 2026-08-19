@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 from tests.module_factory import ModuleFactory
 from slips_files.common.input_type import InputType
+from slips_files.core.input.input import SUPPORTED_INPUT_HANDLERS
 
 
 @pytest.mark.parametrize("output,expected_total", [("a\nb\n", 2), ("", 0)])
@@ -13,7 +14,7 @@ def test_nfdump_read_output_sets_total(output, expected_total):
     input_process.print = MagicMock()
     input_process.total_flows = 0
 
-    handler = input_process.input_handlers[InputType.NFDUMP]
+    handler = SUPPORTED_INPUT_HANDLERS[InputType.NFDUMP](input_process)
     handler.nfdump_output = output
     total = handler.read_nfdump_output()
 

@@ -125,7 +125,9 @@ class BenignCorpusSQLiteDB(_BaseRegexSQLiteDB):
         )
         return bool(cursor and cursor.rowcount)
 
-    def seed_strings(self, seed_samples: Dict[str, Iterable[str]], source: str):
+    def seed_strings(
+        self, seed_samples: Dict[str, Iterable[str]], source: str
+    ):
         for regex_type, values in seed_samples.items():
             for value in values:
                 self.insert_benign_string(regex_type, value, source)
@@ -442,7 +444,9 @@ class RegexGeneratorStorage:
             return value
 
         parser = ConfigParser()
-        parser_getter = getattr(parser, "regex_generator_seed_benign_samples", None)
+        parser_getter = getattr(
+            parser, "regex_generator_seed_benign_samples", None
+        )
         if callable(parser_getter):
             try:
                 value = parser_getter()
@@ -455,7 +459,9 @@ class RegexGeneratorStorage:
         return True
 
     def _read_store_rejected_regexes(self) -> bool:
-        value = self._read_bool_config("regex_generator_store_rejected_regexes")
+        value = self._read_bool_config(
+            "regex_generator_store_rejected_regexes"
+        )
         if value is not None:
             return value
 
@@ -475,7 +481,9 @@ class RegexGeneratorStorage:
         return False
 
     def _read_max_stored_rejected_regexes(self) -> int:
-        value = self._read_int_config("regex_generator_max_stored_rejected_regexes")
+        value = self._read_int_config(
+            "regex_generator_max_stored_rejected_regexes"
+        )
         if value is not None:
             return max(0, value)
 
@@ -702,9 +710,6 @@ class RegexGeneratorStorage:
             mode=ScalableBloomFilter.SMALL_SET_GROWTH,
             error_rate=0.001,
         )
-
-    def get_benign_examples(self, regex_type: str, limit: int = 5) -> List[str]:
-        return self.benign_db.get_examples(regex_type, limit)
 
     def iter_benign_strings(self, regex_type: str):
         yield from self.benign_db.iter_values(regex_type)

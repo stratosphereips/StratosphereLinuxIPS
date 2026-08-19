@@ -659,7 +659,7 @@ def test_benign_seeding_initializes_all_types(tmp_path):
     )
 
     for regex_type in REGEX_TYPES:
-        assert storage.get_benign_examples(regex_type, limit=1)
+        assert storage.benign_db.get_examples(regex_type, limit=1)
 
     storage.close()
 
@@ -741,15 +741,19 @@ def test_storage_imports_whitelist_domains_into_matching_regex_types(tmp_path):
         12345,
     )
 
-    assert "example.com" in storage.get_benign_examples(
+    assert "example.com" in storage.benign_db.get_examples(
         "dns_domain", limit=100
     )
-    assert "example.com" in storage.get_benign_examples("tls_sni", limit=100)
-    assert "example.com" in storage.get_benign_examples(
+    assert "example.com" in storage.benign_db.get_examples(
+        "tls_sni", limit=100
+    )
+    assert "example.com" in storage.benign_db.get_examples(
         "certificate_cn", limit=100
     )
-    assert "github.com" in storage.get_benign_examples("dns_domain", limit=100)
-    assert "/index.html" in storage.get_benign_examples("uri", limit=100)
+    assert "github.com" in storage.benign_db.get_examples(
+        "dns_domain", limit=100
+    )
+    assert "/index.html" in storage.benign_db.get_examples("uri", limit=100)
     storage.close()
 
 
@@ -770,7 +774,7 @@ def test_storage_skips_whitelist_import_when_disabled(tmp_path):
         12345,
     )
 
-    assert "example.com" not in storage.get_benign_examples(
+    assert "example.com" not in storage.benign_db.get_examples(
         "dns_domain", limit=100
     )
     storage.close()
@@ -791,9 +795,11 @@ def test_storage_imports_tranco_top_domains_into_matching_regex_types(
         db=db,
     )
 
-    assert "google.com" in storage.get_benign_examples("dns_domain", limit=200)
-    assert "github.com" in storage.get_benign_examples("tls_sni", limit=200)
-    assert "microsoft.com" in storage.get_benign_examples(
+    assert "google.com" in storage.benign_db.get_examples(
+        "dns_domain", limit=200
+    )
+    assert "github.com" in storage.benign_db.get_examples("tls_sni", limit=200)
+    assert "microsoft.com" in storage.benign_db.get_examples(
         "certificate_cn", limit=200
     )
     db.get_tranco_top_domains.assert_called_once_with(limit=1000)
@@ -815,7 +821,7 @@ def test_storage_skips_tranco_import_when_limit_is_zero(tmp_path):
         db=db,
     )
 
-    assert "tranco-only-example.test" not in storage.get_benign_examples(
+    assert "tranco-only-example.test" not in storage.benign_db.get_examples(
         "dns_domain", limit=200
     )
     db.get_tranco_top_domains.assert_not_called()

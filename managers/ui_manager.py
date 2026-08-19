@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from slips_files.common.slips_utils import utils
+from slips_files.common.ips import LOCALHOST_HOSTNAME
 from slips_files.common.style import green
 
 import subprocess
@@ -33,7 +34,7 @@ class UIManager:
 
         self.main.print(
             f"Slips {green('web interface')} running on "
-            f"http://localhost:{self.web_interface_port}/ "
+            f"http://{LOCALHOST_HOSTNAME}:{self.web_interface_port}/ "
             f"[PID {green(self.web_interface_pid)}]\n"
             f"The web interface on this port will remain open after slips is "
             f"done with the analysis unless you manually kill it.\n"

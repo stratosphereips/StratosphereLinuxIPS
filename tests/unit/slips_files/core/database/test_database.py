@@ -273,6 +273,31 @@ def test_get_the_other_ip_version():
     assert other_ip == ipv6
 
 
+def test_get_mac_vendor_from_profile_falls_back_to_slips_utils(mocker):
+    module_factory = ModuleFactory()
+    db = module_factory.create_db_manager_obj(6379, flush_db=True)
+    profileid = "profile_192.168.1.2"
+    mac_addr = "00:11:22:33:44:55"
+    vendor = "Samsung Electronics Co.,Ltd"
+
+    db.rdb.get_mac_vendor_from_profile = Mock(return_value=None)
+    db.rdb.get_mac_addr_from_profile = Mock(return_value=mac_addr)
+    db.rdb.set_mac_vendor_to_profile = Mock()
+    mock_get_vendor = mocker.patch(
+        "slips_files.core.database.database_manager.utils."
+        "get_mac_vendor_from_mac_addr",
+        return_value=vendor,
+    )
+
+    assert db.get_mac_vendor_from_profile(profileid) == vendor
+    db.rdb.get_mac_vendor_from_profile.assert_called_once_with(profileid)
+    db.rdb.get_mac_addr_from_profile.assert_called_once_with(profileid)
+    mock_get_vendor.assert_called_once_with(mac_addr)
+    db.rdb.set_mac_vendor_to_profile.assert_called_once_with(
+        profileid, mac_addr, vendor
+    )
+
+
 def test_is_tor_node():
     """Test the DB manager Tor node lookup wrapper."""
     db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)

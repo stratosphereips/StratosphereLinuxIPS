@@ -22,6 +22,9 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.structures.flow_attributes import Role
 
 
+from slips_files.common.ips import IPV4_ANY
+
+
 class ProfileHandler:
     """
     Helper class for the Redis class in database.py
@@ -815,7 +818,7 @@ class ProfileHandler:
         self, ip, mac, interface
     ) -> bool:
         return not (
-            ip == "0.0.0.0"
+            ip == IPV4_ANY
             or not mac
             # sometimes we create profiles with the mac address.
             # don't save that in MAC hash
@@ -1343,7 +1346,6 @@ class ProfileHandler:
         """
         Returns a str MAC vendor of  the given profile or None
         """
-
         return self.r.hget(profileid, self.constants.MAC_VENDOR)
 
     def get_hostname_from_profile(self, profileid: str) -> Optional[str]:

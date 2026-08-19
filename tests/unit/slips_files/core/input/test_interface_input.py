@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from unittest.mock import MagicMock, patch
+from slips_files.common.input_type import InputType
+from slips_files.core.input.input import SUPPORTED_INPUT_HANDLERS
 from tests.module_factory import ModuleFactory
 
 
@@ -14,7 +16,7 @@ def test_interface_input_runs_for_single_interface(tmp_path):
     input_process.zeek_utils.init_zeek_and_start_the_zeek_thread = MagicMock()
     input_process.zeek_utils.read_zeek_files = MagicMock(return_value=4)
 
-    handler = input_process.input_handlers["interface"]
+    handler = SUPPORTED_INPUT_HANDLERS[InputType.INTERFACE](input_process)
     with patch("os.path.exists", return_value=True):
         assert handler.run() is True
 
@@ -36,7 +38,7 @@ def test_interface_input_returns_false_when_zeek_startup_fails(tmp_path):
     )
     input_process.zeek_utils.read_zeek_files = MagicMock(return_value=4)
 
-    handler = input_process.input_handlers["interface"]
+    handler = SUPPORTED_INPUT_HANDLERS[InputType.INTERFACE](input_process)
     with patch("os.path.exists", return_value=True):
         assert handler.run() is False
 

@@ -112,11 +112,12 @@ class Conn(IFlowalertsAnalyzer):
     def port_belongs_to_an_org(self, daddr, portproto, profileid):
         """
         Checks whether the given port and daddr are known to be used by a
-        specific organization or not, and returns true if the daddr belongs
-        to the same org as the port
-        This function says that the port belongs to an org if:
+        specific organization or not
+        and returns true if the daddr belongs to the same org as the port
+        - This function says that the port belongs to an org if:
         1. we have its info in ports_used_by_specific_orgs.csv
-        and considers the IP belongs to an org if:
+
+        - and considers the IP belongs to an org if any of the below:
         1. both saddr and daddr have the Mac vendor fo this org e.g. apple
         2. both saddr and daddr belong to the range specified in the
         ports_used_by_specific_orgs.csv
@@ -128,20 +129,17 @@ class Conn(IFlowalertsAnalyzer):
         if not organization_info:
             # consider this port as unknown, it doesn't belong to any org
             return False
-
         # there's an organization that's known to use this port,
         # check if the daddr belongs to the range of this org
         organization_info = json.loads(organization_info)
-
         # get the organization ip or range
         org_ips: list = organization_info["ip"]
-
-        # org_name = organization_info['org_name']
 
         if daddr in org_ips:
             # it's an ip and it belongs to this org, consider the port as known
             return True
 
+        # TODO this is really slow!
         for ip in org_ips:
             # is any of them a range?
             with contextlib.suppress(ValueError):
@@ -151,13 +149,12 @@ class Conn(IFlowalertsAnalyzer):
                     # it does, consider the port as known
                     return True
 
-        # not a range either since nothing is specified, e.g. ip is set to ""
+        # we reach here if the ip in the csv file is set to ""
         # check the source and dst mac address vendors
-        src_mac_vendor = str(self.db.get_mac_vendor_from_profile(profileid))
-        dst_mac_vendor = str(
-            self.db.get_mac_vendor_from_profile(f"profile_{daddr}")
+        src_mac_vendor = self.db.get_mac_vendor_from_profile(profileid) or ""
+        dst_mac_vendor = (
+            self.db.get_mac_vendor_from_profile(f"profile_{daddr}") or ""
         )
-
         # get the list of all orgs known to use this port and proto
         for org_name in organization_info["org_name"]:
             org_name = org_name.lower()

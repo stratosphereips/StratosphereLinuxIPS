@@ -8,6 +8,8 @@ from typing import (
     List,
 )
 
+from slips_files.common.ips import IPV4_LOCALHOST
+
 RDB_HEADER_SIZE = 9
 RDB_MAGIC = b"REDIS"
 
@@ -18,7 +20,7 @@ def is_port_open(port: int) -> bool:
     """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(0.2)
-        return sock.connect_ex(("127.0.0.1", port)) == 0
+        return sock.connect_ex((IPV4_LOCALHOST, port)) == 0
 
 
 def has_rdb_extension(filename: str) -> bool:
