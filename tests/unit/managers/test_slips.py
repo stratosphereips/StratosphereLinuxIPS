@@ -4,6 +4,7 @@
 
 from unittest.mock import patch
 
+from modules.supported_module_names import Modules
 from tests.module_factory import ModuleFactory
 
 
@@ -17,8 +18,9 @@ def test_load_modules():
             else default_value
         )
     )
-    failed_to_load_modules = proc_manager.get_modules()[1]
-    assert failed_to_load_modules == 0
+    plugins, failed_to_load_modules = proc_manager.get_modules()
+    assert failed_to_load_modules == 1
+    assert Modules.FLOW_ML_DETECTION not in plugins
 
 
 #
