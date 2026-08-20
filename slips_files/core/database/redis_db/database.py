@@ -1479,6 +1479,30 @@ class RedisDB(
             self.constants.ORGANIZATIONS_PORTS, portproto, org_info
         )
 
+    def set_organizations_of_ports(self, entries: list) -> None:
+        """
+        Bulk version of set_organization_of_port().
+        Saves many (organization, ip, portproto) entries in a single
+        round trip to the db instead of 1 hget + 1 hset per entry.
+        :param entries: list of (organization, ip, portproto) tuples
+        """
+        if not entries:
+            return
+
+        cached: dict = self.rcache.hgetall(self.constants.ORGANIZATIONS_PORTS)
+        updated: dict = {}
+        for organization, ip, portproto in entries:
+            raw = updated.get(portproto) or cached.get(portproto)
+            if raw:
+                org_info = json.loads(raw)
+                org_info["ip"].append(ip)
+                org_info["org_name"].append(organization)
+            else:
+                org_info = {"org_name": [organization], "ip": [ip]}
+            updated[portproto] = json.dumps(org_info)
+
+        self.rcache.hset(self.constants.ORGANIZATIONS_PORTS, mapping=updated)
+
     def get_organization_of_port(self, portproto: str):
         """
         Retrieve the organization info that uses this port
