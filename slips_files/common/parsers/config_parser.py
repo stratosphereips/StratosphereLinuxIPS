@@ -28,8 +28,17 @@ class ConfigParser(object):
         "stable": "origin/master",
         "unstable": "origin/develop",
     }
+    _instance = None
+    _initialized = False
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
     def __init__(self):
+        if self._initialized:
+            return
         configfile: str = self.get_config_file()
         self.config = self.read_config_file(configfile)
         self.home_network_ranges = (
@@ -40,6 +49,7 @@ class ConfigParser(object):
         self.home_network_ranges = list(
             map(ipaddress.ip_network, self.home_network_ranges)
         )
+        self._initialized = True
 
     def read_config_file(self, configfile: str) -> dict:
         """
