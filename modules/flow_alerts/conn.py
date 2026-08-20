@@ -7,7 +7,6 @@ import json
 from typing import Tuple, List, Dict, Any
 import validators
 
-from modules.flow_alerts.dns import DNS
 from modules.flow_alerts.utils import (
     SPECIAL_IPV4,
     get_ip_to_check,
@@ -44,7 +43,6 @@ class Conn(IFlowalertsAnalyzer):
         # already, so we need to wait a little to report
         # In mins
         self.conn_without_dns_interface_wait_time = 30
-        self.dns_analyzer = DNS(self.db, flowalerts=self)
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.classifier = FlowClassifier()
         self.our_ips: List[str] = utils.get_own_ips(ret="List")
