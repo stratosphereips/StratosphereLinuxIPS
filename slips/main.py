@@ -654,8 +654,7 @@ class Main:
                 # update manager updates the iocs that the bloom filters need
                 self.bloom_filters_man.initialize_filter()
                 self.proc_man.load_modules()
-                # give outputprocess time to print all the started modules
-                time.sleep(0.5)
+
                 self.proc_man.print_disabled_modules()
 
             if self.args.webinterface:
@@ -685,9 +684,12 @@ class Main:
 
             self.proc_man.start_evidence_process()
             self.proc_man.start_profiler_process()
-            # give the profiler process time to start and subscribe to the db
-            # before we start sending data to it
-            time.sleep(1)
+            if not (
+                self.proc_man.is_profiler_done_starting_initial_workers_event.is_set()
+            ):
+                # give the profiler process time to start and subscribe to the db
+                # before we start sending data to it
+                time.sleep(0.1)
 
             self.c1 = self.db.subscribe("control_channel")
 
