@@ -22,6 +22,9 @@ class LocalFeedUpdaterMixin:
         # consider it 'unknown'.
         # in ports_info_filepath  we have a list of organizations range/ip and
         # the port it's known to use
+        # (organization, ip, portproto) entries to write to the db in a
+        # single batch instead of 1 db round trip per port
+        entries = []
         with open(ports_info_filepath, "r") as f:
             line_number = 0
             while True:
@@ -49,15 +52,11 @@ class LocalFeedUpdaterMixin:
 
                         for port in range(first_port, last_port + 1):
                             portproto = f"{port}/{proto}"
-                            self.db.set_organization_of_port(
-                                organization, ip, portproto
-                            )
+                            entries.append((organization, ip, portproto))
                     else:
                         # it's a single port
                         portproto = f"{ports_range}/{proto}"
-                        self.db.set_organization_of_port(
-                            organization, ip, portproto
-                        )
+                        entries.append((organization, ip, portproto))
 
                 except IndexError:
                     self.print(
@@ -67,6 +66,7 @@ class LocalFeedUpdaterMixin:
                         1,
                     )
                     continue
+        self.db.set_organizations_of_ports(entries)
         return line_number
 
     def update_local_file(self, file_path) -> bool:

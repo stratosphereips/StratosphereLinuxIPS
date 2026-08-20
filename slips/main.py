@@ -644,7 +644,7 @@ class Main:
                 # if wait_for_TI_to_finish is set to true in the config file,
                 # slips will wait untill all TI files are updated before
                 # starting the rest of the modules
-                self.proc_man.start_update_manager(
+                self.proc_man.start_feeds_update_manager(
                     local_files=True,
                     ti_feeds=self.conf.wait_for_TI_to_finish(),
                 )

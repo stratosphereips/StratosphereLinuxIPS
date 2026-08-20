@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # StartupMixin groups construction and startup of core processes and shared
 # runtime helpers used by ProcessManager.
+import threading
+from typing import Optional
+
 from managers.update_manager import UpdateManager
 from modules.feeds_update_manager.feeds_update_manager import (
     FeedsUpdateManager,
@@ -190,24 +193,29 @@ class StartupMixin:
             self.main.pid,
         )
 
-    def start_update_manager(
+    def start_feeds_update_manager(
         self, local_files: bool = False, ti_feeds: bool = False
-    ) -> None:
+    ) -> Optional[threading.Thread]:
         """
         Run the feeds update manager in the current process.
 
         Parameters:
             local_files: Whether to update local ports and org files.
             ti_feeds: Whether to update remote threat-intel feeds.
+
+        Returns:
+            The background thread updating local ports info, if one was
+            started. Slips doesn't need to wait for it before starting
+            the rest of the modules, so callers can ignore it.
         """
-        FeedsUpdateManager.run_startup_update(
-            self.main.logger,
-            self.main.args.output,
-            self.main.redis_port,
-            self.main.args,
-            self.main.conf,
-            self.main.pid,
-            getattr(self.main, "bloom_filters_man", None),
+        return FeedsUpdateManager.run_startup_update(
+            logger=self.main.logger,
+            output_dir=self.main.args.output,
+            redis_port=self.main.redis_port,
+            args=self.main.args,
+            conf=self.main.conf,
+            pid=self.main.pid,
+            bloom_filters_man=getattr(self.main, "bloom_filters_man", None),
             local_files=local_files,
             ti_feeds=ti_feeds,
         )

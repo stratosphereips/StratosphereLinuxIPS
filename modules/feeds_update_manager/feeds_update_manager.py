@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
 import multiprocessing
+import threading
 from asyncio import Task
-from typing import Dict
+from typing import Dict, Optional
 
 from exclusiveprocess import (
     Lock,
@@ -208,6 +209,65 @@ class FeedsUpdateManager(
             f"TI files successfully loaded."
         )
 
+    def _init_whitelist(self):
+        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
+
+    @classmethod
+    def _build_startup_instance(
+        cls, logger, output_dir, redis_port, args, conf, pid, bloom_filters_man
+    ) -> "FeedsUpdateManager":
+        """
+        Build the instance used by the startup update.
+
+        Returns:
+            A FeedsUpdateManager with a dummy termination event, since it
+            doesn't run as a process here.
+        """
+        return cls(
+            logger,
+            output_dir,
+            redis_port,
+            multiprocessing.Event(),
+            args,
+            conf,
+            pid,
+            bloom_filters_man,
+        )
+
+    @staticmethod
+    def _update_ports_info_in_background(
+        update_manager: "FeedsUpdateManager",
+    ) -> threading.Thread:
+        """
+        Updates local ports info (ports_used_by_specific_orgs.csv and
+        services.csv) in a background thread.
+
+        we're running it in a separate thread in order to avoid blocking
+        the startup of the rest f the modules until this function is done.
+        it takes 18+ seconds
+        Uses its own lock name (instead of "slips_ports_and_orgs") since
+        it now runs concurrently with the org files/whitelist update of
+        this same process.
+
+        Returns:
+            The started thread, so callers that need to wait for it
+            (e.g. tests) can join() it.
+        """
+
+        def _run():
+            try:
+                with Lock(name="slips_ports_info"):
+                    update_manager.update_ports_info()
+            except CannotAcquireLock:
+                # another instance of slips is updating ports info
+                return
+
+        thread = threading.Thread(
+            target=_run, name="ports-info-updater", daemon=True
+        )
+        thread.start()
+        return thread
+
     @classmethod
     def run_startup_update(
         cls,
@@ -220,10 +280,11 @@ class FeedsUpdateManager(
         bloom_filters_man=None,
         local_files: bool = False,
         ti_feeds: bool = False,
-    ) -> None:
+    ) -> Optional[threading.Thread]:
         """
         Run the feeds update manager in the current process, before slips
         starts the rest of the modules.
+        this is triggered by the startup_mixin.
 
         Parameters:
             logger: the logger to use for printing.
@@ -235,28 +296,35 @@ class FeedsUpdateManager(
             bloom_filters_man: shared bloom filters manager.
             local_files: Whether to update local ports and org files.
             ti_feeds: Whether to update remote threat-intel feeds.
+
+        Returns:
+            The background thread updating local ports info, if one was
+            started, so callers that need to wait for it can join() it.
+            Callers that don't care (e.g. normal slips startup) can just
+            ignore the return value and let it finish on its own.
         """
+        ports_info_thread: Optional[threading.Thread] = None
         try:
-            # only one instance of slips should be able to update ports
-            # and orgs at a time
+            # only one instance of slips should be able to update orgs
+            # at a time
             # so this function will only be allowed to run from 1 slips
             # instance.
             with Lock(name="slips_ports_and_orgs"):
-                # pass a dummy termination event for update manager to
-                # update orgs and ports info
-                update_manager = cls(
+                update_manager = cls._build_startup_instance(
                     logger,
                     output_dir,
                     redis_port,
-                    multiprocessing.Event(),
                     args,
                     conf,
                     pid,
                     bloom_filters_man,
                 )
+                update_manager._init_whitelist()
 
                 if local_files:
-                    update_manager.update_ports_info()
+                    ports_info_thread = cls._update_ports_info_in_background(
+                        update_manager
+                    )
                     update_manager.update_org_files()
                     update_manager.update_local_whitelist()
 
@@ -265,7 +333,9 @@ class FeedsUpdateManager(
                     asyncio.run(update_manager.update_ti_files())
         except CannotAcquireLock:
             # another instance of slips is updating ports and orgs
-            return
+            return ports_info_thread
+
+        return ports_info_thread
 
     def shutdown_gracefully(self):
         # terminating the timer for the process to be killed
@@ -278,9 +348,7 @@ class FeedsUpdateManager(
             # only one instance of slips should be able to update TI files at a time
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_feeds_update"):
-                self.whitelist = Whitelist(
-                    self.logger, self.db, self.bloom_filters
-                )
+                self._init_whitelist()
                 asyncio.run(self.update_ti_files())
                 # Starting timer to update files
                 self.update_timer.start()
