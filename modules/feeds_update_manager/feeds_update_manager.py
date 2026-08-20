@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
+import multiprocessing
 from asyncio import Task
 from typing import Dict
 
@@ -60,13 +61,9 @@ class FeedsUpdateManager(
             ),
             self.update_ti_files,
         )
-
-        self.read_configuration()
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
         self.max_days_to_keep_ti_files = 7
-        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
-        self.slips_logfile = self.db.get_stdfile("stdout")
         self.org_info_path = "slips_files/organizations_info/"
         self.path_to_mac_db = "databases/macaddress-db.json"
         # if any keyword of the following is present in a line
@@ -211,6 +208,65 @@ class FeedsUpdateManager(
             f"TI files successfully loaded."
         )
 
+    @classmethod
+    def run_startup_update(
+        cls,
+        logger,
+        output_dir: str,
+        redis_port: int,
+        args,
+        conf,
+        pid: int,
+        bloom_filters_man=None,
+        local_files: bool = False,
+        ti_feeds: bool = False,
+    ) -> None:
+        """
+        Run the feeds update manager in the current process, before slips
+        starts the rest of the modules.
+
+        Parameters:
+            logger: the logger to use for printing.
+            output_dir: slips output dir.
+            redis_port: the port of the redis db slips is using.
+            args: slips args.
+            conf: slips config.
+            pid: pid of the process starting the update.
+            bloom_filters_man: shared bloom filters manager.
+            local_files: Whether to update local ports and org files.
+            ti_feeds: Whether to update remote threat-intel feeds.
+        """
+        try:
+            # only one instance of slips should be able to update ports
+            # and orgs at a time
+            # so this function will only be allowed to run from 1 slips
+            # instance.
+            with Lock(name="slips_ports_and_orgs"):
+                # pass a dummy termination event for update manager to
+                # update orgs and ports info
+                update_manager = cls(
+                    logger,
+                    output_dir,
+                    redis_port,
+                    multiprocessing.Event(),
+                    args,
+                    conf,
+                    pid,
+                    bloom_filters_man,
+                )
+
+                if local_files:
+                    update_manager.update_ports_info()
+                    update_manager.update_org_files()
+                    update_manager.update_local_whitelist()
+
+                if ti_feeds:
+                    update_manager.print("Updating TI feeds")
+                    asyncio.run(update_manager.update_ti_files())
+        except CannotAcquireLock:
+            # another instance of slips is updating ports and orgs
+            return
+
     def shutdown_gracefully(self):
         # terminating the timer for the process to be killed
         self.update_timer.cancel()
@@ -222,6 +278,9 @@ class FeedsUpdateManager(
             # only one instance of slips should be able to update TI files at a time
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_feeds_update"):
+                self.whitelist = Whitelist(
+                    self.logger, self.db, self.bloom_filters
+                )
                 asyncio.run(self.update_ti_files())
                 # Starting timer to update files
                 self.update_timer.start()
