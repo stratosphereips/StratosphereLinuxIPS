@@ -237,7 +237,10 @@ class RedisManager:
         start_redis_server = not utils.is_port_in_use(redis_port)
         # we dont care about the logger here we're just making sure the
         # server is up, this r isnt gonna be used later
-        logger = ""
+        logger = Output(
+            create_logfiles=False,
+            slips_args=getattr(self.main, "args", None),
+        )
         redis = RedisDB(
             logger,
             redis_port,
