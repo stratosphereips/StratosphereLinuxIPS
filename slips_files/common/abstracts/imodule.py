@@ -243,7 +243,9 @@ class IModule(ABC, Process):
     def pre_main(self) -> bool:
         """
         This function is for initializations that are
-        executed once before the main loop
+        executed once before the main loop.
+        if any initialization function takes too long, it goes here instead
+         of init() in order to avoid slowing down the startup of slips modules.
         """
 
     def _pre_main(self):

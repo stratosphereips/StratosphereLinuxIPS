@@ -2,11 +2,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # StartupMixin groups construction and startup of core processes and shared
 # runtime helpers used by ProcessManager.
-import asyncio
-import multiprocessing
-
-from exclusiveprocess import CannotAcquireLock, Lock
-
 from managers.update_manager import UpdateManager
 from modules.feeds_update_manager.feeds_update_manager import (
     FeedsUpdateManager,
@@ -205,34 +200,14 @@ class StartupMixin:
             local_files: Whether to update local ports and org files.
             ti_feeds: Whether to update remote threat-intel feeds.
         """
-        try:
-            bloom_filters_man = getattr(self.main, "bloom_filters_man", None)
-            # only one instance of slips should be able to update ports
-            # and orgs at a time
-            # so this function will only be allowed to run from 1 slips
-            # instance.
-            with Lock(name="slips_ports_and_orgs"):
-                # pass a dummy termination event for update manager to
-                # update orgs and ports info
-                update_manager = FeedsUpdateManager(
-                    self.main.logger,
-                    self.main.args.output,
-                    self.main.redis_port,
-                    multiprocessing.Event(),
-                    self.main.args,
-                    self.main.conf,
-                    self.main.pid,
-                    bloom_filters_man,
-                )
-
-                if local_files:
-                    update_manager.update_ports_info()
-                    update_manager.update_org_files()
-                    update_manager.update_local_whitelist()
-
-                if ti_feeds:
-                    update_manager.print("Updating TI feeds")
-                    asyncio.run(update_manager.update_ti_files())
-        except CannotAcquireLock:
-            # another instance of slips is updating ports and orgs
-            return
+        FeedsUpdateManager.run_startup_update(
+            self.main.logger,
+            self.main.args.output,
+            self.main.redis_port,
+            self.main.args,
+            self.main.conf,
+            self.main.pid,
+            getattr(self.main, "bloom_filters_man", None),
+            local_files=local_files,
+            ti_feeds=ti_feeds,
+        )
