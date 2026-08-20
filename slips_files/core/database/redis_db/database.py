@@ -521,22 +521,29 @@ class RedisDB(
         Connects to the given port and Sets r and rcache
         Returns a tuple of (bool, error message).
         """
-        try:
-            # db 0 changes everytime we run slips
-            cls.r = cls._connect(cls.redis_port, 0)
-            # port 6379 db 0 is cache, delete it using -cc flag
-            cls.rcache = cls._connect(6379, 1)
+        backoff = 0.5
+        last_err = "database.connect_to_redis_server: connection refused"
+        for attempt in range(3):
+            try:
+                # db 0 changes everytime we run slips
+                cls.r = cls._connect(cls.redis_port, 0)
+                # port 6379 db 0 is cache, delete it using -cc flag
+                cls.rcache = cls._connect(6379, 1)
 
-            # fix  ConnectionRefused error by giving redis time to open
-            time.sleep(1)
+                # the connection to redis is only established
+                # when you try to execute a command on the server.
+                # so make sure it's established first
+                cls.r.client_list()
+                return True, ""
+            except redis.ConnectionRefused as e:
+                last_err = f"database.connect_to_redis_server: {e}"
+                if attempt < 2:
+                    time.sleep(backoff)
+                    backoff *= 2
+            except Exception as e:
+                return False, f"database.connect_to_redis_server: {e}"
 
-            # the connection to redis is only established
-            # when you try to execute a command on the server.
-            # so make sure it's established first
-            cls.r.client_list()
-            return True, ""
-        except Exception as e:
-            return False, f"database.connect_to_redis_server: {e}"
+        return False, last_err
 
     @classmethod
     def change_redis_limits(cls, client: redis.StrictRedis):
