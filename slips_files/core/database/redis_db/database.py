@@ -484,6 +484,7 @@ class RedisDB(
             "--daemonize",
             "yes",
         ]
+
         cls.printer.print(
             f"Redis command: {shlex.join(cmd)}",
             log_to_logfiles_only=True,
