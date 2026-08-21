@@ -321,6 +321,10 @@ class ModuleLoadingMixin:
             + NUM_INITIAL_PROFILER_WORKERS
             + DEFAULT_EVIDENCE_HANDLER_WORKERS
         )
+        # from here until the last process/module announces itself,
+        # queue every other printed message instead of letting it
+        # interleave with the startup progress report
+        self.main.logger.begin_startup_announcements()
 
     def load_modules(self) -> None:
         """

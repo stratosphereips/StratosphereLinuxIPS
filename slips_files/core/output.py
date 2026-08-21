@@ -17,8 +17,10 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 import multiprocessing
 import sys
+import time
 from pathlib import Path
 from datetime import datetime
+from queue import Empty
 import os
 
 from slips_files.common.abstracts.iobserver import IObserver
@@ -53,6 +55,25 @@ class Output(IObserver):
     # of overwriting/merging with it.
     _cli_has_dangling_line = multiprocessing.Value("b", False)
 
+    # While slips' processes/modules are still announcing their startup
+    # (see begin_startup_announcements()), every OTHER printed message
+    # is held here instead of going straight to the cli/logfiles, so it
+    # can't land in the middle of the startup progress report and break
+    # up its lines. Nothing is delayed except the printing itself - the
+    # code that queued the message keeps running normally. Queued
+    # messages are flushed, in the order they arrived, as soon as the
+    # last process/module announces itself.
+    _startup_queue = multiprocessing.Queue()
+    _startup_in_progress = multiprocessing.Value("b", False)
+    _startup_queue_lock = multiprocessing.Lock()
+    # monotonic-clock deadline after which queued messages are
+    # force-flushed even if the expected total was never reached - a
+    # safety net for the case where a module dies/errors out before
+    # announcing itself, which would otherwise stall all cli/logfile
+    # output for the rest of the run
+    _startup_deadline = multiprocessing.Value("d", 0.0)
+    STARTUP_QUEUE_TIMEOUT_SECS = 120
+
     def __init__(
         self,
         verbose=1,
@@ -65,6 +86,9 @@ class Output(IObserver):
         slips_args=None,
     ):
         super().__init__()
+        # a fresh Output() means a fresh run for whichever process
+        # constructed it - no startup announcements are in progress yet
+        self._startup_in_progress.value = False
         # when running slips using -e , this var is set and we only
         # print all msgs with debug lvl less than it
         self.verbose = verbose
@@ -257,6 +281,54 @@ class Output(IObserver):
         if debug == 1:
             self.log_error(msg)
 
+    def begin_startup_announcements(self) -> None:
+        """
+        Marks the start of slips' startup progress report. Called once,
+        as soon as the total number of processes/modules to start is
+        known, and before any of them are forked. Until the last one
+        announces itself (or the safety-net timeout below elapses),
+        every other printed message is queued instead of interleaving
+        with the startup progress lines.
+        """
+        self._startup_deadline.value = (
+            time.monotonic() + self.STARTUP_QUEUE_TIMEOUT_SECS
+        )
+        self._startup_in_progress.value = True
+
+    def _dispatch(self, msg: dict) -> None:
+        """
+        Actually prints/logs a message - the part of update() that
+        queueing defers.
+        """
+        if msg.get("log_to_logfiles_only", False):
+            self.log_line(msg)
+        else:
+            self.output_line_to_cli_and_logfiles(msg)
+
+    def _flush_startup_queue(self) -> None:
+        """
+        Prints every message queued since begin_startup_announcements(),
+        in order, then lets new messages print immediately again.
+        """
+        with self._startup_queue_lock:
+            if not self._startup_in_progress.value:
+                # another process already flushed it
+                return
+            # a multiprocessing.Queue delivers items to get() slightly
+            # after put() returns on another process - a short grace
+            # period avoids treating a message that was queued a
+            # moment ago, but isn't visible yet, as if it never was
+            consecutive_empty_checks = 0
+            while consecutive_empty_checks < 3:
+                try:
+                    queued_msg = self._startup_queue.get(timeout=0.05)
+                except Empty:
+                    consecutive_empty_checks += 1
+                    continue
+                consecutive_empty_checks = 0
+                self._dispatch(queued_msg)
+            self._startup_in_progress.value = False
+
     def update(self, msg: dict):
         """
         is called whenever any module need to print something using the
@@ -268,8 +340,26 @@ class Output(IObserver):
             txt: text to log to the logfiles and/or the cli
         }
         """
-        # output to terminal and logs or logs only?
-        if msg.get("log_to_logfiles_only", False):
-            self.log_line(msg)
-        else:
-            self.output_line_to_cli_and_logfiles(msg)
+        # startup progress lines are never queued - they're what the
+        # queueing is protecting in the first place
+        if msg.get("suppress_sender", False):
+            self._dispatch(msg)
+            if msg.get("is_final_startup_announcement", False):
+                self._flush_startup_queue()
+            return
+
+        if self._startup_in_progress.value:
+            if time.monotonic() >= self._startup_deadline.value:
+                # a module/worker likely died before announcing itself,
+                # so the expected total was never reached. stop
+                # queueing instead of holding all future output forever
+                self._flush_startup_queue()
+            else:
+                with self._startup_queue_lock:
+                    # re-check now that we hold the lock: startup may
+                    # have finished between the check above and here
+                    if self._startup_in_progress.value:
+                        self._startup_queue.put(msg)
+                        return
+
+        self._dispatch(msg)

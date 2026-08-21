@@ -27,6 +27,7 @@ class Printer(IObservable):
         log_to_logfiles_only=False,
         end="\n",
         suppress_sender=False,
+        is_final_startup_announcement=False,
     ):
         """
         Function to use to print text using the slips_files/core/output.py.
@@ -48,6 +49,11 @@ class Printer(IObservable):
         :param suppress_sender: if True, the cli line isn't prefixed with
         "[sender]" - used for lines that already carry their own
         formatting, e.g. the startup progress report
+        :param is_final_startup_announcement: if True, this is the last
+        line of the startup progress report (this process/module/worker
+        is the last of the expected total to start), so all other
+        messages queued while starting up are flushed right after this
+        one prints
         """
         self.notify_observers(
             {
@@ -58,5 +64,6 @@ class Printer(IObservable):
                 "log_to_logfiles_only": log_to_logfiles_only,
                 "end": end,
                 "suppress_sender": suppress_sender,
+                "is_final_startup_announcement": is_final_startup_announcement,
             }
         )

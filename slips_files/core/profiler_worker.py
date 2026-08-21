@@ -607,7 +607,15 @@ class ProfilerWorker(IModule):
             os.getpid(),
             "Parses flows in parallel with other profiler workers",
         )
-        self.print(line, 1, 0, suppress_sender=True)
+        self.print(
+            line,
+            1,
+            0,
+            suppress_sender=True,
+            is_final_startup_announcement=(
+                started_count >= self.total_processes_to_start
+            ),
+        )
 
         if line_processors := self.db.get_line_processors():
             for file_type, indices in line_processors.items():
