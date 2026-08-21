@@ -53,6 +53,10 @@ class ProcessManager(
       -> Slips can finish shutdown
     """
 
+    # non-detection-module processes counted alongside modules in the
+    # live startup progress: main, evidence handler, profiler, input
+    NUM_CORE_PROCESSES = 4
+
     def __init__(self, main: object) -> None:
         """
         Initialize shared process-manager state.
@@ -105,3 +109,9 @@ class ProcessManager(
         self.all_children_started = False
         self.core_module_failure = False
         self.disabled_warning_printed = False
+        # total number of detection modules plus core processes (main,
+        # evidence handler, profiler, input) slips is starting, used to
+        # show live "x/total" progress as each one announces itself.
+        # set for real by set_total_processes_to_start() once slips
+        # knows whether detection modules will be loaded at all.
+        self.total_processes_to_start = self.NUM_CORE_PROCESSES

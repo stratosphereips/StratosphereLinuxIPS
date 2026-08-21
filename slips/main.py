@@ -22,12 +22,19 @@ from managers.profilers_manager import ProfilersManager
 from managers.redis_manager import RedisManager
 from managers.timewindow_manager import TimewindowManager
 from managers.ui_manager import UIManager
+from modules.supported_module_names import Modules
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_paths import get_performance_plots_dir
 from slips_files.common.printer import Printer
 from slips_files.common.sqlite_flock import SQLiteFlock
 from slips_files.common.slips_utils import utils
-from slips_files.common.style import green, yellow
+from slips_files.common.style import (
+    green,
+    grey,
+    header_line,
+    print_separator,
+    yellow,
+)
 from slips_files.common.input_type import InputType
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.bloom_filters_manager import BFManager
@@ -359,12 +366,12 @@ class Main:
         self.args.debug = max(self.args.debug, 0)
 
     def print_version(self):
-        slips_version = f"Slips Version: {green(self.version)}"
+        slips_version = f"Slips {green(f'v{self.version}')}"
         branch_info = utils.get_branch_info()
         if branch_info is not False:
             # it's false when we're in docker because there's no .git/ there
             self.commit, self.branch = branch_info
-            slips_version += f" ({self.commit[:8]})"
+            slips_version += grey(f" ({self.commit[:8]})")
         slips_version.replace("\n", "")
         print(slips_version)
 
@@ -479,9 +486,9 @@ class Main:
 
         for interface in utils.get_all_interfaces(self.args):
             if ip := self.db.get_gateway_ip(interface):
-                self.print(f"Detected gateway IP: {green(ip)}")
+                self.print(header_line("Gateway IP", ip))
             if mac := self.db.get_gateway_mac(interface):
-                self.print(f"Detected gateway MAC: {green(mac)}")
+                self.print(header_line("Gateway MAC", mac))
             self.gw_info_printed = True
 
     def print_localnet_info(self):
@@ -493,10 +500,11 @@ class Main:
             if not local_net:
                 continue
 
-            to_print = f"Used local network: {green(local_net)}"
+            value = local_net
             if interface != "default":
-                to_print += f" for interface {green(interface)}."
-            self.print(to_print)
+                value += f" ({interface})"
+            self.print(header_line("Local Net", value))
+            print_separator()
             self.localnet_info_printed = True
 
     def prepare_locks_dir(self):
@@ -514,8 +522,8 @@ class Main:
         """Main Slips Function"""
         try:
             self.print_version()
-            print("https://stratosphereips.org")
-            print("-" * 27)
+            print(grey("stratosphereips.org"))
+            print_separator()
 
             self.setup_print_levels()
             stderr: str = self.get_slips_error_file()
@@ -527,7 +535,7 @@ class Main:
             )
             self.printer = Printer(self.logger, self.name)
 
-            self.print(f"Storing Slips logs in {self.args.output}")
+            self.print(header_line("Logs", self.args.output))
 
             self.redis_port: int = self.redis_man.get_redis_port()
             if self.args.is_slips_started_by_an_update:
@@ -599,14 +607,26 @@ class Main:
             host_ips = self.host_ip_man.store_host_ip()
 
             self.print(
-                f"Using redis server on port: {green(self.redis_port)}",
+                header_line("Redis", f"localhost:{self.redis_port}"),
                 1,
                 0,
             )
-            self.print(
-                f'Started {green("Main")} process [PID {green(self.pid)}]',
-                1,
-                0,
+            if host_ips:
+                for iface, ip in host_ips.items():
+                    self.print(
+                        header_line("Host IP", f"{ip} ({iface})"),
+                        1,
+                        0,
+                    )
+            self.proc_man.set_total_processes_to_start(
+                will_load_modules=not self.args.db
+            )
+            print_separator()
+            self.proc_man.announce_started(
+                Modules.MAIN,
+                self.pid,
+                "Coordinates all other slips processes and modules",
+                self.db,
             )
             self.profilers_manager.cpu_profiler_init()
             self.profilers_manager.memory_profiler_init()
@@ -648,14 +668,12 @@ class Main:
                     local_files=True,
                     ti_feeds=self.conf.wait_for_TI_to_finish(),
                 )
-                self.print("Starting modules", 1, 0)
                 # initialize_filter must be called after the update manager
                 # is started, and before the modules start. why? because
                 # update manager updates the iocs that the bloom filters need
                 self.bloom_filters_man.initialize_filter()
-                self.proc_man.load_modules()
 
-                self.proc_man.print_disabled_modules()
+                self.proc_man.load_modules()
 
             if self.args.webinterface:
                 self.ui_man.start_webinterface()
@@ -728,6 +746,8 @@ class Main:
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
+                self.proc_man.print_disabled_modules()
+
                 self.print_gw_info()
                 self.print_localnet_info()
 

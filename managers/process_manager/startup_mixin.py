@@ -9,8 +9,8 @@ from managers.update_manager import UpdateManager
 from modules.feeds_update_manager.feeds_update_manager import (
     FeedsUpdateManager,
 )
+from modules.supported_module_names import Modules
 from slips_files.common.input_type import InputType
-from slips_files.common.style import green
 from slips_files.core.evidence_handler import EvidenceHandler
 from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.input import Input
@@ -91,13 +91,14 @@ class StartupMixin:
             is_profiler_done_starting_initial_workers_event=(
                 self.is_profiler_done_starting_initial_workers_event
             ),
+            total_processes_to_start=self.total_processes_to_start,
         )
         profiler_process.start()
-        self.main.print(
-            f'Started {green("Profiler Process")} '
-            f"[PID {green(profiler_process.pid)}]",
-            1,
-            0,
+        self.announce_started(
+            Modules.PROFILER,
+            profiler_process.pid,
+            profiler_process.description,
+            self.main.db,
         )
         self.main.db.store_pid("Profiler", int(profiler_process.pid))
         # Interface input starts profiler workers before the input process
@@ -124,13 +125,14 @@ class StartupMixin:
             self.main.conf,
             self.main.pid,
             self.main.bloom_filters_man,
+            total_processes_to_start=self.total_processes_to_start,
         )
         evidence_process.start()
-        self.main.print(
-            f'Started {green("Evidence Process")} '
-            f"[PID {green(evidence_process.pid)}]",
-            1,
-            0,
+        self.announce_started(
+            Modules.EVIDENCE_HANDLER,
+            evidence_process.pid,
+            evidence_process.description,
+            self.main.db,
         )
         self.main.db.store_pid("evidence_handler", int(evidence_process.pid))
         self.evidence_process = evidence_process
@@ -168,11 +170,11 @@ class StartupMixin:
             ),
         )
         input_process.start()
-        self.main.print(
-            f'Started {green("Input Process")} '
-            f"[PID {green(input_process.pid)}]",
-            1,
-            0,
+        self.announce_started(
+            Modules.INPUT,
+            input_process.pid,
+            input_process.description,
+            self.main.db,
         )
         self.main.db.store_pid("Input", int(input_process.pid))
         self.input_process = input_process

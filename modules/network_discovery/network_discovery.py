@@ -27,7 +27,7 @@ class NetworkDiscovery(IModule):
     """
 
     name = "network_discovery"
-    description = "Detect Horizonal, Vertical, and DHCP Scans."
+    description = "Detects Horizonal, Vertical, and DHCP Scans."
     authors = ["Sebastian Garcia", "Alya Gomaa"]
 
     def init(self):
