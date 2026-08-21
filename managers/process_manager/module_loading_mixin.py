@@ -4,9 +4,10 @@
 # startup of detection modules for ProcessManager.
 import importlib
 import inspect
+import os
 import pkgutil
 import traceback
-from collections import OrderedDict
+from multiprocessing import Process
 from types import ModuleType
 from typing import List, Any, Dict, Iterator, Optional
 
@@ -220,55 +221,82 @@ class ModuleLoadingMixin:
             print(traceback.format_exc())
             return None
 
-    def _load_valid_classes_from_module(
-        self, module: ModuleType, plugins: PluginMap
-    ) -> PluginMap:
+    def _find_module_class(self, module: ModuleType) -> Optional[type]:
         """
-        Load valid IModule subclasses from an imported module.
+        Find the concrete IModule subclass defined in an imported module.
+        The discovery convention (dir_name == file_name) guarantees each
+        module file that reaches this point defines exactly one.
 
         Parameters:
             module: Imported Python module.
-            plugins: Current plugin mapping.
 
         Returns:
-            Updated plugin mapping.
+            The module's IModule subclass, or None if it doesn't have one.
         """
         for _, member_object in inspect.getmembers(module):
             if inspect.isclass(member_object):
                 if issubclass(
                     member_object, IModule
                 ) and not self.is_abstract_module(member_object):
-                    module_name = Modules(member_object.name)
-                    plugins[module_name] = {
-                        "obj": member_object,
-                        "description": member_object.description,
-                    }
-        return plugins
+                    return member_object
+        return None
 
-    def _prioritize_blocking_modules(self, plugins: PluginMap) -> PluginMap:
+    def _run_module(
+        self,
+        module_name: str,
+        logger: Any,
+        output_dir: str,
+        redis_port: int,
+        termination_event: Any,
+        slips_args: Any,
+        conf: Any,
+        ppid: int,
+        bloom_filters_manager: Any,
+    ) -> None:
         """
-        Move blocking modules to the beginning of the startup order.
+        Entry point that runs inside a module's own (already forked)
+        process. Imports the module and constructs+runs its class here
+        instead of in the main process, so every module's import cost
+        is paid in parallel across processes instead of serially
+        blocking the rest of Slips startup. The module announces its
+        own startup once it knows its own description and real PID.
 
         Parameters:
-            plugins: Loaded plugin mapping.
-
-        Returns:
-            Reordered plugin mapping.
+            module_name: Fully qualified module name to import and run.
+            logger, output_dir, redis_port, termination_event,
+            slips_args, conf, ppid, bloom_filters_manager: Regular
+                IModule constructor arguments.
         """
-        blocking_modules = (Modules.BLOCKING, Modules.ARP_POISONER)
-        if not any(module in plugins for module in blocking_modules):
-            return plugins
+        imported_module = self._import_module(module_name)
+        if imported_module is None:
+            return
 
-        # put the blocking modules at the top to start first
-        ordered = OrderedDict(plugins)
-        for module in blocking_modules:
-            if module in plugins:
-                # last=False to move to the beginning of the dict
-                ordered.move_to_end(module, last=False)
+        module_class = self._find_module_class(imported_module)
+        if module_class is None:
+            return
 
-        plugins.clear()
-        plugins.update(ordered)
-        return plugins
+        instance = module_class(
+            logger,
+            output_dir,
+            redis_port,
+            termination_event,
+            slips_args,
+            conf,
+            ppid,
+            bloom_filters_manager,
+        )
+        # each module announces itself from its own process, so the
+        # only way to know how many have started so far is a counter
+        # shared through the db, not local process state. uses this
+        # module's own db connection - the one on self.main.db was
+        # inherited across the fork and isn't safe to share.
+        self.announce_started(
+            Modules(module_class.name),
+            os.getpid(),
+            module_class.description,
+            instance.db,
+        )
+        instance.run()
 
     def set_total_processes_to_start(self, will_load_modules: bool) -> None:
         """
@@ -298,23 +326,23 @@ class ModuleLoadingMixin:
         """
         Start all enabled modules discovered in the modules directory.
         """
-        modules_to_call = self.get_modules()[0]
-        for module_name in modules_to_call:
-            module_class = modules_to_call[module_name]["obj"]
-            module = module_class(
-                self.main.logger,
-                self.main.args.output,
-                self.main.redis_port,
-                self.termination_event,
-                self.main.args,
-                self.main.conf,
-                self.main.pid,
-                self.main.bloom_filters_man,
+        enabled_module_names = self.get_enabled_module_names()
+        for module_name in enabled_module_names:
+            short_name = self._short_name(module_name)
+            process = Process(
+                target=self._run_module,
+                name=short_name,
+                args=(
+                    module_name,
+                    self.main.logger,
+                    self.main.args.output,
+                    self.main.redis_port,
+                    self.termination_event,
+                    self.main.args,
+                    self.main.conf,
+                    self.main.pid,
+                    self.main.bloom_filters_man,
+                ),
             )
-            module.start()
-            self.main.db.store_pid(module_name, int(module.pid))
-            self.print_started_module(
-                module_name,
-                module.pid,
-                modules_to_call[module_name]["description"],
-            )
+            process.start()
+            self.main.db.store_pid(short_name, int(process.pid))
