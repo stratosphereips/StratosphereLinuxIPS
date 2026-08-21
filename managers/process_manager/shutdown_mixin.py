@@ -15,6 +15,7 @@ from typing import List, Optional, Tuple
 from modules.supported_module_names import Modules
 from slips_files.common.plotter import Plotter
 from slips_files.common.slips_utils import utils
+from slips_files.common.style import print_separator
 
 
 class ShutdownMixin:
@@ -495,7 +496,8 @@ class ShutdownMixin:
             self._generate_plots()
 
             if not self.main.args.stopdaemon:
-                print("\n" + "-" * 27)
+                print_separator()
+
             print("Stopping Slips")
 
             self.children: List[BaseProcess] = (
