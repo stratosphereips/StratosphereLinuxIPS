@@ -47,6 +47,8 @@ class ProfilerWorker(IModule):
         aid_manager: AIDManager,
         is_input_done_event: multiprocessing.Event = None,
         total_processes_to_start: int = 1,
+        gw_ip_print_lock: multiprocessing.Lock = None,
+        gw_ip_printed_event: multiprocessing.Event = None,
     ):
         self.name = name
         self.total_processes_to_start = total_processes_to_start
