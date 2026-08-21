@@ -20,7 +20,7 @@ from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.slips_utils import utils
 from slips_files.common.performance_paths import get_performance_csv_path
 from slips_files.common.startup_report import format_started_line
-from slips_files.common.style import green
+from slips_files.common.style import header_line
 from slips_files.core.aid_manager import AIDManager
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.localnet_handler import LocalnetHandler
@@ -59,6 +59,9 @@ class ProfilerWorker(IModule):
         # lets workers stop when input is done even if the stop sentinel
         # never reaches them
         self.is_input_done_event = is_input_done_event
+        # used to make sure only 1 worker prints the gateway IP, once
+        self.gw_ip_print_lock = gw_ip_print_lock
+        self.gw_ip_printed_event = gw_ip_printed_event
         # this is an instance of
         # ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         self.input_handler = input_handler
@@ -462,9 +465,23 @@ class ProfilerWorker(IModule):
             if gw_ip and self.gw_ip_belongs_to_localnet(gw_ip):
                 self.gw_ips[flow.interface] = gw_ip
                 self.db.set_default_gateway("IP", gw_ip, flow.interface)
-                self.print(
-                    f"IP address of the gateway detected: " f"{green(gw_ip)}"
-                )
+                self._print_gw_ip_once(gw_ip)
+
+    def _print_gw_ip_once(self, gw_ip: str) -> None:
+        """
+        Makes sure only 1 profiler worker prints the gateway IP, and
+        only once, even if multiple workers detect it at the same time.
+        """
+        if not self.gw_ip_print_lock or not self.gw_ip_printed_event:
+            # not given (e.g. in unit tests), fall back to printing
+            self.print(header_line("Gateway IP", gw_ip))
+            return
+
+        with self.gw_ip_print_lock:
+            if self.gw_ip_printed_event.is_set():
+                return
+            self.gw_ip_printed_event.set()
+            self.print(header_line("Gateway IP", gw_ip))
 
     def is_ignored_ip(self, ip: str) -> bool:
         """
