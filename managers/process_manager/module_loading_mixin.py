@@ -13,6 +13,10 @@ from typing import List, Any, Dict, Iterator, Optional
 import modules
 from modules.supported_module_names import Modules
 from slips_files.common.abstracts.imodule import IModule
+from slips_files.core.evidence_handler import DEFAULT_EVIDENCE_HANDLER_WORKERS
+from slips_files.core.worker_manager_mixin import (
+    NUM_INITIAL_PROFILER_WORKERS,
+)
 
 PluginMap = Dict[Modules, Dict[str, Any]]
 
@@ -266,29 +270,29 @@ class ModuleLoadingMixin:
         plugins.update(ordered)
         return plugins
 
-    def _change_cyst_module_order(self, plugins: PluginMap) -> PluginMap:
+    def set_total_processes_to_start(self, will_load_modules: bool) -> None:
         """
-        Move the CYST module to the end of the startup order.
+        Compute and cache how many processes slips will start this run,
+        detection modules plus the fixed set of core processes and the
+        profiler/evidence workers they start, so each one can announce
+        itself with an accurate running count. Workers don't get their
+        own separate counter - they count towards this same total.
+        Must be called before any process/module announces itself.
 
         Parameters:
-            plugins: Loaded plugin mapping.
-
-        Returns:
-            Reordered plugin mapping.
+            will_load_modules: False when slips was started with a
+                .rdb file and skips starting detection modules
+                entirely.
         """
-        if Modules.CYST not in plugins:
-            return plugins
-
-        # when cyst starts first, as soon as slips connects to cyst,
-        # cyst sends slips the flows,
-        # but the inputprocess didn't even start yet so the flows are lost
-        # to fix this, change the order of the CYST module (load it last)
-        ordered = OrderedDict(plugins)
-        # last=True to move to the end of the dict
-        ordered.move_to_end(Modules.CYST, last=True)
-        plugins.clear()
-        plugins.update(ordered)
-        return plugins
+        module_count = (
+            len(self.get_enabled_module_names()) if will_load_modules else 0
+        )
+        self.total_processes_to_start = (
+            module_count
+            + self.NUM_CORE_PROCESSES
+            + NUM_INITIAL_PROFILER_WORKERS
+            + DEFAULT_EVIDENCE_HANDLER_WORKERS
+        )
 
     def load_modules(self) -> None:
         """
