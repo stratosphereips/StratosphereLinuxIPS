@@ -7,13 +7,10 @@ from typing import (
     Dict,
 )
 
-from slips_files.common.style import green
-
 
 class HostIPManager:
     def __init__(self, main):
         self.main = main
-        self.info_printed = False
 
     def _get_host_ips(self) -> Dict[str, str]:
         """
@@ -60,11 +57,6 @@ class HostIPManager:
         if host_ips := self._get_host_ips():
             for iface, ip in host_ips.items():
                 self.main.db.set_host_ip(ip, iface)
-                if not self.info_printed:
-                    self.main.print(
-                        f"Detected host IP: {green(ip)} for {green(iface)}\n"
-                    )
-            self.info_printed = True
             return host_ips
 
         # uncomment this if in the future we require host ips to start

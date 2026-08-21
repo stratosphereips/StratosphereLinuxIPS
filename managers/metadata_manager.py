@@ -13,6 +13,7 @@ from typing import (
 
 from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
+from slips_files.common.style import header_line
 
 
 class MetadataManager:
@@ -66,7 +67,7 @@ class MetadataManager:
             if hasattr(self.main, "zeek_bro"):
                 f.write(f"Zeek version: {self.main.db.get_zeek_version()}\n")
 
-        self.main.print(f"Metadata added to {metadata_dir}")
+        self.main.print(header_line("Metadata", metadata_dir))
         return self.info_path
 
     def set_analysis_end_date(self, end_date):
