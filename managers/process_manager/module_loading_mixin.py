@@ -1,19 +1,18 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-# ModuleLoadingMixin groups module discovery, import, filtering, ordering,
-# and startup of detection modules for ProcessManager.
+# ModuleLoadingMixin groups module discovery, filtering, ordering, and
+# startup of detection modules for ProcessManager.
 import importlib
 import inspect
 import pkgutil
 import traceback
 from collections import OrderedDict
 from types import ModuleType
-from typing import Any, Dict, Iterator, Optional, Tuple
+from typing import List, Any, Dict, Iterator, Optional
 
 import modules
 from modules.supported_module_names import Modules
 from slips_files.common.abstracts.imodule import IModule
-
 
 PluginMap = Dict[Modules, Dict[str, Any]]
 
@@ -33,54 +32,13 @@ class ModuleLoadingMixin:
         """
         return obj.name in ("imodule", "iasync_module")
 
-    def get_modules(self) -> Tuple[PluginMap, int]:
-        """
-        Discover and load valid modules from the modules package.
-
-        Returns:
-            Loaded plugin mapping and number of import failures.
-        """
-        (
-            self.user_disabled_modules,
-            self.slips_disabled_modules,
-        ) = self.get_disabled_modules()
-
-        plugins: PluginMap = {}
-        failed_to_load_modules = 0
-        for module_name in self._discover_module_names():
-            if not self._should_load_module(module_name):
-                continue
-
-            module = self._import_module(module_name)
-            if not module:
-                failed_to_load_modules += 1
-                continue
-
-            plugins = self._load_valid_classes_from_module(module, plugins)
-
-        plugins = self._reorder_modules(plugins)
-        return plugins, failed_to_load_modules
-
-    def _reorder_modules(self, plugins: PluginMap) -> PluginMap:
-        """
-        Apply module ordering rules before startup.
-
-        Parameters:
-            plugins: Loaded plugin mapping.
-
-        Returns:
-            Reordered plugin mapping.
-        """
-        plugins = self._prioritize_blocking_modules(plugins)
-        plugins = self._change_cyst_module_order(plugins)
-        return plugins
-
     def _discover_module_names(self) -> Iterator[str]:
         """
         Walk recursively through all importable modules in modules/.
+        Doesn't import anything, just looks at file/dir names.
 
         Returns:
-            Iterator of module names to consider.
+            Iterator of fully qualified module names to consider.
         """
         # __path__ is the current path of this python program
         look_for_modules_in = modules.__path__
@@ -120,6 +78,122 @@ class ModuleLoadingMixin:
         elif self.is_disabled_module(module_name):
             return False
         return True
+
+    def _short_name(self, module_name: str) -> str:
+        """
+        Get a module's short name from its fully qualified name, e.g.
+        "modules.arp.arp" -> "arp". Cheap: no import needed, the
+        dir_name == file_name discovery convention guarantees this
+        matches the module's Modules enum value.
+
+        Parameters:
+            module_name: Fully qualified module name.
+
+        Returns:
+            The module's short/directory name.
+        """
+        return module_name.split(".")[1]
+
+    def get_enabled_module_names(self) -> List[str]:
+        """
+        Discover the fully qualified names of every module Slips should
+        start, in startup order.
+
+        Filtering and ordering only need module *names*, so this never
+        imports any module.
+
+        Returns:
+            Fully qualified names of the modules to start, in order.
+        """
+        (
+            self.user_disabled_modules,
+            self.slips_disabled_modules,
+        ) = self.get_disabled_modules()
+
+        enabled_module_names = [
+            module_name
+            for module_name in self._discover_module_names()
+            if self._should_load_module(module_name)
+        ]
+        return self._reorder_module_names(enabled_module_names)
+
+    def _reorder_module_names(self, module_names: List[str]) -> List[str]:
+        """
+        Apply module ordering rules before startup.
+
+        Parameters:
+            module_names: Fully qualified names of enabled modules.
+
+        Returns:
+            Reordered list of fully qualified module names.
+        """
+        module_names = self._prioritize_blocking_modules(module_names)
+        module_names = self._change_cyst_module_order(module_names)
+        return module_names
+
+    def _prioritize_blocking_modules(
+        self, module_names: List[str]
+    ) -> List[str]:
+        """
+        Move blocking modules to the beginning of the startup order.
+
+        Parameters:
+            module_names: Fully qualified names of enabled modules.
+
+        Returns:
+            Reordered list of fully qualified module names.
+        """
+        blocking_module_names = {
+            Modules.BLOCKING.value,
+            Modules.ARP_POISONER.value,
+        }
+        if not any(
+            self._short_name(module_name) in blocking_module_names
+            for module_name in module_names
+        ):
+            return module_names
+
+        # put the blocking modules at the top to start first
+        front = [
+            module_name
+            for module_name in module_names
+            if self._short_name(module_name) in blocking_module_names
+        ]
+        rest = [
+            module_name
+            for module_name in module_names
+            if self._short_name(module_name) not in blocking_module_names
+        ]
+        return front + rest
+
+    def _change_cyst_module_order(self, module_names: List[str]) -> List[str]:
+        """
+        Move the CYST module to the end of the startup order.
+
+        Parameters:
+            module_names: Fully qualified names of enabled modules.
+
+        Returns:
+            Reordered list of fully qualified module names.
+        """
+        # when cyst starts first, as soon as slips connects to cyst,
+        # cyst sends slips the flows,
+        # but the inputprocess didn't even start yet so the flows are lost
+        # to fix this, change the order of the CYST module (load it last)
+        cyst = [
+            module_name
+            for module_name in module_names
+            if self._short_name(module_name) == Modules.CYST.value
+        ]
+        if not cyst:
+            return module_names
+
+        rest = [
+            module_name
+            for module_name in module_names
+            if self._short_name(module_name) != Modules.CYST.value
+        ]
+        return rest + cyst
 
     def _import_module(self, module_name: str) -> Optional[ModuleType]:
         """
