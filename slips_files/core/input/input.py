@@ -59,6 +59,7 @@ class Input(ICore):
     """A class process to run the process of the flows"""
 
     name = "input"
+    description = "Reads traffic input and feeds parsed flows to the profiler"
 
     def init(
         self,
