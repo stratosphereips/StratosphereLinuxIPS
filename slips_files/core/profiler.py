@@ -64,6 +64,7 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
     """A class to create the profiles for IPs"""
 
     name = "profiler"
+    description = "Builds per-IP profiles and timewindows from parsed flows"
 
     def init(
         self,
@@ -75,8 +76,12 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         is_profiler_done_starting_initial_workers_event: Optional[
             Event
         ] = None,
+        total_processes_to_start: int = 1,
     ) -> None:
         IObservable.__init__(self)
+        # shared with every profiler worker this process starts, so
+        # they all announce themselves against the same run-wide total
+        self.total_processes_to_start = total_processes_to_start
         self.add_observer(self.logger)
         # when profiler is done processing, it releases this semaphore,
         # that's how the process_manager knows it's done

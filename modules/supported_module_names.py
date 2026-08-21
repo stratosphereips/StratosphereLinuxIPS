@@ -29,6 +29,7 @@ class Modules(str, Enum):
     IRIS = "iris"
     LEAK_DETECTOR = "leak_detector"
     LLM_PROXY = "llm_proxy"
+    MAIN = "main"
     NETWORK_DISCOVERY = "network_discovery"
     P2P_TRUST = "p2p_trust"
     REGEX_GENERATOR = "regex_generator"
