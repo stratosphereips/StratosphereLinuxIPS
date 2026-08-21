@@ -20,7 +20,13 @@ class Printer(IObservable):
         self.add_observer(self.logger)
 
     def print(
-        self, text, verbose=1, debug=0, log_to_logfiles_only=False, end="\n"
+        self,
+        text,
+        verbose=1,
+        debug=0,
+        log_to_logfiles_only=False,
+        end="\n",
+        suppress_sender=False,
     ):
         """
         Function to use to print text using the slips_files/core/output.py.
@@ -39,6 +45,9 @@ class Printer(IObservable):
         :param log_to_logfiles_only: if this is True, Sips logs to logfile
         only and doesn't log the given text to cli
         :param end: this is exactly linke print()'s end kwarg
+        :param suppress_sender: if True, the cli line isn't prefixed with
+        "[sender]" - used for lines that already carry their own
+        formatting, e.g. the startup progress report
         """
         self.notify_observers(
             {
@@ -48,5 +57,6 @@ class Printer(IObservable):
                 "debug": debug,
                 "log_to_logfiles_only": log_to_logfiles_only,
                 "end": end,
+                "suppress_sender": suppress_sender,
             }
         )

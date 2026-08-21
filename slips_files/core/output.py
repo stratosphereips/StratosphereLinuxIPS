@@ -211,7 +211,7 @@ class Output(IObserver):
         # There should be a level 0 that we never print. So its >, and not >=
         if self.enough_verbose(verbose) or self.enough_debug(debug):
             # when printing started processes, don't print a sender
-            if "Start" in txt:
+            if "Start" in txt or msg.get("suppress_sender", False):
                 sender = ""
             self.print(sender, txt, end=end)
             self.log_line(msg)
