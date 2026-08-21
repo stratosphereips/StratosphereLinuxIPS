@@ -14,7 +14,7 @@ from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.idmefv2 import IDMEFv2
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.style import green
+from slips_files.common.startup_report import format_started_line
 from slips_files.core.helpers.notify import Notify
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from slips_files.core.structures.alerts import Alert
@@ -44,8 +44,10 @@ class EvidenceHandlerWorker(IModule):
         evidence_queue: Queue,
         evidence_logger_q: Queue,
         notify: Notify,
+        total_processes_to_start: int = 1,
     ):
         self.name = name
+        self.total_processes_to_start = total_processes_to_start
         self.evidence_queue = evidence_queue
         self.evidence_logger_q = evidence_logger_q
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
@@ -455,9 +457,16 @@ class EvidenceHandlerWorker(IModule):
         return msg == "stop"
 
     def pre_main(self):
-        worker_number = self.name.split("_")[-1]
-        worker_name = f"Evidence Handler Worker {worker_number}"
-        self.print(f"Started {green(worker_name)} [PID {green(os.getpid())}]")
+        worker_id = int(self.name.split("_")[-1])
+        started_count = self.db.increment_modules_started_count()
+        line = format_started_line(
+            f"evidence_worker_{worker_id + 1}",
+            started_count,
+            self.total_processes_to_start,
+            os.getpid(),
+            "Processes evidence in parallel with other evidence workers",
+        )
+        self.print(line, 1, 0, suppress_sender=True)
 
     def should_stop(self) -> bool:
         return False

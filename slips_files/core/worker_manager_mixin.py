@@ -9,6 +9,7 @@ from typing import List, Optional
 from slips_files.core.profiler_worker import ProfilerWorker
 
 FIVE_MINS = 300
+NUM_INITIAL_PROFILER_WORKERS = 3
 
 
 class WorkerManagerMixin:
@@ -31,9 +32,13 @@ class WorkerManagerMixin:
         # is set by this module to indicate to the monitor thread that
         # workers stopped.
         self.did_all_workers_stop = multiprocessing.Event()
+        # shared between all profiler workers to make sure only 1 of
+        # them prints the gateway IP, and only once
+        self.gw_ip_print_lock = multiprocessing.Lock()
+        self.gw_ip_printed_event = multiprocessing.Event()
         self.last_worker_id = -1
         self.active_profiler_workers = 0
-        self.num_of_initial_profiler_workers = 3
+        self.num_of_initial_profiler_workers = NUM_INITIAL_PROFILER_WORKERS
         # max parallel profiler workers to start when high throughput is
         # detected
         self.max_workers = 6
@@ -85,6 +90,9 @@ class WorkerManagerMixin:
             aid_queue=self.aid_queue,
             aid_manager=self.aid_manager,
             is_input_done_event=self.is_input_done_event,
+            total_processes_to_start=self.total_processes_to_start,
+            gw_ip_print_lock=self.gw_ip_print_lock,
+            gw_ip_printed_event=self.gw_ip_printed_event,
         )
         worker.start()
         self.profiler_child_processes.append(worker)
