@@ -26,3 +26,39 @@ def cyan(txt):
 
 def yellow(txt):
     return colored(txt, "yellow")
+
+
+def blue(txt):
+    """
+    returns the text in blue
+    """
+    return colored(txt, "blue")
+
+
+def grey(txt):
+    """
+    returns the text dimmed, used for de-emphasized details
+    """
+    return colored(txt, "dark_grey")
+
+
+# width of the label column in slips' startup header lines (Logs, Redis,
+# Host IP, Gateway IP..), shared so every line lines up regardless of
+# which module prints it
+HEADER_LABEL_WIDTH = 12
+
+
+def header_line(label: str, value) -> str:
+    """
+    Format one line of slips' startup header: a dim, left-aligned label
+    followed by a plain value, e.g. "Redis       localhost:6379".
+    """
+    return f"{grey(label.ljust(HEADER_LABEL_WIDTH))}{value}"
+
+
+def print_separator() -> None:
+    """
+    Print a dim horizontal rule used to divide sections of slips'
+    startup output.
+    """
+    print(grey("─" * 27))
