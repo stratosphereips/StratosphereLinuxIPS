@@ -504,7 +504,6 @@ class Main:
             if interface != "default":
                 value += f" ({interface})"
             self.print(header_line("Local Net", value))
-            print_separator()
             self.localnet_info_printed = True
 
     def prepare_locks_dir(self):

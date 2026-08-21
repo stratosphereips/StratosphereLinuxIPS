@@ -26,7 +26,7 @@ import os
 from slips_files.common.abstracts.iobserver import IObserver
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.style import red, yellow
+from slips_files.common.style import red, yellow, print_separator
 
 
 class Output(IObserver):
@@ -314,6 +314,9 @@ class Output(IObserver):
             if not self._startup_in_progress.value:
                 # another process already flushed it
                 return
+
+            print_separator()
+
             # a multiprocessing.Queue delivers items to get() slightly
             # after put() returns on another process - a short grace
             # period avoids treating a message that was queued a

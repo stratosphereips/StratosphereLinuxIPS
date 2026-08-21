@@ -56,9 +56,17 @@ def header_line(label: str, value) -> str:
     return f"{grey(label.ljust(HEADER_LABEL_WIDTH))}{value}"
 
 
+def separator_line() -> str:
+    """
+    Build the dim horizontal rule used to divide sections of slips'
+    startup output.
+    """
+    return grey("─" * 35)
+
+
 def print_separator() -> None:
     """
     Print a dim horizontal rule used to divide sections of slips'
     startup output.
     """
-    print(grey("─" * 27))
+    print(separator_line())
