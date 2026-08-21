@@ -466,7 +466,15 @@ class EvidenceHandlerWorker(IModule):
             os.getpid(),
             "Processes evidence in parallel with other evidence workers",
         )
-        self.print(line, 1, 0, suppress_sender=True)
+        self.print(
+            line,
+            1,
+            0,
+            suppress_sender=True,
+            is_final_startup_announcement=(
+                started_count >= self.total_processes_to_start
+            ),
+        )
 
     def should_stop(self) -> bool:
         return False

@@ -6,7 +6,7 @@ from typing import Callable, Optional, Set
 
 from modules.supported_module_names import Modules
 from slips_files.common.startup_report import format_started_line
-from slips_files.common.style import green, grey, print_separator
+from slips_files.common.style import green, grey
 
 
 class ReportingMixin:
@@ -30,7 +30,6 @@ class ReportingMixin:
             module.value if isinstance(module, Modules) else str(module)
             for module in disabled_modules
         )
-        print_separator()
         self.main.print(
             f"Disabled Modules: {grey(', '.join(printable_modules))}"
         )
@@ -62,7 +61,13 @@ class ReportingMixin:
             module_pid,
             module_description,
         )
-        self.main.print(line, 1, 0, suppress_sender=True)
+        self.main.print(
+            line,
+            1,
+            0,
+            suppress_sender=True,
+            is_final_startup_announcement=started_count >= total_modules,
+        )
 
     def announce_started(
         self,
