@@ -2226,6 +2226,15 @@ class RedisDB(
             return 0
         return int(count)
 
+    def increment_modules_started_count(self) -> int:
+        """
+        atomically increments and returns the number of detection
+        modules that finished starting so far, used to show live
+        startup progress since each module announces itself from its
+        own process
+        """
+        return self.r.incr(self.constants.MODULES_STARTED_COUNT, 1)
+
     def store_std_file(self, **kwargs):
         """
         available args are

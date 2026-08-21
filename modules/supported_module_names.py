@@ -30,6 +30,7 @@ class Modules(str, Enum):
     LLM_PROXY = "llm_proxy"
     ML_LINEAR_MODEL = "ml_linear_model"
     ML_ONLINE_MODEL = "ml_online_model"
+    MAIN = "main"
     NETWORK_DISCOVERY = "network_discovery"
     P2P_TRUST = "p2p_trust"
     REGEX_GENERATOR = "regex_generator"

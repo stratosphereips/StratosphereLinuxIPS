@@ -737,6 +737,9 @@ class DBManager:
     def store_pid(self, *args, **kwargs):
         return self.rdb.store_pid(*args, **kwargs)
 
+    def increment_modules_started_count(self, *args, **kwargs):
+        return self.rdb.increment_modules_started_count(*args, **kwargs)
+
     def get_pids(self, *args, **kwargs):
         return self.rdb.get_pids(*args, **kwargs)
 
