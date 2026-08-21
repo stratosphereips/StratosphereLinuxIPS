@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-from threading import Lock
+import multiprocessing
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -35,9 +35,23 @@ class Output(IObserver):
     """
 
     name = "output"
-    slips_logfile_lock = Lock()
-    errors_logfile_lock = Lock()
-    cli_lock = Lock()
+    # Output is instantiated once in the main process before any of
+    # slips' child processes are forked, so these multiprocessing locks
+    # are inherited by every child and actually serialize writes to the
+    # shared stdout/logfiles across processes. threading.Lock() would not
+    # do that, since each forked process gets its own independent copy of
+    # it, letting concurrent prints from different processes interleave
+    # and corrupt each other's output (e.g. a partial in-place \r update
+    # from one process landing in the middle of another process' line).
+    slips_logfile_lock = multiprocessing.Lock()
+    errors_logfile_lock = multiprocessing.Lock()
+    cli_lock = multiprocessing.Lock()
+    # set while a single-line, in-place-refreshing status line (e.g. the
+    # "Total analyzed IPs" summary) is left on screen without a trailing
+    # newline. shared across all forked processes so that any of them
+    # printing a normal line first closes it out with a newline instead
+    # of overwriting/merging with it.
+    _cli_has_dangling_line = multiprocessing.Value("b", False)
 
     def __init__(
         self,
@@ -159,7 +173,24 @@ class Output(IObserver):
             else:
                 to_print = txt
 
-            print(to_print, end=end)
+            if end == "\r":
+                # in-place status line: go back to the start of the line,
+                # print, then clear anything left over from a longer
+                # previous status line, and remember it's left dangling
+                # (no trailing newline) so the next unrelated line closes
+                # it out instead of overwriting/merging with it
+                print(f"\r{to_print}\033[K", end="")
+                self._cli_has_dangling_line.value = True
+            else:
+                if self._cli_has_dangling_line.value:
+                    print()
+                    self._cli_has_dangling_line.value = False
+                print(to_print, end=end)
+            # flush while still holding the lock, so this write is fully
+            # on screen before another process is allowed to print,
+            # instead of risking a delayed buffered flush interleaving
+            # with the next process' output
+            sys.stdout.flush()
 
         except Exception as e:
             print(f"Problem printing {txt}. {e}")
@@ -204,9 +235,12 @@ class Output(IObserver):
             txt = red(txt)
         if "Warning" in txt:
             txt = yellow(txt)
+
+        # the periodically-updated "Total analyzed IPs" summary refreshes
+        # in place on a single unprefixed cli line instead of scrolling
         if "analyzed IPs" in txt:
-            self.print("", txt, end="\r")
-            return
+            sender = ""
+            end = "\r"
 
         # There should be a level 0 that we never print. So its >, and not >=
         if self.enough_verbose(verbose) or self.enough_debug(debug):

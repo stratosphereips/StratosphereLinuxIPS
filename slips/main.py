@@ -405,7 +405,7 @@ class Main:
             ].name.lower()
 
         stats = (
-            f"\r[{now}] Total analyzed IPs: {green(profiles_len)}. "
+            f"[{now}] Total analyzed IPs: {green(profiles_len)}. "
             f"{self.get_analyzed_flows_percentage()}"
             f"Evidence: {green(evidence_number)}. "
         )
