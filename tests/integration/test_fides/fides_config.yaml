@@ -181,7 +181,7 @@ modules:
    # List of modules to ignore. By default we always ignore the template! do not remove it from the list
    # Names of other modules that you can disable (they all should be lowercase with no special characters):
    # threatintelligence, blocking, networkdiscovery, timeline, virustotal,
-   # rnnccdetection, flow_ml_detection, feeds_update_manager
+   # rnnccdetection, feeds_update_manager
    disable: [template, feeds_update_manager]
 
    # For each line in timeline file there is a timestamp.
@@ -189,18 +189,6 @@ modules:
    # by setting this variable to "True" value the time will be human readable.
    timeline_human_timestamp : True
 
-
-#############################
-flow_ml_detection:
-   # The mode 'train' should be used to tell the flow_ml_detection module
-   # that the flows received are all for training.
-   # A label should be provided in the [Parameters] section
-   # mode : train
-
-   # The mode 'test' should be used after training the models, to test in unknown data.
-   # You should have trained at least once with 'Normal' data and once with
-   # 'Malicious' data in order for the test to work.
-   mode : test
 
 #############################
 virustotal:
