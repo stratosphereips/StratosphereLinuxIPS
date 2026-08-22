@@ -2,9 +2,12 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from unittest.mock import patch
 
+import pytest
+
 from modules.supported_module_names import Modules
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.input_type import InputType
+from tests.module_factory import ModuleFactory
 
 
 def test_evidence_signal_default_falls_back_to_pamp():
@@ -166,3 +169,19 @@ def test_reading_flows_from_cyst_matches_supported_module_name() -> None:
     parser = ConfigParser.__new__(ConfigParser)
 
     assert parser.reading_flows_from_cyst() is True
+
+
+@pytest.mark.parametrize("section", ["flowmldetection", "ml_linear_model"])
+def test_ml_module_enable_logs_uses_configured_or_default_value(
+    section: str,
+) -> None:
+    """Test ML log configuration accepts both explicit and default values."""
+    module_factory = ModuleFactory()
+    assert module_factory is not None
+
+    parser = ConfigParser.__new__(ConfigParser)
+    parser.config = {section: {"create_performance_metrics_log_files": "true"}}
+    assert parser.ml_module_enable_logs(section) is True
+
+    parser.config = {}
+    assert parser.ml_module_enable_logs(section) is False
