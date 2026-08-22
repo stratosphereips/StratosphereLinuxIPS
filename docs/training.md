@@ -84,6 +84,32 @@ not continue your previous custom training.
   every individual flow.
 
 
+## Finding and plotting module metrics
+
+ML logs are stored inside the selected module's subdirectory of the Slips
+output directory. For example, a training run of `ml_linear_model` writes:
+
+```text
+output/test7-malicious.pcap_2026-08-22_18:10:46/ml_linear_model/training_ml_linear_model.log
+```
+
+`ml_online_model` uses the same layout, with
+`ml_online_model/training_ml_online_model.log`. In test mode, replace
+`training_` with `testing_`. Plot the exact log for the module and mode you
+ran:
+
+```bash
+python3 slips_files/common/ml_modules_utils/plot_train_performance.py \
+  -f output/test7-malicious.pcap_2026-08-22_18:10:46/ml_linear_model/training_ml_linear_model.log \
+  -e test7-linear-training
+```
+
+Without `--save_folder`, the generated plots and `summary.txt` are stored in
+the same module output directory, under `training/<experiment>/` or
+`testing/<experiment>/`. For the command above, they are written to
+`output/test7-malicious.pcap_2026-08-22_18:10:46/ml_linear_model/training/test7-linear-training/`,
+not to the repository-level `performance_metrics/` directory.
+
 ## Official Models and Training Pipeline
 
 The official trained models used by SLIPS ML modules are maintained in a separate repository:
