@@ -241,7 +241,7 @@ modules:
   # Add the names of other modules that you want to disable
   # (use module snake_case names). Example,
   # threat_intelligence, blocking, network_discovery, timeline, virustotal,
-  # rnn_cc_detection, flow_ml_detection, feeds_update_manager,
+  # rnn_cc_detection, feeds_update_manager,
   # ml_linear_model, ml_online_model
   disable:
     - template
@@ -591,43 +591,6 @@ t_cell:
   # If blocking or ARP-poisoning modules are not running, log a simulated
   # effector action instead of publishing new_blocking.
   simulate_effector_without_blocking: true
-
-#############################
-flowmldetection:
-  # This is a module that uses machine learning for detection.
-  # It can be used in train mode or test mode.
-  # The mode 'train' should be used to tell the flow_ml_detection module
-  # that the flows received are all for training.
-  # A label should be provided in the [Parameters] section
-  # mode : train
-  # The mode 'test' should be used for normal Slips usage and  after
-  # training the models, to test in unknown data.
-  # You should have trained at least once with 'Normal' data and once with
-  # 'Malicious' data in order for the test to work.
-  mode: test
-
-  # Write training/testing metrics logs to output dir.
-  # This affects only logging, not training behavior.
-  create_performance_metrics_log_files: false
-
-  # Used only when mode: train.
-  # If true, each training batch is split into train/validation for metrics.
-  validate_on_train: false
-
-  # Used only when validate_on_train is true.
-  # Fraction (0.0-1.0) or percent (1-100) of each training batch used for validation.
-  validation_percentage: 0.1
-
-  # Number of labeled flows collected before each training/retraining step.
-  training_batch_size: 500
-
-  # Reproducibility seed for train/test behavior in this module.
-  seed: 1111
-
-  # Global target conversion used by refactored ML modules when a backend
-  # expects numeric targets (for example some river models).
-  benign_target_value: 0.0
-  malicious_target_value: 1.0
 
 #############################
 ml_linear_model:
