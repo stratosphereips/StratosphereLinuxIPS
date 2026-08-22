@@ -77,7 +77,6 @@ def test_conf_file(
                 "disable": [
                     "template",
                     "ensembling",
-                    "flow_ml_detection",
                     "feeds_update_manager",
                 ]
             },
@@ -130,7 +129,7 @@ def test_conf_file(
         # test label=malicious
         assert get_label_count_from_output_db(output_dir, "malicious") > 370
         # test disable
-        for module in ["template", "flow_ml_detection"]:
+        for module in ["template"]:
             print(f"Checking if {module} is disabled")
             assert check_for_text(module, output_dir)
         success = True
@@ -182,7 +181,6 @@ def test_conf_file2(
                 "disable": [
                     "template",
                     "ensembling",
-                    "flow_ml_detection",
                     "feeds_update_manager",
                 ]
             },
