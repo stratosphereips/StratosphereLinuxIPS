@@ -27,7 +27,7 @@ def test_get_modules() -> None:
     }
     reordered_plugins = dict(discovered_plugins)
     user_disabled_modules = {"skipped"}
-    slips_disabled_modules = {Modules.FLOW_ML_DETECTION}
+    slips_disabled_modules = {Modules.ML_LINEAR_MODEL}
     process_manager.get_disabled_modules = Mock(
         return_value=(user_disabled_modules, slips_disabled_modules)
     )
