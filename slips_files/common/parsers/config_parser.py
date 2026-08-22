@@ -787,11 +787,6 @@ class ConfigParser(object):
             threshold = 500
         return threshold
 
-    def get_ml_mode(self):
-        return self.read_module_configuration(
-            "flow_ml_detection", "flowmldetection", "mode", "test"
-        )
-
     @staticmethod
     def _to_bool(value, default: bool) -> bool:
         if isinstance(value, bool):
@@ -968,12 +963,6 @@ class ConfigParser(object):
         default: float = 0.0,
     ) -> float:
         value = self.read_configuration(section, "benign_target_value", None)
-        if value is None:
-            value = self.read_configuration(
-                "flowmldetection",
-                "benign_target_value",
-                default,
-            )
         try:
             return float(value)
         except (TypeError, ValueError):
@@ -987,30 +976,10 @@ class ConfigParser(object):
         value = self.read_configuration(
             section, "malicious_target_value", None
         )
-        if value is None:
-            value = self.read_configuration(
-                "flowmldetection",
-                "malicious_target_value",
-                default,
-            )
         try:
             return float(value)
         except (TypeError, ValueError):
             return default
-
-    # Legacy flowmldetection wrappers kept for compatibility.
-    def create_performance_metrics_log_files(self) -> bool:
-        return self.ml_module_enable_logs("flowmldetection", default=False)
-
-    def validate_on_train(self) -> bool:
-        return self.ml_module_validate_on_train(
-            "flowmldetection", default=True
-        )
-
-    def flow_ml_detection_training_batch_size(self) -> int:
-        return self.ml_module_training_batch_size(
-            "flowmldetection", default=50
-        )
 
     @staticmethod
     def _to_bool(value, default: bool) -> bool:
@@ -1312,12 +1281,6 @@ class ConfigParser(object):
         default: float = 0.0,
     ) -> float:
         value = self.read_configuration(section, "benign_target_value", None)
-        if value is None:
-            value = self.read_configuration(
-                "flowmldetection",
-                "benign_target_value",
-                default,
-            )
         try:
             return float(value)
         except (TypeError, ValueError):
@@ -1331,30 +1294,10 @@ class ConfigParser(object):
         value = self.read_configuration(
             section, "malicious_target_value", None
         )
-        if value is None:
-            value = self.read_configuration(
-                "flowmldetection",
-                "malicious_target_value",
-                default,
-            )
         try:
             return float(value)
         except (TypeError, ValueError):
             return default
-
-    # Legacy flowmldetection wrappers kept for compatibility.
-    def create_performance_metrics_log_files(self) -> bool:
-        return self.ml_module_enable_logs("flowmldetection", default=False)
-
-    def validate_on_train(self) -> bool:
-        return self.ml_module_validate_on_train(
-            "flowmldetection", default=True
-        )
-
-    def flow_ml_detection_training_batch_size(self) -> int:
-        return self.ml_module_training_batch_size(
-            "flowmldetection", default=50
-        )
 
     def https_anomaly_training_hours(self) -> int:
         training_hours = self.read_configuration(
