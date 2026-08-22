@@ -98,6 +98,44 @@ You can train your own model externally (using the pipeline or your own code) an
 
 To train a new model within SLIPS, set `mode: train` and adjust `train_from_scratch` and artifact store paths as described above.
 
+## Labels and training with your data
+
+Both standalone ML modules use the same label rules. A flow is trained with its
+`ground_truth_label` when the input provides one. For Zeek input, SLIPS maps a
+Zeek `label` field to `ground_truth_label`. Accepted values are case-insensitive:
+
+- `benign` or `normal` means **Benign**.
+- `malicious` or `malware` means **Malicious**.
+
+If a flow has no `ground_truth_label`, SLIPS uses `parameters.label` from the
+active configuration. The default is `normal`, so unlabeled traffic trains as
+Benign. Labels other than Benign or Malicious are not added to a training batch.
+
+### Reproducible training
+
+For a mixed, labeled Zeek dataset, add a `label` column to the relevant Zeek
+logs, with one of the accepted values for every training flow. Then set this
+module's `mode: train`, optionally set `train_from_scratch: true`, choose a
+`training_batch_size` no larger than the labeled data you will supply, and run:
+
+```bash
+./slips.py -c config/slips.yaml -f dataset/my-labeled-zeek-dir/
+```
+
+For an unlabeled PCAP or interface, use separate runs and explicitly set
+`parameters.label` for each run. For example, run known-benign traffic with
+`parameters.label: normal`; then run known-malicious traffic with
+`parameters.label: malicious`. After the first run, set `train_from_scratch:
+false` and point the load paths to the custom artifacts produced by that run
+before starting the next run. Otherwise the next run reloads the shipped model
+instead of continuing your custom training.
+
+`ml_online_model` needs its two custom artifacts for continuation:
+`model_custom.bin` and `scaler_custom.bin`. On graceful shutdown or
+time-window close, training writes them to the configured store paths. To
+evaluate the resulting model, switch to `mode: test` and use those same custom
+paths as its load paths.
+
 ## Visualizing training and testing results
 
 You can visualize model performance using the provided scripts:
