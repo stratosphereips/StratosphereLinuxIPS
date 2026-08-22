@@ -6,7 +6,6 @@ Current ML modules:
 
 - `ml_linear_model`
 - `ml_online_model`
-- `flowmldetection` (legacy module, still available)
 
 ## Labels used for training
 
