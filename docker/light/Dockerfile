@@ -43,7 +43,6 @@ RUN cd modules \
         rnn_cc_detection/ \
         timeline/ \
         p2ptrust/ \
-        flow_ml_detection/ \
         cyst/ \
         cesnet/ \
         exporting_alerts/ \
