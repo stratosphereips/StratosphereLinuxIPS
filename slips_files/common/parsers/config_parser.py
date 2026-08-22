@@ -1035,6 +1035,7 @@ class ConfigParser(object):
         if method not in ("welford", "ewma"):
             return "welford"
         return method
+
     def ml_module_mode(self, section: str, default: str = "test") -> str:
         value = self.read_configuration(section, "mode", default)
         value = str(value).strip().lower()
@@ -1045,6 +1046,13 @@ class ConfigParser(object):
     def https_anomaly_hourly_zscore_thr(self) -> float:
         threshold = self.read_configuration(
             "anomaly_detection_https", "hourly_zscore_threshold", 3.0
+        )
+        try:
+            threshold = float(threshold)
+        except (TypeError, ValueError):
+            threshold = 3.0
+        return max(0.5, threshold)
+
     def ml_module_enable_logs(
         self, section: str, default: bool = False
     ) -> bool:
@@ -1053,11 +1061,6 @@ class ConfigParser(object):
             "create_performance_metrics_log_files",
             default,
         )
-        try:
-            threshold = float(threshold)
-        except (TypeError, ValueError):
-            threshold = 3.0
-        return max(0.5, threshold)
         return self._to_bool(value, default)
 
     def https_anomaly_flow_zscore_thr(self) -> float:
@@ -1069,6 +1072,7 @@ class ConfigParser(object):
         except (TypeError, ValueError):
             threshold = 3.5
         return max(0.5, threshold)
+
     def ml_module_validate_on_train(
         self,
         section: str,
@@ -1080,6 +1084,13 @@ class ConfigParser(object):
     def https_anomaly_adapt_score_thr(self) -> float:
         threshold = self.read_configuration(
             "anomaly_detection_https", "adaptation_score_threshold", 2.0
+        )
+        try:
+            threshold = float(threshold)
+        except (TypeError, ValueError):
+            threshold = 2.0
+        return max(0.0, threshold)
+
     def ml_module_validation_percentage(
         self,
         section: str,
@@ -1089,12 +1100,13 @@ class ConfigParser(object):
             section, "validation_percentage", default
         )
         try:
-            threshold = float(threshold)
             value = float(value)
         except (TypeError, ValueError):
-            threshold = 2.0
-        return max(0.0, threshold)
             value = default
+
+        if value > 1.0:
+            value = value / 100.0
+        return min(max(value, 0.0), 0.9)
 
     def https_anomaly_baseline_alpha(self) -> float:
         alpha = self.read_configuration(
@@ -1105,8 +1117,6 @@ class ConfigParser(object):
         except (TypeError, ValueError):
             alpha = 0.1
         return min(max(alpha, 0.001), 1.0)
-        if value > 1.0:
-            value = value / 100.0
 
     def https_anomaly_drift_alpha(self) -> float:
         alpha = self.read_configuration(
@@ -1117,11 +1127,17 @@ class ConfigParser(object):
         except (TypeError, ValueError):
             alpha = 0.05
         return min(max(alpha, 0.001), 1.0)
-        return min(max(value, 0.0), 0.9)
 
     def https_anomaly_suspicious_alpha(self) -> float:
         alpha = self.read_configuration(
             "anomaly_detection_https", "suspicious_alpha", 0.005
+        )
+        try:
+            alpha = float(alpha)
+        except (TypeError, ValueError):
+            alpha = 0.005
+        return min(max(alpha, 0.0), 1.0)
+
     def ml_module_training_batch_size(
         self,
         section: str,
@@ -1131,11 +1147,8 @@ class ConfigParser(object):
             section, "training_batch_size", default
         )
         try:
-            alpha = float(alpha)
             value = int(value)
         except (TypeError, ValueError):
-            alpha = 0.005
-        return min(max(alpha, 0.0), 1.0)
             value = default
         return max(1, value)
 
@@ -1143,6 +1156,12 @@ class ConfigParser(object):
         points = self.read_configuration(
             "anomaly_detection_https", "min_baseline_points", 6
         )
+        try:
+            points = int(points)
+        except (TypeError, ValueError):
+            points = 6
+        return max(1, points)
+
     def ml_module_seed(
         self,
         section: str,
@@ -1150,11 +1169,8 @@ class ConfigParser(object):
     ) -> int:
         value = self.read_configuration(section, "seed", default)
         try:
-            points = int(points)
             value = int(value)
         except (TypeError, ValueError):
-            points = 6
-        return max(1, points)
             value = default
         return value
 
@@ -1167,6 +1183,7 @@ class ConfigParser(object):
         except (TypeError, ValueError):
             threshold = 1
         return max(0, threshold)
+
     def ml_module_train_from_scratch(
         self,
         section: str,
@@ -1184,42 +1201,51 @@ class ConfigParser(object):
         except (TypeError, ValueError):
             threshold = 3
         return max(1, threshold)
+
     def ml_module_log_suffix(self, section: str, default: str) -> str:
         value = self.read_configuration(section, "log_suffix", default)
         return str(value).strip()
 
     def https_anomaly_use_adwin_drift(self) -> bool:
+        value = self.read_configuration(
+            "anomaly_detection_https", "use_adwin_drift", True
+        )
+        return self._to_bool(value, True)
+
     def ml_module_test_log_batch_size(
         self,
         section: str,
         default: int,
     ) -> int:
         value = self.read_configuration(
-            "anomaly_detection_https", "use_adwin_drift", True
+            section, "test_log_batch_size", default
         )
-        if isinstance(value, bool):
-            return value
-        return str(value).strip().lower() in ("true", "1", "yes", "on")
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = default
+        return max(1, value)
 
     def https_anomaly_adwin_delta(self) -> float:
         delta = self.read_configuration(
             "anomaly_detection_https", "adwin_delta", 0.01
-            section, "test_log_batch_size", default
         )
         try:
             delta = float(delta)
-            value = int(value)
         except (TypeError, ValueError):
             delta = 0.01
         return min(max(delta, 0.000001), 1.0)
-            value = default
-        return max(1, value)
 
     def https_anomaly_adwin_clock(self) -> int:
         clock = self.read_configuration(
             "anomaly_detection_https", "adwin_clock", 1
         )
         try:
+            clock = int(clock)
+        except (TypeError, ValueError):
+            clock = 1
+        return max(1, clock)
+
     def ml_module_model_load_path(self, section: str, default: str) -> str:
         return str(
             self.read_configuration(section, "model_load_path", default)
