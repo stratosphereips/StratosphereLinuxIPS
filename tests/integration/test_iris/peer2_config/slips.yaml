@@ -72,8 +72,6 @@ flow_alerts:
   long_connection_threshold: 1500
   pastebin_download_threshold: 700
   ssh_succesful_detection_threshold: 4290
-flow_ml_detection:
-  mode: test
 global_p2p:
   bootstrapping_modules:
   - fides
