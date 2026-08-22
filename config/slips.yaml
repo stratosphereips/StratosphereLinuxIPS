@@ -241,8 +241,10 @@ modules:
   # Add the names of other modules that you want to disable
   # (use module snake_case names). Example,
   # threat_intelligence, blocking, network_discovery, timeline, virustotal,
-  # rnn_cc_detection, flow_ml_detection, feeds_update_manager
-  disable: [template]
+  # rnn_cc_detection, flow_ml_detection, feeds_update_manager,
+  # ml_linear_model, ml_online_model
+  disable:
+    - template
 
   # For each line in timeline file there is a timestamp.
   # By default the timestamp is seconds in unix time. However

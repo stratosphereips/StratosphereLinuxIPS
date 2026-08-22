@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Unit tests for the profiler core process."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import pytest
 from tests.module_factory import ModuleFactory
