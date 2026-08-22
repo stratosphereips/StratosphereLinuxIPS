@@ -2,7 +2,14 @@
 # plot_test_performance.py (drop-in replacement)
 import argparse
 import os
+from pathlib import Path
+import sys
 import traceback
+
+if __package__ in (None, ""):
+    repository_root = Path(__file__).resolve().parents[3]
+    sys.path.insert(0, str(repository_root))
+
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -327,6 +334,7 @@ def main():
     )
     args = parser.parse_args()
 
+    file_path = resolve_testing_log_path(args.file)
     save_folder = args.save_folder
     if save_folder is not None:
         if not os.path.isdir(save_folder):
@@ -335,9 +343,7 @@ def main():
             )
         base_dir = ensure_dir(save_folder)
     else:
-        base_dir = ensure_dir("performance_metrics")
-
-    file_path = resolve_testing_log_path(args.file)
+        base_dir = ensure_dir(os.path.dirname(os.path.abspath(file_path)))
 
     testing_dir = ensure_dir(os.path.join(base_dir, "testing", args.exp))
     print(f"[INFO] Output folder: {testing_dir}")
