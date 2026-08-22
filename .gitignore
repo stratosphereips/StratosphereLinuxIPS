@@ -184,3 +184,6 @@ config/redis.conf
 .vscode/launch.json
 # permanen p2p dbs and encryption keys
 permanent/
+performance_metrics/
+modules/ml_linear_model/artifacts/
+modules/ml_online_model/artifacts/
