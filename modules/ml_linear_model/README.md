@@ -37,20 +37,6 @@ The shipped model was trained using the [SLIPS ML Training Pipeline](https://git
 
 For more details on the pipeline or datasets, see the [training pipeline repo](https://github.com/stratosphereips/Slips-ML-Training-Pipeline) and [dataset repo](https://github.com/stratosphereips/security-datasets-for-testing).
 
-## Using your own model
-
-You can train your own model externally (using the pipeline or your own code) and use it in this module:
-
-1. Set `mode: train` to train your custom model.
-2. Place your model, scaler, and PCA artifacts in the `modules/ml_linear_model/artifacts/` directory (or another path).
-3. In `config/slips.yaml`, set:
-   - `model_load_path` to your model file
-   - `preprocess_load_path` to your scaler file
-   - `pca_load_path` to your PCA file
-4. Run slips on the input you know has the selected label
-
-Later, to use the model in new unseen data
-1. Set `mode: test` to use your custom model for inference.
 
 ## Labels and training with your data
 
@@ -89,6 +75,18 @@ instead of continuing your custom training.
 shutdown or time-window close, training writes them to the configured store
 paths. To evaluate the resulting model, switch to `mode: test` and use those
 same custom paths as its load paths.
+
+## Using your own model
+
+After you trained your own model, you can use it like this:
+
+1. Set `mode: test` to use your custom model for testing (normal inference)
+2. Place your model, scaler, and PCA artifacts in the `modules/ml_linear_model/artifacts/` directory (or another path).
+3. In `config/slips.yaml`, set:
+   - `model_load_path` to your model file
+   - `preprocess_load_path` to your scaler file
+   - `pca_load_path` to your PCA file
+4. Run slips
 
 ## Visualizing training and testing results
 
