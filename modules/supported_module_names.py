@@ -22,7 +22,6 @@ class Modules(str, Enum):
     FEEDS_UPDATE_MANAGER = "feeds_update_manager"
     FIDES = "fides"
     FLOW_ALERTS = "flow_alerts"
-    FLOW_ML_DETECTION = "flow_ml_detection"
     HTTP_ANALYZER = "http_analyzer"
     INPUT = "input"
     IP_INFO = "ip_info"
