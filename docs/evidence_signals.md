@@ -116,7 +116,6 @@ The table below lists the evidence types currently emitted by Slips modules and 
 | `flowalerts` | `UNKNOWN_PORT` | `DAMP` |
 | `flowalerts` | `VERTICAL_PORT_SCAN` | `PAMP` |
 | `flowalerts` | `YOUNG_DOMAIN` | `DAMP` |
-| `flowmldetection` | `MALICIOUS_FLOW` | `DAMP` |
 | `http_analyzer` | `EMPTY_CONNECTIONS` | `PAMP` |
 | `http_analyzer` | `EXECUTABLE_MIME_TYPE` | `PAMP` |
 | `http_analyzer` | `HTTP_TRAFFIC` | `DAMP` |
@@ -147,9 +146,9 @@ The table below lists the evidence types currently emitted by Slips modules and 
 | `threat_intelligence.urlhaus` | `MALICIOUS_DOWNLOADED_FILE` | `PAMP` |
 | `threat_intelligence.urlhaus` | `THREAT_INTELLIGENCE_MALICIOUS_URL` | `PAMP` |
 
-`ANOMALOUS_FLOW` is emitted by `anomaly_detection_https`, while `MALICIOUS_FLOW`
-is emitted by `flowmldetection`. Both are marked as `DAMP` by default in the
-central signal configuration. The additional shipped DAMP overrides in
+`ANOMALOUS_FLOW` is emitted by `anomaly_detection_https` and is marked as
+`DAMP` by default in the central signal configuration. The additional shipped
+DAMP overrides in
 `config/slips.yaml` are `UNSOLICITED_ARP`,
 `CONNECTION_TO_MULTIPLE_PORTS`, `CONNECTION_TO_PRIVATE_IP`,
 `CONNECTION_WITHOUT_DNS`, `DNS_WITHOUT_CONNECTION`,
