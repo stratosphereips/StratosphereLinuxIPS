@@ -1330,8 +1330,8 @@ class RedisDB(
             domains = domains[:limit]
 
         with self.rcache.pipeline() as pipe:
+            pipe.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
             if domains:
-                pipe.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
                 pipe.zadd(
                     self.constants.TRANCO_WHITELISTED_DOMAINS,
                     {domain: rank for rank, domain in enumerate(domains)},
@@ -1340,20 +1340,26 @@ class RedisDB(
 
     def get_tranco_top_domains(self, limit: Optional[int] = None) -> List[str]:
         end = -1 if limit is None or limit <= 0 else limit - 1
-        return (
-            self.rcache.zrange(
+        try:
+            return self.rcache.zrange(
                 self.constants.TRANCO_WHITELISTED_DOMAINS, 0, end
-            )
-            or []
-        )
+            ) or []
+        except redis.ResponseError as error:
+            if "WRONGTYPE" not in str(error):
+                raise
+            self.rcache.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
+            return []
 
     def is_whitelisted_tranco_domain(self, domain: str) -> bool:
-        return (
-            self.rcache.zscore(
+        try:
+            return self.rcache.zscore(
                 self.constants.TRANCO_WHITELISTED_DOMAINS, domain
-            )
-            is not None
-        )
+            ) is not None
+        except redis.ResponseError as error:
+            if "WRONGTYPE" not in str(error):
+                raise
+            self.rcache.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
+            return False
 
     def get_asn_info(self, ip: str) -> Optional[Dict[str, str]]:
         """
