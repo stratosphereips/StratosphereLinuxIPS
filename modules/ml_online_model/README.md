@@ -138,17 +138,33 @@ paths as its load paths.
 
 ## Visualizing training and testing results
 
-You can visualize model performance using the provided scripts:
+Each module writes its metrics log inside that module's directory in the Slips
+output folder. For a run whose output directory is
+`output/test7-malicious.pcap_2026-08-22_18:10:46/`, the online-model logs are:
 
-- `slips_files/common/ml_modules_utils/plot_train_performance.py` (for training logs)
-- `slips_files/common/ml_modules_utils/plot_testing_performance.py` (for testing logs)
+- Training: `output/test7-malicious.pcap_2026-08-22_18:10:46/ml_online_model/training_ml_online_model.log`
+- Testing: `output/test7-malicious.pcap_2026-08-22_18:10:46/ml_online_model/testing_ml_online_model.log`
 
-Example usage:
+Use the log for the mode you ran. For example, to plot that training run:
 
 ```bash
-python3 slips_files/common/ml_modules_utils/plot_train_performance.py -f path/to/training.log
-python3 slips_files/common/ml_modules_utils/plot_testing_performance.py -f path/to/testing.log
+python3 slips_files/common/ml_modules_utils/plot_train_performance.py \
+  -f output/test7-malicious.pcap_2026-08-22_18:10:46/ml_online_model/training_ml_online_model.log \
+  -e test7-online-training
 ```
+
+The testing equivalent is:
+
+```bash
+python3 slips_files/common/ml_modules_utils/plot_testing_performance.py \
+  -f output/test7-malicious.pcap_2026-08-22_18:10:46/ml_online_model/testing_ml_online_model.log \
+  -e test7-online-testing
+```
+
+By default, the generated PNG files and `summary.txt` stay beside the log in
+this module's output directory: `output/test7-malicious.pcap_2026-08-22_18:10:46/ml_online_model/training/test7-online-training/` for training, or
+`.../ml_online_model/testing/test7-online-testing/` for testing. They are not
+written to the repository-level `performance_metrics/` directory.
 
 ## Creating your own ML module
 
