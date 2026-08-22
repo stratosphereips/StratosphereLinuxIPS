@@ -216,22 +216,22 @@ class MLBaseDetection(IModule, ABC):
         conf = ConfigParser()
         section = self.module_config_section
 
-        self.mode = conf.ml_module_mode(section, default=conf.get_ml_mode())
+        self.mode = conf.ml_module_mode(section, default="test")
         self.ground_truth_config_label = conf.label()
         self.enable_logs = conf.ml_module_enable_logs(
             section,
-            default=conf.create_performance_metrics_log_files(),
+            default=False,
         )
         self.batch_size = conf.ml_module_training_batch_size(
             section,
-            default=conf.flow_ml_detection_training_batch_size(),
+            default=50,
         )
         self.minimum_labels_to_start_train = self.batch_size
         self.minimum_labels_to_retrain = self.batch_size
         self.minimum_labels_to_finalize_train = int(self.batch_size / 4)
         self.validate_on_train = conf.ml_module_validate_on_train(
             section,
-            default=conf.validate_on_train(),
+            default=True,
         )
         self.percentage_validation = conf.ml_module_validation_percentage(
             section,
