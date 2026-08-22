@@ -373,6 +373,18 @@ def test_tranco_whitelist_stores_ordered_domains_with_limit() -> None:
     assert db.is_whitelisted_tranco_domain("github.com") is False
 
 
+def test_tranco_whitelist_discards_legacy_cache_key_type() -> None:
+    """Test Tranco cache reads recover from legacy non-sorted-set keys."""
+    with patch.object(DBManager, "get_used_redis_port", return_value=6379):
+        db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+
+    key = db.rdb.constants.TRANCO_WHITELISTED_DOMAINS
+    db.rdb.rcache.set(key, "legacy-cache-value")
+
+    assert db.is_whitelisted_tranco_domain("example.com") is False
+    assert db.rdb.rcache.type(key) in ("none", b"none")
+
+
 def test_setup_config_file_uses_isolated_path_and_preserves_save(
     tmp_path, monkeypatch
 ):
