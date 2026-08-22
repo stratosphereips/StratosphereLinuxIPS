@@ -21,6 +21,8 @@ from tests.module_factory import ModuleFactory
         ("EXPORTING_ALERTS", "exporting_alerts"),
         ("INPUT", "input"),
         ("LLM_PROXY", "llm_proxy"),
+        ("ML_LINEAR_MODEL", "ml_linear_model"),
+        ("ML_ONLINE_MODEL", "ml_online_model"),
         ("PROFILER", "profiler"),
         ("REGEX_GENERATOR", "regex_generator"),
         ("T_CELL", "t_cell"),
