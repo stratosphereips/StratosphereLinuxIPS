@@ -171,7 +171,7 @@ def test_reading_flows_from_cyst_matches_supported_module_name() -> None:
     assert parser.reading_flows_from_cyst() is True
 
 
-@pytest.mark.parametrize("section", ["flowmldetection", "ml_linear_model"])
+@pytest.mark.parametrize("section", ["ml_linear_model", "ml_online_model"])
 def test_ml_module_enable_logs_uses_configured_or_default_value(
     section: str,
 ) -> None:
