@@ -315,6 +315,10 @@ non-established connection UIDs. The interface identifies this limit when a
 scan is opened; other evidence types retain all of their triggering-flow links.
 Selecting scan evidence therefore shows a bounded sample of attempted connections.
 
+Native horizontal and vertical port-scan evidence records every contributing
+non-established connection UID. Selecting scan evidence therefore shows the
+actual attempted connections and any related protocol activity.
+
 ## Historical API
 
 The page uses bounded local endpoints:
