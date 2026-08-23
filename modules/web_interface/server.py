@@ -2162,9 +2162,7 @@ class RunDataReader:
             )
         ]
         network_flow_total = sum(bool(item["network_flow"]) for item in items)
-        protocol_flow_total = sum(
-            len(item["protocol_flows"]) for item in items
-        )
+        protocol_flow_total = sum(len(item["protocol_flows"]) for item in items)
         return {
             "items": items,
             "total": len(items),
