@@ -487,7 +487,9 @@ def test_info_evidence_cannot_open_alert_from_existing_score() -> None:
     worker.get_evidence_for_tw = Mock()
     worker.handle_new_alert = Mock()
 
-    worker.handle_evidence_added_message({"data": json.dumps(utils.to_dict(evidence))})
+    worker.handle_evidence_added_message(
+        {"data": json.dumps(utils.to_dict(evidence))}
+    )
 
     worker.get_evidence_for_tw.assert_not_called()
     worker.handle_new_alert.assert_not_called()
