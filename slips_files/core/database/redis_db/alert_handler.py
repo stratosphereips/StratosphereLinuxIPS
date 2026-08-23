@@ -240,7 +240,6 @@ class AlertHandler:
         """
         Return the start and end timestamps of a time window.
 
-
         Parameters:
             profileid: Profile that owns the time window.
             twid: Canonical time-window identifier.
