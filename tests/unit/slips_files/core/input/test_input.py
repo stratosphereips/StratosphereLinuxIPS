@@ -420,8 +420,7 @@ def test_mark_self_as_done_processing_sends_worker_stop_signals():
     input_process.db.get_slips_start_time.return_value = "0"
     input_process.db.get_profiler_workers_started.return_value = 3
 
-    with patch("slips_files.core.input.input.time.time", return_value=500):
-        type(input_process).mark_self_as_done_processing(input_process)
+    type(input_process).mark_self_as_done_processing(input_process)
 
     input_process.db.get_profiler_workers_started.assert_called_once()
     input_process.profiler_queue.put.assert_has_calls([call("stop")] * 3)
