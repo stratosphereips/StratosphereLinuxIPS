@@ -112,7 +112,7 @@ Flow totals use exact profiler counter deltas rather than assuming every sample 
 
 Alerts come from durable SQLite. The default table shows individual alerts, bounded to 100 rows per page. **Group by host** is an optional display mode that shows alert count, evidence-link count, latest alert time, highest threat, and labels. Selecting a host aggregate shows its newest individual alerts; selecting an individual alert shows related evidence.
 
-Evidence also includes records that did not cross the alert threshold. The default table shows individual evidence, bounded to 100 rows per page. **Group by host and type** is optional and shows evidence, triggering-flow, and alert-link counts. Selecting an aggregate shows its newest individual evidence. Selecting an individual record groups each triggering UID into one primary **flow** (the conn.log-style connection) and a separate **Related protocol flows** section containing alternative-flow records such as DNS, HTTP, TLS, SSH, DHCP, files, and notices.
+Evidence also includes records that did not cross the alert threshold. The default table is **Group by host and type**, bounded to 100 rows per page, and shows evidence, triggering-flow, and alert-link counts. **Individual evidence** remains available from the display selector. Selecting an aggregate shows its newest individual evidence. Selecting an individual record groups each triggering UID into one primary **flow** (the conn.log-style connection) and a separate **Related protocol flows** section containing alternative-flow records such as DNS, HTTP, TLS, SSH, DHCP, files, and notices.
 
 Protocol activity is rendered as labeled fields instead of connection metrics. For example, DNS shows the queried name and type, response code such as `NXDOMAIN`, answers, and TTLs; HTTP shows method, host, URI, response status, user agent, body sizes, MIME types, and response file IDs; TLS shows server name, version, validation, cipher, and certificate fields. Other supported protocols have equivalent structured fields, with a readable generic field view for unknown types. Complete flow and protocol-flow records remain available in separately labeled JSON expanders. Alert to evidence to flow drill-down remains available after Redis time windows expire.
 
@@ -138,7 +138,7 @@ Selecting a host opens a full-width workspace with:
 - total and inbound/outbound flow and byte counts, plus packet, evidence, and alert totals;
 - inbound/outbound flow and byte plots;
 - protocol/application distribution and top peers;
-- durable related alerts and evidence;
+- compact related alerts and a full-width, sortable evidence table showing time, threat, type, module, confidence, triggering-flow count, alert links, and description;
 - newest historical flows with cursor navigation into older traffic.
 
 DNS resolution context is shown as structured fields: domains pointing to the selected IP, the hosts that requested those resolutions, the latest DNS observation and flow UID, and the relevant Slips time windows. Resolver addresses are clickable and open their host workspace.
@@ -161,6 +161,7 @@ GET /api/alerts?...filters...&sort=...&order=...&cursor=...
 GET /api/evidence?...filters...&sort=...&order=...&cursor=...
 GET /api/hosts?...filters...&sort=...&order=...&cursor=...
 GET /api/hosts/<ip>
+GET /api/hosts/<ip>/evidence?sort=...&order=...&cursor=...
 GET /api/hosts/<ip>/flows?limit=...&from=...&to=...&cursor=...
 GET /api/hosts/<ip>/traffic-summary?from=...&to=...&max_points=...
 GET /api/evidence/<uuid>/flows
