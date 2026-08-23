@@ -55,9 +55,7 @@ def test_get_hitlist_in_order_uses_supported_module_name_values() -> None:
         ([Modules.FEEDS_UPDATE_MANAGER], 2),
     ],
 )
-def test_warn_about_pending_modules(
-    pending_module_names, expected_print_calls
-):
+def test_warn_about_pending_modules(pending_module_names, expected_print_calls):
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.warning_printed_once = False
     pending_modules = []
@@ -143,20 +141,14 @@ def test_wait_for_processes_to_finish(alive_statuses, expected_alive_count):
     process_manager = ModuleFactory().create_process_manager_obj()
 
     # create mock process objects based on the `alive_statuses`
-    mock_processes = [
-        Mock(name=f"Process{i}") for i in range(len(alive_statuses))
-    ]
+    mock_processes = [Mock(name=f"Process{i}") for i in range(len(alive_statuses))]
 
     # set up the is_alive of each process
     for i, process in enumerate(mock_processes):
         process.is_alive.return_value = alive_statuses[i]
 
-    with patch.object(
-        process_manager, "print_stopped_module"
-    ) as mock_print_stopped:
-        alive_processes = process_manager.wait_for_processes_to_finish(
-            mock_processes
-        )
+    with patch.object(process_manager, "print_stopped_module") as mock_print_stopped:
+        alive_processes = process_manager.wait_for_processes_to_finish(mock_processes)
 
     # assertions
     # verify the number of alive processes matches the expected count
@@ -197,9 +189,7 @@ def test_wait_for_processes_to_finish(alive_statuses, expected_alive_count):
         ),  # "2023-04-01 10:00:30", "2023-04-01 10:00:00"
     ],
 )
-def test_get_analysis_time(
-    end_date_str, start_time_str, expected_analysis_time
-):
+def test_get_analysis_time(end_date_str, start_time_str, expected_analysis_time):
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.db.get_slips_start_time.return_value = start_time_str
 
@@ -218,11 +208,7 @@ def test_get_analysis_time(
         ({"data": "some_other_message"}, True, False),
         # Test case 3: Wrapped plain-text messages should be decoded first
         (
-            {
-                "data": json.dumps(
-                    {"text": "stop_slips", "version": "test-version"}
-                )
-            },
+            {"data": json.dumps({"text": "stop_slips", "version": "test-version"})},
             True,
             True,
         ),
@@ -234,9 +220,7 @@ def test_get_analysis_time(
         ({"data": "stop_slips"}, True, True),
     ],
 )
-def test_is_stop_msg_received(
-    message, msg_recvd_in_control_channel, expected_result
-):
+def test_is_stop_msg_received(message, msg_recvd_in_control_channel, expected_result):
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.c1.get_message.return_value = message
 
@@ -254,9 +238,7 @@ def test_is_stop_msg_received(
         (Mock(), True),
     ],
 )
-def test_is_debugger_active(
-    mock_return_value: object, expected_result: bool
-) -> None:
+def test_is_debugger_active(mock_return_value: object, expected_result: bool) -> None:
     process_manager = ModuleFactory().create_process_manager_obj()
 
     with patch("sys.gettrace", return_value=mock_return_value):
@@ -316,14 +298,14 @@ def test_stop_llm_stack_if_llm_module_stopped_kills_dependents() -> None:
         Modules.ALERT_SUMMARY: 102,
     }.get(module_name)
 
-    with patch(
-        "managers.process_manager.shutdown_mixin.os.kill",
-        side_effect=ProcessLookupError,
-    ), patch.object(
-        process_manager, "kill_process_tree"
-    ) as mock_kill_process_tree, patch.object(
-        process_manager.main, "print"
-    ) as mock_print:
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.os.kill",
+            side_effect=ProcessLookupError,
+        ),
+        patch.object(process_manager, "kill_process_tree") as mock_kill_process_tree,
+        patch.object(process_manager.main, "print") as mock_print,
+    ):
         process_manager._stop_llm_stack_if_llm_module_stopped()
 
     assert mock_kill_process_tree.call_args_list == [call(101), call(102)]
@@ -363,21 +345,20 @@ def test_stop_llm_stack_if_llm_module_stopped_skips_unneeded_shutdown(
     }.get(module_name)
     process_manager.stopped_modules = stopped_modules
 
-    with patch(
-        "managers.process_manager.shutdown_mixin.os.kill",
-        side_effect=os_kill_side_effect,
-    ), patch.object(
-        process_manager, "kill_process_tree"
-    ) as mock_kill_process_tree, patch.object(
-        process_manager.main, "print"
-    ) as mock_print:
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.os.kill",
+            side_effect=os_kill_side_effect,
+        ),
+        patch.object(process_manager, "kill_process_tree") as mock_kill_process_tree,
+        patch.object(process_manager.main, "print") as mock_print,
+    ):
         process_manager._stop_llm_stack_if_llm_module_stopped()
 
     if llm_enabled and os_kill_side_effect is ProcessLookupError:
         mock_kill_process_tree.assert_called_once_with(101)
         mock_print.assert_called_once_with(
-            "Stopping modules because llm_proxy stopped: "
-            "['Modules.REGEX_GENERATOR']"
+            "Stopping modules because llm_proxy stopped: ['Modules.REGEX_GENERATOR']"
         )
     else:
         mock_kill_process_tree.assert_not_called()
@@ -385,16 +366,20 @@ def test_stop_llm_stack_if_llm_module_stopped_skips_unneeded_shutdown(
 
 
 @pytest.mark.parametrize(
-    "live_update, stop_received, done_receiving, expected_result",
+    "live_update, stop_received, done_receiving, expected_result, expected_cause",
     [
-        (True, False, False, True),
-        (False, True, False, True),
-        (False, False, True, True),
-        (False, False, False, False),
+        (True, False, False, True, "live_update"),
+        (False, True, False, True, "control"),
+        (False, False, True, True, "natural"),
+        (False, False, False, False, ""),
     ],
 )
 def test_should_stop_slips(
-    live_update, stop_received, done_receiving, expected_result
+    live_update,
+    stop_received,
+    done_receiving,
+    expected_result,
+    expected_cause,
 ):
     """
     Test whether Slips should stop for live updates, stop messages, or done input.
@@ -404,22 +389,20 @@ def test_should_stop_slips(
     stop_received: Whether a stop message was received.
     done_receiving: Whether input and profiler finished processing.
     expected_result: Expected stop decision.
+    expected_cause: Expected recorded shutdown cause.
 
     Return:
     None.
     """
     process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.is_slips_live_updating_event.is_set = Mock(
-        return_value=live_update
-    )
+    process_manager.is_slips_live_updating_event.is_set = Mock(return_value=live_update)
     process_manager.is_stop_msg_received = Mock(return_value=stop_received)
-    process_manager.is_done_receiving_new_flows = Mock(
-        return_value=done_receiving
-    )
+    process_manager.is_done_receiving_new_flows = Mock(return_value=done_receiving)
     process_manager._did_a_core_module_fail = Mock(return_value=False)
     process_manager.all_children_started = True
 
     assert process_manager.should_stop_slips() == expected_result
+    assert process_manager.shutdown_cause == expected_cause
 
 
 @pytest.mark.parametrize(
@@ -519,9 +502,7 @@ def test_should_stop_slips_sets_core_module_failure() -> None:
     None.
     """
     process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.is_slips_live_updating_event.is_set = Mock(
-        return_value=False
-    )
+    process_manager.is_slips_live_updating_event.is_set = Mock(return_value=False)
     process_manager._did_a_core_module_fail = Mock(return_value=True)
     process_manager.is_stop_msg_received = Mock()
     process_manager.is_done_receiving_new_flows = Mock()
@@ -529,6 +510,7 @@ def test_should_stop_slips_sets_core_module_failure() -> None:
 
     assert process_manager.should_stop_slips() is True
     assert process_manager.core_module_failure is True
+    assert process_manager.shutdown_cause == "core_failure"
     process_manager.is_stop_msg_received.assert_not_called()
     process_manager.is_done_receiving_new_flows.assert_not_called()
 
@@ -557,12 +539,8 @@ def test_shutdown_gracefully_handles_core_module_failure() -> None:
     process_manager.get_hitlist_in_order = Mock(return_value=([], []))
     process_manager.shutdown_interactive = Mock()
     process_manager.kill_all_children = Mock()
-    process_manager.get_analysis_time = Mock(
-        return_value=(1.23, "2026/05/21 12:00:00")
-    )
-    process_manager.is_slips_live_updating_event.is_set = Mock(
-        return_value=False
-    )
+    process_manager.get_analysis_time = Mock(return_value=(1.23, "2026/05/21 12:00:00"))
+    process_manager.is_slips_live_updating_event.is_set = Mock(return_value=False)
 
     with patch(
         "managers.process_manager.shutdown_mixin.multiprocessing.active_children",
@@ -573,8 +551,7 @@ def test_shutdown_gracefully_handles_core_module_failure() -> None:
     process_manager.shutdown_interactive.assert_not_called()
     assert process_manager.kill_all_children.call_count == 2
     process_manager.main.print.assert_any_call(
-        "[Process Manager] Slips didn't shutdown gracefully - "
-        "Core module failure.\n",
+        "[Process Manager] Slips didn't shutdown gracefully - Core module failure.\n",
         log_to_logfiles_only=True,
     )
 
@@ -588,11 +565,12 @@ def test_kill_daemon_children_excludes_thread_pids_from_logging_count():
         "module_two": 789,
     }
 
-    with patch.object(
-        process_manager, "kill_process_tree"
-    ) as mock_kill_process_tree, patch.object(
-        process_manager, "print_stopped_module"
-    ) as mock_print_stopped_module:
+    with (
+        patch.object(process_manager, "kill_process_tree") as mock_kill_process_tree,
+        patch.object(
+            process_manager, "print_stopped_module"
+        ) as mock_print_stopped_module,
+    ):
         process_manager.kill_daemon_children()
 
     assert mock_kill_process_tree.call_args_list == [call(123), call(789)]
@@ -610,10 +588,13 @@ def test_kill_process_tree_kills_descendants_before_parent():
     child_children = Mock()
     child_children.read.return_value = ""
 
-    with patch(
-        "managers.process_manager.shutdown_mixin.os.popen",
-        side_effect=[parent_children, child_children],
-    ), patch("managers.process_manager.shutdown_mixin.os.kill") as mock_kill:
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.os.popen",
+            side_effect=[parent_children, child_children],
+        ),
+        patch("managers.process_manager.shutdown_mixin.os.kill") as mock_kill,
+    ):
         process_manager.kill_process_tree(123)
 
     assert mock_kill.call_args_list == [
@@ -628,16 +609,17 @@ def test_shutdown_interactive_signals_evidence_handler_after_other_modules_stop(
     first_process = Mock()
     last_process = Mock()
 
-    with patch.object(
-        process_manager,
-        "wait_for_processes_to_finish",
-        side_effect=[[], []],
-    ) as mock_wait, patch.object(
-        process_manager.evidence_handler_termination_event, "set"
-    ) as mock_set:
-        result = process_manager.shutdown_interactive(
-            [first_process], [last_process]
-        )
+    with (
+        patch.object(
+            process_manager,
+            "wait_for_processes_to_finish",
+            side_effect=[[], []],
+        ) as mock_wait,
+        patch.object(
+            process_manager.evidence_handler_termination_event, "set"
+        ) as mock_set,
+    ):
+        result = process_manager.shutdown_interactive([first_process], [last_process])
 
     assert result == (None, None)
     assert mock_wait.call_args_list == [
@@ -653,20 +635,117 @@ def test_shutdown_interactive_does_not_signal_evidence_handler_while_modules_are
     pending_process = Mock()
     last_process = Mock()
 
-    with patch.object(
-        process_manager,
-        "wait_for_processes_to_finish",
-        return_value=[pending_process],
-    ) as mock_wait, patch.object(
-        process_manager, "warn_about_pending_modules"
-    ) as mock_warn, patch.object(
-        process_manager.evidence_handler_termination_event, "set"
-    ) as mock_set:
-        result = process_manager.shutdown_interactive(
-            [pending_process], [last_process]
-        )
+    with (
+        patch.object(
+            process_manager,
+            "wait_for_processes_to_finish",
+            return_value=[pending_process],
+        ) as mock_wait,
+        patch.object(process_manager, "warn_about_pending_modules") as mock_warn,
+        patch.object(
+            process_manager.evidence_handler_termination_event, "set"
+        ) as mock_set,
+    ):
+        result = process_manager.shutdown_interactive([pending_process], [last_process])
 
     assert result == ([pending_process], [last_process])
     mock_wait.assert_called_once_with([pending_process])
     mock_warn.assert_called_once_with([pending_process, last_process])
     mock_set.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "response, expected_stop",
+    [
+        ("y\n", True),
+        ("yes\n", True),
+        ("n\n", False),
+        ("\n", False),
+    ],
+)
+def test_ask_to_stop_web_interface(response: str, expected_stop: bool) -> None:
+    """
+    Test the completed-analysis web interface prompt.
+
+    Parameters:
+        response: Console response to the prompt.
+        expected_stop: Whether the response requests server shutdown.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    stdin = Mock()
+    stdin.isatty.return_value = True
+    stdin.readline.return_value = response
+    process_manager.main.shutdown_signal_received = False
+
+    with (
+        patch("managers.process_manager.shutdown_mixin.sys.stdin", stdin),
+        patch(
+            "managers.process_manager.shutdown_mixin.select.select",
+            return_value=([stdin], [], []),
+        ),
+    ):
+        result = process_manager._ask_to_stop_web_interface()
+
+    assert result is expected_stop
+
+
+def test_forced_shutdown_stops_web_interface_without_prompt() -> None:
+    """Test signal-driven shutdown immediately stops the verified server."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.webinterface = True
+    process_manager.main.conf.web_interface_port = 55000
+    process_manager.main.web_interface_shutdown = False
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "WebInterface.is_verified_server_running",
+            return_value=True,
+        ),
+        patch(
+            "managers.process_manager.shutdown_mixin.WebInterface.stop_verified_server",
+            return_value=True,
+        ) as stop_server,
+        patch.object(process_manager, "_ask_to_stop_web_interface") as prompt,
+    ):
+        process_manager._handle_web_interface_after_analysis(False)
+
+    prompt.assert_not_called()
+    stop_server.assert_called_once_with(55000)
+    assert process_manager.main.web_interface_shutdown is True
+
+
+def test_natural_shutdown_keeps_web_until_ctrl_c() -> None:
+    """Test a completed run stays available until the user interrupts it."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.webinterface = True
+    process_manager.main.conf.web_interface_port = 55000
+    process_manager.main.shutdown_signal_received = False
+    process_manager.main.web_interface_shutdown = False
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "WebInterface.is_verified_server_running",
+            return_value=True,
+        ),
+        patch(
+            "managers.process_manager.shutdown_mixin.WebInterface.stop_verified_server",
+            return_value=True,
+        ) as stop_server,
+        patch.object(
+            process_manager,
+            "_ask_to_stop_web_interface",
+            return_value=False,
+        ) as prompt,
+        patch(
+            "managers.process_manager.shutdown_mixin.time.sleep",
+            side_effect=KeyboardInterrupt,
+        ),
+    ):
+        process_manager._handle_web_interface_after_analysis(True)
+
+    prompt.assert_called_once_with()
+    stop_server.assert_called_once_with(55000)
+    assert process_manager.main.shutdown_signal_received is True
+    assert process_manager.main.web_interface_shutdown is True
