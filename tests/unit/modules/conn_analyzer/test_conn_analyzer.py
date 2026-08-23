@@ -25,6 +25,43 @@ daddr = "192.168.1.2"
 dst_profileid = f"profile_{daddr}"
 
 
+@pytest.mark.asyncio
+async def test_connection_without_dns_disabled_in_config() -> None:
+    """Do not run or emit connection-without-DNS evidence when disabled."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    flow = Conn(
+        starttime=timestamp,
+        uid=uid,
+        saddr=saddr,
+        daddr=daddr,
+        dur=1,
+        proto="tcp",
+        appproto="",
+        sport="12345",
+        dport="443",
+        spkts=1,
+        dpkts=1,
+        sbytes=60,
+        dbytes=60,
+        smac="",
+        dmac="",
+        state="Established",
+        history="ShADadf",
+    )
+    conn.db.is_detection_disabled = Mock(return_value=True)
+    conn.set_evidence.conn_without_dns = Mock()
+
+    result = await conn.check_connection_without_dns_resolution(
+        profileid, twid, flow
+    )
+
+    assert result is False
+    conn.db.is_detection_disabled.assert_called_once_with(
+        EvidenceType.CONNECTION_WITHOUT_DNS
+    )
+    conn.set_evidence.conn_without_dns.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "dport, proto, daddr, initial_p2p_daddrs, "
     "expected_result, expected_final_p2p_daddrs",
