@@ -84,7 +84,7 @@
         <input id="evidence-search" type="search" placeholder="Search description, type, host…">
         <select id="evidence-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
         <select id="evidence-link"><option value="">All evidence</option><option value="linked">In an alert</option><option value="unlinked">Without alert</option></select>
-        <select id="evidence-view" aria-label="Evidence display mode"><option value="individual">Individual evidence</option><option value="grouped">Group by host and type</option></select>
+        <select id="evidence-view" aria-label="Evidence display mode"><option value="grouped" selected>Group by host and type</option><option value="individual">Individual evidence</option></select>
         <select id="evidence-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
         <input id="evidence-from" class="custom-time" type="datetime-local" hidden>
         <input id="evidence-to" class="custom-time" type="datetime-local" hidden>
@@ -133,10 +133,15 @@
             <figure><figcaption>Top peers</figcaption><div id="host-peers" class="bar-chart"></div></figure>
           </div>
         </article>
-        <div class="split-grid">
-          <article class="surface"><h3 id="host-alerts-title">Related alerts</h3><div id="host-alerts"></div></article>
-          <article class="surface"><h3 id="host-evidence-title">Related evidence</h3><div id="host-evidence"></div></article>
-        </div>
+        <article class="surface host-alerts-panel">
+          <div class="host-section-heading"><div><h3 id="host-alerts-title">Related alerts</h3><p>Open an alert to inspect its evidence and triggering flows.</p></div></div>
+          <div id="host-alerts" class="host-alert-list"></div>
+        </article>
+        <article class="surface table-surface host-evidence-panel">
+          <div class="table-heading"><div><h3 id="host-evidence-title">Related evidence</h3><p id="host-evidence-count">Newest evidence for every address associated with this host.</p></div></div>
+          <div class="table-wrap host-evidence-wrap"><table id="host-evidence-table"><thead><tr><th data-sort="time">Time</th><th data-sort="threat">Threat</th><th data-sort="type">Type</th><th data-sort="module">Module</th><th data-sort="confidence">Confidence</th><th data-sort="flows">Flows</th><th data-sort="alert">Alerts</th><th>Description</th></tr></thead><tbody></tbody></table></div>
+        </article>
+        <div id="host-evidence-pager" class="pager"></div>
         <article class="surface table-surface">
           <div class="table-heading"><div><h3>Historical traffic</h3><p id="host-flow-count"></p></div></div>
           <div class="table-wrap"><table id="host-flows-table"><thead><tr><th>Time</th><th>Direction</th><th>Peer</th><th>Protocol</th><th>Ports</th><th>State</th><th>Packets</th><th>Bytes</th><th>Duration</th><th>Label</th></tr></thead><tbody></tbody></table></div>
