@@ -81,6 +81,10 @@ class DBManager:
         self.rdb = RedisDB(
             self.logger, redis_port, output_dir, start_redis_server, **kwargs
         )
+        # RedisDB is a per-port singleton. Module processes may inherit or
+        # reuse that object, so refresh process-local configuration from the
+        # ConfigParser instance that belongs to this DBManager.
+        self.rdb.disabled_detections = self.conf.disabled_detections()
         self.constants = self.rdb.constants
 
         self.trust_db = None
@@ -123,16 +127,12 @@ class DBManager:
         """
         try:
             # backup the DB aside (optional safety)
-            date_time = utils.get_human_readable_datetime(
-                format="%Y-%m-%dT%H:%M:%S"
-            )
+            date_time = utils.get_human_readable_datetime(format="%Y-%m-%dT%H:%M:%S")
             backup_path = f"{db_path}.{date_time}.bak"
             shutil.move(db_path, backup_path)
 
             db_short = Path(db_path).parent.name + "/" + Path(db_path).name
-            backup_short = (
-                Path(backup_path).parent.name + "/" + Path(backup_path).name
-            )
+            backup_short = Path(backup_path).parent.name + "/" + Path(backup_path).name
             self.print(
                 f"{db_short} backup is at {backup_short}. "
                 f"Creating a new one at {db_short}."
@@ -163,8 +163,7 @@ class DBManager:
         if os.path.exists(db_path):
             if self.is_db_malformed(db_path):
                 self.print(
-                    "trustdb.db is malformed. Backing it up and "
-                    "creating another one..."
+                    "trustdb.db is malformed. Backing it up and creating another one..."
                 )
                 self.backup_db(db_path)
             if not self.has_write_access_to_sqlite(db_path):
@@ -196,9 +195,7 @@ class DBManager:
             conn = sqlite3.connect(f"file:{db_path}?mode=rw", uri=True)
             cursor = conn.cursor()
             cursor.execute("BEGIN IMMEDIATE")
-            cursor.execute(
-                "CREATE TABLE IF NOT EXISTS __write_test__ (id INTEGER)"
-            )
+            cursor.execute("CREATE TABLE IF NOT EXISTS __write_test__ (id INTEGER)")
             cursor.execute("DROP TABLE __write_test__")
             conn.rollback()
             conn.close()
@@ -390,9 +387,7 @@ class DBManager:
 
             modules = self.rdb.get_flows_per_minute_modules()
             profiler_modules = sorted(
-                module
-                for module in modules
-                if self._is_profiler_module(module)
+                module for module in modules if self._is_profiler_module(module)
             )
             for ts in range(last_logged + 60, last_complete_minute + 1, 60):
                 input_count = self.rdb.get_flows_per_minute("input", ts)
@@ -400,9 +395,7 @@ class DBManager:
                     module: self.rdb.get_flows_per_minute(module, ts)
                     for module in profiler_modules
                 }
-                self._append_flows_per_minute_row(
-                    ts, input_count, profiler_counts
-                )
+                self._append_flows_per_minute_row(ts, input_count, profiler_counts)
                 self.rdb.set_last_logged_flows_per_minute(ts)
         finally:
             self.rdb.release_flows_per_minute_log_lock()
@@ -492,9 +485,7 @@ class DBManager:
             existing_header, desired_header
         )
         if merged_header != existing_header:
-            self._rewrite_flows_per_minute_csv(
-                csv_path, existing_header, merged_header
-            )
+            self._rewrite_flows_per_minute_csv(csv_path, existing_header, merged_header)
         return merged_header
 
     def _merge_flows_per_minute_headers(
@@ -520,9 +511,10 @@ class DBManager:
         self, csv_path: str, old_header: List[str], new_header: List[str]
     ):
         tmp_path = f"{csv_path}.tmp"
-        with open(csv_path, newline="") as handle, open(
-            tmp_path, "w", newline=""
-        ) as out_handle:
+        with (
+            open(csv_path, newline="") as handle,
+            open(tmp_path, "w", newline="") as out_handle,
+        ):
             reader = csv.reader(handle)
             writer = csv.writer(out_handle)
             next(reader, None)
@@ -532,9 +524,7 @@ class DBManager:
                     old_header[idx]: row[idx]
                     for idx in range(min(len(old_header), len(row)))
                 }
-                writer.writerow(
-                    [row_map.get(column, "0") for column in new_header]
-                )
+                writer.writerow([row_map.get(column, "0") for column in new_header])
         os.replace(tmp_path, csv_path)
 
     def _build_flows_per_minute_row(
@@ -828,6 +818,10 @@ class DBManager:
         return self.rdb.get_evidence_by_id(*args, **kwargs)
 
     def is_detection_disabled(self, *args, **kwargs):
+        # RedisDB is shared per port and its instance attributes can be
+        # overwritten by another DBManager in this worker. Refresh the active
+        # process configuration immediately before every decision.
+        self.rdb.disabled_detections = self.conf.disabled_detections()
         return self.rdb.is_detection_disabled(*args, **kwargs)
 
     def set_flow_causing_evidence(self, *args, **kwargs):
@@ -871,10 +865,14 @@ class DBManager:
             return "default" if not flow else flow["interface"]
 
     def set_evidence(self, evidence: Evidence):
+        if self.is_detection_disabled(evidence.evidence_type):
+            return False
+
         interface: str | None = self._get_evidence_interface(evidence)
         setattr(evidence, "interface", interface)
         evidence_set = self.rdb.set_evidence(evidence)
         if evidence_set:
+            self.sqlite.add_evidence(evidence)
             # an evidence is generated for this profile
             # update the threat level of this profile
             self.update_threat_level(
@@ -884,9 +882,7 @@ class DBManager:
             )
         return evidence_set
 
-    def set_alert(
-        self, alert: Alert, evidence_causing_the_alert: Dict[str, Evidence]
-    ):
+    def set_alert(self, alert: Alert, evidence_causing_the_alert: Dict[str, Evidence]):
         """
         Sets the alert in the rdb and sqlite databases and labels each flow
         that was responsible for this alert as "malicious"
@@ -937,20 +933,14 @@ class DBManager:
     def get_twid_evidence(self, *args, **kwargs):
         return self.rdb.get_twid_evidence(*args, **kwargs)
 
-    def update_threat_level(
-        self, profileid: str, threat_level: str, confidence: float
-    ):
+    def update_threat_level(self, profileid: str, threat_level: str, confidence: float):
         """updates the threat level and confidence of an ip in redis and
         trust db for other peers to use it"""
         if self.trust_db:
             ip = profileid.split("_")[-1]
             float_threat_level = utils.threat_levels[threat_level]
-            self.trust_db.insert_slips_score(
-                ip, float_threat_level, confidence
-            )
-        return self.rdb.update_threat_level(
-            profileid, threat_level, confidence
-        )
+            self.trust_db.insert_slips_score(ip, float_threat_level, confidence)
+        return self.rdb.update_threat_level(profileid, threat_level, confidence)
 
     def set_loaded_ti_files(self, *args, **kwargs):
         return self.rdb.set_loaded_ti_files(*args, **kwargs)
@@ -1106,19 +1096,13 @@ class DBManager:
         return self.rdb.add_dhcp_requested_addr(*args, **kwargs)
 
     def get_dstips_with_not_established_flows(self, *args, **kwargs):
-        yield from self.rdb.get_dstips_with_not_established_flows(
-            *args, **kwargs
-        )
+        yield from self.rdb.get_dstips_with_not_established_flows(*args, **kwargs)
 
     def get_dstports_of_not_established_flows(self, *args, **kwargs):
-        yield from self.rdb.get_dstports_of_not_established_flows(
-            *args, **kwargs
-        )
+        yield from self.rdb.get_dstports_of_not_established_flows(*args, **kwargs)
 
     def get_total_dstips_for_not_estab_flows_on_port(self, *args, **kwargs):
-        return self.rdb.get_total_dstips_for_not_estab_flows_on_port(
-            *args, **kwargs
-        )
+        return self.rdb.get_total_dstips_for_not_estab_flows_on_port(*args, **kwargs)
 
     def get_timewindow(self, *args, **kwargs):
         return self.rdb.get_timewindow(*args, **kwargs)
@@ -1160,9 +1144,7 @@ class DBManager:
         """
         Get all the contacted IPs in a given profile and TW
         """
-        return self.sqlite.get_all_contacted_ips_in_profileid_twid(
-            *args, **kwargs
-        )
+        return self.sqlite.get_all_contacted_ips_in_profileid_twid(*args, **kwargs)
 
     def mark_profile_and_timewindow_as_blocked(self, *args, **kwargs):
         return self.rdb.mark_profile_and_timewindow_as_blocked(*args, **kwargs)
@@ -1192,9 +1174,7 @@ class DBManager:
         return self.rdb.increment_processed_flows(*args, **kwargs)
 
     def get_flows_analyzed_by_the_profiler_so_far(self, *args, **kwargs):
-        return self.rdb.get_flow_analyzed_by_the_profiler_so_far(
-            *args, **kwargs
-        )
+        return self.rdb.get_flow_analyzed_by_the_profiler_so_far(*args, **kwargs)
 
     def add_out_ssh(self, *args, **kwargs):
         return self.rdb.add_out_ssh(*args, **kwargs)
@@ -1457,9 +1437,7 @@ class DBManager:
         # stores it in the db
         self.sqlite.add_flow(flow, profileid, twid, label=label)
         # handles the channels and labels etc.
-        return self.rdb.add_flow(
-            flow, profileid=profileid, twid=twid, label=label
-        )
+        return self.rdb.add_flow(flow, profileid=profileid, twid=twid, label=label)
 
     def get_slips_start_time(self):
         return self.rdb.get_slips_start_time()
@@ -1508,9 +1486,7 @@ class DBManager:
         exports the labeled flows and altflows stored in sqlite
         db to json or csv based on the config file
         """
-        self.sqlite.export_labeled_flows(
-            self.get_output_dir(), *args, **kwargs
-        )
+        self.sqlite.export_labeled_flows(self.get_output_dir(), *args, **kwargs)
 
     def get_commit(self, *args, **kwargs):
         return self.rdb.get_commit(*args, **kwargs)
@@ -1523,6 +1499,9 @@ class DBManager:
 
     def get_tw_limits(self, *args, **kwargs):
         return self.rdb.get_tw_limits(*args, **kwargs)
+
+    def get_alert_generation_lock(self, *args, **kwargs):
+        return self.rdb.get_alert_generation_lock(*args, **kwargs)
 
     def close_sqlite(self, *args, **kwargs):
         # when stopping the daemon using -S, slips doesn't start the sqlite db
