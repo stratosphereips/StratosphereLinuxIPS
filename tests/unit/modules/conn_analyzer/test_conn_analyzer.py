@@ -14,6 +14,7 @@ import pytest
 from ipaddress import ip_address
 from slips_files.common.input_type import InputType
 from tests.unit.common_test_utils import get_mock_coro
+from slips_files.core.structures.evidence import EvidenceType
 
 # dummy params used for testing
 profileid = "profile_192.168.1.1"
