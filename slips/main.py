@@ -658,9 +658,6 @@ class Main:
                 time.sleep(0.5)
                 self.proc_man.print_disabled_modules()
 
-            if self.args.webinterface:
-                self.ui_man.start_webinterface()
-
             def sig_handler(sig, frame):
                 """calls shutdown_gracefully on sig"""
                 if os.getpid() != self.pid:
@@ -728,12 +725,6 @@ class Main:
                 time.sleep(5)
                 self.print_gw_info()
                 self.print_localnet_info()
-
-                # if you remove check_if_webinterface_started() call anywhere
-                # before the above sleep(), it will try to get the return
-                # value very quickly before  the webinterface thread sets
-                # it. so don't:D
-                self.ui_man.check_if_webinterface_started()
 
                 self.update_stats()
                 self.timewindow_man.update_current_timewindow_if_due()
