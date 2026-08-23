@@ -871,6 +871,10 @@ class DBManager:
             return "default" if not flow else flow["interface"]
 
     def set_evidence(self, evidence: Evidence):
+        # A process from a completed/replaced run must never publish evidence
+        # into the Redis database now owned by another run.
+        if not self.rdb.belongs_to_run(self.output_dir):
+            return False
         if self.is_detection_disabled(evidence.evidence_type):
             return False
 
@@ -1071,6 +1075,9 @@ class DBManager:
     def get_info_about_not_established_flows(self, *args, **kwargs):
         return self.rdb.get_info_about_not_established_flows(*args, **kwargs)
 
+    def get_uids_for_vertical_portscan(self, *args, **kwargs):
+        return self.rdb.get_uids_for_vertical_portscan(*args, **kwargs)
+
     def is_there_estab_tcp_flows(self, *args, **kwargs):
         return self.rdb.is_there_estab_tcp_flows(*args, **kwargs)
 
@@ -1109,6 +1116,9 @@ class DBManager:
 
     def get_total_dstips_for_not_estab_flows_on_port(self, *args, **kwargs):
         return self.rdb.get_total_dstips_for_not_estab_flows_on_port(*args, **kwargs)
+
+    def get_uids_for_horizontal_portscan(self, *args, **kwargs):
+        return self.rdb.get_uids_for_horizontal_portscan(*args, **kwargs)
 
     def get_timewindow(self, *args, **kwargs):
         return self.rdb.get_timewindow(*args, **kwargs)
