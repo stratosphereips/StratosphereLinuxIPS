@@ -53,16 +53,14 @@ class VerticalPortscan:
         saddr = evidence["profileid"].split("_")[-1]
         confidence = utils.calculate_confidence(evidence["pkts_sent"])
         description = (
-            f'new vertical port scan to IP {evidence["dstip"]} from {saddr}. '
-            f'Total {evidence["amount_of_dports"]} '
-            f'{evidence["protocol"].upper()} ports were scanned. '
-            f'Total packets sent to all ports: {evidence["pkts_sent"]}. '
+            f"new vertical port scan to IP {evidence['dstip']} from {saddr}. "
+            f"Total {evidence['amount_of_dports']} "
+            f"{evidence['protocol'].upper()} ports were scanned. "
+            f"Total packets sent to all ports: {evidence['pkts_sent']}. "
             f"Confidence: {confidence}. by Slips"
         )
 
-        attacker = Attacker(
-            direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
-        )
+        attacker = Attacker(direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr)
         victim = Victim(
             direction=Direction.DST,
             ioc_type=IoCType.IP,
@@ -149,9 +147,7 @@ class VerticalPortscan:
             ) in self.db.get_dstips_with_not_established_flows(
                 profileid, twid, protocol
             ):
-                if not (
-                    utils.are_detection_modules_interested_in_this_ip(dstip)
-                ):
+                if not (utils.are_detection_modules_interested_in_this_ip(dstip)):
                     continue
                 # Get the total amount of pkts sent to all
                 # ports on the same host
@@ -160,9 +156,10 @@ class VerticalPortscan:
                         profileid, twid, protocol, dstip
                     )
                 )
-                amount_of_dports, total_pkts_sent_to_all_dports = int(
-                    amount_of_dports
-                ), int(total_pkts_sent_to_all_dports)
+                amount_of_dports, total_pkts_sent_to_all_dports = (
+                    int(amount_of_dports),
+                    int(total_pkts_sent_to_all_dports),
+                )
 
                 # todo use this later
                 # last_seen = self.db.get_ip_last_seen_ts(
@@ -179,13 +176,16 @@ class VerticalPortscan:
                     twid,
                     dstip,
                 ):
+                    uids = self.db.get_uids_for_vertical_portscan(
+                        profileid, twid, protocol, dstip
+                    )
                     evidence_details = {
                         "timestamp": first_seen_ts,
                         "pkts_sent": total_pkts_sent_to_all_dports,
                         "protocol": protocol.name.lower(),
                         "profileid": str(profileid),
                         "twid": str(twid),
-                        "uid": [],
+                        "uid": uids,
                         "amount_of_dports": amount_of_dports,
                         "dstip": dstip,
                         "state": State.NOT_EST.name.lower(),
