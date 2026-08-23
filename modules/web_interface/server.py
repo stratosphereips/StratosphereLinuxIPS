@@ -1225,7 +1225,7 @@ class RunDataReader:
         return self._id_list(self.redis.hget("flows_causing_evidence", evidence_id))
 
     def flows_for_evidence(self, evidence_id: str) -> Dict[str, Any]:
-        """Return bounded conn and alternative flows causing evidence."""
+        """Return triggering network flows grouped with protocol activity."""
         uids = self._flow_uids_for_evidence(evidence_id)
         if not uids:
             for item in self._redis_evidence():
@@ -1233,24 +1233,61 @@ class RunDataReader:
                     uids = self._id_list(item.get("uid", []))
                     break
         if not uids:
-            return {"items": [], "total": 0, "page_size": 0}
-        placeholders = ",".join("?" for _ in uids)
-        items: List[Dict[str, Any]] = []
+            return {
+                "items": [],
+                "total": 0,
+                "network_flow_total": 0,
+                "protocol_flow_total": 0,
+                "page_size": 0,
+            }
+        bounded_uids = list(dict.fromkeys(uids))[:MAX_FLOW_LIMIT]
+        placeholders = ",".join("?" for _ in bounded_uids)
+        grouped: Dict[str, Dict[str, Any]] = {
+            uid: {"uid": uid, "network_flow": None, "protocol_flows": []}
+            for uid in bounded_uids
+        }
         with self._connect_sqlite() as connection:
             for table in ("flows", "altflows"):
                 rows = connection.execute(
                     f"SELECT * FROM {table} WHERE uid IN ({placeholders}) LIMIT 1000",
-                    tuple(uids),
+                    tuple(bounded_uids),
                 ).fetchall()
                 for row in rows:
                     record = dict(row)
                     record["flow"] = self._loads(record.get("flow"), {})
                     record["table"] = table
-                    items.append(record)
+                    uid = str(record.get("uid", ""))
+                    item = grouped.setdefault(
+                        uid,
+                        {
+                            "uid": uid,
+                            "network_flow": None,
+                            "protocol_flows": [],
+                        },
+                    )
+                    if table == "flows":
+                        item["network_flow"] = record
+                    else:
+                        item["protocol_flows"].append(record)
+        items = [
+            grouped[uid]
+            for uid in bounded_uids
+            if uid in grouped
+            and (
+                grouped[uid]["network_flow"]
+                or grouped[uid]["protocol_flows"]
+            )
+        ]
+        network_flow_total = sum(bool(item["network_flow"]) for item in items)
+        protocol_flow_total = sum(
+            len(item["protocol_flows"]) for item in items
+        )
         return {
-            "items": items[:MAX_FLOW_LIMIT],
+            "items": items,
             "total": len(items),
-            "page_size": min(len(items), MAX_FLOW_LIMIT),
+            "network_flow_total": network_flow_total,
+            "protocol_flow_total": protocol_flow_total,
+            "page_size": len(items),
         }
 
     def _snapshot(self, ip: str) -> Dict[str, Any]:
