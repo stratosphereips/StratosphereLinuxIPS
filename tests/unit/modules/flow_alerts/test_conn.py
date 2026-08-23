@@ -11,6 +11,7 @@ from unittest.mock import (
 import pytest
 from ipaddress import ip_address
 from slips_files.common.input_type import InputType
+from slips_files.core.structures.evidence import EvidenceType
 
 # dummy params used for testing
 profileid = "profile_192.168.1.1"
@@ -20,6 +21,43 @@ timestamp = 1635765895.037696
 saddr = "192.168.1.1"
 daddr = "192.168.1.2"
 dst_profileid = f"profile_{daddr}"
+
+
+@pytest.mark.asyncio
+async def test_connection_without_dns_disabled_in_config() -> None:
+    """Do not run or emit connection-without-DNS evidence when disabled."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    flow = Conn(
+        starttime=timestamp,
+        uid=uid,
+        saddr=saddr,
+        daddr=daddr,
+        dur=1,
+        proto="tcp",
+        appproto="",
+        sport="12345",
+        dport="443",
+        spkts=1,
+        dpkts=1,
+        sbytes=60,
+        dbytes=60,
+        smac="",
+        dmac="",
+        state="Established",
+        history="ShADadf",
+    )
+    conn.db.is_detection_disabled = Mock(return_value=True)
+    conn.set_evidence.conn_without_dns = Mock()
+
+    result = await conn.check_connection_without_dns_resolution(
+        profileid, twid, flow
+    )
+
+    assert result is False
+    conn.db.is_detection_disabled.assert_called_once_with(
+        EvidenceType.CONNECTION_WITHOUT_DNS
+    )
+    conn.set_evidence.conn_without_dns.assert_not_called()
 
 
 @pytest.mark.parametrize(
