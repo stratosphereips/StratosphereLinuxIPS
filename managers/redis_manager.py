@@ -78,6 +78,18 @@ class RedisManager:
         # server up after the analysis to avoid losing the analysis
         return not self.saved_redis_dump
 
+    def _is_web_interface_enabled(self) -> bool:
+        """
+        Check whether CLI or configuration enabled the local interface.
+
+        Returns:
+            True when the current run must remain readable by the interface.
+        """
+        if getattr(self.main.args, "webinterface", False) is True:
+            return True
+        accessor = getattr(self.main.conf, "web_interface_enabled", None)
+        return callable(accessor) and accessor() is True
+
     def _should_save_redis_db_after_analysis(self) -> bool:
         """
         Decide whether Slips should persist Redis after this analysis.
@@ -88,7 +100,7 @@ class RedisManager:
         if self.main.args.save:
             return True
 
-        return not self.main.args.webinterface
+        return not self._is_web_interface_enabled()
 
     def decide_on_saving_and_killing_the_redis_db(self) -> bool:
         """
@@ -117,8 +129,8 @@ class RedisManager:
 
     def _print_reason_for_not_killing_redis(self):
         reason = ""
-        if self.main.args.webinterface:
-            reason = "the web interface is running."
+        if self._is_web_interface_enabled():
+            reason = "the web interface is running"
         elif self.main.redis_port == 6379:
             reason = (
                 "the default redis port should always stay up"
