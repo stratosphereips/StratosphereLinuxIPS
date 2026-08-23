@@ -1132,9 +1132,6 @@ class DBManager:
     def get_uids_for_horizontal_portscan(self, *args, **kwargs):
         return self.rdb.get_uids_for_horizontal_portscan(*args, **kwargs)
 
-    def get_uids_for_horizontal_portscan(self, *args, **kwargs):
-        return self.rdb.get_uids_for_horizontal_portscan(*args, **kwargs)
-
     def get_timewindow(self, *args, **kwargs):
         return self.rdb.get_timewindow(*args, **kwargs)
 
