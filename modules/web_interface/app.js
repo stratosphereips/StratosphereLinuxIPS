@@ -869,7 +869,7 @@ function evidenceEntity(label, entity) {
   return card;
 }
 
-/** Read one normalized field from a raw conn or alternative-flow object. */
+/** Read one normalized field from a stored network or protocol record. */
 function flowValue(flow, ...names) {
   for (const name of names) {
     const value = flow?.[name];
@@ -878,54 +878,251 @@ function flowValue(flow, ...names) {
   return null;
 }
 
-/** Create a structured triggering-flow card with host navigation. */
-function flowCard(record) {
-  const flow = record.flow && typeof record.flow === "object" ? record.flow : record;
-  const srcIp = flowValue(flow, "saddr", "src_ip", "id.orig_h");
-  const dstIp = flowValue(flow, "daddr", "dst_ip", "id.resp_h");
-  const srcPort = flowValue(flow, "sport", "src_port", "id.orig_p");
-  const dstPort = flowValue(flow, "dport", "dst_port", "id.resp_p");
-  const packets = flowValue(flow, "pkts", "packets")
-    ?? numeric(flowValue(flow, "spkts")) + numeric(flowValue(flow, "dpkts"));
-  const bytes = flowValue(flow, "bytes")
-    ?? numeric(flowValue(flow, "sbytes")) + numeric(flowValue(flow, "dbytes"));
+const PROTOCOL_FIELDS = {
+  dns: [
+    ["Query", ["query"]], ["Query type", ["qtype_name", "qtype"]],
+    ["Query class", ["qclass_name", "qclass"]], ["Result", ["rcode_name", "rcode"]],
+    ["Answers", ["answers"]], ["TTLs", ["TTLs", "ttls"]],
+  ],
+  http: [
+    ["Method", ["method"]], ["Host", ["host", "hostname"]], ["URI", ["uri", "url"]],
+    ["HTTP version", ["version", "http_version"]], ["Status", ["status_code"]],
+    ["Status message", ["status_msg"]], ["User agent", ["user_agent"]],
+    ["Request body", ["request_body_len"]], ["Response body", ["response_body_len"]],
+    ["Response MIME types", ["resp_mime_types"]], ["Response file IDs", ["resp_fuids"]],
+  ],
+  ssl: [
+    ["Server name", ["server_name", "sni"]], ["TLS version", ["version", "sslversion"]],
+    ["Validation", ["validation_status"]], ["Cipher", ["cipher"]], ["Curve", ["curve"]],
+    ["Certificate subject", ["subject"]], ["Certificate issuer", ["issuer"]],
+    ["Valid from", ["notbefore"]], ["Valid until", ["notafter"]],
+    ["Session resumed", ["resumed"]], ["Established", ["established"]],
+    ["JA3 client", ["ja3"]], ["JA3 server", ["ja3s"]], ["DNS over HTTPS", ["is_DoH"]],
+    ["Certificate chain IDs", ["cert_chain_fuids"]],
+    ["Client certificate chain IDs", ["client_cert_chain_fuids"]],
+  ],
+  ssh: [
+    ["SSH version", ["version"]], ["Authentication successful", ["auth_success"]],
+    ["Authentication attempts", ["auth_attempts"]], ["Client", ["client"]],
+    ["Server", ["server"]], ["Cipher", ["cipher_alg"]], ["MAC algorithm", ["mac_alg"]],
+    ["Key exchange", ["kex_alg"]], ["Compression", ["compression_alg"]],
+    ["Host-key algorithm", ["host_key_alg"]], ["Host key", ["host_key"]],
+  ],
+  dhcp: [
+    ["Client address", ["client_addr"]], ["Server address", ["server_addr"]],
+    ["Requested address", ["requested_addr"]], ["Host name", ["host_name"]],
+    ["Client MAC", ["smac"]], ["Related UIDs", ["uids"]],
+  ],
+  ftp: [["Negotiated data port", ["used_port"]]],
+  smtp: [["Last server reply", ["last_reply"]]],
+  tunnel: [["Tunnel type", ["tunnel_type"]], ["Action", ["action"]]],
+  notice: [
+    ["Notice", ["note"]], ["Message", ["msg"]], ["Scanner", ["scanning_ip"]],
+    ["Scanned port", ["scanned_port"]], ["Destination", ["dst"]],
+  ],
+  files: [
+    ["File size", ["size"]], ["Source analyzer", ["source"]], ["Analyzers", ["analyzers"]],
+    ["MD5", ["md5"]], ["SHA1", ["sha1"]], ["Transmitting hosts", ["tx_hosts"]],
+    ["Receiving hosts", ["rx_hosts"]],
+  ],
+  arp: [
+    ["Operation", ["operation"]], ["Source MAC", ["smac", "src_hw"]],
+    ["Destination MAC", ["dmac", "dst_hw"]], ["Source hardware", ["src_hw"]],
+    ["Destination hardware", ["dst_hw"]],
+  ],
+  software: [
+    ["Software", ["software", "software_name"]], ["Version", ["unparsed_version"]],
+    ["Major version", ["version_major"]], ["Minor version", ["version_minor"]],
+  ],
+  weird: [["Anomaly", ["name"]], ["Additional information", ["addl"]]],
+  login: [
+    ["Protocol", ["proto"]], ["Successful", ["success"]], ["Parser confused", ["confused"]],
+    ["User", ["user"]], ["Client user", ["client_user"]], ["Password", ["password"]],
+  ],
+};
+
+/** Normalize the type stored for one alternative protocol record. */
+function protocolType(record) {
+  const flow = record?.flow || {};
+  const type = String(record?.flow_type || flow.type_ || flow.type || "protocol").toLowerCase();
+  if (type === "tls") return "ssl";
+  if (type === "file" || type === "fileinfo") return "files";
+  return type;
+}
+
+/** Return whether a protocol field contains displayable data. */
+function hasProtocolValue(value) {
+  return value !== undefined && value !== null && value !== "";
+}
+
+/** Format arrays, objects, booleans, sizes, and scalar protocol values. */
+function protocolValueText(label, value) {
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (Array.isArray(value)) {
+    if (!value.length) return "None";
+    return value.map((item) => {
+      if (!item || typeof item !== "object") return String(item);
+      return Object.entries(item).map(([key, nested]) => key + ": " + nested).join(" · ");
+    }).join(", ");
+  }
+  if (value && typeof value === "object") return JSON.stringify(value);
+  if (/body|file size/i.test(label) && Number.isFinite(Number(value))) return formatBytes(value);
+  return String(value);
+}
+
+/** Build the visible labeled fields for a protocol-specific record. */
+function protocolDetails(type, flow) {
+  const definitions = PROTOCOL_FIELDS[type] || [];
+  const details = definitions.map(([label, names]) => {
+    const value = flowValue(flow, ...names);
+    return hasProtocolValue(value) ? [label, protocolValueText(label, value)] : null;
+  }).filter(Boolean);
+  if (details.length || definitions.length) return details;
+  const excluded = new Set([
+    "uid", "starttime", "endtime", "saddr", "daddr", "sport", "dport", "proto",
+    "appproto", "interface", "type", "type_", "flow_source", "ground_truth_label",
+    "detailed_ground_truth_label",
+  ]);
+  return Object.entries(flow).filter(([name, value]) =>
+    !excluded.has(name) && hasProtocolValue(value)).slice(0, 16).map(([name, value]) => [
+    name.replaceAll("_", " "), protocolValueText(name, value),
+  ]);
+}
+
+/** Return the protocol outcome shown prominently beside its title. */
+function protocolOutcome(type, flow) {
+  if (type === "dns") return flowValue(flow, "rcode_name", "rcode");
+  if (type === "http") {
+    const code = flowValue(flow, "status_code");
+    const message = flowValue(flow, "status_msg");
+    return [code, message].filter(hasProtocolValue).join(" ");
+  }
+  if (type === "ssl") return flowValue(flow, "validation_status");
+  if (type === "ssh" && hasProtocolValue(flow.auth_success)) {
+    return flow.auth_success === true || String(flow.auth_success).toLowerCase() === "true"
+      ? "Authentication succeeded" : "Authentication failed";
+  }
+  return null;
+}
+
+/** Render one alternative-flow record as readable protocol activity. */
+function protocolFlowCard(record) {
+  const flow = record?.flow && typeof record.flow === "object" ? record.flow : record;
+  const type = protocolType(record);
+  const displayType = type === "ssl" ? "TLS" : type.toUpperCase();
+  const card = document.createElement("section");
+  card.className = "protocol-card protocol-" + type;
+  const heading = document.createElement("div");
+  heading.className = "protocol-card-head";
+  heading.append(text("h4", displayType + " flow"));
+  const outcome = protocolOutcome(type, flow);
+  if (outcome) {
+    const isFailure = /NXDOMAIN|SERVFAIL|REFUSED|failed|invalid|error/i.test(outcome);
+    heading.append(text("span", outcome, "protocol-outcome " + (isFailure ? "failure" : "success")));
+  }
+  const context = document.createElement("div");
+  context.className = "protocol-context";
+  const timestamp = flowValue(flow, "starttime", "ts");
+  context.append(
+    text("span", "Alternative protocol flow: " + displayType),
+    text("span", "UID: " + (record.uid || flow.uid || "Unknown")),
+  );
+  if (timestamp) {
+    const observed = numeric(timestamp) ? formatTime(timestamp) : String(timestamp);
+    context.append(text("span", "Observed: " + observed));
+  }
+  const grid = document.createElement("div");
+  grid.className = "protocol-details";
+  const details = protocolDetails(type, flow);
+  if (!details.length) grid.append(text("p", "No parsed protocol fields are available.", "muted"));
+  details.forEach(([label, value]) => {
+    const field = document.createElement("div");
+    field.className = "protocol-field" + (/query|host|uri|server name/i.test(label) ? " important" : "");
+    field.append(text("small", label), text("strong", value));
+    grid.append(field);
+  });
+  card.append(heading, context, grid, rawBlock(record, displayType + " protocol flow"));
+  return card;
+}
+
+/** Create one primary network-flow card and attach its protocol records. */
+function flowCard(group) {
+  if (group.network_flow === undefined && group.protocol_flows === undefined) {
+    group = group.table === "altflows"
+      ? { uid: group.uid, network_flow: null, protocol_flows: [group] }
+      : { uid: group.uid, network_flow: group, protocol_flows: [] };
+  }
+  const record = group.network_flow;
+  const related = Array.isArray(group.protocol_flows) ? group.protocol_flows : [];
+  const flow = record?.flow && typeof record.flow === "object" ? record.flow : {};
   const card = document.createElement("article");
-  card.className = "flow-card";
+  card.className = "flow-card flow-group";
   const heading = document.createElement("div");
   heading.className = "flow-card-head";
   heading.append(
-    text("code", record.uid || flowValue(flow, "uid") || "Unknown UID"),
-    text("span", record.flow_type || record.table || flowValue(flow, "type") || "flow", "type-chip"),
+    text("code", group.uid || record?.uid || flow.uid || "Unknown UID"),
+    text("span", "Flow · conn", "type-chip network-flow-chip"),
   );
-  const path = document.createElement("div");
-  path.className = "flow-path";
-  const source = document.createElement("div");
-  source.className = "flow-endpoint";
-  source.append(text("small", "Source host"), hostLink(srcIp));
-  if (srcPort !== null) source.append(text("div", `Port ${srcPort}`, "port-label"));
-  const destination = document.createElement("div");
-  destination.className = "flow-endpoint";
-  destination.append(text("small", "Destination host"), hostLink(dstIp));
-  if (dstPort !== null) destination.append(text("div", `Port ${dstPort}`, "port-label"));
-  path.append(source, text("span", "→", "flow-arrow"), destination);
-  const metrics = document.createElement("div");
-  metrics.className = "flow-metrics";
-  [
-    ["Protocol", flowValue(flow, "proto", "protocol") || "—"],
-    ["Application", flowValue(flow, "appproto", "app_proto", "service") || "—"],
-    ["State", flowValue(flow, "state", "conn_state") || "—"],
-    ["Packets", compact(packets)],
-    ["Bytes", formatBytes(bytes)],
-    ["Duration", `${numeric(flowValue(flow, "dur", "duration")).toFixed(3)} s`],
-    ["Label", record.label || flowValue(flow, "label") || "—"],
-    ["Interface", flowValue(flow, "interface") || "—"],
-  ].forEach(([label, value]) => {
-    const metric = document.createElement("div");
-    metric.className = "flow-metric";
-    metric.append(text("small", label), text("strong", value));
-    metrics.append(metric);
-  });
-  card.append(heading, path, metrics, rawBlock(record, "flow"));
+  if (related.length) heading.append(text(
+    "span", String(related.length) + " related protocol flow" + (related.length === 1 ? "" : "s"),
+    "count-chip",
+  ));
+  card.append(heading);
+  if (record) {
+    const srcIp = flowValue(flow, "saddr", "src_ip", "id.orig_h");
+    const dstIp = flowValue(flow, "daddr", "dst_ip", "id.resp_h");
+    const srcPort = flowValue(flow, "sport", "src_port", "id.orig_p");
+    const dstPort = flowValue(flow, "dport", "dst_port", "id.resp_p");
+    const packets = flowValue(flow, "pkts", "packets")
+      ?? numeric(flowValue(flow, "spkts")) + numeric(flowValue(flow, "dpkts"));
+    const bytes = flowValue(flow, "bytes")
+      ?? numeric(flowValue(flow, "sbytes")) + numeric(flowValue(flow, "dbytes"));
+    const path = document.createElement("div");
+    path.className = "flow-path";
+    const source = document.createElement("div");
+    source.className = "flow-endpoint";
+    source.append(text("small", "Source host"), hostLink(srcIp));
+    if (srcPort !== null) source.append(text("div", "Port " + srcPort, "port-label"));
+    const destination = document.createElement("div");
+    destination.className = "flow-endpoint";
+    destination.append(text("small", "Destination host"), hostLink(dstIp));
+    if (dstPort !== null) destination.append(text("div", "Port " + dstPort, "port-label"));
+    path.append(source, text("span", "→", "flow-arrow"), destination);
+    const metrics = document.createElement("div");
+    metrics.className = "flow-metrics";
+    [
+      ["Transport", flowValue(flow, "proto", "protocol") || "—"],
+      ["Application", flowValue(flow, "appproto", "app_proto", "service") || "—"],
+      ["State", flowValue(flow, "state", "conn_state") || "—"],
+      ["Packets", compact(packets)], ["Bytes", formatBytes(bytes)],
+      ["Duration", numeric(flowValue(flow, "dur", "duration")).toFixed(3) + " s"],
+      ["Label", record.label || flow.label || "—"], ["Interface", flow.interface || "—"],
+    ].forEach(([label, value]) => {
+      const metric = document.createElement("div");
+      metric.className = "flow-metric";
+      metric.append(text("small", label), text("strong", value));
+      metrics.append(metric);
+    });
+    card.append(path, metrics, rawBlock(record, "flow"));
+  } else {
+    card.append(text(
+      "p",
+      "The primary flow row is unavailable, but related protocol flows were retained.",
+      "flow-missing",
+    ));
+  }
+  if (related.length) {
+    const section = document.createElement("div");
+    section.className = "related-protocols";
+    section.append(investigationHeading(
+      "Related protocol flows",
+      "Alternative protocol records associated by the same flow UID",
+    ));
+    related.forEach((protocol) => section.append(protocolFlowCard(protocol)));
+    card.append(section);
+  } else {
+    card.append(text("p", "No related protocol flows were recorded for this flow.", "muted protocol-empty"));
+  }
   return card;
 }
 
@@ -969,12 +1166,12 @@ async function openEvidence(record) {
     body.append(investigationHeading("Related alert IDs"), identifiers);
   }
   body.append(
-    investigationHeading("Triggering flows", "Source and destination IPs open the host workspace"),
+    investigationHeading("Triggering flows", "Each flow includes its related parsed protocol flows"),
   );
   try {
     const payload = await api("evidenceFlows", `/api/evidence/${escapePath(record.id)}/flows`);
     if (!payload || generation !== state.drawerGeneration) return;
-    if (!payload.items.length) body.append(text("p", "No triggering flow rows are available."));
+    if (!payload.items.length) body.append(text("p", "No triggering flow records are available."));
     payload.items.forEach((flow) => body.append(flowCard(flow)));
   } catch (_) {
     if (generation !== state.drawerGeneration) return;
