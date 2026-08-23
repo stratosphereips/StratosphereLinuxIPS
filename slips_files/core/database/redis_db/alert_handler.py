@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import time
 import json
+import re
 from typing import (
     List,
     Tuple,
@@ -29,6 +30,9 @@ from slips_files.core.structures.risk_weights import (
     RiskWeight,
     convert_weight_to_risk_weight_enum_member,
 )
+
+
+ALERT_GENERATION_LOCK_TIMEOUT_SECONDS = 60
 
 
 class AlertHandler:
@@ -59,6 +63,24 @@ class AlertHandler:
     add_profile: Callable[..., Any]
 
     name = "alert_handler_db"
+
+    def get_alert_generation_lock(self, profileid: str, twid: str) -> Any:
+        """
+        Create the cross-process lock for one profile and time window.
+
+        Parameters:
+            profileid: Profile whose accumulated threat level is being updated.
+            twid: Time window whose accumulated threat level is being updated.
+
+        Returns:
+            A Redis lock that serializes evidence scoring and alert creation.
+        """
+        lock_name = f"alert_generation_lock:{profileid}:{twid}"
+        return self.r.lock(
+            lock_name,
+            timeout=ALERT_GENERATION_LOCK_TIMEOUT_SECONDS,
+            blocking_timeout=None,
+        )
 
     def set_evidence_causing_alert(self, alert: Alert):
         """
@@ -92,9 +114,7 @@ class AlertHandler:
     def get_number_of_alerts_so_far(self):
         return self.r.get(self.constants.NUMBER_OF_ALERTS)
 
-    def get_evidence_causing_alert(
-        self, profileid, twid, alert_id: str
-    ) -> list:
+    def get_evidence_causing_alert(self, profileid, twid, alert_id: str) -> list:
         """
         Returns all the IDs of evidence causing this alert
         :param alert_ID: ID of alert to export to warden server
@@ -117,15 +137,31 @@ class AlertHandler:
                 # found an evidence that has a matching ID
                 return evidence_details
 
-    def is_detection_disabled(self, evidence_type: EvidenceType):
+    def is_detection_disabled(self, evidence_type: EvidenceType) -> bool:
         """
-        Function to check if detection is disabled in slips.yaml
-        """
-        return str(evidence_type) in self.disabled_detections
+        Check whether the configured disabled list contains a detection.
 
-    def _classify_evidence_signal(
-        self, evidence_type: EvidenceType
-    ) -> EvidenceSignal:
+        Parameters:
+            evidence_type: Detection type about to enter the evidence pipeline.
+
+        Returns:
+            True when the detection is disabled in the active configuration.
+        """
+        configured_detections = self.disabled_detections or []
+        if isinstance(configured_detections, str):
+            configured_detections = [configured_detections]
+
+        evidence_name = str(evidence_type).rsplit(".", 1)[-1].upper()
+        for configured_detection in configured_detections:
+            configured_name = str(configured_detection).strip()
+            configured_name = configured_name.rsplit(".", 1)[-1]
+            configured_name = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", configured_name)
+            configured_name = re.sub(r"[^A-Za-z0-9]+", "_", configured_name)
+            if configured_name.strip("_").upper() == evidence_name:
+                return True
+        return False
+
+    def _classify_evidence_signal(self, evidence_type: EvidenceType) -> EvidenceSignal:
         evidence_type_name = str(evidence_type).upper()
         signal = self.evidence_signal_overrides.get(
             evidence_type_name,
@@ -147,9 +183,7 @@ class AlertHandler:
             json.dumps(uids),
         )
         # expire if no TTL
-        self.r.expire(
-            self.constants.FLOWS_CAUSING_EVIDENCE, self.default_ttl, nx=True
-        )
+        self.r.expire(self.constants.FLOWS_CAUSING_EVIDENCE, self.default_ttl, nx=True)
 
     def get_flows_causing_evidence(self, evidence_id) -> list:
         uids = self.r.hget(self.constants.FLOWS_CAUSING_EVIDENCE, evidence_id)
@@ -177,28 +211,53 @@ class AlertHandler:
         # remove ip from the blocked_ips sorted set
         self.r.zrem(self.constants.BLOCKED_IPS, ip)
 
-    def get_tw_limits(self, profileid, twid: str) -> Tuple[float, float]:
+    def get_tw_limits(
+        self,
+        profileid: str,
+        twid: str,
+        fallback_time: Any = None,
+    ) -> Tuple[float, float]:
         """
-        returns the timewindow start and endtime
-        """
-        twid_start_time: float = self.get_tw_start_time(profileid, twid)
-        if not twid_start_time:
-            # the given tw is in the future
-            # calc the start time of the twid manually based on the first
-            # twid
-            first_twid_start_time: float = self.get_first_flow_time()
-            given_twid: int = int(twid.replace("timewindow", ""))
-            # tws in slips start from 1.
-            #     tw1   tw2   tw3   tw4
-            # 0 ──────┬─────┬──────┬──────
-            #         │     │      │
-            #         2     4      6
-            twid_start_time = first_twid_start_time + (
-                self.width * (given_twid - 1)
-            )
+        Return the start and end timestamps of a time window.
 
-        twid_end_time: float = twid_start_time + self.width
-        return twid_start_time, twid_end_time
+        Parameters:
+            profileid: Profile that owns the time window.
+            twid: Canonical time-window identifier.
+            fallback_time: Evidence timestamp used when Redis anchors expired.
+
+        Returns:
+            Start and end Unix timestamps.
+        """
+        twid_start_time = self.get_tw_start_time(profileid, twid)
+        if twid_start_time is not None:
+            return float(twid_start_time), float(twid_start_time) + self.width
+
+        given_twid = int(twid.replace("timewindow", ""))
+        known_windows = self.r.zrange(f"tws{profileid}", 0, 0, withscores=True)
+        if known_windows:
+            known_twid, known_start = known_windows[0]
+            if isinstance(known_twid, bytes):
+                known_twid = known_twid.decode()
+            known_number = int(str(known_twid).replace("timewindow", ""))
+            twid_start_time = float(known_start) + self.width * (
+                given_twid - known_number
+            )
+        elif (first_twid_start_time := self.get_first_flow_time()) is not None:
+            twid_start_time = float(first_twid_start_time) + self.width * (
+                given_twid - 1
+            )
+        else:
+            try:
+                twid_start_time = float(fallback_time)
+            except (TypeError, ValueError):
+                try:
+                    twid_start_time = float(
+                        utils.convert_ts_format(fallback_time, "unixtimestamp")
+                    )
+                except (TypeError, ValueError):
+                    twid_start_time = time.time()
+
+        return twid_start_time, twid_start_time + self.width
 
     def _get_more_info_about_evidence(self, evidence) -> Evidence:
         """
@@ -230,9 +289,7 @@ class AlertHandler:
 
                 entity.CNAME = domain_info.get("CNAME", [])
                 entity.DNS_resolution = domain_info.get("IPs", [])
-                entity.TI = domain_info.get("threatintelligence", {}).get(
-                    "source"
-                )
+                entity.TI = domain_info.get("threatintelligence", {}).get("source")
                 # if any of the domain's ips have an asn, set it here to
                 # check if it's whitelisted later
                 for ip in entity.DNS_resolution:
@@ -269,9 +326,7 @@ class AlertHandler:
 
         evidence_hash = f"{evidence.profile}_{evidence.timewindow}_evidence"
         # This is done to ignore repetition.
-        evidence_exists: Optional[dict] = self.r.hget(
-            evidence_hash, evidence.id
-        )
+        evidence_exists: Optional[dict] = self.r.hget(evidence_hash, evidence.id)
         if evidence_exists:
             return False
         if self.is_whitelisted_evidence(evidence.id):
@@ -300,9 +355,7 @@ class AlertHandler:
     def get_evidence_number(self):
         return self.r.get(self.constants.NUMBER_OF_EVIDENCE)
 
-    def mark_evidence_as_processed(
-        self, evidence_id: str, profileid: str, twid: str
-    ):
+    def mark_evidence_as_processed(self, evidence_id: str, profileid: str, twid: str):
         """
         If an evidence was processed by the evidenceprocess, mark it in the db
         """
@@ -334,18 +387,14 @@ class AlertHandler:
         # before deleteEvidence is called, so we need to keep track of
         # whitelisted evidence ids
         self.r.sadd(self.constants.WHITELISTED_EVIDENCE, evidence_id)
-        self.r.expire(
-            self.constants.WHITELISTED_EVIDENCE, self.default_ttl, nx=True
-        )
+        self.r.expire(self.constants.WHITELISTED_EVIDENCE, self.default_ttl, nx=True)
 
     def is_whitelisted_evidence(self, evidence_id: str):
         """
         Check if we have the evidence ID as whitelisted in the db to
         avoid showing it in alerts
         """
-        return self.r.sismember(
-            self.constants.WHITELISTED_EVIDENCE, evidence_id
-        )
+        return self.r.sismember(self.constants.WHITELISTED_EVIDENCE, evidence_id)
 
     def remove_whitelisted_evidence(self, all_evidence: dict) -> dict:
         """
@@ -361,9 +410,7 @@ class AlertHandler:
             tw_evidence[evidence_id] = evidence
         return tw_evidence
 
-    def get_profileid_twid_alerts(
-        self, profileid, twid
-    ) -> Dict[str, List[str]]:
+    def get_profileid_twid_alerts(self, profileid, twid) -> Dict[str, List[str]]:
         """
         The format for the returned dict is
             {<alert_uuid>: [ev_uuid1, ev_uuid2, ev_uuid3]}
@@ -376,13 +423,9 @@ class AlertHandler:
 
     def get_twid_evidence(self, profileid: str, twid: str) -> Dict[str, dict]:
         """Get the evidence for this TW for this Profile"""
-        evidence: Dict[str, dict] = self.r.hgetall(
-            f"{profileid}_{twid}_evidence"
-        )
+        evidence: Dict[str, dict] = self.r.hgetall(f"{profileid}_{twid}_evidence")
         if evidence:
-            evidence: Dict[str, dict] = self.remove_whitelisted_evidence(
-                evidence
-            )
+            evidence: Dict[str, dict] = self.remove_whitelisted_evidence(evidence)
             return evidence
 
         return {}
@@ -433,9 +476,7 @@ class AlertHandler:
             }
         current_weight = float(current_risk_weight.get("risk_weight"))
         return {
-            "risk_weight": convert_weight_to_risk_weight_enum_member(
-                current_weight
-            ),
+            "risk_weight": convert_weight_to_risk_weight_enum_member(current_weight),
             "profile": current_risk_weight.get("profile", ""),
         }
 
@@ -461,9 +502,7 @@ class AlertHandler:
 
         return max_seen_risk_weight["risk_weight"]
 
-    def get_risk_weight_of_last_alert(
-        self, timewindow: TimeWindow
-    ) -> RiskWeight:
+    def get_risk_weight_of_last_alert(self, timewindow: TimeWindow) -> RiskWeight:
         risk_weight: float = self.r.hget(
             self.constants.RISK_WEIGHT_OF_LAST_ALERT, timewindow.number
         )
@@ -516,9 +555,7 @@ class AlertHandler:
             {profile_twid: accumulated_threat_lvl},
         )
 
-    def update_max_threat_level(
-        self, profileid: str, threat_level: str
-    ) -> float:
+    def update_max_threat_level(self, profileid: str, threat_level: str) -> float:
         """
         given the current threat level of a profileid, this method sets the
         max_threat_level value to the given val if that max is less than
@@ -544,9 +581,7 @@ class AlertHandler:
 
         return old_max_threat_level_float
 
-    def update_threat_level(
-        self, profileid: str, threat_level: str, confidence: float
-    ):
+    def update_threat_level(self, profileid: str, threat_level: str, confidence: float):
         """
         1. Update the threat level of a certain profile
         2. Updates the profileid key and the IPsInfo key with the
@@ -558,13 +593,9 @@ class AlertHandler:
         Do not call this function directy from this class, always call it
         from dbmanager.update_threat_level() to update the trustdb too:D
         """
-        self.set_profileid_field(
-            profileid, self.constants.THREAT_LEVEL, threat_level
-        )
+        self.set_profileid_field(profileid, self.constants.THREAT_LEVEL, threat_level)
 
-        max_threat_lvl: float = self.update_max_threat_level(
-            profileid, threat_level
-        )
+        max_threat_lvl: float = self.update_max_threat_level(profileid, threat_level)
 
         ip = profileid.split("_")[-1]
         score_confidence = {"score": max_threat_lvl, "confidence": confidence}
