@@ -4,6 +4,7 @@
 # and final cleanup for ProcessManager.
 import multiprocessing
 import os
+import select
 import signal
 import sys
 import time
@@ -13,6 +14,7 @@ from multiprocessing.process import BaseProcess
 from typing import List, Optional, Tuple
 
 from modules.supported_module_names import Modules
+from modules.web_interface.web_interface import WebInterface
 from slips_files.common.plotter import Plotter
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import print_separator
@@ -77,9 +79,7 @@ class ShutdownMixin:
         if self.warning_printed_once:
             return None
 
-        pending_module_names: List[str] = [
-            proc.name for proc in pending_modules
-        ]
+        pending_module_names: List[str] = [proc.name for proc in pending_modules]
         self.main.print(
             "The following modules are busy working on your data."
             f"\n\n{pending_module_names}\n\n"
@@ -114,20 +114,14 @@ class ShutdownMixin:
 
         if self.main.args.blocking:
             pids_to_kill_last.append(self.main.db.get_pid_of(Modules.BLOCKING))
-            pids_to_kill_last.append(
-                self.main.db.get_pid_of(Modules.ARP_POISONER)
-            )
+            pids_to_kill_last.append(self.main.db.get_pid_of(Modules.ARP_POISONER))
 
         if Modules.EXPORTING_ALERTS not in self.main.db.get_disabled_modules():
-            pids_to_kill_last.append(
-                self.main.db.get_pid_of(Modules.EXPORTING_ALERTS)
-            )
+            pids_to_kill_last.append(self.main.db.get_pid_of(Modules.EXPORTING_ALERTS))
         # remove all None PIDs. this happens when a module in that list
         # isnt started in the current run. e.g. virustotal module starts then
         # stops immediately if no API is found. so its pid will be None.
-        pids_to_kill_last = [
-            pid for pid in pids_to_kill_last if pid is not None
-        ]
+        pids_to_kill_last = [pid for pid in pids_to_kill_last if pid is not None]
 
         # now get the process obj of each pid
         to_kill_first: List[Process] = []
@@ -191,6 +185,7 @@ class ShutdownMixin:
         if self.is_slips_live_updating_event.is_set():
             # slips is auto updating this version of slips should stop and
             # the updated one will start soon
+            self.shutdown_cause = "live_update"
             return True
 
         if not self.all_children_started:
@@ -202,9 +197,15 @@ class ShutdownMixin:
 
         if self._did_a_core_module_fail():
             self.core_module_failure = True
+            self.shutdown_cause = "core_failure"
             return True
 
-        if self.is_stop_msg_received() or self.is_done_receiving_new_flows():
+        if self.is_stop_msg_received():
+            self.shutdown_cause = "control"
+            return True
+
+        if self.is_done_receiving_new_flows():
+            self.shutdown_cause = "natural"
             return True
 
         return False
@@ -361,10 +362,7 @@ class ShutdownMixin:
                     module_that_has_a_dependency
                 )
                 # did any of the module's dependencies stop?
-                if any(
-                    dependency in stopped_modules
-                    for dependency in dependencies
-                ):
+                if any(dependency in stopped_modules for dependency in dependencies):
                     modules_with_stopped_dependencies.append(
                         module_that_has_a_dependency
                     )
@@ -382,8 +380,7 @@ class ShutdownMixin:
         stopped_module_names: List[str] = []
         for module_that_has_a_dependency in impacted_modules:
             if module_that_has_a_dependency.casefold() in (
-                stopped_module.casefold()
-                for stopped_module in self.stopped_modules
+                stopped_module.casefold() for stopped_module in self.stopped_modules
             ):
                 continue
 
@@ -400,8 +397,7 @@ class ShutdownMixin:
 
         self.stopped_modules.append(str(Modules.LLM_PROXY))
         self.main.print(
-            "Stopping modules because llm_proxy stopped: "
-            f"{stopped_module_names}"
+            f"Stopping modules because llm_proxy stopped: {stopped_module_names}"
         )
 
     def health_check_modules(self):
@@ -439,9 +435,7 @@ class ShutdownMixin:
         # is to avoid the race condition that happens when
         # one of the 2 semaphores (input and profiler) is released and
         # the other isnt
-        input_done_processing: bool = self.can_acquire_semaphore(
-            self.is_input_done
-        )
+        input_done_processing: bool = self.can_acquire_semaphore(self.is_input_done)
         profiler_done_processing: bool = self.can_acquire_semaphore(
             self.is_profiler_done_semaphore
         )
@@ -465,6 +459,92 @@ class ShutdownMixin:
             self.kill_process_tree(int(pid))
             self.print_stopped_module(module_name, total_modules=len(children))
 
+    def _is_web_interface_enabled(self) -> bool:
+        """
+        Check whether CLI or configuration enabled the local web interface.
+
+        Returns:
+            True when this run started the local web interface.
+        """
+        if getattr(self.main.args, "webinterface", False) is True:
+            return True
+        accessor = getattr(self.main.conf, "web_interface_enabled", None)
+        return callable(accessor) and accessor() is True
+
+    def _ask_to_stop_web_interface(self) -> bool:
+        """
+        Ask the interactive user whether the completed-run server should stop.
+
+        Returns:
+            True when the server should stop immediately.
+        """
+        if not sys.stdin or not sys.stdin.isatty():
+            self.main.print(
+                "No interactive console is available; stopping the web interface."
+            )
+            return True
+
+        print("Analysis completed. Stop the web interface? [y/N] ", end="", flush=True)
+        while not getattr(self.main, "shutdown_signal_received", False):
+            try:
+                readable, _, _ = select.select([sys.stdin], [], [], 0.25)
+            except (OSError, ValueError):
+                return True
+            if not readable:
+                continue
+            response = sys.stdin.readline()
+            if response == "":
+                return True
+            return response.strip().lower() in {"y", "yes"}
+        return True
+
+    def _stop_web_interface(self, port: int) -> None:
+        """
+        Stop only the verified Slips web server on the configured port.
+
+        Parameters:
+            port: Configured loopback HTTP port.
+        """
+        if WebInterface.stop_verified_server(port):
+            self.main.web_interface_shutdown = True
+            self.main.print("Web interface stopped.")
+            return
+        self.main.print(
+            f"Could not stop the verified web interface on port {port}.",
+            0,
+            1,
+        )
+
+    def _handle_web_interface_after_analysis(self, natural_completion: bool) -> None:
+        """
+        Prompt and wait after normal completion, or stop on forced shutdown.
+
+        Parameters:
+            natural_completion: Whether finite input completed without a stop signal.
+        """
+        if not self._is_web_interface_enabled():
+            return
+        port = int(self.main.conf.web_interface_port)
+        if not WebInterface.is_verified_server_running(port):
+            self.main.web_interface_shutdown = True
+            return
+        if not natural_completion or self._ask_to_stop_web_interface():
+            self._stop_web_interface(port)
+            return
+
+        self.main.print(
+            f"Web interface remains available at http://localhost:{port}/. "
+            "Press CTRL-C to stop it and exit Slips."
+        )
+        try:
+            while WebInterface.is_verified_server_running(port) and not getattr(
+                self.main, "shutdown_signal_received", False
+            ):
+                time.sleep(0.5)
+        except KeyboardInterrupt:
+            self.main.shutdown_signal_received = True
+        self._stop_web_interface(port)
+
     def _generate_plots(self) -> None:
         """
         Generate performance plots after analysis finishes.
@@ -483,9 +563,12 @@ class ShutdownMixin:
             self.plotter.write_throughput_metrics()
             self.plotter.plot_flows_from_conn_log()
 
-    def shutdown_gracefully(self) -> Optional[bool]:
+    def shutdown_gracefully(self, natural_completion: bool = False) -> Optional[bool]:
         """
         Wait for modules to finish or kill them after the timeout.
+
+        Parameters:
+            natural_completion: Whether finite input completed without a signal.
 
         Returns:
             False when interrupted during shutdown, otherwise None.
@@ -500,9 +583,7 @@ class ShutdownMixin:
 
             print("Stopping Slips")
 
-            self.children: List[BaseProcess] = (
-                multiprocessing.active_children()
-            )
+            self.children: List[BaseProcess] = multiprocessing.active_children()
             method_start_time = time.time()
             timeout: float = self.main.conf.wait_for_modules_to_finish()
             # convert to seconds
@@ -541,9 +622,7 @@ class ShutdownMixin:
                             (
                                 to_kill_first,
                                 to_kill_last,
-                            ) = self.shutdown_interactive(
-                                to_kill_first, to_kill_last
-                            )
+                            ) = self.shutdown_interactive(to_kill_first, to_kill_last)
                             if not to_kill_first and not to_kill_last:
                                 break
                 except KeyboardInterrupt:
@@ -552,23 +631,27 @@ class ShutdownMixin:
                     # or slips was stuck looping for too long that the OS
                     # sent an automatic sigint to kill slips
                     # pass to kill the remaining modules
-                    shutdown_reason = (
-                        "User pressed ctr+c or Slips was killed by the OS"
-                    )
+                    shutdown_reason = "User pressed ctr+c or Slips was killed by the OS"
                     graceful_shutdown = False
+                    natural_completion = False
+                    self.main.shutdown_signal_received = True
 
                 if time.time() - method_start_time >= timeout:
                     # getting here means we're killing them bc of the timeout
                     # not getting here means we're killing them bc of double
                     # ctr+c OR they terminated successfully
                     shutdown_reason = (
-                        f"Killing modules that took more than {timeout}"
-                        f" mins to finish."
+                        f"Killing modules that took more than {timeout} mins to finish."
                     )
                     print(shutdown_reason)
                     graceful_shutdown = False
+                    natural_completion = False
 
                 self.kill_all_children()
+
+            analysis_time, end_date = self.get_analysis_time()
+            self.main.metadata_man.set_analysis_end_date(end_date)
+            self._handle_web_interface_after_analysis(natural_completion)
 
             if not self.is_slips_live_updating_event.is_set():
                 self.main.redis_man.decide_on_saving_and_killing_the_redis_db()
@@ -579,9 +662,6 @@ class ShutdownMixin:
 
                 self.main.store_zeek_dir_copy()
                 self.main.delete_zeek_files()
-
-            analysis_time, end_date = self.get_analysis_time()
-            self.main.metadata_man.set_analysis_end_date(end_date)
 
             self.main.profilers_manager.cpu_profiler_release()
             self.main.profilers_manager.memory_profiler_release()
@@ -594,5 +674,9 @@ class ShutdownMixin:
                 graceful_shutdown, analysis_time, shutdown_reason, print
             )
         except KeyboardInterrupt:
+            self.main.shutdown_signal_received = True
+            if self._is_web_interface_enabled():
+                port = int(self.main.conf.web_interface_port)
+                self._stop_web_interface(port)
             return False
         return None
