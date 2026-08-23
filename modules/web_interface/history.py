@@ -62,8 +62,7 @@ def initialize_history(path: Path) -> None:
         "ON flow_index(src_ip, event_time DESC, uid)",
         "CREATE INDEX IF NOT EXISTS flow_dst_time_idx "
         "ON flow_index(dst_ip, event_time DESC, uid)",
-        "CREATE INDEX IF NOT EXISTS flow_time_idx "
-        "ON flow_index(event_time DESC, uid)",
+        "CREATE INDEX IF NOT EXISTS flow_time_idx ON flow_index(event_time DESC, uid)",
         "CREATE TABLE IF NOT EXISTS host_snapshots ("
         "ip TEXT PRIMARY KEY, observed_at REAL NOT NULL, data TEXT NOT NULL)",
         "CREATE INDEX IF NOT EXISTS host_seen_idx "
@@ -79,7 +78,7 @@ def initialize_history(path: Path) -> None:
         "ts REAL PRIMARY KEY, cpu_percent REAL NOT NULL, "
         "memory_mb REAL NOT NULL, flows_per_second REAL NOT NULL, "
         "flow_delta REAL NOT NULL DEFAULT 0)",
-        "CREATE INDEX IF NOT EXISTS metrics_1s_time_idx " "ON runtime_metrics_1s(ts)",
+        "CREATE INDEX IF NOT EXISTS metrics_1s_time_idx ON runtime_metrics_1s(ts)",
         "CREATE TABLE IF NOT EXISTS runtime_metrics_1m ("
         "bucket_ts REAL PRIMARY KEY, cpu_avg REAL NOT NULL, "
         "cpu_max REAL NOT NULL, memory_avg REAL NOT NULL, "
@@ -518,13 +517,31 @@ class HistoryCollector:
             "ON evidence(evidence_type, evidence_time DESC)",
             "CREATE INDEX IF NOT EXISTS evidence_threat_idx "
             "ON evidence(threat_level, evidence_time DESC)",
-            "CREATE INDEX IF NOT EXISTS evidence_flows_uid_idx "
-            "ON evidence_flows(uid)",
+            "CREATE INDEX IF NOT EXISTS evidence_flows_uid_idx ON evidence_flows(uid)",
             "CREATE INDEX IF NOT EXISTS alert_evidence_evidence_idx "
             "ON alert_evidence(evidence_id)",
         )
         for statement in statements:
             connection.execute(statement)
+
+    def _redis_belongs_to_run(self) -> bool:
+        """
+        Check whether Redis advertises this collector's output directory.
+
+        Returns:
+            True only when Redis belongs to the configured run.
+        """
+        try:
+            redis_output_dir = self.redis.hget("analysis", "output_dir")
+        except redis.RedisError:
+            return False
+        if not redis_output_dir:
+            return False
+        if isinstance(redis_output_dir, bytes):
+            redis_output_dir = redis_output_dir.decode(errors="replace")
+        expected = self.output_dir.as_posix().rstrip("/")
+        actual = Path(str(redis_output_dir)).as_posix().rstrip("/")
+        return actual == expected
 
     def _backfill_redis_evidence(self, connection: sqlite3.Connection) -> int:
         """
@@ -662,6 +679,7 @@ class HistoryCollector:
         threat_level = str(
             note.get("threat_level") or record.get("Priority") or "info"
         ).lower()
+        evidence_type = str(note.get("evidence_type") or "IDMEF_EVENT")
         connection.execute(
             "INSERT OR IGNORE INTO evidence "
             "(evidence_id, evidence_time, profile_ip, timewindow, "
@@ -673,14 +691,14 @@ class HistoryCollector:
                 profile_ip,
                 f"timewindow{note.get('timewindow', '')}",
                 threat_level,
-                "IDMEF_EVENT",
+                evidence_type,
                 str(record.get("Description", "")),
                 float(record.get("Confidence") or 0),
                 json.dumps(record),
             ),
         )
         connection.executemany(
-            "INSERT OR IGNORE INTO evidence_flows " "(evidence_id, uid) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO evidence_flows (evidence_id, uid) VALUES (?, ?)",
             [(record_id, uid) for uid in self._list_value(note.get("uids", []))],
         )
 
@@ -747,7 +765,11 @@ class HistoryCollector:
         try:
             with sqlite3.connect(self.flows_path, timeout=20) as connection:
                 self._detection_schema(connection)
-                redis_count = self._backfill_redis_evidence(connection)
+                redis_count = (
+                    self._backfill_redis_evidence(connection)
+                    if self._redis_belongs_to_run()
+                    else 0
+                )
                 file_count = self._backfill_alert_file(connection)
             return redis_count + file_count
         except sqlite3.Error:
