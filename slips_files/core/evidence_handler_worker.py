@@ -559,6 +559,12 @@ class EvidenceHandlerWorker(IModule):
                 "report_to_peers", json.dumps(utils.to_dict(evidence))
             )
 
+        # Informational evidence has no threat contribution and therefore
+        # cannot be the event that opens an alert. It remains processed and
+        # may still be correlated with a later, score-contributing alert.
+        if evidence.threat_level == ThreatLevel.INFO:
+            return
+
         if self.is_running_non_stop:
             # here we use the RATL to dynamically change the risk weight of
             # slips
