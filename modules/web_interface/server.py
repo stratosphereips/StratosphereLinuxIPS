@@ -687,7 +687,7 @@ class RunDataReader:
         search = self._query_value(query, "search").lower()
         threat = self._query_value(query, "threat").lower()
         association = self._query_value(query, "association")
-        profile = self._query_value(query, "profile")
+        profiles = [str(value) for value in query.get("profile", []) if value]
         evidence_type = self._query_value(query, "type")
         cursor = self._decode_cursor(self._query_value(query, "cursor"))
         threat_expression = (
@@ -733,6 +733,7 @@ class RunDataReader:
                         "module": (
                             "LOWER(evidence_module(COALESCE(evidence_type, '')))"
                         ),
+                        "confidence": "confidence",
                         "flows": flow_expression,
                         "alert": alert_expression,
                     },
@@ -755,9 +756,10 @@ class RunDataReader:
                     )
                     term = f"%{search}%"
                     params.extend([term, term, term, term])
-                if profile:
-                    clauses.append("profile_ip = ?")
-                    params.append(profile)
+                if profiles:
+                    placeholders = ",".join("?" for _ in profiles)
+                    clauses.append(f"profile_ip IN ({placeholders})")
+                    params.extend(profiles)
                 if evidence_type:
                     clauses.append("evidence_type = ?")
                     params.append(evidence_type)
@@ -833,11 +835,12 @@ class RunDataReader:
                         )
                     )
                 ]
-            if profile:
+            profile_set = set(profiles)
+            if profile_set:
                 records = [
                     item
                     for item in records
-                    if str(item.get("profile_ip", "")) == profile
+                    if str(item.get("profile_ip", "")) in profile_set
                 ]
             if evidence_type:
                 records = [
@@ -1629,9 +1632,7 @@ class RunDataReader:
         host["load"] = self._host_load(ip)
         host["ti"] = self._ti_for_ip(ip)
         alerts_by_id: Dict[str, Dict[str, Any]] = {}
-        evidence_by_id: Dict[str, Dict[str, Any]] = {}
         alert_total = 0
-        evidence_total = 0
         for address in host_ips:
             alert_page = self.alerts(
                 {
@@ -1641,20 +1642,9 @@ class RunDataReader:
                     "details": ["false"],
                 }
             )
-            evidence_page = self.evidence(
-                {
-                    "range": ["all"],
-                    "profile": [address],
-                    "limit": ["100"],
-                }
-            )
             alert_total += int(alert_page["total"])
-            evidence_total += int(evidence_page["total"])
             alerts_by_id.update(
                 {str(item["alert_id"]): item for item in alert_page["items"]}
-            )
-            evidence_by_id.update(
-                {str(item["id"]): item for item in evidence_page["items"]}
             )
         host["alerts"] = sorted(
             alerts_by_id.values(),
@@ -1665,16 +1655,25 @@ class RunDataReader:
             reverse=True,
         )[:MAX_PAGE_SIZE]
         host["alert_count"] = alert_total
-        host["evidence"] = sorted(
-            evidence_by_id.values(),
-            key=lambda item: (
-                float(item.get("timestamp") or 0),
-                str(item.get("id", "")),
-            ),
-            reverse=True,
-        )[:MAX_PAGE_SIZE]
-        host["evidence_count"] = evidence_total
+        host["evidence"] = []
+        host["evidence_count"] = self._profile_evidence_count(ip)
         return host
+
+    def evidence_for_host(self, ip: str, query: Dict[str, List[str]]) -> Dict[str, Any]:
+        """
+        Return one bounded evidence page for every address associated with a host.
+
+        Parameters:
+            ip: Primary host address.
+            query: Request filters, sorting, time range, and cursor values.
+
+        Returns:
+            One evidence page with durable totals and pagination metadata.
+        """
+        host_query = dict(query)
+        host_query["profile"] = self._host_ips(ip)
+        host_query.pop("group", None)
+        return self.evidence(host_query)
 
     @staticmethod
     def _ip_predicate(ips: Sequence[str]) -> tuple[str, List[Any]]:
@@ -2229,6 +2228,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         elif path.startswith("/api/hosts/") and path.endswith("/traffic-summary"):
             ip = unquote(path[len("/api/hosts/") : -len("/traffic-summary")])
             payload = reader.traffic_summary(ip, query)
+        elif path.startswith("/api/hosts/") and path.endswith("/evidence"):
+            ip = unquote(path[len("/api/hosts/") : -len("/evidence")])
+            payload = reader.evidence_for_host(ip, query)
         elif path.startswith("/api/hosts/") and path.endswith("/flows"):
             ip = unquote(path[len("/api/hosts/") : -len("/flows")])
             payload = reader.flows_for_host(ip, query)
