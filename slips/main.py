@@ -52,6 +52,8 @@ class Main:
         self.parent_output_dir = "output/"
         self.mode = "interactive"
         self.sigterm_received = False
+        self.shutdown_signal_received = False
+        self.web_interface_shutdown = False
         # objects to manage various functionality
         self.checker = Checker(self)
         self.redis_man = RedisManager(self)
@@ -83,15 +85,9 @@ class Main:
                     self.input_information,
                     self.line_type,
                 ) = self.checker.get_input_type()
-                self.checker.verify_flags_that_require_an_interface(
-                    self.input_type
-                )
-                self.input_information = os.path.normpath(
-                    self.input_information
-                )
-                self.input_information = self.input_information.replace(
-                    ",", "_"
-                )
+                self.checker.verify_flags_that_require_an_interface(self.input_type)
+                self.input_information = os.path.normpath(self.input_information)
+                self.input_information = self.input_information.replace(",", "_")
                 self.check_zeek_or_bro()
                 self.prepare_output_dir()
                 self.redis_man.start_redis_cache_if_not_running()
@@ -132,8 +128,7 @@ class Main:
     def was_running_zeek(self) -> bool:
         """returns true if zeek was used in this run"""
         return (
-            self.db.is_running_non_stop()
-            or self.db.get_input_type() == InputType.PCAP
+            self.db.is_running_non_stop() or self.db.get_input_type() == InputType.PCAP
         )
 
     def store_zeek_dir_copy(self):
@@ -150,11 +145,7 @@ class Main:
 
     def delete_zeek_files(self):
         zeek_dir = self.db.get_zeek_output_dir()
-        if (
-            self.conf.delete_zeek_files()
-            and isinstance(zeek_dir, str)
-            and zeek_dir
-        ):
+        if self.conf.delete_zeek_files() and isinstance(zeek_dir, str) and zeek_dir:
             shutil.rmtree(zeek_dir)
 
     def del_file_or_dir(self, file):
@@ -169,9 +160,7 @@ class Main:
     def construct_output_dir_name(self) -> str:
         dir_name = os.path.join(
             self.parent_output_dir,
-            os.path.basename(
-                self.input_information
-            ),  # get pcap name from path
+            os.path.basename(self.input_information),  # get pcap name from path
         )
 
         # add timestamp to avoid conflicts e.g wlp3s0_2022-03-1_03:55
@@ -249,9 +238,7 @@ class Main:
             sys.exit(-1)
 
         if self.mode == DAEMONIZED_MODE:
-            print(
-                "Can't read input from stdin in daemonized mode. " "Stopping"
-            )
+            print("Can't read input from stdin in daemonized mode. Stopping")
             sys.exit(-1)
         line_type = input_information
         input_type = InputType.STDIN
@@ -274,14 +261,11 @@ class Main:
         # Get command output
         cmd_result = cmd_result.stdout.decode("utf-8")
         if (
-            "pcap capture file" in cmd_result
-            or "pcapng capture file" in cmd_result
+            "pcap capture file" in cmd_result or "pcapng capture file" in cmd_result
         ) and os.path.isfile(given_path):
             input_type = InputType.PCAP
         elif (
-            "dBase" in cmd_result
-            or "nfcap" in given_path
-            or "nfdump" in given_path
+            "dBase" in cmd_result or "nfcap" in given_path or "nfdump" in given_path
         ) and os.path.isfile(given_path):
             input_type = InputType.NFDUMP
             if shutil.which("nfdump") is None:
@@ -328,9 +312,7 @@ class Main:
                     # is it zeek log file or binetflow file?
 
                     # zeek tab files are separated by several spaces or tabs
-                    sequential_spaces_found = re.search(
-                        r"\s{1,}-\s{1,}", first_line
-                    )
+                    sequential_spaces_found = re.search(r"\s{1,}-\s{1,}", first_line)
                     tabs_found = re.search("\t{1,}", first_line)
                     commas_found = re.search(",{1,}", first_line)
                     if sequential_spaces_found or tabs_found:
@@ -384,10 +366,7 @@ class Main:
 
         # only update the stats every 5s
         now = datetime.now()
-        if (
-            utils.get_time_diff(self.last_updated_stats_time, now, "seconds")
-            < 5
-        ):
+        if utils.get_time_diff(self.last_updated_stats_time, now, "seconds") < 5:
             return
 
         self.last_updated_stats_time = now
@@ -400,9 +379,7 @@ class Main:
         current_risk_weight = None
         if self.db.is_running_non_stop():
             max_seen_risk_weight = self.db.get_max_seen_risk_weight()
-            current_risk_weight = max_seen_risk_weight[
-                "risk_weight"
-            ].name.lower()
+            current_risk_weight = max_seen_risk_weight["risk_weight"].name.lower()
 
         stats = (
             f"[{now}] Total analyzed IPs: {green(profiles_len)}. "
@@ -529,9 +506,7 @@ class Main:
             slips_logfile: str = self.get_slips_logfile()
             # if stdout is redirected to a file,
             # tell output.py to redirect it's output as well
-            self.logger = self.proc_man.start_output_process(
-                stderr, slips_logfile
-            )
+            self.logger = self.proc_man.start_output_process(stderr, slips_logfile)
             self.printer = Printer(self.logger, self.name)
 
             self.print(header_line("Logs", self.args.output))
@@ -582,9 +557,7 @@ class Main:
                     self.ap_manager.store_ap_interfaces(self.input_information)
 
             if self.args.growing:
-                self.print(
-                    f"Running on a growing zeek dir: {self.args.growing}"
-                )
+                self.print(f"Running on a growing zeek dir: {self.args.growing}")
 
             self.db.set_input_metadata(
                 {
@@ -674,27 +647,32 @@ class Main:
 
                 self.proc_man.load_modules()
 
-            def sig_handler(sig, frame):
-                """calls shutdown_gracefully on sig"""
+            def sig_handler(sig: int, frame: object) -> None:
+                """
+                Record a termination signal for forced shutdown.
+
+                Parameters:
+                    sig: Numeric signal received by the main process.
+                    frame: Interpreter frame active when the signal arrived.
+                """
                 if os.getpid() != self.pid:
-                    # to ensure that this SIGTERM handler is not inherited by
-                    # children created the signal.signal() call, because we
-                    # need this handler to be called only once when slips
-                    # is shutting down
+                    # Children created after this handler is installed inherit
+                    # it, but only the main process coordinates shutdown.
                     return
+                if self.shutdown_signal_received:
+                    return
+                self.shutdown_signal_received = True
+                self.sigterm_received = sig == signal.SIGTERM
+                signal_name = signal.Signals(sig).name
+                self.print(f"{signal_name} received, shutting down Slips.")
+                self.print(
+                    "Slips is stopping without completing the analysis.",
+                    0,
+                    1,
+                )
 
-                if not self.sigterm_received:
-                    self.sigterm_received = True
-                    self.print("SIGTERM received, shutting down slips.")
-                    self.print(
-                        "Slips is stopping without completing the analysis.",
-                        0,
-                        1,
-                    )
-
-            # The signals SIGKILL and SIGSTOP cannot be caught,
-            # blocked, or ignored.
-            signal.signal(signal.SIGTERM, sig_handler)
+            for handled_signal in (signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT):
+                signal.signal(handled_signal, sig_handler)
 
             self.proc_man.start_evidence_process()
             self.proc_man.start_profiler_process()
@@ -737,7 +715,7 @@ class Main:
                 )
 
             while (not self.proc_man.should_stop_slips()) and (
-                not self.sigterm_received
+                not self.shutdown_signal_received
             ):
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
@@ -762,11 +740,11 @@ class Main:
                     self.update_man.update_slips()
 
         except KeyboardInterrupt:
-            # the EINTR error code happens if a signal occurred while
-            # the system call was in progress
-            # comes here if zeek terminates while slips is still working
-            pass
+            self.shutdown_signal_received = True
+            self.print("Interrupt received, shutting down Slips.")
 
-        if not self.sigterm_received:
-            # to avoid calling this func twice when sigterm is received
-            self.proc_man.shutdown_gracefully()
+        natural_completion = (
+            not self.shutdown_signal_received
+            and self.proc_man.shutdown_cause == "natural"
+        )
+        self.proc_man.shutdown_gracefully(natural_completion=natural_completion)
