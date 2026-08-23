@@ -89,9 +89,7 @@ class ScanDetectionsHandler:
         self.ask_ip_cache[ip] = True
         return True
 
-    def _hscan(
-        self, key: str, redis_client=None, count: int = 100
-    ) -> Iterator:
+    def _hscan(self, key: str, redis_client=None, count: int = 100) -> Iterator:
         if not redis_client:
             redis_client = self.r
 
@@ -234,9 +232,7 @@ class ScanDetectionsHandler:
                 data_to_send.update({"cache_age": 1000, "ip": str(ip)})
                 self.publish("p2p_data_request", json.dumps(data_to_send))
 
-    def add_ips(
-        self, profileid: ProfileID, twid: TimeWindow, flow, role: Role
-    ):
+    def add_ips(self, profileid: ProfileID, twid: TimeWindow, flow, role: Role):
         """
         Function to add metadata about the flow's ips and ports
         """
@@ -270,16 +266,36 @@ class ScanDetectionsHandler:
         returns (amount_of_dports, total_pkts_sent_to_all_dports)
         """
         str_proto = proto.name.lower()
-        key = f"{profileid}_{twid}:{str_proto}:not_estab:" f"{dstip}:dstports"
+        key = f"{profileid}_{twid}:{str_proto}:not_estab:{dstip}:dstports"
         amount_of_dports = self.r.hlen(key) or 0
 
-        key = (
-            f"{profileid}_{twid}:{str_proto}:not_estab:"
-            f"{dstip}:dstports:tot_pkts_sum"
-        )
+        key = f"{profileid}_{twid}:{str_proto}:not_estab:{dstip}:dstports:tot_pkts_sum"
         total_pkts_sent_to_all_dports = self.r.get(key) or 0
 
         return amount_of_dports, total_pkts_sent_to_all_dports
+
+    def get_uids_for_vertical_portscan(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        proto: Protocol,
+        dstip: str,
+    ) -> list[str]:
+        """
+        Return connection UIDs contributing to a vertical port scan.
+
+        Parameters:
+            profileid: Profile that originated the connections.
+            twid: Time window containing the scan.
+            proto: Transport protocol used by the scan.
+            dstip: Host whose ports were scanned.
+
+        Returns:
+            Flow UIDs ordered by their first-seen timestamp.
+        """
+        str_proto = proto.name.lower()
+        key = f"{profileid}_{twid}:{str_proto}:not_estab:{dstip}:uids"
+        return list(self.r.zrange(key, 0, -1))
 
     def get_dstports_of_not_established_flows(
         self,
@@ -288,10 +304,7 @@ class ScanDetectionsHandler:
         proto: Protocol,
     ) -> Iterator[Tuple[str, int]]:
         str_proto = proto.name.lower()
-        key = (
-            f"{profileid}_{twid}:"
-            f"{str_proto}:not_estab:dstports:total_packets"
-        )
+        key = f"{profileid}_{twid}:{str_proto}:not_estab:dstports:total_packets"
         yield from self._hscan(key)
 
     def get_total_dstips_for_not_estab_flows_on_port(
@@ -320,6 +333,29 @@ class ScanDetectionsHandler:
         except TypeError:
             amount_of_dstips = 0
         return amount_of_dstips
+
+    def get_uids_for_horizontal_portscan(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        proto: Protocol,
+        dport: int,
+    ) -> list[str]:
+        """
+        Return connection UIDs contributing to a horizontal port scan.
+
+        Parameters:
+            profileid: Profile that originated the connections.
+            twid: Time window containing the scan.
+            proto: Transport protocol used by the scan.
+            dport: Destination port scanned across hosts.
+
+        Returns:
+            Flow UIDs ordered by their first-seen timestamp.
+        """
+        str_proto = proto.name.lower()
+        key = f"{profileid}_{twid}:{str_proto}:not_estab:dstport:{dport}:uids"
+        return list(self.r.zrange(key, 0, -1))
 
     def get_attack_starttime(
         self,
@@ -410,10 +446,7 @@ class ScanDetectionsHandler:
         # this hash is needed for vertical portscans detections
         # hash:
         # profile_tw:[tcp|udp]:Not_estab:<ip>:dstports <port> <tot_pkts>
-        key = (
-            f"{profileid}_{twid}"
-            f":{str_proto}:not_estab:{target_ip}:dstports"
-        )
+        key = f"{profileid}_{twid}:{str_proto}:not_estab:{target_ip}:dstports"
         pipe.hincrby(key, flow.dport, int(flow.pkts))
         # increment the total pkts sent to this target ip on this
         # proto so slips can retreieve it in O(1) when setting and
@@ -424,6 +457,9 @@ class ScanDetectionsHandler:
             f"{target_ip}:dstports:tot_pkts_sum"
         )
         pipe.incrby(key, int(flow.spkts))
+
+        key = f"{profileid}_{twid}:{str_proto}:not_estab:{target_ip}:uids"
+        pipe.zadd(key, {flow.uid: flow.starttime}, nx=True)
 
         # we keep an index hash of target_ips to be able to access the
         # diff variants of the key above using them
@@ -441,10 +477,7 @@ class ScanDetectionsHandler:
             # HASH:
             # profile_tw:[tcp|udp]:not_estab:dstports:total_packets
             # <dport> <tot_pkts>
-            key = (
-                f"{profileid}_{twid}:"
-                f"{str_proto}:not_estab:dstports:total_packets"
-            )
+            key = f"{profileid}_{twid}:{str_proto}:not_estab:dstports:total_packets"
             pipe.hincrby(key, flow.dport, int(flow.pkts))
 
             # ZSET
@@ -461,11 +494,12 @@ class ScanDetectionsHandler:
             # daddr, we use nx=True, so if a daddr is present we dont zadd
             pipe.zadd(key, {flow.daddr: flow.starttime}, nx=True)
 
+            key = f"{profileid}_{twid}:{str_proto}:not_estab:dstport:{flow.dport}:uids"
+            pipe.zadd(key, {flow.uid: flow.starttime}, nx=True)
+
         return pipe
 
-    def _store_conn_to_multiple_ports_info(
-        self, pipe, profileid, twid, role, flow
-    ):
+    def _store_conn_to_multiple_ports_info(self, pipe, profileid, twid, role, flow):
         # updates the following:
         # zset profile_tw:tcp:estab:ips <ip> <first_seen>
         # hash profile_tw:tcp:estab:<ip>:dstports <port> <uid>
@@ -507,15 +541,11 @@ class ScanDetectionsHandler:
             self.tw_width = int(self.conf.get_tw_width_in_seconds())
 
         # Get the state. Established, NotEstablished
-        summary_state: str = self.get_final_state_from_flags(
-            flow.state, flow.pkts
-        )
+        summary_state: str = self.get_final_state_from_flags(flow.state, flow.pkts)
         state: State = self.convert_str_to_state(summary_state)
         proto: Protocol = self._convert_str_to_proto(flow.proto)
 
-        if self._is_info_needed_by_the_portscan_detector_modules(
-            role, proto, state
-        ):
+        if self._is_info_needed_by_the_portscan_detector_modules(role, proto, state):
             pipe = self._store_vertical_portscan_info(
                 pipe, profileid, twid, proto, target_ip, flow
             )
@@ -572,14 +602,10 @@ class ScanDetectionsHandler:
         """
         key = f"profile_{attacker}"
         self.r.hset(key, self.constants.DETECTED_DOING_PORTSCAN, 1)
-        self.r.hexpire(
-            key, 10800, self.constants.DETECTED_DOING_PORTSCAN, nx=True
-        )
+        self.r.hexpire(key, 10800, self.constants.DETECTED_DOING_PORTSCAN, nx=True)
 
     def is_a_port_scanner(self, ip: str, timewindow):
-        return self.r.hget(
-            f"profile_{ip}", self.constants.DETECTED_DOING_PORTSCAN
-        )
+        return self.r.hget(f"profile_{ip}", self.constants.DETECTED_DOING_PORTSCAN)
 
     def get_final_state_from_flags(self, state, pkts):
         """
@@ -697,9 +723,7 @@ class ScanDetectionsHandler:
                     # but we can't tell without -z b.
                     # So we use as heuristic the amount of packets. If <=3,
                     # then is not established because the OS retries 3 times.
-                    return (
-                        "Not Established" if int(pkts) <= 3 else "Established"
-                    )
+                    return "Not Established" if int(pkts) <= 3 else "Established"
                 elif "FIN" in pre:
                     # TCP. When -z B is not used in argus, states are single
                     # words. Most connections are finished with FIN when
@@ -708,9 +732,7 @@ class ScanDetectionsHandler:
                     # but we can't tell without -z b.
                     # So we use as heuristic the amount of packets. If <=3,
                     # then is not established because the OS retries 3 times.
-                    return (
-                        "Not Established" if int(pkts) <= 3 else "Established"
-                    )
+                    return "Not Established" if int(pkts) <= 3 else "Established"
                 else:
                     """
                     Examples:
@@ -725,7 +747,7 @@ class ScanDetectionsHandler:
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Error in getFinalStateFromFlags()" f" line {exception_line}",
+                f"Error in getFinalStateFromFlags() line {exception_line}",
                 0,
                 1,
             )
