@@ -41,12 +41,8 @@ def test_is_disabled_module(module_name, modules_to_ignore, expected):
 def test_get_disabled_modules_uses_disabled_module_helpers() -> None:
     """Test disabled modules are returned from the dedicated helper methods."""
     process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.get_user_disabled_modules = Mock(
-        return_value={Modules.TEMPLATE}
-    )
-    process_manager.get_runtime_disabled_modules = Mock(
-        return_value={Modules.BLOCKING}
-    )
+    process_manager.get_user_disabled_modules = Mock(return_value={Modules.TEMPLATE})
+    process_manager.get_runtime_disabled_modules = Mock(return_value={Modules.BLOCKING})
 
     disabled_modules = process_manager.get_disabled_modules()
 
@@ -78,9 +74,7 @@ def test_get_user_disabled_modules(
     process_manager.main.conf.regex_generator_enabled.return_value = True
     process_manager.main.conf.read_configuration.reset_mock()
     process_manager.main.conf.read_configuration.side_effect = None
-    process_manager.main.conf.read_configuration.return_value = (
-        configured_modules
-    )
+    process_manager.main.conf.read_configuration.return_value = configured_modules
 
     disabled_modules = process_manager.get_user_disabled_modules()
 
@@ -90,9 +84,7 @@ def test_get_user_disabled_modules(
     )
 
 
-def test_get_runtime_disabled_modules_recomputes_from_current_settings() -> (
-    None
-):
+def test_get_runtime_disabled_modules_recomputes_from_current_settings() -> None:
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.args.clearblocking = False
     process_manager.main.args.blocking = False
@@ -201,9 +193,7 @@ def test_get_user_disabled_modules_includes_feature_toggled_modules(
     process_manager.main.conf.read_configuration.side_effect = None
     process_manager.main.conf.read_configuration.return_value = []
     process_manager.main.conf.llm_enabled.return_value = llm_enabled
-    process_manager.main.conf.alert_summary_enabled.return_value = (
-        alert_summary_enabled
-    )
+    process_manager.main.conf.alert_summary_enabled.return_value = alert_summary_enabled
     process_manager.main.conf.regex_generator_enabled.return_value = (
         regex_generator_enabled
     )
@@ -314,10 +304,7 @@ def test_get_module_dependencies(
     module_factory = ModuleFactory()
     process_manager = module_factory.create_process_manager_obj()
 
-    assert (
-        process_manager.get_module_dependencies(module_name)
-        == expected_dependencies
-    )
+    assert process_manager.get_module_dependencies(module_name) == expected_dependencies
 
 
 def test_get_dependency_disabled_modules_disables_llm_dependents() -> None:
@@ -374,3 +361,25 @@ def test_reading_flows_from_cyst_uses_supported_module_name() -> None:
     process_manager.main.args.input_module = Modules.CYST.value
 
     assert process_manager._reading_flows_from_cyst() is True
+
+
+@pytest.mark.parametrize(
+    "cli_enabled, config_enabled, expected_disabled",
+    [
+        (False, False, True),
+        (False, True, False),
+        (True, False, False),
+    ],
+)
+def test_web_interface_feature_toggle(
+    cli_enabled: bool,
+    config_enabled: bool,
+    expected_disabled: bool,
+) -> None:
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.webinterface = cli_enabled
+    process_manager.main.conf.web_interface_enabled.return_value = config_enabled
+
+    disabled = process_manager._get_feature_toggled_disabled_modules()
+
+    assert (Modules.WEB_INTERFACE in disabled) is expected_disabled
