@@ -5,9 +5,35 @@ import random
 import binascii
 import base64
 import os
+from unittest.mock import Mock
 
 from slips_files.common.slips_utils import utils
+from slips_files.core.structures.evidence import ProfileID, TimeWindow
 from tests.module_factory import ModuleFactory
+
+
+def test_check_includes_contributing_flow_uids():
+    """Attach the connection UIDs accumulated for each vertical scan."""
+    module_factory = ModuleFactory()
+    vertical_ps = module_factory.create_vertical_portscan_obj()
+    profileid = ProfileID(ip="10.0.0.1")
+    twid = TimeWindow(number=0)
+    vertical_ps.db.get_dstips_with_not_established_flows.return_value = [
+        ("8.8.8.8", 1234.5)
+    ]
+    vertical_ps.db.get_info_about_not_established_flows.return_value = (10, 20)
+    vertical_ps.db.get_uids_for_vertical_portscan.return_value = [
+        "scan-flow-1",
+        "scan-flow-2",
+    ]
+    vertical_ps.should_set_evidence = Mock(return_value=True)
+    vertical_ps.set_evidence_vertical_portscan = Mock()
+
+    vertical_ps.check(profileid, twid)
+
+    assert vertical_ps.set_evidence_vertical_portscan.call_count == 2
+    for call_args in vertical_ps.set_evidence_vertical_portscan.call_args_list:
+        assert call_args.args[0]["uid"] == ["scan-flow-1", "scan-flow-2"]
 
 
 def get_random_uid():
@@ -23,9 +49,7 @@ def not_enough_dports_to_reach_the_threshold():
 
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
-    amount_of_dports: int = random.randint(
-        0, module.minimum_dports_to_set_evidence - 1
-    )
+    amount_of_dports: int = random.randint(0, module.minimum_dports_to_set_evidence - 1)
 
     ip: str = "8.8.8.8"
     res = {ip: {"stime": "1700828217.314165", "uid": [], "dstports": {}}}
@@ -48,9 +72,7 @@ def enough_dports_to_reach_the_threshold():
 
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
-    amount_of_dports: int = random.randint(
-        module.minimum_dports_to_set_evidence, 100
-    )
+    amount_of_dports: int = random.randint(module.minimum_dports_to_set_evidence, 100)
 
     ip: str = "8.8.8.8"
     res = {ip: {"stime": "1700828217.314165", "uid": [], "dstports": {}}}
@@ -75,9 +97,7 @@ def not_enough_dports_to_combine_1_evidence():
 
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
-    amount_of_dports: int = random.randint(
-        module.minimum_dports_to_set_evidence, 100
-    )
+    amount_of_dports: int = random.randint(module.minimum_dports_to_set_evidence, 100)
 
     ip: str = "8.8.8.8"
     res = {ip: {"stime": "1700828217.314165", "uid": [], "dstports": {}}}
