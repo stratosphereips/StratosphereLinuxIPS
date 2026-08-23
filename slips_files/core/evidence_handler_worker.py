@@ -506,6 +506,28 @@ class EvidenceHandlerWorker(IModule):
 
         profileid = str(evidence.profile)
         twid = str(evidence.timewindow)
+
+        # Multiple evidence-handler processes consume the same queue. Scoring,
+        # selecting correlated evidence, persisting the alert, and resetting
+        # the score must therefore be one cross-process operation per profile
+        # and time window.
+        with self.db.get_alert_generation_lock(profileid, twid):
+            self._handle_evidence_added_under_lock(evidence, profileid, twid)
+
+    def _handle_evidence_added_under_lock(
+        self,
+        evidence: Evidence,
+        profileid: str,
+        twid: str,
+    ) -> None:
+        """
+        Process evidence while its profile and time window lock is held.
+
+        Parameters:
+            evidence: Evidence to score and potentially turn into an alert.
+            profileid: Canonical profile identifier for the evidence.
+            twid: Canonical time-window identifier for the evidence.
+        """
         timestamp = evidence.timestamp
 
         self.db.mark_evidence_as_processed(evidence.id, profileid, twid)
@@ -569,7 +591,11 @@ class EvidenceHandlerWorker(IModule):
         if not tw_evidence:
             return
 
-        tw_start, tw_end = self.db.get_tw_limits(profileid, twid)
+        tw_start, tw_end = self.db.get_tw_limits(
+            profileid,
+            twid,
+            evidence.timestamp,
+        )
         evidence.timewindow.start_time = tw_start
         evidence.timewindow.end_time = tw_end
 
