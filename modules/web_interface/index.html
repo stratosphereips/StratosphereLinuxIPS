@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slips · Current run</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="error-banner" class="error-banner" role="alert" hidden></div>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">STRATOSPHERE LINUX IPS</p>
+      <h1 id="run-name">Current run</h1>
+      <p id="run-meta" class="muted">Connecting to run data…</p>
+    </div>
+    <div class="run-state">
+      <span id="state-dot" class="state-dot"></span>
+      <div><strong id="run-state">Connecting</strong><small id="updated-at">Not updated</small></div>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Interface sections">
+    <button class="tab active" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="alerts">Alerts <span id="alerts-badge" class="badge">0</span></button>
+    <button class="tab" data-tab="evidence">Evidence <span id="evidence-badge" class="badge">0</span></button>
+    <button class="tab" data-tab="hosts">Hosts <span id="hosts-badge" class="badge">0</span></button>
+  </nav>
+
+  <main>
+    <section id="overview" class="panel active" aria-labelledby="overview-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">RUNTIME</p><h2 id="overview-title">Analysis state</h2></div>
+        <button class="secondary" id="refresh-overview">Refresh</button>
+      </div>
+      <div id="summary-cards" class="summary-grid"></div>
+      <div class="split-grid">
+        <article class="surface"><h3>Current host load</h3><div id="system-load" class="metrics"></div></article>
+        <article class="surface"><h3>Data sources</h3><div id="data-sources" class="source-list"></div></article>
+      </div>
+      <article class="surface"><h3>Run metadata</h3><div id="run-metadata" class="metadata-grid"></div></article>
+      <article class="surface">
+        <div class="table-heading">
+          <div><h3>Slips performance history</h3><p>Bounded view; exact seconds for 24 hours, minute rollups afterward.</p></div>
+          <select id="metrics-range" aria-label="Performance history range">
+            <option value="5m">5 minutes</option>
+            <option value="15m" selected>15 minutes</option>
+            <option value="1h">1 hour</option>
+            <option value="24h">24 hours</option>
+            <option value="all">Full run</option>
+          </select>
+        </div>
+        <div class="chart-grid">
+          <figure><figcaption>CPU · host capacity %</figcaption><svg id="cpu-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
+          <figure><figcaption>Resident memory · MiB</figcaption><svg id="memory-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
+          <figure><figcaption>Processed flows · per second</figcaption><svg id="fps-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
+        </div>
+      </article>
+      <article class="surface table-surface">
+        <div class="table-heading"><div><h3>Modules</h3><p>Current process health and bounded counters.</p></div><input id="module-search" type="search" placeholder="Filter modules"></div>
+        <div class="table-wrap"><table id="modules-table"><thead><tr><th>Module</th><th>State</th><th>PID</th><th>CPU</th><th>Memory</th><th>Flows/min</th><th>Evidence</th><th>Errors</th></tr></thead><tbody></tbody></table></div>
+      </article>
+      <article class="surface"><div class="table-heading"><div><h3>Recent log events</h3><p id="error-source">Parsed incrementally from this run’s errors log.</p></div></div><ol id="errors-list" class="event-list"></ol></article>
+    </section>
+
+    <section id="alerts" class="panel" aria-labelledby="alerts-title">
+      <div class="section-heading"><div><p class="eyebrow">DETECTIONS</p><h2 id="alerts-title">Alerts</h2><p id="alerts-description">Individual durable alerts. Select one to inspect its evidence and triggering flows.</p></div><button class="secondary refresh-list" data-target="alerts">Refresh</button></div>
+      <div class="toolbar">
+        <input id="alerts-search" type="search" placeholder="Search ID, host, label…">
+        <select id="alerts-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
+        <select id="alerts-view" aria-label="Alert display mode"><option value="individual">Individual alerts</option><option value="grouped">Group by host</option></select>
+        <select id="alerts-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
+        <input id="alerts-from" class="custom-time" type="datetime-local" hidden>
+        <input id="alerts-to" class="custom-time" type="datetime-local" hidden>
+        <span id="alerts-count" class="result-count"></span>
+      </div>
+      <div class="surface table-surface"><div class="table-wrap"><table id="alerts-table"><thead><tr></tr></thead><tbody></tbody></table></div></div>
+      <div id="alerts-pager" class="pager"></div>
+    </section>
+
+    <section id="evidence" class="panel" aria-labelledby="evidence-title">
+      <div class="section-heading"><div><p class="eyebrow">DETECTION EVENTS</p><h2 id="evidence-title">Evidence</h2><p id="evidence-description">Individual durable evidence, including records that never formed an alert.</p></div><button class="secondary refresh-list" data-target="evidence">Refresh</button></div>
+      <div class="toolbar">
+        <input id="evidence-search" type="search" placeholder="Search description, type, host…">
+        <select id="evidence-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
+        <select id="evidence-link"><option value="">All evidence</option><option value="linked">In an alert</option><option value="unlinked">Without alert</option></select>
+        <select id="evidence-view" aria-label="Evidence display mode"><option value="individual">Individual evidence</option><option value="grouped">Group by host and type</option></select>
+        <select id="evidence-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
+        <input id="evidence-from" class="custom-time" type="datetime-local" hidden>
+        <input id="evidence-to" class="custom-time" type="datetime-local" hidden>
+        <span id="evidence-count" class="result-count"></span>
+      </div>
+      <div class="surface table-surface"><div class="table-wrap"><table id="evidence-table"><thead><tr></tr></thead><tbody></tbody></table></div></div>
+      <div id="evidence-pager" class="pager"></div>
+    </section>
+
+    <section id="hosts" class="panel" aria-labelledby="hosts-title">
+      <div id="hosts-list-view">
+        <div class="section-heading"><div><p class="eyebrow">INVENTORY</p><h2 id="hosts-title">Hosts</h2><p>Current and last-known identity with indexed historical activity.</p></div><button class="secondary refresh-list" data-target="hosts">Refresh</button></div>
+        <div class="toolbar">
+          <input id="hosts-search" type="search" placeholder="Search IP, MAC, hostname, DNS…">
+          <select id="hosts-scope"><option value="">All scopes</option><option value="local">Local</option><option value="public">Public</option><option value="special">Special</option></select>
+          <select id="hosts-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
+          <select id="hosts-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
+          <input id="hosts-from" class="custom-time" type="datetime-local" hidden>
+          <input id="hosts-to" class="custom-time" type="datetime-local" hidden>
+          <span id="hosts-count" class="result-count"></span>
+        </div>
+        <div class="surface table-surface"><div class="table-wrap"><table id="hosts-table"><thead><tr><th data-sort="ip">Primary IP</th><th data-sort="scope">Scope</th><th data-sort="hostname">Hostname</th><th data-sort="mac">MAC</th><th data-sort="threat">Threat</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div></div>
+        <div id="hosts-pager" class="pager"></div>
+      </div>
+
+      <div id="host-detail-view" hidden>
+        <div class="section-heading host-heading">
+          <div><button id="host-back" class="text-button">← Back to hosts</button><p class="eyebrow">HOST WORKSPACE</p><h2 id="host-title">Host</h2><p id="host-subtitle"></p></div>
+          <div class="toolbar compact-toolbar">
+            <select id="host-flow-limit"><option>25</option><option>50</option><option selected>100</option><option>250</option><option>500</option><option>1000</option></select>
+            <select id="host-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
+            <input id="host-from" class="custom-time" type="datetime-local" hidden>
+            <input id="host-to" class="custom-time" type="datetime-local" hidden>
+          </div>
+        </div>
+        <div id="host-summary" class="summary-grid"></div>
+        <div class="split-grid">
+          <article class="surface"><h3>Identity and DNS</h3><div id="host-identity"></div></article>
+          <article class="surface"><h3>Threat intelligence</h3><pre id="host-ti"></pre></article>
+        </div>
+        <article class="surface">
+          <div class="chart-grid host-charts">
+            <figure><figcaption>Inbound / outbound flows</figcaption><svg id="host-flow-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
+            <figure><figcaption>Inbound / outbound bytes</figcaption><svg id="host-byte-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
+            <figure><figcaption>Protocols and applications</figcaption><div id="host-protocols" class="bar-chart"></div></figure>
+            <figure><figcaption>Top peers</figcaption><div id="host-peers" class="bar-chart"></div></figure>
+          </div>
+        </article>
+        <div class="split-grid">
+          <article class="surface"><h3 id="host-alerts-title">Related alerts</h3><div id="host-alerts"></div></article>
+          <article class="surface"><h3 id="host-evidence-title">Related evidence</h3><div id="host-evidence"></div></article>
+        </div>
+        <article class="surface table-surface">
+          <div class="table-heading"><div><h3>Historical traffic</h3><p id="host-flow-count"></p></div></div>
+          <div class="table-wrap"><table id="host-flows-table"><thead><tr><th>Time</th><th>Direction</th><th>Peer</th><th>Protocol</th><th>Ports</th><th>State</th><th>Packets</th><th>Bytes</th><th>Duration</th><th>Label</th></tr></thead><tbody></tbody></table></div>
+        </article>
+        <div id="host-flows-pager" class="pager"></div>
+      </div>
+    </section>
+  </main>
+
+  <aside id="drawer" class="drawer" aria-hidden="true">
+    <div id="drawer-resize" class="drawer-resize" role="separator" aria-label="Resize investigation panel" aria-orientation="vertical" tabindex="0"></div>
+    <div class="drawer-head">
+      <div class="drawer-heading">
+        <button id="drawer-back" class="drawer-back" type="button" hidden>← Back</button>
+        <p id="drawer-kind" class="eyebrow">DETAIL</p>
+        <h2 id="drawer-title">Record</h2>
+      </div>
+      <button id="drawer-close" class="icon-button" type="button" aria-label="Close investigation and return to the table">×</button>
+    </div>
+    <div id="drawer-body" class="drawer-body"></div>
+  </aside>
+  <div id="drawer-backdrop" class="backdrop"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
