@@ -299,6 +299,18 @@ def test_add_evidence_to_json_log_file_adds_accumulated_ratl(
 def test_handle_evidence_added_message_sets_risk_level_on_objects() -> None:
     module_factory = ModuleFactory()
     worker = module_factory.create_evidence_handler_worker_obj()
+    critical_section_events = []
+    alert_generation_lock = MagicMock()
+    alert_generation_lock.__enter__.side_effect = (
+        lambda: critical_section_events.append("lock_entered")
+    )
+    alert_generation_lock.__exit__.side_effect = (
+        lambda *args: critical_section_events.append("lock_released")
+    )
+    worker.db.get_alert_generation_lock.return_value = alert_generation_lock
+    worker.db.mark_evidence_as_processed.side_effect = (
+        lambda *args: critical_section_events.append("evidence_processed")
+    )
     evidence = Evidence(
         evidence_type=EvidenceType.ARP_SCAN,
         description="ARP scan detected",
@@ -334,13 +346,30 @@ def test_handle_evidence_added_message_sets_risk_level_on_objects() -> None:
             "2024-10-04T16:00:00+00:00",
         )
     )
-    worker.handle_new_alert = Mock()
+    worker.handle_new_alert = Mock(
+        side_effect=lambda *args: critical_section_events.append("alert_stored")
+    )
     worker.detection_threshold_in_this_width = 10.0
 
     worker.handle_evidence_added_message(
         {"data": json.dumps(utils.to_dict(evidence))}
     )
 
+    worker.db.get_tw_limits.assert_called_once_with(
+        str(evidence.profile),
+        str(evidence.timewindow),
+        evidence.timestamp,
+    )
+    worker.db.get_alert_generation_lock.assert_called_once_with(
+        str(evidence.profile),
+        str(evidence.timewindow),
+    )
+    assert critical_section_events == [
+        "lock_entered",
+        "evidence_processed",
+        "alert_stored",
+        "lock_released",
+    ]
     logged_evidence = worker.add_evidence_to_json_log_file.call_args[0][0]
     assert logged_evidence.risk_level == RiskWeight.HIGH
 
