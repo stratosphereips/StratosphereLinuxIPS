@@ -4,6 +4,7 @@ import socket
 import sqlite3
 import threading
 import time
+from pathlib import Path
 from urllib.request import urlopen
 from unittest.mock import Mock
 
@@ -190,9 +191,10 @@ def test_id_list_normalizes_redis_alert_values(
     assert RunDataReader._id_list(value) == expected
 
 
-def test_host_keeps_durable_alerts_and_evidence_after_redis_expiry(
+def test_web_returns_durable_connection_without_dns_and_linked_alert(
     tmp_path,
 ) -> None:
+    """Return all durable records without interpreting detection configuration."""
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
     reader.sqlite_path = tmp_path / "flows.sqlite"
@@ -246,7 +248,7 @@ def test_host_keeps_durable_alerts_and_evidence_after_redis_expiry(
                 "10.0.0.1",
                 "timewindow1",
                 "high",
-                "UNKNOWN_PORT",
+                "CONNECTION_WITHOUT_DNS",
                 "Durable evidence",
                 1.0,
                 "{}",
@@ -258,6 +260,9 @@ def test_host_keeps_durable_alerts_and_evidence_after_redis_expiry(
         )
 
     host = reader.host("10.0.0.1")
+    evidence_page = reader.evidence(
+        {"range": ["all"], "search": ["CONNECTION_WITHOUT_DNS"]}
+    )
     alert_page = reader.alerts(
         {"range": ["all"], "search": ["alert-1"], "limit": ["1"]}
     )
@@ -268,19 +273,29 @@ def test_host_keeps_durable_alerts_and_evidence_after_redis_expiry(
     assert host["alert_count"] == 1
     assert host["alerts"][0]["alert_id"] == "alert-1"
     assert host["alerts"][0]["evidence_count"] == 1
+    assert evidence_page["full_total"] == 1
+    assert evidence_page["total"] == 1
+    assert evidence_page["items"][0]["evidence_type"] == "CONNECTION_WITHOUT_DNS"
+    assert evidence_page["items"][0]["alert_ids"] == ["alert-1"]
+    assert alert_page["full_total"] == 1
+    assert alert_page["total"] == 1
     assert alert_page["items"][0]["evidence"][0]["id"] == "evidence-1"
     assert host["alerts"][0]["threat_level"] == "high"
 
 
-def test_validate_run_identity_rejects_stale_redis() -> None:
+@pytest.mark.parametrize("redis_output", [None, "output/different"])
+def test_validate_run_identity_rejects_missing_or_stale_redis(
+    redis_output: str | None,
+) -> None:
+    """Reject requests unless Redis identifies the exact configured run."""
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
-    reader.output_dir = "output/current"
+    reader.output_dir = Path("output/current")
     reader.redis_port = 32768
     reader.redis = Mock()
-    reader.redis.hgetall.return_value = {
-        "output_dir": "output/different",
-    }
+    reader.redis.hgetall.return_value = (
+        {"output_dir": redis_output} if redis_output is not None else {}
+    )
 
     with pytest.raises(RunMismatchError):
         reader.validate_run_identity()
