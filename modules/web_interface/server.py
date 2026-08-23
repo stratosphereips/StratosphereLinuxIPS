@@ -2157,9 +2157,7 @@ class RunDataReader:
             grouped[uid]
             for uid in bounded_uids
             if uid in grouped
-            and (
-                grouped[uid]["network_flow"] or grouped[uid]["protocol_flows"]
-            )
+            and (grouped[uid]["network_flow"] or grouped[uid]["protocol_flows"])
         ]
         network_flow_total = sum(bool(item["network_flow"]) for item in items)
         protocol_flow_total = sum(len(item["protocol_flows"]) for item in items)
