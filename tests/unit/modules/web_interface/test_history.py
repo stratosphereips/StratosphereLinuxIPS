@@ -97,6 +97,7 @@ def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
         encoding="utf-8",
     )
     redis_client = Mock()
+    redis_client.hget.return_value = str(output_dir)
     redis_client.scan_iter.return_value = []
     collector = HistoryCollector(str(output_dir), history_path, redis_client, 999999)
 
@@ -116,6 +117,21 @@ def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
     assert relation == ("alert-1", "evidence-1")
     assert flow == ("evidence-1", "flow-1")
     assert collector.backfill_detections() == 0
+
+
+def test_backfill_rejects_redis_owned_by_another_run(tmp_path) -> None:
+    """Do not copy Redis evidence when its output directory differs."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    flows_path = output_dir / "databases" / "flows.sqlite"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    create_flow_database(flows_path)
+    redis_client = Mock()
+    redis_client.hget.return_value = str(tmp_path / "other-run")
+    collector = HistoryCollector(str(output_dir), history_path, redis_client, 999999)
+
+    assert collector.backfill_detections() == 0
+    redis_client.scan_iter.assert_not_called()
 
 
 def test_metric_rollup_waits_for_complete_minutes_and_is_idempotent(
@@ -166,9 +182,7 @@ def test_snapshot_hosts_persists_all_mac_addresses(tmp_path) -> None:
         "{}",
     ]
     mac_pipeline = Mock()
-    mac_pipeline.execute.return_value = [
-        json.dumps(["10.0.0.1", "fe80::1"])
-    ]
+    mac_pipeline.execute.return_value = [json.dumps(["10.0.0.1", "fe80::1"])]
     redis_client.pipeline.side_effect = [identity_pipeline, mac_pipeline]
     collector = HistoryCollector(str(output_dir), history_path, redis_client, 999999)
 
