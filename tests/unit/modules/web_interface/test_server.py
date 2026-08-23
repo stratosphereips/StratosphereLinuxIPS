@@ -705,6 +705,12 @@ def test_api_routes_evidence_flow_ids() -> None:
         "10.0.0.1", {"range": ["all"]}
     )
 
+    handler.server.reader.evidence_for_host.return_value = {"items": [], "total": 2}
+    host_result = handler._api_response("/api/hosts/10.0.0.1/evidence", {})
+
+    assert host_result["total"] == 2
+    handler.server.reader.evidence_for_host.assert_called_once_with("10.0.0.1", {})
+
 
 @pytest.mark.parametrize(
     "evidence_type, expected",
