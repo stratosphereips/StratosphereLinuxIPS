@@ -157,6 +157,12 @@ def test_api_routes_evidence_flow_ids() -> None:
     assert result["count"] == 0
     handler.server.reader.flows_for_evidence.assert_called_once_with("evidence-1")
 
+    handler.server.reader.evidence_for_host.return_value = {"items": [], "total": 2}
+    host_result = handler._api_response("/api/hosts/10.0.0.1/evidence", {})
+
+    assert host_result["total"] == 2
+    handler.server.reader.evidence_for_host.assert_called_once_with("10.0.0.1", {})
+
 
 @pytest.mark.parametrize(
     "evidence_type, expected",
@@ -611,6 +617,55 @@ def test_evidence_sorting_is_server_side_and_stable(tmp_path) -> None:
     assert [item["id"] for item in result["items"]] == ["a", "z"]
     assert result["sort"] == "host"
     assert result["order"] == "asc"
+
+
+def test_host_evidence_includes_associated_ips_and_sorts_before_paging(
+    tmp_path,
+) -> None:
+    """Test a host evidence page covers all addresses with server-side sorting."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = Mock()
+    reader._host_ips = Mock(return_value=["10.0.0.1", "2001:db8::1"])
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY, "
+            "evidence_time REAL, profile_ip TEXT, timewindow TEXT, "
+            "threat_level TEXT, evidence_type TEXT, description TEXT, "
+            "confidence REAL, data TEXT)"
+        )
+        connection.execute("CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)")
+        connection.execute(
+            "CREATE TABLE alert_evidence (alert_id TEXT, evidence_id TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                ("low", 3.0, "10.0.0.1", "tw", "low", "DNS", "first", 0.2, "{}"),
+                ("high", 2.0, "2001:db8::1", "tw", "high", "SCAN", "second", 0.9, "{}"),
+                (
+                    "other",
+                    4.0,
+                    "203.0.113.4",
+                    "tw",
+                    "high",
+                    "OTHER",
+                    "excluded",
+                    1.0,
+                    "{}",
+                ),
+            ],
+        )
+
+    result = reader.evidence_for_host(
+        "10.0.0.1",
+        {"range": ["all"], "sort": ["confidence"], "order": ["desc"]},
+    )
+
+    assert result["total"] == 2
+    assert [item["id"] for item in result["items"]] == ["high", "low"]
+    reader._host_ips.assert_called_once_with("10.0.0.1")
 
 
 def test_run_metadata_reads_info_file(tmp_path) -> None:
