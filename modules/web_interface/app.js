@@ -17,6 +17,7 @@ const state = {
     evidence: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
     hosts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "last_seen", order: "desc" },
     hostFlows: { items: [], total: 0, next: null, cursors: [null], index: 0 },
+    "host-evidence": { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
   },
 };
 
@@ -1363,24 +1364,60 @@ function renderHostCards(host) {
   );
   byId("host-ti").textContent = Object.keys(host.ti || {}).length
     ? JSON.stringify(host.ti, null, 2) : "No cached threat-intelligence data.";
-  byId("host-alerts-title").textContent = `Related alerts · ${host.alert_count}`;
-  byId("host-evidence-title").textContent = `Related evidence · ${host.evidence_count}`;
+  byId("host-alerts-title").textContent = "Related alerts · " + host.alert_count;
   const alerts = byId("host-alerts");
   alerts.replaceChildren();
   host.alerts?.slice(0, 100).forEach((item) => {
-    const button = text("button", `${formatTime(item.alert_time)} · ${item.label || item.alert_id}`, "detail-link");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "host-alert-chip";
+    button.append(
+      threat(item.threat_level),
+      text("span", item.label || "Unlabeled alert", "host-alert-label"),
+      text("time", formatTime(item.alert_time)),
+      text("span", compact(item.evidence_count) + " evidence", "count-chip"),
+    );
     button.addEventListener("click", () => openAlert(item));
     alerts.append(button);
   });
   if (!host.alerts?.length) alerts.append(text("p", "No related alerts.", "muted"));
-  const evidence = byId("host-evidence");
-  evidence.replaceChildren();
-  host.evidence?.slice(0, 100).forEach((item) => {
-    const button = text("button", `${formatTime(item.timestamp)} · ${item.evidence_type}`, "detail-link");
-    button.addEventListener("click", () => openEvidence(item));
-    evidence.append(button);
+}
+
+async function loadHostEvidence() {
+  if (!state.host) return;
+  const page = state.pages["host-evidence"];
+  const params = new URLSearchParams({
+    range: "all",
+    limit: "100",
+    sort: page.sort,
+    order: page.order,
   });
-  if (!host.evidence?.length) evidence.append(text("p", "No related evidence.", "muted"));
+  if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
+  const path = "/api/hosts/" + escapePath(state.host.ip) + "/evidence?" + params;
+  const payload = await api("hostEvidence", path);
+  if (!payload) return;
+  page.items = payload.items;
+  page.total = payload.total;
+  page.next = payload.next_cursor;
+  byId("host-evidence-title").textContent = "Related evidence · " + payload.total;
+  byId("host-evidence-count").textContent =
+    payload.page_size + " shown · " + compact(payload.total) + " evidence records";
+  renderTable("host-evidence-table", payload.items, [
+    (row) => formatTime(row.timestamp),
+    (row) => threat(row.threat_level),
+    (row) => text("code", row.evidence_type),
+    (row) => text("code", row.module || "—"),
+    (row) => Math.round(numeric(row.confidence) * 100) + "%",
+    (row) => compact(row.flow_count),
+    (row) => row.alert_ids?.length ? compact(row.alert_ids.length) : "none",
+    (row) => {
+      const description = text("span", row.description || "—", "host-evidence-description");
+      description.title = row.description || "";
+      return description;
+    },
+  ], openEvidence);
+  applySortIndicators("host-evidence");
+  pager("host-evidence", "host-evidence-pager", loadHostEvidence);
 }
 
 async function loadHostFlows() {
@@ -1444,13 +1481,14 @@ async function openHost(ip) {
   if (!host) return;
   state.host = host;
   resetPage("hostFlows");
+  resetPage("host-evidence");
   byId("hosts-list-view").hidden = true;
   byId("host-detail-view").hidden = false;
   byId("host-title").textContent = host.ip;
   byId("host-subtitle").textContent =
     `${host.hostname || "Unnamed host"} · ${host.scope} · ${host.live ? "current" : "last known"}`;
   renderHostCards(host);
-  await Promise.all([loadHostFlows(), loadHostSummary()]);
+  await Promise.all([loadHostFlows(), loadHostSummary(), loadHostEvidence()]);
 }
 
 async function refreshHostWorkspace() {
@@ -1459,13 +1497,14 @@ async function refreshHostWorkspace() {
   if (!host) return;
   state.host = host;
   renderHostCards(host);
-  await Promise.all([loadHostFlows(), loadHostSummary()]);
+  await Promise.all([loadHostFlows(), loadHostSummary(), loadHostEvidence()]);
 }
 
 function closeHost() {
   state.host = null;
   state.requests.get("hostFlows")?.abort();
   state.requests.get("hostSummary")?.abort();
+  state.requests.get("hostEvidence")?.abort();
   byId("host-detail-view").hidden = true;
   byId("hosts-list-view").hidden = false;
 }
@@ -1590,9 +1629,10 @@ bindRange("alerts", "alerts", loadAlerts);
 bindRange("evidence", "evidence", loadEvidence);
 bindRange("hosts", "hosts", loadHosts);
 bindRange("host", "hostFlows", async () => {
-  await Promise.all([loadHostFlows(), loadHostSummary()]);
+  await Promise.all([loadHostFlows(), loadHostSummary(), loadHostEvidence()]);
 });
 bindTableSort("hosts", loadHosts);
+bindTableSort("host-evidence", loadHostEvidence);
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
