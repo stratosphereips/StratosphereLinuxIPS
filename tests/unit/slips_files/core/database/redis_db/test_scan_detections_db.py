@@ -1,8 +1,76 @@
 from unittest.mock import MagicMock, Mock
 
-from slips_files.core.structures.flow_attributes import Role
+from slips_files.core.structures.flow_attributes import Protocol, Role
+from slips_files.core.structures.evidence import ProfileID, TimeWindow
 from tests.module_factory import ModuleFactory
 import pytest
+
+
+@pytest.mark.parametrize(
+    "scan_kind, expected_key",
+    [
+        (
+            "vertical",
+            "profile_10.0.0.1_timewindow2:tcp:not_estab:8.8.8.8:uids",
+        ),
+        (
+            "horizontal",
+            "profile_10.0.0.1_timewindow2:tcp:not_estab:dstport:443:uids",
+        ),
+    ],
+)
+def test_get_portscan_uids(scan_kind, expected_key):
+    """Read contributing scan UIDs in chronological order."""
+    module_factory = ModuleFactory()
+    handler = module_factory.create_scan_detections_db()
+    profileid = ProfileID(ip="10.0.0.1")
+    twid = TimeWindow(number=2)
+    handler.r.zrange.return_value = ["uid-early", "uid-late"]
+
+    if scan_kind == "vertical":
+        result = handler.get_uids_for_vertical_portscan(
+            profileid, twid, Protocol.TCP, "8.8.8.8"
+        )
+    else:
+        result = handler.get_uids_for_horizontal_portscan(
+            profileid, twid, Protocol.TCP, 443
+        )
+
+    assert result == ["uid-early", "uid-late"]
+    handler.r.zrange.assert_called_once_with(expected_key, 0, -1)
+
+
+@pytest.mark.parametrize("scan_kind", ["vertical", "horizontal"])
+def test_store_portscan_flow_uid(scan_kind):
+    """Store every contributing connection UID in the scan index."""
+    module_factory = ModuleFactory()
+    handler = module_factory.create_scan_detections_db()
+    pipe = MagicMock()
+    flow = Mock(
+        uid="scan-flow",
+        starttime=123.5,
+        daddr="8.8.8.8",
+        dport=443,
+        pkts=1,
+        spkts=1,
+        state_hist="",
+    )
+    profileid = ProfileID(ip="10.0.0.1")
+    twid = TimeWindow(number=2)
+    handler._update_portscan_index_hash = Mock(return_value=pipe)
+
+    if scan_kind == "vertical":
+        handler._store_vertical_portscan_info(
+            pipe, profileid, twid, Protocol.TCP, "8.8.8.8", flow
+        )
+        expected_key = "profile_10.0.0.1_timewindow2:tcp:not_estab:8.8.8.8:uids"
+    else:
+        handler._store_horizontal_portscan_info(
+            pipe, profileid, twid, Protocol.TCP, flow
+        )
+        expected_key = "profile_10.0.0.1_timewindow2:tcp:not_estab:dstport:443:uids"
+
+    pipe.zadd.assert_any_call(expected_key, {"scan-flow": 123.5}, nx=True)
 
 
 def test_add_ips():
@@ -21,9 +89,7 @@ def test_add_ips():
     handler.r.pipeline.return_value.__enter__.return_value = pipe
 
     handler._ask_modules_about_all_ips_in_flow = Mock()
-    handler._store_flow_info_if_needed_by_detection_modules = Mock(
-        return_value=pipe
-    )
+    handler._store_flow_info_if_needed_by_detection_modules = Mock(return_value=pipe)
     handler.mark_profile_tw_as_modified = Mock(return_value=pipe)
 
     role = Role.CLIENT
