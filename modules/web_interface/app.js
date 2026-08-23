@@ -10,6 +10,7 @@ const state = {
   requests: new Map(),
   drawerHistory: [],
   drawerGeneration: 0,
+  runIdentity: null,
   rangesInitialized: false,
   pages: {
     alerts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
@@ -79,6 +80,22 @@ function toast(message) {
   window.setTimeout(() => element.classList.remove("show"), 3000);
 }
 
+/** Clear run-specific browser state when the local web server is replaced. */
+function applyRunIdentity(identity) {
+  if (!identity || !identity.output_dir || !identity.server_pid) return;
+  const token = `${identity.output_dir}:${identity.server_pid}`;
+  if (state.runIdentity && state.runIdentity !== token) {
+    closeDrawer();
+    closeHost();
+    Object.keys(state.pages).forEach((name) => resetPage(name));
+    state.overview = null;
+    state.metrics = [];
+    state.rangesInitialized = false;
+    toast("A new Slips run is now active. Investigation state was cleared.");
+  }
+  state.runIdentity = token;
+}
+
 async function api(key, path) {
   state.requests.get(key)?.abort();
   const controller = new AbortController();
@@ -93,6 +110,7 @@ async function api(key, path) {
       error.status = response.status;
       throw error;
     }
+    applyRunIdentity(payload.run_identity);
     state.failures = 0;
     clearError();
     return payload;
