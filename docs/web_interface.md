@@ -22,7 +22,11 @@ The -w flag enables the module even when enabled is false. The bind address is d
 
 Only one web-enabled Slips run is supported on a host. A new -w run replaces an older listener only after verifying that it is a Slips web server owned by the same user. It never terminates an unrelated program using the port. If another program owns the port, the module reports an error and stops.
 
-A completed file analysis remains available at the same URL. A later web-enabled run replaces it. Every data request checks that Redis still advertises the output directory configured for that server. If Redis belongs to a different run, the API returns HTTP 409 and the page displays a persistent run-mismatch banner instead of mixing runs.
+When a file or folder analysis finishes naturally, Slips asks `Analysis completed. Stop the web interface? [y/N]`. Answer `y` or `yes` to stop the page and finish shutdown. Answer `n`, `no`, or press Enter to keep the page and its Redis/SQLite data available; Slips then waits until the page is stopped or you press Ctrl-C. A later web-enabled run can replace a verified older listener.
+
+Ctrl-C, SIGTERM, SIGHUP, SIGQUIT, daemon stop, core-module failure, and update shutdowns do not prompt: they stop the web server with Slips. SIGKILL and SIGSTOP cannot be caught by any process, so no application can perform cleanup for those signals. In a non-interactive session where Slips cannot read a console answer, the web interface is stopped instead of leaving the command blocked indefinitely.
+
+Every data request checks that Redis still advertises the output directory configured for that server. If Redis belongs to a different run, the API returns HTTP 409 and the page displays a persistent run-mismatch banner instead of mixing runs. Detection producers perform the same ownership check before publishing evidence, so a delayed process from a replaced run cannot write into the new run.
 
 Do not enable this interface with -m or for several concurrent Slips instances.
 
@@ -40,7 +44,7 @@ output/<run>/databases/flows.sqlite
 
 It contains the existing unlimited flows and altflows rows, normalized evidence with its complete serialized record, evidence UUID to triggering flow UID relationships, and alert UUID to evidence UUID relationships. Evidence and alert relationships are written transactionally when Slips creates them, whether or not a browser is open.
 
-When an older run is opened after this upgrade, the module first backfills evidence and correlations still in Redis. It then consumes this file incrementally in bounded batches as a best-effort fallback for records that already expired:
+When an older run is opened after this upgrade, the module first backfills evidence and correlations still in Redis. Backfill runs only when Redis belongs to the same output directory. The web interface does not read `DisabledAlerts`, interpret the detection configuration, or hide persisted evidence and alerts. It presents the records Slips stored; deciding whether a detection should be generated belongs to the Slips detection and evidence pipeline. The module then consumes this file incrementally in bounded batches as a best-effort fallback for records that already expired:
 
 ```text
 output/<run>/alerts/alerts.json
@@ -140,6 +144,10 @@ Selecting a host opens a full-width workspace with:
 DNS resolution context is shown as structured fields: domains pointing to the selected IP, the hosts that requested those resolutions, the latest DNS observation and flow UID, and the relevant Slips time windows. Resolver addresses are clickable and open their host workspace.
 
 Traffic matches any associated host address as source or destination. Rows show normalized direction, peer, addresses, ports, protocol/application, state, duration, packets, bytes, label, UID, and expandable raw details.
+
+Native horizontal and vertical port-scan evidence records every contributing
+non-established connection UID. Selecting scan evidence therefore shows the
+actual attempted connections and any related protocol activity.
 
 ## Historical API
 
