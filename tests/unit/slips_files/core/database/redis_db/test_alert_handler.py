@@ -750,13 +750,9 @@ def test_get_evidence_causing_alert(profileid, twid, alert_id, expected_alert):
         '{"profile1_twid1_alert1": ["ev1", "ev2", "ev3"]}'
     )
 
-    result = alert_handler.get_evidence_causing_alert(
-        profileid, twid, alert_id
-    )
+    result = alert_handler.get_evidence_causing_alert(profileid, twid, alert_id)
 
-    alert_handler.r.hget.assert_called_once_with(
-        f"{profileid}_{twid}", "alerts"
-    )
+    alert_handler.r.hget.assert_called_once_with(f"{profileid}_{twid}", "alerts")
     assert result == expected_alert
 
 
