@@ -118,16 +118,51 @@ class WebInterface(IModule):
         Returns:
             True when the port is available after replacement.
         """
-        if self._port_is_available(port):
-            return True
-        pid = self._listener_pid(port)
+        return self.stop_verified_server(port)
+
+    @classmethod
+    def is_verified_server_running(cls, port: int) -> bool:
+        """
+        Check whether the configured listener is this user's Slips server.
+
+        Parameters:
+            port: Configured HTTP port.
+
+        Returns:
+            True only while the verified Slips web server is listening.
+        """
+        if cls._port_is_available(port):
+            return False
+        pid = cls._listener_pid(port)
         if not pid:
             return False
         try:
             process = psutil.Process(pid)
         except psutil.Error:
             return False
-        if not self._is_owned_web_server(process, port):
+        return cls._is_owned_web_server(process, port)
+
+    @classmethod
+    def stop_verified_server(cls, port: int) -> bool:
+        """
+        Stop the verified Slips web server on the configured port.
+
+        Parameters:
+            port: Configured HTTP port.
+
+        Returns:
+            True when no Slips server remains on the port.
+        """
+        if cls._port_is_available(port):
+            return True
+        pid = cls._listener_pid(port)
+        if not pid:
+            return False
+        try:
+            process = psutil.Process(pid)
+        except psutil.Error:
+            return False
+        if not cls._is_owned_web_server(process, port):
             return False
         try:
             process.terminate()
@@ -142,7 +177,7 @@ class WebInterface(IModule):
             pass
         except psutil.Error:
             return False
-        return self._port_is_available(port)
+        return cls._port_is_available(port)
 
     def _collect_history(self) -> None:
         """Collect one bounded history batch each second."""
@@ -262,7 +297,7 @@ class WebInterface(IModule):
         return True
 
     def shutdown_gracefully(self) -> None:
-        """Stop collection while leaving completed-run HTTP access alive."""
+        """Stop collection while main owns the final server lifecycle."""
         self.history_stop.set()
         if self.history_thread:
             self.history_thread.join(timeout=2)
