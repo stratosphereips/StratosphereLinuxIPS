@@ -17,7 +17,7 @@ from slips_files.common.input_type import InputType
 
 
 @pytest.mark.parametrize(
-    "redis_port, redis_pid, is_daemon, " "save_db, expected_output",
+    "redis_port, redis_pid, is_daemon, save_db, expected_output",
     [
         # Testcase 1: Normal case
         (
@@ -25,7 +25,7 @@ from slips_files.common.input_type import InputType
             1234,
             False,
             False,
-            "Date,input_info,32768,1234,output_dir," "output_dir,os_pid,False,False\n",
+            "Date,input_info,32768,1234,output_dir,output_dir,os_pid,False,False\n",
         ),
         # Testcase 2: Daemon mode
         (
@@ -33,7 +33,7 @@ from slips_files.common.input_type import InputType
             9101,
             True,
             False,
-            "Date,input_info,32769,9101,output_dir," "output_dir,os_pid,True,False\n",
+            "Date,input_info,32769,9101,output_dir,output_dir,os_pid,True,False\n",
         ),
         # Testcase 3: Save DB
         (
@@ -41,7 +41,7 @@ from slips_files.common.input_type import InputType
             1122,
             False,
             True,
-            "Date,input_info,32770,1122,output_dir," "output_dir,os_pid,False,True\n",
+            "Date,input_info,32770,1122,output_dir,output_dir,os_pid,False,True\n",
         ),
     ],
 )
@@ -491,7 +491,7 @@ def test_remove_old_logline(redis_port, file_content, expected_output, mock_db):
             call(line + "\n") for line in expected_output.strip().split("\n")
         ]
         assert write_calls == expected_calls, (
-            f"Expected calls: {expected_calls}, " f"Actual calls: {write_calls}"
+            f"Expected calls: {expected_calls}, Actual calls: {write_calls}"
         )
         mock_replace.assert_called_once_with(
             "tmp_running_slips_log.txt", redis_manager.running_logfile
@@ -714,7 +714,6 @@ def test_get_redis_port(
         patch.object(redis_manager, "get_random_redis_port", return_value=32768),
         patch.object(redis_manager.main, "terminate_slips") as mock_terminate,
     ):
-
         # Mock the DB manager return
         mock_instance = Mock()
         mock_instance.rdb = Mock() if default_port_used else None
@@ -787,7 +786,6 @@ def test_flush_redis_server_success(mock_db):
         ) as mock_get_db,
         patch.object(redis_manager, "confirm_server_altering", return_value=True),
     ):
-
         mock_db_inst = Mock()
         mock_db_inst.rdb.r = mock_client
         mock_get_db.return_value = mock_db_inst
@@ -808,7 +806,6 @@ def test_flush_redis_server_user_cancelled(mock_db):
         ) as mock_get_db,
         patch.object(redis_manager, "confirm_server_altering", return_value=False),
     ):
-
         mock_db_inst = Mock()
         mock_db_inst.rdb.r = Mock()
         mock_get_db.return_value = mock_db_inst
@@ -826,7 +823,6 @@ def test_close_all_ports(mock_db):
         patch.object(redis_manager, "get_pid_of_redis_server", return_value=None),
         patch.object(redis_manager.main, "terminate_slips"),
     ):
-
         redis_manager.close_all_ports()
 
         # Should call flush_and_kill for the logged port
@@ -846,7 +842,6 @@ def test_close_open_redis_servers_interactive(mock_db):
         ),
         patch.object(redis_manager, "flush_and_kill") as mock_fk,
     ):
-
         redis_manager.close_open_redis_servers()
         mock_fk.assert_called_once_with(1234, 32768)
 
@@ -870,3 +865,12 @@ def test_is_web_interface_enabled(
     redis_manager.main.conf.web_interface_enabled = Mock(return_value=config_enabled)
 
     assert redis_manager._is_web_interface_enabled() is expected
+
+
+def test_stopped_web_interface_does_not_keep_redis_alive(mock_db: object) -> None:
+    """Test Redis retention ends after the web server is stopped."""
+    redis_manager = ModuleFactory().create_redis_manager_obj()
+    redis_manager.main.args.webinterface = True
+    redis_manager.main.web_interface_shutdown = True
+
+    assert redis_manager._is_web_interface_enabled() is False
