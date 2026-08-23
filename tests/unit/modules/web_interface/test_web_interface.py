@@ -50,7 +50,7 @@ def test_pre_main_starts_server_for_current_run() -> None:
     process = Mock(pid=1234)
 
     with (
-        patch.object(module, "_port_is_available", return_value=True),
+        patch.object(module, "_replace_stale_server", return_value=True),
         patch.object(
             module,
             "get_module_specific_output_path",
@@ -99,7 +99,8 @@ def test_pre_main_rejects_used_port() -> None:
     module = module_factory.create_web_interface_obj()
 
     with (
-        patch.object(module, "_port_is_available", return_value=False),
+        patch.object(type(module), "_port_is_available", return_value=False),
+        patch.object(type(module), "_listener_pid", return_value=None),
         patch("modules.web_interface.web_interface.utils.drop_root_privs_permanently"),
     ):
         result = module.pre_main()
@@ -119,3 +120,46 @@ def test_main_reports_stopped_server() -> None:
 
     assert result is True
     assert "exit code 7" in module.print.call_args.args[0]
+
+
+@pytest.mark.parametrize(
+    "owned_server, expected",
+    [
+        (True, True),
+        (False, False),
+    ],
+)
+def test_stop_verified_server_only_stops_owned_listener(
+    owned_server: bool, expected: bool
+) -> None:
+    """
+    Test shutdown never terminates an unrelated listener.
+
+    Parameters:
+        owned_server: Whether listener verification accepts the process.
+        expected: Expected stop result.
+    """
+    module = ModuleFactory().create_web_interface_obj()
+    process = Mock()
+
+    with (
+        patch.object(
+            type(module),
+            "_port_is_available",
+            side_effect=[False, True] if owned_server else [False],
+        ),
+        patch.object(type(module), "_listener_pid", return_value=1234),
+        patch.object(type(module), "_is_owned_web_server", return_value=owned_server),
+        patch(
+            "modules.web_interface.web_interface.psutil.Process",
+            return_value=process,
+        ),
+    ):
+        result = module.stop_verified_server(55000)
+
+    assert result is expected
+    if owned_server:
+        process.terminate.assert_called_once_with()
+        process.wait.assert_called_once_with(timeout=3)
+    else:
+        process.terminate.assert_not_called()
