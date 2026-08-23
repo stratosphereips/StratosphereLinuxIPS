@@ -460,15 +460,12 @@ class RedisDB(
 
         # If we reach here, port never opened
         return False, (
-            f"_confirm_redis_is_listening: Redis failed to start on "
-            f"{cls.redis_port}"
+            f"_confirm_redis_is_listening: Redis failed to start on {cls.redis_port}"
         )
 
     @classmethod
     def _start_redis_server(cls) -> bool:
-        safe_conf_file = utils.validate_safe_path(
-            cls._conf_file, must_exist=True
-        )
+        safe_conf_file = utils.validate_safe_path(cls._conf_file, must_exist=True)
         logfile = cls._options.get("logfile")
         if logfile:
             os.makedirs(os.path.dirname(logfile), exist_ok=True)
@@ -563,9 +560,7 @@ class RedisDB(
         # format is client hard_limit soft_limit
         client.config_set(
             "client-output-buffer-limit",
-            "normal 0 0 0 "
-            "slave 268435456 67108864 60 "
-            "pubsub 4294967296 2147483648 600",
+            "normal 0 0 0 slave 268435456 67108864 60 pubsub 4294967296 2147483648 600",
         )
 
     @classmethod
@@ -603,15 +598,11 @@ class RedisDB(
 
         # keeps track of how many msgs were published in the given channel
         if pipeline is not None:
-            pipeline.hincrby(
-                self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel, 1
-            )
+            pipeline.hincrby(self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel, 1)
             pipeline.publish(channel, msg)
             return pipeline
         else:
-            self.r.hincrby(
-                self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel, 1
-            )
+            self.r.hincrby(self.constants.MSGS_PUBLISHED_AT_RUNTIME, channel, 1)
             self.r.publish(channel, msg)
 
     def get_msgs_published_in_channel(self, channel: str) -> int | None:
@@ -668,8 +659,7 @@ class RedisDB(
             if self.connection_retry >= self.max_retries:
                 self.publish_stop()
                 self.print(
-                    f"Stopping slips due to "
-                    f"redis.exceptions.ConnectionError: {ex}",
+                    f"Stopping slips due to redis.exceptions.ConnectionError: {ex}",
                     1,
                     1,
                 )
@@ -721,9 +711,7 @@ class RedisDB(
     def set_ap_info(self, interfaces: Dict[str, str]):
         """the main slips instance call this func for the modules to be
         aware that slips is running as an access point"""
-        return self.r.set(
-            self.constants.IS_RUNNING_AS_AP, json.dumps(interfaces)
-        )
+        return self.r.set(self.constants.IS_RUNNING_AS_AP, json.dumps(interfaces))
 
     def get_ap_info(self) -> Dict[str, str] | None:
         """returns both AP interfaces or None if slips is not
@@ -791,9 +779,7 @@ class RedisDB(
 
     def set_available_llm_backends(self, registry: dict):
         normalized = self._normalize_available_llm_backends_registry(registry)
-        self.r.set(
-            self.constants.AVAILABLE_LLM_BACKENDS, json.dumps(normalized)
-        )
+        self.r.set(self.constants.AVAILABLE_LLM_BACKENDS, json.dumps(normalized))
 
     def get_available_llm_backends(self) -> dict:
         if registry := self.r.get(self.constants.AVAILABLE_LLM_BACKENDS):
@@ -867,9 +853,7 @@ class RedisDB(
         except (TypeError, ValueError):
             return 0
 
-    def _normalize_available_llm_backends_registry(
-        self, registry: dict
-    ) -> dict:
+    def _normalize_available_llm_backends_registry(self, registry: dict) -> dict:
         if not isinstance(registry, dict):
             return self._empty_available_llm_backends()
 
@@ -904,9 +888,7 @@ class RedisDB(
         }
 
     def get_disabled_modules(self) -> List[str]:
-        if disabled_modules := self.r.hget(
-            self.constants.ANALYSIS, "disabled_modules"
-        ):
+        if disabled_modules := self.r.hget(self.constants.ANALYSIS, "disabled_modules"):
             return json.loads(disabled_modules)
         else:
             return []
@@ -922,25 +904,19 @@ class RedisDB(
         """
         gets zeek output dir from the db
         """
-        return self.r.hget(
-            self.constants.ANALYSIS, self.constants.ANALYSIS_ZEEK_DIR
-        )
+        return self.r.hget(self.constants.ANALYSIS, self.constants.ANALYSIS_ZEEK_DIR)
 
     def get_input_file(self):
         """
         gets zeek output dir from the db
         """
-        return self.r.hget(
-            self.constants.ANALYSIS, self.constants.ANALYSIS_NAME
-        )
+        return self.r.hget(self.constants.ANALYSIS, self.constants.ANALYSIS_NAME)
 
     def get_commit(self):
         """
         gets the currently used commit from the db
         """
-        return self.r.hget(
-            self.constants.ANALYSIS, self.constants.ANALYSIS_COMMIT
-        )
+        return self.r.hget(self.constants.ANALYSIS, self.constants.ANALYSIS_COMMIT)
 
     def client_setname(self, name: str):
         name = utils.sanitize(name)
@@ -959,38 +935,45 @@ class RedisDB(
         """
         gets the currently used branch from the db
         """
-        return self.r.hget(
-            self.constants.ANALYSIS, self.constants.ANALYSIS_BRANCH
-        )
+        return self.r.hget(self.constants.ANALYSIS, self.constants.ANALYSIS_BRANCH)
 
     def get_evidence_detection_threshold(self):
         """
         gets the currently used evidence_detection_threshold from the db
         """
-        return self.r.hget(
-            self.constants.ANALYSIS, "evidence_detection_threshold"
-        )
+        return self.r.hget(self.constants.ANALYSIS, "evidence_detection_threshold")
 
     def get_input_type(self) -> InputType | None:
         """
         gets input type from the db
         """
-        input = self.r.hget(
-            self.constants.ANALYSIS, self.constants.ANALYSIS_INPUT_TYPE
-        )
+        input = self.r.hget(self.constants.ANALYSIS, self.constants.ANALYSIS_INPUT_TYPE)
         return InputType.coerce(input)
 
     def get_interface(self) -> str:
-        return self.r.hget(
-            self.constants.ANALYSIS, self.constants.ANALYSIS_INTERFACE
-        )
+        return self.r.hget(self.constants.ANALYSIS, self.constants.ANALYSIS_INTERFACE)
 
     def get_output_dir(self):
         """
         returns the currently used output dir
         """
-        return self.r.hget(
-            self.constants.ANALYSIS, self.constants.ANALYSIS_OUTPUT_DIR
+        return self.r.hget(self.constants.ANALYSIS, self.constants.ANALYSIS_OUTPUT_DIR)
+
+    def belongs_to_run(self, output_dir: str) -> bool:
+        """
+        Check whether Redis belongs to the requested Slips run.
+
+        Parameters:
+            output_dir: Output directory owned by the caller.
+
+        Returns:
+            True only when Redis advertises the same output directory.
+        """
+        redis_output_dir = self.get_output_dir()
+        if not redis_output_dir:
+            return False
+        return os.path.normpath(str(redis_output_dir)) == os.path.normpath(
+            os.fspath(output_dir)
         )
 
     def set_ip_info(self, ip: str, to_store: Dict[str, Any]):
@@ -1065,11 +1048,7 @@ class RedisDB(
         # don't store queries ending with arpa as dns resolutions,
         # they're reverse dns
         # only store type A and AAAA for ipv4 and ipv6
-        if (
-            qtype_name not in ["AAAA", "A"]
-            or answers == "-"
-            or query.endswith("arpa")
-        ):
+        if qtype_name not in ["AAAA", "A"] or answers == "-" or query.endswith("arpa"):
             return False
 
         # sometimes adservers are resolved to 0.0.0.0 or "127.0.0.1" to
@@ -1249,10 +1228,7 @@ class RedisDB(
 
         # if the ip's not in the following key, then its the first flow
         # seen of this ip
-        return (
-            self.r.zscore(self.constants.SRCIPS_SEEN_IN_CONN_LOG, ip)
-            is not None
-        )
+        return self.r.zscore(self.constants.SRCIPS_SEEN_IN_CONN_LOG, ip) is not None
 
     def mark_srcip_as_seen_in_connlog(self, ip):
         """
@@ -1348,9 +1324,10 @@ class RedisDB(
     def get_tranco_top_domains(self, limit: Optional[int] = None) -> List[str]:
         end = -1 if limit is None or limit <= 0 else limit - 1
         try:
-            return self.rcache.zrange(
-                self.constants.TRANCO_WHITELISTED_DOMAINS, 0, end
-            ) or []
+            return (
+                self.rcache.zrange(self.constants.TRANCO_WHITELISTED_DOMAINS, 0, end)
+                or []
+            )
         except redis.ResponseError as error:
             if "WRONGTYPE" not in str(error):
                 raise
@@ -1359,9 +1336,10 @@ class RedisDB(
 
     def is_whitelisted_tranco_domain(self, domain: str) -> bool:
         try:
-            return self.rcache.zscore(
-                self.constants.TRANCO_WHITELISTED_DOMAINS, domain
-            ) is not None
+            return (
+                self.rcache.zscore(self.constants.TRANCO_WHITELISTED_DOMAINS, domain)
+                is not None
+            )
         except redis.ResponseError as error:
             if "WRONGTYPE" not in str(error):
                 raise
@@ -1393,9 +1371,7 @@ class RedisDB(
         sni = sni[0] if isinstance(sni, list) else sni
         return sni.get("server_name")
 
-    def get_ip_identification(
-        self, ip: str, get_ti_data=True
-    ) -> Dict[str, str]:
+    def get_ip_identification(self, ip: str, get_ti_data=True) -> Dict[str, str]:
         """
         Return the identification of this IP based
         on the AS, rDNS, and SNI of the IP.
@@ -1482,9 +1458,7 @@ class RedisDB(
             org_info = {"org_name": [organization], "ip": [ip]}
 
         org_info = json.dumps(org_info)
-        self.rcache.hset(
-            self.constants.ORGANIZATIONS_PORTS, portproto, org_info
-        )
+        self.rcache.hset(self.constants.ORGANIZATIONS_PORTS, portproto, org_info)
 
     def set_organizations_of_ports(self, entries: list) -> None:
         """
@@ -1517,9 +1491,7 @@ class RedisDB(
         """
         # this key is used to store the ports the are known to be used
         #  by certain organizations
-        return self.rcache.hget(
-            self.constants.ORGANIZATIONS_PORTS, portproto.lower()
-        )
+        return self.rcache.hget(self.constants.ORGANIZATIONS_PORTS, portproto.lower())
 
     def add_zeek_file(self, filename, interface):
         """Add an entry to the list of zeek files"""
@@ -1554,9 +1526,7 @@ class RedisDB(
         if gw_info := self._get_gw_info(interface):
             return gw_info.get("Vendor")
 
-    def set_default_gateway(
-        self, address_type: str, address: str, interface: str
-    ):
+    def set_default_gateway(self, address_type: str, address: str, interface: str):
         """
         :param address_type: can either be 'IP' or 'MAC'
         :param address: can be ip or mac, but always is a str
@@ -1569,10 +1539,7 @@ class RedisDB(
                 address_type == self.constants.MAC
                 and not self.get_gateway_mac(interface)
             )
-            or (
-                address_type == "Vendor"
-                and not self.get_gateway_mac_vendor(interface)
-            )
+            or (address_type == "Vendor" and not self.get_gateway_mac_vendor(interface))
         ):
             gw_info = json.dumps({address_type: address})
 
@@ -1606,9 +1573,7 @@ class RedisDB(
         if data:
             data = json.dumps(data)
             self.rcache.hset(self.constants.PASSIVE_DNS, ip, data)
-            self.rcache.hexpire(
-                self.constants.PASSIVE_DNS, self.default_ttl, ip
-            )
+            self.rcache.hexpire(self.constants.PASSIVE_DNS, self.default_ttl, ip)
 
     def get_passive_dns(self, ip):
         """
@@ -1628,9 +1593,7 @@ class RedisDB(
     def set_reconnections(self, profileid, twid, data):
         """Set the reconnections for this TW for this Profile"""
         data = json.dumps(data)
-        self.r.hset(
-            f"{profileid}_{twid}", self.constants.RECONNECTIONS, str(data)
-        )
+        self.r.hset(f"{profileid}_{twid}", self.constants.RECONNECTIONS, str(data))
 
     def get_host_ip(self, interface) -> Optional[str]:
         """returns the latest added host ip
@@ -1647,9 +1610,7 @@ class RedisDB(
         # of them as the host ip
         key = f"host_ip_{interface}"
         host_ips_added = self.r.zcard(key)
-        self.zadd_but_keep_n_entries(
-            key, {ip: host_ips_added + 1}, max_entries=10
-        )
+        self.zadd_but_keep_n_entries(key, {ip: host_ips_added + 1}, max_entries=10)
 
     def get_wifi_interface(self):
         """
@@ -1667,9 +1628,7 @@ class RedisDB(
 
         all_ips: List[str] = []
         for key in ip_keys:
-            host_ip_list: List[bytes] = self.r.zrevrange(
-                key, 0, 0, withscores=False
-            )
+            host_ip_list: List[bytes] = self.r.zrevrange(key, 0, 0, withscores=False)
             if host_ip_list:
                 # Decode the bytes to a string before appending
                 latest_ip: str = host_ip_list[0]
@@ -1884,9 +1843,7 @@ class RedisDB(
         key = f"{org}_asn"
         return True if self.rcache.sismember(key, asn) else False
 
-    def is_ip_in_org_cidrs(
-        self, org: str, first_octet: str
-    ) -> List[str] | None:
+    def is_ip_in_org_cidrs(self, org: str, first_octet: str) -> List[str] | None:
         """
         checks if the given first octet in the org's octets
         :param org: supported orgs are ('google', 'microsoft', 'apple',
@@ -1949,8 +1906,7 @@ class RedisDB(
         valid_types = {"IPs", "domains", "macs"}
         if type_ not in valid_types:
             raise ValueError(
-                f"Unsupported whitelist type: {type_}. "
-                f"Must be one of {valid_types}."
+                f"Unsupported whitelist type: {type_}. Must be one of {valid_types}."
             )
 
         key = f"{self.constants.WHITELIST}_{type_}"
@@ -2009,9 +1965,7 @@ class RedisDB(
         Path Redis writes when SAVE is executed.
         """
         redis_dir = self.r.config_get("dir").get("dir", os.getcwd())
-        dbfilename = self.r.config_get("dbfilename").get(
-            "dbfilename", "dump.rdb"
-        )
+        dbfilename = self.r.config_get("dbfilename").get("dbfilename", "dump.rdb")
         return os.path.join(redis_dir, dbfilename)
 
     def _save_rdb_with_redis_cli(self, backup_rdb: str) -> bool:
@@ -2065,17 +2019,14 @@ class RedisDB(
         redis_db_path = self._get_redis_dump_path_from_redis_config()
 
         if os.path.exists(redis_db_path):
-            if os.path.abspath(redis_db_path) != os.path.abspath(
-                safe_backup_rdb
-            ):
+            if os.path.abspath(redis_db_path) != os.path.abspath(safe_backup_rdb):
                 shutil.copy2(redis_db_path, safe_backup_rdb)
                 os.remove(redis_db_path)
 
             return True
 
         self.print(
-            f"Error Saving: Cannot find the redis "
-            f"database directory {redis_db_path}"
+            f"Error Saving: Cannot find the redis database directory {redis_db_path}"
         )
         return False
 
@@ -2087,22 +2038,16 @@ class RedisDB(
 
         # do not use self.print here! the output queue isn't initialized yet
         def is_valid_rdb_file():
-            safe_backup_file = utils.validate_safe_path(
-                backup_file, must_exist=True
-            )
+            safe_backup_file = utils.validate_safe_path(backup_file, must_exist=True)
             if not os.path.exists(safe_backup_file):
                 print("{} doesn't exist.".format(safe_backup_file))
                 return False
 
             # Check if valid .rdb file
-            result = subprocess.run(
-                ["file", safe_backup_file], stdout=subprocess.PIPE
-            )
+            result = subprocess.run(["file", safe_backup_file], stdout=subprocess.PIPE)
             file_type = result.stdout.decode("utf-8")
             if "Redis" not in file_type:
-                print(
-                    f"{safe_backup_file} is not a valid redis database file."
-                )
+                print(f"{safe_backup_file} is not a valid redis database file.")
                 return False
             return True
 
@@ -2110,9 +2055,7 @@ class RedisDB(
             return False
 
         try:
-            safe_backup_file = utils.validate_safe_path(
-                backup_file, must_exist=True
-            )
+            safe_backup_file = utils.validate_safe_path(backup_file, must_exist=True)
             RedisDB._conf_file = RedisDB._get_conf_file_path(32850)
             RedisDB._options.update(
                 {
@@ -2140,17 +2083,13 @@ class RedisDB(
         """
         :param time: epoch
         """
-        self.r.hset(
-            self.constants.WARDEN_INFO, self.constants.WARDEN_POLL, time
-        )
+        self.r.hset(self.constants.WARDEN_INFO, self.constants.WARDEN_POLL, time)
 
     def get_last_warden_poll_time(self):
         """
         returns epoch time of last poll
         """
-        time = self.r.hget(
-            self.constants.WARDEN_INFO, self.constants.WARDEN_POLL
-        )
+        time = self.r.hget(self.constants.WARDEN_INFO, self.constants.WARDEN_POLL)
         time = float(time) if time else float("-inf")
         return time
 
@@ -2205,9 +2144,7 @@ class RedisDB(
 
     def get_flow_analyzed_by_the_profiler_so_far(self) -> int:
         """processed by the profiler only"""
-        processed_flows = self.r.get(
-            self.constants.PROCESSED_FLOWS_BY_PROFILER
-        )
+        processed_flows = self.r.get(self.constants.PROCESSED_FLOWS_BY_PROFILER)
         if not processed_flows:
             return 0
         return int(processed_flows)
