@@ -81,6 +81,10 @@ def test_flows_for_evidence_falls_back_to_evidence_uids(tmp_path) -> None:
 
     assert result["total"] == 1
     assert result["items"][0]["uid"] == "flow-1"
+    assert result["items"][0]["network_flow"]["table"] == "flows"
+    assert result["items"][0]["protocol_flows"] == []
+    assert result["network_flow_total"] == 1
+    assert result["protocol_flow_total"] == 0
 
 
 def test_flows_for_evidence_reads_durable_conn_and_altflows(tmp_path) -> None:
@@ -104,17 +108,37 @@ def test_flows_for_evidence_reads_durable_conn_and_altflows(tmp_path) -> None:
         )
         connection.execute(
             "INSERT INTO altflows VALUES (?, ?, ?, ?, ?, ?)",
-            ("flow-2", json.dumps({"query": "example.org"}), "benign", "", "", "dns"),
+            (
+                "flow-1",
+                json.dumps(
+                    {
+                        "query": "aaa.com",
+                        "qtype_name": "A",
+                        "rcode_name": "NXDOMAIN",
+                        "answers": [],
+                    }
+                ),
+                "benign",
+                "",
+                "",
+                "dns",
+            ),
         )
-        connection.executemany(
+        connection.execute(
             "INSERT INTO evidence_flows VALUES (?, ?)",
-            [("evidence-1", "flow-1"), ("evidence-1", "flow-2")],
+            ("evidence-1", "flow-1"),
         )
 
     result = reader.flows_for_evidence("evidence-1")
 
-    assert result["total"] == 2
-    assert {item["table"] for item in result["items"]} == {"flows", "altflows"}
+    assert result["total"] == 1
+    assert result["network_flow_total"] == 1
+    assert result["protocol_flow_total"] == 1
+    group = result["items"][0]
+    assert group["network_flow"]["table"] == "flows"
+    assert group["protocol_flows"][0]["table"] == "altflows"
+    assert group["protocol_flows"][0]["flow"]["query"] == "aaa.com"
+    assert group["protocol_flows"][0]["flow"]["rcode_name"] == "NXDOMAIN"
 
 
 def test_api_routes_evidence_flow_ids() -> None:
