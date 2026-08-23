@@ -61,6 +61,27 @@ flow = Conn(
 )
 
 
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "get_uids_for_vertical_portscan",
+        "get_uids_for_horizontal_portscan",
+    ],
+)
+def test_portscan_uid_methods_forward_to_redis(method_name):
+    """Expose contributing scan-flow UID queries through DBManager."""
+    module_factory = ModuleFactory()
+    db = module_factory.create_db_manager_obj(6379)
+    expected = ["uid-1", "uid-2"]
+    redis_method = Mock(return_value=expected)
+    setattr(db.rdb, method_name, redis_method)
+
+    result = getattr(db, method_name)("profile", "tw", "tcp", "target")
+
+    assert result == expected
+    redis_method.assert_called_once_with("profile", "tw", "tcp", "target")
+
+
 def test_set_info_for_domains():
     """tests set_info_for_domains, setNewDomain and get_domain_data"""
     db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
@@ -108,6 +129,25 @@ def test_db_manager_refreshes_singleton_disabled_detections() -> None:
     assert db.set_evidence(evidence) is False
     db.rdb.set_evidence.assert_not_called()
     db.sqlite.add_evidence.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "redis_output, caller_output, expected",
+    [
+        ("output/run/", "output/run", True),
+        ("output/old-run", "output/new-run", False),
+        (None, "output/new-run", False),
+    ],
+)
+def test_redis_belongs_to_run(
+    redis_output: str | None, caller_output: str, expected: bool
+) -> None:
+    """Verify producer ownership uses the Redis run identity."""
+    _module_factory = ModuleFactory()
+    db = object.__new__(RedisDB)
+    db.get_output_dir = Mock(return_value=redis_output)
+
+    assert db.belongs_to_run(caller_output) is expected
 
 
 def test_subscribe():
