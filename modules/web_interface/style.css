@@ -216,6 +216,18 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .identifier-list code { padding: .3rem .48rem; border: 1px solid var(--line); border-radius: 6px; background: #0a141c; color: var(--blue); font-size: .68rem; overflow-wrap: anywhere; }
 .detail-link { display: block; width: 100%; margin-top: .45rem; padding: .65rem .75rem; border: 1px solid var(--line); border-radius: 7px; background: #111d26; color: var(--text); text-align: left; cursor: pointer; }
 .detail-link:hover { border-color: var(--accent); background: #152630; }
+.host-alerts-panel { padding: .85rem 1rem; }
+.host-section-heading h3, .host-section-heading p { margin: 0; }
+.host-section-heading p { margin-top: .2rem; color: var(--muted); font-size: .72rem; }
+.host-alert-list { display: flex; max-height: 180px; flex-wrap: wrap; gap: .5rem; margin-top: .7rem; overflow: auto; }
+.host-alert-chip { display: inline-flex; align-items: center; gap: .55rem; padding: .48rem .65rem; border: 1px solid var(--line); border-left: 3px solid var(--danger); border-radius: 7px; background: #101d26; color: var(--text); cursor: pointer; }
+.host-alert-chip:hover, .host-alert-chip:focus-visible { border-color: var(--accent); outline: none; background: #152630; }
+.host-alert-label { color: #dce9f1; font-weight: 700; }
+.host-alert-chip time { color: var(--muted); font: .7rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+.host-evidence-panel { margin-top: 0; }
+.host-evidence-wrap { max-height: 480px; }
+#host-evidence-table { min-width: 1120px; }
+.host-evidence-description { display: block; max-width: 430px; overflow: hidden; color: #c7d5de; text-overflow: ellipsis; white-space: nowrap; }
 pre { max-height: 380px; overflow: auto; padding: .8rem; border: 1px solid var(--line); border-radius: 7px; background: #080d12; color: #b8c9d6; font-size: .72rem; white-space: pre-wrap; word-break: break-word; }
 .toast { position: fixed; z-index: 30; left: 50%; bottom: 1.5rem; padding: .65rem .9rem; border: 1px solid var(--danger); border-radius: 7px; background: #2a1418; opacity: 0; pointer-events: none; transform: translateX(-50%); transition: opacity .2s; }
 .toast.show { opacity: 1; }
