@@ -55,9 +55,7 @@ class EvidenceHandlerWorker(IModule):
         self.read_configuration()
         self.notify = notify
         self.is_running_non_stop = self.db.is_running_non_stop()
-        self.detection_threshold_in_this_width = (
-            self._get_detection_threshold()
-        )
+        self.detection_threshold_in_this_width = self._get_detection_threshold()
         self.blocking_modules_supported = self.is_blocking_modules_supported()
         self.our_ips: List[str] = utils.get_own_ips(ret="List")
         self.formatter = EvidenceFormatter(self.db, self.args)
@@ -83,12 +81,8 @@ class EvidenceHandlerWorker(IModule):
             0,
         )
         self.use_p2p: bool = conf.use_local_p2p() or conf.use_global_p2p()
-        self.exporting_modules_enabled: bool = (
-            conf.export_to() or conf.send_to_warden()
-        )
-        self.generate_performance_plots = (
-            conf.generate_performance_plots() is True
-        )
+        self.exporting_modules_enabled: bool = conf.export_to() or conf.send_to_warden()
+        self.generate_performance_plots = conf.generate_performance_plots() is True
         # if IS_IN_A_DOCKER_CONTAINER:
         #     self.popup_alerts = False
 
@@ -124,19 +118,16 @@ class EvidenceHandlerWorker(IModule):
     ):
         idmef_evidence: dict = self.idmefv2.convert_to_idmef_event(evidence)
         if not idmef_evidence:
-            self.handle_unable_to_log(
-                evidence, "Can't convert to IDMEF evidence"
-            )
+            self.handle_unable_to_log(evidence, "Can't convert to IDMEF evidence")
             return
 
         try:
             note = (
-                json.loads(idmef_evidence["Note"])
-                if idmef_evidence.get("Note")
-                else {}
+                json.loads(idmef_evidence["Note"]) if idmef_evidence.get("Note") else {}
             )
             note.update(
                 {
+                    "evidence_type": str(evidence.evidence_type),
                     "uids": evidence.uid,
                     "accumulated_threat_level": accumulated_threat_level,
                     "risk_accumulated_threat_level": risk_accumulated_threat_level,
@@ -181,12 +172,8 @@ class EvidenceHandlerWorker(IModule):
             if self.is_running_non_stop:
                 latency = float(create_unix) - float(start_unix)
             else:
-                wall_elapsed = float(create_unix) - float(
-                    self.slips_start_time
-                )
-                pcap_elapsed = float(start_unix) - float(
-                    self.first_flow_pcap_time
-                )
+                wall_elapsed = float(create_unix) - float(self.slips_start_time)
+                pcap_elapsed = float(start_unix) - float(self.first_flow_pcap_time)
                 latency = wall_elapsed - pcap_elapsed
                 if latency < 0:
                     latency = 0
@@ -215,7 +202,7 @@ class EvidenceHandlerWorker(IModule):
         now = utils.get_human_readable_datetime()
 
         alert_description = (
-            f"{alert.last_flow_datetime}: " f"Src IP {alert.profile.ip:26}. "
+            f"{alert.last_flow_datetime}: Src IP {alert.profile.ip:26}. "
         )
         if blocked:
             alert_description += "Is blocked "
@@ -229,7 +216,7 @@ class EvidenceHandlerWorker(IModule):
             f"{alert.timewindow.number}. (real time: {now})"
         )
         if self.is_running_non_stop:
-            alert_description += f" (risk weight:" f" {current_risk_weight})"
+            alert_description += f" (risk weight: {current_risk_weight})"
 
         self.add_to_log_file(alert_description)
         self.add_alert_to_json_log_file(alert)
@@ -253,9 +240,7 @@ class EvidenceHandlerWorker(IModule):
     def get_evidence_for_tw(
         self, profileid: str, twid: str
     ) -> Optional[Dict[str, Evidence]]:
-        tw_evidence: Dict[str, dict] = self.db.get_twid_evidence(
-            profileid, twid
-        )
+        tw_evidence: Dict[str, dict] = self.db.get_twid_evidence(profileid, twid)
         if not tw_evidence:
             return None
 
@@ -281,9 +266,7 @@ class EvidenceHandlerWorker(IModule):
 
         return filtered_evidence
 
-    def is_filtered_evidence(
-        self, evidence: Evidence, past_evidence_ids: List[str]
-    ):
+    def is_filtered_evidence(self, evidence: Evidence, past_evidence_ids: List[str]):
         if evidence.id in past_evidence_ids:
             return True
 
@@ -293,9 +276,7 @@ class EvidenceHandlerWorker(IModule):
         return False
 
     def get_threat_level(self, evidence: Evidence) -> float:
-        evidence_threat_level = (
-            evidence.threat_level.value * evidence.confidence
-        )
+        evidence_threat_level = evidence.threat_level.value * evidence.confidence
         self.print(f"\t\tWeighted Threat Level: {evidence_threat_level}", 3, 0)
         return evidence_threat_level
 
@@ -329,9 +310,7 @@ class EvidenceHandlerWorker(IModule):
     def is_blocking_modules_supported(self) -> bool:
         custom_flows = "-im" in sys.argv or "--input-module" in sys.argv
         blocking_module_enabled = "-p" in sys.argv
-        return (
-            self.is_running_non_stop or custom_flows
-        ) and blocking_module_enabled
+        return (self.is_running_non_stop or custom_flows) and blocking_module_enabled
 
     def escalate_risk_level(self, alert: Alert):
         """
@@ -343,8 +322,8 @@ class EvidenceHandlerWorker(IModule):
         go up.
         """
         next_level: RiskWeight = increase_risk_weight(alert.risk_level)
-        risk_weight_of_last_alert: RiskWeight = (
-            self.db.get_risk_weight_of_last_alert(alert.timewindow)
+        risk_weight_of_last_alert: RiskWeight = self.db.get_risk_weight_of_last_alert(
+            alert.timewindow
         )
 
         if not risk_weight_of_last_alert:
@@ -357,9 +336,7 @@ class EvidenceHandlerWorker(IModule):
         # whether this aler is low/med, slips should now be in the next
         # risk level.
         self.db.update_max_seen_risk_weight(str(alert.profile), next_level)
-        self.db.set_risk_weight_of_last_alert(
-            alert.risk_level, alert.timewindow
-        )
+        self.db.set_risk_weight_of_last_alert(alert.risk_level, alert.timewindow)
         return alert
 
     def handle_new_alert(
@@ -372,9 +349,7 @@ class EvidenceHandlerWorker(IModule):
         alert = self.escalate_risk_level(alert)
 
         self.db.set_alert(alert, evidence_causing_the_alert)
-        is_blocked: bool = self.decide_blocking(
-            alert.profile.ip, alert.timewindow
-        )
+        is_blocked: bool = self.decide_blocking(alert.profile.ip, alert.timewindow)
         profile_already_blocked: bool = self.db.is_blocked_profile_and_tw(
             str(alert.profile), str(alert.timewindow)
         )
@@ -412,9 +387,7 @@ class EvidenceHandlerWorker(IModule):
             "ip": ip_to_block,
             "block": True,
             "tw": timewindow.number,
-            "interface": utils.get_interface_of_ip(
-                ip_to_block, self.db, self.args
-            ),
+            "interface": utils.get_interface_of_ip(ip_to_block, self.db, self.args),
         }
         self.db.publish("new_blocking", json.dumps(blocking_data))
         return True
@@ -506,6 +479,11 @@ class EvidenceHandlerWorker(IModule):
 
         profileid = str(evidence.profile)
         twid = str(evidence.timewindow)
+        # Do not trust publishers to enforce this setting. A delayed process
+        # from a replaced run can still publish briefly while shutting down.
+        if self.db.is_detection_disabled(evidence.evidence_type) is True:
+            self.db.delete_evidence(profileid, twid, evidence.id)
+            return
 
         # Multiple evidence-handler processes consume the same queue. Scoring,
         # selecting correlated evidence, persisting the alert, and resetting
@@ -542,9 +520,7 @@ class EvidenceHandlerWorker(IModule):
             timestamp = utils.convert_to_local_timezone(timestamp)
         flow_datetime = utils.convert_ts_format(timestamp, "iso")
 
-        evidence = self.formatter.add_threat_level_to_evidence_description(
-            evidence
-        )
+        evidence = self.formatter.add_threat_level_to_evidence_description(evidence)
         evidence_to_log = self.formatter.get_evidence_to_log(
             evidence,
             flow_datetime,
@@ -573,9 +549,7 @@ class EvidenceHandlerWorker(IModule):
         self.give_evidence_to_exporting_modules(evidence)
 
         if self.use_p2p:
-            self.db.publish(
-                "report_to_peers", json.dumps(utils.to_dict(evidence))
-            )
+            self.db.publish("report_to_peers", json.dumps(utils.to_dict(evidence)))
 
         # Informational evidence has no threat contribution and therefore
         # cannot be the event that opens an alert. It remains processed and
