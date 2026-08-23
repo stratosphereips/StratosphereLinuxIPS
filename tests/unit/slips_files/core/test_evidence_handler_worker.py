@@ -377,6 +377,48 @@ def test_handle_evidence_added_message_sets_risk_level_on_objects() -> None:
     assert logged_alert.risk_level == RiskWeight.HIGH
 
 
+def test_info_evidence_cannot_open_alert_from_existing_score() -> None:
+    """Verify zero-weight evidence never becomes an alert threshold trigger."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = Evidence(
+        evidence_type=EvidenceType.HTTP_TRAFFIC,
+        description="Unencrypted HTTP traffic",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="10.0.66.100",
+        ),
+        threat_level=ThreatLevel.INFO,
+        confidence=1.0,
+        profile=ProfileID("10.0.66.100"),
+        timewindow=TimeWindow(1),
+        uid=["uid-http"],
+        timestamp="2023/02/16 17:46:13.000000+0000",
+    )
+    worker.whitelist.is_whitelisted_evidence.return_value = False
+    worker.is_running_non_stop = False
+    worker.formatter.add_threat_level_to_evidence_description = Mock(
+        return_value=evidence
+    )
+    worker.formatter.get_evidence_to_log = Mock(return_value="evidence_log")
+    worker.add_to_log_file = Mock()
+    worker.get_accumulated_threat_level = Mock(return_value=55.0)
+    worker.db.get_max_seen_risk_weight = Mock(
+        return_value={"risk_weight": RiskWeight.HIGH, "profile": ""}
+    )
+    worker.add_evidence_to_json_log_file = Mock()
+    worker.give_evidence_to_exporting_modules = Mock()
+    worker.get_evidence_for_tw = Mock()
+    worker.handle_new_alert = Mock()
+
+    worker.handle_evidence_added_message(
+        {"data": json.dumps(utils.to_dict(evidence))}
+    )
+
+    worker.get_evidence_for_tw.assert_not_called()
+    worker.handle_new_alert.assert_not_called()
+
+
 def test_escalate_risk_level_stores_current_weight_for_first_alert() -> None:
     worker = ModuleFactory().create_evidence_handler_worker_obj()
     worker.db.get_risk_weight_of_last_alert = Mock(return_value={})
