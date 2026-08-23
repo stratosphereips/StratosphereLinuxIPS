@@ -17,6 +17,7 @@ from slips_files.core.flows.zeek import Conn
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.structures.risk_weights import RiskWeight
+from slips_files.core.structures.evidence import EvidenceType
 from tests.module_factory import ModuleFactory
 
 
@@ -70,6 +71,43 @@ def test_set_info_for_domains():
     stored_data = db.get_domain_data(domain)
     assert "threatintelligence" in stored_data
     assert stored_data["threatintelligence"] == "sample data"
+
+
+def test_get_alert_generation_lock_forwards_to_redis() -> None:
+    """Verify DBManager exposes the Redis cross-process alert lock."""
+    db = ModuleFactory().create_db_manager_obj(6379)
+    expected_lock = Mock()
+    db.rdb.get_alert_generation_lock = Mock(return_value=expected_lock)
+
+    result = db.get_alert_generation_lock("profile_10.0.0.1", "timewindow2")
+
+    assert result is expected_lock
+    db.rdb.get_alert_generation_lock.assert_called_once_with(
+        "profile_10.0.0.1",
+        "timewindow2",
+    )
+
+
+def test_db_manager_refreshes_singleton_disabled_detections() -> None:
+    """Verify every DBManager applies its process-local active config."""
+    db = ModuleFactory().create_db_manager_obj(
+        6379,
+        disabled_detections=["CONNECTION_WITHOUT_DNS"],
+    )
+
+    # Reproduce another DBManager overwriting the per-port Redis singleton.
+    db.rdb.disabled_detections = []
+
+    assert db.is_detection_disabled(EvidenceType.CONNECTION_WITHOUT_DNS)
+    assert db.rdb.disabled_detections == ["CONNECTION_WITHOUT_DNS"]
+
+    evidence = Mock(evidence_type=EvidenceType.CONNECTION_WITHOUT_DNS)
+    db.rdb.set_evidence = Mock()
+    db.sqlite = Mock()
+
+    assert db.set_evidence(evidence) is False
+    db.rdb.set_evidence.assert_not_called()
+    db.sqlite.add_evidence.assert_not_called()
 
 
 def test_subscribe():
@@ -255,9 +293,7 @@ def test_add_mac_addr_with_ipv6_association():
         call(profile_ipv4, mac_addr),  # call with the ipv4 profileid
         call(profile_ipv6, mac_addr),  # call with the ipv6 profileid
     ]
-    db.rdb.update_mac_of_profile.assert_has_calls(
-        expected_calls, any_order=True
-    )
+    db.rdb.update_mac_of_profile.assert_has_calls(expected_calls, any_order=True)
 
 
 def test_get_the_other_ip_version():
@@ -284,8 +320,7 @@ def test_get_mac_vendor_from_profile_falls_back_to_slips_utils(mocker):
     db.rdb.get_mac_addr_from_profile = Mock(return_value=mac_addr)
     db.rdb.set_mac_vendor_to_profile = Mock()
     mock_get_vendor = mocker.patch(
-        "slips_files.core.database.database_manager.utils."
-        "get_mac_vendor_from_mac_addr",
+        "slips_files.core.database.database_manager.utils.get_mac_vendor_from_mac_addr",
         return_value=vendor,
     )
 
@@ -345,15 +380,11 @@ def test_current_timewindow_wrappers_delegate_to_redis_db():
         patch.object(type(db.rdb), "_set_max_seen_risk_weight") as mock_set,
     ):
         assert db.get_current_timewindow() == "7"
-        redis_mock.get.assert_called_once_with(
-            db.rdb.constants.CURRENT_TIMEWINDOW
-        )
+        redis_mock.get.assert_called_once_with(db.rdb.constants.CURRENT_TIMEWINDOW)
 
         db.incr_current_timewindow()
 
-        redis_mock.incr.assert_called_once_with(
-            db.rdb.constants.CURRENT_TIMEWINDOW
-        )
+        redis_mock.incr.assert_called_once_with(db.rdb.constants.CURRENT_TIMEWINDOW)
         mock_set.assert_called_once_with(None, RiskWeight.LOW)
 
 
@@ -385,13 +416,9 @@ def test_tranco_whitelist_discards_legacy_cache_key_type() -> None:
     assert db.rdb.rcache.type(key) in ("none", b"none")
 
 
-def test_setup_config_file_uses_isolated_path_and_preserves_save(
-    tmp_path, monkeypatch
-):
+def test_setup_config_file_uses_isolated_path_and_preserves_save(tmp_path, monkeypatch):
     template = tmp_path / "redis.conf.template"
-    template.write_text(
-        'daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8"
-    )
+    template.write_text('daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8")
 
     monkeypatch.setattr(RedisDB, "_conf_file_template", str(template))
     monkeypatch.setattr(RedisDB, "output_dir", tmp_path, raising=False)
@@ -400,9 +427,7 @@ def test_setup_config_file_uses_isolated_path_and_preserves_save(
 
     RedisDB._setup_config_file()
 
-    expected_conf = (
-        tmp_path / "redis" / f"redis-server-port-{RedisDB.redis_port}.conf"
-    )
+    expected_conf = tmp_path / "redis" / f"redis-server-port-{RedisDB.redis_port}.conf"
     assert RedisDB._conf_file == str(expected_conf)
 
     conf_contents = expected_conf.read_text(encoding="utf-8").splitlines()
@@ -420,9 +445,7 @@ def test_setup_config_file_enables_autosave_when_save_enabled(
 ) -> None:
     """Test Redis autosave options are set when save is enabled."""
     template = tmp_path / "redis.conf.template"
-    template.write_text(
-        'daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8"
-    )
+    template.write_text('daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8")
 
     monkeypatch.setattr(RedisDB, "_conf_file_template", str(template))
     monkeypatch.setattr(RedisDB, "output_dir", tmp_path, raising=False)
@@ -431,9 +454,7 @@ def test_setup_config_file_enables_autosave_when_save_enabled(
 
     RedisDB._setup_config_file()
 
-    expected_conf = (
-        tmp_path / "redis" / f"redis-server-port-{RedisDB.redis_port}.conf"
-    )
+    expected_conf = tmp_path / "redis" / f"redis-server-port-{RedisDB.redis_port}.conf"
     conf_contents = expected_conf.read_text(encoding="utf-8").splitlines()
 
     assert "save 30 500" in conf_contents
@@ -447,15 +468,11 @@ def test_setup_config_file_uses_absolute_redis_paths(
 ) -> None:
     """Test generated Redis configs use absolute paths for dir and logfile."""
     template = tmp_path / "redis.conf.template"
-    template.write_text(
-        'daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8"
-    )
+    template.write_text('daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8")
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(RedisDB, "_conf_file_template", str(template))
-    monkeypatch.setattr(
-        RedisDB, "output_dir", "relative-output", raising=False
-    )
+    monkeypatch.setattr(RedisDB, "output_dir", "relative-output", raising=False)
     monkeypatch.setattr(RedisDB, "redis_port", 6379, raising=False)
     monkeypatch.setattr(RedisDB, "args", Mock(save=False), raising=False)
 
@@ -465,9 +482,7 @@ def test_setup_config_file_uses_absolute_redis_paths(
         tmp_path / "relative-output" / "redis" / "redis-server-port-6379.log"
     )
     expected_dir = tmp_path / "relative-output" / "databases"
-    conf_contents = (
-        Path(RedisDB._conf_file).read_text(encoding="utf-8").splitlines()
-    )
+    conf_contents = Path(RedisDB._conf_file).read_text(encoding="utf-8").splitlines()
 
     assert f"logfile {expected_logfile}" in conf_contents
     assert f"dir {expected_dir}" in conf_contents
@@ -522,9 +537,7 @@ def test_save_copies_dump_from_configured_redis_dir(tmp_path: Path) -> None:
         str(backup_file.parent / "dump.rdb")
     )
     db.r.save.assert_called_once()
-    assert (backup_file.parent / "dump.rdb").read_text(
-        encoding="utf-8"
-    ) == "redis dump"
+    assert (backup_file.parent / "dump.rdb").read_text(encoding="utf-8") == "redis dump"
     assert not redis_dump.exists()
     db.print.assert_not_called()
 
