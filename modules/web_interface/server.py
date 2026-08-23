@@ -361,7 +361,12 @@ class RunDataReader:
         analysis = self.redis.hgetall("analysis")
         actual = str(analysis.get("output_dir", ""))
         expected = self._normalized_path(str(self.output_dir))
-        if actual and self._normalized_path(actual) != expected:
+        if not actual:
+            raise RunMismatchError(
+                f"Web server expects {expected}, but Redis does not advertise "
+                "an analysis output directory."
+            )
+        if self._normalized_path(actual) != expected:
             raise RunMismatchError(
                 f"Web server expects {expected}, but Redis serves {actual}."
             )
@@ -396,6 +401,10 @@ class RunDataReader:
                 ).fetchall()
             }
         return {
+            "run_identity": {
+                "output_dir": str(self.output_dir),
+                "server_pid": os.getpid(),
+            },
             "source_freshness": {
                 "flow_index_updated_at": float(
                     values.get("flow_index_updated_at", "0")
@@ -901,7 +910,8 @@ class RunDataReader:
             rows = connection.execute(
                 "SELECT e.* FROM evidence e JOIN alert_evidence ae "
                 "ON ae.evidence_id = e.evidence_id "
-                "WHERE ae.alert_id = ? ORDER BY e.evidence_time DESC "
+                "WHERE ae.alert_id = ? "
+                "ORDER BY e.evidence_time DESC "
                 "LIMIT ?",
                 (alert_id, maximum),
             ).fetchall()
@@ -1273,15 +1283,10 @@ class RunDataReader:
             grouped[uid]
             for uid in bounded_uids
             if uid in grouped
-            and (
-                grouped[uid]["network_flow"]
-                or grouped[uid]["protocol_flows"]
-            )
+            and (grouped[uid]["network_flow"] or grouped[uid]["protocol_flows"])
         ]
         network_flow_total = sum(bool(item["network_flow"]) for item in items)
-        protocol_flow_total = sum(
-            len(item["protocol_flows"]) for item in items
-        )
+        protocol_flow_total = sum(len(item["protocol_flows"]) for item in items)
         return {
             "items": items,
             "total": len(items),
@@ -1579,7 +1584,7 @@ class RunDataReader:
                 return int(
                     connection.execute(
                         "SELECT COUNT(*) AS count FROM evidence "
-                        f"WHERE profile_ip IN ({placeholders})",
+                        f"WHERE profile_ip IN ({placeholders}) ",
                         ips,
                     ).fetchone()["count"]
                 )
