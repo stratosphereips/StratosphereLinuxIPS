@@ -182,6 +182,27 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .flow-metric { min-width: 0; padding: .55rem .65rem; border: 1px solid #203443; border-radius: 7px; }
 .flow-metric small { display: block; color: var(--muted); font-size: .63rem; text-transform: uppercase; }
 .flow-metric strong { display: block; margin-top: .2rem; overflow-wrap: anywhere; color: var(--text); font-size: .76rem; }
+.flow-group { border-left: 3px solid var(--accent); background: #101c25; }
+.network-flow-chip { background: #43c7b51c; color: var(--accent); }
+.flow-missing { margin: .5rem 0 0; padding: .75rem .85rem; border-left: 3px solid var(--warn); background: #2a2418; color: #e5d7b8; }
+.related-protocols { margin-top: 1rem; padding-top: .1rem; border-top: 1px solid var(--line); }
+.protocol-empty { margin: .9rem 0 0; }
+.protocol-card { margin-top: .65rem; padding: .85rem; border: 1px solid #203746; border-left: 3px solid var(--blue); border-radius: 8px; background: #0b171f; }
+.protocol-card.protocol-dns { border-left-color: var(--accent); }
+.protocol-card.protocol-http { border-left-color: #79d18c; }
+.protocol-card.protocol-ssl { border-left-color: #ad8cff; }
+.protocol-card.protocol-ssh { border-left-color: var(--warn); }
+.protocol-card-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.protocol-card-head h4 { margin: 0; color: var(--text); font-size: .86rem; letter-spacing: .03em; }
+.protocol-outcome { padding: .2rem .5rem; border: 1px solid #43c7b54d; border-radius: 99px; background: #43c7b518; color: var(--accent); font: 700 .68rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+.protocol-outcome.failure { border-color: #ff64704d; background: #ff647018; color: var(--danger); }
+.protocol-context { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin-top: .45rem; color: var(--muted); font-size: .67rem; }
+.protocol-details { display: grid; grid-template-columns: repeat(3, minmax(100px, 1fr)); gap: .5rem; margin-top: .7rem; }
+.protocol-field { min-width: 0; padding: .58rem .65rem; border: 1px solid #1d3341; border-radius: 7px; background: #101f29; }
+.protocol-field.important { grid-column: span 2; border-color: #43c7b540; background: #10252d; }
+.protocol-field small { display: block; color: var(--muted); font-size: .62rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.protocol-field strong { display: block; margin-top: .24rem; overflow-wrap: anywhere; color: #dce9f1; font-size: .77rem; line-height: 1.35; }
+.protocol-field.important strong { color: var(--accent); font-size: .82rem; }
 .json-details { margin-top: .75rem; border-top: 1px solid var(--line); }
 .json-details > summary { padding: .75rem 0 .15rem; color: var(--blue); font-size: .75rem; cursor: pointer; }
 .json-details > summary:hover { color: var(--accent); }
@@ -205,4 +226,5 @@ pre { max-height: 380px; overflow: auto; padding: .8rem; border: 1px solid var(-
   .metadata-grid { grid-template-columns: 1fr; }
   .investigation-summary { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
   .flow-metrics { grid-template-columns: repeat(3, minmax(80px, 1fr)); }
+  .protocol-details { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
 }
