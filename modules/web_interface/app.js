@@ -198,12 +198,36 @@ function rangeIsLive(prefix) {
   return ["live", "1h", "24h", "7d", "all"].includes(byId(`${prefix}-range`).value);
 }
 
+/** Format a chart-axis numeric value without adding an unnecessary unit. */
+function formatChartValue(value, maximum) {
+  const amount = numeric(value);
+  if (maximum < 10) return amount.toFixed(1);
+  if (maximum < 100) return amount.toFixed(0);
+  return compact(amount);
+}
+
+/** Format a compact, readable timestamp for a performance-chart x-axis. */
+function formatChartTime(value, span) {
+  const timestamp = numeric(value);
+  if (timestamp < 946684800) return formatTime(timestamp).replace("T+", "");
+  const options = span >= 86400
+    ? { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }
+    : { hour: "2-digit", minute: "2-digit", second: "2-digit" };
+  return new Date(timestamp * 1000).toLocaleString([], options);
+}
+
+/** Render a performance chart with numeric and time axes. */
 function renderLineChart(id, points, series) {
   const svg = byId(id);
   svg.replaceChildren();
   const width = 600;
   const height = 180;
-  const pad = 28;
+  const left = 42;
+  const right = 10;
+  const top = 12;
+  const bottom = 30;
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
   if (!points.length) {
     const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
     label.setAttribute("x", "300");
@@ -219,25 +243,48 @@ function renderLineChart(id, points, series) {
   const maximumTime = numeric(points.at(-1).ts);
   const span = Math.max(maximumTime - minimumTime, 1);
   const grid = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  grid.setAttribute("d", `M${pad} ${height - pad}H${width - 8}M${pad} 8V${height - pad}`);
-  grid.setAttribute("class", "chart-axis");
+  grid.setAttribute("d", `M${left} ${height - bottom}H${width - right}M${left} ${top}V${height - bottom}`);
+  grid.setAttribute("class", "grid-line");
   svg.append(grid);
+  [0, 0.5, 1].forEach((ratio) => {
+    const y = height - bottom - ratio * plotHeight;
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("x1", String(left));
+    line.setAttribute("x2", String(width - right));
+    line.setAttribute("y1", String(y));
+    line.setAttribute("y2", String(y));
+    line.setAttribute("class", "grid-line chart-grid-line");
+    svg.append(line);
+    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    label.setAttribute("x", String(left - 6));
+    label.setAttribute("y", String(y + 3));
+    label.setAttribute("text-anchor", "end");
+    label.setAttribute("class", "chart-label");
+    label.textContent = formatChartValue(maximum * ratio, maximum);
+    svg.append(label);
+  });
+  [0, 0.5, 1].forEach((ratio) => {
+    const x = left + ratio * plotWidth;
+    const timestamp = minimumTime + ratio * span;
+    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    label.setAttribute("x", String(x));
+    label.setAttribute("y", String(height - 8));
+    label.setAttribute("text-anchor", ratio === 0 ? "start" : ratio === 1 ? "end" : "middle");
+    label.setAttribute("class", "chart-label");
+    label.textContent = formatChartTime(timestamp, span);
+    svg.append(label);
+  });
   for (const item of series) {
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     const d = points.map((point, index) => {
-      const x = pad + ((numeric(point.ts) - minimumTime) / span) * (width - pad - 8);
-      const y = height - pad - (numeric(point[item.key]) / maximum) * (height - pad - 12);
+      const x = left + ((numeric(point.ts) - minimumTime) / span) * plotWidth;
+      const y = height - bottom - (numeric(point[item.key]) / maximum) * plotHeight;
       return `${index ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
     }).join(" ");
     path.setAttribute("d", d);
     path.setAttribute("class", `chart-line ${item.className || ""}`);
     svg.append(path);
   }
-  const maxLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-  maxLabel.setAttribute("x", "4");
-  maxLabel.setAttribute("y", "14");
-  maxLabel.textContent = maximum.toFixed(maximum < 10 ? 1 : 0);
-  svg.append(maxLabel);
 }
 
 function renderBars(id, rows) {
