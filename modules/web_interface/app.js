@@ -2635,6 +2635,9 @@ bindRange("host", "hostFlows", async () => {
 bindTableSort("modules", async () => {
   if (state.overview) renderModules(state.overview.modules);
 });
+bindTableSort("modules", async () => {
+  if (state.overview) renderModules(state.overview.modules);
+});
 bindTableSort("hosts", loadHosts);
 bindTableSort("host-evidence", loadHostEvidence);
 
