@@ -749,13 +749,25 @@ class RunDataReader:
                     params.append(end)
                 if search:
                     clauses.append(
-                        "(LOWER(description) LIKE ? OR "
-                        "LOWER(evidence_type) LIKE ? OR "
-                        "LOWER(profile_ip) LIKE ? OR "
-                        "LOWER(evidence_id) LIKE ?)"
+                        "(LOWER(COALESCE(evidence_id, '')) LIKE ? OR "
+                        "LOWER(COALESCE(CAST(evidence_time AS TEXT), '')) LIKE ? OR "
+                        "LOWER(COALESCE(profile_ip, '')) LIKE ? OR "
+                        "LOWER(COALESCE(timewindow, '')) LIKE ? OR "
+                        "LOWER(COALESCE(threat_level, '')) LIKE ? OR "
+                        "LOWER(COALESCE(evidence_type, '')) LIKE ? OR "
+                        "LOWER(COALESCE(description, '')) LIKE ? OR "
+                        "LOWER(COALESCE(CAST(confidence AS TEXT), '')) LIKE ? OR "
+                        "LOWER(COALESCE(data, '')) LIKE ? OR "
+                        "LOWER(COALESCE(evidence_module(COALESCE(evidence_type, '')), '')) LIKE ? OR "
+                        "EXISTS (SELECT 1 FROM evidence_flows ef "
+                        "WHERE ef.evidence_id = evidence.evidence_id "
+                        "AND LOWER(ef.uid) LIKE ?) OR "
+                        "EXISTS (SELECT 1 FROM alert_evidence ae "
+                        "WHERE ae.evidence_id = evidence.evidence_id "
+                        "AND LOWER(ae.alert_id) LIKE ?))"
                     )
                     term = f"%{search}%"
-                    params.extend([term, term, term, term])
+                    params.extend([term] * 12)
                 if profiles:
                     placeholders = ",".join("?" for _ in profiles)
                     clauses.append(f"profile_ip IN ({placeholders})")
@@ -824,16 +836,7 @@ class RunDataReader:
                 records = [
                     item
                     for item in records
-                    if search
-                    in " ".join(
-                        str(item.get(field, "")).lower()
-                        for field in (
-                            "id",
-                            "description",
-                            "evidence_type",
-                            "profile_ip",
-                        )
-                    )
+                    if search in json.dumps(item, sort_keys=True, default=str).lower()
                 ]
             profile_set = set(profiles)
             if profile_set:
@@ -1067,6 +1070,7 @@ class RunDataReader:
             item["alert_count"] = int(item["alert_count"] or 0)
             item["evidence_count"] = int(item["evidence_count"] or 0)
             item["label"] = str(item.pop("labels") or "")
+            item.update(self._ip_context_for_ip(str(item["ip_alerted"])))
             items.append(item)
         next_cursor = (
             self._encode_cursor(rows[-1]["sort_value"], str(items[-1]["id"]))
@@ -1125,6 +1129,9 @@ class RunDataReader:
                     "time": "CAST(alert_time AS REAL)",
                     "host": "LOWER(COALESCE(ip_alerted, ''))",
                     "threat": threat_expression,
+                    "tw": "LOWER(COALESCE(timewindow, ''))",
+                    "tw_start": "COALESCE(tw_start, '')",
+                    "tw_end": "COALESCE(tw_end, '')",
                     "label": "LOWER(COALESCE(label, ''))",
                     "evidence": evidence_expression,
                     "id": "LOWER(alert_id)",
@@ -1201,6 +1208,7 @@ class RunDataReader:
                             for item in related
                         ]
                     )
+                alert.update(self._ip_context_for_ip(str(alert["ip_alerted"])))
                 items.append(alert)
         next_cursor = (
             self._encode_cursor(
@@ -1552,6 +1560,9 @@ class RunDataReader:
             host = self._live_host(str(row["ip"]))
             host["observed_at"] = float(row["observed_at"])
             host["load"] = self._host_load(str(row["ip"]))
+            host.update(
+                self._ip_context_for_ip(str(host["ip"]), host.get("dns"))
+            )
             host["evidence_count"] = self._profile_evidence_count(str(row["ip"]))
             host["alert_count"] = self._profile_alert_count(str(row["ip"]))
             items.append(host)
@@ -1609,7 +1620,6 @@ class RunDataReader:
                 )
         except sqlite3.Error:
             return 0
-
     def _ti_for_ip(self, ip: str) -> Dict[str, Any]:
         """Read cached threat-intelligence fields for an IP."""
         result: Dict[str, Any] = {}
@@ -1618,10 +1628,47 @@ class RunDataReader:
                 value = self.cache.hget(f"IPsInfo:{field}", ip)
                 if value is not None:
                     result[field] = self._loads(value, value)
-        except redis.RedisError:
+        except (AttributeError, redis.RedisError):
             pass
         return result
 
+    def _ip_context_for_ip(
+        self, ip: str, dns: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Build compact DNS and threat-intelligence context for an IP.
+
+        Parameters:
+            ip: IP address whose cached context should be read.
+            dns: Optional already-loaded DNS-resolution record for the IP.
+
+        Returns:
+            A display-ready name, its source, and matching TI feed names.
+        """
+        ti = self._ti_for_ip(ip)
+        rdns_value = ti.get("reverse_dns", "")
+        if isinstance(rdns_value, (list, tuple)):
+            rdns_value = rdns_value[0] if rdns_value else ""
+        rdns = str(rdns_value or "")
+        if dns is None:
+            try:
+                dns = self._loads(self.redis.hget("DNSresolution", ip), {})
+            except (AttributeError, redis.RedisError):
+                dns = {}
+        domains_value = dns.get("domains", []) if isinstance(dns, dict) else []
+        if not isinstance(domains_value, (list, tuple)):
+            domains_value = [domains_value]
+        domains = [str(domain) for domain in domains_value if domain]
+        ti_record = ti.get("threatintelligence", {})
+        source_value = ti_record.get("source", []) if isinstance(ti_record, dict) else []
+        if not isinstance(source_value, (list, tuple)):
+            source_value = [source_value]
+        ti_feeds = [str(source) for source in source_value if source]
+        return {
+            "dns_name": rdns or (domains[0] if domains else ""),
+            "dns_name_source": "rDNS" if rdns else ("DNS" if domains else ""),
+            "ti_feeds": ti_feeds,
+        }
     def host(self, ip: str) -> Dict[str, Any]:
         """Return complete bounded context for one current or historical host."""
         host = self._live_host(ip)
@@ -1928,6 +1975,7 @@ class RunDataReader:
         modules: List[Dict[str, Any]] = []
         flow_modules = set(self.redis.smembers("flows_per_minute_modules"))
         now_bucket = int(time.time() // 60 * 60)
+        total_memory = max(psutil.virtual_memory().total, 1)
         for name, raw_pid in self.redis.hgetall("PIDs").items():
             # utils.start_thread() stores native thread IDs in the same Redis
             # hash used for processes. They are implementation details of
@@ -1942,10 +1990,14 @@ class RunDataReader:
                 memory_mb = (
                     round(process.memory_info().rss / 1024 / 1024, 1) if running else 0
                 )
+                memory_percent = (
+                    process.memory_info().rss / total_memory * 100 if running else 0
+                )
                 cpu = process.cpu_percent(interval=None) if running else 0
             except (ValueError, psutil.Error):
                 pid = int(raw_pid) if str(raw_pid).isdigit() else 0
                 running = False
+                memory_percent = 0
                 status = "completed" if analysis_complete else "stopped"
                 memory_mb = 0
                 cpu = 0
@@ -1958,6 +2010,7 @@ class RunDataReader:
                 {
                     "name": name,
                     "pid": pid,
+                    "memory_percent": memory_percent,
                     "state": status,
                     "running": running,
                     "cpu_percent": cpu,
@@ -2128,7 +2181,50 @@ class RunDataReader:
         }
 
 
+
+    def firewall(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
+        """Return active Slips firewall blocks and their probation schedules."""
+        try:
+            blocked = self.redis.zrange("blocked_ips", 0, -1, withscores=True)
+            schedules = {
+                ip: self._loads(raw, {})
+                for ip, raw in self.redis.hgetall("firewall_blocks").items()
+            }
+        except redis.RedisError:
+            blocked, schedules = [], {}
+        records: List[Dict[str, Any]] = []
+        for ip, blocked_at in blocked:
+            schedule = schedules.get(ip, {})
+            deadline = self._event_timestamp(schedule.get("unblock_at"))
+            remaining_windows = schedule.get("remaining_timewindows")
+            records.append(
+                {
+                    "ip": ip,
+                    "status": "probation" if remaining_windows == 0 else "blocked",
+                    "blocked_at": float(blocked_at),
+                    "unblock_at": deadline or None,
+                    "remaining_seconds": max(0, deadline - time.time()) if deadline else None,
+                    "remaining_timewindows": remaining_windows,
+                    "evidence_count": self._profile_evidence_count(ip),
+                    "alert_count": self._profile_alert_count(ip),
+                },
+            )
+        search = self._query_value(query, "search").lower()
+        if search:
+            records = [
+                item for item in records
+                if search in item["ip"].lower() or search in item["status"]
+            ]
+        records.sort(key=lambda item: (item["unblock_at"] or 0, item["ip"]))
+        return {
+            "items": records[:MAX_PAGE_SIZE],
+            "total": len(records),
+            "full_total": len(records),
+            "page_size": min(len(records), MAX_PAGE_SIZE),
+        }
+
 class SlipsHTTPServer(ThreadingHTTPServer):
+
     """Concurrent HTTP server carrying the fixed run data reader."""
 
     daemon_threads = True
@@ -2170,9 +2266,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         )
 
     def _send_json(self, payload: Any, status: HTTPStatus = HTTPStatus.OK) -> None:
+        self.send_response(status)
         """Send a JSON response with local-interface security headers."""
         body = json.dumps(payload, default=str).encode("utf-8")
-        self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
@@ -2222,6 +2318,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = reader.evidence(query)
         elif path == "/api/hosts":
             payload = reader.hosts(query)
+        elif path == "/api/firewall":
+            payload = reader.firewall(query)
         elif path.startswith("/api/evidence/") and path.endswith("/flows"):
             evidence_id = unquote(path[len("/api/evidence/") : -len("/flows")])
             payload = reader.flows_for_evidence(evidence_id)
