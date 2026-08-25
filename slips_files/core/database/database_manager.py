@@ -888,7 +888,6 @@ class DBManager:
         }:
             evidence.uid = evidence.uid[:20]
 
-
         interface: str | None = self._get_evidence_interface(evidence)
         setattr(evidence, "interface", interface)
         evidence_set = self.rdb.set_evidence(evidence)
