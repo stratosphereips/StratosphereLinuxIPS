@@ -166,6 +166,10 @@ and a ```p2p.log``` will be available in the output dir
 
 Slips rotates the p2p.log every 1 day by default, and keeps the logs of 1 past day only.
 
+When the local web interface is enabled, its **P2P** tab shows live peer
+connectivity, local identity, bounded message activity, reports received in the
+current run, and persistent peer trust and reliability evolution.
+
 
 ## Limitations
 
