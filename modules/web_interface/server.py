@@ -2522,7 +2522,6 @@ class RunDataReader:
                 )
         except sqlite3.Error:
             return 0
-
     def _ti_for_ip(self, ip: str) -> Dict[str, Any]:
         """Read cached threat-intelligence fields for an IP."""
         result: Dict[str, Any] = {}
@@ -3080,6 +3079,9 @@ class RunDataReader:
                     process.memory_info().rss / total_memory * 100
                     if running
                     else 0
+                )
+                memory_percent = (
+                    process.memory_info().rss / total_memory * 100 if running else 0
                 )
                 cpu = process.cpu_percent(interval=None) if running else 0
             except (ValueError, psutil.Error):
@@ -4133,7 +4135,50 @@ class RunDataReader:
         }
 
 
+
+    def firewall(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
+        """Return active Slips firewall blocks and their probation schedules."""
+        try:
+            blocked = self.redis.zrange("blocked_ips", 0, -1, withscores=True)
+            schedules = {
+                ip: self._loads(raw, {})
+                for ip, raw in self.redis.hgetall("firewall_blocks").items()
+            }
+        except redis.RedisError:
+            blocked, schedules = [], {}
+        records: List[Dict[str, Any]] = []
+        for ip, blocked_at in blocked:
+            schedule = schedules.get(ip, {})
+            deadline = self._event_timestamp(schedule.get("unblock_at"))
+            remaining_windows = schedule.get("remaining_timewindows")
+            records.append(
+                {
+                    "ip": ip,
+                    "status": "probation" if remaining_windows == 0 else "blocked",
+                    "blocked_at": float(blocked_at),
+                    "unblock_at": deadline or None,
+                    "remaining_seconds": max(0, deadline - time.time()) if deadline else None,
+                    "remaining_timewindows": remaining_windows,
+                    "evidence_count": self._profile_evidence_count(ip),
+                    "alert_count": self._profile_alert_count(ip),
+                },
+            )
+        search = self._query_value(query, "search").lower()
+        if search:
+            records = [
+                item for item in records
+                if search in item["ip"].lower() or search in item["status"]
+            ]
+        records.sort(key=lambda item: (item["unblock_at"] or 0, item["ip"]))
+        return {
+            "items": records[:MAX_PAGE_SIZE],
+            "total": len(records),
+            "full_total": len(records),
+            "page_size": min(len(records), MAX_PAGE_SIZE),
+        }
+
 class SlipsHTTPServer(ThreadingHTTPServer):
+
     """Concurrent HTTP server carrying the fixed run data reader."""
 
     daemon_threads = True
