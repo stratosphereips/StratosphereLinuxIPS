@@ -28,6 +28,7 @@ runs:
         ref: ${{ github.ref }}
         fetch-depth: 0
         submodules: recursive
+        lfs: true
 
     - name: Validate Docker build context
       shell: bash

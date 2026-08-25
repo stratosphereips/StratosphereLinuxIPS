@@ -127,6 +127,7 @@ jobs:
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
+          lfs: true
 
       - name: Prepare Docker image metadata
         id: image
@@ -169,6 +170,7 @@ jobs:
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
+          lfs: true
 
       - name: Run ${{ inputs.test_suite_name }} for ${{ matrix.test_file }}
         uses: ./.github/workflows/reusable/run-test-file
@@ -206,6 +208,7 @@ jobs:
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
+          lfs: true
 
       - name: Download Docker Image
         uses: actions/download-artifact@v8
@@ -251,6 +254,7 @@ jobs:
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
+          lfs: true
 
       - name: Download Docker Image
         uses: actions/download-artifact@v8
