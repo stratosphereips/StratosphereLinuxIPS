@@ -85,6 +85,7 @@ class Unblocker(IUnblocker):
                     if self._unblock(ip, flags):
                         self._log_successful_unblock(ip)
                         self.db.del_blocked_ip(ip)
+                        self.db.del_firewall_block_state(ip)
                         requests_to_del.append(ip)
 
             for ip in requests_to_del:
@@ -126,6 +127,14 @@ class Unblocker(IUnblocker):
                     continue
                 new_req = req
                 new_req["block_this_ip_for"] = req["block_this_ip_for"] - 1
+                self.db.set_firewall_block_state(
+                    ip,
+                    {
+                        "unblock_at": new_req["tw_to_unblock"].end_time,
+                        "remaining_timewindows": new_req["block_this_ip_for"],
+                        "updated_at": time.time(),
+                    },
+                )
                 new_requests[ip] = new_req
             self.requests = new_requests
 
@@ -140,6 +149,16 @@ class Unblocker(IUnblocker):
         Add an unblocking request to self.requests
         :param tw_to_unblock_at: unix ts to unblock the given ip at
         :param block_this_ip_for: number of following timewindows this ip
+        if self.db.get_blocking_timestamp(ip) is not None:
+            self.db.set_firewall_block_state(
+                ip,
+                {
+                    "unblock_at": tw_to_unblock_at.end_time,
+                    "remaining_timewindows": block_this_ip_for,
+                    "updated_at": time.time(),
+                },
+            )
+
         will remain blocked in.
         """
         with self.requests_lock:
