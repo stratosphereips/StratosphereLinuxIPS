@@ -7,6 +7,7 @@ import ipaddress
 import json
 import math
 import os
+import re
 import socket
 import sqlite3
 import time
@@ -2223,6 +2224,131 @@ class RunDataReader:
             "page_size": min(len(records), MAX_PAGE_SIZE),
         }
 
+    def p2p(self) -> Dict[str, Any]:
+        """Return live P2P connectivity, report activity, and trust history."""
+        connected_raw = self._loads(self.redis.get("connected_peers"), [])
+        connected = set(connected_raw if isinstance(connected_raw, list) else [])
+        peer_info = {
+            peer_id: self._loads(raw, {})
+            for peer_id, raw in self.redis.hgetall("peer_info").items()
+        }
+        peer_trust = self.redis.hgetall("peer_trust")
+        peer_seen = dict(self.redis.zrange("peers_strust", 0, -1, withscores=True))
+        counts = {
+            key: int(value)
+            for key, value in self.redis.hgetall("p2p_message_counts").items()
+        }
+        activity = [
+            self._loads(raw, {})
+            for raw in self.redis.lrange("p2p_message_history", 0, 199)
+        ]
+        analysis = self.redis.hgetall("analysis")
+        run_start = self._event_timestamp(analysis.get("analysis_start"))
+        trust_path = Path("permanent") / "p2p_trust_runtime" / "trustdb.db"
+        trust_history: List[Dict[str, Any]] = []
+        reports: List[Dict[str, Any]] = []
+        peer_ips: Dict[str, Dict[str, Any]] = {}
+        if trust_path.exists():
+            try:
+                with sqlite3.connect(
+                    f"file:{trust_path}?mode=ro", uri=True, timeout=5
+                ) as connection:
+                    connection.row_factory = sqlite3.Row
+                    for row in connection.execute(
+                        "SELECT peerid, reliability, update_time FROM go_reliability "
+                        "ORDER BY update_time DESC LIMIT 500"
+                    ):
+                        trust_history.append(
+                            {
+                                "peer_id": str(row["peerid"]),
+                                "reliability": float(row["reliability"]),
+                                "timestamp": self._event_timestamp(row["update_time"]),
+                            }
+                        )
+                    for row in connection.execute(
+                        "SELECT peerid, ipaddress, update_time FROM peer_ips "
+                        "ORDER BY update_time DESC LIMIT 1000"
+                    ):
+                        peer_ips.setdefault(
+                            str(row["peerid"]),
+                            {
+                                "ip": str(row["ipaddress"]),
+                                "timestamp": self._event_timestamp(row["update_time"]),
+                            },
+                        )
+                    for row in connection.execute(
+                        "SELECT reporter_peerid, reported_key, score, confidence, "
+                        "update_time FROM reports ORDER BY update_time DESC LIMIT 500"
+                    ):
+                        timestamp = self._event_timestamp(row["update_time"])
+                        reports.append(
+                            {
+                                "peer_id": str(row["reporter_peerid"]),
+                                "target": str(row["reported_key"]),
+                                "score": float(row["score"]),
+                                "confidence": float(row["confidence"]),
+                                "timestamp": timestamp,
+                                "this_run": not run_start or timestamp >= run_start,
+                            }
+                        )
+            except sqlite3.Error:
+                pass
+        report_counts = Counter(item["peer_id"] for item in reports)
+        latest_reliability: Dict[str, Dict[str, Any]] = {}
+        for item in trust_history:
+            latest_reliability.setdefault(item["peer_id"], item)
+        peer_ids = set(peer_info) | set(peer_ips) | set(latest_reliability) | connected
+        peers = []
+        for peer_id in peer_ids:
+            info = peer_info.get(peer_id, {})
+            pairing = peer_ips.get(peer_id, {})
+            ip = str(info.get("ip") or info.get("ipaddress") or pairing.get("ip") or "")
+            reliability = latest_reliability.get(peer_id, {})
+            peers.append(
+                {
+                    "peer_id": peer_id,
+                    "ip": ip,
+                    "connected": peer_id in connected,
+                    "trust": float(peer_trust[ip]) if ip in peer_trust else None,
+                    "reliability": reliability.get("reliability"),
+                    "last_seen": max(
+                        float(peer_seen.get(peer_id, 0)),
+                        float(pairing.get("timestamp") or 0),
+                        float(reliability.get("timestamp") or 0),
+                    ),
+                    "reports_received": report_counts[peer_id],
+                }
+            )
+        peers.sort(key=lambda item: (not item["connected"], -item["last_seen"], item["peer_id"]))
+        p2p_log = self.output_dir / "p2p_trust" / "p2p.log"
+        listener = ""
+        local_peer_id = ""
+        try:
+            log_tail = p2p_log.read_text(encoding="utf-8", errors="replace")[-65536:]
+            matches = re.findall(r"(/ip4/[^\s]+/p2p/([^\s]+))", log_tail)
+            if matches:
+                listener, local_peer_id = matches[-1]
+        except OSError:
+            pass
+        current_reports = [item for item in reports if item["this_run"]]
+        return {
+            "enabled": bool(self.redis.hget("PIDs", "p2p_trust")) or p2p_log.exists(),
+            "listener": listener,
+            "local_peer_id": local_peer_id,
+            "peers": peers,
+            "trust_history": trust_history,
+            "reports": current_reports[:200],
+            "activity": [item for item in activity if isinstance(item, dict)],
+            "counts": {
+                "connected": len(connected),
+                "known": len(peers),
+                "reports_sent": counts.get("sent:report", 0) + counts.get("sent:blame", 0),
+                "reports_received": len(current_reports),
+                "requests_sent": counts.get("sent:request", 0),
+                "requests_received": counts.get("received:request", 0),
+            },
+        }
+
 class SlipsHTTPServer(ThreadingHTTPServer):
 
     """Concurrent HTTP server carrying the fixed run data reader."""
@@ -2320,6 +2446,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = reader.hosts(query)
         elif path == "/api/firewall":
             payload = reader.firewall(query)
+        elif path == "/api/p2p":
+            payload = reader.p2p()
         elif path.startswith("/api/evidence/") and path.endswith("/flows"):
             evidence_id = unquote(path[len("/api/evidence/") : -len("/flows")])
             payload = reader.flows_for_evidence(evidence_id)
