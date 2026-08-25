@@ -124,9 +124,16 @@ Message counters begin when telemetry-capable P2P code starts. Reliability histo
 
 ### Alerts and evidence
 
-Alerts come from durable SQLite. The default table shows individual alerts, bounded to 100 rows per page. **Group by host** is an optional display mode that shows alert count, evidence-link count, latest alert time, highest threat, and labels. Selecting a host aggregate shows its newest individual alerts; selecting an individual alert shows related evidence.
+Alerts come from durable SQLite. The default table shows individual alerts, bounded to 100 rows per page. Each row shows the exact Slips score at threshold crossing and the configured threshold. **Group by host** is an optional display mode that shows alert count, evidence-link count, latest alert time, highest threat, peak threshold-crossing score, and labels. Selecting a host aggregate shows its newest individual alerts; selecting an individual alert shows related evidence.
 
-Evidence also includes records that did not cross the alert threshold. The default table is **Group by host and type**, bounded to 100 rows per page, and shows evidence, triggering-flow, and alert-link counts. **Individual evidence** remains available from the display selector. Selecting an aggregate shows its newest individual evidence. Selecting an individual record groups each triggering UID into one primary **flow** (the conn.log-style connection) and a separate **Related protocol flows** section containing alternative-flow records such as DNS, HTTP, TLS, SSH, DHCP, files, and notices.
+Evidence also includes records that did not cross the alert threshold. Individual rows show the exact accumulated score Slips recorded when the evidence was processed; grouped rows show the highest recorded score in the group. The default table is **Group by host and type**, bounded to 100 rows per page, and shows evidence, triggering-flow, and alert-link counts. **Individual evidence** remains available from the display selector. Selecting an aggregate shows its newest individual evidence. Selecting an individual record groups each triggering UID into one primary **flow** (the conn.log-style connection) and a separate **Related protocol flows** section containing alternative-flow records such as DNS, HTTP, TLS, SSH, DHCP, files, and notices.
+
+The displayed score is not calculated by the web interface. For interface,
+standard-input, and CYST runs it is Slips' risk-adjusted accumulated threat
+level (RATL), compared with `detection.risk_accumulated_threat_level`. For
+finite file analyses it is Slips' accumulated threat level (ATL), compared
+with `detection.evidence_detection_threshold × time-window minutes`. Values
+are rendered as `score / threshold`, and the score columns are sortable.
 
 Protocol activity is rendered as labeled fields instead of connection metrics. For example, DNS shows the queried name and type, response code such as `NXDOMAIN`, answers, and TTLs; HTTP shows method, host, URI, response status, user agent, body sizes, MIME types, and response file IDs; TLS shows server name, version, validation, cipher, and certificate fields. Other supported protocols have equivalent structured fields, with a readable generic field view for unknown types. Complete flow and protocol-flow records remain available in separately labeled JSON expanders. Alert to evidence to flow drill-down remains available after Redis time windows expire.
 
@@ -144,7 +151,7 @@ table, so the next selection starts a new investigation.
 
 ### Hosts
 
-The host list combines current Redis metadata with persisted last-known identity, so hosts that expired from Redis remain visible. Inventory can be filtered by local/public scope and by the host's maximum threat level.
+The host list combines current Redis metadata with persisted last-known identity, so hosts that expired from Redis remain visible. Inventory can be filtered by local/public scope and by the host's maximum threat level. Its current Slips score column reads the active time-window accumulator directly from Redis, retains the last snapshot for completed runs, shows the configured threshold, and is sortable.
 
 Selecting a host opens a full-width workspace with:
 
