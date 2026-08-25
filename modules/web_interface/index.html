@@ -25,6 +25,7 @@
     <button class="tab" data-tab="alerts">Alerts <span id="alerts-badge" class="badge">0</span></button>
     <button class="tab" data-tab="evidence">Evidence <span id="evidence-badge" class="badge">0</span></button>
     <button class="tab" data-tab="hosts">Hosts <span id="hosts-badge" class="badge">0</span></button>
+    <button class="tab" data-tab="firewall">Firewall <span id="firewall-badge" class="badge">0</span></button>
   </nav>
 
   <main>
@@ -51,14 +52,14 @@
           </select>
         </div>
         <div class="chart-grid">
-          <figure><figcaption>CPU · host capacity %</figcaption><svg id="cpu-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
-          <figure><figcaption>Resident memory · MiB</figcaption><svg id="memory-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
+          <figure><figcaption>CPU · Slips process tree (% of host capacity)<small><i class="chart-key average"></i>Average <i class="chart-key peak"></i>Peak in each displayed interval</small></figcaption><svg id="cpu-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
+          <figure><figcaption>Resident memory · Slips process tree<small>Axis uses MiB or GiB <i class="chart-key average"></i>Average <i class="chart-key peak"></i>Peak in each displayed interval</small></figcaption><svg id="memory-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
           <figure><figcaption>Processed flows · per second</figcaption><svg id="fps-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
         </div>
       </article>
       <article class="surface table-surface">
         <div class="table-heading"><div><h3>Modules</h3><p>Current process health and bounded counters.</p></div><input id="module-search" type="search" placeholder="Filter modules"></div>
-        <div class="table-wrap"><table id="modules-table"><thead><tr><th>Module</th><th>State</th><th>PID</th><th>CPU</th><th>Memory</th><th>Flows/min</th><th>Evidence</th><th>Errors</th></tr></thead><tbody></tbody></table></div>
+        <div class="table-wrap"><table id="modules-table"><thead><tr><th data-sort="name">Module</th><th data-sort="state">State</th><th data-sort="pid">PID</th><th data-sort="cpu_percent">CPU</th><th data-sort="memory_mb">Memory</th><th data-sort="flows_per_minute">Flows/min</th><th data-sort="evidence_count">Evidence</th><th data-sort="error_count">Errors</th></tr></thead><tbody></tbody></table></div>
       </article>
       <article class="surface"><div class="table-heading"><div><h3>Recent log events</h3><p id="error-source">Parsed incrementally from this run’s errors log.</p></div></div><ol id="errors-list" class="event-list"></ol></article>
     </section>
@@ -92,6 +93,7 @@
       </div>
       <div class="surface table-surface"><div class="table-wrap"><table id="evidence-table"><thead><tr></tr></thead><tbody></tbody></table></div></div>
       <div id="evidence-pager" class="pager"></div>
+
     </section>
 
     <section id="hosts" class="panel" aria-labelledby="hosts-title">
@@ -106,7 +108,7 @@
           <input id="hosts-to" class="custom-time" type="datetime-local" hidden>
           <span id="hosts-count" class="result-count"></span>
         </div>
-        <div class="surface table-surface"><div class="table-wrap"><table id="hosts-table"><thead><tr><th data-sort="ip">Primary IP</th><th data-sort="scope">Scope</th><th data-sort="hostname">Hostname</th><th data-sort="mac">MAC</th><th data-sort="threat">Threat</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="surface table-surface"><div class="table-wrap"><table id="hosts-table"><thead><tr><th data-sort="ip">Primary IP</th><th data-sort="scope">Scope</th><th data-sort="hostname">Hostname</th><th>Name / domain</th><th>TI feeds</th><th data-sort="mac">MAC</th><th data-sort="threat">Threat</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div></div>
         <div id="hosts-pager" class="pager"></div>
       </div>
 
@@ -138,7 +140,7 @@
           <div id="host-alerts" class="host-alert-list"></div>
         </article>
         <article class="surface table-surface host-evidence-panel">
-          <div class="table-heading"><div><h3 id="host-evidence-title">Related evidence</h3><p id="host-evidence-count">Newest evidence for every address associated with this host.</p></div></div>
+          <div class="table-heading"><div><h3 id="host-evidence-title">Related evidence</h3><p id="host-evidence-count">Newest evidence for every address associated with this host.</p></div><input id="host-evidence-search" type="search" aria-label="Search related evidence" placeholder="Search any evidence field…"></div>
           <div class="table-wrap host-evidence-wrap"><table id="host-evidence-table"><thead><tr><th data-sort="time">Time</th><th data-sort="threat">Threat</th><th data-sort="type">Type</th><th data-sort="module">Module</th><th data-sort="confidence">Confidence</th><th data-sort="flows">Flows</th><th data-sort="alert">Alerts</th><th>Description</th></tr></thead><tbody></tbody></table></div>
         </article>
         <div id="host-evidence-pager" class="pager"></div>
