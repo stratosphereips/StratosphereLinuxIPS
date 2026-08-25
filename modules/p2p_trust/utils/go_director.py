@@ -169,6 +169,17 @@ class GoDirector:
         # decode b64
         message_type, data = self.validate_message(message)
 
+        self.db.record_p2p_message(
+            "received",
+            {
+                "message_type": message_type or "unknown",
+                "peer": reporter,
+                "target": data.get("key", "") if isinstance(data, dict) else "",
+                "report_time": report_time,
+                "message": data,
+            },
+        )
+
         self.print(
             f"[The Network -> Slips] Received msg {data} from peer {reporter}"
         )
