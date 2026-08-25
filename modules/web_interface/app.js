@@ -692,6 +692,56 @@ async function loadFirewall() {
   ], (row) => openHost(row.ip));
 }
 
+async function loadP2P() {
+  const payload = await api("p2p", "/api/p2p");
+  if (!payload) return;
+  const counts = payload.counts || {};
+  byId("p2p-badge").textContent = compact(counts.connected);
+  byId("p2p-status").textContent = payload.enabled
+    ? (counts.connected ? `${counts.connected} peer${counts.connected === 1 ? "" : "s"} connected now.` : "P2P is running and listening; no peers are connected now.")
+    : "P2P is not running for this Slips run.";
+  setSummaryCards([
+    ["Connected peers", compact(counts.connected)],
+    ["Known peers", compact(counts.known)],
+    ["Reports sent", compact(counts.reports_sent)],
+    ["Reports received", compact(counts.reports_received)],
+    ["Requests sent / received", `${compact(counts.requests_sent)} / ${compact(counts.requests_received)}`],
+  ], "p2p-summary");
+  const identity = byId("p2p-identity");
+  identity.replaceChildren(
+    detailRow("Local peer ID", payload.local_peer_id || "Waiting for Pigeon identity"),
+    detailRow("Listen address", payload.listener || "Waiting for listener announcement"),
+  );
+  renderTable("p2p-peers-table", payload.peers || [], [
+    (row) => text("code", row.peer_id),
+    (row) => text("code", row.ip || "—"),
+    (row) => text("span", row.connected ? "connected" : "offline", `status ${row.connected ? "ok" : "warn"}`),
+    (row) => row.trust === null ? "—" : numeric(row.trust).toFixed(3),
+    (row) => row.reliability === null ? "—" : numeric(row.reliability).toFixed(3),
+    (row) => compact(row.reports_received),
+    (row) => formatTime(row.last_seen),
+  ]);
+  renderTable("p2p-trust-table", (payload.trust_history || []).slice(0, 100), [
+    (row) => formatTime(row.timestamp),
+    (row) => text("code", row.peer_id),
+    (row) => numeric(row.reliability).toFixed(3),
+  ]);
+  renderTable("p2p-reports-table", payload.reports || [], [
+    (row) => formatTime(row.timestamp),
+    (row) => text("code", row.peer_id),
+    (row) => text("code", row.target),
+    (row) => numeric(row.score).toFixed(3),
+    (row) => numeric(row.confidence).toFixed(3),
+  ]);
+  renderTable("p2p-activity-table", payload.activity || [], [
+    (row) => formatTime(row.timestamp),
+    (row) => row.direction || "—",
+    (row) => row.message_type || "unknown",
+    (row) => text("code", row.peer || "—"),
+    (row) => text("code", row.target || "—"),
+  ]);
+}
+
 function formatDuration(seconds) {
   const total = Math.max(0, Math.round(numeric(seconds)));
   const hours = Math.floor(total / 3600);
@@ -1670,12 +1720,11 @@ function closeHost() {
   state.requests.get("hostSummary")?.abort();
   state.requests.get("hostEvidence")?.abort();
   byId("host-detail-view").hidden = true;
-  return { overview: loadOverview, alerts: loadAlerts, evidence: loadEvidence, firewall: loadFirewall, hosts: loadHosts }[name];
+  byId("hosts-list-view").hidden = false;
 }
 
 function tabLoader(name) {
-  return { overview: loadOverview, alerts: loadAlerts, evidence: loadEvidence, hosts: loadHosts }[name];
-  return { overview: loadOverview, alerts: loadAlerts, evidence: loadEvidence, firewall: loadFirewall, hosts: loadHosts }[name];
+  return { overview: loadOverview, alerts: loadAlerts, evidence: loadEvidence, firewall: loadFirewall, p2p: loadP2P, hosts: loadHosts }[name];
 }
 
 function currentLoader() {
@@ -1696,7 +1745,7 @@ async function refreshActive() {
 }
 
 function activeRangeIsLive() {
-  if (state.activeTab === "firewall") return true;
+  if (["firewall", "p2p"].includes(state.activeTab)) return true;
   if (state.activeTab === "overview") return true;
   if (state.activeTab === "hosts" && state.host) {
     return rangeIsLive("host") && state.pages.hostFlows.index === 0;
@@ -1784,9 +1833,9 @@ byId("host-back").addEventListener("click", closeHost);
 byId("host-flow-limit").addEventListener("change", () => {
   resetPage("hostFlows");
   loadHostFlows().catch(() => {});
-bindFilters("firewall", ["firewall-search"], loadFirewall);
 });
 
+bindFilters("firewall", ["firewall-search"], loadFirewall);
 bindFilters("host-evidence", ["host-evidence-search"], loadHostEvidence);
 bindFilters("alerts", ["alerts-search", "alerts-threat"], loadAlerts);
 bindFilters("evidence", ["evidence-search", "evidence-threat", "evidence-link"], loadEvidence);
