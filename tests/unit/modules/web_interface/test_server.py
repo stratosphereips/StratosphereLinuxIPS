@@ -1005,3 +1005,40 @@ def test_hosts_live_range_uses_indexed_flow_clock(tmp_path) -> None:
     assert result["full_total"] == 2
     assert result["items"][0]["ip"] == "10.0.0.1"
     assert full_run["total"] == 2
+
+
+def test_p2p_reports_enabled_listener_and_healthy_empty_network(
+    tmp_path, monkeypatch
+) -> None:
+    """Expose a listening P2P module even before any peers are discovered."""
+    _module_factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    output_dir = tmp_path / "output" / "run"
+    log_dir = output_dir / "p2p_trust"
+    log_dir.mkdir(parents=True)
+    log_dir.joinpath("p2p.log").write_text(
+        "[*] Your Multiaddress Is:  "
+        "/ip4/10.0.0.1/tcp/32768/p2p/QmLocalPeer\n",
+        encoding="utf-8",
+    )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = output_dir
+    reader.redis = Mock()
+    reader.redis.get.return_value = None
+    reader.redis.hget.side_effect = lambda key, field: (
+        "123" if (key, field) == ("PIDs", "p2p_trust") else None
+    )
+    reader.redis.hgetall.side_effect = lambda key: (
+        {"analysis_start": "2026-08-25T23:07:20"}
+        if key == "analysis"
+        else {}
+    )
+    reader.redis.zrange.return_value = []
+    reader.redis.lrange.return_value = []
+
+    result = reader.p2p()
+
+    assert result["enabled"] is True
+    assert result["local_peer_id"] == "QmLocalPeer"
+    assert result["counts"]["connected"] == 0
+    assert result["peers"] == []
