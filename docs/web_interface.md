@@ -99,7 +99,7 @@ Only the active tab refreshes every five seconds and only when its range include
 
 ### Overview
 
-Overview shows run state, source freshness, disk use, Slips counters, and module health. It also displays the version, input path, branch, commit, command, start time, and Zeek version written to this run's `metadata/info.txt`. Each module row includes state, PID, CPU, resident memory, flows per minute, evidence, and parsed log events.
+Overview shows run state, source freshness, disk use, Slips counters, and module health. It also displays the version, input path, branch, commit, command, start time, and Zeek version written to this run's `metadata/info.txt`. Each module row includes state, PID, CPU, resident memory, flows per minute, evidence, and parsed log events. CPU and memory cells are heat mapped from the normal table background at 0% to red at 100%; memory is scaled to total host RAM while the displayed value remains MiB. The Modules table is sortable by every displayed column; click a header again to reverse its direction.
 
 The **Current host load** card describes the whole machine, not only the Slips process. **CPU** and **Memory** are the current host-wide utilization percentages. **Load 1 / 5 / 15m** is the operating system load average over the previous 1, 5, and 15 minutes: the average number of tasks that were runnable or waiting in uninterruptible I/O. It is not a percentage. Compare it with the host's logical CPU count; for example, a sustained load of 8 means roughly one task per logical CPU on an 8-CPU machine when the workload is CPU-bound, while it indicates queued work on a 4-CPU machine. The runtime charts below are different: their CPU and resident-memory series measure only the Slips process tree.
 
@@ -113,6 +113,8 @@ CPU, resident memory, and processed flows per second are sampled from the comple
 Flow totals use exact profiler counter deltas rather than assuming every sample is exactly one second apart. Existing web history databases are upgraded in place when the module starts.
 
 ### Alerts and evidence
+### Firewall
+
 
 Alerts come from durable SQLite. The default table shows individual alerts, bounded to 100 rows per page. **Group by host** is an optional display mode that shows alert count, evidence-link count, latest alert time, highest threat, and labels. Selecting a host aggregate shows its newest individual alerts; selecting an individual alert shows related evidence.
 
@@ -138,20 +140,21 @@ The host list combines current Redis metadata with persisted last-known identity
 
 Selecting a host opens a full-width workspace with:
 
-- MAC, vendor, all associated IPv4 and IPv6 addresses, hostname, DNS, scope, and cached threat intelligence;
+- MAC, vendor, all associated IPv4 and IPv6 addresses, hostname, DNS, scope, and cached threat intelligence; the host and alert tables also show cached rDNS (or the most related DNS domain) and the TI feeds that contain the IP;
 - total and inbound/outbound flow and byte counts, plus packet, evidence, and alert totals;
 - inbound/outbound flow and byte plots;
 - protocol/application distribution and top peers;
-- compact related alerts and a full-width, sortable evidence table showing time, threat, type, module, confidence, triggering-flow count, alert links, and description;
+- compact related alerts and a full-width, sortable evidence table showing time, threat, type, module, confidence, triggering-flow count, alert links, and description; its search box matches every stored evidence field, including raw evidence attributes, triggering flow UIDs, and linked alert IDs;
 - newest historical flows with cursor navigation into older traffic.
 
 DNS resolution context is shown as structured fields: domains pointing to the selected IP, the hosts that requested those resolutions, the latest DNS observation and flow UID, and the relevant Slips time windows. Resolver addresses are clickable and open their host workspace.
 
 Traffic matches any associated host address as source or destination. Rows show normalized direction, peer, addresses, ports, protocol/application, state, duration, packets, bytes, label, UID, and expandable raw details.
 
-Native horizontal and vertical port-scan evidence records every contributing
-non-established connection UID. Selecting scan evidence therefore shows the
-actual attempted connections and any related protocol activity.
+Native horizontal and vertical port-scan evidence links at most 20 contributing
+non-established connection UIDs. The interface identifies this limit when a
+scan is opened; other evidence types retain all of their triggering-flow links.
+Selecting scan evidence therefore shows a bounded sample of attempted connections.
 
 ## Historical API
 
