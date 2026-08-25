@@ -497,7 +497,7 @@ def test_durable_module_counts_survive_redis_window_expiry(tmp_path) -> None:
     assert counts["arp"] == 1
 
 
-def test_module_rows_exclude_internal_threads() -> None:
+def test_module_rows_exclude_internal_threads(mocker) -> None:
     """Verify PID bookkeeping threads are not presented as Slips modules."""
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
@@ -512,10 +512,15 @@ def test_module_rows_exclude_internal_threads() -> None:
     process.status.return_value = "sleeping"
     process.memory_info.return_value = Mock(rss=1024 * 1024)
     process.cpu_percent.return_value = 0
+    mocker.patch(
+        "modules.web_interface.server.psutil.virtual_memory",
+        return_value=Mock(total=100 * 1024 * 1024),
+    )
     reader._processes = {123: process}
 
     rows = reader._module_rows(Counter(), {}, analysis_complete=False)
 
+    assert rows[0]["memory_percent"] == 1.0
     assert [row["name"] for row in rows] == ["flow_alerts"]
 
 
@@ -667,6 +672,81 @@ def test_host_evidence_includes_associated_ips_and_sorts_before_paging(
     assert [item["id"] for item in result["items"]] == ["high", "low"]
     reader._host_ips.assert_called_once_with("10.0.0.1")
 
+def test_host_evidence_searches_all_durable_evidence_fields(tmp_path) -> None:
+    """Test host evidence search includes raw fields and linked identifiers."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = Mock()
+    reader._host_ips = Mock(return_value=["10.0.0.1"])
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY, "
+            "evidence_time REAL, profile_ip TEXT, timewindow TEXT, "
+            "threat_level TEXT, evidence_type TEXT, description TEXT, "
+            "confidence REAL, data TEXT)"
+        )
+        connection.execute("CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)")
+        connection.execute(
+            "CREATE TABLE alert_evidence (alert_id TEXT, evidence_id TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "evidence-id", 1.0, "10.0.0.1", "tw", "low", "DNS", "",
+                0.2, '{"attacker": "raw-field-token"}',
+            ),
+        )
+        connection.execute(
+            "INSERT INTO evidence_flows VALUES (?, ?)",
+            ("evidence-id", "flow-identifier-token"),
+        )
+        connection.execute(
+            "INSERT INTO alert_evidence VALUES (?, ?)",
+            ("alert-identifier-token", "evidence-id"),
+        )
+
+    for search in (
+        "raw-field-token",
+        "flow-identifier-token",
+        "alert-identifier-token",
+    ):
+        result = reader.evidence_for_host(
+            "10.0.0.1", {"range": ["all"], "search": [search]}
+        )
+
+        assert [item["id"] for item in result["items"]] == ["evidence-id"]
+
+
+def test_ip_context_prefers_rdns_and_reports_ti_feeds() -> None:
+    """Test cached IP context returns rDNS, DNS fallback, and TI feed names."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader._ti_for_ip = Mock(
+        return_value={
+            "reverse_dns": "rdns.example.test",
+            "threatintelligence": {"source": ["feed-a", "feed-b"]},
+        }
+    )
+
+    context = reader._ip_context_for_ip(
+        "192.0.2.1", {"domains": ["domain.example.test"]}
+    )
+
+    assert context == {
+        "dns_name": "rdns.example.test",
+        "dns_name_source": "rDNS",
+        "ti_feeds": ["feed-a", "feed-b"],
+    }
+
+    reader._ti_for_ip.return_value = {}
+    fallback = reader._ip_context_for_ip(
+        "192.0.2.1", {"domains": ["domain.example.test"]}
+    )
+
+    assert fallback["dns_name"] == "domain.example.test"
+    assert fallback["dns_name_source"] == "DNS"
+    assert fallback["ti_feeds"] == []
 
 def test_run_metadata_reads_info_file(tmp_path) -> None:
     """Test the overview metadata parser preserves technical run facts."""
