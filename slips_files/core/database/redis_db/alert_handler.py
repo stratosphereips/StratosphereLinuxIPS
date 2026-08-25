@@ -211,6 +211,26 @@ class AlertHandler:
         # remove ip from the blocked_ips sorted set
         self.r.zrem(self.constants.BLOCKED_IPS, ip)
 
+
+    def set_firewall_block_state(self, ip: str, state: Dict[str, Any]) -> None:
+        """Store the current firewall block schedule for an IP."""
+        self.r.hset(self.constants.FIREWALL_BLOCKS, ip, json.dumps(state))
+
+    def get_firewall_block_states(self) -> Dict[str, Dict[str, Any]]:
+        """Return current firewall block schedules indexed by IP."""
+        states: Dict[str, Dict[str, Any]] = {}
+        for ip, raw in self.r.hgetall(self.constants.FIREWALL_BLOCKS).items():
+            try:
+                state = json.loads(raw)
+            except (TypeError, ValueError):
+                continue
+            if isinstance(state, dict):
+                states[ip] = state
+        return states
+
+    def del_firewall_block_state(self, ip: str) -> None:
+        """Remove the firewall block schedule for an unblocked IP."""
+        self.r.hdel(self.constants.FIREWALL_BLOCKS, ip)
     def get_tw_limits(
         self,
         profileid: str,
