@@ -158,3 +158,37 @@ class P2PHandler:
         if trust:
             return float(trust)
         return None
+
+    def record_p2p_message(self, direction: str, message: dict) -> None:
+        """Record one bounded P2P send or receive event for observability.
+
+        Parameters:
+            direction: Either ``sent`` or ``received``.
+            message: JSON-serializable message metadata.
+        """
+        message_type = str(message.get("message_type") or "unknown")
+        record = {"direction": direction, "timestamp": time.time(), **message}
+        self.r.hincrby(
+            self.constants.P2P_MESSAGE_COUNTS,
+            f"{direction}:{message_type}",
+            1,
+        )
+        self.r.lpush(self.constants.P2P_MESSAGE_HISTORY, json.dumps(record))
+        self.r.ltrim(self.constants.P2P_MESSAGE_HISTORY, 0, 999)
+
+    def get_p2p_message_telemetry(self) -> dict:
+        """Return P2P message counters and newest bounded activity.
+
+        Returns:
+            Message counters and decoded recent message records.
+        """
+        records = []
+        for raw in self.r.lrange(self.constants.P2P_MESSAGE_HISTORY, 0, 199):
+            try:
+                records.append(json.loads(raw))
+            except (TypeError, ValueError):
+                continue
+        return {
+            "counts": self.r.hgetall(self.constants.P2P_MESSAGE_COUNTS),
+            "activity": records,
+        }
