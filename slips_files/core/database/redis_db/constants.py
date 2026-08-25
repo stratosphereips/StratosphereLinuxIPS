@@ -117,6 +117,8 @@ class Constants:
     PEER_TRUST = "peer_trust"
     P2P_TRUST_SET = "peers_strust"
     P2P_PEER_INFO_HASH = "peer_info"
+    P2P_MESSAGE_COUNTS = "p2p_message_counts"
+    P2P_MESSAGE_HISTORY = "p2p_message_history"
     FIDES_CACHE_KEY = "fides_cache"
     FIDES_CACHE_CREATED_SECONDS = "created_seconds"
     FLOWS_PER_MINUTE = "flows_per_minute"
