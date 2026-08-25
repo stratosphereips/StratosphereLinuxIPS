@@ -71,6 +71,7 @@ class Constants:
     # used in the web interface
     BLOCKED_PROFILES_AND_TWS = "BlockedProfTW"
     BLOCKED_IPS = "blocked_ips"
+    FIREWALL_BLOCKS = "firewall_blocks"
     PROFILES = "profiles"
     NUMBER_OF_ALERTS = "number_of_alerts"
     KNOWN_FP_MD5_HASHES = "known_fps"
