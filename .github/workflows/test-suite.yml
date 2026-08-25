@@ -166,6 +166,12 @@ jobs:
         include: ${{ fromJson(needs.list-tests.outputs.test_files) }}
 
     steps:
+      - name: Install git-lfs
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git-lfs
+          git lfs install
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
