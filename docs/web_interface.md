@@ -255,8 +255,6 @@ predate score persistence. Missing samples are reported explicitly and are
 never replaced with scores calculated by the web interface.
 
 ### Alerts and evidence
-### Firewall
-
 
 Alerts come from durable SQLite. The default table shows individual alerts, bounded to 100 rows per page. Each row shows the exact Slips score at threshold crossing and the configured threshold. **Group by host** is an optional display mode that shows alert count, evidence-link count, latest alert time, highest threat, peak threshold-crossing score, and labels. Selecting a host aggregate shows its newest individual alerts; selecting an individual alert shows related evidence.
 
