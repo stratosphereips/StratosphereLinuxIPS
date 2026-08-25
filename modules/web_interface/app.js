@@ -16,6 +16,8 @@ const state = {
     alerts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
     evidence: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
     hosts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "last_seen", order: "desc" },
+    modules: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "name", order: "asc" },
+    firewall: { items: [], total: 0, next: null, cursors: [null], index: 0 },
     hostFlows: { items: [], total: 0, next: null, cursors: [null], index: 0 },
     "host-evidence": { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
   },
@@ -206,6 +208,19 @@ function formatChartValue(value, maximum) {
   return compact(amount);
 }
 
+/** Format a memory-chart axis value using binary units. */
+function formatMemoryChartValue(value) {
+  const mib = numeric(value);
+  if (mib < 1024) return `${formatChartValue(mib, mib)} MiB`;
+  const gib = mib / 1024;
+  return `${formatChartValue(gib, gib)} GiB`;
+}
+
+/** Format a CPU-chart axis value as a percentage of total host capacity. */
+function formatCpuChartValue(value, maximum) {
+  return `${formatChartValue(value, maximum)}%`;
+}
+
 /** Format a compact, readable timestamp for a performance-chart x-axis. */
 function formatChartTime(value, span) {
   const timestamp = numeric(value);
@@ -217,7 +232,7 @@ function formatChartTime(value, span) {
 }
 
 /** Render a performance chart with numeric and time axes. */
-function renderLineChart(id, points, series) {
+function renderLineChart(id, points, series, formatValue = formatChartValue) {
   const svg = byId(id);
   svg.replaceChildren();
   const width = 600;
@@ -260,7 +275,7 @@ function renderLineChart(id, points, series) {
     label.setAttribute("y", String(y + 3));
     label.setAttribute("text-anchor", "end");
     label.setAttribute("class", "chart-label");
-    label.textContent = formatChartValue(maximum * ratio, maximum);
+    label.textContent = formatValue(maximum * ratio, maximum);
     svg.append(label);
   });
   [0, 0.5, 1].forEach((ratio) => {
@@ -399,15 +414,41 @@ function renderOverview() {
   });
 }
 
+/** Render a module resource value with a 0–100 red heat-map background. */
+function usageCell(percentage, label, resource) {
+  const actual = Math.max(0, numeric(percentage));
+  const intensity = Math.min(actual, 100);
+  const element = text("span", label, "usage-cell");
+  element.style.backgroundColor = `rgba(239, 107, 115, ${intensity / 100})`;
+  element.title = `${actual.toFixed(1)}% of ${resource}`;
+  return element;
+}
+
 function renderModules(modules) {
   const query = byId("module-search").value.trim().toLowerCase();
-  renderTable("modules-table", modules.filter((item) =>
-    item.name.toLowerCase().includes(query)), [
+  const sort = state.pages.modules;
+  const numericColumns = new Set([
+    "pid", "cpu_percent", "memory_mb", "flows_per_minute", "evidence_count", "error_count",
+  ]);
+  const rows = modules.filter((item) => item.name.toLowerCase().includes(query));
+  rows.sort((left, right) => {
+    const key = sort.sort;
+    const comparison = numericColumns.has(key)
+      ? numeric(left[key]) - numeric(right[key])
+      : String(left[key] || "").localeCompare(String(right[key] || ""));
+    if (comparison) return sort.order === "asc" ? comparison : -comparison;
+    return left.name.localeCompare(right.name);
+  });
+  renderTable("modules-table", rows, [
     (row) => text("code", row.name),
     (row) => text("span", row.state, `status ${row.running ? "ok" : "warn"}`),
     (row) => row.pid,
-    (row) => `${numeric(row.cpu_percent).toFixed(1)}%`,
-    (row) => `${numeric(row.memory_mb).toFixed(1)} MiB`,
+    (row) => usageCell(
+      row.cpu_percent, `${numeric(row.cpu_percent).toFixed(1)}%`, "one CPU core",
+    ),
+    (row) => usageCell(
+      row.memory_percent, `${numeric(row.memory_mb).toFixed(1)} MiB`, "host memory",
+    ),
     (row) => compact(row.flows_per_minute),
     (row) => compact(row.evidence_count),
     (row) => row.error_count,
@@ -419,8 +460,16 @@ async function loadMetrics() {
   const payload = await api("metrics", `/api/metrics?range=${range}&max_points=1200`);
   if (!payload) return;
   state.metrics = payload.items;
-  renderLineChart("cpu-chart", state.metrics, [{ key: "cpu" }, { key: "cpu_max", className: "secondary-line" }]);
-  renderLineChart("memory-chart", state.metrics, [{ key: "memory" }, { key: "memory_max", className: "secondary-line" }]);
+  renderLineChart(
+    "cpu-chart", state.metrics,
+    [{ key: "cpu" }, { key: "cpu_max", className: "secondary-line" }],
+    formatCpuChartValue,
+  );
+  renderLineChart(
+    "memory-chart", state.metrics,
+    [{ key: "memory" }, { key: "memory_max", className: "secondary-line" }],
+    formatMemoryChartValue,
+  );
   renderLineChart("fps-chart", state.metrics, [{ key: "fps" }, { key: "fps_max", className: "secondary-line" }]);
 }
 
@@ -552,10 +601,13 @@ async function loadAlerts() {
   const grouped = byId("alerts-view").value === "grouped";
   configureTable("alerts", grouped ? "grouped" : "individual", grouped ? [
     ["Latest", "time"], ["Host", "host"], ["Highest threat", "threat"],
+    ["Name / domain", null], ["TI feeds", null],
     ["Alerts", "alerts"], ["Evidence links", "evidence"], ["Labels", "label"],
   ] : [
     ["Time", "time"], ["Host", "host"], ["Threat", "threat"],
-    ["Label", "label"], ["Evidence", "evidence"], ["Alert ID", "id"],
+    ["TW", "tw"], ["Window start", "tw_start"], ["Window end", "tw_end"],
+    ["Name / domain", null], ["TI feeds", null], ["Label", "label"],
+    ["Evidence", "evidence"], ["Alert ID", "id"],
   ], loadAlerts);
   byId("alerts-description").textContent = grouped
     ? "Grouped by host. Select a host, then an alert, its evidence, and triggering flows."
@@ -566,13 +618,17 @@ async function loadAlerts() {
   if (grouped) {
     renderTable("alerts-table", payload.items, [
       (row) => formatTime(row.alert_time), (row) => text("code", row.ip_alerted),
-      (row) => threat(row.threat_level), (row) => compact(row.alert_count),
+      (row) => threat(row.threat_level), (row) => contextName(row),
+      (row) => tiFeeds(row), (row) => compact(row.alert_count),
       (row) => compact(row.evidence_count), (row) => row.label || "—",
     ], openAlertGroup);
   } else {
     renderTable("alerts-table", payload.items, [
       (row) => formatTime(row.alert_time), (row) => text("code", row.ip_alerted),
-      (row) => threat(row.threat_level), (row) => row.label || "—",
+      (row) => threat(row.threat_level),
+      (row) => text("code", row.timewindow || "—"),
+      (row) => row.tw_start || "—", (row) => row.tw_end || "—",
+      (row) => contextName(row), (row) => tiFeeds(row), (row) => row.label || "—",
       (row) => compact(row.evidence_count), (row) => text("code", row.alert_id),
     ], openAlert);
   }
@@ -616,6 +672,35 @@ async function loadEvidence() {
   pager("evidence", "evidence-pager", loadEvidence);
 }
 
+async function loadFirewall() {
+  const search = byId("firewall-search").value.trim();
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  const payload = await api("firewall", `/api/firewall?${params}`);
+  if (!payload) return;
+  byId("firewall-badge").textContent = compact(payload.total);
+  byId("firewall-count").textContent = `${payload.page_size} active enforcement record${payload.page_size === 1 ? "" : "s"}`;
+  renderTable("firewall-table", payload.items, [
+    (row) => text("code", row.ip),
+    (row) => text("span", row.status, `status ${row.status === "blocked" ? "bad" : "warn"}`),
+    (row) => formatTime(row.blocked_at),
+    (row) => row.unblock_at ? formatTime(row.unblock_at) : "Schedule unavailable",
+    (row) => row.remaining_seconds === null ? "Schedule unavailable" : formatDuration(row.remaining_seconds),
+    (row) => row.remaining_timewindows === null ? "—" : row.remaining_timewindows,
+    (row) => compact(row.evidence_count),
+    (row) => compact(row.alert_count),
+  ], (row) => openHost(row.ip));
+}
+
+function formatDuration(seconds) {
+  const total = Math.max(0, Math.round(numeric(seconds)));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  if (hours) return `${hours}h ${minutes}m`;
+  if (minutes) return `${minutes}m ${secs}s`;
+  return `${secs}s`;
+}
 async function loadHosts() {
   const payload = await api("hosts", listPath("hosts"));
   if (!payload) return;
@@ -624,6 +709,8 @@ async function loadHosts() {
     (row) => text("code", row.ip),
     (row) => text("span", row.scope, `status ${row.scope === "public" ? "warn" : "ok"}`),
     (row) => row.hostname || "—",
+    (row) => contextName(row),
+    (row) => tiFeeds(row),
     (row) => text("code", row.mac || "—"),
     (row) => threat(row.max_threat_level),
     (row) => compact(row.load?.flows),
@@ -633,6 +720,25 @@ async function loadHosts() {
     (row) => formatTime(row.load?.last_seen || row.observed_at),
   ], (row) => openHost(row.ip));
   pager("hosts", "hosts-pager", loadHosts);
+}
+
+/** Render cached rDNS or the most recently associated DNS domain. */
+function contextName(record) {
+  const value = record.dns_name || "—";
+  const source = record.dns_name_source || "No cached DNS context";
+  const element = text("code", value);
+  element.title = source;
+  return element;
+}
+
+/** Render names of threat-intelligence feeds that contain this IP. */
+function tiFeeds(record) {
+  const feeds = Array.isArray(record.ti_feeds) ? record.ti_feeds : [];
+  const element = text("span", feeds.length ? feeds.join(", ") : "—");
+  element.title = feeds.length
+    ? `${feeds.length} matching threat-intelligence feed${feeds.length === 1 ? "" : "s"}`
+    : "No cached threat-intelligence feed match";
+  return element;
 }
 
 function detailRow(label, value) {
@@ -744,7 +850,6 @@ function renderDnsDetails(dns) {
   }
   return container;
 }
-
 /** Cancel requests whose results belong exclusively to drawer content. */
 function cancelDrawerRequests() {
   ["alertDetail", "alertGroup", "evidenceGroup", "evidenceFlows"].forEach((key) =>
@@ -909,6 +1014,7 @@ function evidenceCard(record) {
   metadata.className = "investigation-card-meta";
   metadata.append(
     text("span", formatTime(record.timestamp)),
+    text("span", `TW: ${record.twid || record.timewindow?.number || "—"}`),
     text("span", `${compact(record.flow_count)} triggering flows`),
     text("span", record.module ? `Module: ${record.module}` : "Module unknown"),
   );
@@ -1231,8 +1337,16 @@ async function openEvidence(record) {
     record.alert_ids.forEach((id) => identifiers.append(text("code", id)));
     body.append(investigationHeading("Related alert IDs"), identifiers);
   }
+  const portScanEvidence = ["HORIZONTAL_PORT_SCAN", "VERTICAL_PORT_SCAN"].includes(
+    String(record.evidence_type).toUpperCase(),
+  );
   body.append(
-    investigationHeading("Triggering flows", "Each flow includes its related parsed protocol flows"),
+    investigationHeading(
+      "Triggering flows",
+      portScanEvidence
+        ? "Port-scan evidence links at most 20 flows; each includes related parsed protocol flows."
+        : "Each flow includes its related parsed protocol flows.",
+    ),
   );
   try {
     const payload = await api("evidenceFlows", `/api/evidence/${escapePath(record.id)}/flows`);
@@ -1439,6 +1553,8 @@ async function loadHostEvidence() {
     sort: page.sort,
     order: page.order,
   });
+  const search = byId("host-evidence-search").value.trim();
+  if (search) params.set("search", search);
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
   const path = "/api/hosts/" + escapePath(state.host.ip) + "/evidence?" + params;
   const payload = await api("hostEvidence", path);
@@ -1448,7 +1564,8 @@ async function loadHostEvidence() {
   page.next = payload.next_cursor;
   byId("host-evidence-title").textContent = "Related evidence · " + payload.total;
   byId("host-evidence-count").textContent =
-    payload.page_size + " shown · " + compact(payload.total) + " evidence records";
+    payload.page_size + " shown · " + compact(payload.total) + " evidence records" +
+    (search ? " matching search" : "");
   renderTable("host-evidence-table", payload.items, [
     (row) => formatTime(row.timestamp),
     (row) => threat(row.threat_level),
@@ -1553,11 +1670,12 @@ function closeHost() {
   state.requests.get("hostSummary")?.abort();
   state.requests.get("hostEvidence")?.abort();
   byId("host-detail-view").hidden = true;
-  byId("hosts-list-view").hidden = false;
+  return { overview: loadOverview, alerts: loadAlerts, evidence: loadEvidence, firewall: loadFirewall, hosts: loadHosts }[name];
 }
 
 function tabLoader(name) {
   return { overview: loadOverview, alerts: loadAlerts, evidence: loadEvidence, hosts: loadHosts }[name];
+  return { overview: loadOverview, alerts: loadAlerts, evidence: loadEvidence, firewall: loadFirewall, hosts: loadHosts }[name];
 }
 
 function currentLoader() {
@@ -1578,6 +1696,7 @@ async function refreshActive() {
 }
 
 function activeRangeIsLive() {
+  if (state.activeTab === "firewall") return true;
   if (state.activeTab === "overview") return true;
   if (state.activeTab === "hosts" && state.host) {
     return rangeIsLive("host") && state.pages.hostFlows.index === 0;
@@ -1665,8 +1784,10 @@ byId("host-back").addEventListener("click", closeHost);
 byId("host-flow-limit").addEventListener("change", () => {
   resetPage("hostFlows");
   loadHostFlows().catch(() => {});
+bindFilters("firewall", ["firewall-search"], loadFirewall);
 });
 
+bindFilters("host-evidence", ["host-evidence-search"], loadHostEvidence);
 bindFilters("alerts", ["alerts-search", "alerts-threat"], loadAlerts);
 bindFilters("evidence", ["evidence-search", "evidence-threat", "evidence-link"], loadEvidence);
 bindFilters("hosts", ["hosts-search", "hosts-scope", "hosts-threat"], loadHosts);
@@ -1677,6 +1798,9 @@ bindRange("evidence", "evidence", loadEvidence);
 bindRange("hosts", "hosts", loadHosts);
 bindRange("host", "hostFlows", async () => {
   await Promise.all([loadHostFlows(), loadHostSummary(), loadHostEvidence()]);
+});
+bindTableSort("modules", async () => {
+  if (state.overview) renderModules(state.overview.modules);
 });
 bindTableSort("hosts", loadHosts);
 bindTableSort("host-evidence", loadHostEvidence);
