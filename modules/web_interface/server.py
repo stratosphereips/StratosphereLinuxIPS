@@ -4134,8 +4134,6 @@ class RunDataReader:
             },
         }
 
-
-
     def firewall(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
         """Return active Slips firewall blocks and their probation schedules."""
         try:
@@ -4176,6 +4174,7 @@ class RunDataReader:
             "full_total": len(records),
             "page_size": min(len(records), MAX_PAGE_SIZE),
         }
+
 
 class SlipsHTTPServer(ThreadingHTTPServer):
 
