@@ -112,9 +112,17 @@ module row.
 CPU, resident memory, and processed flows per second are sampled from the complete Slips process tree every second. CPU is a percentage of total host capacity. Exact samples are retained for 24 hours. Complete old minutes are transactionally compacted into permanent average, maximum, and flow-total rollups. Charts support 5 minutes, 15 minutes, 1 hour, 24 hours, and Full run.
 Flow totals use exact profiler counter deltas rather than assuming every sample is exactly one second apart. Existing web history databases are upgraded in place when the module starts.
 
-### Alerts and evidence
 ### Firewall
 
+The Firewall tab lists IPs currently confirmed in Slips' `slipsBlocking` firewall state. It distinguishes the current blocking window from the final **probation** window, shows the scheduled unblock time and remaining duration when available, and includes each IP's evidence and alert totals.
+
+### P2P
+
+The P2P tab combines current Redis connectivity with the persistent local P2P trust database. It shows the local Pigeon identity and listen address, connected and previously known peers, peer trust and reliability, reliability evolution, peer reports received during the current run, and bounded recent send/receive activity. An enabled module with zero connected peers is shown as healthy and listening.
+
+Message counters begin when telemetry-capable P2P code starts. Reliability history can span earlier runs because `permanent/p2p_trust_runtime/trustdb.db` is persistent; the reports table is filtered using this run's analysis start time.
+
+### Alerts and evidence
 
 Alerts come from durable SQLite. The default table shows individual alerts, bounded to 100 rows per page. **Group by host** is an optional display mode that shows alert count, evidence-link count, latest alert time, highest threat, and labels. Selecting a host aggregate shows its newest individual alerts; selecting an individual alert shows related evidence.
 
