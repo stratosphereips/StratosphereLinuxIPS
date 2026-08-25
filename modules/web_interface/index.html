@@ -26,6 +26,7 @@
     <button class="tab" data-tab="evidence">Evidence <span id="evidence-badge" class="badge">0</span></button>
     <button class="tab" data-tab="hosts">Hosts <span id="hosts-badge" class="badge">0</span></button>
     <button class="tab" data-tab="firewall">Firewall <span id="firewall-badge" class="badge">0</span></button>
+    <button class="tab" data-tab="p2p">P2P <span id="p2p-badge" class="badge">0</span></button>
   </nav>
 
   <main>
@@ -94,6 +95,24 @@
       <div class="surface table-surface"><div class="table-wrap"><table id="evidence-table"><thead><tr></tr></thead><tbody></tbody></table></div></div>
       <div id="evidence-pager" class="pager"></div>
 
+    </section>
+
+    <section id="firewall" class="panel" aria-labelledby="firewall-title">
+      <div class="section-heading"><div><p class="eyebrow">ENFORCEMENT</p><h2 id="firewall-title">Firewall blocks</h2><p>Confirmed active blocks and their final probation window.</p></div><button class="secondary refresh-list" data-target="firewall">Refresh</button></div>
+      <div class="toolbar"><input id="firewall-search" type="search" placeholder="Search IP or status"><span id="firewall-count" class="result-count"></span></div>
+      <div class="surface table-surface"><div class="table-wrap"><table id="firewall-table"><thead><tr><th>IP</th><th>Status</th><th>Blocked since</th><th>Unblock at</th><th>Remaining</th><th>Extra TWs</th><th>Evidence</th><th>Alerts</th></tr></thead><tbody></tbody></table></div></div>
+    </section>
+
+    <section id="p2p" class="panel" aria-labelledby="p2p-title">
+      <div class="section-heading"><div><p class="eyebrow">COLLABORATIVE INTELLIGENCE</p><h2 id="p2p-title">P2P network</h2><p id="p2p-status">Loading peer connectivity and trust state…</p></div><button class="secondary refresh-list" data-target="p2p">Refresh</button></div>
+      <div id="p2p-summary" class="summary-grid"></div>
+      <article class="surface"><h3>Local identity</h3><div id="p2p-identity" class="metadata-grid"></div></article>
+      <article class="surface table-surface"><div class="table-heading"><div><h3>Peers</h3><p>Live connectivity plus the latest persistent trust state.</p></div></div><div class="table-wrap"><table id="p2p-peers-table"><thead><tr><th>Peer ID</th><th>IP</th><th>Connectivity</th><th>Trust</th><th>Reliability</th><th>Reports received</th><th>Last seen</th></tr></thead><tbody></tbody></table></div></article>
+      <div class="split-grid">
+        <article class="surface table-surface"><div class="table-heading"><div><h3>Trust evolution</h3><p>Newest persistent reliability changes.</p></div></div><div class="table-wrap"><table id="p2p-trust-table"><thead><tr><th>Time</th><th>Peer</th><th>Reliability</th></tr></thead><tbody></tbody></table></div></article>
+        <article class="surface table-surface"><div class="table-heading"><div><h3>Reports received</h3><p>Peer opinions received during this run.</p></div></div><div class="table-wrap"><table id="p2p-reports-table"><thead><tr><th>Time</th><th>Peer</th><th>Target</th><th>Score</th><th>Confidence</th></tr></thead><tbody></tbody></table></div></article>
+      </div>
+      <article class="surface table-surface"><div class="table-heading"><div><h3>Recent message activity</h3><p>Bounded send/receive telemetry from this run.</p></div></div><div class="table-wrap"><table id="p2p-activity-table"><thead><tr><th>Time</th><th>Direction</th><th>Type</th><th>Peer</th><th>Target</th></tr></thead><tbody></tbody></table></div></article>
     </section>
 
     <section id="hosts" class="panel" aria-labelledby="hosts-title">
