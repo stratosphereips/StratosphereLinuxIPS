@@ -1568,6 +1568,12 @@ class DBManager:
     def get_peer_trust_data(self, id: str):
         return self.rdb.get_peer_td(id)
 
+    def record_p2p_message(self, *args, **kwargs):
+        return self.rdb.record_p2p_message(*args, **kwargs)
+
+    def get_p2p_message_telemetry(self, *args, **kwargs):
+        return self.rdb.get_p2p_message_telemetry(*args, **kwargs)
+
     def cache_network_opinion(self, target: str, opinion: dict, time: float):
         self.rdb.cache_network_opinion(target, opinion, time)
 
