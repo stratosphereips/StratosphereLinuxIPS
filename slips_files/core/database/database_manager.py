@@ -24,7 +24,7 @@ from slips_files.common.output_paths import (
     get_this_filepath_inside_permanent_dir,
 )
 from slips_files.common.performance_paths import get_performance_csv_path
-from slips_files.core.structures.evidence import Evidence
+from slips_files.core.structures.evidence import Evidence, EvidenceType
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.output import Output
 
@@ -872,6 +872,12 @@ class DBManager:
         if self.is_detection_disabled(evidence.evidence_type):
             return False
 
+        if evidence.evidence_type in {
+            EvidenceType.HORIZONTAL_PORT_SCAN,
+            EvidenceType.VERTICAL_PORT_SCAN,
+        }:
+            evidence.uid = evidence.uid[:20]
+
         interface: str | None = self._get_evidence_interface(evidence)
         setattr(evidence, "interface", interface)
         evidence_set = self.rdb.set_evidence(evidence)
@@ -1324,6 +1330,15 @@ class DBManager:
 
     def del_blocked_ip(self, *args, **kwargs):
         return self.rdb.del_blocked_ip(*args, **kwargs)
+
+    def set_firewall_block_state(self, *args, **kwargs):
+        return self.rdb.set_firewall_block_state(*args, **kwargs)
+
+    def get_firewall_block_states(self, *args, **kwargs):
+        return self.rdb.get_firewall_block_states(*args, **kwargs)
+
+    def del_firewall_block_state(self, *args, **kwargs):
+        return self.rdb.del_firewall_block_state(*args, **kwargs)
 
     def set_ipv6_of_profile(self, *args, **kwargs):
         return self.rdb.set_ipv6_of_profile(*args, **kwargs)
