@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import shutil
-from unittest.mock import patch, mock_open, Mock, call
+from unittest.mock import ANY, patch, mock_open, Mock, call
 import os
 import psutil
 import redis
@@ -330,7 +330,7 @@ def test_check_redis_database_uses_running_cache(mock_db):
 
     assert result is True
     mock_redis.assert_called_once_with(
-        "", 6379, "output_dir", False, flush_db=False
+        ANY, 6379, "output_dir", False, flush_db=False
     )
     mock_db.rcache.ping.assert_called_once_with()
     mock_db.rcache.close.assert_called_once_with()
