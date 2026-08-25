@@ -279,6 +279,15 @@ def send_b64_to_go(
     # only channel used right now is self.pygo_channel defined in p2ptrst.py
     decoded_data = base64.b64decode(message)
     data_json = json.loads(decoded_data.decode("utf-8"))
+    db.record_p2p_message(
+        "sent",
+        {
+            "message_type": data_json.get("message_type", "unknown"),
+            "peer": recipient,
+            "target": data_json.get("key", ""),
+            "message": data_json,
+        },
+    )
 
 
 def read_configuration(config, section: str, name: str) -> str:
