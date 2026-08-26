@@ -154,24 +154,37 @@ class FeedsUpdateManager(
             # this run (self.url_feeds, self.ja3_feeds, self.ssl_feeds)
             self._delete_unused_cached_remote_feeds()
 
-            for file_to_download in files_to_download:
-                if self.should_update(file_to_download, self.update_period):
-                    # failed to get the response, either a server problem
-                    # or the file is up to date so the response isn't needed
-                    # either way __check_if_update handles the error printing
+            # should_update() does a blocking network request (through
+            # download_file()) to check each feed's e-tag. Running it
+            # in a thread per feed lets those checks actually overlap -
+            # calling it directly in this loop would block the event
+            # loop for every feed in turn, serializing ~45 requests
+            # (each with its own retries) even though update_ti_file()
+            # below is scheduled as if downloads were concurrent.
+            should_update_results = await asyncio.gather(
+                *(
+                    asyncio.to_thread(
+                        self.should_update,
+                        file_to_download,
+                        self.update_period,
+                    )
+                    for file_to_download in files_to_download
+                )
+            )
 
+            tasks = []
+            for file_to_download, needs_update in zip(
+                files_to_download, should_update_results
+            ):
+                if needs_update:
                     # this run wasn't started with existing ti files in the db
                     self.first_time_reading_files = True
 
-                    # every function call to update_ti_file is now running
-                    # concurrently instead of serially
-                    # so when a server's taking a while to give us the TI
-                    # feed, we proceed to download the next file instead of
-                    # being idle
                     task = asyncio.create_task(
                         self.update_ti_file(file_to_download)
                     )
                     task.add_done_callback(self._handle_task_exception)
+                    tasks.append(task)
             #######################################################
             # in case of risk_iq files, we don't have a link for them in
             # ti_files, We update these files using their API
@@ -181,12 +194,8 @@ class FeedsUpdateManager(
                 self.update_riskiq_feed()
 
             # wait for all TI files to update
-            try:
-                await task
-            except (UnboundLocalError, asyncio.exceptions.CancelledError):
-                # in case all our files are updated, we don't
-                # have task defined, skip
-                pass
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
 
             self.db.set_loaded_ti_files(self.loaded_ti_files)
             self.print_duplicate_ip_summary()

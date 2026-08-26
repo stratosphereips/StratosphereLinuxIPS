@@ -11,6 +11,7 @@ import requests
 from pytest_mock.plugin import MockerFixture
 
 from slips_files.common.timer_manager import PeriodicUpdateTimer
+from tests.common_test_utils import get_mock_coro
 from tests.module_factory import ModuleFactory
 
 
@@ -912,3 +913,46 @@ def test_parse_ssl_feed_no_valid_fingerprints(mocker, tmp_path):
 
     update_manager.db.add_ssl_sha1_to_ioc.assert_not_called()
     assert result is False
+
+
+@pytest.mark.asyncio
+async def test_update_checks_all_feeds_concurrently_and_awaits_all_tasks():
+    """should_update() should run for every feed (not stop at the first
+    one), and every update_ti_file() task it triggers should be awaited,
+    not just the last one scheduled."""
+    update_manager = ModuleFactory().create_update_manager_obj()
+    update_manager.update_period = 3600
+    update_manager.url_feeds = {"https://example.com/feed1.txt": {}}
+    update_manager.ja3_feeds = {"https://example.com/feed2.txt": {}}
+    update_manager.ssl_feeds = {}
+    update_manager.tor_nodes_feeds = {"https://example.com/feed3.txt": {}}
+    update_manager.riskiq_update_period = 3600
+    update_manager._should_update_mac_db = Mock(return_value=False)
+    update_manager.should_update_online_whitelist = Mock(return_value=False)
+    update_manager._delete_unused_cached_remote_feeds = Mock()
+    update_manager.should_update = Mock(
+        side_effect=lambda feed, period: feed
+        != "https://example.com/feed2.txt"
+    )
+    update_manager.update_ti_file = get_mock_coro(None)
+    update_manager.db.set_loaded_ti_files = Mock()
+    update_manager.print_duplicate_ip_summary = Mock()
+
+    await update_manager.update()
+
+    checked_feeds = {
+        call.args[0] for call in update_manager.should_update.call_args_list
+    }
+    assert checked_feeds == {
+        "https://example.com/feed1.txt",
+        "https://example.com/feed2.txt",
+        "https://example.com/feed3.txt",
+        "riskiq_domains",
+    }
+    update_manager.update_ti_file.assert_any_call(
+        "https://example.com/feed1.txt"
+    )
+    update_manager.update_ti_file.assert_any_call(
+        "https://example.com/feed3.txt"
+    )
+    assert update_manager.update_ti_file.call_count == 2
