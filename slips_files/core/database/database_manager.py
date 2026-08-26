@@ -668,6 +668,9 @@ class DBManager:
     def set_organization_of_port(self, *args, **kwargs):
         return self.rdb.set_organization_of_port(*args, **kwargs)
 
+    def set_organizations_of_ports(self, *args, **kwargs):
+        return self.rdb.set_organizations_of_ports(*args, **kwargs)
+
     def get_organization_of_port(self, *args, **kwargs):
         return self.rdb.get_organization_of_port(*args, **kwargs)
 
@@ -733,6 +736,9 @@ class DBManager:
 
     def store_pid(self, *args, **kwargs):
         return self.rdb.store_pid(*args, **kwargs)
+
+    def increment_modules_started_count(self, *args, **kwargs):
+        return self.rdb.increment_modules_started_count(*args, **kwargs)
 
     def get_pids(self, *args, **kwargs):
         return self.rdb.get_pids(*args, **kwargs)

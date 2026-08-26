@@ -932,7 +932,6 @@ class MLBaseDetection(IModule, ABC):
         """Drop privileges and load model artifacts before the main loop starts."""
         utils.drop_root_privs_permanently()
         self.read_model()
-        print("\n")
 
     @staticmethod
     def _extract_twid_from_tw_closed(msg: dict) -> Optional[str]:

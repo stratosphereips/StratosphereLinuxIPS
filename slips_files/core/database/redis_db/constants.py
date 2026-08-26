@@ -32,6 +32,7 @@ class Constants:
     DOMAINS_RESOLVED = "DomainsResolved"
     CACHED_ASN = "cached_asn"
     PIDS = "PIDs"
+    MODULES_STARTED_COUNT = "modules_started_count"
     MAC = "MAC"
     MODIFIED_TIMEWINDOWS = "modified_timewindows"
     TW_FLOWS_COUNTER = "timewindow_flows_counter"

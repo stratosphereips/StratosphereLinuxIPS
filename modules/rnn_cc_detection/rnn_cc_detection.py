@@ -61,7 +61,7 @@ def _silence_native_stderr():
 class CCDetection(IModule):
     # Name: short name of the module. Do not use spaces
     name = "rnn_cc_detection"
-    description = "Detect C&C channels based on behavioral letters"
+    description = "Detects C&C channels based on behavioral letters"
     authors = ["Sebastian Garcia", "Kamila Babayeva", "Ondrej Lukas"]
 
     def init(self):

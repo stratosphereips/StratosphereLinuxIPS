@@ -2,17 +2,15 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # StartupMixin groups construction and startup of core processes and shared
 # runtime helpers used by ProcessManager.
-import asyncio
-import multiprocessing
-
-from exclusiveprocess import CannotAcquireLock, Lock
+import threading
+from typing import Optional
 
 from managers.update_manager import UpdateManager
 from modules.feeds_update_manager.feeds_update_manager import (
     FeedsUpdateManager,
 )
+from modules.supported_module_names import Modules
 from slips_files.common.input_type import InputType
-from slips_files.common.style import green
 from slips_files.core.evidence_handler import EvidenceHandler
 from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.input import Input
@@ -93,13 +91,14 @@ class StartupMixin:
             is_profiler_done_starting_initial_workers_event=(
                 self.is_profiler_done_starting_initial_workers_event
             ),
+            total_processes_to_start=self.total_processes_to_start,
         )
         profiler_process.start()
-        self.main.print(
-            f'Started {green("Profiler Process")} '
-            f"[PID {green(profiler_process.pid)}]",
-            1,
-            0,
+        self.announce_started(
+            Modules.PROFILER,
+            profiler_process.pid,
+            profiler_process.description,
+            self.main.db,
         )
         self.main.db.store_pid("Profiler", int(profiler_process.pid))
         # Interface input starts profiler workers before the input process
@@ -126,13 +125,14 @@ class StartupMixin:
             self.main.conf,
             self.main.pid,
             self.main.bloom_filters_man,
+            total_processes_to_start=self.total_processes_to_start,
         )
         evidence_process.start()
-        self.main.print(
-            f'Started {green("Evidence Process")} '
-            f"[PID {green(evidence_process.pid)}]",
-            1,
-            0,
+        self.announce_started(
+            Modules.EVIDENCE_HANDLER,
+            evidence_process.pid,
+            evidence_process.description,
+            self.main.db,
         )
         self.main.db.store_pid("evidence_handler", int(evidence_process.pid))
         self.evidence_process = evidence_process
@@ -170,11 +170,11 @@ class StartupMixin:
             ),
         )
         input_process.start()
-        self.main.print(
-            f'Started {green("Input Process")} '
-            f"[PID {green(input_process.pid)}]",
-            1,
-            0,
+        self.announce_started(
+            Modules.INPUT,
+            input_process.pid,
+            input_process.description,
+            self.main.db,
         )
         self.main.db.store_pid("Input", int(input_process.pid))
         self.input_process = input_process
@@ -195,44 +195,29 @@ class StartupMixin:
             self.main.pid,
         )
 
-    def start_update_manager(
+    def start_feeds_update_manager(
         self, local_files: bool = False, ti_feeds: bool = False
-    ) -> None:
+    ) -> Optional[threading.Thread]:
         """
         Run the feeds update manager in the current process.
 
         Parameters:
             local_files: Whether to update local ports and org files.
             ti_feeds: Whether to update remote threat-intel feeds.
+
+        Returns:
+            The background thread updating local ports info, if one was
+            started. Slips doesn't need to wait for it before starting
+            the rest of the modules, so callers can ignore it.
         """
-        try:
-            bloom_filters_man = getattr(self.main, "bloom_filters_man", None)
-            # only one instance of slips should be able to update ports
-            # and orgs at a time
-            # so this function will only be allowed to run from 1 slips
-            # instance.
-            with Lock(name="slips_ports_and_orgs"):
-                # pass a dummy termination event for update manager to
-                # update orgs and ports info
-                update_manager = FeedsUpdateManager(
-                    self.main.logger,
-                    self.main.args.output,
-                    self.main.redis_port,
-                    multiprocessing.Event(),
-                    self.main.args,
-                    self.main.conf,
-                    self.main.pid,
-                    bloom_filters_man,
-                )
-
-                if local_files:
-                    update_manager.update_ports_info()
-                    update_manager.update_org_files()
-                    update_manager.update_local_whitelist()
-
-                if ti_feeds:
-                    update_manager.print("Updating TI feeds")
-                    asyncio.run(update_manager.update_ti_files())
-        except CannotAcquireLock:
-            # another instance of slips is updating ports and orgs
-            return
+        return FeedsUpdateManager.run_startup_update(
+            logger=self.main.logger,
+            output_dir=self.main.args.output,
+            redis_port=self.main.redis_port,
+            args=self.main.args,
+            conf=self.main.conf,
+            pid=self.main.pid,
+            bloom_filters_man=getattr(self.main, "bloom_filters_man", None),
+            local_files=local_files,
+            ti_feeds=ti_feeds,
+        )

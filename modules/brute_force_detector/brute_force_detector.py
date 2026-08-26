@@ -64,7 +64,7 @@ class SSHBruteforceCampaign:
 class BruteforceDetector(IModule):
     name = "brute_force_detector"
     description = (
-        "Detect SSH brute forcing using ssh.log, software.log, and Zeek "
+        "Detects SSH brute forcing using ssh.log, software.log, and Zeek "
         "notices."
     )
     authors = ["Sebastian Garcia"]

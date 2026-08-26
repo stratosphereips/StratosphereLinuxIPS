@@ -5,35 +5,52 @@
 from typing import Callable, Optional, Set
 
 from modules.supported_module_names import Modules
-from slips_files.common.style import green
+from slips_files.common.startup_report import format_started_line
+from slips_files.common.style import green, grey
+
+# core processes get their own color in the startup progress report,
+# to visually distinguish them from detection modules
+CORE_PROCESSES = {
+    Modules.MAIN,
+    Modules.PROFILER,
+    Modules.EVIDENCE_HANDLER,
+    Modules.INPUT,
+}
 
 
 class ReportingMixin:
     """Provide printing and shutdown-report helpers."""
 
+    disabled_modules_printed = False
+
     def print_disabled_modules(self) -> None:
         """
         Print the current disabled module list.
         """
+        if self.disabled_modules_printed:
+            return
         disabled_modules: Set[str | Modules] = (
             self.get_user_and_runtime_disabled_modules()
         )
-        printable_modules = [
+        if not disabled_modules:
+            return
+
+        printable_modules = sorted(
             module.value if isinstance(module, Modules) else str(module)
             for module in disabled_modules
-        ]
-        print("-" * 27)
-        self.main.print(
-            f"Disabled Modules: {printable_modules}",
-            1,
-            0,
         )
+        self.main.print(
+            f"Disabled Modules: {grey(', '.join(printable_modules))}"
+        )
+        self.disabled_modules_printed = True
 
     def print_started_module(
         self,
         module_name: Modules,
         module_pid: int,
         module_description: str,
+        started_count: int,
+        total_modules: int,
     ) -> None:
         """
         Print a module startup message.
@@ -42,13 +59,56 @@ class ReportingMixin:
             module_name: Module name.
             module_pid: Started module PID.
             module_description: Human-readable module description.
+            started_count: How many modules have finished starting so
+                far, including this one.
+            total_modules: Total number of modules slips is starting.
         """
+        category = "core" if module_name in CORE_PROCESSES else "module"
+        line = format_started_line(
+            module_name.value,
+            started_count,
+            total_modules,
+            module_pid,
+            module_description,
+            category=category,
+        )
         self.main.print(
-            f"\t\tStarting {green(module_name.value)} module "
-            f"({module_description}) "
-            f"[PID {green(module_pid)}]",
+            line,
             1,
             0,
+            suppress_sender=True,
+            is_final_startup_announcement=started_count >= total_modules,
+        )
+
+    def announce_started(
+        self,
+        module_name: Modules,
+        pid: int,
+        description: str,
+        db,
+    ) -> None:
+        """
+        Bump the shared startup counter and print this module/process's
+        startup line. Used by detection modules and core processes
+        (main, evidence handler, profiler, input) alike, so they all
+        share one running "x/total" count.
+
+        Parameters:
+            module_name: Module or core process name.
+            pid: Started process/module PID.
+            description: Human-readable description.
+            db: DB connection to increment the shared counter through.
+                Must be a connection local to the calling process -
+                each detection module has its own, since it runs in
+                its own forked process.
+        """
+        started_count = db.increment_modules_started_count()
+        self.print_started_module(
+            module_name,
+            pid,
+            description,
+            started_count,
+            self.total_processes_to_start,
         )
 
     def print_stopped_module(

@@ -31,7 +31,7 @@ from slips_files.core.structures.evidence import (
 class ARP(IModule):
 
     name = "arp"
-    description = "Detect ARP attacks"
+    description = "Detects ARP attacks"
     authors = ["Alya Gomaa"]
 
     def init(self):

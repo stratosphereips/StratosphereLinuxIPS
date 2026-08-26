@@ -473,16 +473,10 @@ class IPInfo(IAsyncModule):
         return mac
 
     def _get_wifi_interface_if_ap(self) -> str | None:
-        ap_interfaces: str = self.db.get_wifi_interface()
-        if not ap_interfaces:
-            return None
-
-        try:
-            # we're now sure that we're running in AP mode
-            wifi_interface = ap_interfaces["wifi_interface"]
-        except KeyError:
-            wifi_interface = None
-        return wifi_interface
+        # get_wifi_interface() already returns the wifi interface name
+        # (or the user-supplied interface if not running as an AP), not a
+        # dict.
+        return self.db.get_wifi_interface()
 
     def _get_mac_using_ip_neigh(self, gw_ip) -> str | None:
         try:

@@ -52,6 +52,7 @@ EVIDENCE_HANDLER_SHUTDOWN_GRACE_PERIOD_SECONDS = 30
 # Evidence Process
 class EvidenceHandler(ICore):
     name = "evidence_handler"
+    description = "Processes evidence from modules and generates alerts"
     is_evidence_done_by_others = (
         EvidenceHandlerWorker.is_evidence_done_by_others
     )
@@ -63,7 +64,10 @@ class EvidenceHandler(ICore):
     )
     show_popup = EvidenceHandlerWorker.show_popup
 
-    def init(self):
+    def init(self, total_processes_to_start: int = 1):
+        # shared with every evidence worker this process starts, so
+        # they all announce themselves against the same run-wide total
+        self.total_processes_to_start = total_processes_to_start
         self.read_configuration()
         self.idmefv2 = IDMEFv2(self.logger, self.db)
         self.formatter = EvidenceFormatter(self.db, self.args)
@@ -288,6 +292,7 @@ class EvidenceHandler(ICore):
             evidence_queue=self.evidence_worker_queue,
             evidence_logger_q=self.evidence_logger_q,
             notify=self.notify,
+            total_processes_to_start=self.total_processes_to_start,
         )
         worker.start()
         self.evidence_worker_child_processes.append(worker)
@@ -348,7 +353,8 @@ class EvidenceHandler(ICore):
         return received_message
 
     def pre_main(self):
-        self.print(f"Using threshold: {green(self.detection_threshold)}")
+        if not self.db.is_running_non_stop():
+            self.print(f"Using threshold: {green(self.detection_threshold)}")
         for worker_id in range(DEFAULT_EVIDENCE_HANDLER_WORKERS):
             self.start_evidence_worker(worker_id)
 

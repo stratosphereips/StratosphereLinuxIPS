@@ -1,8 +1,10 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
+import multiprocessing
+import threading
 from asyncio import Task
-from typing import Dict
+from typing import Dict, Optional
 
 from exclusiveprocess import (
     Lock,
@@ -60,13 +62,9 @@ class FeedsUpdateManager(
             ),
             self.update_ti_files,
         )
-
-        self.read_configuration()
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
         self.max_days_to_keep_ti_files = 7
-        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
-        self.slips_logfile = self.db.get_stdfile("stdout")
         self.org_info_path = "slips_files/organizations_info/"
         self.path_to_mac_db = "databases/macaddress-db.json"
         # if any keyword of the following is present in a line
@@ -156,24 +154,37 @@ class FeedsUpdateManager(
             # this run (self.url_feeds, self.ja3_feeds, self.ssl_feeds)
             self._delete_unused_cached_remote_feeds()
 
-            for file_to_download in files_to_download:
-                if self.should_update(file_to_download, self.update_period):
-                    # failed to get the response, either a server problem
-                    # or the file is up to date so the response isn't needed
-                    # either way __check_if_update handles the error printing
+            # should_update() does a blocking network request (through
+            # download_file()) to check each feed's e-tag. Running it
+            # in a thread per feed lets those checks actually overlap -
+            # calling it directly in this loop would block the event
+            # loop for every feed in turn, serializing ~45 requests
+            # (each with its own retries) even though update_ti_file()
+            # below is scheduled as if downloads were concurrent.
+            should_update_results = await asyncio.gather(
+                *(
+                    asyncio.to_thread(
+                        self.should_update,
+                        file_to_download,
+                        self.update_period,
+                    )
+                    for file_to_download in files_to_download
+                )
+            )
 
+            tasks = []
+            for file_to_download, needs_update in zip(
+                files_to_download, should_update_results
+            ):
+                if needs_update:
                     # this run wasn't started with existing ti files in the db
                     self.first_time_reading_files = True
 
-                    # every function call to update_ti_file is now running
-                    # concurrently instead of serially
-                    # so when a server's taking a while to give us the TI
-                    # feed, we proceed to download the next file instead of
-                    # being idle
                     task = asyncio.create_task(
                         self.update_ti_file(file_to_download)
                     )
                     task.add_done_callback(self._handle_task_exception)
+                    tasks.append(task)
             #######################################################
             # in case of risk_iq files, we don't have a link for them in
             # ti_files, We update these files using their API
@@ -183,12 +194,8 @@ class FeedsUpdateManager(
                 self.update_riskiq_feed()
 
             # wait for all TI files to update
-            try:
-                await task
-            except (UnboundLocalError, asyncio.exceptions.CancelledError):
-                # in case all our files are updated, we don't
-                # have task defined, skip
-                pass
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
 
             self.db.set_loaded_ti_files(self.loaded_ti_files)
             self.print_duplicate_ip_summary()
@@ -211,6 +218,134 @@ class FeedsUpdateManager(
             f"TI files successfully loaded."
         )
 
+    def _init_whitelist(self):
+        self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
+
+    @classmethod
+    def _build_startup_instance(
+        cls, logger, output_dir, redis_port, args, conf, pid, bloom_filters_man
+    ) -> "FeedsUpdateManager":
+        """
+        Build the instance used by the startup update.
+
+        Returns:
+            A FeedsUpdateManager with a dummy termination event, since it
+            doesn't run as a process here.
+        """
+        return cls(
+            logger,
+            output_dir,
+            redis_port,
+            multiprocessing.Event(),
+            args,
+            conf,
+            pid,
+            bloom_filters_man,
+        )
+
+    @staticmethod
+    def _update_ports_info_in_background(
+        update_manager: "FeedsUpdateManager",
+    ) -> threading.Thread:
+        """
+        Updates local ports info (ports_used_by_specific_orgs.csv and
+        services.csv) in a background thread.
+
+        we're running it in a separate thread in order to avoid blocking
+        the startup of the rest f the modules until this function is done.
+        it takes 18+ seconds
+        Uses its own lock name (instead of "slips_ports_and_orgs") since
+        it now runs concurrently with the org files/whitelist update of
+        this same process.
+
+        Returns:
+            The started thread, so callers that need to wait for it
+            (e.g. tests) can join() it.
+        """
+
+        def _run():
+            try:
+                with Lock(name="slips_ports_info"):
+                    update_manager.update_ports_info()
+            except CannotAcquireLock:
+                # another instance of slips is updating ports info
+                return
+
+        thread = threading.Thread(
+            target=_run, name="ports-info-updater", daemon=True
+        )
+        thread.start()
+        return thread
+
+    @classmethod
+    def run_startup_update(
+        cls,
+        logger,
+        output_dir: str,
+        redis_port: int,
+        args,
+        conf,
+        pid: int,
+        bloom_filters_man=None,
+        local_files: bool = False,
+        ti_feeds: bool = False,
+    ) -> Optional[threading.Thread]:
+        """
+        Run the feeds update manager in the current process, before slips
+        starts the rest of the modules.
+        this is triggered by the startup_mixin.
+
+        Parameters:
+            logger: the logger to use for printing.
+            output_dir: slips output dir.
+            redis_port: the port of the redis db slips is using.
+            args: slips args.
+            conf: slips config.
+            pid: pid of the process starting the update.
+            bloom_filters_man: shared bloom filters manager.
+            local_files: Whether to update local ports and org files.
+            ti_feeds: Whether to update remote threat-intel feeds.
+
+        Returns:
+            The background thread updating local ports info, if one was
+            started, so callers that need to wait for it can join() it.
+            Callers that don't care (e.g. normal slips startup) can just
+            ignore the return value and let it finish on its own.
+        """
+        ports_info_thread: Optional[threading.Thread] = None
+        try:
+            # only one instance of slips should be able to update orgs
+            # at a time
+            # so this function will only be allowed to run from 1 slips
+            # instance.
+            with Lock(name="slips_ports_and_orgs"):
+                update_manager = cls._build_startup_instance(
+                    logger,
+                    output_dir,
+                    redis_port,
+                    args,
+                    conf,
+                    pid,
+                    bloom_filters_man,
+                )
+                update_manager._init_whitelist()
+
+                if local_files:
+                    ports_info_thread = cls._update_ports_info_in_background(
+                        update_manager
+                    )
+                    update_manager.update_org_files()
+                    update_manager.update_local_whitelist()
+
+                if ti_feeds:
+                    update_manager.print("Updating TI feeds")
+                    asyncio.run(update_manager.update_ti_files())
+        except CannotAcquireLock:
+            # another instance of slips is updating ports and orgs
+            return ports_info_thread
+
+        return ports_info_thread
+
     def shutdown_gracefully(self):
         # terminating the timer for the process to be killed
         self.update_timer.cancel()
@@ -222,6 +357,7 @@ class FeedsUpdateManager(
             # only one instance of slips should be able to update TI files at a time
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_feeds_update"):
+                self._init_whitelist()
                 asyncio.run(self.update_ti_files())
                 # Starting timer to update files
                 self.update_timer.start()

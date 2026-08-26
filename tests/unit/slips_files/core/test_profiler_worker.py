@@ -642,7 +642,9 @@ def test_should_stop_always_returns_false():
 def test_pre_main_updates_line_processor_cache():
     profiler = ModuleFactory().create_profiler_worker_obj()
     profiler.name = "profiler_worker_process_2"
+    profiler.total_processes_to_start = 5
     profiler.input_handler.line_processor_cache = {}
+    profiler.db.increment_modules_started_count.return_value = 1
     profiler.db.get_line_processors.return_value = {
         "conn.log": json.dumps({"ts": 0})
     }

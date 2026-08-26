@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 from slips_files.common.abstracts.iinput_handler import IInputHandler
+from slips_files.common.style import header_line
 from slips_files.core.input.observer_manager import InputObserver
 from slips_files.core.input.zeek.utils.zeek_file_remover import ZeekFileRemover
 
@@ -18,7 +19,7 @@ class PcapInput(IInputHandler):
         runs when slips is given a pcap with -f
         """
         zeek_dir: str = self.input.zeek_utils.create_zeek_output_dir()
-        self.input.print(f"Storing zeek log files in {zeek_dir}")
+        self.input.print(header_line("Zeek Logs", zeek_dir))
         if self.input.is_running_non_stop:
             self.file_remover.start()
 

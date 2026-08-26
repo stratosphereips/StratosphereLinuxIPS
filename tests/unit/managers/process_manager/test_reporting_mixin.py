@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import ast
 from unittest.mock import Mock, patch
 
 import pytest
@@ -20,10 +19,15 @@ def test_print_disabled_modules():
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.user_disabled_modules = {Modules.TEMPLATE, Modules.FIDES}
     process_manager.slips_disabled_modules = set()
-    with patch.object(process_manager.main, "print") as mock_print:
+    with patch(
+        "managers.process_manager.reporting_mixin.grey",
+        side_effect=lambda text: text,
+    ), patch.object(process_manager.main, "print") as mock_print:
         process_manager.print_disabled_modules()
-        printed_modules = ast.literal_eval(
-            mock_print.call_args.args[0].removeprefix("Disabled Modules: ")
+        printed_modules = (
+            mock_print.call_args.args[0]
+            .removeprefix("Disabled Modules: ")
+            .split(", ")
         )
 
         assert set(printed_modules) == {"template", "fides"}
@@ -83,16 +87,27 @@ def test_print_stopped_module():
 def test_print_started_module():
     process_manager = ModuleFactory().create_process_manager_obj()
     with patch(
-        "managers.process_manager.reporting_mixin.green",
-        return_value="green_module_name",
-    ), patch.object(process_manager.main, "print") as mock_print:
+        "managers.process_manager.reporting_mixin.format_started_line",
+        return_value="formatted_line",
+    ) as mock_format_started_line, patch.object(
+        process_manager.main, "print"
+    ) as mock_print:
         process_manager.print_started_module(
-            Modules.CESNET, 12345, "Test description"
+            Modules.CESNET, 12345, "Test description", 1, 5
         )
 
+        mock_format_started_line.assert_called_once_with(
+            Modules.CESNET.value,
+            1,
+            5,
+            12345,
+            "Test description",
+            category="module",
+        )
         mock_print.assert_called_once_with(
-            "\t\tStarting green_module_name module "
-            "(Test description) [PID green_module_name]",
+            "formatted_line",
             1,
             0,
+            suppress_sender=True,
+            is_final_startup_announcement=False,
         )
