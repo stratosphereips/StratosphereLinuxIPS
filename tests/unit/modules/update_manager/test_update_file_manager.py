@@ -224,7 +224,7 @@ def test_download_file_logs_transient_failures_as_warnings(
     [
         # Testcase1: Valid file with single and range ports.
         (
-            """Organization,IP,Ports Range,Protocol
+            """"Organization","IP","Ports Range","Protocol"
 TestOrg,192.168.1.1,80,tcp
 TestOrg,192.168.1.2,443-445,udp""",
             [
@@ -236,7 +236,7 @@ TestOrg,192.168.1.2,443-445,udp""",
         ),
         # Testcase2: File with invalid line format.
         (
-            """Organization,IP,Ports Range,Protocol
+            """"Organization","IP","Ports Range","Protocol"
 TestOrg,192.168.1.1,80
 TestOrg,192.168.1.2,443-445,udp""",
             [
@@ -257,8 +257,9 @@ def test_read_ports_info(mocker, tmp_path, test_data, expected_calls):
     update_manager = ModuleFactory().create_update_manager_obj()
     mocker.patch("builtins.open", mock_open(read_data=test_data))
     update_manager.read_ports_info(str(tmp_path / "ports_info.csv"))
-    for call in expected_calls:
-        update_manager.db.set_organization_of_port.assert_any_call(*call)
+    update_manager.db.set_organizations_of_ports.assert_called_once_with(
+        expected_calls
+    )
 
 
 @pytest.mark.parametrize(

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Unit tests for the profiler core process."""
 
-from unittest.mock import Mock, call, patch
+from unittest.mock import Mock, patch
 
 import pytest
 from tests.module_factory import ModuleFactory
@@ -269,6 +269,7 @@ def test_start_profiler_worker_uses_parent_output_dir(mock_worker_cls):
         aid_queue=profiler.aid_queue,
         aid_manager=profiler.aid_manager,
         is_input_done_event=profiler.is_input_done_event,
+        total_processes_to_start=profiler.total_processes_to_start,
     )
     worker.start.assert_called_once()
     assert profiler.profiler_child_processes == [worker]

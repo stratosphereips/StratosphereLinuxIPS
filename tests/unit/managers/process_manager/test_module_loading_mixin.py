@@ -1,4 +1,4 @@
-from unittest.mock import Mock, call
+from unittest.mock import Mock, call, patch
 
 import pytest
 
@@ -13,57 +13,72 @@ def test_process_manager_includes_module_loading_mixin() -> None:
     assert isinstance(process_manager, ModuleLoadingMixin)
 
 
-def test_get_modules() -> None:
+def test_get_enabled_module_names() -> None:
     process_manager = ModuleFactory().create_process_manager_obj()
     skipped_module = "modules.skipped.skipped"
-    failed_module = "modules.failed.failed"
     loaded_module_name = "modules.arp.arp"
-    loaded_module = Mock(name="loaded_module")
-    discovered_plugins = {
-        Modules.ARP: {
-            "obj": Mock(name="arp_class"),
-            "description": "ARP detections",
-        }
-    }
-    reordered_plugins = dict(discovered_plugins)
     user_disabled_modules = {"skipped"}
     slips_disabled_modules = {Modules.ML_LINEAR_MODEL}
+    reordered_module_names = [loaded_module_name]
     process_manager.get_disabled_modules = Mock(
         return_value=(user_disabled_modules, slips_disabled_modules)
     )
     process_manager._discover_module_names = Mock(
-        return_value=(skipped_module, failed_module, loaded_module_name)
+        return_value=(skipped_module, loaded_module_name)
     )
-    process_manager._should_load_module = Mock(side_effect=(False, True, True))
-    process_manager._import_module = Mock(side_effect=(None, loaded_module))
-    process_manager._load_valid_classes_from_module = Mock(
-        return_value=discovered_plugins
+    process_manager._should_load_module = Mock(side_effect=(False, True))
+    process_manager._reorder_module_names = Mock(
+        return_value=reordered_module_names
     )
-    process_manager._reorder_modules = Mock(return_value=reordered_plugins)
 
-    plugins, failed_to_load_modules = process_manager.get_modules()
+    enabled_module_names = process_manager.get_enabled_module_names()
 
-    assert plugins == reordered_plugins
-    assert failed_to_load_modules == 1
+    assert enabled_module_names == reordered_module_names
     assert process_manager.user_disabled_modules == user_disabled_modules
     assert process_manager.slips_disabled_modules == slips_disabled_modules
     process_manager.get_disabled_modules.assert_called_once_with()
     process_manager._discover_module_names.assert_called_once_with()
     assert process_manager._should_load_module.call_args_list == [
         call(skipped_module),
-        call(failed_module),
         call(loaded_module_name),
     ]
-    assert process_manager._import_module.call_args_list == [
-        call(failed_module),
-        call(loaded_module_name),
-    ]
-    process_manager._load_valid_classes_from_module.assert_called_once_with(
-        loaded_module, {}
+    process_manager._reorder_module_names.assert_called_once_with(
+        [loaded_module_name]
     )
-    process_manager._reorder_modules.assert_called_once_with(
-        discovered_plugins
+
+
+def test_load_modules_starts_a_process_per_enabled_module() -> None:
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.get_enabled_module_names = Mock(
+        return_value=["modules.arp.arp"]
     )
+    process_manager.termination_event = Mock(name="termination_event")
+
+    with patch(
+        "managers.process_manager.module_loading_mixin.Process"
+    ) as mock_process_class:
+        mock_process = Mock(pid=1234)
+        mock_process_class.return_value = mock_process
+
+        process_manager.load_modules()
+
+        mock_process_class.assert_called_once_with(
+            target=process_manager._run_module,
+            name="arp",
+            args=(
+                "modules.arp.arp",
+                process_manager.main.logger,
+                process_manager.main.args.output,
+                process_manager.main.redis_port,
+                process_manager.termination_event,
+                process_manager.main.args,
+                process_manager.main.conf,
+                process_manager.main.pid,
+                process_manager.main.bloom_filters_man,
+            ),
+        )
+        mock_process.start.assert_called_once_with()
+        process_manager.main.db.store_pid.assert_called_once_with("arp", 1234)
 
 
 @pytest.mark.parametrize(

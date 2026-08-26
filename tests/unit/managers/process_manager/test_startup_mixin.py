@@ -47,6 +47,7 @@ def test_start_input_process(
     process_manager.main.zeek_bro = zeek_or_bro
     process_manager.main.line_type = line_type
     process_manager.main.bloom_filters_man = Mock()
+    process_manager.main.db.increment_modules_started_count.return_value = 1
 
     with patch("managers.process_manager.startup_mixin.Input") as mock_input:
         mock_input_process = Mock()
@@ -92,6 +93,7 @@ def test_start_input_process(
 def test_start_profiler_process():
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.bloom_filters_man = Mock()
+    process_manager.main.db.increment_modules_started_count.return_value = 1
     with patch(
         "managers.process_manager.startup_mixin.Profiler"
     ) as mock_profiler, patch.object(
@@ -124,6 +126,7 @@ def test_start_profiler_process():
             is_profiler_done_starting_initial_workers_event=(
                 process_manager.is_profiler_done_starting_initial_workers_event
             ),
+            total_processes_to_start=process_manager.total_processes_to_start,
         )
         mock_profiler_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()
@@ -155,6 +158,7 @@ def test_start_profiler_process_waits_for_initial_workers(
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.bloom_filters_man = Mock()
     process_manager.main.input_type = input_type
+    process_manager.main.db.increment_modules_started_count.return_value = 1
     wait_event = (
         process_manager.is_profiler_done_starting_initial_workers_event
     )
@@ -188,6 +192,7 @@ def test_start_evidence_process(output_dir, redis_port):
     process_manager.main.bloom_filters_man = Mock()
     process_manager.main.args.output = output_dir
     process_manager.main.redis_port = redis_port
+    process_manager.main.db.increment_modules_started_count.return_value = 1
 
     with patch(
         "managers.process_manager.startup_mixin.EvidenceHandler"
@@ -208,6 +213,7 @@ def test_start_evidence_process(output_dir, redis_port):
             process_manager.main.conf,
             process_manager.main.pid,
             process_manager.main.bloom_filters_man,
+            total_processes_to_start=process_manager.total_processes_to_start,
         )
         mock_evidence_process.start.assert_called_once()
         process_manager.main.print.assert_called_once()
@@ -217,49 +223,41 @@ def test_start_evidence_process(output_dir, redis_port):
 
 
 @pytest.mark.parametrize(
-    "local_files, ti_feeds, ports_called, orgs_called, "
-    "whitelist_called, print_called, asyncio_called",
+    "local_files, ti_feeds",
     [  # Testcase1: Update both
-        (True, True, True, True, True, True, True),
+        (True, True),
         # Testcase2: Update local only
-        (True, False, True, True, True, False, False),
+        (True, False),
         # Testcase3: Update TI only
-        (False, True, False, False, False, True, True),
+        (False, True),
         # Testcase4: Don't update
-        (False, False, False, False, False, False, False),
+        (False, False),
     ],
 )
-@patch("asyncio.run")
-@patch("managers.process_manager.startup_mixin.Lock")
-def test_start_update_manager(
-    mock_lock,
-    mock_asyncio_run,
-    local_files,
-    ti_feeds,
-    ports_called,
-    orgs_called,
-    whitelist_called,
-    print_called,
-    asyncio_called,
-):
+def test_start_feeds_update_manager(local_files, ti_feeds):
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.args.output = "output"
-    mock_lock_instance = Mock()
-    mock_lock.return_value.__enter__.return_value = mock_lock_instance
+    process_manager.main.bloom_filters_man = Mock()
+    mock_thread = Mock()
 
-    mock_update_manager = Mock()
     with patch(
-        "managers.process_manager.startup_mixin.FeedsUpdateManager",
-        return_value=mock_update_manager,
-    ):
-        process_manager.start_update_manager(
+        "managers.process_manager.startup_mixin.FeedsUpdateManager."
+        "run_startup_update",
+        return_value=mock_thread,
+    ) as mock_run_startup_update:
+        result = process_manager.start_feeds_update_manager(
             local_files=local_files, ti_feeds=ti_feeds
         )
 
-    assert mock_update_manager.update_ports_info.called is ports_called
-    assert mock_update_manager.update_org_files.called is orgs_called
-    assert (
-        mock_update_manager.update_local_whitelist.called is whitelist_called
+    assert result == mock_thread
+    mock_run_startup_update.assert_called_once_with(
+        logger=process_manager.main.logger,
+        output_dir=process_manager.main.args.output,
+        redis_port=process_manager.main.redis_port,
+        args=process_manager.main.args,
+        conf=process_manager.main.conf,
+        pid=process_manager.main.pid,
+        bloom_filters_man=process_manager.main.bloom_filters_man,
+        local_files=local_files,
+        ti_feeds=ti_feeds,
     )
-    assert mock_update_manager.print.called is print_called
-    assert mock_asyncio_run.called is asyncio_called

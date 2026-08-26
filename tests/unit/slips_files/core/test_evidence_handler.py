@@ -139,6 +139,7 @@ def test_start_evidence_worker(mock_worker_cls):
         evidence_queue=handler.evidence_worker_queue,
         evidence_logger_q=handler.evidence_logger_q,
         notify=handler.notify,
+        total_processes_to_start=handler.total_processes_to_start,
     )
     worker.start.assert_called_once()
     assert handler.evidence_worker_child_processes == [worker]
