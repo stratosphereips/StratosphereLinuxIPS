@@ -32,10 +32,6 @@ class WorkerManagerMixin:
         # is set by this module to indicate to the monitor thread that
         # workers stopped.
         self.did_all_workers_stop = multiprocessing.Event()
-        # shared between all profiler workers to make sure only 1 of
-        # them prints the gateway IP, and only once
-        self.gw_ip_print_lock = multiprocessing.Lock()
-        self.gw_ip_printed_event = multiprocessing.Event()
         self.last_worker_id = -1
         self.active_profiler_workers = 0
         self.num_of_initial_profiler_workers = NUM_INITIAL_PROFILER_WORKERS
@@ -91,8 +87,6 @@ class WorkerManagerMixin:
             aid_manager=self.aid_manager,
             is_input_done_event=self.is_input_done_event,
             total_processes_to_start=self.total_processes_to_start,
-            gw_ip_print_lock=self.gw_ip_print_lock,
-            gw_ip_printed_event=self.gw_ip_printed_event,
         )
         worker.start()
         self.profiler_child_processes.append(worker)
