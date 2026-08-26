@@ -8,6 +8,15 @@ from modules.supported_module_names import Modules
 from slips_files.common.startup_report import format_started_line
 from slips_files.common.style import green, grey
 
+# core processes get their own color in the startup progress report,
+# to visually distinguish them from detection modules
+CORE_PROCESSES = {
+    Modules.MAIN,
+    Modules.PROFILER,
+    Modules.EVIDENCE_HANDLER,
+    Modules.INPUT,
+}
+
 
 class ReportingMixin:
     """Provide printing and shutdown-report helpers."""
@@ -54,12 +63,14 @@ class ReportingMixin:
                 far, including this one.
             total_modules: Total number of modules slips is starting.
         """
+        category = "core" if module_name in CORE_PROCESSES else "module"
         line = format_started_line(
             module_name.value,
             started_count,
             total_modules,
             module_pid,
             module_description,
+            category=category,
         )
         self.main.print(
             line,

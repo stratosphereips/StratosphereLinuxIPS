@@ -583,6 +583,7 @@ class ProfilerWorker(IModule):
             self.total_processes_to_start,
             os.getpid(),
             "Parses flows in parallel with other profiler workers",
+            category="worker",
         )
         self.print(
             line,

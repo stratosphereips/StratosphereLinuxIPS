@@ -465,6 +465,7 @@ class EvidenceHandlerWorker(IModule):
             self.total_processes_to_start,
             os.getpid(),
             "Processes evidence in parallel with other evidence workers",
+            category="worker",
         )
         self.print(
             line,
