@@ -128,12 +128,16 @@ class DBManager:
         """
         try:
             # backup the DB aside (optional safety)
-            date_time = utils.get_human_readable_datetime(format="%Y-%m-%dT%H:%M:%S")
+            date_time = utils.get_human_readable_datetime(
+                format="%Y-%m-%dT%H:%M:%S"
+            )
             backup_path = f"{db_path}.{date_time}.bak"
             shutil.move(db_path, backup_path)
 
             db_short = Path(db_path).parent.name + "/" + Path(db_path).name
-            backup_short = Path(backup_path).parent.name + "/" + Path(backup_path).name
+            backup_short = (
+                Path(backup_path).parent.name + "/" + Path(backup_path).name
+            )
             self.print(
                 f"{db_short} backup is at {backup_short}. "
                 f"Creating a new one at {db_short}."
@@ -196,7 +200,9 @@ class DBManager:
             conn = sqlite3.connect(f"file:{db_path}?mode=rw", uri=True)
             cursor = conn.cursor()
             cursor.execute("BEGIN IMMEDIATE")
-            cursor.execute("CREATE TABLE IF NOT EXISTS __write_test__ (id INTEGER)")
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS __write_test__ (id INTEGER)"
+            )
             cursor.execute("DROP TABLE __write_test__")
             conn.rollback()
             conn.close()
@@ -388,7 +394,9 @@ class DBManager:
 
             modules = self.rdb.get_flows_per_minute_modules()
             profiler_modules = sorted(
-                module for module in modules if self._is_profiler_module(module)
+                module
+                for module in modules
+                if self._is_profiler_module(module)
             )
             for ts in range(last_logged + 60, last_complete_minute + 1, 60):
                 input_count = self.rdb.get_flows_per_minute("input", ts)
@@ -396,7 +404,9 @@ class DBManager:
                     module: self.rdb.get_flows_per_minute(module, ts)
                     for module in profiler_modules
                 }
-                self._append_flows_per_minute_row(ts, input_count, profiler_counts)
+                self._append_flows_per_minute_row(
+                    ts, input_count, profiler_counts
+                )
                 self.rdb.set_last_logged_flows_per_minute(ts)
         finally:
             self.rdb.release_flows_per_minute_log_lock()
@@ -486,7 +496,9 @@ class DBManager:
             existing_header, desired_header
         )
         if merged_header != existing_header:
-            self._rewrite_flows_per_minute_csv(csv_path, existing_header, merged_header)
+            self._rewrite_flows_per_minute_csv(
+                csv_path, existing_header, merged_header
+            )
         return merged_header
 
     def _merge_flows_per_minute_headers(
@@ -525,7 +537,9 @@ class DBManager:
                     old_header[idx]: row[idx]
                     for idx in range(min(len(old_header), len(row)))
                 }
-                writer.writerow([row_map.get(column, "0") for column in new_header])
+                writer.writerow(
+                    [row_map.get(column, "0") for column in new_header]
+                )
         os.replace(tmp_path, csv_path)
 
     def _build_flows_per_minute_row(
@@ -902,7 +916,9 @@ class DBManager:
             )
         return evidence_set
 
-    def set_alert(self, alert: Alert, evidence_causing_the_alert: Dict[str, Evidence]):
+    def set_alert(
+        self, alert: Alert, evidence_causing_the_alert: Dict[str, Evidence]
+    ):
         """
         Sets the alert in the rdb and sqlite databases and labels each flow
         that was responsible for this alert as "malicious"
@@ -954,14 +970,20 @@ class DBManager:
     def get_twid_evidence(self, *args, **kwargs):
         return self.rdb.get_twid_evidence(*args, **kwargs)
 
-    def update_threat_level(self, profileid: str, threat_level: str, confidence: float):
+    def update_threat_level(
+        self, profileid: str, threat_level: str, confidence: float
+    ):
         """updates the threat level and confidence of an ip in redis and
         trust db for other peers to use it"""
         if self.trust_db:
             ip = profileid.split("_")[-1]
             float_threat_level = utils.threat_levels[threat_level]
-            self.trust_db.insert_slips_score(ip, float_threat_level, confidence)
-        return self.rdb.update_threat_level(profileid, threat_level, confidence)
+            self.trust_db.insert_slips_score(
+                ip, float_threat_level, confidence
+            )
+        return self.rdb.update_threat_level(
+            profileid, threat_level, confidence
+        )
 
     def set_loaded_ti_files(self, *args, **kwargs):
         return self.rdb.set_loaded_ti_files(*args, **kwargs)
@@ -1120,13 +1142,19 @@ class DBManager:
         return self.rdb.add_dhcp_requested_addr(*args, **kwargs)
 
     def get_dstips_with_not_established_flows(self, *args, **kwargs):
-        yield from self.rdb.get_dstips_with_not_established_flows(*args, **kwargs)
+        yield from self.rdb.get_dstips_with_not_established_flows(
+            *args, **kwargs
+        )
 
     def get_dstports_of_not_established_flows(self, *args, **kwargs):
-        yield from self.rdb.get_dstports_of_not_established_flows(*args, **kwargs)
+        yield from self.rdb.get_dstports_of_not_established_flows(
+            *args, **kwargs
+        )
 
     def get_total_dstips_for_not_estab_flows_on_port(self, *args, **kwargs):
-        return self.rdb.get_total_dstips_for_not_estab_flows_on_port(*args, **kwargs)
+        return self.rdb.get_total_dstips_for_not_estab_flows_on_port(
+            *args, **kwargs
+        )
 
     def get_uids_for_horizontal_portscan(self, *args, **kwargs):
         return self.rdb.get_uids_for_horizontal_portscan(*args, **kwargs)
@@ -1171,7 +1199,9 @@ class DBManager:
         """
         Get all the contacted IPs in a given profile and TW
         """
-        return self.sqlite.get_all_contacted_ips_in_profileid_twid(*args, **kwargs)
+        return self.sqlite.get_all_contacted_ips_in_profileid_twid(
+            *args, **kwargs
+        )
 
     def mark_profile_and_timewindow_as_blocked(self, *args, **kwargs):
         return self.rdb.mark_profile_and_timewindow_as_blocked(*args, **kwargs)
@@ -1201,7 +1231,9 @@ class DBManager:
         return self.rdb.increment_processed_flows(*args, **kwargs)
 
     def get_flows_analyzed_by_the_profiler_so_far(self, *args, **kwargs):
-        return self.rdb.get_flow_analyzed_by_the_profiler_so_far(*args, **kwargs)
+        return self.rdb.get_flow_analyzed_by_the_profiler_so_far(
+            *args, **kwargs
+        )
 
     def add_out_ssh(self, *args, **kwargs):
         return self.rdb.add_out_ssh(*args, **kwargs)
@@ -1473,7 +1505,9 @@ class DBManager:
         # stores it in the db
         self.sqlite.add_flow(flow, profileid, twid, label=label)
         # handles the channels and labels etc.
-        return self.rdb.add_flow(flow, profileid=profileid, twid=twid, label=label)
+        return self.rdb.add_flow(
+            flow, profileid=profileid, twid=twid, label=label
+        )
 
     def get_slips_start_time(self):
         return self.rdb.get_slips_start_time()
@@ -1522,7 +1556,9 @@ class DBManager:
         exports the labeled flows and altflows stored in sqlite
         db to json or csv based on the config file
         """
-        self.sqlite.export_labeled_flows(self.get_output_dir(), *args, **kwargs)
+        self.sqlite.export_labeled_flows(
+            self.get_output_dir(), *args, **kwargs
+        )
 
     def get_commit(self, *args, **kwargs):
         return self.rdb.get_commit(*args, **kwargs)
