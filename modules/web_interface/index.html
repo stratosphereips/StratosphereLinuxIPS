@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips · Current run</title>
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/style.css?v=20260826-firewall-history">
 </head>
 <body>
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -98,9 +98,11 @@
     </section>
 
     <section id="firewall" class="panel" aria-labelledby="firewall-title">
-      <div class="section-heading"><div><p class="eyebrow">ENFORCEMENT</p><h2 id="firewall-title">Firewall blocks</h2><p>Confirmed active blocks and their final probation window.</p></div><button class="secondary refresh-list" data-target="firewall">Refresh</button></div>
+      <div class="section-heading"><div><p class="eyebrow">ENFORCEMENT</p><h2 id="firewall-title">Firewall blocks</h2><p>Confirmed active blocks, final probation windows, and durable rule transitions.</p></div><button class="secondary refresh-list" data-target="firewall">Refresh</button></div>
       <div class="toolbar"><input id="firewall-search" type="search" placeholder="Search IP or status"><span id="firewall-count" class="result-count"></span></div>
       <div class="surface table-surface"><div class="table-wrap"><table id="firewall-table"><thead><tr><th>IP</th><th>Status</th><th>Blocked since</th><th>Unblock at</th><th>Remaining</th><th>Extra TWs</th><th>Evidence</th><th>Alerts</th></tr></thead><tbody></tbody></table></div></div>
+      <article class="surface table-surface"><div class="table-heading"><div><h3>Block / unblock history</h3><p id="firewall-history-count">Firewall transitions and failed removals from this run.</p></div></div><div class="table-wrap"><table id="firewall-history-table"><thead><tr><th>Time</th><th>IP</th><th>Action</th><th>Details</th></tr></thead><tbody></tbody></table></div></article>
+      <div id="firewall-history-pager" class="pager"></div>
     </section>
 
     <section id="p2p" class="panel" aria-labelledby="p2p-title">
@@ -127,7 +129,7 @@
           <input id="hosts-to" class="custom-time" type="datetime-local" hidden>
           <span id="hosts-count" class="result-count"></span>
         </div>
-        <div class="surface table-surface"><div class="table-wrap"><table id="hosts-table"><thead><tr><th data-sort="ip">Primary IP</th><th data-sort="scope">Scope</th><th data-sort="hostname">Hostname</th><th>Name / domain</th><th>TI feeds</th><th data-sort="mac">MAC</th><th data-sort="threat">Threat</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="surface table-surface"><div class="table-wrap"><table id="hosts-table"><thead><tr><th data-sort="ip">Primary IP</th><th data-sort="scope">Scope</th><th data-sort="hostname">Hostname</th><th>Name / domain</th><th>TI feeds</th><th data-sort="mac">MAC</th><th data-sort="threat">Threat</th><th data-sort="score">Current Slips score</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div></div>
         <div id="hosts-pager" class="pager"></div>
       </div>
 
@@ -147,7 +149,9 @@
           <article class="surface"><h3>Threat intelligence</h3><pre id="host-ti"></pre></article>
         </div>
         <article class="surface">
+          <p id="host-traffic-status" class="muted">Traffic and peers match the exact profile IP only.</p>
           <div class="chart-grid host-charts">
+            <figure class="score-history-figure"><figcaption>Slips score history<small><i class="chart-key average"></i>End of interval <i class="chart-key peak"></i>Peak <i class="chart-key threshold"></i>Alert threshold <i class="chart-key reset"></i>Reset</small></figcaption><p id="host-score-history-status" class="score-history-status">Loading processed score samples…</p><svg id="host-score-chart" class="line-chart" viewBox="0 0 1200 180"></svg></figure>
             <figure><figcaption>Inbound / outbound flows</figcaption><svg id="host-flow-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
             <figure><figcaption>Inbound / outbound bytes</figcaption><svg id="host-byte-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
             <figure><figcaption>Protocols and applications</figcaption><div id="host-protocols" class="bar-chart"></div></figure>
@@ -159,7 +163,7 @@
           <div id="host-alerts" class="host-alert-list"></div>
         </article>
         <article class="surface table-surface host-evidence-panel">
-          <div class="table-heading"><div><h3 id="host-evidence-title">Related evidence</h3><p id="host-evidence-count">Newest evidence for every address associated with this host.</p></div><input id="host-evidence-search" type="search" aria-label="Search related evidence" placeholder="Search any evidence field…"></div>
+          <div class="table-heading"><div><h3 id="host-evidence-title">Related evidence</h3><p id="host-evidence-count">Newest evidence for this exact profile IP.</p></div><input id="host-evidence-search" type="search" aria-label="Search related evidence" placeholder="Search any evidence field…"></div>
           <div class="table-wrap host-evidence-wrap"><table id="host-evidence-table"><thead><tr><th data-sort="time">Time</th><th data-sort="threat">Threat</th><th data-sort="type">Type</th><th data-sort="module">Module</th><th data-sort="confidence">Confidence</th><th data-sort="flows">Flows</th><th data-sort="alert">Alerts</th><th>Description</th></tr></thead><tbody></tbody></table></div>
         </article>
         <div id="host-evidence-pager" class="pager"></div>
@@ -186,6 +190,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js"></script>
+  <script src="/app.js?v=20260826-firewall-history"></script>
 </body>
 </html>
