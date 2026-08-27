@@ -14,7 +14,8 @@ import psutil
 import redis
 
 ERROR_LINE = re.compile(
-    r"^(?P<date>\S+)\s+(?P<clock>\S+)\s+" r"\[(?P<module>[^]]+)]\s+(?P<message>.*)$"
+    r"^(?P<date>\S+)\s+(?P<clock>\S+)\s+"
+    r"\[(?P<module>[^]]+)]\s+(?P<message>.*)$"
 )
 RAW_METRIC_RETENTION_SECONDS = 24 * 60 * 60
 FLOW_INDEX_BATCH_SIZE = 5000
@@ -33,7 +34,9 @@ def connect_history(path: Path, read_only: bool = False) -> sqlite3.Connection:
         Configured SQLite connection.
     """
     if read_only:
-        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)
+        connection = sqlite3.connect(
+            f"file:{path}?mode=ro", uri=True, timeout=5
+        )
     else:
         connection = sqlite3.connect(path, timeout=20)
         connection.execute("PRAGMA journal_mode=WAL")
@@ -150,7 +153,9 @@ class HistoryCollector:
         return str(row["value"]) if row else default
 
     @staticmethod
-    def _metadata_set(connection: sqlite3.Connection, key: str, value: Any) -> None:
+    def _metadata_set(
+        connection: sqlite3.Connection, key: str, value: Any
+    ) -> None:
         """Store a collector checkpoint."""
         connection.execute(
             "INSERT OR REPLACE INTO metadata(key, value) VALUES (?, ?)",
@@ -167,7 +172,9 @@ class HistoryCollector:
         if not self.flows_path.exists():
             return 0
         with connect_history(self.history_path) as history:
-            last_rowid = int(self._metadata_get(history, "flow_last_rowid", "0"))
+            last_rowid = int(
+                self._metadata_get(history, "flow_last_rowid", "0")
+            )
             try:
                 source = sqlite3.connect(
                     f"file:{self.flows_path}?mode=ro",
@@ -212,7 +219,9 @@ class HistoryCollector:
                     indexed,
                 )
             if rows:
-                self._metadata_set(history, "flow_last_rowid", rows[-1]["rowid"])
+                self._metadata_set(
+                    history, "flow_last_rowid", rows[-1]["rowid"]
+                )
             self._metadata_set(history, "flow_index_updated_at", time.time())
             return len(indexed)
 
@@ -231,7 +240,10 @@ class HistoryCollector:
         unique: Dict[int, psutil.Process] = {}
         for process in candidates:
             try:
-                if process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
+                if (
+                    process.is_running()
+                    and process.status() != psutil.STATUS_ZOMBIE
+                ):
                     unique[process.pid] = process
             except psutil.Error:
                 continue
@@ -251,7 +263,9 @@ class HistoryCollector:
             except psutil.Error:
                 continue
         self._processes = {
-            pid: process for pid, process in self._processes.items() if pid in live_pids
+            pid: process
+            for pid, process in self._processes.items()
+            if pid in live_pids
         }
         cpu_percent = cpu_total / max(psutil.cpu_count() or 1, 1)
         try:
@@ -316,7 +330,9 @@ class HistoryCollector:
             events: List[tuple[Any, ...]] = []
             new_offset = offset
             try:
-                with error_path.open("r", encoding="utf-8", errors="replace") as handle:
+                with error_path.open(
+                    "r", encoding="utf-8", errors="replace"
+                ) as handle:
                     handle.seek(offset)
                     while True:
                         line_start = handle.tell()
@@ -367,46 +383,55 @@ class HistoryCollector:
                 ip = str(profile_id).removeprefix("profile_")
                 identity_pipeline.hgetall(profile_id)
                 identity_pipeline.hget("DNSresolution", ip)
+                identity_pipeline.zrange(f"tws{profile_id}", -1, -1)
             identity_values = identity_pipeline.execute() if profiles else []
         except redis.RedisError:
             return 0
 
-        profile_data: List[tuple[str, Dict[str, Any], Any]] = []
-        macs = set()
+        profile_data: List[tuple[str, Dict[str, Any], Any, str]] = []
         for index, profile_id in enumerate(profiles):
             ip = str(profile_id).removeprefix("profile_")
-            fields = identity_values[index * 2] or {}
+            fields = identity_values[index * 3] or {}
             if not isinstance(fields, dict):
                 fields = {}
-            dns = identity_values[index * 2 + 1]
-            profile_data.append((ip, fields, dns))
-            if fields.get("MAC"):
-                macs.add(str(fields["MAC"]))
+            dns = identity_values[index * 3 + 1]
+            tw_values = identity_values[index * 3 + 2] or []
+            twid = str(tw_values[0]) if tw_values else ""
+            profile_data.append((ip, fields, dns, twid))
 
-        mac_addresses: Dict[str, Any] = {}
-        if macs:
-            try:
-                mac_pipeline = self.redis.pipeline(transaction=False)
-                sorted_macs = sorted(macs)
-                for mac in sorted_macs:
-                    mac_pipeline.hget("MAC", mac)
-                mac_addresses = dict(zip(sorted_macs, mac_pipeline.execute()))
-            except redis.RedisError:
-                mac_addresses = {}
+        accumulated_scores: Dict[str, float] = {}
+        risk_weight = 0.32
+        try:
+            score_pipeline = self.redis.pipeline(transaction=False)
+            for ip, _, _, twid in profile_data:
+                score_pipeline.zscore(
+                    "accumulated_threat_levels", f"profile_{ip}_{twid}"
+                )
+            score_values = score_pipeline.execute()
+            accumulated_scores = {
+                ip: float(value or 0)
+                for (ip, _, _, _), value in zip(profile_data, score_values)
+            }
+            risk_weight = float(
+                self.redis.hget(
+                    "max_risk_weight_of_all_profiles", "risk_weight"
+                )
+                or risk_weight
+            )
+        except (redis.RedisError, TypeError, ValueError):
+            pass
 
         rows: List[tuple[Any, ...]] = []
         observed_at = time.time()
-        for ip, fields, dns in profile_data:
+        for ip, fields, dns, twid in profile_data:
             try:
-                scope = "local" if ipaddress.ip_address(ip).is_private else "public"
+                scope = (
+                    "local"
+                    if ipaddress.ip_address(ip).is_private
+                    else "public"
+                )
             except ValueError:
                 scope = "special"
-            mac = fields.get("MAC", "")
-            all_ips = [ip]
-            if mac:
-                all_ips = self._list_value(mac_addresses.get(str(mac))) or [ip]
-            if ip not in all_ips:
-                all_ips.append(ip)
             data = {
                 "ip": ip,
                 "scope": scope,
@@ -415,8 +440,16 @@ class HistoryCollector:
                 "mac_vendor": fields.get("MAC_vendor", ""),
                 "threat_level": fields.get("threat_level", "info"),
                 "max_threat_level": fields.get("max_threat_level", "info"),
-                "all_ips": sorted(set(all_ips)),
+                # An observed L2 MAC can be a router/next-hop MAC for many
+                # unrelated remote addresses. Host workspaces are therefore
+                # deliberately profile-IP-specific.
+                "all_ips": [ip],
                 "dns": self._json_value(dns, {}),
+                "alert_score_twid": twid,
+                "accumulated_threat_level": accumulated_scores.get(ip, 0),
+                "accumulated_ratl": accumulated_scores.get(ip, 0)
+                * risk_weight,
+                "risk_weight": risk_weight,
             }
             rows.append((ip, observed_at, json.dumps(data)))
         if rows:
@@ -457,7 +490,9 @@ class HistoryCollector:
         except (TypeError, ValueError):
             pass
         try:
-            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+            return datetime.fromisoformat(
+                str(value).replace("Z", "+00:00")
+            ).timestamp()
         except ValueError:
             pass
         for date_format in (
@@ -489,12 +524,15 @@ class HistoryCollector:
         return [str(decoded)]
 
     @staticmethod
-    def _detection_schema(connection: sqlite3.Connection) -> None:
+    def _detection_schema(connection: sqlite3.Connection) -> bool:
         """
         Add durable detection tables to an older flow database.
 
         Parameters:
             connection: Writable flows.sqlite connection.
+
+        Returns:
+            True when detector-score columns were added.
         """
         statements = (
             "CREATE INDEX IF NOT EXISTS alerts_time_idx "
@@ -504,7 +542,8 @@ class HistoryCollector:
             "CREATE TABLE IF NOT EXISTS evidence ("
             "evidence_id TEXT PRIMARY KEY, evidence_time REAL, "
             "profile_ip TEXT, timewindow TEXT, threat_level TEXT, "
-            "evidence_type TEXT, description TEXT, confidence REAL, data TEXT)",
+            "evidence_type TEXT, description TEXT, confidence REAL, data TEXT, "
+            "accumulated_threat_level REAL, accumulated_ratl REAL)",
             "CREATE TABLE IF NOT EXISTS evidence_flows ("
             "evidence_id TEXT, uid TEXT, PRIMARY KEY (evidence_id, uid))",
             "CREATE TABLE IF NOT EXISTS alert_evidence ("
@@ -523,6 +562,33 @@ class HistoryCollector:
         )
         for statement in statements:
             connection.execute(statement)
+        additions = {
+            "alerts": {
+                "accumulated_threat_level": "REAL",
+                "accumulated_ratl": "REAL",
+                "risk_weight": "REAL",
+            },
+            "evidence": {
+                "accumulated_threat_level": "REAL",
+                "accumulated_ratl": "REAL",
+            },
+        }
+        upgraded = False
+        for table_name, columns in additions.items():
+            existing = {
+                str(row[1])
+                for row in connection.execute(
+                    f"PRAGMA table_info({table_name})"
+                ).fetchall()
+            }
+            for column_name, column_type in columns.items():
+                if column_name not in existing:
+                    connection.execute(
+                        f"ALTER TABLE {table_name} "
+                        f"ADD COLUMN {column_name} {column_type}"
+                    )
+                    upgraded = True
+        return upgraded
 
     def _redis_belongs_to_run(self) -> bool:
         """
@@ -586,7 +652,9 @@ class HistoryCollector:
                 if not uids:
                     try:
                         uids = self._list_value(
-                            self.redis.hget("flows_causing_evidence", canonical_id)
+                            self.redis.hget(
+                                "flows_causing_evidence", canonical_id
+                            )
                         )
                     except redis.RedisError:
                         pass
@@ -616,7 +684,10 @@ class HistoryCollector:
         try:
             alert_keys = self.redis.scan_iter(match="profile_*_timewindow*")
             for key in alert_keys:
-                if str(key).endswith("_evidence") or self.redis.type(key) != "hash":
+                if (
+                    str(key).endswith("_evidence")
+                    or self.redis.type(key) != "hash"
+                ):
                     continue
                 alerts = self._json_value(self.redis.hget(key, "alerts"), {})
                 if not isinstance(alerts, dict):
@@ -651,10 +722,26 @@ class HistoryCollector:
         source = record.get("Source") or [{}]
         profile_ip = str(source[0].get("IP", "")) if source else ""
         if record.get("Status") == "Incident":
+            accumulated_threat_level = note.get("accumulated_threat_level")
+            accumulated_ratl = note.get("accumulated_ratl")
+            risk_weight = None
+            try:
+                if float(accumulated_threat_level):
+                    risk_weight = float(accumulated_ratl) / float(
+                        accumulated_threat_level
+                    )
+            except (TypeError, ValueError):
+                pass
             connection.execute(
-                "INSERT OR IGNORE INTO alerts "
+                "INSERT INTO alerts "
                 "(alert_id, alert_time, ip_alerted, timewindow, "
-                "tw_start, tw_end, label) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "tw_start, tw_end, label, accumulated_threat_level, "
+                "accumulated_ratl, risk_weight) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(alert_id) DO UPDATE SET "
+                "accumulated_threat_level = excluded.accumulated_threat_level, "
+                "accumulated_ratl = excluded.accumulated_ratl, "
+                "risk_weight = excluded.risk_weight",
                 (
                     record_id,
                     self._event_timestamp(record.get("CreateTime")),
@@ -663,6 +750,9 @@ class HistoryCollector:
                     record.get("StartTime", ""),
                     note.get("EndTime", ""),
                     "malicious",
+                    accumulated_threat_level,
+                    accumulated_ratl,
+                    risk_weight,
                 ),
             )
             connection.executemany(
@@ -681,10 +771,15 @@ class HistoryCollector:
         ).lower()
         evidence_type = str(note.get("evidence_type") or "IDMEF_EVENT")
         connection.execute(
-            "INSERT OR IGNORE INTO evidence "
+            "INSERT INTO evidence "
             "(evidence_id, evidence_time, profile_ip, timewindow, "
-            "threat_level, evidence_type, description, confidence, data) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "threat_level, evidence_type, description, confidence, data, "
+            "accumulated_threat_level, accumulated_ratl) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(evidence_id) DO UPDATE SET "
+            "data = excluded.data, "
+            "accumulated_threat_level = excluded.accumulated_threat_level, "
+            "accumulated_ratl = excluded.accumulated_ratl",
             (
                 record_id,
                 self._event_timestamp(record.get("StartTime")),
@@ -695,11 +790,16 @@ class HistoryCollector:
                 str(record.get("Description", "")),
                 float(record.get("Confidence") or 0),
                 json.dumps(record),
+                note.get("accumulated_threat_level"),
+                note.get("risk_accumulated_threat_level"),
             ),
         )
         connection.executemany(
             "INSERT OR IGNORE INTO evidence_flows (evidence_id, uid) VALUES (?, ?)",
-            [(record_id, uid) for uid in self._list_value(note.get("uids", []))],
+            [
+                (record_id, uid)
+                for uid in self._list_value(note.get("uids", []))
+            ],
         )
 
     def _backfill_alert_file(
@@ -719,7 +819,9 @@ class HistoryCollector:
         if not alerts_path.exists():
             return 0
         with connect_history(self.history_path) as history:
-            offset = int(self._metadata_get(history, "alerts_json_offset", "0"))
+            offset = int(
+                self._metadata_get(history, "alerts_json_offset", "0")
+            )
         try:
             if alerts_path.stat().st_size < offset:
                 offset = 0
@@ -728,7 +830,9 @@ class HistoryCollector:
         count = 0
         new_offset = offset
         try:
-            with alerts_path.open("r", encoding="utf-8", errors="replace") as handle:
+            with alerts_path.open(
+                "r", encoding="utf-8", errors="replace"
+            ) as handle:
                 handle.seek(offset)
                 while count < maximum:
                     line_start = handle.tell()
@@ -764,7 +868,10 @@ class HistoryCollector:
             return 0
         try:
             with sqlite3.connect(self.flows_path, timeout=20) as connection:
-                self._detection_schema(connection)
+                schema_upgraded = self._detection_schema(connection)
+                if schema_upgraded:
+                    with connect_history(self.history_path) as history:
+                        self._metadata_set(history, "alerts_json_offset", 0)
                 redis_count = (
                     self._backfill_redis_evidence(connection)
                     if self._redis_belongs_to_run()
@@ -783,7 +890,9 @@ class HistoryCollector:
             size = 0
         now = time.time()
         with connect_history(self.history_path) as connection:
-            old_size = int(self._metadata_get(connection, "storage_size", str(size)))
+            old_size = int(
+                self._metadata_get(connection, "storage_size", str(size))
+            )
             old_time = float(
                 self._metadata_get(connection, "storage_checked_at", str(now))
             )
