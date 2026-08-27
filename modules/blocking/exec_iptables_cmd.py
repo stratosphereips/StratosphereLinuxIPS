@@ -11,7 +11,7 @@ def exec_iptables_command(
     ip_to_block: str,
     flag: str,
     options: Dict[str, str],
-):
+) -> bool:
     """
     Constructs the iptables rule/command based on the options sent
 
@@ -21,16 +21,19 @@ def exec_iptables_command(
     action options:
       insert : to insert a new rule at the top of slipsBlocking list
       delete : to delete an existing rule
+      check : to check whether an exact rule exists
     """
     # sanitize cmd params
-    if action not in ("insert", "delete"):
-        return 1
+    if action not in ("insert", "delete", "check"):
+        return False
 
     if flag not in ("-s", "-d"):
-        return 1
+        return False
 
-    if not ipaddress.ip_address(ip_to_block):
-        return 1
+    try:
+        ipaddress.ip_address(ip_to_block)
+    except ValueError:
+        return False
 
     command = (
         f"{sudo} iptables --{action} slipsBlocking {flag} {ip_to_block} "
