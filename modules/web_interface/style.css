@@ -248,6 +248,30 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .host-evidence-wrap { max-height: 480px; }
 #host-evidence-table { min-width: 1120px; }
 .host-evidence-description { display: block; max-width: 430px; overflow: hidden; color: #c7d5de; text-overflow: ellipsis; white-space: nowrap; }
+.status.whitelisted, .slips-score.whitelisted { border-color: #ad8cff55; background: #ad8cff18; color: #c8b4ff; }
+.configuration-sections { display: grid; gap: .8rem; }
+.config-provenance { border-left: 3px solid var(--blue); }
+.config-provenance p { margin-bottom: .45rem; line-height: 1.45; }
+.config-section { padding: 0; overflow: hidden; }
+.config-section > summary { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.1rem; cursor: pointer; list-style: none; }
+.config-section > summary::-webkit-details-marker { display: none; }
+.config-section > summary::before { color: var(--accent); content: "▸"; }
+.config-section[open] > summary::before { content: "▾"; }
+.config-section > summary > div { min-width: 0; flex: 1; }
+.config-section > summary h3, .config-section > summary p { margin: 0; }
+.config-section > summary p { margin-top: .22rem; color: var(--muted); font-size: .76rem; }
+.config-settings { display: grid; grid-template-columns: repeat(3, minmax(240px, 1fr)); gap: .7rem; padding: 0 1rem 1rem; border-top: 1px solid var(--line); }
+.config-setting { min-width: 0; padding: .85rem; border: 1px solid var(--line); border-radius: 8px; background: #0b151d; }
+.config-setting h4 { margin: .25rem 0 .5rem; font-size: .88rem; }
+.config-setting code { display: block; padding: .45rem .55rem; overflow-wrap: anywhere; border-radius: 5px; background: #071017; color: var(--accent); white-space: pre-wrap; }
+.config-setting code.redacted { color: var(--warn); }
+.config-setting p { margin: .55rem 0 0; color: var(--muted); font-size: .74rem; line-height: 1.4; }
+.config-key { color: var(--blue); font: .65rem ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.empty-state { padding: 2rem; color: var(--muted); text-align: center; }
+.whitelist-notice { margin-bottom: 1rem; padding: .9rem 1rem; border: 1px solid #ad8cff66; border-left: 4px solid #ad8cff; border-radius: 8px; background: #1b1830; }
+.whitelist-notice h3 { color: #d5c8ff; }
+.whitelist-notice p, .whitelist-notice li { color: #c8c0dc; font-size: .8rem; line-height: 1.5; }
+.whitelist-notice ul { margin: .6rem 0 0; padding-left: 1.2rem; }
 pre { max-height: 380px; overflow: auto; padding: .8rem; border: 1px solid var(--line); border-radius: 7px; background: #080d12; color: #b8c9d6; font-size: .72rem; white-space: pre-wrap; word-break: break-word; }
 .toast { position: fixed; z-index: 30; left: 50%; bottom: 1.5rem; padding: .65rem .9rem; border: 1px solid var(--danger); border-radius: 7px; background: #2a1418; opacity: 0; pointer-events: none; transform: translateX(-50%); transition: opacity .2s; }
 .toast.show { opacity: 1; }
@@ -259,4 +283,5 @@ pre { max-height: 380px; overflow: auto; padding: .8rem; border: 1px solid var(-
   .investigation-summary { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
   .flow-metrics { grid-template-columns: repeat(3, minmax(80px, 1fr)); }
   .protocol-details { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
+  .config-settings { grid-template-columns: repeat(2, minmax(240px, 1fr)); }
 }
