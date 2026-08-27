@@ -631,25 +631,6 @@ class HistoryCollector:
         actual = Path(str(redis_output_dir)).as_posix().rstrip("/")
         return actual == expected
 
-    def _redis_belongs_to_run(self) -> bool:
-        """
-        Check whether Redis advertises this collector's output directory.
-
-        Returns:
-            True only when Redis belongs to the configured run.
-        """
-        try:
-            redis_output_dir = self.redis.hget("analysis", "output_dir")
-        except redis.RedisError:
-            return False
-        if not redis_output_dir:
-            return False
-        if isinstance(redis_output_dir, bytes):
-            redis_output_dir = redis_output_dir.decode(errors="replace")
-        expected = self.output_dir.as_posix().rstrip("/")
-        actual = Path(str(redis_output_dir)).as_posix().rstrip("/")
-        return actual == expected
-
     def _backfill_redis_evidence(self, connection: sqlite3.Connection) -> int:
         """
         Copy currently retained Redis evidence and relationships.
