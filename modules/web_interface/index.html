@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips · Current run</title>
-  <link rel="stylesheet" href="/style.css?v=20260826-firewall-history">
+  <link rel="stylesheet" href="/style.css?v=20260827-config-whitelist">
 </head>
 <body>
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -27,6 +27,8 @@
     <button class="tab" data-tab="hosts">Hosts <span id="hosts-badge" class="badge">0</span></button>
     <button class="tab" data-tab="firewall">Firewall <span id="firewall-badge" class="badge">0</span></button>
     <button class="tab" data-tab="p2p">P2P <span id="p2p-badge" class="badge">0</span></button>
+    <button class="tab" data-tab="configuration">Configuration</button>
+    <button class="tab" data-tab="whitelists">Whitelists <span id="whitelists-badge" class="badge">0</span></button>
   </nav>
 
   <main>
@@ -117,6 +119,24 @@
       <article class="surface table-surface"><div class="table-heading"><div><h3>Recent message activity</h3><p>Bounded send/receive telemetry from this run.</p></div></div><div class="table-wrap"><table id="p2p-activity-table"><thead><tr><th>Time</th><th>Direction</th><th>Type</th><th>Peer</th><th>Target</th></tr></thead><tbody></tbody></table></div></article>
     </section>
 
+    <section id="configuration" class="panel" aria-labelledby="configuration-title">
+      <div class="section-heading"><div><p class="eyebrow">RUN SETTINGS</p><h2 id="configuration-title">Configuration</h2><p id="configuration-status">Loading the configuration snapshot captured when this run started…</p></div><button class="secondary refresh-list" data-target="configuration">Refresh</button></div>
+      <div class="toolbar"><input id="configuration-search" type="search" placeholder="Search setting, section, value, or explanation…"><span id="configuration-count" class="result-count"></span></div>
+      <article class="surface config-provenance"><h3>What this view means</h3><p id="configuration-source">This is the parsed run snapshot, organized and explained instead of displaying raw YAML.</p><p class="muted">Secrets are marked as configured but their values are intentionally hidden. A setting absent from the snapshot may still use a built-in Slips default.</p></article>
+      <div id="configuration-sections" class="configuration-sections"></div>
+    </section>
+
+    <section id="whitelists" class="panel" aria-labelledby="whitelists-title">
+      <div class="section-heading"><div><p class="eyebrow">SUPPRESSION RULES</p><h2 id="whitelists-title">Whitelists used in this run</h2><p id="whitelists-status">Loading parsed runtime rules and online benign-domain settings…</p></div><button class="secondary refresh-list" data-target="whitelists">Refresh</button></div>
+      <div id="whitelists-summary" class="summary-grid"></div>
+      <div class="split-grid">
+        <article class="surface"><h3>Local rules</h3><div id="whitelists-local-source" class="metadata-grid"></div></article>
+        <article class="surface"><h3>Online benign domains</h3><div id="whitelists-online-source" class="metadata-grid"></div></article>
+      </div>
+      <div class="toolbar"><input id="whitelists-search" type="search" placeholder="Search value, type, or effect…"><select id="whitelists-type"><option value="">All rule types</option><option>IP address</option><option>Domain</option><option>Organization</option><option>MAC address</option></select><span id="whitelists-count" class="result-count"></span></div>
+      <div class="surface table-surface"><div class="table-wrap"><table id="whitelists-table"><thead><tr><th>Type</th><th>Value</th><th>Applies on</th><th>Suppresses</th><th>Meaning</th><th>Runtime source</th></tr></thead><tbody></tbody></table></div></div>
+    </section>
+
     <section id="hosts" class="panel" aria-labelledby="hosts-title">
       <div id="hosts-list-view">
         <div class="section-heading"><div><p class="eyebrow">INVENTORY</p><h2 id="hosts-title">Hosts</h2><p>Current and last-known identity with indexed historical activity.</p></div><button class="secondary refresh-list" data-target="hosts">Refresh</button></div>
@@ -164,7 +184,7 @@
         </article>
         <article class="surface table-surface host-evidence-panel">
           <div class="table-heading"><div><h3 id="host-evidence-title">Related evidence</h3><p id="host-evidence-count">Newest evidence for this exact profile IP.</p></div><input id="host-evidence-search" type="search" aria-label="Search related evidence" placeholder="Search any evidence field…"></div>
-          <div class="table-wrap host-evidence-wrap"><table id="host-evidence-table"><thead><tr><th data-sort="time">Time</th><th data-sort="threat">Threat</th><th data-sort="type">Type</th><th data-sort="module">Module</th><th data-sort="confidence">Confidence</th><th data-sort="flows">Flows</th><th data-sort="alert">Alerts</th><th>Description</th></tr></thead><tbody></tbody></table></div>
+          <div class="table-wrap host-evidence-wrap"><table id="host-evidence-table"><thead><tr><th data-sort="time">Time</th><th data-sort="threat">Threat</th><th data-sort="type">Type</th><th data-sort="module">Module</th><th>Score handling</th><th data-sort="confidence">Confidence</th><th data-sort="flows">Flows</th><th data-sort="alert">Alerts</th><th>Description</th></tr></thead><tbody></tbody></table></div>
         </article>
         <div id="host-evidence-pager" class="pager"></div>
         <article class="surface table-surface">
@@ -190,6 +210,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20260826-firewall-history"></script>
+  <script src="/app.js?v=20260827-config-whitelist"></script>
 </body>
 </html>
