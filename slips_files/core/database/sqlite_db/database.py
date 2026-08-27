@@ -59,7 +59,8 @@ class SQLiteDB(ISQLite):
         table_schema = {
             "evidence": "evidence_id TEXT PRIMARY KEY, evidence_time REAL, "
             "profile_ip TEXT, timewindow TEXT, threat_level TEXT, "
-            "evidence_type TEXT, description TEXT, confidence REAL, data TEXT",
+            "evidence_type TEXT, description TEXT, confidence REAL, data TEXT, "
+            "whitelisted INTEGER DEFAULT 0",
             "evidence_flows": "evidence_id TEXT, uid TEXT, "
             "PRIMARY KEY (evidence_id, uid)",
             "alert_evidence": "alert_id TEXT, evidence_id TEXT, "
@@ -84,7 +85,8 @@ class SQLiteDB(ISQLite):
             "evidence": "evidence_id TEXT PRIMARY KEY, evidence_time REAL, "
             "profile_ip TEXT, timewindow TEXT, threat_level TEXT, "
             "evidence_type TEXT, description TEXT, confidence REAL, data TEXT, "
-            "accumulated_threat_level REAL, accumulated_ratl REAL",
+            "accumulated_threat_level REAL, accumulated_ratl REAL, "
+            "whitelisted INTEGER DEFAULT 0",
             "evidence_flows": "evidence_id TEXT, uid TEXT, "
             "PRIMARY KEY (evidence_id, uid)",
             "alert_evidence": "alert_id TEXT, evidence_id TEXT, "
@@ -105,6 +107,7 @@ class SQLiteDB(ISQLite):
             "evidence": {
                 "accumulated_threat_level": "REAL",
                 "accumulated_ratl": "REAL",
+                "whitelisted": "INTEGER DEFAULT 0",
             },
         }
         for table_name, additions in columns.items():
@@ -477,6 +480,18 @@ class SQLiteDB(ISQLite):
             for uid in evidence.uid
         )
         self._execute_detection_transaction(statements)
+
+    def mark_evidence_whitelisted(self, evidence_id: str) -> None:
+        """
+        Persist that Evidence Handler excluded an evidence by whitelist.
+
+        Parameters:
+            evidence_id: Canonical evidence identifier.
+        """
+        self.execute(
+            "UPDATE evidence SET whitelisted = 1 WHERE evidence_id = ?",
+            (evidence_id,),
+        )
 
     def add_alert(self, alert: Alert) -> None:
         """
