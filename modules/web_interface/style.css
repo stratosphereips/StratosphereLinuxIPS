@@ -27,6 +27,8 @@ figcaption small { display: block; margin-top: .2rem; font-size: .7rem; }
 .chart-key { display: inline-block; width: .7rem; border-top: 2px solid var(--accent); margin: 0 .25rem .15rem .55rem; vertical-align: middle; }
 .chart-key:first-child { margin-left: 0; }
 .chart-key.peak { border-color: var(--blue); }
+.chart-key.threshold { border-color: var(--danger); border-top-style: dashed; }
+.chart-key.reset { border-color: var(--warn); border-top-style: dotted; }
 .eyebrow { margin-bottom: .35rem; color: var(--accent); font-size: .68rem; font-weight: 750; letter-spacing: .15em; }
 .muted, .section-heading p, .table-heading p { margin-bottom: 0; color: var(--muted); font-size: .82rem; }
 .error-banner { position: sticky; top: 0; z-index: 50; padding: .75rem 2.5rem; border-bottom: 1px solid var(--danger); background: #31171c; color: #ffd8dc; }
@@ -56,6 +58,7 @@ main { max-width: 1900px; margin: auto; padding: 2rem 2.5rem 4rem; }
 .summary-card { padding: 1rem 1.1rem; }
 .summary-card span { color: var(--muted); font-size: .75rem; }
 .summary-card strong { display: block; margin-top: .3rem; font: 650 1.45rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+.summary-card strong > .slips-score { font-size: inherit; }
 .split-grid { display: grid; grid-template-columns: 2fr 1fr; gap: .8rem; margin-bottom: .8rem; }
 .surface { margin-bottom: .8rem; padding: 1rem; }
 .table-surface { padding: 0; overflow: hidden; }
@@ -92,17 +95,27 @@ th[data-sort].sorted[data-order="desc"]::after { color: var(--accent); content: 
 tbody tr[data-clickable="true"] { cursor: pointer; }
 tbody tr:hover { background: #1b2a3540; }
 .usage-cell { display: block; min-width: 6.2rem; margin: -.68rem -.75rem; padding: .68rem .75rem; color: var(--text); font-variant-numeric: tabular-nums; font-weight: 700; }
+.slips-score { display: inline-block; min-width: 5.8rem; font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+.slips-score.below { color: var(--text); }
+.slips-score.near { color: var(--warn); }
+.slips-score.reached { color: var(--danger); }
+.slips-score.unavailable { color: var(--muted); font-weight: 500; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .73rem; }
 .empty { padding: 2rem; color: var(--muted); text-align: center; }
 .pager { display: flex; justify-content: flex-end; gap: .5rem; min-height: 2.8rem; padding-top: .7rem; }
 .pager button:disabled { opacity: .4; cursor: default; }
 .chart-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
 .host-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.score-history-figure { grid-column: 1 / -1; }
+.score-history-status { min-height: 2.2em; margin: -.15rem 0 .5rem; color: var(--muted); font-size: .72rem; }
+.score-history-figure .line-chart { height: 180px; min-height: 180px; }
 .line-chart { display: block; width: 100%; min-height: 180px; border: 1px solid var(--line); border-radius: 7px; background: #0a1219; }
 .chart-grid .grid-line { stroke: #263a49; stroke-width: 1; }
 .chart-grid .chart-grid-line { stroke-dasharray: 2 3; }
 .chart-grid .chart-line { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .chart-grid .chart-line.secondary-line { stroke: var(--blue); }
+.chart-grid .chart-line.threshold-line { stroke: var(--danger); stroke-dasharray: 6 4; stroke-width: 1.5; }
+.chart-grid .chart-reset-line { stroke: var(--warn); stroke-dasharray: 2 4; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .chart-grid .chart-label { fill: var(--muted); font-size: 10px; }
 .bar-chart { display: grid; gap: .45rem; min-height: 180px; align-content: start; }
 .bar-row { display: grid; grid-template-columns: minmax(90px, 1fr) 3fr 55px; align-items: center; gap: .55rem; font-size: .72rem; }
