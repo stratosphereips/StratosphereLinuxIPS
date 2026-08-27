@@ -136,6 +136,19 @@ def test_block_ip(
             mock_exec.assert_not_called()
 
 
+def test_block_ip_tracks_preexisting_firewall_rule() -> None:
+    """Track an iptables rule inherited without a Redis blocked timestamp."""
+    blocking = ModuleFactory().create_blocking_obj()
+    blocking.firewall = "iptables"
+    blocking.db.get_blocking_timestamp.return_value = None
+
+    with patch.object(blocking, "_is_ip_already_blocked", return_value=True):
+        result = blocking._block_ip("192.168.1.10", {})
+
+    assert result is False
+    blocking.db.set_blocked_ip.assert_called_once_with("192.168.1.10")
+
+
 @pytest.mark.parametrize(
     "block,expected_block_called",
     [
