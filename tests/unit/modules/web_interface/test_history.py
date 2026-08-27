@@ -14,7 +14,9 @@ def create_flow_database(path) -> None:
     """Create the minimal raw-flow schema used by collector tests."""
     path.parent.mkdir(parents=True)
     with sqlite3.connect(path) as connection:
-        connection.execute("CREATE TABLE flows (uid TEXT, flow TEXT, label TEXT)")
+        connection.execute(
+            "CREATE TABLE flows (uid TEXT, flow TEXT, label TEXT)"
+        )
         connection.execute(
             "CREATE TABLE alerts (alert_id TEXT PRIMARY KEY, alert_time REAL, "
             "ip_alerted TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT)"
@@ -76,7 +78,14 @@ def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
         "Confidence": 0.9,
         "Description": "Historical event",
         "Source": [{"IP": "10.0.0.1"}],
-        "Note": json.dumps({"timewindow": 7, "uids": ["flow-1"]}),
+        "Note": json.dumps(
+            {
+                "timewindow": 7,
+                "uids": ["flow-1"],
+                "accumulated_threat_level": 4.0,
+                "risk_accumulated_threat_level": 1.28,
+            }
+        ),
     }
     incident = {
         "Status": "Incident",
@@ -89,6 +98,8 @@ def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
             {
                 "timewindow": 7,
                 "EndTime": "2026-08-22T11:00:00+00:00",
+                "accumulated_threat_level": 16.0,
+                "accumulated_ratl": 5.12,
             }
         ),
     }
@@ -99,12 +110,19 @@ def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
     redis_client = Mock()
     redis_client.hget.return_value = str(output_dir)
     redis_client.scan_iter.return_value = []
-    collector = HistoryCollector(str(output_dir), history_path, redis_client, 999999)
+    collector = HistoryCollector(
+        str(output_dir), history_path, redis_client, 999999
+    )
 
     assert collector.backfill_detections() == 2
     with sqlite3.connect(flows_path) as connection:
         evidence = connection.execute(
-            "SELECT * FROM evidence WHERE evidence_id = 'evidence-1'"
+            "SELECT accumulated_threat_level, accumulated_ratl "
+            "FROM evidence WHERE evidence_id = 'evidence-1'"
+        ).fetchone()
+        alert = connection.execute(
+            "SELECT accumulated_threat_level, accumulated_ratl, risk_weight "
+            "FROM alerts WHERE alert_id = 'alert-1'"
         ).fetchone()
         relation = connection.execute(
             "SELECT * FROM alert_evidence WHERE alert_id = 'alert-1'"
@@ -113,7 +131,8 @@ def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
             "SELECT * FROM evidence_flows WHERE evidence_id = 'evidence-1'"
         ).fetchone()
 
-    assert evidence is not None
+    assert evidence == (4.0, 1.28)
+    assert alert == (16.0, 5.12, 0.32)
     assert relation == ("alert-1", "evidence-1")
     assert flow == ("evidence-1", "flow-1")
     assert collector.backfill_detections() == 0
@@ -128,7 +147,9 @@ def test_backfill_rejects_redis_owned_by_another_run(tmp_path) -> None:
     create_flow_database(flows_path)
     redis_client = Mock()
     redis_client.hget.return_value = str(tmp_path / "other-run")
-    collector = HistoryCollector(str(output_dir), history_path, redis_client, 999999)
+    collector = HistoryCollector(
+        str(output_dir), history_path, redis_client, 999999
+    )
 
     assert collector.backfill_detections() == 0
     redis_client.scan_iter.assert_not_called()
@@ -157,7 +178,9 @@ def test_metric_rollup_waits_for_complete_minutes_and_is_idempotent(
         assert collector.rollup_metrics() == 0
 
     with connect_history(history_path, read_only=True) as connection:
-        raw = connection.execute("SELECT ts FROM runtime_metrics_1s").fetchall()
+        raw = connection.execute(
+            "SELECT ts FROM runtime_metrics_1s"
+        ).fetchall()
         rolled = connection.execute(
             "SELECT flow_total, samples FROM runtime_metrics_1m"
         ).fetchone()
@@ -167,7 +190,8 @@ def test_metric_rollup_waits_for_complete_minutes_and_is_idempotent(
     assert rolled["samples"] == 1
 
 
-def test_snapshot_hosts_persists_all_mac_addresses(tmp_path) -> None:
+def test_snapshot_hosts_keeps_profile_ip_exact(tmp_path) -> None:
+    """Do not persist router-MAC aliases as addresses of a profile IP."""
     _module_factory = ModuleFactory()
     output_dir = tmp_path / "run"
     history_path = output_dir / "web_interface" / "history.sqlite"
@@ -180,11 +204,18 @@ def test_snapshot_hosts_persists_all_mac_addresses(tmp_path) -> None:
             "host_name": "sensor",
         },
         "{}",
+        ["timewindow1"],
     ]
-    mac_pipeline = Mock()
-    mac_pipeline.execute.return_value = [json.dumps(["10.0.0.1", "fe80::1"])]
-    redis_client.pipeline.side_effect = [identity_pipeline, mac_pipeline]
-    collector = HistoryCollector(str(output_dir), history_path, redis_client, 999999)
+    score_pipeline = Mock()
+    score_pipeline.execute.return_value = [2.5]
+    redis_client.pipeline.side_effect = [
+        identity_pipeline,
+        score_pipeline,
+    ]
+    redis_client.hget.return_value = "0.32"
+    collector = HistoryCollector(
+        str(output_dir), history_path, redis_client, 999999
+    )
 
     assert collector.snapshot_hosts() == 1
     with connect_history(history_path, read_only=True) as connection:
@@ -194,10 +225,14 @@ def test_snapshot_hosts_persists_all_mac_addresses(tmp_path) -> None:
             ).fetchone()["data"]
         )
 
-    assert stored["all_ips"] == ["10.0.0.1", "fe80::1"]
+    assert stored["all_ips"] == ["10.0.0.1"]
+    assert stored["accumulated_threat_level"] == 2.5
+    assert stored["accumulated_ratl"] == 0.8
 
 
-def test_collect_once_snapshots_hosts_before_detection_backfill(tmp_path) -> None:
+def test_collect_once_snapshots_hosts_before_detection_backfill(
+    tmp_path,
+) -> None:
     """Publish host inventory before potentially expensive historical work."""
     _module_factory = ModuleFactory()
     output_dir = tmp_path / "run"
@@ -227,13 +262,17 @@ def test_initialize_history_migrates_legacy_metric_schema(tmp_path) -> None:
         connection.execute(
             "CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
         )
-        connection.execute("INSERT INTO metadata VALUES ('schema_version', '1')")
+        connection.execute(
+            "INSERT INTO metadata VALUES ('schema_version', '1')"
+        )
         connection.execute(
             "CREATE TABLE runtime_metrics_1s ("
             "ts REAL PRIMARY KEY, cpu_percent REAL NOT NULL, "
             "memory_mb REAL NOT NULL, flows_per_second REAL NOT NULL)"
         )
-        connection.execute("INSERT INTO runtime_metrics_1s VALUES (1, 2, 3, 4)")
+        connection.execute(
+            "INSERT INTO runtime_metrics_1s VALUES (1, 2, 3, 4)"
+        )
 
     initialize_history(history_path)
 
@@ -263,13 +302,17 @@ def test_metric_sample_preserves_exact_profiler_delta(tmp_path) -> None:
     history_path = output_dir / "web_interface" / "history.sqlite"
     redis_client = Mock()
     redis_client.get.return_value = 107
-    collector = HistoryCollector(str(output_dir), history_path, redis_client, 999999)
+    collector = HistoryCollector(
+        str(output_dir), history_path, redis_client, 999999
+    )
     collector._last_flow_count = 100
     collector._last_flow_check = 10.0
     collector._live_processes = Mock(return_value=[])
 
     with (
-        patch("modules.web_interface.history.time.monotonic", return_value=12.0),
+        patch(
+            "modules.web_interface.history.time.monotonic", return_value=12.0
+        ),
         patch("modules.web_interface.history.time.time", return_value=20.0),
     ):
         collector.sample_metrics()
