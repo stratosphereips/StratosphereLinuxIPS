@@ -46,6 +46,8 @@ class ARP(IModule):
         self.delete_arp_periodically = False
         self.arp_log_creation_time = 0
         self.period_before_deleting = 0
+        # we stop combining evidence when this is reached, and we set 1
+        # evidence immediately.
         self.max_arp_scan_evidence_to_combine = 1200
         if self.delete_zeek_files and not self.store_zeek_files_copy:
             self.delete_arp_periodically = True
@@ -107,46 +109,56 @@ class ARP(IModule):
                 time.sleep(3)
                 continue
 
-            # unpack the evidence that triggered the thread
-            (ts, profileid, twid, uids) = evidence
+            try:
+                # unpack the evidence that triggered the thread
+                (ts, profileid, twid, uids) = evidence
 
-            # wait 10s if a new evidence arrived
-            time.sleep(self.time_to_wait)
+                # wait 10s if a new evidence arrived
+                time.sleep(self.time_to_wait)
 
-            for _ in range(self.pending_arp_scan_evidence.qsize()):
-                try:
-                    new_evidence = self.pending_arp_scan_evidence.get(
-                        timeout=0.5
-                    )
-                except queue.Empty:
-                    break
-
-                (ts2, profileid2, twid2, uids2) = new_evidence
-                if profileid == profileid2 and twid == twid2:
-                    # this should be combined with the past alert
-                    ts = ts2
-                    uids += uids2
-                    if len(uids) >= self.max_arp_scan_evidence_to_combine:
-                        # enough combining, time to set 1 evidence.
-                        break
-                else:
-                    # this is an ip performing arp scan in a diff
-                    # profile or a diff twid, we shouldn't accumulate its
-                    # evidence  store it back in the queue until we're done
-                    # with the current one
+                for _ in range(self.pending_arp_scan_evidence.qsize()):
                     try:
-                        self.pending_arp_scan_evidence.put_nowait(new_evidence)
-                    except queue.Full:
-                        # no room to put it back. we already popped it
-                        # off the queue, so set its own evidence now
-                        # instead of silently dropping it, then stop
-                        # draining to avoid an infinite busy loop.
-                        self.set_evidence_arp_scan(
-                            ts2, profileid2, twid2, uids2
+                        new_evidence = self.pending_arp_scan_evidence.get(
+                            timeout=0.5
                         )
+                    except queue.Empty:
                         break
 
-            self.set_evidence_arp_scan(ts, profileid, twid, uids)
+                    (ts2, profileid2, twid2, uids2) = new_evidence
+                    if profileid == profileid2 and twid == twid2:
+                        # this should be combined with the past alert
+                        ts = ts2
+                        uids += uids2
+                        if len(uids) >= self.max_arp_scan_evidence_to_combine:
+                            # enough combining, time to set 1 evidence.
+                            break
+                    else:
+                        # this is an ip performing arp scan in a diff
+                        # profile or a diff twid, we shouldn't accumulate
+                        # its evidence store it back in the queue until
+                        # we're done with the current one
+                        try:
+                            self.pending_arp_scan_evidence.put_nowait(
+                                new_evidence
+                            )
+                        except queue.Full:
+                            # no room to put it back. we already popped it
+                            # off the queue, so set its own evidence now
+                            # instead of silently dropping it, then stop
+                            # draining to avoid an infinite busy loop.
+                            self.set_evidence_arp_scan(
+                                ts2, profileid2, twid2, uids2
+                            )
+                            break
+
+                self.set_evidence_arp_scan(ts, profileid, twid, uids)
+            except Exception as e:
+                self.print(
+                    f"Error in wait_for_arp_scans: {e}. "
+                    f"Evidence: {evidence}",
+                    0,
+                    1,
+                )
 
     def check_arp_scan(self, profileid, twid, flow):
         """
