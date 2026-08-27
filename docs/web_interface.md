@@ -22,9 +22,9 @@ The -w flag enables the module even when enabled is false. The bind address is d
 
 Only one web-enabled Slips run is supported on a host. A new -w run replaces an older listener only after verifying that it is a Slips web server owned by the same user. It never terminates an unrelated program using the port. If another program owns the port, the module reports an error and stops.
 
-When a file or folder analysis finishes naturally, Slips asks `Analysis completed. Stop the web interface? [y/N]`. Answer `y` or `yes` to stop the page and finish shutdown. Answer `n`, `no`, or press Enter to keep the page and its Redis/SQLite data available; Slips then waits until the page is stopped or you press Ctrl-C. A later web-enabled run can replace a verified older listener.
+When a file or folder analysis finishes naturally, or after the first Ctrl-C stops a web-enabled live analysis, Slips asks `Slips analysis has stopped. Stop the web interface? [y/N]`. Answer `y` or `yes` to stop the page and finish shutdown. Answer `n`, `no`, or press Enter to keep the page and its Redis/SQLite data available; Slips then waits until the page is stopped or you press Ctrl-C. A later web-enabled run can replace a verified older listener.
 
-Ctrl-C, SIGTERM, SIGHUP, SIGQUIT, daemon stop, core-module failure, and update shutdowns do not prompt: they stop the web server with Slips. SIGKILL and SIGSTOP cannot be caught by any process, so no application can perform cleanup for those signals. In a non-interactive session where Slips cannot read a console answer, the web interface is stopped instead of leaving the command blocked indefinitely.
+A second Ctrl-C, SIGTERM, SIGHUP, SIGQUIT, daemon stop, core-module failure, and update shutdowns stop the web server with Slips without prompting. SIGKILL and SIGSTOP cannot be caught by any process, so no application can perform cleanup for those signals. In a non-interactive session where Slips cannot read a console answer, the web interface is stopped instead of leaving the command blocked indefinitely.
 
 Every data request checks that Redis still advertises the output directory configured for that server. If Redis belongs to a different run, the API returns HTTP 409 and the page displays a persistent run-mismatch banner instead of mixing runs. Detection producers perform the same ownership check before publishing evidence, so a delayed process from a replaced run cannot write into the new run.
 
@@ -114,13 +114,35 @@ Flow totals use exact profiler counter deltas rather than assuming every sample 
 
 ### Firewall
 
-The Firewall tab lists IPs currently confirmed in Slips' `slipsBlocking` firewall state. It distinguishes the current blocking window from the final **probation** window, shows the scheduled unblock time and remaining duration when available, and includes each IP's evidence and alert totals.
+The Firewall tab lists IPs currently confirmed in Slips' `slipsBlocking` firewall state. It distinguishes the current blocking window from the final **probation** window, shows the scheduled unblock time and remaining duration when available, and includes each IP's evidence and alert totals. A block whose deadline has passed but whose rules have not been removed is marked **overdue** instead of silently showing `0s` probation.
+
+The tab also shows a newest-first block/unblock history for the run. Its authoritative append-only source is `output/<run>/blocking/blocking.log`; Slips records the human timestamp, IP, direction when blocked, successful removal, and failed removal attempts. The unblocker retains zero-window requests until their rules are actually absent, retries partial failures, and restores persisted schedules after a blocker restart.
 
 ### P2P
 
 The P2P tab combines current Redis connectivity with the persistent local P2P trust database. It shows the local Pigeon identity and listen address, connected and previously known peers, peer trust and reliability, reliability evolution, peer reports received during the current run, and bounded recent send/receive activity. An enabled module with zero connected peers is shown as healthy and listening.
 
 Message counters begin when telemetry-capable P2P code starts. Reliability history can span earlier runs because `permanent/p2p_trust_runtime/trustdb.db` is persistent; the reports table is filtered using this run's analysis start time.
+
+### Host score history
+
+The host workspace plots the real detector score recorded after each evidence
+is processed for the selected profile IP. Scores are never combined across
+MAC-derived host aliases because Slips accumulators are IP-specific. Interface,
+standard-input, and CYST runs plot RATL; finite input runs plot ATL. The chart
+includes the configured alert threshold, the last score and peak score in each
+bounded server-side interval, and detected drops.
+A time-window change is labeled separately from a same-window drop after an
+alert resets the accumulator. The host range selector also controls this
+plot.
+
+Evidence creation and evidence scoring are separate pipeline stages. The plot
+therefore reports how many durable evidence records have a persisted score
+sample. A host can have many evidence records and a current score of zero when
+those records are still waiting for Evidence Handler processing, when an
+alert reset the accumulator, when a new time window started, or when records
+predate score persistence. Missing samples are reported explicitly and are
+never replaced with scores calculated by the web interface.
 
 ### Alerts and evidence
 
@@ -155,7 +177,7 @@ The host list combines current Redis metadata with persisted last-known identity
 
 Selecting a host opens a full-width workspace with:
 
-- MAC, vendor, all associated IPv4 and IPv6 addresses, hostname, DNS, scope, and cached threat intelligence; the host and alert tables also show cached rDNS (or the most related DNS domain) and the TI feeds that contain the IP;
+- MAC and vendor metadata, the exact profile IP, hostname, DNS, scope, and cached threat intelligence; the host and alert tables also show cached rDNS (or the most related DNS domain) and the TI feeds that contain the IP;
 - total and inbound/outbound flow and byte counts, plus packet, evidence, and alert totals;
 - inbound/outbound flow and byte plots;
 - protocol/application distribution and top peers;
@@ -164,7 +186,7 @@ Selecting a host opens a full-width workspace with:
 
 DNS resolution context is shown as structured fields: domains pointing to the selected IP, the hosts that requested those resolutions, the latest DNS observation and flow UID, and the relevant Slips time windows. Resolver addresses are clickable and open their host workspace.
 
-Traffic matches any associated host address as source or destination. Rows show normalized direction, peer, addresses, ports, protocol/application, state, duration, packets, bytes, label, UID, and expandable raw details.
+Traffic, scores, alerts, and evidence match only the selected Slips profile IP. MAC metadata never expands a workspace into other addresses because an observed Ethernet address can belong to a router or next hop shared by unrelated remote IPv4 and IPv6 traffic. Rows show normalized direction, peer, addresses, ports, protocol/application, state, duration, packets, bytes, label, UID, and expandable raw details.
 
 Native horizontal and vertical port-scan evidence links at most 20 contributing
 non-established connection UIDs. The interface identifies this limit when a
@@ -186,6 +208,7 @@ GET /api/hosts/<ip>
 GET /api/hosts/<ip>/evidence?sort=...&order=...&cursor=...
 GET /api/hosts/<ip>/flows?limit=...&from=...&to=...&cursor=...
 GET /api/hosts/<ip>/traffic-summary?from=...&to=...&max_points=...
+GET /api/hosts/<ip>/score-history?range=...&from=...&to=...&max_points=...
 GET /api/evidence/<uuid>/flows
 ```
 
