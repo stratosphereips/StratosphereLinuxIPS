@@ -160,6 +160,8 @@ class Blocking(IModule):
 
         # Make sure ip isn't already blocked before blocking
         if self._is_ip_already_blocked(ip_to_block):
+            if self.db.get_blocking_timestamp(ip_to_block) is None:
+                self.db.set_blocked_ip(ip_to_block)
             return False
 
         from_ = flags.get("from_")
@@ -186,7 +188,7 @@ class Blocking(IModule):
                 }
             )
 
-        blocked = False
+        results = []
         if from_:
             # Add rule to block traffic from source ip_to_block (-s)
             blocked = exec_iptables_command(
@@ -197,6 +199,7 @@ class Blocking(IModule):
                 options=options,
             )
             if blocked:
+                results.append(True)
                 txt = f"Blocked all traffic from: {ip_to_block}"
                 self.print(txt)
                 self.log(txt)
@@ -211,11 +214,14 @@ class Blocking(IModule):
                 options=options,
             )
             if blocked:
+                results.append(True)
                 txt = f"Blocked all traffic to: {ip_to_block}"
                 self.print(txt)
                 self.log(f"Blocked all traffic to: {ip_to_block}")
-                self.db.set_blocked_ip(ip_to_block)
-        return blocked
+        if results:
+            self.db.set_blocked_ip(ip_to_block)
+        requested_rules = int(bool(from_)) + int(bool(to))
+        return bool(results) and len(results) == requested_rules
 
     def shutdown_gracefully(self):
         self.unblocker.unblocker_thread.join(30)
