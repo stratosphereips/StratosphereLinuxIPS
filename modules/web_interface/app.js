@@ -4,6 +4,8 @@ const state = {
   activeTab: "overview",
   overview: null,
   metrics: [],
+  configuration: null,
+  whitelists: null,
   host: null,
   failures: 0,
   timer: null,
@@ -96,6 +98,11 @@ const threat = (value) => {
   return text("span", level, `status threat-${level}`);
 };
 const slipsScore = (record) => {
+  if (record.whitelisted) {
+    const excluded = text("span", "Excluded", "slips-score whitelisted");
+    excluded.title = "Slips matched a whitelist rule and deliberately excluded this evidence from scoring.";
+    return excluded;
+  }
   const score = Number(record.alert_score);
   const threshold = Number(record.alert_threshold);
   if (!Number.isFinite(score) || !Number.isFinite(threshold)) {
@@ -113,6 +120,14 @@ const slipsScore = (record) => {
   );
   element.title = `${record.alert_score_mode || "Slips"} · ${record.alert_score_basis || "detector accumulator"}`;
   return element;
+};
+const whitelistHandling = (record) => {
+  if (!record.whitelisted) return text("span", "Scored", "status neutral");
+  const count = numeric(record.whitelisted_count);
+  const label = count ? `${compact(count)} excluded` : "Whitelisted";
+  const marker = text("span", label, "status whitelisted");
+  marker.title = "Slips excluded this evidence from score accumulation because a whitelist rule matched.";
+  return marker;
 };
 const escapePath = (value) => encodeURIComponent(String(value));
 
@@ -716,11 +731,11 @@ async function loadEvidence() {
     ["Latest", "time"], ["Host", "host"], ["Highest threat", "threat"],
     ["Peak Slips score", "score"],
     ["Type", "type"], ["Module", "module"], ["Evidence", "evidence"],
-    ["Flows", "flows"], ["Alert links", "alert"],
+    ["Flows", "flows"], ["Alert links", "alert"], ["Score handling", null],
   ] : [
     ["Time", "time"], ["Host", "host"], ["Threat", "threat"],
     ["Slips score", "score"],
-    ["Type", "type"], ["Module", "module"], ["Flows", "flows"],
+    ["Type", "type"], ["Module", "module"], ["Score handling", null], ["Flows", "flows"],
     ["Alerts", "alert"], ["Description", null],
   ], loadEvidence);
   byId("evidence-description").textContent = grouped
@@ -737,18 +752,124 @@ async function loadEvidence() {
       (row) => text("code", row.module), (row) => compact(row.evidence_count),
       (row) => compact(row.flow_count),
       (row) => row.alert_count ? `${compact(row.alert_count)} linked` : "none",
+      (row) => whitelistHandling(row),
     ], openEvidenceGroup);
   } else {
     renderTable("evidence-table", payload.items, [
       (row) => formatTime(row.timestamp), (row) => text("code", row.profile_ip),
       (row) => threat(row.threat_level), (row) => slipsScore(row),
       (row) => text("code", row.evidence_type),
-      (row) => text("code", row.module), (row) => compact(row.flow_count),
+      (row) => text("code", row.module), (row) => whitelistHandling(row),
+      (row) => compact(row.flow_count),
       (row) => row.alert_ids?.length ? compact(row.alert_ids.length) : "none",
       (row) => row.description || "—",
     ], openEvidence);
   }
   pager("evidence", "evidence-pager", loadEvidence);
+}
+
+function renderConfiguration() {
+  const payload = state.configuration;
+  if (!payload) return;
+  const query = byId("configuration-search").value.trim().toLowerCase();
+  const container = byId("configuration-sections");
+  container.replaceChildren();
+  let shown = 0;
+  (payload.sections || []).forEach((section) => {
+    const settings = (section.settings || []).filter((setting) => !query || [
+      section.title, section.description, setting.key, setting.label,
+      setting.explanation, JSON.stringify(setting.value),
+    ].join(" ").toLowerCase().includes(query));
+    if (!settings.length) return;
+    shown += settings.length;
+    const details = document.createElement("details");
+    details.className = "surface config-section";
+    details.open = Boolean(query) || ["parameters", "detection", "whitelists", "web_interface"]
+      .includes(section.key);
+    const summary = document.createElement("summary");
+    const heading = document.createElement("div");
+    heading.append(text("h3", section.title), text("p", section.description));
+    summary.append(heading, text("span", `${settings.length} settings`, "count-chip"));
+    const grid = document.createElement("div");
+    grid.className = "config-settings";
+    settings.forEach((setting) => {
+      const card = document.createElement("article");
+      card.className = "config-setting";
+      const value = setting.value && typeof setting.value === "object"
+        ? JSON.stringify(displayData(setting.value)) : displayValue(setting.value);
+      card.append(
+        text("small", `${section.key}.${setting.key}`, "config-key"),
+        text("h4", setting.label),
+        text("code", value === "" ? "Empty" : value, setting.sensitive ? "redacted" : ""),
+        text("p", setting.explanation),
+      );
+      grid.append(card);
+    });
+    details.append(summary, grid);
+    container.append(details);
+  });
+  byId("configuration-count").textContent = `${shown} shown · ${payload.total} captured settings`;
+  if (!shown) container.append(text("p", "No settings match this search.", "surface empty-state"));
+}
+
+async function loadConfiguration() {
+  const payload = await api("configuration", "/api/configuration");
+  if (!payload) return;
+  state.configuration = payload;
+  byId("configuration-status").textContent = payload.captured
+    ? `${payload.total} settings from the immutable run snapshot.`
+    : "No configuration snapshot was captured for this run.";
+  byId("configuration-source").textContent = payload.source
+    ? `${payload.source} was copied into this run when Slips started. Values below are parsed, grouped, and explained; this is not a dump of the YAML text.`
+    : "Run metadata did not contain a YAML configuration snapshot.";
+  renderConfiguration();
+}
+
+function renderWhitelists() {
+  const payload = state.whitelists;
+  if (!payload) return;
+  const query = byId("whitelists-search").value.trim().toLowerCase();
+  const type = byId("whitelists-type").value;
+  const rows = (payload.rules || []).filter((rule) =>
+    (!type || rule.type === type) && (!query || JSON.stringify(rule).toLowerCase().includes(query)));
+  byId("whitelists-count").textContent = `${rows.length} shown · ${payload.total} parsed local rules`;
+  renderTable("whitelists-table", rows, [
+    (row) => text("span", row.type, "type-chip"),
+    (row) => text("code", row.value),
+    (row) => row.direction === "both" ? "Source or destination" : row.direction === "src" ? "Source" : "Destination",
+    (row) => row.ignore === "both" ? "Flows and alerts" : row.ignore === "alerts" ? "Evidence and alerts" : "Flows",
+    (row) => row.effect,
+    (row) => row.source,
+  ]);
+}
+
+async function loadWhitelists() {
+  const payload = await api("whitelists", "/api/whitelists");
+  if (!payload) return;
+  state.whitelists = payload;
+  byId("whitelists-badge").textContent = compact(payload.total);
+  byId("whitelists-status").textContent = `${payload.total} local rules were parsed for this run. Evidence marked “Whitelisted” was excluded by Slips before score accumulation.`;
+  setSummaryCards([
+    ["Parsed local rules", compact(payload.total)],
+    ["IP addresses", compact(payload.counts?.["IP address"])],
+    ["Domains", compact(payload.counts?.Domain)],
+    ["Organizations", compact(payload.counts?.Organization)],
+    ["Online domains loaded", compact(payload.online_domains_loaded)],
+  ], "whitelists-summary");
+  byId("whitelists-local-source").replaceChildren(
+    detailRow("Enabled", payload.local_enabled ? "Yes" : "No"),
+    detailRow("Captured source", payload.local_source || "Not captured"),
+    detailRow("Runtime result", `${payload.total} parsed rules`),
+  );
+  byId("whitelists-online-source").replaceChildren(
+    detailRow("Enabled", payload.online_enabled ? "Yes" : "No"),
+    detailRow("Source", payload.online_source || "Not configured"),
+    detailRow("Configured limit", payload.online_domain_limit ?? "Not configured"),
+    detailRow("Loaded now", `${compact(payload.online_domains_loaded)} domains`),
+    detailRow("Refresh period", payload.online_update_period
+      ? formatDuration(payload.online_update_period) : "Not configured"),
+  );
+  renderWhitelists();
 }
 
 async function loadFirewall() {
@@ -1452,6 +1573,33 @@ async function openEvidence(record) {
   const generation = openDrawer("EVIDENCE", record.evidence_type || record.id);
   const body = byId("drawer-body");
   const alertCount = record.alert_ids?.length || 0;
+  if (record.whitelisted) {
+    const notice = document.createElement("section");
+    notice.className = "whitelist-notice";
+    notice.append(
+      text("h3", "Excluded from scoring by whitelist"),
+      text("p", "Slips detected and retained this evidence for visibility, but a whitelist rule matched an entity inside it. Evidence Handler therefore did not add it to the host score or use it to form an alert."),
+    );
+    const matches = Array.isArray(record.whitelist_matches)
+      ? record.whitelist_matches : [];
+    if (matches.length) {
+      const list = document.createElement("ul");
+      matches.forEach((match) => {
+        list.append(text(
+          "li",
+          `${match.entity} ${match.type.toLowerCase()} ${match.value} matched rule ${match.rule} (${match.direction}; suppress ${match.ignore}).`,
+        ));
+      });
+      notice.append(list);
+    } else {
+      notice.append(text(
+        "p",
+        "The whitelist decision is recorded, but the exact matching entity cannot be reconstructed from the retained evidence data.",
+        "muted",
+      ));
+    }
+    body.append(notice);
+  }
   body.append(
     investigationStats([
       ["Detected", formatTime(record.timestamp)],
@@ -1730,6 +1878,7 @@ async function loadHostEvidence() {
     (row) => threat(row.threat_level),
     (row) => text("code", row.evidence_type),
     (row) => text("code", row.module || "—"),
+    (row) => whitelistHandling(row),
     (row) => Math.round(numeric(row.confidence) * 100) + "%",
     (row) => compact(row.flow_count),
     (row) => row.alert_ids?.length ? compact(row.alert_ids.length) : "none",
@@ -2014,7 +2163,16 @@ function closeHost() {
 }
 
 function tabLoader(name) {
-  return { overview: loadOverview, alerts: loadAlerts, evidence: loadEvidence, firewall: loadFirewall, p2p: loadP2P, hosts: loadHosts }[name];
+  return {
+    overview: loadOverview,
+    alerts: loadAlerts,
+    evidence: loadEvidence,
+    firewall: loadFirewall,
+    p2p: loadP2P,
+    configuration: loadConfiguration,
+    whitelists: loadWhitelists,
+    hosts: loadHosts,
+  }[name];
 }
 
 function currentLoader() {
@@ -2035,6 +2193,7 @@ async function refreshActive() {
 }
 
 function activeRangeIsLive() {
+  if (["configuration", "whitelists"].includes(state.activeTab)) return false;
   if (["firewall", "p2p"].includes(state.activeTab)) return true;
   if (state.activeTab === "overview") return true;
   if (state.activeTab === "hosts" && state.host) {
@@ -2130,6 +2289,9 @@ bindFilters("host-evidence", ["host-evidence-search"], loadHostEvidence);
 bindFilters("alerts", ["alerts-search", "alerts-threat"], loadAlerts);
 bindFilters("evidence", ["evidence-search", "evidence-threat", "evidence-link"], loadEvidence);
 bindFilters("hosts", ["hosts-search", "hosts-scope", "hosts-threat"], loadHosts);
+byId("configuration-search").addEventListener("input", renderConfiguration);
+byId("whitelists-search").addEventListener("input", renderWhitelists);
+byId("whitelists-type").addEventListener("change", renderWhitelists);
 bindView("alerts", loadAlerts);
 bindView("evidence", loadEvidence);
 bindRange("alerts", "alerts", loadAlerts);
