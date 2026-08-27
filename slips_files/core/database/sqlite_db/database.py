@@ -36,7 +36,9 @@ class SQLiteDB(ISQLite):
 
     def __init__(self, logger: Output, output_dir: str, main_pid: int):
         self.printer = Printer(logger, self.name)
-        self._flows_db = get_this_db_path_inside_output_dir(output_dir, "flows.sqlite")
+        self._flows_db = get_this_db_path_inside_output_dir(
+            output_dir, "flows.sqlite"
+        )
 
         db_newly_created = False
         if not os.path.exists(self._flows_db):
@@ -221,7 +223,9 @@ class SQLiteDB(ISQLite):
         Return a list of all the flows in this profileid
         [{'uid':flow},...]
         """
-        flows = self.select("flows", condition="profileid = ?", params=(profileid,))
+        flows = self.select(
+            "flows", condition="profileid = ?", params=(profileid,)
+        )
         all_flows: Dict[str, dict] = {}
         if flows:
             for flow in flows:
@@ -382,7 +386,9 @@ class SQLiteDB(ISQLite):
 
         condition = " AND ".join(condition_parts) if condition_parts else None
 
-        flows = self.get_count("flows", condition=condition, params=tuple(params))
+        flows = self.get_count(
+            "flows", condition=condition, params=tuple(params)
+        )
         # flows += self.get_count('altflows', condition=condition)
         return flows
 
