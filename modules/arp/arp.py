@@ -5,7 +5,8 @@ import ipaddress
 import os
 import time
 import threading
-from multiprocessing import Queue
+
+import queue
 from typing import List
 
 from modules.arp.filter import ARPEvidenceFilter
@@ -45,6 +46,9 @@ class ARP(IModule):
         self.delete_arp_periodically = False
         self.arp_log_creation_time = 0
         self.period_before_deleting = 0
+        # we stop combining evidence when this is reached, and we set 1
+        # evidence immediately.
+        self.max_arp_scan_evidence_to_combine = 1200
         if self.delete_zeek_files and not self.store_zeek_files_copy:
             self.delete_arp_periodically = True
             # first time arp.log is created
@@ -56,9 +60,9 @@ class ARP(IModule):
             daemon=True,
             name="timer_thread_arp_scan",
         )
-        self.pending_arp_scan_evidence = Queue()
-        self.alerted_once_arp_scan = False
-        # wait 10s for mmore arp scan evidence to come
+        self.pending_arp_scan_evidence = queue.Queue(maxsize=50)
+        self.alerted_once_arp_scan = {}
+        # wait 10s for more arp scan evidence to come
         self.time_to_wait = 10
         self.is_zeek_running: bool = self.is_running_zeek()
         self.evidence_filter = ARPEvidenceFilter(self.conf, self.args, self.db)
@@ -96,48 +100,65 @@ class ARP(IModule):
         arp scans happened to reduce the number of evidence
         """
         # this evidence is the one that triggered this thread
-        scans_ctr = 0
         while not self.should_stop():
             try:
                 evidence: dict = self.pending_arp_scan_evidence.get(
                     timeout=0.5
                 )
-            except Exception:
-                # nothing in queue
-                time.sleep(5)
+            except queue.Empty:
+                time.sleep(3)
                 continue
-            # unpack the evidence that triggered the thread
-            (ts, profileid, twid, uids) = evidence
 
-            # wait 10s if a new evidence arrived
-            time.sleep(self.time_to_wait)
+            try:
+                # unpack the evidence that triggered the thread
+                (ts, profileid, twid, uids) = evidence
 
-            while True:
-                try:
-                    new_evidence = self.pending_arp_scan_evidence.get(
-                        timeout=0.5
-                    )
-                except Exception:
-                    # queue is empty
-                    break
+                # wait 10s if a new evidence arrived
+                time.sleep(self.time_to_wait)
 
-                (ts2, profileid2, twid2, uids2) = new_evidence
-                if profileid == profileid2 and twid == twid2:
-                    # this should be combined with the past alert
-                    ts = ts2
-                    uids += uids2
-                else:
-                    # this is an ip performing arp scan in a diff
-                    # profile or a diff twid, we shouldn't accumulate its
-                    # evidence  store it back in the queue until we're done
-                    # with the current one
-                    scans_ctr += 1
-                    self.pending_arp_scan_evidence.put(new_evidence)
-                    if scans_ctr == 3:
-                        scans_ctr = 0
+                for _ in range(self.pending_arp_scan_evidence.qsize()):
+                    try:
+                        new_evidence = self.pending_arp_scan_evidence.get(
+                            timeout=0.5
+                        )
+                    except queue.Empty:
                         break
 
-            self.set_evidence_arp_scan(ts, profileid, twid, uids)
+                    (ts2, profileid2, twid2, uids2) = new_evidence
+                    if profileid == profileid2 and twid == twid2:
+                        # this should be combined with the past alert
+                        ts = ts2
+                        uids += uids2
+                        if len(uids) >= self.max_arp_scan_evidence_to_combine:
+                            # enough combining, time to set 1 evidence.
+                            break
+                    else:
+                        # this is an ip performing arp scan in a diff
+                        # profile or a diff twid, we shouldn't accumulate
+                        # its evidence store it back in the queue until
+                        # we're done with the current one
+                        try:
+                            self.pending_arp_scan_evidence.put_nowait(
+                                new_evidence
+                            )
+                        except queue.Full:
+                            # no room to put it back. we already popped it
+                            # off the queue, so set its own evidence now
+                            # instead of silently dropping it, then stop
+                            # draining to avoid an infinite busy loop.
+                            self.set_evidence_arp_scan(
+                                ts2, profileid2, twid2, uids2
+                            )
+                            break
+
+                self.set_evidence_arp_scan(ts, profileid, twid, uids)
+            except Exception as e:
+                self.print(
+                    f"Error in wait_for_arp_scans: {e}. "
+                    f"Evidence: {evidence}",
+                    0,
+                    1,
+                )
 
     def check_arp_scan(self, profileid, twid, flow):
         """
@@ -213,18 +234,25 @@ class ARP(IModule):
             # in seconds
             if self.diff <= 30.00:
                 uids = get_uids()
+                profileid_twid = f"{profileid}_{twid}"
                 # we are sure this is an arp scan
-                if not self.alerted_once_arp_scan:
-                    self.alerted_once_arp_scan = True
+                if not self.alerted_once_arp_scan.get(profileid_twid, False):
+                    self.alerted_once_arp_scan[profileid_twid] = True
                     self.set_evidence_arp_scan(
                         flow.starttime, profileid, twid, uids
                     )
                 else:
-                    # after alerting once, wait 10s to see
-                    # if more evidence are coming
-                    self.pending_arp_scan_evidence.put(
-                        (flow.starttime, profileid, twid, uids)
-                    )
+                    # after alerting once, queue the upcoming evidence and
+                    # combine them into 1 evidence to avoid having too many .
+                    try:
+                        self.pending_arp_scan_evidence.put_nowait(
+                            (flow.starttime, profileid, twid, uids)
+                        )
+                    except queue.Full:
+                        # no room for combining evidence, set it immediately.
+                        self.set_evidence_arp_scan(
+                            flow.starttime, profileid, twid, uids
+                        )
 
                 return True
         return False
@@ -560,17 +588,11 @@ class ARP(IModule):
                 # Unsolicited ARPs should be of type reply only, not request
                 self.detect_unsolicited_arp(twid, flow)
 
-        # if the tw is closed, remove all its entries from the cache dict
+        # if the tw is closed, remove all its entries from the cache dicts
         if msg := self.get_msg("tw_closed"):
             profileid_tw = utils.get_msg_payload(msg)
             # when a tw is closed, this means that it's too
             # old so we don't check for arp scan in this time
             # range anymore
-            # this copy is made to avoid dictionary
-            # changed size during iteration err
-            cache_copy = self.cache_arp_requests.copy()
-            for key in cache_copy:
-                if profileid_tw in key:
-                    self.cache_arp_requests.pop(key)
-                    # don't break, keep looking for more
-                    # keys that belong to the same tw
+            self.alerted_once_arp_scan.pop(profileid_tw, None)
+            self.cache_arp_requests.pop(profileid_tw, None)
