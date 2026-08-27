@@ -569,17 +569,11 @@ class ARP(IModule):
                 # Unsolicited ARPs should be of type reply only, not request
                 self.detect_unsolicited_arp(twid, flow)
 
-        # if the tw is closed, remove all its entries from the cache dict
+        # if the tw is closed, remove all its entries from the cache dicts
         if msg := self.get_msg("tw_closed"):
             profileid_tw = utils.get_msg_payload(msg)
             # when a tw is closed, this means that it's too
             # old so we don't check for arp scan in this time
             # range anymore
-            # this copy is made to avoid dictionary
-            # changed size during iteration err
-            cache_copy = self.cache_arp_requests.copy()
-            for key in cache_copy:
-                if profileid_tw in key:
-                    self.cache_arp_requests.pop(key)
-                    # don't break, keep looking for more
-                    # keys that belong to the same tw
+            self.alerted_once_arp_scan.pop(profileid_tw, None)
+            self.cache_arp_requests.pop(profileid_tw, None)
