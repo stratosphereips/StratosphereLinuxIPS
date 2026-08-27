@@ -78,7 +78,9 @@ class ShutdownMixin:
         if self.warning_printed_once:
             return None
 
-        pending_module_names: List[str] = [proc.name for proc in pending_modules]
+        pending_module_names: List[str] = [
+            proc.name for proc in pending_modules
+        ]
         self.main.print(
             "The following modules are busy working on your data."
             f"\n\n{pending_module_names}\n\n"
@@ -113,14 +115,20 @@ class ShutdownMixin:
 
         if self.main.args.blocking:
             pids_to_kill_last.append(self.main.db.get_pid_of(Modules.BLOCKING))
-            pids_to_kill_last.append(self.main.db.get_pid_of(Modules.ARP_POISONER))
+            pids_to_kill_last.append(
+                self.main.db.get_pid_of(Modules.ARP_POISONER)
+            )
 
         if Modules.EXPORTING_ALERTS not in self.main.db.get_disabled_modules():
-            pids_to_kill_last.append(self.main.db.get_pid_of(Modules.EXPORTING_ALERTS))
+            pids_to_kill_last.append(
+                self.main.db.get_pid_of(Modules.EXPORTING_ALERTS)
+            )
         # remove all None PIDs. this happens when a module in that list
         # isnt started in the current run. e.g. virustotal module starts then
         # stops immediately if no API is found. so its pid will be None.
-        pids_to_kill_last = [pid for pid in pids_to_kill_last if pid is not None]
+        pids_to_kill_last = [
+            pid for pid in pids_to_kill_last if pid is not None
+        ]
 
         # now get the process obj of each pid
         to_kill_first: List[Process] = []
@@ -361,7 +369,10 @@ class ShutdownMixin:
                     module_that_has_a_dependency
                 )
                 # did any of the module's dependencies stop?
-                if any(dependency in stopped_modules for dependency in dependencies):
+                if any(
+                    dependency in stopped_modules
+                    for dependency in dependencies
+                ):
                     modules_with_stopped_dependencies.append(
                         module_that_has_a_dependency
                     )
@@ -379,7 +390,8 @@ class ShutdownMixin:
         stopped_module_names: List[str] = []
         for module_that_has_a_dependency in impacted_modules:
             if module_that_has_a_dependency.casefold() in (
-                stopped_module.casefold() for stopped_module in self.stopped_modules
+                stopped_module.casefold()
+                for stopped_module in self.stopped_modules
             ):
                 continue
 
@@ -434,7 +446,9 @@ class ShutdownMixin:
         # is to avoid the race condition that happens when
         # one of the 2 semaphores (input and profiler) is released and
         # the other isnt
-        input_done_processing: bool = self.can_acquire_semaphore(self.is_input_done)
+        input_done_processing: bool = self.can_acquire_semaphore(
+            self.is_input_done
+        )
         profiler_done_processing: bool = self.can_acquire_semaphore(
             self.is_profiler_done_semaphore
         )
@@ -472,7 +486,7 @@ class ShutdownMixin:
 
     def _ask_to_stop_web_interface(self) -> bool:
         """
-        Ask the interactive user whether the completed-run server should stop.
+        Ask whether to stop the local web interface after analysis stops.
 
         Returns:
             True when the server should stop immediately.
@@ -483,7 +497,11 @@ class ShutdownMixin:
             )
             return True
 
-        print("Analysis completed. Stop the web interface? [y/N] ", end="", flush=True)
+        print(
+            "Slips analysis has stopped. Stop the web interface? [y/N] ",
+            end="",
+            flush=True,
+        )
         while not getattr(self.main, "shutdown_signal_received", False):
             try:
                 readable, _, _ = select.select([sys.stdin], [], [], 0.25)
@@ -514,7 +532,9 @@ class ShutdownMixin:
             1,
         )
 
-    def _handle_web_interface_after_analysis(self, natural_completion: bool) -> None:
+    def _handle_web_interface_after_analysis(
+        self, natural_completion: bool
+    ) -> None:
         """
         Prompt and wait after normal completion, or stop on forced shutdown.
 
@@ -527,7 +547,21 @@ class ShutdownMixin:
         if not WebInterface.is_verified_server_running(port):
             self.main.web_interface_shutdown = True
             return
-        if not natural_completion or self._ask_to_stop_web_interface():
+        keep_web_interface_available = natural_completion or getattr(
+            self.main, "keyboard_interrupt_received", False
+        )
+        if (
+            getattr(self.main, "force_shutdown_requested", False)
+            or self.main.sigterm_received
+            or not keep_web_interface_available
+        ):
+            self._stop_web_interface(port)
+            return
+
+        # The first Ctrl-C stopped the analysis. It must not also cancel the
+        # web-interface prompt; a later Ctrl-C remains a forced shutdown.
+        self.main.shutdown_signal_received = False
+        if self._ask_to_stop_web_interface():
             self._stop_web_interface(port)
             return
 
@@ -536,9 +570,9 @@ class ShutdownMixin:
             "Press CTRL-C to stop it and exit Slips."
         )
         try:
-            while WebInterface.is_verified_server_running(port) and not getattr(
-                self.main, "shutdown_signal_received", False
-            ):
+            while WebInterface.is_verified_server_running(
+                port
+            ) and not getattr(self.main, "shutdown_signal_received", False):
                 time.sleep(0.5)
         except KeyboardInterrupt:
             self.main.shutdown_signal_received = True
@@ -562,7 +596,9 @@ class ShutdownMixin:
             self.plotter.write_throughput_metrics()
             self.plotter.plot_flows_from_conn_log()
 
-    def shutdown_gracefully(self, natural_completion: bool = False) -> Optional[bool]:
+    def shutdown_gracefully(
+        self, natural_completion: bool = False
+    ) -> Optional[bool]:
         """
         Wait for modules to finish or kill them after the timeout.
 
@@ -581,7 +617,9 @@ class ShutdownMixin:
                 print("\n" + "-" * 27)
             print("Stopping Slips")
 
-            self.children: List[BaseProcess] = multiprocessing.active_children()
+            self.children: List[BaseProcess] = (
+                multiprocessing.active_children()
+            )
             method_start_time = time.time()
             timeout: float = self.main.conf.wait_for_modules_to_finish()
             # convert to seconds
@@ -620,7 +658,9 @@ class ShutdownMixin:
                             (
                                 to_kill_first,
                                 to_kill_last,
-                            ) = self.shutdown_interactive(to_kill_first, to_kill_last)
+                            ) = self.shutdown_interactive(
+                                to_kill_first, to_kill_last
+                            )
                             if not to_kill_first and not to_kill_last:
                                 break
                 except KeyboardInterrupt:
@@ -629,18 +669,19 @@ class ShutdownMixin:
                     # or slips was stuck looping for too long that the OS
                     # sent an automatic sigint to kill slips
                     # pass to kill the remaining modules
-                    shutdown_reason = "User pressed ctr+c or Slips was killed by the OS"
+                    shutdown_reason = (
+                        "User pressed ctr+c or Slips was killed by the OS"
+                    )
                     graceful_shutdown = False
                     natural_completion = False
                     self.main.shutdown_signal_received = True
 
+                    self.main.force_shutdown_requested = True
                 if time.time() - method_start_time >= timeout:
                     # getting here means we're killing them bc of the timeout
                     # not getting here means we're killing them bc of double
                     # ctr+c OR they terminated successfully
-                    shutdown_reason = (
-                        f"Killing modules that took more than {timeout} mins to finish."
-                    )
+                    shutdown_reason = f"Killing modules that took more than {timeout} mins to finish."
                     print(shutdown_reason)
                     graceful_shutdown = False
                     natural_completion = False
