@@ -44,7 +44,7 @@ output/<run>/databases/flows.sqlite
 
 It contains the existing unlimited flows and altflows rows, normalized evidence with its complete serialized record, evidence UUID to triggering flow UID relationships, and alert UUID to evidence UUID relationships. Evidence and alert relationships are written transactionally when Slips creates them, whether or not a browser is open.
 
-When an older run is opened after this upgrade, the module first backfills evidence and correlations still in Redis. Backfill runs only when Redis belongs to the same output directory. The web interface does not read `DisabledAlerts`, interpret the detection configuration, or hide persisted evidence and alerts. It presents the records Slips stored; deciding whether a detection should be generated belongs to the Slips detection and evidence pipeline. The module then consumes this file incrementally in bounded batches as a best-effort fallback for records that already expired:
+When an older run is opened after this upgrade, the module first backfills evidence and correlations still in Redis. Backfill runs only when Redis belongs to the same output directory. The web interface does not read `DisabledAlerts` or make its own suppression decisions. It presents the records and whitelist decisions Slips stored; deciding whether a detection should be generated belongs to the Slips detection and evidence pipeline. The module then consumes this file incrementally in bounded batches as a best-effort fallback for records that already expired:
 
 ```text
 output/<run>/alerts/alerts.json
@@ -124,6 +124,35 @@ The P2P tab combines current Redis connectivity with the persistent local P2P tr
 
 Message counters begin when telemetry-capable P2P code starts. Reliability history can span earlier runs because `permanent/p2p_trust_runtime/trustdb.db` is persistent; the reports table is filtered using this run's analysis start time.
 
+### Configuration
+
+The Configuration tab reads the YAML snapshot copied to
+`output/<run>/metadata/` when this run started. It does not display the file as
+raw text. Every captured leaf setting is grouped by component and shown with a
+readable name, its parsed value, its complete YAML path, and a short explanation
+of what it controls. Sections can be expanded and searched by section, setting,
+value, or explanation.
+
+This is the configuration supplied to the run, not the current repository
+file. A setting omitted from the snapshot can still use a built-in default in
+Slips. Values whose names indicate API keys, passwords, private keys, secrets,
+or tokens are shown as configured but are never returned to the browser.
+
+### Whitelists
+
+The Whitelists tab shows what the run actually parsed. Local IP, domain,
+organization, and MAC rules come from the run's Redis whitelist hashes, with
+the captured `metadata/*.conf` file as an offline fallback. Each row explains
+whether the rule applies to a source, destination, or either side and whether
+it suppresses flows, evidence/alerts, or both. The table is searchable and can
+be filtered by rule type.
+
+The source cards also show whether local and online whitelisting were enabled,
+the captured local filename, the configured online benign-domain source and
+limit, its refresh period, and the number of domains currently present in the
+shared cache. The latter is explicitly current cache state because that cache
+can be refreshed independently of an already completed run.
+
 ### Host score history
 
 The host workspace plots the real detector score recorded after each evidence
@@ -148,7 +177,17 @@ never replaced with scores calculated by the web interface.
 
 Alerts come from durable SQLite. The default table shows individual alerts, bounded to 100 rows per page. Each row shows the exact Slips score at threshold crossing and the configured threshold. **Group by host** is an optional display mode that shows alert count, evidence-link count, latest alert time, highest threat, peak threshold-crossing score, and labels. Selecting a host aggregate shows its newest individual alerts; selecting an individual alert shows related evidence.
 
-Evidence also includes records that did not cross the alert threshold. Individual rows show the exact accumulated score Slips recorded when the evidence was processed; grouped rows show the highest recorded score in the group. The default table is **Group by host and type**, bounded to 100 rows per page, and shows evidence, triggering-flow, and alert-link counts. **Individual evidence** remains available from the display selector. Selecting an aggregate shows its newest individual evidence. Selecting an individual record groups each triggering UID into one primary **flow** (the conn.log-style connection) and a separate **Related protocol flows** section containing alternative-flow records such as DNS, HTTP, TLS, SSH, DHCP, files, and notices.
+Evidence also includes records that did not cross the alert threshold. Individual rows show the exact accumulated score Slips recorded when the evidence was processed; grouped rows show the highest recorded score in the group. The default table is **Group by host and type**, bounded to 100 rows per page, and shows evidence, triggering-flow, alert-link, and whitelist-exclusion counts. **Individual evidence** remains available from the display selector. Selecting an aggregate shows its newest individual evidence. Selecting an individual record groups each triggering UID into one primary **flow** (the conn.log-style connection) and a separate **Related protocol flows** section containing alternative-flow records such as DNS, HTTP, TLS, SSH, DHCP, files, and notices.
+
+When Evidence Handler finds a whitelisted attacker or victim, the evidence is
+retained for investigation but deliberately excluded from the host score and
+from alert formation. These rows show **Whitelisted** under **Score handling**,
+and their score cell shows **Excluded** instead of **Pending**. The evidence
+drawer identifies the matching attacker or victim, value, direction, and local
+rule whenever those details can be reconstructed. Grouped Evidence and the
+host workspace show how many records were excluded. New runs persist this
+decision with the evidence in `flows.sqlite`; older active runs use Slips'
+existing `whitelisted_evidence` decision set while it remains available.
 
 The displayed score is not calculated by the web interface. For interface,
 standard-input, and CYST runs it is Slips' risk-adjusted accumulated threat
