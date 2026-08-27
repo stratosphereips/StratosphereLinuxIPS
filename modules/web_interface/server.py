@@ -22,6 +22,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 import psutil
 import redis
+import yaml
 
 from modules.web_interface.history import connect_history, initialize_history
 
@@ -44,6 +45,7 @@ METRIC_RANGES = {
     "1h": 60 * 60,
     "24h": 24 * 60 * 60,
 }
+# pragma: allowlist secret
 EVIDENCE_MODULE = {
     "ARP_SCAN": "arp",
     "ARP_OUTSIDE_LOCALNET": "arp",
@@ -68,7 +70,7 @@ EVIDENCE_MODULE = {
     "COMMAND_AND_CONTROL_CHANNEL": "rnn_cc_detection",
     "MALICIOUS_IP_FROM_P2P_NETWORK": "p2p_trust",
     "P2P_REPORT": "p2p_trust",
-}
+}  # pragma: allowlist secret
 MODULE_BY_EVIDENCE_PREFIX = {
     "ARP_": "arp",
     "HTTP_": "http_analyzer",
@@ -94,6 +96,33 @@ TI_FIELDS = (
     "SNI",
 )
 
+CONFIG_SECTION_DESCRIPTIONS = {
+    "update": "How this Slips installation checks for and selects software updates.",
+    "output": "Names and destinations of files produced by this analysis.",
+    "parameters": "Core capture, profiling, time-window, and processing behaviour.",
+    "Debug": "Diagnostic output controls used while troubleshooting Slips.",
+    "detection": "Global scoring, alerting, and enforcement thresholds.",
+    "modules": "Which detection and support modules are enabled for this run.",
+    "whitelists": "Sources Slips trusts and the traffic or alerts they suppress.",
+    "web_interface": "Run-scoped local web server settings.",
+    "global_p2p": "Global peer-to-peer threat-intelligence behaviour.",
+    "local_p2p": "Local peer-to-peer transport and identity settings.",
+}
+SENSITIVE_CONFIG_TERMS = (
+    "api_key",
+    "apikey",
+    "password",
+    "private_key",
+    "secret",
+    "token",
+)
+WHITELIST_TYPES = {
+    "IPs": "IP address",
+    "domains": "Domain",
+    "organizations": "Organization",
+    "macs": "MAC address",
+}
+
 
 class RunMismatchError(RuntimeError):
     """Raised when Redis belongs to a different Slips output directory."""
@@ -113,7 +142,9 @@ class RunDataReader:
         self.redis_port = redis_port
         self.output_dir = Path(output_dir)
         self.sqlite_path = self.output_dir / "databases" / "flows.sqlite"
-        self.history_path = self.output_dir / "web_interface" / "history.sqlite"
+        self.history_path = (
+            self.output_dir / "web_interface" / "history.sqlite"
+        )
         self.redis = redis.Redis(
             host=LOOPBACK_ADDRESS,
             port=redis_port,
@@ -130,6 +161,620 @@ class RunDataReader:
         )
         self._processes: Dict[int, psutil.Process] = {}
         initialize_history(self.history_path)
+        self.score_mode, self.alert_threshold = self._detector_score_settings()
+
+    def _metadata_snapshot(self, suffix: str) -> Optional[Path]:
+        """
+        Find one immutable input snapshot captured for this run.
+
+        Parameters:
+            suffix: File suffix including its leading dot.
+
+        Returns:
+            Matching metadata path, or None when metadata was disabled.
+        """
+        metadata_dir = self.output_dir / "metadata"
+        return next(iter(sorted(metadata_dir.glob(f"*{suffix}"))), None)
+
+    def _run_config(self) -> tuple[Dict[str, Any], Optional[Path]]:
+        """
+        Load the YAML configuration snapshot supplied to this run.
+
+        Returns:
+            Parsed top-level configuration and its snapshot path.
+        """
+        path = self._metadata_snapshot(".yaml")
+        if path is None:
+            return {}, None
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                value = yaml.safe_load(handle) or {}
+            return (value if isinstance(value, dict) else {}), path
+        except (OSError, yaml.YAMLError):
+            return {}, path
+
+    @staticmethod
+    def _setting_label(name: str) -> str:
+        """
+        Convert one YAML key into a readable setting name.
+
+        Parameters:
+            name: Raw YAML mapping key.
+
+        Returns:
+            Human-readable label.
+        """
+        return str(name).replace("_", " ").strip().capitalize()
+
+    @classmethod
+    def _setting_explanation(cls, section: str, path: str) -> str:
+        """
+        Explain the operational role of one configuration setting.
+
+        Parameters:
+            section: Top-level configuration section.
+            path: Dot-separated setting path below that section.
+
+        Returns:
+            Concise plain-language explanation.
+        """
+        name = path.rsplit(".", 1)[-1]
+        label = cls._setting_label(name).lower()
+        explicit = {
+            "parameters.time_window_width": (
+                "How long evidence is accumulated together before Slips starts "
+                "a new analysis time window."
+            ),
+            "parameters.analysis_direction": (
+                "Whether Slips analyses only outbound activity or traffic in "
+                "both directions."
+            ),
+            "detection.evidence_detection_threshold": (
+                "Base accumulated-threat threshold used to form alerts in "
+                "finite analyses."
+            ),
+            "detection.risk_accumulated_threat_level": (
+                "Risk-adjusted score a live host must reach before Slips forms "
+                "an alert."
+            ),
+            "whitelists.local_whitelist_path": (
+                "Whitelist file captured with this run and parsed into the "
+                "active local rules."
+            ),
+            "whitelists.enable_local_whitelist": (
+                "Controls whether locally configured IP, domain, organization, "
+                "and MAC rules are applied."
+            ),
+            "whitelists.enable_online_whitelist": (
+                "Controls whether the downloaded benign-domain list is used "
+                "when evaluating domains."
+            ),
+            "web_interface.enabled": (
+                "Controls whether this run starts its loopback-only web interface."
+            ),
+            "web_interface.port": "TCP port used by the loopback-only web server.",
+        }
+        full_path = f"{section}.{path}"
+        if full_path in explicit:
+            return explicit[full_path]
+        lowered = name.lower()
+        if lowered.startswith(("enable_", "use_")):
+            feature = label.removeprefix("enable ").removeprefix("use ")
+            return f"Turns {feature} on or off."
+        if "threshold" in lowered:
+            return f"Decision boundary Slips uses for {label}."
+        if any(
+            term in lowered
+            for term in ("timeout", "period", "interval", "width")
+        ):
+            return f"Time interval controlling {label}."
+        if any(
+            term in lowered for term in ("path", "file", "directory", "dir")
+        ):
+            return f"File or directory Slips uses for {label}."
+        if lowered.endswith("port"):
+            return f"Network port used for {label}."
+        component = cls._setting_label(section).lower()
+        return f"Value used by the {component} component for {label}."
+
+    @classmethod
+    def _flatten_settings(
+        cls,
+        section: str,
+        value: Any,
+        prefix: str = "",
+    ) -> List[Dict[str, Any]]:
+        """
+        Flatten a configuration section into displayable leaf settings.
+
+        Parameters:
+            section: Top-level configuration section.
+            value: Current mapping or leaf value.
+            prefix: Dot-separated path accumulated during recursion.
+
+        Returns:
+            Ordered setting records for the web interface.
+        """
+        if isinstance(value, dict):
+            settings: List[Dict[str, Any]] = []
+            for key, nested in value.items():
+                path = f"{prefix}.{key}" if prefix else str(key)
+                settings.extend(cls._flatten_settings(section, nested, path))
+            return settings
+        lowered_path = prefix.lower()
+        sensitive = any(
+            term in lowered_path for term in SENSITIVE_CONFIG_TERMS
+        )
+        return [
+            {
+                "key": prefix,
+                "label": cls._setting_label(prefix.rsplit(".", 1)[-1]),
+                "value": (
+                    "Configured — hidden" if sensitive and value else value
+                ),
+                "value_type": type(value).__name__,
+                "sensitive": sensitive and bool(value),
+                "explanation": cls._setting_explanation(section, prefix),
+            }
+        ]
+
+    def configuration(self) -> Dict[str, Any]:
+        """
+        Return the run's captured configuration as explained settings.
+
+        Returns:
+            Sectioned configuration snapshot without exposing secret values.
+        """
+        config, path = self._run_config()
+        sections = []
+        total = 0
+        for name, value in config.items():
+            settings = self._flatten_settings(str(name), value)
+            total += len(settings)
+            sections.append(
+                {
+                    "key": str(name),
+                    "title": self._setting_label(str(name)),
+                    "description": CONFIG_SECTION_DESCRIPTIONS.get(
+                        str(name),
+                        f"Settings used by the {self._setting_label(str(name)).lower()} component.",
+                    ),
+                    "settings": settings,
+                }
+            )
+        return {
+            "source": path.name if path else None,
+            "captured": path is not None,
+            "total": total,
+            "sections": sections,
+        }
+
+    @staticmethod
+    def _whitelist_effect(direction: str, ignored: str) -> str:
+        """
+        Describe one parsed whitelist rule's suppression semantics.
+
+        Parameters:
+            direction: Source, destination, or both sides of activity.
+            ignored: Alerts, flows, or both record classes.
+
+        Returns:
+            Human-readable rule effect.
+        """
+        side = {
+            "src": "source side",
+            "dst": "destination side",
+            "both": "source or destination side",
+        }.get(direction, direction)
+        target = {
+            "alerts": "evidence and alerts",
+            "flows": "flows",
+            "both": "flows, evidence, and alerts",
+        }.get(ignored, ignored)
+        return f"Suppresses {target} when this value appears on the {side}."
+
+    def _runtime_whitelist_rules(self) -> List[Dict[str, Any]]:
+        """
+        Read the local whitelist rules parsed into this run's Redis database.
+
+        Returns:
+            Active parsed rule records, falling back to the captured file.
+        """
+        rules: List[Dict[str, Any]] = []
+        try:
+            for redis_type, label in WHITELIST_TYPES.items():
+                values = self.redis.hgetall(f"whitelist_{redis_type}")
+                for value, serialized in values.items():
+                    details = self._loads(serialized, {})
+                    if not isinstance(details, dict):
+                        details = {}
+                    direction = str(details.get("from", "both"))
+                    ignored = str(details.get("what_to_ignore", "alerts"))
+                    rules.append(
+                        {
+                            "type": label,
+                            "value": str(value),
+                            "direction": direction,
+                            "ignore": ignored,
+                            "effect": self._whitelist_effect(
+                                direction, ignored
+                            ),
+                            "source": "Parsed runtime rule",
+                        }
+                    )
+        except (redis.RedisError, TypeError):
+            rules = []
+        if rules:
+            return sorted(
+                rules, key=lambda item: (item["type"], item["value"])
+            )
+        if not hasattr(self, "output_dir"):
+            return []
+        path = self._metadata_snapshot(".conf")
+        if path is None:
+            return []
+        try:
+            for raw in path.read_text(encoding="utf-8").splitlines():
+                line = raw.strip()
+                if not line or line.startswith(("#", ";", '"IoCType"')):
+                    continue
+                parts = [part.strip() for part in line.split(",")]
+                if len(parts) < 4:
+                    continue
+                type_name, value, direction, ignored = parts[:4]
+                label = {
+                    "ip": "IP address",
+                    "domain": "Domain",
+                    "organization": "Organization",
+                    "mac": "MAC address",
+                }.get(type_name.lower(), self._setting_label(type_name))
+                rules.append(
+                    {
+                        "type": label,
+                        "value": value,
+                        "direction": direction,
+                        "ignore": ignored,
+                        "effect": self._whitelist_effect(direction, ignored),
+                        "source": "Captured local file",
+                    }
+                )
+        except OSError:
+            return []
+        return rules
+
+    def whitelists(self) -> Dict[str, Any]:
+        """
+        Return whitelist sources and the exact local rules used by this run.
+
+        Returns:
+            Whitelist status, counts, sources, and parsed local rules.
+        """
+        config, _ = self._run_config()
+        settings = config.get("whitelists", {})
+        if not isinstance(settings, dict):
+            settings = {}
+        rules = self._runtime_whitelist_rules()
+        counts = dict(Counter(str(rule["type"]) for rule in rules))
+        try:
+            tranco_count = int(self.cache.zcard("tranco_whitelisted_domains"))
+        except (redis.RedisError, TypeError, ValueError):
+            tranco_count = 0
+        path = self._metadata_snapshot(".conf")
+        return {
+            "local_enabled": bool(
+                settings.get("enable_local_whitelist", True)
+            ),
+            "online_enabled": bool(
+                settings.get("enable_online_whitelist", True)
+            ),
+            "local_source": (
+                path.name if path else settings.get("local_whitelist_path")
+            ),
+            "online_source": settings.get("online_whitelist"),
+            "online_update_period": settings.get(
+                "online_whitelist_update_period"
+            ),
+            "online_domain_limit": settings.get("tranco_top_benign_limit"),
+            "online_domains_loaded": tranco_count,
+            "counts": counts,
+            "total": len(rules),
+            "rules": rules,
+        }
+
+    @staticmethod
+    def _direction_matches(entity_direction: Any, rule_direction: str) -> bool:
+        """
+        Check whether an evidence entity is covered by a whitelist side.
+
+        Parameters:
+            entity_direction: Slips SRC or DST entity direction.
+            rule_direction: Parsed src, dst, or both rule direction.
+
+        Returns:
+            True when the rule applies to the entity's side.
+        """
+        if rule_direction == "both":
+            return True
+        normalized = str(entity_direction or "").lower()
+        return rule_direction in normalized
+
+    def _whitelist_matches_for_record(
+        self,
+        record: Dict[str, Any],
+        rules: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """
+        Reconstruct visible local-rule matches for a whitelisted evidence.
+
+        Parameters:
+            record: Parsed durable evidence object.
+            rules: Parsed runtime whitelist rules.
+
+        Returns:
+            Matching entity and rule details that can be explained in the UI.
+        """
+        candidates: List[tuple[str, str, str, Any]] = []
+        for role in ("attacker", "victim"):
+            entity = record.get(role)
+            if not isinstance(entity, dict):
+                continue
+            direction = entity.get("direction")
+            value = entity.get("value")
+            indicator = str(entity.get("ioc_type") or "").upper()
+            if value and indicator == "IP":
+                candidates.append((role, "IP address", str(value), direction))
+            if value and indicator == "DOMAIN":
+                candidates.append((role, "Domain", str(value), "dst"))
+            for ip in entity.get("DNS_resolution") or []:
+                candidates.append((role, "IP address", str(ip), direction))
+            domains = list(entity.get("queries") or [])
+            domains.extend(entity.get("CNAME") or [])
+            if entity.get("SNI"):
+                domains.append(entity["SNI"])
+            for domain in domains:
+                candidates.append((role, "Domain", str(domain), "dst"))
+        matches = []
+        seen = set()
+        for role, type_name, value, direction in candidates:
+            for rule in rules:
+                if rule.get("type") != type_name:
+                    continue
+                rule_value = str(rule.get("value") or "")
+                value_matches = value == rule_value
+                if type_name == "Domain":
+                    value_matches = value == rule_value or value.endswith(
+                        f".{rule_value}"
+                    )
+                if not value_matches:
+                    continue
+                if str(rule.get("ignore")) not in {"alerts", "both"}:
+                    continue
+                if not self._direction_matches(
+                    direction, str(rule.get("direction"))
+                ):
+                    continue
+                identifier = (role, type_name, value, rule_value)
+                if identifier in seen:
+                    continue
+                seen.add(identifier)
+                matches.append(
+                    {
+                        "entity": role,
+                        "type": type_name,
+                        "value": value,
+                        "rule": rule_value,
+                        "direction": rule.get("direction"),
+                        "ignore": rule.get("ignore"),
+                        "effect": rule.get("effect"),
+                    }
+                )
+        return matches
+
+    def _annotate_whitelisted_evidence(
+        self, items: List[Dict[str, Any]]
+    ) -> None:
+        """
+        Attach Slips' whitelist decision and matching entities to evidence.
+
+        Parameters:
+            items: Individual or grouped evidence API records.
+        """
+        if not items:
+            return
+        identifiers: List[str] = []
+        for item in items:
+            grouped = item.get("_evidence_ids")
+            if isinstance(grouped, list):
+                identifiers.extend(str(value) for value in grouped)
+            elif item.get("id"):
+                identifiers.append(str(item["id"]))
+        live_members: set[str] = set()
+        try:
+            pipeline = self.redis.pipeline(transaction=False)
+            for evidence_id in identifiers:
+                pipeline.sismember("whitelisted_evidence", evidence_id)
+            live_members = {
+                evidence_id
+                for evidence_id, member in zip(identifiers, pipeline.execute())
+                if member is True or member == 1
+            }
+        except (redis.RedisError, StopIteration, TypeError):
+            pass
+        rules = self._runtime_whitelist_rules()
+        for item in items:
+            grouped_ids = item.pop("_evidence_ids", None)
+            if isinstance(grouped_ids, list):
+                live_count = sum(
+                    evidence_id in live_members for evidence_id in grouped_ids
+                )
+                count = max(
+                    int(item.get("whitelisted_count") or 0), live_count
+                )
+                item["whitelisted"] = count > 0
+                item["whitelisted_count"] = count
+                continue
+            persisted = item.get("whitelisted") in (True, 1, "1")
+            evidence_id = str(item.get("id") or "")
+            item["whitelisted"] = persisted or evidence_id in live_members
+            item["whitelist_matches"] = (
+                self._whitelist_matches_for_record(item, rules)
+                if item["whitelisted"]
+                else []
+            )
+
+    def _detector_score_settings(self) -> tuple[str, float]:
+        """
+        Read the run's real Slips alert-score mode and threshold.
+
+        Returns:
+            Score field name (ATL or RATL) and configured alert threshold.
+        """
+        try:
+            input_type = str(
+                self.redis.hget("analysis", "input_type") or ""
+            ).lower()
+        except redis.RedisError:
+            input_type = ""
+        non_stop = input_type in {"interface", "stdin", "cyst"}
+        tw_width = 3600.0
+        evidence_threshold = 0.25
+        ratl_threshold = 5.0
+        metadata_dir = self.output_dir / "metadata"
+        try:
+            config_path = next(iter(sorted(metadata_dir.glob("*.yaml"))))
+            with config_path.open("r", encoding="utf-8") as handle:
+                config = yaml.safe_load(handle) or {}
+            parameters = config.get("parameters", {})
+            detection = config.get("detection", {})
+            tw_width = float(parameters.get("time_window_width", tw_width))
+            evidence_threshold = float(
+                detection.get(
+                    "evidence_detection_threshold", evidence_threshold
+                )
+            )
+            ratl_threshold = float(
+                detection.get("risk_accumulated_threat_level", ratl_threshold)
+            )
+        except (OSError, StopIteration, TypeError, ValueError, yaml.YAMLError):
+            pass
+        if non_stop:
+            return "ratl", ratl_threshold
+        return "atl", evidence_threshold * tw_width / 60
+
+    def _score_fields(
+        self,
+        accumulated_threat_level: Any,
+        accumulated_ratl: Any,
+        basis: str,
+    ) -> Dict[str, Any]:
+        """
+        Select the detector value Slips compares with the alert threshold.
+
+        Parameters:
+            accumulated_threat_level: Raw Slips ATL value.
+            accumulated_ratl: Risk-adjusted Slips RATL value.
+            basis: Human-readable point at which the score was captured.
+
+        Returns:
+            API fields containing the real score and its threshold context.
+        """
+        selected = (
+            accumulated_ratl
+            if getattr(self, "score_mode", "ratl") == "ratl"
+            else accumulated_threat_level
+        )
+        try:
+            score = float(selected) if selected is not None else None
+        except (TypeError, ValueError):
+            score = None
+        return {
+            "alert_score": score,
+            "alert_threshold": getattr(self, "alert_threshold", 5.0),
+            "alert_score_mode": getattr(self, "score_mode", "ratl").upper(),
+            "alert_score_basis": basis,
+        }
+
+    def _detector_score_expression(
+        self, connection: sqlite3.Connection, table_name: str
+    ) -> str:
+        """
+        Return a compatible SQL expression for the run's detector score.
+
+        Parameters:
+            connection: Read-only current-run SQLite connection.
+            table_name: Detection table whose score columns should be checked.
+
+        Returns:
+            SQL expression selecting the real score, or NULL before migration.
+        """
+        columns = {
+            str(row[1])
+            for row in connection.execute(
+                f"PRAGMA table_info({table_name})"
+            ).fetchall()
+        }
+        column_name = (
+            "accumulated_ratl"
+            if getattr(self, "score_mode", "ratl") == "ratl"
+            else "accumulated_threat_level"
+        )
+        return (
+            f"COALESCE({column_name}, 0)" if column_name in columns else "NULL"
+        )
+
+    def _attach_current_host_scores(self, items: List[Dict[str, Any]]) -> None:
+        """
+        Attach current Slips accumulator values to host records in one batch.
+
+        Parameters:
+            items: Host records returned by the inventory endpoint.
+        """
+        if not items:
+            return
+        try:
+            tw_pipeline = self.redis.pipeline(transaction=False)
+            for item in items:
+                tw_pipeline.zrange(f"twsprofile_{item['ip']}", -1, -1)
+            tw_values = tw_pipeline.execute()
+            score_pipeline = self.redis.pipeline(transaction=False)
+            for item, tw_value in zip(items, tw_values):
+                twid = (
+                    str(tw_value[0])
+                    if tw_value
+                    else str(item.get("alert_score_twid") or "")
+                )
+                item["alert_score_twid"] = twid
+                score_pipeline.zscore(
+                    "accumulated_threat_levels",
+                    f"profile_{item['ip']}_{twid}",
+                )
+            accumulated_values = score_pipeline.execute()
+            risk_weight = float(
+                self.redis.hget(
+                    "max_risk_weight_of_all_profiles", "risk_weight"
+                )
+                or 0.32
+            )
+        except (redis.RedisError, TypeError, ValueError):
+            accumulated_values = [None] * len(items)
+            risk_weight = 0.32
+        for item, accumulated in zip(items, accumulated_values):
+            item_risk_weight = float(item.get("risk_weight") or risk_weight)
+            raw_score = float(
+                accumulated
+                if accumulated is not None
+                else item.get("accumulated_threat_level") or 0
+            )
+            item.update(
+                self._score_fields(
+                    raw_score,
+                    raw_score * item_risk_weight,
+                    "current host time window",
+                )
+            )
+            item["accumulated_threat_level"] = raw_score
+            item["accumulated_ratl"] = raw_score * item_risk_weight
+            item["risk_weight"] = item_risk_weight
 
     @staticmethod
     def _loads(value: Any, default: Any) -> Any:
@@ -174,7 +819,9 @@ class RunDataReader:
         except (TypeError, ValueError):
             pass
         try:
-            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+            return datetime.fromisoformat(
+                str(value).replace("Z", "+00:00")
+            ).timestamp()
         except ValueError:
             pass
         for date_format in (
@@ -227,7 +874,9 @@ class RunDataReader:
             return None
 
     @staticmethod
-    def _query_value(query: Dict[str, List[str]], key: str, default: str = "") -> str:
+    def _query_value(
+        query: Dict[str, List[str]], key: str, default: str = ""
+    ) -> str:
         """Return the first query-string value."""
         return str(query.get(key, [default])[0])
 
@@ -241,7 +890,11 @@ class RunDataReader:
         """Parse and bound a query page size."""
         try:
             return max(
-                1, min(int(cls._query_value(query, "limit", str(default))), maximum)
+                1,
+                min(
+                    int(cls._query_value(query, "limit", str(default))),
+                    maximum,
+                ),
             )
         except ValueError:
             return default
@@ -415,7 +1068,9 @@ class RunDataReader:
             "indexing_status": {
                 "schema_version": int(values.get("schema_version", "1")),
                 "flow_last_rowid": int(values.get("flow_last_rowid", "0")),
-                "alerts_json_offset": int(values.get("alerts_json_offset", "0")),
+                "alerts_json_offset": int(
+                    values.get("alerts_json_offset", "0")
+                ),
             },
         }
 
@@ -432,9 +1087,13 @@ class RunDataReader:
                 for evidence_id in self._id_list(evidence_ids):
                     alert_ids_by_evidence[evidence_id].append(str(alert_id))
         records: List[Dict[str, Any]] = []
-        for key in self.redis.scan_iter(match="profile_*_timewindow*_evidence"):
+        for key in self.redis.scan_iter(
+            match="profile_*_timewindow*_evidence"
+        ):
             profile_twid = key[: -len("_evidence")]
-            profile_id, separator, twid = profile_twid.rpartition("_timewindow")
+            profile_id, separator, twid = profile_twid.rpartition(
+                "_timewindow"
+            )
             if not separator:
                 continue
             for evidence_id, raw in self.redis.hgetall(key).items():
@@ -456,11 +1115,17 @@ class RunDataReader:
                         or profile_id.removeprefix(PROFILE_PREFIX),
                         "twid": f"timewindow{twid}",
                         "module": self._module_for_evidence(evidence_type),
-                        "alert_ids": alert_ids_by_evidence.get(canonical_id, []),
+                        "alert_ids": alert_ids_by_evidence.get(
+                            canonical_id, []
+                        ),
                     }
                 )
-                evidence["flow_count"] = len(self._id_list(evidence.get("uid", [])))
-                evidence["timestamp"] = self._event_timestamp(evidence.get("timestamp"))
+                evidence["flow_count"] = len(
+                    self._id_list(evidence.get("uid", []))
+                )
+                evidence["timestamp"] = self._event_timestamp(
+                    evidence.get("timestamp")
+                )
                 records.append(evidence)
         records.sort(
             key=lambda item: float(item.get("timestamp") or 0),
@@ -502,7 +1167,27 @@ class RunDataReader:
                 "module": self._module_for_evidence(evidence_type),
                 "alert_ids": alert_ids,
                 "flow_count": int(flow_count),
+                "whitelisted": (
+                    row["whitelisted"] in (True, 1, "1")
+                    if "whitelisted" in row.keys()
+                    else False
+                ),
             }
+        )
+        record.update(
+            self._score_fields(
+                (
+                    row["accumulated_threat_level"]
+                    if "accumulated_threat_level" in row.keys()
+                    else None
+                ),
+                (
+                    row["accumulated_ratl"]
+                    if "accumulated_ratl" in row.keys()
+                    else None
+                ),
+                "when this evidence was recorded",
+            )
         )
         return record
 
@@ -555,16 +1240,32 @@ class RunDataReader:
         )
         with self._connect_sqlite() as connection:
             connection.execute("BEGIN")
-            connection.create_function("evidence_module", 1, self._module_for_evidence)
+            score_expression = self._detector_score_expression(
+                connection, "evidence"
+            )
+            evidence_columns = {
+                str(column[1])
+                for column in connection.execute(
+                    "PRAGMA table_info(evidence)"
+                ).fetchall()
+            }
+            whitelist_expression = (
+                "COALESCE(whitelisted, 0)"
+                if "whitelisted" in evidence_columns
+                else "0"
+            )
+            connection.create_function(
+                "evidence_module", 1, self._module_for_evidence
+            )
             latest_row = connection.execute(
                 "SELECT MAX(evidence_time) AS latest FROM evidence"
             ).fetchone()
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
             full_total = int(
-                connection.execute("SELECT COUNT(*) AS count FROM evidence").fetchone()[
-                    "count"
-                ]
+                connection.execute(
+                    "SELECT COUNT(*) AS count FROM evidence"
+                ).fetchone()["count"]
             )
             clauses = ["1 = 1"]
             params: List[Any] = []
@@ -608,8 +1309,11 @@ class RunDataReader:
                 f"MAX({threat_expression}) AS threat_rank, "
                 "evidence_module(evidence_type) AS module, "
                 "COUNT(*) AS evidence_count, "
+                "GROUP_CONCAT(evidence_id) AS evidence_ids, "
+                f"SUM({whitelist_expression}) AS persisted_whitelisted_count, "
                 f"SUM({flow_expression}) AS flow_count, "
-                f"SUM({alert_expression}) AS alert_count "
+                f"SUM({alert_expression}) AS alert_count, "
+                f"MAX({score_expression}) AS alert_score "
                 f"FROM evidence WHERE {' AND '.join(clauses)} "
                 "GROUP BY profile_ip, evidence_type"
             )
@@ -624,6 +1328,7 @@ class RunDataReader:
                     "evidence": "evidence_count",
                     "flows": "flow_count",
                     "alert": "alert_count",
+                    "score": "alert_score",
                 },
                 "time",
             )
@@ -657,12 +1362,32 @@ class RunDataReader:
             item = dict(row)
             item.pop("sort_value", None)
             item["id"] = str(item.pop("group_id"))
-            item["threat_level"] = self._threat_from_rank(item.pop("threat_rank"))
+            item["threat_level"] = self._threat_from_rank(
+                item.pop("threat_rank")
+            )
             item["timestamp"] = float(item["timestamp"] or 0)
             item["evidence_count"] = int(item["evidence_count"] or 0)
+            item["_evidence_ids"] = [
+                evidence_id
+                for evidence_id in str(item.pop("evidence_ids") or "").split(
+                    ","
+                )
+                if evidence_id
+            ]
+            item["whitelisted_count"] = int(
+                item.pop("persisted_whitelisted_count") or 0
+            )
             item["flow_count"] = int(item["flow_count"] or 0)
             item["alert_count"] = int(item["alert_count"] or 0)
+            item.update(
+                self._score_fields(
+                    item["alert_score"],
+                    item["alert_score"],
+                    "highest score in this evidence group",
+                )
+            )
             items.append(item)
+        self._annotate_whitelisted_evidence(items)
         next_cursor = (
             self._encode_cursor(rows[-1]["sort_value"], str(items[-1]["id"]))
             if has_more and items
@@ -711,6 +1436,9 @@ class RunDataReader:
                 connection.execute("BEGIN")
                 if not self._table_exists(connection, "evidence"):
                     raise sqlite3.OperationalError("no durable evidence")
+                score_expression = self._detector_score_expression(
+                    connection, "evidence"
+                )
                 connection.create_function(
                     "evidence_module", 1, self._module_for_evidence
                 )
@@ -737,6 +1465,7 @@ class RunDataReader:
                         "confidence": "confidence",
                         "flows": flow_expression,
                         "alert": alert_expression,
+                        "score": score_expression,
                     },
                     "time",
                 )
@@ -813,7 +1542,9 @@ class RunDataReader:
                 ).fetchall()
                 has_more = len(rows) > limit
                 rows = rows[:limit]
-                items = [self._durable_evidence_row(connection, row) for row in rows]
+                items = [
+                    self._durable_evidence_row(connection, row) for row in rows
+                ]
                 sort_values = [row["sort_value"] for row in rows]
         except sqlite3.Error:
             records = self._redis_evidence()
@@ -831,13 +1562,16 @@ class RunDataReader:
                 ]
             if end is not None:
                 records = [
-                    item for item in records if float(item.get("timestamp") or 0) <= end
+                    item
+                    for item in records
+                    if float(item.get("timestamp") or 0) <= end
                 ]
             if search:
                 records = [
                     item
                     for item in records
-                    if search in json.dumps(item, sort_keys=True, default=str).lower()
+                    if search
+                    in json.dumps(item, sort_keys=True, default=str).lower()
                 ]
             profile_set = set(profiles)
             if profile_set:
@@ -885,6 +1619,7 @@ class RunDataReader:
             items = records[:limit]
             sort_values = [float(item.get("timestamp") or 0) for item in items]
             has_more = len(records) > limit
+        self._annotate_whitelisted_evidence(items)
         next_cursor = (
             self._encode_cursor(
                 sort_values[-1],
@@ -923,17 +1658,25 @@ class RunDataReader:
                 (alert_id, maximum),
             ).fetchall()
         if rows:
-            return [self._durable_evidence_row(connection, row) for row in rows]
+            items = [
+                self._durable_evidence_row(connection, row) for row in rows
+            ]
+            self._annotate_whitelisted_evidence(items)
+            return items
         profile_id = f"profile_{alert.get('ip_alerted', '')}"
         twid = str(alert.get("timewindow", ""))
-        alert_map = self._loads(self.redis.hget(f"{profile_id}_{twid}", "alerts"), {})
+        alert_map = self._loads(
+            self.redis.hget(f"{profile_id}_{twid}", "alerts"), {}
+        )
         ids = (
             self._id_list(alert_map.get(alert_id, []))
             if isinstance(alert_map, dict)
             else []
         )
         by_id = {item["id"]: item for item in self._redis_evidence()}
-        return [by_id[item] for item in ids if item in by_id][:maximum]
+        items = [by_id[item] for item in ids if item in by_id][:maximum]
+        self._annotate_whitelisted_evidence(items)
+        return items
 
     @staticmethod
     def _highest_threat(levels: Sequence[str]) -> str:
@@ -976,15 +1719,18 @@ class RunDataReader:
         )
         with self._connect_sqlite() as connection:
             connection.execute("BEGIN")
+            score_expression = self._detector_score_expression(
+                connection, "alerts"
+            )
             latest_row = connection.execute(
                 "SELECT MAX(CAST(alert_time AS REAL)) AS latest FROM alerts"
             ).fetchone()
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
             full_total = int(
-                connection.execute("SELECT COUNT(*) AS count FROM alerts").fetchone()[
-                    "count"
-                ]
+                connection.execute(
+                    "SELECT COUNT(*) AS count FROM alerts"
+                ).fetchone()["count"]
             )
             clauses = ["1 = 1"]
             params: List[Any] = []
@@ -1021,6 +1767,7 @@ class RunDataReader:
                 f"MAX({threat_expression}) AS threat_rank, "
                 "COUNT(*) AS alert_count, "
                 f"SUM({evidence_expression}) AS evidence_count, "
+                f"MAX({score_expression}) AS alert_score, "
                 "GROUP_CONCAT(DISTINCT COALESCE(label, '')) AS labels "
                 f"FROM alerts WHERE {' AND '.join(clauses)} GROUP BY ip_alerted"
             )
@@ -1033,6 +1780,7 @@ class RunDataReader:
                     "label": "LOWER(labels)",
                     "alerts": "alert_count",
                     "evidence": "evidence_count",
+                    "score": "alert_score",
                 },
                 "time",
             )
@@ -1066,11 +1814,20 @@ class RunDataReader:
             item = dict(row)
             item.pop("sort_value", None)
             item["id"] = str(item.pop("group_id"))
-            item["threat_level"] = self._threat_from_rank(item.pop("threat_rank"))
+            item["threat_level"] = self._threat_from_rank(
+                item.pop("threat_rank")
+            )
             item["alert_time"] = float(item["alert_time"] or 0)
             item["alert_count"] = int(item["alert_count"] or 0)
             item["evidence_count"] = int(item["evidence_count"] or 0)
             item["label"] = str(item.pop("labels") or "")
+            item.update(
+                self._score_fields(
+                    item["alert_score"],
+                    item["alert_score"],
+                    "highest threshold-crossing score for this host",
+                )
+            )
             item.update(self._ip_context_for_ip(str(item["ip_alerted"])))
             items.append(item)
         next_cursor = (
@@ -1098,7 +1855,9 @@ class RunDataReader:
         search = self._query_value(query, "search").lower()
         threat = self._query_value(query, "threat").lower()
         profile = self._query_value(query, "profile")
-        include_details = self._query_value(query, "details").lower() != "false"
+        include_details = (
+            self._query_value(query, "details").lower() != "false"
+        )
         cursor = self._decode_cursor(self._query_value(query, "cursor"))
         threat_expression = (
             "COALESCE((SELECT MAX(CASE LOWER(e.threat_level) "
@@ -1114,13 +1873,16 @@ class RunDataReader:
         )
         with self._connect_sqlite() as connection:
             connection.execute("BEGIN")
+            score_expression = self._detector_score_expression(
+                connection, "alerts"
+            )
             latest_row = connection.execute(
                 "SELECT MAX(CAST(alert_time AS REAL)) AS latest FROM alerts"
             ).fetchone()
             full_total = int(
-                connection.execute("SELECT COUNT(*) AS count FROM alerts").fetchone()[
-                    "count"
-                ]
+                connection.execute(
+                    "SELECT COUNT(*) AS count FROM alerts"
+                ).fetchone()["count"]
             )
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
@@ -1135,6 +1897,7 @@ class RunDataReader:
                     "tw_end": "COALESCE(tw_end, '')",
                     "label": "LOWER(COALESCE(label, ''))",
                     "evidence": evidence_expression,
+                    "score": score_expression,
                     "id": "LOWER(alert_id)",
                 },
                 "time",
@@ -1199,6 +1962,13 @@ class RunDataReader:
                 alert["alert_time"] = float(alert["alert_time"] or 0)
                 alert["evidence_count"] = evidence_count
                 alert["threat_level"] = self._threat_from_rank(threat_rank)
+                alert.update(
+                    self._score_fields(
+                        alert.get("accumulated_threat_level"),
+                        alert.get("accumulated_ratl"),
+                        "when this alert crossed the threshold",
+                    )
+                )
                 if include_details:
                     related = self._alert_evidence(connection, alert)
                     alert["evidence"] = related
@@ -1244,7 +2014,9 @@ class RunDataReader:
                         return [str(row["uid"]) for row in rows]
         except sqlite3.Error:
             pass
-        return self._id_list(self.redis.hget("flows_causing_evidence", evidence_id))
+        return self._id_list(
+            self.redis.hget("flows_causing_evidence", evidence_id)
+        )
 
     def flows_for_evidence(self, evidence_id: str) -> Dict[str, Any]:
         """Return triggering network flows grouped with protocol activity."""
@@ -1295,10 +2067,14 @@ class RunDataReader:
             grouped[uid]
             for uid in bounded_uids
             if uid in grouped
-            and (grouped[uid]["network_flow"] or grouped[uid]["protocol_flows"])
+            and (
+                grouped[uid]["network_flow"] or grouped[uid]["protocol_flows"]
+            )
         ]
         network_flow_total = sum(bool(item["network_flow"]) for item in items)
-        protocol_flow_total = sum(len(item["protocol_flows"]) for item in items)
+        protocol_flow_total = sum(
+            len(item["protocol_flows"]) for item in items
+        )
         return {
             "items": items,
             "total": len(items),
@@ -1369,20 +2145,18 @@ class RunDataReader:
         return result
 
     def _host_ips(self, ip: str) -> List[str]:
-        """Resolve all Redis addresses linked to a host MAC."""
-        host = self._live_host(ip)
-        addresses = {ip}
-        for value in host.get("all_ips", []):
-            addresses.add(str(value))
-        mac = str(host.get("mac", ""))
-        if mac:
-            reverse = self._loads(self.redis.hget("MAC", mac), [])
-            if isinstance(reverse, list):
-                addresses.update(str(value) for value in reverse)
-        return sorted(addresses)
+        """Return only the selected Slips profile IP.
+
+        Parameters:
+            ip: Profile IP selected in the host workspace.
+
+        Returns:
+            A single-item list suitable for parameterized SQL predicates.
+        """
+        return [ip]
 
     def _host_load(self, ip: str) -> Dict[str, Any]:
-        """Read compact all-time traffic totals for all associated addresses."""
+        """Read compact all-time traffic totals for the exact profile IP."""
         ips = self._host_ips(ip)
         predicate, params = self._ip_predicate(ips)
         placeholders = ",".join("?" for _ in ips)
@@ -1439,7 +2213,9 @@ class RunDataReader:
         cursor = self._decode_cursor(self._query_value(query, "cursor"))
         with connect_history(self.history_path, read_only=True) as connection:
             connection.execute("BEGIN")
-            connection.execute("ATTACH DATABASE ? AS run_db", (str(self.sqlite_path),))
+            connection.execute(
+                "ATTACH DATABASE ? AS run_db", (str(self.sqlite_path),)
+            )
             latest_row = connection.execute(
                 "SELECT MAX(event_time) AS latest FROM flow_index"
             ).fetchone()
@@ -1463,12 +2239,8 @@ class RunDataReader:
                 "(SELECT COALESCE(SUM(bytes), 0) FROM flow_index fi "
                 "WHERE fi.src_ip = hs.ip OR fi.dst_ip = hs.ip)"
             )
-            evidence_expression = (
-                "(SELECT COUNT(*) FROM run_db.evidence e WHERE e.profile_ip = hs.ip)"
-            )
-            alert_expression = (
-                "(SELECT COUNT(*) FROM run_db.alerts a WHERE a.ip_alerted = hs.ip)"
-            )
+            evidence_expression = "(SELECT COUNT(*) FROM run_db.evidence e WHERE e.profile_ip = hs.ip)"
+            alert_expression = "(SELECT COUNT(*) FROM run_db.alerts a WHERE a.ip_alerted = hs.ip)"
             last_seen_expression = (
                 "COALESCE((SELECT MAX(event_time) FROM flow_index fi "
                 "WHERE fi.src_ip = hs.ip OR fi.dst_ip = hs.ip), hs.observed_at)"
@@ -1477,6 +2249,14 @@ class RunDataReader:
                 "CASE LOWER(COALESCE(json_extract(hs.data, '$.max_threat_level'), "
                 "'info')) WHEN 'critical' THEN 4 WHEN 'high' THEN 3 "
                 "WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END"
+            )
+            score_field = (
+                "accumulated_ratl"
+                if getattr(self, "score_mode", "ratl") == "ratl"
+                else "accumulated_threat_level"
+            )
+            score_expression = (
+                f"COALESCE(json_extract(hs.data, '$.{score_field}'), 0)"
             )
             sort_key, sort_expression, direction = self._sort_spec(
                 query,
@@ -1492,6 +2272,7 @@ class RunDataReader:
                     "bytes": byte_expression,
                     "evidence": evidence_expression,
                     "alerts": alert_expression,
+                    "score": score_expression,
                     "last_seen": last_seen_expression,
                 },
                 "last_seen",
@@ -1518,11 +2299,15 @@ class RunDataReader:
                 if current_threats:
                     live_ips = list(current_threats)
                     matching_ips = [
-                        ip for ip, level in current_threats.items() if level == threat
+                        ip
+                        for ip, level in current_threats.items()
+                        if level == threat
                     ]
                     live_placeholders = ",".join("?" for _ in live_ips)
                     if matching_ips:
-                        matching_placeholders = ",".join("?" for _ in matching_ips)
+                        matching_placeholders = ",".join(
+                            "?" for _ in matching_ips
+                        )
                         clauses.append(
                             f"(hs.ip IN ({matching_placeholders}) OR "
                             f"(hs.ip NOT IN ({live_placeholders}) AND "
@@ -1541,7 +2326,9 @@ class RunDataReader:
             count_where = " AND ".join(clauses)
             count_params = list(params)
             if cursor:
-                clauses.append(self._cursor_clause(sort_expression, "hs.ip", direction))
+                clauses.append(
+                    self._cursor_clause(sort_expression, "hs.ip", direction)
+                )
                 params.extend([cursor[0], cursor[0], cursor[1]])
             where = " AND ".join(clauses)
             total = connection.execute(
@@ -1564,9 +2351,12 @@ class RunDataReader:
             host.update(
                 self._ip_context_for_ip(str(host["ip"]), host.get("dns"))
             )
-            host["evidence_count"] = self._profile_evidence_count(str(row["ip"]))
+            host["evidence_count"] = self._profile_evidence_count(
+                str(row["ip"])
+            )
             host["alert_count"] = self._profile_alert_count(str(row["ip"]))
             items.append(host)
+        self._attach_current_host_scores(items)
         next_cursor = (
             self._encode_cursor(
                 rows[min(limit, len(rows)) - 1]["sort_value"],
@@ -1587,14 +2377,15 @@ class RunDataReader:
         }
 
     def _profile_evidence_count(self, ip: str) -> int:
-        """Count durable evidence for every address associated with a host."""
+        """Count durable evidence for the exact profile IP."""
         ips = self._host_ips(ip)
         placeholders = ",".join("?" for _ in ips)
         try:
             with self._connect_sqlite() as connection:
                 if not self._table_exists(connection, "evidence"):
                     return sum(
-                        item.get("profile_ip") in ips for item in self._redis_evidence()
+                        item.get("profile_ip") in ips
+                        for item in self._redis_evidence()
                     )
                 return int(
                     connection.execute(
@@ -1607,7 +2398,7 @@ class RunDataReader:
             return 0
 
     def _profile_alert_count(self, ip: str) -> int:
-        """Count durable alerts for every address associated with a host."""
+        """Count durable alerts for the exact profile IP."""
         ips = self._host_ips(ip)
         placeholders = ",".join("?" for _ in ips)
         try:
@@ -1621,6 +2412,7 @@ class RunDataReader:
                 )
         except sqlite3.Error:
             return 0
+
     def _ti_for_ip(self, ip: str) -> Dict[str, Any]:
         """Read cached threat-intelligence fields for an IP."""
         result: Dict[str, Any] = {}
@@ -1661,7 +2453,9 @@ class RunDataReader:
             domains_value = [domains_value]
         domains = [str(domain) for domain in domains_value if domain]
         ti_record = ti.get("threatintelligence", {})
-        source_value = ti_record.get("source", []) if isinstance(ti_record, dict) else []
+        source_value = (
+            ti_record.get("source", []) if isinstance(ti_record, dict) else []
+        )
         if not isinstance(source_value, (list, tuple)):
             source_value = [source_value]
         ti_feeds = [str(source) for source in source_value if source]
@@ -1670,11 +2464,13 @@ class RunDataReader:
             "dns_name_source": "rDNS" if rdns else ("DNS" if domains else ""),
             "ti_feeds": ti_feeds,
         }
+
     def host(self, ip: str) -> Dict[str, Any]:
         """Return complete bounded context for one current or historical host."""
         host = self._live_host(ip)
         if not host.get("observed_at") and not host.get("live"):
             raise KeyError(ip)
+        self._attach_current_host_scores([host])
         host_ips = self._host_ips(ip)
         host["all_ips"] = host_ips
         host["load"] = self._host_load(ip)
@@ -1707,9 +2503,11 @@ class RunDataReader:
         host["evidence_count"] = self._profile_evidence_count(ip)
         return host
 
-    def evidence_for_host(self, ip: str, query: Dict[str, List[str]]) -> Dict[str, Any]:
+    def evidence_for_host(
+        self, ip: str, query: Dict[str, List[str]]
+    ) -> Dict[str, Any]:
         """
-        Return one bounded evidence page for every address associated with a host.
+        Return one bounded evidence page for the exact profile IP.
 
         Parameters:
             ip: Primary host address.
@@ -1732,7 +2530,9 @@ class RunDataReader:
             [*ips, *ips],
         )
 
-    def flows_for_host(self, ip: str, query: Dict[str, List[str]]) -> Dict[str, Any]:
+    def flows_for_host(
+        self, ip: str, query: Dict[str, List[str]]
+    ) -> Dict[str, Any]:
         """Return a bounded bidirectional host flow page."""
         try:
             requested = int(self._query_value(query, "limit", "100"))
@@ -1784,7 +2584,9 @@ class RunDataReader:
                     f"SELECT uid, flow, label FROM flows WHERE uid IN ({placeholders})",
                     uids,
                 ).fetchall()
-            raw_by_uid = {str(row["uid"]): self._loads(row["flow"], {}) for row in rows}
+            raw_by_uid = {
+                str(row["uid"]): self._loads(row["flow"], {}) for row in rows
+            }
         host_ips = set(ips)
         items: List[Dict[str, Any]] = []
         for row in index_rows:
@@ -1821,7 +2623,9 @@ class RunDataReader:
                 }
             )
         next_cursor = (
-            self._encode_cursor(float(items[-1]["event_time"]), str(items[-1]["uid"]))
+            self._encode_cursor(
+                float(items[-1]["event_time"]), str(items[-1]["uid"])
+            )
             if has_more and items
             else None
         )
@@ -1834,7 +2638,9 @@ class RunDataReader:
             "host_ips": ips,
         }
 
-    def traffic_summary(self, ip: str, query: Dict[str, List[str]]) -> Dict[str, Any]:
+    def traffic_summary(
+        self, ip: str, query: Dict[str, List[str]]
+    ) -> Dict[str, Any]:
         """Return bounded server-side host traffic plot aggregates."""
         try:
             max_points = int(self._query_value(query, "max_points", "300"))
@@ -1895,9 +2701,7 @@ class RunDataReader:
                 "GROUP BY name ORDER BY value DESC LIMIT 12",
                 params,
             ).fetchall()
-            peer_expression = (
-                f"CASE WHEN src_ip IN ({placeholders}) THEN dst_ip ELSE src_ip END"
-            )
+            peer_expression = f"CASE WHEN src_ip IN ({placeholders}) THEN dst_ip ELSE src_ip END"
             peers = connection.execute(
                 f"SELECT {peer_expression} AS name, COUNT(*) AS value "
                 f"FROM flow_index WHERE {where} GROUP BY name "
@@ -1912,11 +2716,173 @@ class RunDataReader:
             "bucket_seconds": bucket if first else 0,
         }
 
+    def score_history(
+        self, ip: str, query: Dict[str, List[str]]
+    ) -> Dict[str, Any]:
+        """
+        Return bounded real Slips score samples for one profile IP.
+
+        Parameters:
+            ip: Primary host address.
+            query: Time range and maximum chart-point parameters.
+
+        Returns:
+            Score timeline, threshold, reset hints, and persistence coverage.
+        """
+        try:
+            max_points = int(self._query_value(query, "max_points", "600"))
+        except ValueError:
+            max_points = 600
+        max_points = max(10, min(max_points, MAX_CHART_POINTS))
+        # Slips accumulators are profile/IP-specific. MAC-derived aliases can
+        # include unrelated public IPs that share a gateway MAC, so combining
+        # their scores would fabricate a value that Slips never calculated.
+        ips = [ip]
+        placeholders = ",".join("?" for _ in ips)
+        score_column = (
+            "accumulated_ratl"
+            if getattr(self, "score_mode", "ratl") == "ratl"
+            else "accumulated_threat_level"
+        )
+        with self._connect_sqlite() as connection:
+            columns = {
+                str(row[1])
+                for row in connection.execute(
+                    "PRAGMA table_info(evidence)"
+                ).fetchall()
+            }
+            latest_row = connection.execute(
+                f"SELECT MAX(evidence_time) AS latest FROM evidence "
+                f"WHERE profile_ip IN ({placeholders})",
+                ips,
+            ).fetchone()
+            latest = float(latest_row["latest"] or 0)
+            start, end, range_name = self._time_bounds(query, latest)
+            clauses = [f"profile_ip IN ({placeholders})"]
+            params: List[Any] = list(ips)
+            if start is not None:
+                clauses.append("evidence_time >= ?")
+                params.append(start)
+            if end is not None:
+                clauses.append("evidence_time <= ?")
+                params.append(end)
+            where = " AND ".join(clauses)
+            evidence_total = int(
+                connection.execute(
+                    f"SELECT COUNT(*) AS count FROM evidence WHERE {where}",
+                    params,
+                ).fetchone()["count"]
+            )
+            if score_column not in columns:
+                scored_evidence = 0
+                timeline: List[Dict[str, Any]] = []
+                bucket = 0
+            else:
+                scored_evidence = int(
+                    connection.execute(
+                        f"SELECT COUNT({score_column}) AS count FROM evidence "
+                        f"WHERE {where}",
+                        params,
+                    ).fetchone()["count"]
+                )
+                bounds = connection.execute(
+                    f"SELECT MIN(evidence_time) AS first, "
+                    f"MAX(evidence_time) AS last FROM evidence WHERE {where} "
+                    f"AND {score_column} IS NOT NULL",
+                    params,
+                ).fetchone()
+                first = float(bounds["first"] or 0)
+                last = float(bounds["last"] or 0)
+                bucket = max(math.ceil(max(last - first, 1) / max_points), 1)
+                rows = connection.execute(
+                    "WITH samples AS ("
+                    "SELECT evidence_id, evidence_time, timewindow, "
+                    f"{score_column} AS score, "
+                    "CAST(evidence_time / ? AS INTEGER) AS bucket_id "
+                    f"FROM evidence WHERE {where} AND {score_column} IS NOT NULL"
+                    "), ranked AS ("
+                    "SELECT evidence_time AS ts, timewindow, score, bucket_id, "
+                    "ROW_NUMBER() OVER (PARTITION BY timewindow, bucket_id "
+                    "ORDER BY evidence_time DESC, evidence_id DESC) AS latest_rank, "
+                    "MAX(score) OVER (PARTITION BY timewindow, bucket_id) "
+                    "AS peak_score, "
+                    "MIN(score) OVER (PARTITION BY timewindow, bucket_id) "
+                    "AS minimum_score, "
+                    "COUNT(*) OVER (PARTITION BY timewindow, bucket_id) "
+                    "AS sample_count FROM samples) "
+                    "SELECT ts, timewindow, score, peak_score, minimum_score, "
+                    "sample_count FROM ranked WHERE latest_rank = 1 ORDER BY ts",
+                    (bucket, *params),
+                ).fetchall()
+                timeline = [dict(row) for row in rows]
+
+        current_host = self._live_host(ip)
+        current_wall_time = time.time()
+        current_in_range = (start is None or current_wall_time >= start) and (
+            range_name != "custom" or end is None or current_wall_time <= end
+        )
+        if current_host.get("live") and current_in_range:
+            self._attach_current_host_scores([current_host])
+            current_score = current_host.get("alert_score")
+            if current_score is not None:
+                current_ts = max(latest, current_wall_time)
+                if timeline and current_ts <= float(timeline[-1]["ts"]):
+                    current_ts = float(timeline[-1]["ts"]) + 0.001
+                timeline.append(
+                    {
+                        "ts": current_ts,
+                        "timewindow": current_host.get("alert_score_twid", ""),
+                        "score": float(current_score),
+                        "peak_score": float(current_score),
+                        "minimum_score": float(current_score),
+                        "sample_count": 1,
+                        "current": True,
+                    }
+                )
+
+        resets = 0
+        previous: Optional[Dict[str, Any]] = None
+        peak_score = 0.0
+        for point in timeline:
+            point["threshold"] = self.alert_threshold
+            peak_score = max(peak_score, float(point.get("peak_score") or 0))
+            reset_reason = ""
+            if previous:
+                if point.get("timewindow") != previous.get("timewindow"):
+                    reset_reason = "time window changed"
+                elif float(point.get("score") or 0) < float(
+                    previous.get("score") or 0
+                ):
+                    reset_reason = "score reset after an alert"
+            point["reset_reason"] = reset_reason
+            if reset_reason:
+                resets += 1
+            previous = point
+        return {
+            "timeline": timeline,
+            "threshold": getattr(self, "alert_threshold", 5.0),
+            "mode": getattr(self, "score_mode", "ratl").upper(),
+            "peak_score": peak_score,
+            "evidence_total": evidence_total,
+            "scored_evidence": scored_evidence,
+            "coverage": (
+                scored_evidence / evidence_total if evidence_total else 1.0
+            ),
+            "reset_count": resets,
+            "range": range_name,
+            "bucket_seconds": bucket,
+            "host_ips": ips,
+        }
+
     def metrics(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
         """Return bounded mixed-resolution runtime history."""
         range_name = self._query_value(query, "range", "15m")
         now = time.time()
-        start = now - METRIC_RANGES[range_name] if range_name in METRIC_RANGES else None
+        start = (
+            now - METRIC_RANGES[range_name]
+            if range_name in METRIC_RANGES
+            else None
+        )
         try:
             max_points = int(self._query_value(query, "max_points", "600"))
         except ValueError:
@@ -1989,10 +2955,14 @@ class RunDataReader:
                 running = process.is_running()
                 status = process.status() if running else "stopped"
                 memory_mb = (
-                    round(process.memory_info().rss / 1024 / 1024, 1) if running else 0
+                    round(process.memory_info().rss / 1024 / 1024, 1)
+                    if running
+                    else 0
                 )
                 memory_percent = (
-                    process.memory_info().rss / total_memory * 100 if running else 0
+                    process.memory_info().rss / total_memory * 100
+                    if running
+                    else 0
                 )
                 cpu = process.cpu_percent(interval=None) if running else 0
             except (ValueError, psutil.Error):
@@ -2005,7 +2975,8 @@ class RunDataReader:
             flow_rate = 0
             if name in flow_modules:
                 flow_rate = int(
-                    self.redis.hget(f"flows_per_minute:{name}", now_bucket) or 0
+                    self.redis.hget(f"flows_per_minute:{name}", now_bucket)
+                    or 0
                 )
             modules.append(
                 {
@@ -2024,7 +2995,9 @@ class RunDataReader:
         modules.sort(key=lambda item: item["name"].lower())
         return modules[:MAX_PAGE_SIZE]
 
-    def _durable_evidence_counts(self, connection: sqlite3.Connection) -> Counter[str]:
+    def _durable_evidence_counts(
+        self, connection: sqlite3.Connection
+    ) -> Counter[str]:
         """
         Count evidence by producing module from durable history.
 
@@ -2042,7 +3015,9 @@ class RunDataReader:
         ).fetchall()
         counts: Counter[str] = Counter()
         for row in rows:
-            module = self._module_for_evidence(str(row["evidence_type"] or "unknown"))
+            module = self._module_for_evidence(
+                str(row["evidence_type"] or "unknown")
+            )
             counts[module] += int(row["count"])
         return counts
 
@@ -2055,7 +3030,9 @@ class RunDataReader:
         """
         path = self.output_dir / "metadata" / "info.txt"
         try:
-            content = path.read_text(encoding="utf-8", errors="replace")[:65536]
+            content = path.read_text(encoding="utf-8", errors="replace")[
+                :65536
+            ]
         except OSError:
             return {}
         metadata: Dict[str, str] = {}
@@ -2086,7 +3063,9 @@ class RunDataReader:
                     if self._table_exists(connection, "evidence")
                     else 0
                 )
-                durable_evidence_counts = self._durable_evidence_counts(connection)
+                durable_evidence_counts = self._durable_evidence_counts(
+                    connection
+                )
         except sqlite3.Error:
             alert_count = 0
             durable_evidence = 0
@@ -2099,7 +3078,9 @@ class RunDataReader:
             error_rows = history.execute(
                 "SELECT module, COUNT(*) AS count FROM error_events GROUP BY module"
             ).fetchall()
-            error_counts = {str(row["module"]): int(row["count"]) for row in error_rows}
+            error_counts = {
+                str(row["module"]): int(row["count"]) for row in error_rows
+            }
             recent_errors = [
                 dict(row)
                 for row in history.execute(
@@ -2115,7 +3096,9 @@ class RunDataReader:
             )
             metadata = {
                 str(row["key"]): str(row["value"])
-                for row in history.execute("SELECT key, value FROM metadata").fetchall()
+                for row in history.execute(
+                    "SELECT key, value FROM metadata"
+                ).fetchall()
             }
         try:
             redis_alert_count = int(self.redis.get("number_of_alerts") or 0)
@@ -2128,7 +3111,9 @@ class RunDataReader:
         except ValueError:
             processed_flows = 0
         disk = psutil.disk_usage(self.output_dir)
-        db_size = self.sqlite_path.stat().st_size if self.sqlite_path.exists() else 0
+        db_size = (
+            self.sqlite_path.stat().st_size if self.sqlite_path.exists() else 0
+        )
         growth = float(metadata.get("storage_growth_bps", "0"))
         if disk.percent >= 95 or disk.free < 5 * 1024**3:
             disk_warning = "critical"
@@ -2136,7 +3121,9 @@ class RunDataReader:
             disk_warning = "warning"
         else:
             disk_warning = ""
-        estimated_seconds_remaining = disk.free / growth if growth > 0 else None
+        estimated_seconds_remaining = (
+            disk.free / growth if growth > 0 else None
+        )
         return {
             "run": {
                 **analysis,
@@ -2176,12 +3163,12 @@ class RunDataReader:
                 "redis_alert_count": redis_alert_count,
                 "alert_count_mismatch": redis_alert_count != alert_count,
             },
-            "modules": self._module_rows(evidence_counts, error_counts, complete),
+            "modules": self._module_rows(
+                evidence_counts, error_counts, complete
+            ),
             "recent_errors": recent_errors,
             "updated_at": time.time(),
         }
-
-
 
     def firewall(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
         """Return active Slips firewall blocks and their probation schedules."""
@@ -2193,18 +3180,30 @@ class RunDataReader:
             }
         except redis.RedisError:
             blocked, schedules = [], {}
+        blocked_at_by_ip = {
+            str(ip): float(blocked_at) for ip, blocked_at in blocked
+        }
         records: List[Dict[str, Any]] = []
-        for ip, blocked_at in blocked:
+        now = time.time()
+        for ip in set(blocked_at_by_ip) | set(schedules):
             schedule = schedules.get(ip, {})
             deadline = self._event_timestamp(schedule.get("unblock_at"))
             remaining_windows = schedule.get("remaining_timewindows")
+            if deadline and now >= deadline:
+                status = "overdue"
+            elif remaining_windows == 0:
+                status = "probation"
+            else:
+                status = "blocked"
             records.append(
                 {
                     "ip": ip,
-                    "status": "probation" if remaining_windows == 0 else "blocked",
-                    "blocked_at": float(blocked_at),
+                    "status": status,
+                    "blocked_at": blocked_at_by_ip.get(ip),
                     "unblock_at": deadline or None,
-                    "remaining_seconds": max(0, deadline - time.time()) if deadline else None,
+                    "remaining_seconds": (
+                        max(0, deadline - now) if deadline else None
+                    ),
                     "remaining_timewindows": remaining_windows,
                     "evidence_count": self._profile_evidence_count(ip),
                     "alert_count": self._profile_alert_count(ip),
@@ -2213,27 +3212,129 @@ class RunDataReader:
         search = self._query_value(query, "search").lower()
         if search:
             records = [
-                item for item in records
+                item
+                for item in records
                 if search in item["ip"].lower() or search in item["status"]
             ]
         records.sort(key=lambda item: (item["unblock_at"] or 0, item["ip"]))
+        history = self._firewall_history(search)
+        try:
+            history_offset = max(
+                0, int(self._query_value(query, "history_offset") or 0)
+            )
+        except ValueError:
+            history_offset = 0
+        history_page = history[history_offset : history_offset + MAX_PAGE_SIZE]
+        history_next = history_offset + len(history_page)
         return {
             "items": records[:MAX_PAGE_SIZE],
             "total": len(records),
             "full_total": len(records),
             "page_size": min(len(records), MAX_PAGE_SIZE),
+            "history": history_page,
+            "history_total": len(history),
+            "history_next_cursor": (
+                str(history_next) if history_next < len(history) else None
+            ),
         }
+
+    def _firewall_history(self, search: str = "") -> List[Dict[str, Any]]:
+        """Parse durable block and unblock transitions from blocking.log.
+
+        Parameters:
+            search: Optional case-insensitive IP, action, or detail filter.
+
+        Returns:
+            Newest-first firewall transition records for this run.
+        """
+        log_path = self.output_dir / "blocking" / "blocking.log"
+        try:
+            lines = log_path.read_text(errors="replace").splitlines()
+        except OSError:
+            return []
+        events: Dict[tuple[str, str, int], Dict[str, Any]] = {}
+        for line in lines:
+            timestamp_text, separator, message = line.partition(" - ")
+            if not separator:
+                continue
+            timestamp = self._event_timestamp(timestamp_text)
+            if not timestamp:
+                continue
+            action = ""
+            ip = ""
+            details = ""
+            block_match = re.match(
+                r"^Blocked all traffic (from|to):\s+(\S+)$", message
+            )
+            unblock_match = re.match(
+                r"^IP (\S+) is unblocked(?: in ([^.]+))?\.$", message
+            )
+            failure_match = re.match(
+                r"^An err+or occured\. Unable to unblock (\S+)$", message
+            )
+            if block_match:
+                action = "blocked"
+                direction, ip = block_match.groups()
+                key = (action, ip, int(timestamp))
+                if key in events:
+                    previous = events[key]["details"].removeprefix("traffic ")
+                    directions = sorted(
+                        set(previous.split(" + ") + [direction])
+                    )
+                    events[key][
+                        "details"
+                    ] = f"traffic {' + '.join(directions)}"
+                    continue
+                details = f"traffic {direction}"
+            elif unblock_match:
+                action = "unblocked"
+                ip, timewindow = unblock_match.groups()
+                details = (
+                    f"rules removed in {timewindow}"
+                    if timewindow
+                    else "rules removed"
+                )
+            elif failure_match:
+                action = "unblock failed"
+                ip = failure_match.group(1)
+                details = "firewall rules could not be removed"
+            else:
+                continue
+            key = (action, ip, int(timestamp))
+            events[key] = {
+                "timestamp": timestamp,
+                "ip": ip,
+                "action": action,
+                "details": details,
+            }
+        history = sorted(
+            events.values(),
+            key=lambda item: (item["timestamp"], item["ip"]),
+            reverse=True,
+        )
+        if not search:
+            return history
+        return [
+            item
+            for item in history
+            if search
+            in " ".join((item["ip"], item["action"], item["details"])).lower()
+        ]
 
     def p2p(self) -> Dict[str, Any]:
         """Return live P2P connectivity, report activity, and trust history."""
         connected_raw = self._loads(self.redis.get("connected_peers"), [])
-        connected = set(connected_raw if isinstance(connected_raw, list) else [])
+        connected = set(
+            connected_raw if isinstance(connected_raw, list) else []
+        )
         peer_info = {
             peer_id: self._loads(raw, {})
             for peer_id, raw in self.redis.hgetall("peer_info").items()
         }
         peer_trust = self.redis.hgetall("peer_trust")
-        peer_seen = dict(self.redis.zrange("peers_strust", 0, -1, withscores=True))
+        peer_seen = dict(
+            self.redis.zrange("peers_strust", 0, -1, withscores=True)
+        )
         counts = {
             key: int(value)
             for key, value in self.redis.hgetall("p2p_message_counts").items()
@@ -2262,7 +3363,9 @@ class RunDataReader:
                             {
                                 "peer_id": str(row["peerid"]),
                                 "reliability": float(row["reliability"]),
-                                "timestamp": self._event_timestamp(row["update_time"]),
+                                "timestamp": self._event_timestamp(
+                                    row["update_time"]
+                                ),
                             }
                         )
                     for row in connection.execute(
@@ -2273,7 +3376,9 @@ class RunDataReader:
                             str(row["peerid"]),
                             {
                                 "ip": str(row["ipaddress"]),
-                                "timestamp": self._event_timestamp(row["update_time"]),
+                                "timestamp": self._event_timestamp(
+                                    row["update_time"]
+                                ),
                             },
                         )
                     for row in connection.execute(
@@ -2288,7 +3393,8 @@ class RunDataReader:
                                 "score": float(row["score"]),
                                 "confidence": float(row["confidence"]),
                                 "timestamp": timestamp,
-                                "this_run": not run_start or timestamp >= run_start,
+                                "this_run": not run_start
+                                or timestamp >= run_start,
                             }
                         )
             except sqlite3.Error:
@@ -2297,19 +3403,31 @@ class RunDataReader:
         latest_reliability: Dict[str, Dict[str, Any]] = {}
         for item in trust_history:
             latest_reliability.setdefault(item["peer_id"], item)
-        peer_ids = set(peer_info) | set(peer_ips) | set(latest_reliability) | connected
+        peer_ids = (
+            set(peer_info)
+            | set(peer_ips)
+            | set(latest_reliability)
+            | connected
+        )
         peers = []
         for peer_id in peer_ids:
             info = peer_info.get(peer_id, {})
             pairing = peer_ips.get(peer_id, {})
-            ip = str(info.get("ip") or info.get("ipaddress") or pairing.get("ip") or "")
+            ip = str(
+                info.get("ip")
+                or info.get("ipaddress")
+                or pairing.get("ip")
+                or ""
+            )
             reliability = latest_reliability.get(peer_id, {})
             peers.append(
                 {
                     "peer_id": peer_id,
                     "ip": ip,
                     "connected": peer_id in connected,
-                    "trust": float(peer_trust[ip]) if ip in peer_trust else None,
+                    "trust": (
+                        float(peer_trust[ip]) if ip in peer_trust else None
+                    ),
                     "reliability": reliability.get("reliability"),
                     "last_seen": max(
                         float(peer_seen.get(peer_id, 0)),
@@ -2319,12 +3437,20 @@ class RunDataReader:
                     "reports_received": report_counts[peer_id],
                 }
             )
-        peers.sort(key=lambda item: (not item["connected"], -item["last_seen"], item["peer_id"]))
+        peers.sort(
+            key=lambda item: (
+                not item["connected"],
+                -item["last_seen"],
+                item["peer_id"],
+            )
+        )
         p2p_log = self.output_dir / "p2p_trust" / "p2p.log"
         listener = ""
         local_peer_id = ""
         try:
-            log_tail = p2p_log.read_text(encoding="utf-8", errors="replace")[-65536:]
+            log_tail = p2p_log.read_text(encoding="utf-8", errors="replace")[
+                -65536:
+            ]
             matches = re.findall(r"(/ip4/[^\s]+/p2p/([^\s]+))", log_tail)
             if matches:
                 listener, local_peer_id = matches[-1]
@@ -2332,7 +3458,8 @@ class RunDataReader:
             pass
         current_reports = [item for item in reports if item["this_run"]]
         return {
-            "enabled": bool(self.redis.hget("PIDs", "p2p_trust")) or p2p_log.exists(),
+            "enabled": bool(self.redis.hget("PIDs", "p2p_trust"))
+            or p2p_log.exists(),
             "listener": listener,
             "local_peer_id": local_peer_id,
             "peers": peers,
@@ -2342,15 +3469,16 @@ class RunDataReader:
             "counts": {
                 "connected": len(connected),
                 "known": len(peers),
-                "reports_sent": counts.get("sent:report", 0) + counts.get("sent:blame", 0),
+                "reports_sent": counts.get("sent:report", 0)
+                + counts.get("sent:blame", 0),
                 "reports_received": len(current_reports),
                 "requests_sent": counts.get("sent:request", 0),
                 "requests_received": counts.get("received:request", 0),
             },
         }
 
-class SlipsHTTPServer(ThreadingHTTPServer):
 
+class SlipsHTTPServer(ThreadingHTTPServer):
     """Concurrent HTTP server carrying the fixed run data reader."""
 
     daemon_threads = True
@@ -2391,7 +3519,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             flush=True,
         )
 
-    def _send_json(self, payload: Any, status: HTTPStatus = HTTPStatus.OK) -> None:
+    def _send_json(
+        self, payload: Any, status: HTTPStatus = HTTPStatus.OK
+    ) -> None:
         self.send_response(status)
         """Send a JSON response with local-interface security headers."""
         body = json.dumps(payload, default=str).encode("utf-8")
@@ -2418,7 +3548,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header(
@@ -2448,10 +3578,21 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = reader.firewall(query)
         elif path == "/api/p2p":
             payload = reader.p2p()
+        elif path == "/api/configuration":
+            payload = reader.configuration()
+        elif path == "/api/whitelists":
+            payload = reader.whitelists()
         elif path.startswith("/api/evidence/") and path.endswith("/flows"):
             evidence_id = unquote(path[len("/api/evidence/") : -len("/flows")])
             payload = reader.flows_for_evidence(evidence_id)
-        elif path.startswith("/api/hosts/") and path.endswith("/traffic-summary"):
+        elif path.startswith("/api/hosts/") and path.endswith(
+            "/score-history"
+        ):
+            ip = unquote(path[len("/api/hosts/") : -len("/score-history")])
+            payload = reader.score_history(ip, query)
+        elif path.startswith("/api/hosts/") and path.endswith(
+            "/traffic-summary"
+        ):
             ip = unquote(path[len("/api/hosts/") : -len("/traffic-summary")])
             payload = reader.traffic_summary(ip, query)
         elif path.startswith("/api/hosts/") and path.endswith("/evidence"):
@@ -2532,7 +3673,9 @@ def main() -> None:
     args = parse_arguments()
     reader = RunDataReader(args.redis_port, args.output_dir)
     reader.validate_run_identity()
-    server = SlipsHTTPServer((LOOPBACK_ADDRESS, args.port), RequestHandler, reader)
+    server = SlipsHTTPServer(
+        (LOOPBACK_ADDRESS, args.port), RequestHandler, reader
+    )
     print(
         f"Serving {args.output_dir} at http://localhost:{args.port}/",
         flush=True,
