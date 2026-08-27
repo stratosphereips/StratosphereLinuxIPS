@@ -7,6 +7,8 @@ import pytest
 
 from unittest.mock import MagicMock
 
+from slips_files.core.structures.evidence import TimeWindow
+
 
 @pytest.mark.parametrize(
     "ip, existing_requests, current_tw, expected_block_duration",
@@ -63,15 +65,107 @@ def test_check_if_time_to_unblock():
     ) as mock_log, patch.object(
         unblocker.db, "del_blocked_ip"
     ) as mock_del, patch.object(
-        unblocker, "del_request"
-    ) as mock_del_req:
+        unblocker.db, "del_firewall_block_state"
+    ) as mock_del_state:
 
         unblocker.check_if_time_to_unblock()
 
         mock_unblock.assert_called_once_with("1.2.3.4", {"src": "test"})
         mock_log.assert_called_once_with("1.2.3.4")
         mock_del.assert_called_once_with("1.2.3.4")
-        mock_del_req.assert_called_once_with("1.2.3.4")
+        mock_del_state.assert_called_once_with("1.2.3.4")
+        assert "1.2.3.4" not in unblocker.requests
+
+
+@pytest.mark.parametrize("remaining", [0, 1])
+def test_update_requests_keeps_due_requests_until_unblocked(
+    remaining: int,
+) -> None:
+    """A zero-window request must remain queued for firewall removal.
+
+    Parameters:
+        remaining: Number of time windows before the update.
+    """
+    unblocker = ModuleFactory().create_unblocker_obj()
+    unblocker.requests = {
+        "1.2.3.4": {
+            "tw_to_unblock": TimeWindow(
+                number=2,
+                end_time="2026-08-26T18:38:10+02:00",
+            ),
+            "block_this_ip_for": remaining,
+            "flags": {"from_": True, "to": True},
+        }
+    }
+
+    with patch("time.time", return_value=1787758703.0):
+        unblocker.update_requests()
+
+    assert unblocker.requests["1.2.3.4"]["block_this_ip_for"] == 0
+    unblocker.db.set_firewall_block_state.assert_called_once_with(
+        "1.2.3.4",
+        {
+            "unblock_at": "2026-08-26T18:38:10+02:00",
+            "remaining_timewindows": 0,
+            "flags": {"from_": True, "to": True},
+            "updated_at": 1787758703.0,
+        },
+    )
+
+
+def test_add_request_persists_schedule_and_flags() -> None:
+    """Persist every active unblock request for restart recovery."""
+    unblocker = ModuleFactory().create_unblocker_obj()
+    unblocker.db.get_blocking_timestamp.return_value = 1787757891.0
+    timewindow = TimeWindow(
+        number=2,
+        end_time="2026-08-26T18:38:10+02:00",
+    )
+    flags = {"from_": True, "to": True}
+
+    with patch("time.time", return_value=1787757900.0):
+        unblocker._add_req("1.2.3.4", timewindow, flags, 1)
+
+    unblocker.db.set_firewall_block_state.assert_called_once_with(
+        "1.2.3.4",
+        {
+            "unblock_at": timewindow.end_time,
+            "remaining_timewindows": 1,
+            "flags": flags,
+            "updated_at": 1787757900.0,
+        },
+    )
+
+
+def test_restore_requests_recovers_persisted_schedule() -> None:
+    """Recover pending firewall work after the blocker process restarts."""
+    unblocker = ModuleFactory().create_unblocker_obj()
+    unblocker.db.get_firewall_block_states.return_value = {
+        "1.2.3.4": {
+            "unblock_at": "2026-08-26T18:38:10+02:00",
+            "remaining_timewindows": 0,
+            "flags": {"from_": True, "to": True},
+        }
+    }
+
+    unblocker._restore_requests()
+
+    request = unblocker.requests["1.2.3.4"]
+    assert request["tw_to_unblock"].end_time == "2026-08-26T18:38:10+02:00"
+    assert request["block_this_ip_for"] == 0
+    assert request["flags"] == {"from_": True, "to": True}
+
+
+def test_successful_unblock_without_start_time_still_completes() -> None:
+    """Do not let missing legacy metadata interrupt firewall cleanup."""
+    unblocker = ModuleFactory().create_unblocker_obj()
+    unblocker.db.get_blocking_timestamp.return_value = None
+
+    unblocker._log_successful_unblock("1.2.3.4")
+
+    unblocker.log.assert_called_once_with(
+        "The blocking of 1.2.3.4 ended; its start time was unavailable."
+    )
 
 
 @pytest.mark.parametrize(
@@ -91,11 +185,16 @@ def test__unblock(flags, expected_calls, unblock_success):
     ip = "1.2.3.4"
     path = "modules.blocking.unblocker.exec_iptables_command"
 
-    with patch(path, return_value=unblock_success) as mock_exec:
+    def command_result(_sudo, action, **_kwargs):
+        """Model a deletion failure while the rule still exists."""
+        return unblock_success if action == "delete" else not unblock_success
+
+    with patch(path, side_effect=command_result) as mock_exec:
         result = unblocker._unblock(ip, flags)
 
         assert result == unblock_success
-        assert mock_exec.call_count == expected_calls
+        attempts_per_rule = 1 if unblock_success else 2
+        assert mock_exec.call_count == expected_calls * attempts_per_rule
 
         if unblock_success:
             unblocker.print.assert_called_once_with(
