@@ -47,22 +47,72 @@ const formatTime = (value) => {
   }
   return new Date(amount * 1000).toLocaleString();
 };
+/** Convert standalone Unix timestamps to localized, human-readable text. */
+function displayValue(value) {
+  const candidate = typeof value === "string" ? value.trim() : value;
+  const numericTimestamp = typeof candidate === "number"
+    || (typeof candidate === "string" && /^\d{10}(?:\.\d+)?$/.test(candidate));
+  if (numericTimestamp) {
+    const amount = Number(candidate);
+    if (Number.isFinite(amount) && amount >= 946684800 && amount <= 4102444800) {
+      return formatTime(amount);
+    }
+  }
+  const millisecondTimestamp = typeof candidate === "number"
+    || (typeof candidate === "string" && /^\d{13}$/.test(candidate));
+  if (millisecondTimestamp) {
+    const amount = Number(candidate);
+    if (Number.isFinite(amount) && amount >= 946684800000 && amount <= 4102444800000) {
+      return formatTime(amount / 1000);
+    }
+  }
+  return value ?? "—";
+}
+/** Recursively humanize timestamps inside arrays and structured detail data. */
+function displayData(value) {
+  if (Array.isArray(value)) return value.map((item) => displayData(item));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, displayData(item)]),
+    );
+  }
+  return displayValue(value);
+}
 const text = (tag, value, className = "") => {
   const element = document.createElement(tag);
-  element.textContent = value ?? "—";
+  element.textContent = displayValue(value);
   if (className) element.className = className;
   return element;
 };
 const cell = (value, className = "") => {
   const td = document.createElement("td");
   if (value instanceof Node) td.append(value);
-  else td.textContent = value ?? "—";
+  else td.textContent = displayValue(value);
   if (className) td.className = className;
   return td;
 };
 const threat = (value) => {
   const level = String(value || "info").toLowerCase();
   return text("span", level, `status threat-${level}`);
+};
+const slipsScore = (record) => {
+  const score = Number(record.alert_score);
+  const threshold = Number(record.alert_threshold);
+  if (!Number.isFinite(score) || !Number.isFinite(threshold)) {
+    const unavailable = text("span", "Pending", "slips-score unavailable");
+    unavailable.title = "Waiting for Slips to persist this detector score.";
+    return unavailable;
+  }
+  const ratio = threshold > 0 ? score / threshold : 0;
+  const tone = ratio >= 1 ? "reached" : ratio >= 0.75 ? "near" : "below";
+  const formatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 });
+  const element = text(
+    "span",
+    `${formatter.format(score)} / ${formatter.format(threshold)}`,
+    `slips-score ${tone}`,
+  );
+  element.title = `${record.alert_score_mode || "Slips"} · ${record.alert_score_basis || "detector accumulator"}`;
+  return element;
 };
 const escapePath = (value) => encodeURIComponent(String(value));
 
@@ -235,8 +285,13 @@ function formatChartTime(value, span) {
 function renderLineChart(id, points, series, formatValue = formatChartValue) {
   const svg = byId(id);
   svg.replaceChildren();
-  const width = 600;
-  const height = 180;
+  const height = numeric(svg.viewBox?.baseVal?.height) || 180;
+  const renderedWidth = numeric(svg.clientWidth);
+  const renderedHeight = numeric(svg.clientHeight);
+  const width = renderedWidth > 0 && renderedHeight > 0
+    ? height * renderedWidth / renderedHeight
+    : numeric(svg.viewBox?.baseVal?.width) || 600;
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   const left = 42;
   const right = 10;
   const top = 12;
@@ -245,8 +300,8 @@ function renderLineChart(id, points, series, formatValue = formatChartValue) {
   const plotHeight = height - top - bottom;
   if (!points.length) {
     const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    label.setAttribute("x", "300");
-    label.setAttribute("y", "92");
+    label.setAttribute("x", String(width / 2));
+    label.setAttribute("y", String(height / 2 + 2));
     label.setAttribute("text-anchor", "middle");
     label.textContent = "No samples in this range";
     svg.append(label);
@@ -300,6 +355,19 @@ function renderLineChart(id, points, series, formatValue = formatChartValue) {
     path.setAttribute("class", `chart-line ${item.className || ""}`);
     svg.append(path);
   }
+  points.filter((point) => point.reset_reason).forEach((point) => {
+    const x = left + ((numeric(point.ts) - minimumTime) / span) * plotWidth;
+    const marker = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    marker.setAttribute("x1", String(x));
+    marker.setAttribute("x2", String(x));
+    marker.setAttribute("y1", String(top));
+    marker.setAttribute("y2", String(height - bottom));
+    marker.setAttribute("class", "chart-reset-line");
+    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    title.textContent = `${formatTime(point.ts)} · ${point.reset_reason}`;
+    marker.append(title);
+    svg.append(marker);
+  });
 }
 
 function renderBars(id, rows) {
@@ -326,8 +394,11 @@ function setSummaryCards(items, target = "summary-cards") {
   container.replaceChildren();
   items.forEach(([label, value]) => {
     const card = document.createElement("article");
+    const valueElement = document.createElement("strong");
     card.className = "summary-card";
-    card.append(text("span", label), text("strong", value));
+    if (value instanceof Node) valueElement.append(value);
+    else valueElement.textContent = displayValue(value);
+    card.append(text("span", label), valueElement);
     container.append(card);
   });
 }
@@ -601,10 +672,12 @@ async function loadAlerts() {
   const grouped = byId("alerts-view").value === "grouped";
   configureTable("alerts", grouped ? "grouped" : "individual", grouped ? [
     ["Latest", "time"], ["Host", "host"], ["Highest threat", "threat"],
+    ["Peak Slips score", "score"],
     ["Name / domain", null], ["TI feeds", null],
     ["Alerts", "alerts"], ["Evidence links", "evidence"], ["Labels", "label"],
   ] : [
     ["Time", "time"], ["Host", "host"], ["Threat", "threat"],
+    ["Slips score", "score"],
     ["TW", "tw"], ["Window start", "tw_start"], ["Window end", "tw_end"],
     ["Name / domain", null], ["TI feeds", null], ["Label", "label"],
     ["Evidence", "evidence"], ["Alert ID", "id"],
@@ -618,7 +691,8 @@ async function loadAlerts() {
   if (grouped) {
     renderTable("alerts-table", payload.items, [
       (row) => formatTime(row.alert_time), (row) => text("code", row.ip_alerted),
-      (row) => threat(row.threat_level), (row) => contextName(row),
+      (row) => threat(row.threat_level), (row) => slipsScore(row),
+      (row) => contextName(row),
       (row) => tiFeeds(row), (row) => compact(row.alert_count),
       (row) => compact(row.evidence_count), (row) => row.label || "—",
     ], openAlertGroup);
@@ -626,6 +700,7 @@ async function loadAlerts() {
     renderTable("alerts-table", payload.items, [
       (row) => formatTime(row.alert_time), (row) => text("code", row.ip_alerted),
       (row) => threat(row.threat_level),
+      (row) => slipsScore(row),
       (row) => text("code", row.timewindow || "—"),
       (row) => row.tw_start || "—", (row) => row.tw_end || "—",
       (row) => contextName(row), (row) => tiFeeds(row), (row) => row.label || "—",
@@ -639,10 +714,12 @@ async function loadEvidence() {
   const grouped = byId("evidence-view").value === "grouped";
   configureTable("evidence", grouped ? "grouped" : "individual", grouped ? [
     ["Latest", "time"], ["Host", "host"], ["Highest threat", "threat"],
+    ["Peak Slips score", "score"],
     ["Type", "type"], ["Module", "module"], ["Evidence", "evidence"],
     ["Flows", "flows"], ["Alert links", "alert"],
   ] : [
     ["Time", "time"], ["Host", "host"], ["Threat", "threat"],
+    ["Slips score", "score"],
     ["Type", "type"], ["Module", "module"], ["Flows", "flows"],
     ["Alerts", "alert"], ["Description", null],
   ], loadEvidence);
@@ -655,7 +732,8 @@ async function loadEvidence() {
   if (grouped) {
     renderTable("evidence-table", payload.items, [
       (row) => formatTime(row.timestamp), (row) => text("code", row.profile_ip),
-      (row) => threat(row.threat_level), (row) => text("code", row.evidence_type),
+      (row) => threat(row.threat_level), (row) => slipsScore(row),
+      (row) => text("code", row.evidence_type),
       (row) => text("code", row.module), (row) => compact(row.evidence_count),
       (row) => compact(row.flow_count),
       (row) => row.alert_count ? `${compact(row.alert_count)} linked` : "none",
@@ -663,7 +741,8 @@ async function loadEvidence() {
   } else {
     renderTable("evidence-table", payload.items, [
       (row) => formatTime(row.timestamp), (row) => text("code", row.profile_ip),
-      (row) => threat(row.threat_level), (row) => text("code", row.evidence_type),
+      (row) => threat(row.threat_level), (row) => slipsScore(row),
+      (row) => text("code", row.evidence_type),
       (row) => text("code", row.module), (row) => compact(row.flow_count),
       (row) => row.alert_ids?.length ? compact(row.alert_ids.length) : "none",
       (row) => row.description || "—",
@@ -676,13 +755,16 @@ async function loadFirewall() {
   const search = byId("firewall-search").value.trim();
   const params = new URLSearchParams();
   if (search) params.set("search", search);
+  const historyPage = state.pages.firewall;
+  const historyCursor = historyPage.cursors[historyPage.index];
+  if (historyCursor) params.set("history_offset", historyCursor);
   const payload = await api("firewall", `/api/firewall?${params}`);
   if (!payload) return;
   byId("firewall-badge").textContent = compact(payload.total);
   byId("firewall-count").textContent = `${payload.page_size} active enforcement record${payload.page_size === 1 ? "" : "s"}`;
   renderTable("firewall-table", payload.items, [
     (row) => text("code", row.ip),
-    (row) => text("span", row.status, `status ${row.status === "blocked" ? "bad" : "warn"}`),
+    (row) => text("span", row.status, `status ${["blocked", "overdue"].includes(row.status) ? "bad" : "warn"}`),
     (row) => formatTime(row.blocked_at),
     (row) => row.unblock_at ? formatTime(row.unblock_at) : "Schedule unavailable",
     (row) => row.remaining_seconds === null ? "Schedule unavailable" : formatDuration(row.remaining_seconds),
@@ -690,6 +772,18 @@ async function loadFirewall() {
     (row) => compact(row.evidence_count),
     (row) => compact(row.alert_count),
   ], (row) => openHost(row.ip));
+  const history = payload.history || [];
+  historyPage.items = history;
+  historyPage.total = payload.history_total || 0;
+  historyPage.next = payload.history_next_cursor || null;
+  byId("firewall-history-count").textContent = `${payload.history_total || 0} block/unblock event${payload.history_total === 1 ? "" : "s"} match this view.`;
+  renderTable("firewall-history-table", history, [
+    (row) => formatTime(row.timestamp),
+    (row) => text("code", row.ip),
+    (row) => text("span", row.action, `status ${row.action === "unblocked" ? "ok" : "bad"}`),
+    (row) => row.details || "—",
+  ], (row) => openHost(row.ip));
+  pager("firewall", "firewall-history-pager", loadFirewall);
 }
 
 async function loadP2P() {
@@ -763,12 +857,13 @@ async function loadHosts() {
     (row) => tiFeeds(row),
     (row) => text("code", row.mac || "—"),
     (row) => threat(row.max_threat_level),
+    (row) => slipsScore(row),
     (row) => compact(row.load?.flows),
     (row) => formatBytes(row.load?.bytes),
     (row) => compact(row.evidence_count),
     (row) => compact(row.alert_count),
     (row) => formatTime(row.load?.last_seen || row.observed_at),
-  ], (row) => openHost(row.ip));
+  ], (row) => openHost(row.ip, row));
   pager("hosts", "hosts-pager", loadHosts);
 }
 
@@ -894,7 +989,10 @@ function renderDnsDetails(dns) {
     section.className = "dns-section";
     section.append(text("small", "Additional DNS fields", "dns-label"));
     additional.forEach(([key, value]) => section.append(
-      detailRow(key.replaceAll("_", " "), typeof value === "object" ? JSON.stringify(value) : value),
+      detailRow(
+        key.replaceAll("_", " "),
+        typeof value === "object" ? JSON.stringify(displayData(value)) : value,
+      ),
     ));
     container.append(section);
   }
@@ -1018,7 +1116,7 @@ function rawBlock(record, label) {
   const details = document.createElement("details");
   details.className = "json-details";
   const summary = text("summary", `View complete ${label} record (JSON)`);
-  const pre = text("pre", JSON.stringify(record, null, 2));
+  const pre = text("pre", JSON.stringify(displayData(record), null, 2));
   details.append(summary, pre);
   return details;
 }
@@ -1183,13 +1281,15 @@ function protocolValueText(label, value) {
   if (Array.isArray(value)) {
     if (!value.length) return "None";
     return value.map((item) => {
-      if (!item || typeof item !== "object") return String(item);
-      return Object.entries(item).map(([key, nested]) => key + ": " + nested).join(" · ");
+      if (!item || typeof item !== "object") return String(displayValue(item));
+      return Object.entries(item)
+        .map(([key, nested]) => key + ": " + JSON.stringify(displayData(nested)))
+        .join(" · ");
     }).join(", ");
   }
-  if (value && typeof value === "object") return JSON.stringify(value);
+  if (value && typeof value === "object") return JSON.stringify(displayData(value));
   if (/body|file size/i.test(label) && Number.isFinite(Number(value))) return formatBytes(value);
-  return String(value);
+  return String(displayValue(value));
 }
 
 /** Build the visible labeled fields for a protocol-specific record. */
@@ -1357,6 +1457,7 @@ async function openEvidence(record) {
       ["Detected", formatTime(record.timestamp)],
       ["Profile host", hostLink(record.profile_ip)],
       ["Threat", threat(record.threat_level)],
+      ["Slips score", slipsScore(record), "accent"],
       ["Confidence", `${Math.round(numeric(record.confidence) * 100)}%`, "accent"],
     ]),
     investigationHeading("Detection summary", record.module ? `Generated by ${record.module}` : ""),
@@ -1442,6 +1543,7 @@ async function openAlert(record) {
       ["Created", formatTime(record.alert_time)],
       ["Affected host", hostLink(record.ip_alerted)],
       ["Highest threat", threat(record.threat_level)],
+      ["Slips score", slipsScore(record), "danger"],
       ["Evidence", compact(record.evidence_count), "accent"],
     ]),
     investigationStats([
@@ -1551,17 +1653,18 @@ function hostRangeParams() {
 }
 
 function renderHostCards(host) {
+  const exactAggregates = host.exact_aggregates !== false;
   setSummaryCards([
-    ["All IPs", compact(host.all_ips?.length || 1)],
-    ["Flows", compact(host.load?.flows)],
-    ["Inbound flows", compact(host.load?.inbound_flows)],
-    ["Outbound flows", compact(host.load?.outbound_flows)],
-    ["Traffic", formatBytes(host.load?.bytes)],
-    ["Inbound bytes", formatBytes(host.load?.inbound_bytes)],
-    ["Outbound bytes", formatBytes(host.load?.outbound_bytes)],
-    ["Packets", compact(host.load?.packets)],
-    ["Evidence", compact(host.evidence_count)],
-    ["Alerts", compact(host.alert_count)],
+    ["Flows", exactAggregates ? compact(host.load?.flows) : "—"],
+    ["Inbound flows", exactAggregates ? compact(host.load?.inbound_flows) : "—"],
+    ["Outbound flows", exactAggregates ? compact(host.load?.outbound_flows) : "—"],
+    ["Traffic", exactAggregates ? formatBytes(host.load?.bytes) : "—"],
+    ["Inbound bytes", exactAggregates ? formatBytes(host.load?.inbound_bytes) : "—"],
+    ["Outbound bytes", exactAggregates ? formatBytes(host.load?.outbound_bytes) : "—"],
+    ["Packets", exactAggregates ? compact(host.load?.packets) : "—"],
+    ["Current Slips score", slipsScore(host)],
+    ["Evidence", exactAggregates ? compact(host.evidence_count) : "—"],
+    ["Alerts", exactAggregates ? compact(host.alert_count) : "—"],
   ], "host-summary");
   const identity = byId("host-identity");
   identity.replaceChildren(
@@ -1574,11 +1677,15 @@ function renderHostCards(host) {
     detailRow("DNS", renderDnsDetails(host.dns)),
   );
   byId("host-ti").textContent = Object.keys(host.ti || {}).length
-    ? JSON.stringify(host.ti, null, 2) : "No cached threat-intelligence data.";
-  byId("host-alerts-title").textContent = "Related alerts · " + host.alert_count;
+    ? JSON.stringify(displayData(host.ti), null, 2)
+    : "No cached threat-intelligence data.";
+  byId("host-alerts-title").textContent = exactAggregates
+    ? "Related alerts · " + host.alert_count
+    : "Related alerts · exact profile IP only";
   const alerts = byId("host-alerts");
   alerts.replaceChildren();
-  host.alerts?.slice(0, 100).forEach((item) => {
+  const exactAlerts = host.alerts?.filter((item) => item.ip_alerted === host.ip) || [];
+  exactAlerts.slice(0, 100).forEach((item) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "host-alert-chip";
@@ -1591,7 +1698,7 @@ function renderHostCards(host) {
     button.addEventListener("click", () => openAlert(item));
     alerts.append(button);
   });
-  if (!host.alerts?.length) alerts.append(text("p", "No related alerts.", "muted"));
+  if (!exactAlerts.length) alerts.append(text("p", "No related alerts.", "muted"));
 }
 
 async function loadHostEvidence() {
@@ -1606,7 +1713,9 @@ async function loadHostEvidence() {
   const search = byId("host-evidence-search").value.trim();
   if (search) params.set("search", search);
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
-  const path = "/api/hosts/" + escapePath(state.host.ip) + "/evidence?" + params;
+  params.set("profile", state.host.ip);
+  params.set("details", "false");
+  const path = "/api/evidence?" + params;
   const payload = await api("hostEvidence", path);
   if (!payload) return;
   page.items = payload.items;
@@ -1643,12 +1752,17 @@ async function loadHostFlows() {
   const path = `/api/hosts/${escapePath(state.host.ip)}/flows?${params}`;
   const payload = await api("hostFlows", path);
   if (!payload) return;
-  page.items = payload.items;
-  page.total = payload.total;
+  const exactItems = payload.items.filter((row) =>
+    row.src_ip === state.host.ip || row.dst_ip === state.host.ip);
+  const discarded = payload.items.length - exactItems.length;
+  page.items = exactItems;
+  page.total = discarded ? exactItems.length : payload.total;
   page.next = payload.next_cursor;
   byId("host-flow-count").textContent =
-    `${payload.page_size} shown · ${compact(payload.total)} flows match this range`;
-  renderTable("host-flows-table", payload.items, [
+    `${exactItems.length} shown · exact profile IP only` +
+    (discarded ? ` · ${discarded} stale MAC-alias rows discarded` :
+      ` · ${compact(payload.total)} flows match this range`);
+  renderTable("host-flows-table", exactItems, [
     (row) => formatTime(row.event_time),
     (row) => text("span", row.direction, `status ${row.direction === "inbound" ? "ok" : "warn"}`),
     (row) => text("code", row.peer),
@@ -1680,6 +1794,18 @@ async function loadHostSummary() {
   const payload = await api("hostSummary",
     `/api/hosts/${escapePath(state.host.ip)}/traffic-summary?${params}`);
   if (!payload) return;
+  const includesAliases = Array.isArray(payload.host_ips)
+    && payload.host_ips.some((address) => address !== state.host.ip);
+  const status = byId("host-traffic-status");
+  if (includesAliases) {
+    status.textContent = "Traffic aggregates withheld because the running backend grouped unrelated addresses through a shared next-hop MAC. Historical rows below are filtered to the exact profile IP.";
+    renderLineChart("host-flow-chart", [], [{ key: "inbound_flows" }]);
+    renderLineChart("host-byte-chart", [], [{ key: "inbound_bytes" }]);
+    renderBars("host-protocols", []);
+    renderBars("host-peers", []);
+    return;
+  }
+  status.textContent = "Traffic and peers match the exact profile IP only.";
   renderLineChart("host-flow-chart", payload.timeline, [
     { key: "inbound_flows" }, { key: "outbound_flows", className: "secondary-line" },
   ]);
@@ -1690,9 +1816,159 @@ async function loadHostSummary() {
   renderBars("host-peers", payload.peers);
 }
 
-async function openHost(ip) {
-  const host = await api("host", `/api/hosts/${escapePath(ip)}`);
-  if (!host) return;
+/** Render score history and explain how much evidence has a persisted score. */
+function renderHostScoreHistory(payload) {
+  let points = Array.isArray(payload.timeline) ? payload.timeline : [];
+  if (points.length === 1) {
+    points = [{ ...points[0], ts: numeric(points[0].ts) - 1 }, points[0]];
+  }
+  renderLineChart("host-score-chart", points, [
+    { key: "score" },
+    { key: "peak_score", className: "secondary-line" },
+    { key: "threshold", className: "threshold-line" },
+  ]);
+  const total = numeric(payload.evidence_total);
+  const scored = numeric(payload.scored_evidence);
+  const status = byId("host-score-history-status");
+  if (payload.history_unavailable) {
+    const selectedRange = byId("host-range").selectedOptions[0]?.textContent || "selected range";
+    const current = payload.current_score === null || payload.current_score === undefined
+      ? "unavailable"
+      : `${numeric(payload.current_score).toFixed(3)} / ${numeric(payload.threshold).toFixed(3)}`;
+    status.textContent = `No persisted score history is available for ${selectedRange} from the currently running web backend. Current score: ${current}. Restart only the web interface to load the updated history endpoint; Slips analysis does not need to restart.`;
+  } else if (payload.compatibility_source) {
+    const inspected = numeric(payload.inspected_evidence);
+    const rangeLabel = byId("host-range").selectedOptions[0]?.textContent || "selected range";
+    const completeness = payload.compatibility_limited
+      ? `newest ${compact(inspected)} of ${compact(total)} evidence records`
+      : `all ${compact(total)} evidence records`;
+    status.textContent = `${compact(scored)} real ${payload.mode} score samples from ${completeness} in ${rangeLabel} · peak ${numeric(payload.peak_score).toFixed(3)} / ${numeric(payload.threshold).toFixed(3)} · ${compact(payload.reset_count)} detected resets${payload.compatibility_limited ? " · partial compatibility history until the web backend next starts" : ""}.`;
+  } else if (total > 0 && scored === 0) {
+    status.textContent = `${compact(total)} evidence records exist, but none has a persisted processed-score sample. They may still be queued for the Evidence Handler or predate score persistence.`;
+  } else if (total > scored) {
+    status.textContent = `${compact(scored)} of ${compact(total)} evidence records have real ${payload.mode} samples · peak ${numeric(payload.peak_score).toFixed(3)} / ${numeric(payload.threshold).toFixed(3)} · ${compact(payload.reset_count)} detected resets.`;
+  } else {
+    status.textContent = `${compact(scored)} processed score samples · peak ${numeric(payload.peak_score).toFixed(3)} / ${numeric(payload.threshold).toFixed(3)} · ${compact(payload.reset_count)} detected resets.`;
+  }
+}
+
+/** Recover bounded, range-aware score samples through an older evidence API. */
+async function loadLegacyScoreHistory(params) {
+  const evidenceLimit = 600;
+  const records = [];
+  let cursor = "";
+  let total = 0;
+  do {
+    const query = new URLSearchParams(params);
+    query.set("profile", state.host.ip);
+    query.set("limit", String(Math.min(100, evidenceLimit - records.length)));
+    query.set("sort", "time");
+    query.set("order", "desc");
+    query.set("details", "false");
+    if (cursor) query.set("cursor", cursor);
+    const response = await fetch(`/api/evidence?${query}`, { cache: "no-store" });
+    const page = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(page.detail || page.error || `HTTP ${response.status}`);
+    }
+    total = numeric(page.total);
+    records.push(...(Array.isArray(page.items) ? page.items : []));
+    cursor = page.next_cursor || "";
+  } while (cursor && records.length < evidenceLimit);
+
+  const timeline = records
+    .filter((row) => row.alert_score !== null
+      && row.alert_score !== undefined
+      && Number.isFinite(Number(row.alert_score)))
+    .map((row) => ({
+      ts: numeric(row.timestamp),
+      timewindow: row.twid || "",
+      score: Number(row.alert_score),
+      peak_score: Number(row.alert_score),
+      threshold: Number(row.alert_threshold),
+    }))
+    .sort((left, right) => left.ts - right.ts);
+  let previous = null;
+  let resetCount = 0;
+  timeline.forEach((point) => {
+    point.reset_reason = previous && point.timewindow !== previous.timewindow
+      ? "time window changed"
+      : previous && point.score < previous.score
+        ? "score reset after an alert"
+        : "";
+    if (point.reset_reason) resetCount += 1;
+    previous = point;
+  });
+  const threshold = timeline.find((point) => Number.isFinite(point.threshold))?.threshold
+    ?? numeric(state.host.alert_threshold);
+  timeline.forEach((point) => { point.threshold = threshold; });
+  return {
+    timeline,
+    threshold,
+    mode: state.host.alert_score_mode || "Slips",
+    peak_score: Math.max(...timeline.map((point) => point.score), 0),
+    evidence_total: total,
+    inspected_evidence: records.length,
+    scored_evidence: timeline.length,
+    reset_count: resetCount,
+    compatibility_source: true,
+    compatibility_limited: total > records.length,
+  };
+}
+
+/** Load bounded score history without fabricating a timeline on older servers. */
+async function loadHostScoreHistory() {
+  if (!state.host) return;
+  const params = hostRangeParams();
+  params.set("max_points", "600");
+  const path = `/api/hosts/${escapePath(state.host.ip)}/score-history?${params}`;
+  try {
+    const response = await fetch(path, { cache: "no-store" });
+    if (response.status === 404) {
+      renderHostScoreHistory(await loadLegacyScoreHistory(params));
+      return;
+    }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+    applyRunIdentity(payload.run_identity);
+    renderHostScoreHistory(payload);
+  } catch (error) {
+    showError(`Score history unavailable: ${error.message}`);
+  }
+}
+
+async function openHost(ip, summary = null) {
+  const detail = await api("host", `/api/hosts/${escapePath(ip)}`);
+  if (!detail) return;
+  const detailHasScore = detail.alert_score !== null
+    && detail.alert_score !== undefined
+    && Number.isFinite(Number(detail.alert_score))
+    && detail.alert_threshold !== null
+    && detail.alert_threshold !== undefined
+    && Number.isFinite(Number(detail.alert_threshold));
+  let scoreSource = summary;
+  const summaryHasScore = scoreSource?.alert_score !== null
+    && scoreSource?.alert_score !== undefined
+    && Number.isFinite(Number(scoreSource.alert_score))
+    && scoreSource?.alert_threshold !== null
+    && scoreSource?.alert_threshold !== undefined
+    && Number.isFinite(Number(scoreSource.alert_threshold));
+  if (!detailHasScore && !summaryHasScore) {
+    const params = new URLSearchParams({ range: "all", search: ip, limit: "100" });
+    const hostPage = await api("hostScore", `/api/hosts?${params}`);
+    scoreSource = hostPage?.items?.find((row) => row.ip === ip) || null;
+  }
+  const host = { ...(scoreSource || {}), ...detail };
+  if (!detailHasScore && scoreSource) {
+    ["alert_score", "alert_threshold", "alert_score_mode", "alert_score_basis"]
+      .forEach((key) => { host[key] = scoreSource[key]; });
+  }
+  const staleAliases = Array.isArray(detail.all_ips)
+    ? detail.all_ips.filter((address) => address !== ip)
+    : [];
+  host.exact_aggregates = staleAliases.length === 0;
+  host.ignored_aliases = staleAliases;
+  host.all_ips = [ip];
   state.host = host;
   resetPage("hostFlows");
   resetPage("host-evidence");
@@ -1702,16 +1978,30 @@ async function openHost(ip) {
   byId("host-subtitle").textContent =
     `${host.hostname || "Unnamed host"} · ${host.scope} · ${host.live ? "current" : "last known"}`;
   renderHostCards(host);
-  await Promise.all([loadHostFlows(), loadHostSummary(), loadHostEvidence()]);
+  await Promise.all([
+    loadHostFlows(), loadHostSummary(), loadHostScoreHistory(), loadHostEvidence(),
+  ]);
 }
 
 async function refreshHostWorkspace() {
   if (!state.host) return;
-  const host = await api("host", `/api/hosts/${escapePath(state.host.ip)}`);
-  if (!host) return;
+  const detail = await api("host", `/api/hosts/${escapePath(state.host.ip)}`);
+  if (!detail) return;
+  const staleAliases = Array.isArray(detail.all_ips)
+    ? detail.all_ips.filter((address) => address !== state.host.ip)
+    : [];
+  const host = {
+    ...state.host,
+    ...detail,
+    all_ips: [state.host.ip],
+    exact_aggregates: staleAliases.length === 0,
+    ignored_aliases: staleAliases,
+  };
   state.host = host;
   renderHostCards(host);
-  await Promise.all([loadHostFlows(), loadHostSummary(), loadHostEvidence()]);
+  await Promise.all([
+    loadHostFlows(), loadHostSummary(), loadHostScoreHistory(), loadHostEvidence(),
+  ]);
 }
 
 function closeHost() {
@@ -1846,7 +2136,9 @@ bindRange("alerts", "alerts", loadAlerts);
 bindRange("evidence", "evidence", loadEvidence);
 bindRange("hosts", "hosts", loadHosts);
 bindRange("host", "hostFlows", async () => {
-  await Promise.all([loadHostFlows(), loadHostSummary(), loadHostEvidence()]);
+  await Promise.all([
+    loadHostFlows(), loadHostSummary(), loadHostScoreHistory(), loadHostEvidence(),
+  ]);
 });
 bindTableSort("modules", async () => {
   if (state.overview) renderModules(state.overview.modules);
