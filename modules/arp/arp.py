@@ -46,6 +46,7 @@ class ARP(IModule):
         self.delete_arp_periodically = False
         self.arp_log_creation_time = 0
         self.period_before_deleting = 0
+        self.max_arp_scan_evidence_to_combine = 1200
         if self.delete_zeek_files and not self.store_zeek_files_copy:
             self.delete_arp_periodically = True
             # first time arp.log is created
@@ -112,7 +113,7 @@ class ARP(IModule):
             # wait 10s if a new evidence arrived
             time.sleep(self.time_to_wait)
 
-            while True:
+            for _ in range(self.pending_arp_scan_evidence.qsize()):
                 try:
                     new_evidence = self.pending_arp_scan_evidence.get(
                         timeout=0.5
@@ -125,6 +126,9 @@ class ARP(IModule):
                     # this should be combined with the past alert
                     ts = ts2
                     uids += uids2
+                    if len(uids) >= self.max_arp_scan_evidence_to_combine:
+                        # enough combining, time to set 1 evidence.
+                        break
                 else:
                     # this is an ip performing arp scan in a diff
                     # profile or a diff twid, we shouldn't accumulate its
@@ -133,10 +137,13 @@ class ARP(IModule):
                     try:
                         self.pending_arp_scan_evidence.put_nowait(new_evidence)
                     except queue.Full:
-                        # dont accumulate anymore, set an evidence
-                        # immediately to empty to queue.
-                        # this is to prevent mem leaks cause by too many
-                        # evidence in queue
+                        # no room to put it back. we already popped it
+                        # off the queue, so set its own evidence now
+                        # instead of silently dropping it, then stop
+                        # draining to avoid an infinite busy loop.
+                        self.set_evidence_arp_scan(
+                            ts2, profileid2, twid2, uids2
+                        )
                         break
 
             self.set_evidence_arp_scan(ts, profileid, twid, uids)
