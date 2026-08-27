@@ -14,8 +14,6 @@ https://raw.githubusercontent.com/AssoEchap/stalkerware-indicators/master/genera
 https://raw.githubusercontent.com/stratosphereips/Civilsphere/main/threatintel/adserversandtrackers.csv,info, ['adtrackers']
 https://raw.githubusercontent.com/stratosphereips/Civilsphere/main/threatintel/civilsphereindicators.csv,medium, ['apt']
 https://raw.githubusercontent.com/botherder/targetedthreats/master/targetedthreats.csv,medium, ['apt']
-https://osint.digitalside.it/Threat-Intel/lists/latestdomains.txt,medium, ['honeypot']
-https://osint.digitalside.it/Threat-Intel/lists/latestips.txt,medium, ['honeypot']
 https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt,medium, ['honeypot']
 https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt,medium, ['honeypot']
 https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level1.netset,low, ['honeypot']
