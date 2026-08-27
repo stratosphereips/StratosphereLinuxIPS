@@ -29,7 +29,9 @@ def test_sqlite_lockfile_is_owner_only_writable(tmp_path):
     locks_dir = tmp_path / "locks"
     locks_dir.mkdir()
 
-    with patch("slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(locks_dir)):
+    with patch(
+        "slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(locks_dir)
+    ):
         db = SQLiteDB(logger, str(tmp_path), 12345)
 
     assert locks_dir.exists()
@@ -143,7 +145,9 @@ def test_get_flows_count_handles_quoted_filters(db):
     db.add_flow(second_flow, 'profile"quoted', "tw-other")
 
     assert db.get_flows_count(profileid='profile"quoted') == 2
-    assert db.get_flows_count(profileid='profile"quoted', twid='tw"quoted') == 1
+    assert (
+        db.get_flows_count(profileid='profile"quoted', twid='tw"quoted') == 1
+    )
 
 
 def test_get_columns_rejects_unknown_tables(db):
