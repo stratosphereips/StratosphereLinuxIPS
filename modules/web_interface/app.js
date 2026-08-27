@@ -737,16 +737,6 @@ function usageCell(percentage, label, resource) {
   return element;
 }
 
-/** Render a module resource value with a 0–100 red heat-map background. */
-function usageCell(percentage, label, resource) {
-  const actual = Math.max(0, numeric(percentage));
-  const intensity = Math.min(actual, 100);
-  const element = text("span", label, "usage-cell");
-  element.style.backgroundColor = `rgba(239, 107, 115, ${intensity / 100})`;
-  element.title = `${actual.toFixed(1)}% of ${resource}`;
-  return element;
-}
-
 function renderModules(modules) {
   const query = byId("module-search").value.trim().toLowerCase();
   const sort = state.pages.modules;
@@ -2641,9 +2631,6 @@ bindRange("host", "hostFlows", async () => {
   await Promise.all([
     loadHostFlows(), loadHostSummary(), loadHostScoreHistory(), loadHostEvidence(),
   ]);
-});
-bindTableSort("modules", async () => {
-  if (state.overview) renderModules(state.overview.modules);
 });
 bindTableSort("modules", async () => {
   if (state.overview) renderModules(state.overview.modules);
