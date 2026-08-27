@@ -177,6 +177,140 @@ def test_highest_threat(levels: list[str], expected: str) -> None:
     assert reader._highest_threat(levels) == expected
 
 
+def test_configuration_explains_captured_run_snapshot(tmp_path) -> None:
+    """Render every captured setting as explained data and redact secrets."""
+    _module_factory = ModuleFactory()
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    (metadata / "run.yaml").write_text(
+        "parameters:\n  time_window_width: 3600\n"
+        "web_interface:\n  enabled: true\n  api_key: keep-private\n",
+        encoding="utf-8",
+    )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+
+    result = reader.configuration()
+
+    assert result["source"] == "run.yaml"
+    assert result["total"] == 3
+    parameters = result["sections"][0]
+    assert (
+        "evidence is accumulated" in parameters["settings"][0]["explanation"]
+    )
+    web_settings = result["sections"][1]["settings"]
+    assert web_settings[1]["value"] == "Configured — hidden"
+    assert web_settings[1]["sensitive"] is True
+
+
+def test_whitelists_returns_parsed_runtime_rules(tmp_path) -> None:
+    """Show the active parsed rule rather than dumping whitelist text."""
+    _module_factory = ModuleFactory()
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    (metadata / "run.yaml").write_text(
+        "whitelists:\n  enable_local_whitelist: true\n"
+        "  enable_online_whitelist: false\n",
+        encoding="utf-8",
+    )
+    (metadata / "run.conf").write_text(
+        "ip,147.32.80.37,both,alerts\n", encoding="utf-8"
+    )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.redis = Mock()
+    reader.redis.hgetall.side_effect = lambda key: {
+        "whitelist_IPs": {
+            "147.32.80.37": json.dumps(
+                {"from": "both", "what_to_ignore": "alerts"}
+            )
+        }
+    }.get(key, {})
+    reader.cache = Mock()
+    reader.cache.zcard.return_value = 0
+
+    result = reader.whitelists()
+
+    assert result["total"] == 1
+    assert result["rules"][0]["value"] == "147.32.80.37"
+    assert result["rules"][0]["effect"] == (
+        "Suppresses evidence and alerts when this value appears on the source or destination side."
+    )
+
+
+def test_whitelisted_evidence_reports_matching_victim_rule() -> None:
+    """Explain why Slips retained evidence but did not add it to the score."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    pipeline = reader.redis.pipeline.return_value
+    pipeline.execute.return_value = [True]
+    reader._runtime_whitelist_rules = Mock(
+        return_value=[
+            {
+                "type": "IP address",
+                "value": "147.32.80.37",
+                "direction": "both",
+                "ignore": "alerts",
+                "effect": "Suppresses evidence and alerts.",
+            }
+        ]
+    )
+    items = [
+        {
+            "id": "evidence-1",
+            "attacker": {
+                "value": "91.231.89.211",
+                "ioc_type": "IP",
+                "direction": "SRC",
+            },
+            "victim": {
+                "value": "147.32.80.37",
+                "ioc_type": "IP",
+                "direction": "DST",
+            },
+        }
+    ]
+
+    reader._annotate_whitelisted_evidence(items)
+
+    assert items[0]["whitelisted"] is True
+    assert items[0]["whitelist_matches"] == [
+        {
+            "entity": "victim",
+            "type": "IP address",
+            "value": "147.32.80.37",
+            "rule": "147.32.80.37",
+            "direction": "both",
+            "ignore": "alerts",
+            "effect": "Suppresses evidence and alerts.",
+        }
+    ]
+
+
+def test_configuration_and_whitelist_tabs_are_wired() -> None:
+    """Keep both run-inspection tabs and evidence exclusion UI reachable."""
+    _module_factory = ModuleFactory()
+    app_source = Path("modules/web_interface/app.js").read_text(
+        encoding="utf-8"
+    )
+    index_source = Path("modules/web_interface/index.html").read_text(
+        encoding="utf-8"
+    )
+    server_source = Path("modules/web_interface/server.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'data-tab="configuration"' in index_source
+    assert 'data-tab="whitelists"' in index_source
+    assert 'id="configuration-sections"' in index_source
+    assert 'id="whitelists-table"' in index_source
+    assert "function whitelistHandling" not in app_source
+    assert "const whitelistHandling" in app_source
+    assert 'path == "/api/configuration"' in server_source
+    assert 'path == "/api/whitelists"' in server_source
+
+
 @pytest.mark.parametrize(
     "mode, expected_score, expected_threshold",
     [
