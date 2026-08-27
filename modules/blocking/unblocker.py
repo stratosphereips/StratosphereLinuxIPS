@@ -32,7 +32,30 @@ class Unblocker(IUnblocker):
         self.log = log
         self.requests_lock = Lock()
         self.requests = {}
+        self._restore_requests()
         self._start_checker_thread()
+
+    def _restore_requests(self) -> None:
+        """Restore persisted unblock schedules after a blocker restart."""
+        states = self.db.get_firewall_block_states()
+        if not isinstance(states, dict):
+            return
+        for ip, state in states.items():
+            if not isinstance(state, dict) or not state.get("unblock_at"):
+                continue
+            try:
+                timewindow = TimeWindow(
+                    number=-1,
+                    end_time=str(state["unblock_at"]),
+                )
+                remaining = max(0, int(state.get("remaining_timewindows", 0)))
+            except (TypeError, ValueError):
+                continue
+            self.requests[str(ip)] = {
+                "tw_to_unblock": timewindow,
+                "block_this_ip_for": remaining,
+                "flags": state.get("flags", {}),
+            }
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
@@ -75,25 +98,32 @@ class Unblocker(IUnblocker):
         """
         while not self.should_stop():
             now = time.time()
-            requests_to_del = []
-
-            for ip, request in self.requests.items():
-                ts: str = request["tw_to_unblock"].end_time
-                ts: float = utils.convert_ts_format(ts, "unixtimestamp")
-                if now >= ts:
+            with self.requests_lock:
+                for ip, request in list(self.requests.items()):
+                    ts: str = request["tw_to_unblock"].end_time
+                    ts: float = utils.convert_ts_format(ts, "unixtimestamp")
+                    if now < ts:
+                        continue
                     flags: Dict[str, str] = request["flags"]
                     if self._unblock(ip, flags):
                         self._log_successful_unblock(ip)
                         self.db.del_blocked_ip(ip)
                         self.db.del_firewall_block_state(ip)
-                        requests_to_del.append(ip)
-
-            for ip in requests_to_del:
-                self.del_request(ip)
+                        self.requests.pop(ip, None)
             time.sleep(10)
 
-    def _log_successful_unblock(self, ip):
+    def _log_successful_unblock(self, ip: str) -> None:
+        """Log how long an IP was blocked when its start time is known.
+
+        Parameters:
+            ip: IP address whose firewall rules were removed.
+        """
         blocking_ts: float = self.db.get_blocking_timestamp(ip)
+        if blocking_ts is None:
+            self.log(
+                f"The blocking of {ip} ended; its start time was unavailable."
+            )
+            return
         now = time.time()
 
         blocking_hrs: int = utils.get_time_diff(blocking_ts, now, "hours")
@@ -119,24 +149,19 @@ class Unblocker(IUnblocker):
         it answers this question
         "how many extra tws should IP X stay blocked in?"
         """
-        new_requests = {}
         with self.requests_lock:
             for ip, req in self.requests.items():
-                if req["block_this_ip_for"] == 0:
-                    # the ip is unblocked, we dont need to keep track of it
-                    continue
-                new_req = req
-                new_req["block_this_ip_for"] = req["block_this_ip_for"] - 1
+                remaining = max(0, req["block_this_ip_for"] - 1)
+                req["block_this_ip_for"] = remaining
                 self.db.set_firewall_block_state(
                     ip,
                     {
-                        "unblock_at": new_req["tw_to_unblock"].end_time,
-                        "remaining_timewindows": new_req["block_this_ip_for"],
+                        "unblock_at": req["tw_to_unblock"].end_time,
+                        "remaining_timewindows": remaining,
+                        "flags": req["flags"],
                         "updated_at": time.time(),
                     },
                 )
-                new_requests[ip] = new_req
-            self.requests = new_requests
 
     def _add_req(
         self,
@@ -145,22 +170,24 @@ class Unblocker(IUnblocker):
         flags: Dict[str, str],
         block_this_ip_for: int,
     ):
+        """Add or replace an IP's scheduled unblock request.
+
+        Parameters:
+            ip: IP address whose firewall rules must later be removed.
+            tw_to_unblock_at: Time window containing the unblock deadline.
+            flags: Rule direction and optional transport selectors.
+            block_this_ip_for: Remaining time windows for the block.
         """
-        Add an unblocking request to self.requests
-        :param tw_to_unblock_at: unix ts to unblock the given ip at
-        :param block_this_ip_for: number of following timewindows this ip
         if self.db.get_blocking_timestamp(ip) is not None:
             self.db.set_firewall_block_state(
                 ip,
                 {
                     "unblock_at": tw_to_unblock_at.end_time,
                     "remaining_timewindows": block_this_ip_for,
+                    "flags": flags,
                     "updated_at": time.time(),
                 },
             )
-
-        will remain blocked in.
-        """
         with self.requests_lock:
             self.requests[ip] = {
                 "tw_to_unblock": tw_to_unblock_at,
@@ -210,28 +237,16 @@ class Unblocker(IUnblocker):
         # so that this function knows which rule to delete
         # if both or none were specified we'll be unblocking all traffic from
         # and to the given ip
-        unblocked = False
+        results = []
         # Block traffic from source ip
         if from_:
-            unblocked = exec_iptables_command(
-                self.sudo,
-                action="delete",
-                ip_to_block=ip_to_unblock,
-                flag="-s",
-                options=options,
-            )
+            results.append(self._remove_rule(ip_to_unblock, "-s", options))
 
         # Block traffic to distination ip
         if to:
-            unblocked = exec_iptables_command(
-                self.sudo,
-                action="delete",
-                ip_to_block=ip_to_unblock,
-                flag="-d",
-                options=options,
-            )
+            results.append(self._remove_rule(ip_to_unblock, "-d", options))
 
-        if unblocked:
+        if results and all(results):
             cur_timewindow = self.db.get_timewindow(
                 time.time(), f"profile_{ip_to_unblock}"
             )
@@ -244,3 +259,37 @@ class Unblocker(IUnblocker):
             self.print(txt)
             self.log(txt)
             return False
+
+    def _remove_rule(
+        self,
+        ip: str,
+        flag: str,
+        options: Dict[str, str],
+    ) -> bool:
+        """Delete one rule and treat an already-absent rule as removed.
+
+        Parameters:
+            ip: IP address in the rule.
+            flag: Iptables source or destination selector.
+            options: Optional protocol and port selectors.
+
+        Returns:
+            True when the rule was deleted or no longer exists.
+        """
+        deleted = exec_iptables_command(
+            self.sudo,
+            action="delete",
+            ip_to_block=ip,
+            flag=flag,
+            options=options,
+        )
+        if deleted:
+            return True
+        still_exists = exec_iptables_command(
+            self.sudo,
+            action="check",
+            ip_to_block=ip,
+            flag=flag,
+            options=options,
+        )
+        return not still_exists
