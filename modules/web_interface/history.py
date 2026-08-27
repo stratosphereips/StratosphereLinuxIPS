@@ -543,7 +543,8 @@ class HistoryCollector:
             "evidence_id TEXT PRIMARY KEY, evidence_time REAL, "
             "profile_ip TEXT, timewindow TEXT, threat_level TEXT, "
             "evidence_type TEXT, description TEXT, confidence REAL, data TEXT, "
-            "accumulated_threat_level REAL, accumulated_ratl REAL)",
+            "accumulated_threat_level REAL, accumulated_ratl REAL, "
+            "whitelisted INTEGER DEFAULT 0)",
             "CREATE TABLE IF NOT EXISTS evidence_flows ("
             "evidence_id TEXT, uid TEXT, PRIMARY KEY (evidence_id, uid))",
             "CREATE TABLE IF NOT EXISTS alert_evidence ("
@@ -571,6 +572,7 @@ class HistoryCollector:
             "evidence": {
                 "accumulated_threat_level": "REAL",
                 "accumulated_ratl": "REAL",
+                "whitelisted": "INTEGER DEFAULT 0",
             },
         }
         upgraded = False
