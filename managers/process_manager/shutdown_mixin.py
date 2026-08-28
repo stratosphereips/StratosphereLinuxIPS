@@ -14,6 +14,10 @@ from multiprocessing.process import BaseProcess
 from typing import List, Optional, Tuple
 
 from modules.supported_module_names import Modules
+from modules.blocking.slips_chain_manager import (
+    del_slips_blocking_chain,
+    has_slips_firewall_rules,
+)
 from modules.web_interface.web_interface import WebInterface
 from slips_files.common.plotter import Plotter
 from slips_files.common.slips_utils import utils
@@ -533,6 +537,66 @@ class ShutdownMixin:
             1,
         )
 
+    def _ask_to_keep_firewall_rules(self) -> bool:
+        """Ask whether managed firewall rules should survive Slips shutdown.
+
+        Returns:
+            True when rules should remain installed, false when deleted.
+        """
+        if not sys.stdin or not sys.stdin.isatty():
+            self.main.print(
+                "No interactive console is available; keeping Slips "
+                "firewall rules."
+            )
+            return True
+        print(
+            "Slips is stopping. Keep the installed firewall rules? [Y/n] ",
+            end="",
+            flush=True,
+        )
+        while not getattr(self.main, "shutdown_signal_received", False):
+            try:
+                readable, _, _ = select.select([sys.stdin], [], [], 0.25)
+            except (OSError, ValueError):
+                return True
+            if not readable:
+                continue
+            response = sys.stdin.readline()
+            if response == "":
+                return True
+            return response.strip().lower() not in {"n", "no", "d", "delete"}
+        return True
+
+    def _handle_firewall_after_analysis(self) -> None:
+        """Keep or remove managed firewall rules after an interactive run."""
+        if not has_slips_firewall_rules():
+            return
+        forced = (
+            self.main.mode == "daemonized"
+            or getattr(self.main, "force_shutdown_requested", False)
+            or getattr(self.main, "sigterm_received", False)
+        )
+        if forced:
+            self.main.print(
+                "Slips firewall rules remain installed after forced shutdown."
+            )
+            return
+        # The first Ctrl-C initiated graceful shutdown and must not cancel this
+        # explicit keep/delete decision.
+        self.main.shutdown_signal_received = False
+        if self._ask_to_keep_firewall_rules():
+            self.main.print("Keeping Slips firewall rules after shutdown.")
+            return
+        if not del_slips_blocking_chain():
+            self.main.print("Unable to delete the Slips firewall rules.", 0, 1)
+            return
+        states = self.main.db.get_firewall_block_states()
+        if isinstance(states, dict):
+            for ip in states:
+                self.main.db.del_firewall_block_state(ip)
+                self.main.db.del_blocked_ip(ip)
+        self.main.print("Deleted Slips firewall rules and recovery state.")
+
     def _handle_web_interface_after_analysis(
         self, natural_completion: bool
     ) -> None:
@@ -552,8 +616,8 @@ class ShutdownMixin:
             self.main, "keyboard_interrupt_received", False
         )
         if (
-            getattr(self.main, "force_shutdown_requested", False)
-            or self.main.sigterm_received
+            getattr(self.main, "force_shutdown_requested", False) is True
+            or getattr(self.main, "sigterm_received", False) is True
             or not keep_web_interface_available
         ):
             self._stop_web_interface(port)
@@ -692,6 +756,7 @@ class ShutdownMixin:
 
             analysis_time, end_date = self.get_analysis_time()
             self.main.metadata_man.set_analysis_end_date(end_date)
+            self._handle_firewall_after_analysis()
             self._handle_web_interface_after_analysis(natural_completion)
 
             if not self.is_slips_live_updating_event.is_set():
