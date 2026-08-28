@@ -60,9 +60,15 @@ def test_pre_main_starts_server_for_current_run() -> None:
             "get_module_specific_output_path",
             return_value="output/current_run/web_interface/server.log",
         ),
-        patch("modules.web_interface.web_interface.HistoryCollector") as collector,
-        patch("modules.web_interface.web_interface.utils.start_thread") as start_thread,
-        patch("modules.web_interface.web_interface.utils.drop_root_privs_permanently"),
+        patch(
+            "modules.web_interface.web_interface.HistoryCollector"
+        ) as collector,
+        patch(
+            "modules.web_interface.web_interface.utils.start_thread"
+        ) as start_thread,
+        patch(
+            "modules.web_interface.web_interface.utils.drop_root_privs_permanently"
+        ),
         patch("builtins.open", mock_open()),
         patch(
             "modules.web_interface.web_interface.subprocess.Popen",
@@ -95,7 +101,7 @@ def test_detection_backfill_runs_outside_live_collector() -> None:
     module._backfill_history()
 
     module.history_collector.backfill_detections.assert_called_once_with()
-    module.history_stop.wait.assert_called_once_with(30)
+    module.history_stop.wait.assert_called_once_with(60)
 
 
 def test_pre_main_rejects_used_port() -> None:
@@ -105,7 +111,9 @@ def test_pre_main_rejects_used_port() -> None:
     with (
         patch.object(type(module), "_port_is_available", return_value=False),
         patch.object(type(module), "_listener_pid", return_value=None),
-        patch("modules.web_interface.web_interface.utils.drop_root_privs_permanently"),
+        patch(
+            "modules.web_interface.web_interface.utils.drop_root_privs_permanently"
+        ),
     ):
         result = module.pre_main()
 
@@ -153,7 +161,9 @@ def test_stop_verified_server_only_stops_owned_listener(
             side_effect=[False, True] if owned_server else [False],
         ),
         patch.object(type(module), "_listener_pid", return_value=1234),
-        patch.object(type(module), "_is_owned_web_server", return_value=owned_server),
+        patch.object(
+            type(module), "_is_owned_web_server", return_value=owned_server
+        ),
         patch(
             "modules.web_interface.web_interface.psutil.Process",
             return_value=process,
