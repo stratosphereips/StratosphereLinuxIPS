@@ -126,6 +126,12 @@ WHITELIST_TYPES = {
     "organizations": "Organization",
     "macs": "MAC address",
 }
+ARP_EVIDENCE_TYPES = (
+    "ARP_SCAN",
+    "ARP_OUTSIDE_LOCALNET",
+    "UNSOLICITED_ARP",
+    "MITM_ARP_ATTACK",
+)
 
 
 class RunMismatchError(RuntimeError):
@@ -3376,6 +3382,269 @@ class RunDataReader:
         intervals.sort(key=lambda item: (item["start"], item["ip"]))
         return intervals
 
+    def _arp_poisoning_events(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Parse ARP poison, schedule, extension, and release transitions.
+
+        Returns:
+            Host state and newest-first transition records for this run.
+        """
+        log_path = self.output_dir / "arp_poisoner" / "arp_poisoning.log"
+        try:
+            lines = log_path.read_text(errors="replace").splitlines()
+        except OSError:
+            lines = []
+        hosts: Dict[str, Dict[str, Any]] = {}
+        events: List[Dict[str, Any]] = []
+        schedule_pattern = re.compile(
+            r"^Current TW: (?P<current_tw>[^.]+)\. Registered a request "
+            r"to stop poisoning (?P<ip>\S+) at the end of: "
+            r"(?P<release_tw>timewindow\d+)\. IP will be poisoned for "
+            r"(?P<extra_tws>\d+) more timewindows\. Timestamp to stop "
+            r"poisoning: (?P<unblock_at>.+?)\)\s*$"
+        )
+        release_pattern = re.compile(
+            r"^Done poisoning (?P<ip>\S+)\. The poisoning lasted "
+            r"(?P<duration_tws>\d+) timewindows\. "
+            r"\((?P<duration_hours>[\d.]+)hrs - From "
+            r"(?P<started_at>.+?) to (?P<released_at>.+?)\)\.\s*$"
+        )
+        poison_pattern = re.compile(
+            r"^Poisoned (?P<ip>\S+) at (?P<mac>\S+)\.\s*$"
+        )
+        for line in lines:
+            timestamp_text, separator, message = line.partition(" - ")
+            if not separator:
+                continue
+            timestamp = self._event_timestamp(timestamp_text)
+            if not timestamp:
+                continue
+            if match := poison_pattern.match(message):
+                values = match.groupdict()
+                ip = values["ip"]
+                host = hosts.setdefault(ip, {"ip": ip})
+                host.update(
+                    {
+                        "status": "poisoned",
+                        "poisoned_at": timestamp,
+                        "released_at": None,
+                        "mac": values["mac"],
+                    }
+                )
+                events.append(
+                    {
+                        "timestamp": timestamp,
+                        "ip": ip,
+                        "action": "poisoned",
+                        "current_tw": None,
+                        "release_tw": None,
+                        "unblock_at": None,
+                        "extra_timewindows": None,
+                        "details": f"target MAC {values['mac']}",
+                    }
+                )
+                continue
+            if match := schedule_pattern.match(message):
+                values = match.groupdict()
+                ip = values["ip"]
+                host = hosts.setdefault(ip, {"ip": ip})
+                action = "extended" if host.get("unblock_at") else "scheduled"
+                unblock_at = self._event_timestamp(values["unblock_at"])
+                extra_tws = int(values["extra_tws"])
+                host.update(
+                    {
+                        "status": "poisoned",
+                        "poisoned_at": host.get("poisoned_at") or timestamp,
+                        "released_at": None,
+                        "current_tw": values["current_tw"],
+                        "release_tw": values["release_tw"],
+                        "unblock_at": unblock_at or None,
+                        "extra_timewindows": extra_tws,
+                    }
+                )
+                events.append(
+                    {
+                        "timestamp": timestamp,
+                        "ip": ip,
+                        "action": action,
+                        "current_tw": values["current_tw"],
+                        "release_tw": values["release_tw"],
+                        "unblock_at": unblock_at or None,
+                        "extra_timewindows": extra_tws,
+                        "details": "release schedule updated",
+                    }
+                )
+                continue
+            if match := release_pattern.match(message):
+                values = match.groupdict()
+                ip = values["ip"]
+                released_at = (
+                    self._event_timestamp(values["released_at"]) or timestamp
+                )
+                started_at = self._event_timestamp(values["started_at"])
+                host = hosts.setdefault(ip, {"ip": ip})
+                host.update(
+                    {
+                        "status": "released",
+                        "poisoned_at": started_at
+                        or host.get("poisoned_at")
+                        or timestamp,
+                        "released_at": released_at,
+                        "extra_timewindows": 0,
+                    }
+                )
+                events.append(
+                    {
+                        "timestamp": released_at,
+                        "ip": ip,
+                        "action": "released",
+                        "current_tw": host.get("current_tw"),
+                        "release_tw": host.get("release_tw"),
+                        "unblock_at": released_at,
+                        "extra_timewindows": 0,
+                        "details": (
+                            f"{values['duration_tws']} timewindows · "
+                            f"{values['duration_hours']} hours"
+                        ),
+                    }
+                )
+        now = time.time()
+        for host in hosts.values():
+            unblock_at = float(host.get("unblock_at") or 0)
+            if host.get("status") == "poisoned" and unblock_at:
+                host["remaining_seconds"] = max(0.0, unblock_at - now)
+                if now >= unblock_at:
+                    host["status"] = "release due"
+            else:
+                host["remaining_seconds"] = None
+        return {
+            "hosts": sorted(hosts.values(), key=lambda item: item["ip"]),
+            "events": sorted(
+                events,
+                key=lambda item: (item["timestamp"], item["ip"]),
+                reverse=True,
+            ),
+        }
+
+    def _arp_evidence(self) -> Dict[str, Any]:
+        """Return bounded durable evidence generated by the ARP detector.
+
+        Returns:
+            Latest ARP evidence, full total, and counts by evidence type.
+        """
+        placeholders = ",".join("?" for _ in ARP_EVIDENCE_TYPES)
+        records: List[Dict[str, Any]] = []
+        counts: Dict[str, int] = {}
+        total = 0
+        try:
+            with self._connect_sqlite() as connection:
+                if not self._table_exists(connection, "evidence"):
+                    raise sqlite3.OperationalError("no durable evidence")
+                rows = connection.execute(
+                    f"SELECT evidence.*, "
+                    f"(SELECT COUNT(*) FROM evidence_flows ef WHERE "
+                    f"ef.evidence_id = evidence.evidence_id) AS flow_count, "
+                    f"(SELECT COUNT(*) FROM alert_evidence ae WHERE "
+                    f"ae.evidence_id = evidence.evidence_id) AS alert_count "
+                    f"FROM evidence WHERE evidence_type IN ({placeholders}) "
+                    f"ORDER BY evidence_time DESC, evidence_id DESC LIMIT ?",
+                    (*ARP_EVIDENCE_TYPES, MAX_PAGE_SIZE),
+                ).fetchall()
+                records = [
+                    {
+                        "timestamp": float(row["evidence_time"] or 0),
+                        "profile_ip": str(row["profile_ip"] or ""),
+                        "threat_level": str(row["threat_level"] or "info"),
+                        "evidence_type": str(
+                            row["evidence_type"] or "unknown"
+                        ),
+                        "description": str(row["description"] or ""),
+                        "confidence": float(row["confidence"] or 0),
+                        "flow_count": int(row["flow_count"] or 0),
+                        "alert_count": int(row["alert_count"] or 0),
+                    }
+                    for row in rows
+                ]
+                count_rows = connection.execute(
+                    f"SELECT evidence_type, COUNT(*) AS count FROM evidence "
+                    f"WHERE evidence_type IN ({placeholders}) "
+                    f"GROUP BY evidence_type",
+                    ARP_EVIDENCE_TYPES,
+                ).fetchall()
+                counts = {
+                    str(row["evidence_type"]): int(row["count"])
+                    for row in count_rows
+                }
+                total = sum(counts.values())
+        except sqlite3.Error:
+            records = [
+                item
+                for item in self._redis_evidence()
+                if str(item.get("evidence_type")) in ARP_EVIDENCE_TYPES
+            ][:MAX_PAGE_SIZE]
+            counts = dict(Counter(item["evidence_type"] for item in records))
+            total = len(records)
+        return {"items": records, "total": total, "counts": counts}
+
+    def arp_poisoning(self) -> Dict[str, Any]:
+        """Return ARP isolation state, transitions, and detector evidence.
+
+        Returns:
+            Bounded run-scoped ARP poisoner and detector information.
+        """
+        parsed = self._arp_poisoning_events()
+        evidence = self._arp_evidence()
+        try:
+            raw_pid = self.redis.hget("PIDs", "arp_poisoner")
+            analysis_complete = bool(
+                self.redis.hget("analysis", "analysis_end")
+            )
+        except redis.RedisError:
+            raw_pid = None
+            analysis_complete = False
+        log_exists = (
+            self.output_dir / "arp_poisoner" / "arp_poisoning.log"
+        ).exists()
+        module_state = "not started"
+        pid = int(raw_pid) if str(raw_pid or "").isdigit() else None
+        if pid:
+            try:
+                process = self._processes.get(pid)
+                if process is None:
+                    process = psutil.Process(pid)
+                    self._processes[pid] = process
+                module_state = (
+                    process.status() if process.is_running() else "stopped"
+                )
+            except psutil.Error:
+                module_state = "completed" if analysis_complete else "stopped"
+        elif log_exists:
+            module_state = "completed" if analysis_complete else "stopped"
+        hosts = parsed["hosts"]
+        active = sum(
+            item.get("status") in {"poisoned", "release due"} for item in hosts
+        )
+        return {
+            "module": {
+                "enabled": bool(pid or log_exists),
+                "state": module_state,
+                "pid": pid,
+            },
+            "counts": {
+                "active": active,
+                "released": sum(
+                    item.get("status") == "released" for item in hosts
+                ),
+                "hosts": len(hosts),
+                "transitions": len(parsed["events"]),
+                "evidence": evidence["total"],
+            },
+            "hosts": hosts[:MAX_PAGE_SIZE],
+            "events": parsed["events"][:MAX_PAGE_SIZE],
+            "evidence": evidence["items"],
+            "evidence_counts": evidence["counts"],
+            "updated_at": time.time(),
+        }
+
     def _firewall_attack_estimate(
         self,
         history: Optional[List[Dict[str, Any]]] = None,
@@ -3907,6 +4176,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = reader.hosts(query)
         elif path == "/api/firewall":
             payload = reader.firewall(query)
+        elif path == "/api/arp-poisoning":
+            payload = reader.arp_poisoning()
         elif path == "/api/p2p":
             payload = reader.p2p()
         elif path == "/api/configuration":
