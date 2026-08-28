@@ -58,6 +58,13 @@ output/<run>/web_interface/history.sqlite
 
 This database contains a compact bidirectional flow index, last-known host identity, parsed log events, runtime samples, rollups, and restart checkpoints. It references raw flows by UID and does not duplicate raw flow JSON.
 
+The live flow index and one-second performance sample are incremental. A full
+last-known host identity snapshot runs once per minute rather than on every UI
+refresh. Redis detection recovery is a one-time compatibility import only when
+the durable evidence table is empty; afterward, the append-only alerts file is
+processed incrementally from its saved byte offset once per minute. The web
+workers never rescan all retained profile/time-window keys on a timer.
+
 The canonical error source is output/<run>/errors.log. For older runs, output/<run>/error.log is used only when errors.log does not exist. It is tailed from a saved byte offset and is never reread completely.
 
 The web server's own log is:
@@ -101,6 +108,12 @@ Only the active tab refreshes every five seconds and only when its range include
 
 Overview shows run state, source freshness, disk use, Slips counters, and module health. It also displays the version, input path, branch, commit, command, start time, and Zeek version written to this run's `metadata/info.txt`. Each module row includes state, PID, CPU, resident memory, flows per minute, evidence, and parsed log events. CPU and memory cells are heat mapped from the normal table background at 0% to red at 100%; memory is scaled to total host RAM while the displayed value remains MiB. The Modules table is sortable by every displayed column; click a header again to reverse its direction.
 
+Overview also shows the run-wide estimated firewall impact: packets and flows
+observed from blocked source IPs during recorded enforcement intervals, plus
+evidence created for those IPs while blocked. Zeek captures ingress packets
+from the interface before the iptables INPUT hook drops them, so an attempted
+connection can be counted without reaching a local service.
+
 The **Current host load** card describes the whole machine, not only the Slips process. **CPU** and **Memory** are the current host-wide utilization percentages. **Load 1 / 5 / 15m** is the operating system load average over the previous 1, 5, and 15 minutes: the average number of tasks that were runnable or waiting in uninterruptible I/O. It is not a percentage. Compare it with the host's logical CPU count; for example, a sustained load of 8 means roughly one task per logical CPU on an 8-CPU machine when the workload is CPU-bound, while it indicates queued work on a 4-CPU machine. The runtime charts below are different: their CPU and resident-memory series measure only the Slips process tree.
 
 **Recent growth** is the short-term increase in this run's `flows.sqlite` file size, displayed as bytes per second. The collector compares the current file size with its preceding storage sample, normally about five seconds earlier, divides the positive size difference by elapsed wall-clock time, and reports zero when the file became smaller. It measures disk-file growth, not flows processed per second, packet throughput, or network bandwidth. SQLite WAL writes and checkpoints can make the value briefly show zero or jump, so use it as a recent disk-consumption estimate rather than an exact sustained rate. **flows.sqlite** is its current file size; **Output disk** reports utilization and remaining free space for the filesystem containing this run's output directory.
@@ -115,6 +128,17 @@ Flow totals use exact profiler counter deltas rather than assuming every sample 
 ### Firewall
 
 The Firewall tab lists IPs currently confirmed in Slips' `slipsBlocking` firewall state. It distinguishes the current blocking window from the final **probation** window, shows the scheduled unblock time and remaining duration when available, and includes each IP's evidence and alert totals. A block whose deadline has passed but whose rules have not been removed is marked **overdue** instead of silently showing `0s` probation.
+
+The tab includes the same run-wide estimated impact and cumulative per-IP
+columns. A **stopped flow** is an indexed flow whose source IP was inside a
+block interval when that flow began. **Stopped packets** sums originator packet
+counts for those flows. **Evidence while blocked** counts durable evidence for
+that profile IP whose creation time falls inside the interval. Block intervals
+are reconstructed from the durable transition log and supplemented with the
+current Redis block timestamps, so completed block/unblock/reblock periods
+remain part of the run total. These are estimates of attempted traffic stopped
+by enforcement, not firewall rule counters and not proof that every observed
+packet was malicious.
 
 The tab also shows a newest-first block/unblock history for the run. Its authoritative append-only source is `output/<run>/blocking/blocking.log`; Slips records the human timestamp, IP, direction when blocked, successful removal, and failed removal attempts. The unblocker retains zero-window requests until their rules are actually absent, retries partial failures, and restores persisted schedules after a blocker restart.
 
