@@ -159,7 +159,7 @@
           <input id="hosts-to" class="custom-time" type="datetime-local" hidden>
           <span id="hosts-count" class="result-count"></span>
         </div>
-        <div class="surface table-surface"><div class="table-wrap"><table id="hosts-table"><thead><tr><th data-sort="ip">Primary IP</th><th data-sort="scope">Scope</th><th data-sort="hostname">Hostname</th><th>Name / domain</th><th>TI feeds</th><th data-sort="mac">MAC</th><th data-sort="threat">Threat</th><th data-sort="score">Current Slips score</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="surface table-surface"><div class="table-wrap"><table id="hosts-table"><thead><tr><th data-sort="ip">Primary IP</th><th data-sort="scope">Scope</th><th data-sort="hostname">Hostname</th><th>Name / domain</th><th>TI feeds</th><th data-sort="mac">MAC</th><th data-sort="threat">Threat</th><th data-sort="score">Current Slips score</th><th data-sort="peak_score">Past peak Slips score</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div></div>
         <div id="hosts-pager" class="pager"></div>
       </div>
 
@@ -220,6 +220,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20260828-firewall-recovery"></script>
+  <script src="/app.js?v=20260828-host-peak-score"></script>
 </body>
 </html>
