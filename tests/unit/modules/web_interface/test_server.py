@@ -1,4 +1,5 @@
 from collections import Counter
+import argparse
 import json
 import socket
 import sqlite3
@@ -16,6 +17,7 @@ from modules.web_interface.server import (
     RunDataReader,
     RunMismatchError,
     SlipsHTTPServer,
+    ipv4_address,
 )
 from tests.module_factory import ModuleFactory
 
@@ -44,6 +46,40 @@ def test_idle_connection_does_not_block_page_requests() -> None:
         server.shutdown()
         server.server_close()
         server_thread.join(timeout=2)
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("127.0.0.1", "127.0.0.1"),
+        ("192.0.2.25", "192.0.2.25"),
+    ],
+)
+def test_server_accepts_only_normalized_ipv4_bind_addresses(
+    value: str, expected: str
+) -> None:
+    """Validate exact IPv4 server bind addresses.
+
+    Parameters:
+        value: Address supplied to the server.
+        expected: Normalized address.
+    """
+    _module_factory = ModuleFactory()
+
+    assert ipv4_address(value) == expected
+
+
+@pytest.mark.parametrize("value", ["::1", "localhost", "0.0.0.0", "0.0.0.0/0"])
+def test_server_rejects_non_ipv4_bind_addresses(value: str) -> None:
+    """Reject hostnames, IPv6, and network ranges as listen addresses.
+
+    Parameters:
+        value: Invalid bind value supplied to the server.
+    """
+    _module_factory = ModuleFactory()
+
+    with pytest.raises(argparse.ArgumentTypeError):
+        ipv4_address(value)
 
 
 @pytest.mark.parametrize("tab", ["alerts", "evidence", "hosts"])
