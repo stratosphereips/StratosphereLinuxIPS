@@ -830,8 +830,12 @@ def test_firewall_includes_schedule_missing_from_blocked_set(
     reader.redis.hgetall.return_value = {
         "147.32.80.6": json.dumps(
             {
-                "unblock_at": "2026-08-29T13:38:10+02:00",
-                "remaining_timewindows": 61,
+                "unblock_at": None,
+                "remaining_timewindows": None,
+                "recovered": True,
+                "recovery_status": "legacy metadata",
+                "origin_run": "unknown",
+                "rule_comment": "Slips rule",
             }
         )
     }
@@ -846,7 +850,10 @@ def test_firewall_includes_schedule_missing_from_blocked_set(
     assert payload["total"] == 1
     assert payload["items"][0]["ip"] == "147.32.80.6"
     assert payload["items"][0]["blocked_at"] is None
-    assert payload["items"][0]["status"] == "blocked"
+    assert payload["items"][0]["status"] == "stale"
+    assert payload["items"][0]["recovered"] is True
+    assert payload["items"][0]["recovery_status"] == "legacy metadata"
+    assert payload["items"][0]["rule_comment"] == "Slips rule"
 
 
 def test_firewall_tab_renders_transition_history() -> None:
@@ -863,9 +870,11 @@ def test_firewall_tab_renders_transition_history() -> None:
     assert 'id="firewall-history-pager"' in index_source
     assert 'id="overview-firewall-impact"' in index_source
     assert 'id="firewall-impact-summary"' in index_source
+    assert "<th>Rule origin</th>" in index_source
     assert "row.stopped_packets" in app_source
     assert "row.stopped_flows" in app_source
     assert "row.evidence_while_blocked" in app_source
+    assert "row.recovery_status" in app_source
     assert 'renderTable("firewall-history-table", history' in app_source
 
 
