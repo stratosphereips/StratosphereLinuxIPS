@@ -33,6 +33,10 @@ MAX_PAGE_SIZE = 100
 MAX_FLOW_LIMIT = 1000
 MAX_CHART_POINTS = 1200
 CLIENT_REQUEST_TIMEOUT_SECONDS = 15
+INTERNAL_PID_NAMES = {
+    "web_interface_history",
+    "web_interface_detection_backfill",
+}
 TIME_RANGES = {
     "live": 60 * 60,
     "1h": 60 * 60,
@@ -2947,7 +2951,11 @@ class RunDataReader:
             # utils.start_thread() stores native thread IDs in the same Redis
             # hash used for processes. They are implementation details of
             # their owning module, not standalone Slips modules.
-            if "thread" in name.lower():
+            normalized_name = name.lower().replace(" ", "_")
+            if (
+                "thread" in normalized_name
+                or normalized_name in INTERNAL_PID_NAMES
+            ):
                 continue
             try:
                 pid = int(raw_pid)
@@ -3159,6 +3167,7 @@ class RunDataReader:
                 "processed_flows": processed_flows,
                 "module_errors": sum(error_counts.values()),
             },
+            "firewall_impact": self._firewall_attack_estimate(),
             "diagnostics": {
                 "redis_alert_count": redis_alert_count,
                 "alert_count_mismatch": redis_alert_count != alert_count,
@@ -3168,6 +3177,153 @@ class RunDataReader:
             ),
             "recent_errors": recent_errors,
             "updated_at": time.time(),
+        }
+
+    def _firewall_intervals(
+        self,
+        history: Optional[List[Dict[str, Any]]] = None,
+        active_blocks: Optional[Dict[str, float]] = None,
+        now: Optional[float] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Build non-overlapping blocked intervals from durable transitions.
+
+        Parameters:
+            history: Parsed block and unblock transitions for this run.
+            active_blocks: Current Redis block timestamps keyed by IP.
+            now: Upper boundary for intervals that remain active.
+
+        Returns:
+            Chronological blocked intervals with their active state.
+        """
+        transitions = (
+            history if history is not None else self._firewall_history()
+        )
+        if active_blocks is None:
+            try:
+                active_blocks = {
+                    str(ip): float(blocked_at)
+                    for ip, blocked_at in self.redis.zrange(
+                        "blocked_ips", 0, -1, withscores=True
+                    )
+                }
+            except (redis.RedisError, TypeError, ValueError):
+                active_blocks = {}
+        current_time = time.time() if now is None else now
+        opened: Dict[str, float] = {}
+        intervals: List[Dict[str, Any]] = []
+        for event in sorted(
+            transitions,
+            key=lambda item: (float(item.get("timestamp") or 0), item["ip"]),
+        ):
+            ip = str(event.get("ip") or "")
+            timestamp = float(event.get("timestamp") or 0)
+            if not ip or not timestamp:
+                continue
+            if event.get("action") == "blocked":
+                opened.setdefault(ip, timestamp)
+            elif event.get("action") == "unblocked" and ip in opened:
+                start = opened.pop(ip)
+                if timestamp > start:
+                    intervals.append(
+                        {
+                            "ip": ip,
+                            "start": start,
+                            "end": timestamp,
+                            "active": False,
+                        }
+                    )
+        for ip, blocked_at in active_blocks.items():
+            opened.setdefault(ip, float(blocked_at))
+        for ip, start in opened.items():
+            if current_time > start:
+                intervals.append(
+                    {
+                        "ip": ip,
+                        "start": start,
+                        "end": current_time,
+                        "active": ip in active_blocks,
+                    }
+                )
+        intervals.sort(key=lambda item: (item["start"], item["ip"]))
+        return intervals
+
+    def _firewall_attack_estimate(
+        self,
+        history: Optional[List[Dict[str, Any]]] = None,
+        active_blocks: Optional[Dict[str, float]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Estimate traffic attempted by IPs while firewall rules were active.
+
+        Parameters:
+            history: Parsed block and unblock transitions for this run.
+            active_blocks: Current Redis block timestamps keyed by IP.
+
+        Returns:
+            Run totals and per-IP packet, flow, and evidence estimates.
+        """
+        intervals = self._firewall_intervals(history, active_blocks)
+        by_ip: Dict[str, Dict[str, int]] = {}
+        for interval in intervals:
+            by_ip.setdefault(
+                interval["ip"],
+                {"packets": 0, "flows": 0, "evidence": 0},
+            )
+        history_path = getattr(self, "history_path", None)
+        if history_path and Path(history_path).exists():
+            try:
+                with connect_history(
+                    Path(history_path), read_only=True
+                ) as connection:
+                    for interval in intervals:
+                        row = connection.execute(
+                            "SELECT COUNT(*) AS flows, "
+                            "COALESCE(SUM(source_packets), 0) AS packets "
+                            "FROM flow_index WHERE src_ip = ? "
+                            "AND event_time >= ? AND event_time < ?",
+                            (
+                                interval["ip"],
+                                interval["start"],
+                                interval["end"],
+                            ),
+                        ).fetchone()
+                        impact = by_ip[interval["ip"]]
+                        impact["flows"] += int(row["flows"] or 0)
+                        impact["packets"] += int(row["packets"] or 0)
+            except sqlite3.Error:
+                pass
+        sqlite_path = getattr(self, "sqlite_path", None)
+        if sqlite_path and Path(sqlite_path).exists():
+            try:
+                with self._connect_sqlite() as connection:
+                    if self._table_exists(connection, "evidence"):
+                        for interval in intervals:
+                            row = connection.execute(
+                                "SELECT COUNT(*) AS evidence FROM evidence "
+                                "WHERE profile_ip = ? AND evidence_time >= ? "
+                                "AND evidence_time < ?",
+                                (
+                                    interval["ip"],
+                                    interval["start"],
+                                    interval["end"],
+                                ),
+                            ).fetchone()
+                            by_ip[interval["ip"]]["evidence"] += int(
+                                row["evidence"] or 0
+                            )
+            except sqlite3.Error:
+                pass
+        totals = {
+            name: sum(item[name] for item in by_ip.values())
+            for name in ("packets", "flows", "evidence")
+        }
+        return {
+            **totals,
+            "estimated": True,
+            "blocked_ips": len(by_ip),
+            "blocked_intervals": len(intervals),
+            "by_ip": by_ip,
         }
 
     def firewall(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
@@ -3183,10 +3339,15 @@ class RunDataReader:
         blocked_at_by_ip = {
             str(ip): float(blocked_at) for ip, blocked_at in blocked
         }
+        all_history = self._firewall_history()
+        impact = self._firewall_attack_estimate(all_history, blocked_at_by_ip)
         records: List[Dict[str, Any]] = []
         now = time.time()
         for ip in set(blocked_at_by_ip) | set(schedules):
             schedule = schedules.get(ip, {})
+            ip_impact = impact["by_ip"].get(
+                ip, {"packets": 0, "flows": 0, "evidence": 0}
+            )
             deadline = self._event_timestamp(schedule.get("unblock_at"))
             remaining_windows = schedule.get("remaining_timewindows")
             if deadline and now >= deadline:
@@ -3207,6 +3368,9 @@ class RunDataReader:
                     "remaining_timewindows": remaining_windows,
                     "evidence_count": self._profile_evidence_count(ip),
                     "alert_count": self._profile_alert_count(ip),
+                    "stopped_packets": ip_impact["packets"],
+                    "stopped_flows": ip_impact["flows"],
+                    "evidence_while_blocked": ip_impact["evidence"],
                 },
             )
         search = self._query_value(query, "search").lower()
@@ -3217,7 +3381,16 @@ class RunDataReader:
                 if search in item["ip"].lower() or search in item["status"]
             ]
         records.sort(key=lambda item: (item["unblock_at"] or 0, item["ip"]))
-        history = self._firewall_history(search)
+        history = all_history
+        if search:
+            history = [
+                item
+                for item in history
+                if search
+                in " ".join(
+                    (item["ip"], item["action"], item["details"])
+                ).lower()
+            ]
         try:
             history_offset = max(
                 0, int(self._query_value(query, "history_offset") or 0)
@@ -3236,6 +3409,7 @@ class RunDataReader:
             "history_next_cursor": (
                 str(history_next) if history_next < len(history) else None
             ),
+            "impact": impact,
         }
 
     def _firewall_history(self, search: str = "") -> List[Dict[str, Any]]:
