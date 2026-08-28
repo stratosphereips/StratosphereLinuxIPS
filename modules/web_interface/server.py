@@ -2984,7 +2984,10 @@ class RunDataReader:
                 continue
             try:
                 pid = int(raw_pid)
-                process = self._processes.setdefault(pid, psutil.Process(pid))
+                process = self._processes.get(pid)
+                if process is None:
+                    process = psutil.Process(pid)
+                    self._processes[pid] = process
                 running = process.is_running()
                 status = process.status() if running else "stopped"
                 memory_mb = (
