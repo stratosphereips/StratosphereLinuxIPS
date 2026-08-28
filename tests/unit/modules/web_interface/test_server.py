@@ -685,6 +685,139 @@ def test_firewall_marks_overdue_and_returns_transition_history(
     assert payload["history"][1]["details"] == "traffic from + to"
 
 
+def test_firewall_estimates_attempts_inside_block_intervals(
+    tmp_path: Path,
+) -> None:
+    """Count source packets, flows, and evidence only while rules were active."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.history_path = tmp_path / "web_interface" / "history.sqlite"
+    reader.sqlite_path = tmp_path / "databases" / "flows.sqlite"
+    reader.redis = Mock()
+    initialize_history(reader.history_path)
+    reader.sqlite_path.parent.mkdir()
+    with connect_history(reader.history_path) as connection:
+        connection.executemany(
+            "INSERT INTO flow_index "
+            "(uid, flow_rowid, event_time, src_ip, dst_ip, proto, app_proto, "
+            "bytes, packets, source_packets, label) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    "before",
+                    1,
+                    90,
+                    "10.0.0.8",
+                    "10.0.0.1",
+                    "tcp",
+                    "",
+                    0,
+                    5,
+                    5,
+                    "",
+                ),
+                (
+                    "blocked-1",
+                    2,
+                    110,
+                    "10.0.0.8",
+                    "10.0.0.1",
+                    "tcp",
+                    "",
+                    0,
+                    7,
+                    7,
+                    "",
+                ),
+                (
+                    "reverse",
+                    3,
+                    120,
+                    "10.0.0.1",
+                    "10.0.0.8",
+                    "tcp",
+                    "",
+                    0,
+                    9,
+                    9,
+                    "",
+                ),
+                (
+                    "blocked-2",
+                    4,
+                    140,
+                    "10.0.0.8",
+                    "10.0.0.1",
+                    "tcp",
+                    "",
+                    0,
+                    3,
+                    3,
+                    "",
+                ),
+                (
+                    "unblocked",
+                    5,
+                    170,
+                    "10.0.0.8",
+                    "10.0.0.1",
+                    "tcp",
+                    "",
+                    0,
+                    8,
+                    8,
+                    "",
+                ),
+                (
+                    "reblocked",
+                    6,
+                    220,
+                    "10.0.0.8",
+                    "10.0.0.1",
+                    "tcp",
+                    "",
+                    0,
+                    4,
+                    4,
+                    "",
+                ),
+            ],
+        )
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY, "
+            "evidence_time REAL, profile_ip TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?, ?)",
+            [
+                ("before", 95, "10.0.0.8"),
+                ("blocked", 130, "10.0.0.8"),
+                ("unblocked", 180, "10.0.0.8"),
+                ("reblocked", 225, "10.0.0.8"),
+            ],
+        )
+    history = [
+        {"timestamp": 100, "ip": "10.0.0.8", "action": "blocked"},
+        {"timestamp": 150, "ip": "10.0.0.8", "action": "unblocked"},
+        {"timestamp": 200, "ip": "10.0.0.8", "action": "blocked"},
+    ]
+
+    with patch("modules.web_interface.server.time.time", return_value=250):
+        result = reader._firewall_attack_estimate(history, {"10.0.0.8": 200})
+
+    assert result["packets"] == 14
+    assert result["flows"] == 3
+    assert result["evidence"] == 2
+    assert result["blocked_intervals"] == 2
+    assert result["by_ip"]["10.0.0.8"] == {
+        "packets": 14,
+        "flows": 3,
+        "evidence": 2,
+    }
+
+
 def test_firewall_includes_schedule_missing_from_blocked_set(
     tmp_path: Path,
 ) -> None:
@@ -728,6 +861,11 @@ def test_firewall_tab_renders_transition_history() -> None:
 
     assert 'id="firewall-history-table"' in index_source
     assert 'id="firewall-history-pager"' in index_source
+    assert 'id="overview-firewall-impact"' in index_source
+    assert 'id="firewall-impact-summary"' in index_source
+    assert "row.stopped_packets" in app_source
+    assert "row.stopped_flows" in app_source
+    assert "row.evidence_while_blocked" in app_source
     assert 'renderTable("firewall-history-table", history' in app_source
 
 
@@ -850,7 +988,10 @@ def test_host_flows_exclude_mac_alias_addresses(tmp_path) -> None:
         )
     with connect_history(reader.history_path) as connection:
         connection.executemany(
-            "INSERT INTO flow_index VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO flow_index "
+            "(uid, flow_rowid, event_time, src_ip, dst_ip, proto, "
+            "app_proto, bytes, packets, label) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     "outbound",
@@ -944,6 +1085,8 @@ def test_module_rows_exclude_internal_threads(mocker) -> None:
     reader.redis.hgetall.return_value = {
         "flow_alerts": "123",
         "dns_without_connection_timeout_checker_thread": "124",
+        "web_interface_history": "125",
+        "web_interface_detection_backfill": "126",
     }
     reader.redis.smembers.return_value = set()
     process = Mock()
@@ -1016,7 +1159,10 @@ def test_host_load_reports_directional_flows_and_bytes(tmp_path) -> None:
     initialize_history(reader.history_path)
     with connect_history(reader.history_path) as connection:
         connection.executemany(
-            "INSERT INTO flow_index VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO flow_index "
+            "(uid, flow_rowid, event_time, src_ip, dst_ip, proto, "
+            "app_proto, bytes, packets, label) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 ("in", 1, 1.0, "8.8.8.8", "10.0.0.1", "tcp", "", 100, 2, ""),
                 ("out", 2, 2.0, "10.0.0.1", "1.1.1.1", "udp", "", 200, 3, ""),
@@ -1513,7 +1659,10 @@ def test_hosts_live_range_uses_indexed_flow_clock(tmp_path) -> None:
             ],
         )
         connection.executemany(
-            "INSERT INTO flow_index VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO flow_index "
+            "(uid, flow_rowid, event_time, src_ip, dst_ip, proto, "
+            "app_proto, bytes, packets, label) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     "recent",
