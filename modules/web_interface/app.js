@@ -897,7 +897,10 @@ async function loadFirewall() {
   ], "firewall-impact-summary");
   renderTable("firewall-table", payload.items, [
     (row) => text("code", row.ip),
-    (row) => text("span", row.status, `status ${["blocked", "overdue"].includes(row.status) ? "bad" : "warn"}`),
+    (row) => text("span", row.status, `status ${["blocked", "overdue", "stale"].includes(row.status) ? "bad" : "warn"}`),
+    (row) => row.recovered
+      ? `${row.recovery_status || "Recovered"}${row.origin_run ? ` · ${row.origin_run}` : ""}`
+      : "Current run",
     (row) => formatTime(row.blocked_at),
     (row) => row.unblock_at ? formatTime(row.unblock_at) : "Schedule unavailable",
     (row) => row.remaining_seconds === null ? "Schedule unavailable" : formatDuration(row.remaining_seconds),
