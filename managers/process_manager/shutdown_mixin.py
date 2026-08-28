@@ -525,7 +525,7 @@ class ShutdownMixin:
         Stop only the verified Slips web server on the configured port.
 
         Parameters:
-            port: Configured loopback HTTP port.
+            port: Configured HTTP port.
         """
         if WebInterface.stop_verified_server(port):
             self.main.web_interface_shutdown = True
@@ -630,8 +630,19 @@ class ShutdownMixin:
             self._stop_web_interface(port)
             return
 
+        bind_mode = getattr(self.main.conf, "web_interface_bind", "localhost")
+        if not isinstance(bind_mode, str):
+            bind_mode = "localhost"
+        display_host = "localhost"
+        if bind_mode == "interface":
+            for interface in utils.get_all_interfaces(self.main.args):
+                candidate = self.main.db.get_host_ip(interface)
+                if isinstance(candidate, str) and candidate:
+                    display_host = candidate
+                    break
         self.main.print(
-            f"Web interface remains available at http://localhost:{port}/. "
+            f"Web interface remains available at "
+            f"http://{display_host}:{port}/. "
             "Press CTRL-C to stop it and exit Slips."
         )
         try:
