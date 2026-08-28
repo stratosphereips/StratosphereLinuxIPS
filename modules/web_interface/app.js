@@ -121,6 +121,20 @@ const slipsScore = (record) => {
   element.title = `${record.alert_score_mode || "Slips"} · ${record.alert_score_basis || "detector accumulator"}`;
   return element;
 };
+
+/** Render the highest persisted real Slips score for one host. */
+function pastPeakSlipsScore(record) {
+  if (record.peak_alert_score === null || record.peak_alert_score === undefined) {
+    const unavailable = text("span", "No samples", "slips-score unavailable");
+    unavailable.title = "No persisted Slips score sample exists for this host yet.";
+    return unavailable;
+  }
+  return slipsScore({
+    ...record,
+    alert_score: record.peak_alert_score,
+    alert_score_basis: "highest persisted score in the full run",
+  });
+}
 const whitelistHandling = (record) => {
   if (!record.whitelisted) return text("span", "Scored", "status neutral");
   const count = numeric(record.whitelisted_count);
@@ -997,6 +1011,7 @@ async function loadHosts() {
     (row) => text("code", row.mac || "—"),
     (row) => threat(row.max_threat_level),
     (row) => slipsScore(row),
+    (row) => pastPeakSlipsScore(row),
     (row) => compact(row.load?.flows),
     (row) => formatBytes(row.load?.bytes),
     (row) => compact(row.evidence_count),
