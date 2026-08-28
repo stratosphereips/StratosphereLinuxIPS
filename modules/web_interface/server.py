@@ -3917,12 +3917,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/": ("index.html", "text/html; charset=utf-8"),
             "/app.js": ("app.js", "text/javascript; charset=utf-8"),
             "/style.css": ("style.css", "text/css; charset=utf-8"),
-            "/favicon.png": (
-                Path(__file__).parents[2]
-                / "docs"
-                / "images"
-                / "slips_logo.png",
-                "image/png",
+            "/favicon.svg": (
+                Path(__file__).with_name("favicon.svg"),
+                "image/svg+xml",
             ),
         }
         if parsed.path in assets:
