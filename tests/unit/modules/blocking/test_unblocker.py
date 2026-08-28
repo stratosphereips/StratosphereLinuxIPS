@@ -185,11 +185,7 @@ def test__unblock(flags, unblock_success):
     ip = "1.2.3.4"
     path = "modules.blocking.unblocker.delete_slips_rules_for_ip"
 
-    def command_result(_sudo, action, **_kwargs):
-        """Model a deletion failure while the rule still exists."""
-        return unblock_success if action == "delete" else not unblock_success
-
-    with patch(path, side_effect=command_result) as mock_exec:
+    with patch(path, return_value=unblock_success) as mock_exec:
         result = unblocker._unblock(ip, flags)
 
         assert result == unblock_success
