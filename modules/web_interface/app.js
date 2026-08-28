@@ -38,6 +38,17 @@ const formatBytes = (value) => {
   if (amount < 1073741824) return `${(amount / 1048576).toFixed(1)} MiB`;
   return `${(amount / 1073741824).toFixed(1)} GiB`;
 };
+const formatDuration = (value) => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) return "—";
+  const elapsed = Math.floor(amount);
+  const days = Math.floor(elapsed / 86400);
+  const hours = String(Math.floor((elapsed % 86400) / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((elapsed % 3600) / 60)).padStart(2, "0");
+  const seconds = String(elapsed % 60).padStart(2, "0");
+  const clock = `${hours}:${minutes}:${seconds}`;
+  return days ? `${days}d ${clock}` : clock;
+};
 const formatTime = (value) => {
   const amount = numeric(value);
   if (!amount) return "—";
@@ -478,6 +489,7 @@ function renderOverview() {
   setSummaryCards([
     ["Alerts", compact(data.counts.alerts)],
     ["Hosts", compact(data.counts.hosts)],
+    ["Uptime", formatDuration(data.run.uptime_seconds)],
     ["Evidence", compact(data.counts.evidence)],
     ["Processed flows", compact(data.counts.processed_flows)],
     ["FW active", compact(firewall.current)],
