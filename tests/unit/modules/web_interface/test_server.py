@@ -114,6 +114,40 @@ def test_header_marks_failed_web_connection_as_disconnected() -> None:
     assert "renderConnectionState(true);" in api_error_handler
 
 
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("127.0.0.1", "127.0.0.1"),
+        ("192.0.2.25", "192.0.2.25"),
+    ],
+)
+def test_server_accepts_only_normalized_ipv4_bind_addresses(
+    value: str, expected: str
+) -> None:
+    """Validate exact IPv4 server bind addresses.
+
+    Parameters:
+        value: Address supplied to the server.
+        expected: Normalized address.
+    """
+    _module_factory = ModuleFactory()
+
+    assert ipv4_address(value) == expected
+
+
+@pytest.mark.parametrize("value", ["::1", "localhost", "0.0.0.0", "0.0.0.0/0"])
+def test_server_rejects_non_ipv4_bind_addresses(value: str) -> None:
+    """Reject hostnames, IPv6, and network ranges as listen addresses.
+
+    Parameters:
+        value: Invalid bind value supplied to the server.
+    """
+    _module_factory = ModuleFactory()
+
+    with pytest.raises(argparse.ArgumentTypeError):
+        ipv4_address(value)
+
+
 @pytest.mark.parametrize("tab", ["alerts", "evidence", "hosts"])
 def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
     """Keep the real Slips score visible in all three requested tables.
