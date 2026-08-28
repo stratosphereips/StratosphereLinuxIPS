@@ -390,11 +390,34 @@ def test_overview_prioritizes_operational_data() -> None:
     assert "Data sources" not in overview
     assert "Run metadata" not in overview
     assert "Recent log events" not in overview
+    assert '["Uptime", formatDuration(data.run.uptime_seconds)]' in app_source
     assert '["FW active", compact(firewall.current)]' in app_source
     assert '["FW added", compact(firewall.added)]' in app_source
     assert '["FW discarded", compact(firewall.discarded)]' in app_source
     assert 'sort: "cpu_percent", order: "desc"' in app_source
     assert "document.title = `Slips ${compact" in app_source
+
+
+@pytest.mark.parametrize(
+    "analysis, now, expected",
+    [
+        ({"analysis_start": "100"}, 160.0, 60.0),
+        (
+            {"analysis_start": "100", "analysis_end": "130"},
+            160.0,
+            30.0,
+        ),
+        ({}, 160.0, None),
+        ({"analysis_start": "200"}, 160.0, 0.0),
+    ],
+)
+def test_run_uptime_seconds(
+    analysis: dict, now: float, expected: float | None
+) -> None:
+    """Calculate live uptime and freeze completed run duration."""
+    _module_factory = ModuleFactory()
+
+    assert RunDataReader._run_uptime_seconds(analysis, now) == expected
 
 
 def test_firewall_overview_counts_rule_transitions() -> None:
