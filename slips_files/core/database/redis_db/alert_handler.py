@@ -32,7 +32,7 @@ from slips_files.core.structures.risk_weights import (
 )
 
 
-ALERT_GENERATION_LOCK_TIMEOUT_SECONDS = 60
+ALERT_GENERATION_LOCK_TIMEOUT_SECONDS = 300
 
 
 class AlertHandler:
