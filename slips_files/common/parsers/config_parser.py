@@ -121,6 +121,21 @@ class ConfigParser(object):
         except Exception:
             return 55000
 
+    @property
+    def web_interface_bind(self) -> str:
+        """Read where the web interface accepts connections.
+
+        Returns:
+            ``localhost`` or ``interface``; invalid values use localhost.
+        """
+        value = self.read_configuration("web_interface", "bind", "localhost")
+        normalized = str(value).strip().lower()
+        return (
+            normalized
+            if normalized in {"localhost", "interface"}
+            else "localhost"
+        )
+
     def web_interface_enabled(self) -> bool:
         """
         Check whether the local web interface is enabled in configuration.
