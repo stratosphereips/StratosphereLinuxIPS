@@ -935,3 +935,43 @@ def test_natural_shutdown_keeps_web_until_ctrl_c() -> None:
     stop_server.assert_called_once_with(55000)
     assert process_manager.main.shutdown_signal_received is True
     assert process_manager.main.web_interface_shutdown is True
+
+
+def test_shutdown_reports_interface_web_address() -> None:
+    """Keep the externally reachable interface URL visible during shutdown."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.webinterface = True
+    process_manager.main.args.interface = "eno1"
+    process_manager.main.conf.web_interface_port = 55000
+    process_manager.main.conf.web_interface_bind = "interface"
+    process_manager.main.db.get_host_ip.return_value = "192.0.2.25"
+    process_manager.main.shutdown_signal_received = False
+    process_manager.main.web_interface_shutdown = False
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "WebInterface.is_verified_server_running",
+            return_value=True,
+        ),
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "WebInterface.stop_verified_server",
+            return_value=True,
+        ),
+        patch.object(
+            process_manager,
+            "_ask_to_stop_web_interface",
+            return_value=False,
+        ),
+        patch(
+            "managers.process_manager.shutdown_mixin.time.sleep",
+            side_effect=KeyboardInterrupt,
+        ),
+    ):
+        process_manager._handle_web_interface_after_analysis(True)
+
+    messages = [
+        str(call.args[0]) for call in process_manager.main.print.call_args_list
+    ]
+    assert any("http://192.0.2.25:55000/" in message for message in messages)
