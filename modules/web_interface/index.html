@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips · Current run</title>
-  <link rel="stylesheet" href="/style.css?v=20260827-config-whitelist">
+  <link rel="stylesheet" href="/style.css?v=20260827-firewall-impact">
 </head>
 <body>
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -38,6 +38,11 @@
         <button class="secondary" id="refresh-overview">Refresh</button>
       </div>
       <div id="summary-cards" class="summary-grid"></div>
+      <article class="surface">
+        <h3>Estimated attacks stopped by the firewall</h3>
+        <p class="muted">Traffic attempts observed from an IP after its block was installed. Packets remain visible to Zeek before iptables drops them.</p>
+        <div id="overview-firewall-impact" class="summary-grid impact-summary"></div>
+      </article>
       <div class="split-grid">
         <article class="surface"><h3>Current host load</h3><div id="system-load" class="metrics"></div></article>
         <article class="surface"><h3>Data sources</h3><div id="data-sources" class="source-list"></div></article>
@@ -101,8 +106,13 @@
 
     <section id="firewall" class="panel" aria-labelledby="firewall-title">
       <div class="section-heading"><div><p class="eyebrow">ENFORCEMENT</p><h2 id="firewall-title">Firewall blocks</h2><p>Confirmed active blocks, final probation windows, and durable rule transitions.</p></div><button class="secondary refresh-list" data-target="firewall">Refresh</button></div>
+      <article class="surface">
+        <h3>Estimated attacks stopped</h3>
+        <p class="muted">Run-wide traffic observed from blocked IPs during recorded enforcement intervals. These packets were visible at capture time but are estimated to have been dropped before reaching a service.</p>
+        <div id="firewall-impact-summary" class="summary-grid impact-summary"></div>
+      </article>
       <div class="toolbar"><input id="firewall-search" type="search" placeholder="Search IP or status"><span id="firewall-count" class="result-count"></span></div>
-      <div class="surface table-surface"><div class="table-wrap"><table id="firewall-table"><thead><tr><th>IP</th><th>Status</th><th>Blocked since</th><th>Unblock at</th><th>Remaining</th><th>Extra TWs</th><th>Evidence</th><th>Alerts</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="surface table-surface"><div class="table-wrap"><table id="firewall-table"><thead><tr><th>IP</th><th>Status</th><th>Blocked since</th><th>Unblock at</th><th>Remaining</th><th>Extra TWs</th><th>Est. stopped packets</th><th>Est. stopped flows</th><th>Evidence while blocked</th><th>Total evidence</th><th>Alerts</th></tr></thead><tbody></tbody></table></div></div>
       <article class="surface table-surface"><div class="table-heading"><div><h3>Block / unblock history</h3><p id="firewall-history-count">Firewall transitions and failed removals from this run.</p></div></div><div class="table-wrap"><table id="firewall-history-table"><thead><tr><th>Time</th><th>IP</th><th>Action</th><th>Details</th></tr></thead><tbody></tbody></table></div></article>
       <div id="firewall-history-pager" class="pager"></div>
     </section>
@@ -210,6 +220,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20260827-config-whitelist"></script>
+  <script src="/app.js?v=20260827-firewall-impact"></script>
 </body>
 </html>
