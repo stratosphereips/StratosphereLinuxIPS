@@ -42,7 +42,9 @@ def test_decide_blocking(
     worker.blocking_modules_supported = True
     worker.our_ips = our_ips
     with patch.object(worker.db, "publish") as mock_publish:
-        tw = TimeWindow(2, "2025-05-09T13:27:45.123456", "2025-05-09T13:27:45.123456")
+        tw = TimeWindow(
+            2, "2025-05-09T13:27:45.123456", "2025-05-09T13:27:45.123456"
+        )
         mocker.patch(
             "slips_files.common.slips_utils.Utils.get_interface_of_ip",
             return_value="eth0",
@@ -72,7 +74,9 @@ def test_get_evidence_that_were_part_of_a_past_alert(
     worker = ModuleFactory().create_evidence_handler_worker_obj()
     worker.db.get_profileid_twid_alerts.return_value = past_alerts
 
-    result = worker.get_evidence_that_were_part_of_a_past_alert(profileid, twid)
+    result = worker.get_evidence_that_were_part_of_a_past_alert(
+        profileid, twid
+    )
 
     assert result == expected_output
 
@@ -165,7 +169,9 @@ def test_add_to_log_file(data):
         ([], 10, 1.0),
     ],
 )
-def test_add_alert_to_json_log_file(all_uids, timewindow, accumulated_threat_level):
+def test_add_alert_to_json_log_file(
+    all_uids, timewindow, accumulated_threat_level
+):
     alert = Alert(
         profile=ProfileID("192.168.1.20"),
         timewindow=TimeWindow(
@@ -191,7 +197,9 @@ def test_add_alert_to_json_log_file(all_uids, timewindow, accumulated_threat_lev
         last_flow_datetime="2024/10/04 15:45:30.123456+0000",
     )
     worker = ModuleFactory().create_evidence_handler_worker_obj()
-    worker.idmefv2.convert_to_idmef_alert = Mock(return_value="alert_in_idmef_format")
+    worker.idmefv2.convert_to_idmef_alert = Mock(
+        return_value="alert_in_idmef_format"
+    )
     worker.evidence_logger_q.put = Mock()
 
     worker.add_alert_to_json_log_file(alert)
@@ -349,7 +357,9 @@ def test_handle_evidence_added_message_sets_risk_level_on_objects() -> None:
     )
     worker.detection_threshold_in_this_width = 10.0
 
-    worker.handle_evidence_added_message({"data": json.dumps(utils.to_dict(evidence))})
+    worker.handle_evidence_added_message(
+        {"data": json.dumps(utils.to_dict(evidence))}
+    )
 
     worker.db.get_tw_limits.assert_called_once_with(
         str(evidence.profile),
@@ -601,7 +611,9 @@ def test_get_float_risk_weight(
     ModuleFactory().create_evidence_handler_worker_obj()
 
     assert (
-        get_risk_weight_for_accumulated_threat_level(accumulated_threat_level).weight
+        get_risk_weight_for_accumulated_threat_level(
+            accumulated_threat_level
+        ).weight
         == expected_risk_weight
     )
 
@@ -655,7 +667,9 @@ def test_send_to_exporting_module():
         ([], False, False),
     ],
 )
-def test_is_blocking_module_supported(sys_argv, running_non_stop, expected_result):
+def test_is_blocking_module_supported(
+    sys_argv, running_non_stop, expected_result
+):
     worker = ModuleFactory().create_evidence_handler_worker_obj()
     worker.is_running_non_stop = running_non_stop
 
@@ -770,7 +784,9 @@ def test_get_threat_level(confidence, threat_level, expected_output):
         result = worker.get_threat_level(evidence)
 
     assert pytest.approx(result, abs=1e-6) == expected_output
-    mock_print.assert_called_once_with(f"\t\tWeighted Threat Level: {result}", 3, 0)
+    mock_print.assert_called_once_with(
+        f"\t\tWeighted Threat Level: {result}", 3, 0
+    )
 
 
 @pytest.mark.parametrize(
