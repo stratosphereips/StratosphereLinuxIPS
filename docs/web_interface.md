@@ -141,6 +141,15 @@ module row.
 CPU, resident memory, and processed flows per second are sampled from the complete Slips process tree every second. CPU is a percentage of total host capacity. Exact samples are retained for 24 hours. Complete old minutes are transactionally compacted into permanent average, maximum, and flow-total rollups. Charts support 5 minutes, 15 minutes, 1 hour, 24 hours, and Full run.
 Flow totals use exact profiler counter deltas rather than assuming every sample is exactly one second apart. Existing web history databases are upgraded in place when the module starts.
 
+### Logs
+
+The Logs tab shows the newest bounded runtime events parsed from the run's
+`errors.log`. Select any row to open a console-style investigation panel with
+the complete timestamp, module, presentation severity, full message, and the
+untouched raw source line. Colors highlight severity, paths, and IP addresses
+without rewriting the stored log. Keyboard users can open a selected row with
+Enter.
+
 ### Firewall
 
 The Firewall tab lists IPs currently confirmed in Slips' `slipsBlocking` firewall state. It distinguishes the current blocking window from the final **probation** window, shows the scheduled unblock time and remaining duration when available, and includes each IP's evidence and alert totals. A block whose deadline has passed but whose rules have not been removed is marked **overdue** instead of silently showing `0s` probation.
