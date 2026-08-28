@@ -482,6 +482,31 @@ def test_metadata_and_logs_endpoints_are_bounded(tmp_path: Path) -> None:
     assert logs["total"] == 1
     assert logs["items"][0]["module"] == "Profiler"
     assert logs["items"][0]["message"] == "failed once"
+    assert logs["items"][0]["line"] == "raw line"
+
+
+def test_log_rows_open_the_colored_raw_console() -> None:
+    """Keep each log row clickable with its exact source line visible."""
+    _module_factory = ModuleFactory()
+    app_source = Path("modules/web_interface/app.js").read_text(
+        encoding="utf-8"
+    )
+    index_source = Path("modules/web_interface/index.html").read_text(
+        encoding="utf-8"
+    )
+    style_source = Path("modules/web_interface/style.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert "function openLog(record)" in app_source
+    assert 'openDrawer("RUNTIME LOG", record.module || "Slips")' in app_source
+    assert "record.line || record.message" in app_source
+    assert "], openLog);" in app_source
+    assert "function appendHighlightedLogText" in app_source
+    assert "<th>Time</th><th>Level</th><th>Module</th>" in index_source
+    assert ".log-console-titlebar" in style_source
+    assert ".log-console-level.critical" in style_source
+    assert ".log-token-reference" in style_source
 
 
 @pytest.mark.parametrize(
