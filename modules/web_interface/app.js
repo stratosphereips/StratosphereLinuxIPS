@@ -14,11 +14,12 @@ const state = {
   drawerGeneration: 0,
   runIdentity: null,
   rangesInitialized: false,
+  titleCounts: { alerts: 0, hosts: 0 },
   pages: {
     alerts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
     evidence: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
     hosts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "last_seen", order: "desc" },
-    modules: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "name", order: "asc" },
+    modules: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "cpu_percent", order: "desc" },
     firewall: { items: [], total: 0, next: null, cursors: [null], index: 0 },
     hostFlows: { items: [], total: 0, next: null, cursors: [null], index: 0 },
     "host-evidence": { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
@@ -432,9 +433,22 @@ function setSummaryCards(items, target = "summary-cards") {
   });
 }
 
-function renderOverview() {
-  const data = state.overview;
-  if (!data) return;
+/**
+ * Keep the browser title focused on the two primary detection totals.
+ *
+ * @param {Object} counts Updated alert or host totals.
+ */
+function updatePageTitle(counts = {}) {
+  state.titleCounts = { ...state.titleCounts, ...counts };
+  document.title = `Slips ${compact(state.titleCounts.alerts)} alerts · ${compact(state.titleCounts.hosts)} hosts`;
+}
+
+/**
+ * Render run identity shared by every top-level tab.
+ *
+ * @param {Object} data Current overview API payload.
+ */
+function renderRunContext(data) {
   const run = data.run;
   const outputName = String(run.output_dir || "").split("/").filter(Boolean).at(-1);
   byId("run-name").textContent = outputName || "Current run";
@@ -442,7 +456,8 @@ function renderOverview() {
   byId("run-meta").textContent = [
     metadata.File || run.input_type || "input",
     metadata.Branch ? `branch ${metadata.Branch}` : "",
-    `Redis ${run.redis_port}`,
+    metadata["Slips version"] ? `Slips ${metadata["Slips version"]}` : "",
+    metadata.Commit ? `commit ${metadata.Commit}` : "",
   ].filter(Boolean).join(" · ");
   byId("run-state").textContent = run.state === "running" ? "Analysis running" : "Analysis complete";
   byId("state-dot").className = `state-dot ${run.state}`;
@@ -450,12 +465,24 @@ function renderOverview() {
   byId("alerts-badge").textContent = compact(data.counts.alerts);
   byId("evidence-badge").textContent = compact(data.counts.evidence);
   byId("hosts-badge").textContent = compact(data.counts.hosts);
+  byId("logs-badge").textContent = compact(data.counts.module_errors);
+  updatePageTitle({ alerts: data.counts.alerts, hosts: data.counts.hosts });
+}
+
+/** Render the operational overview without supporting metadata or logs. */
+function renderOverview() {
+  const data = state.overview;
+  if (!data) return;
+  renderRunContext(data);
+  const firewall = data.firewall || {};
   setSummaryCards([
     ["Alerts", compact(data.counts.alerts)],
-    ["Evidence", compact(data.counts.evidence)],
     ["Hosts", compact(data.counts.hosts)],
+    ["Evidence", compact(data.counts.evidence)],
     ["Processed flows", compact(data.counts.processed_flows)],
-    ["Logged events", compact(data.counts.module_errors)],
+    ["FW active", compact(firewall.current)],
+    ["FW added", compact(firewall.added)],
+    ["FW discarded", compact(firewall.discarded)],
   ]);
   const firewallImpact = data.firewall_impact || {};
   setSummaryCards([
@@ -480,17 +507,15 @@ function renderOverview() {
     row.append(text("small", label), text("strong", value));
     load.append(row);
   });
-  const sources = byId("data-sources");
-  sources.replaceChildren();
-  Object.entries(data.sources).forEach(([name, value]) => {
-    const available = typeof value === "boolean" ? value : Boolean(value);
-    const row = document.createElement("div");
-    row.className = "source-row";
-    row.append(text("span", name.replaceAll("_", " ")),
-      text("span", typeof value === "string" ? (value || "unavailable") :
-        (available ? "available" : "unavailable"), `status ${available ? "ok" : "bad"}`));
-    sources.append(row);
-  });
+  renderModules(data.modules);
+}
+
+/**
+ * Render the metadata captured for this run.
+ *
+ * @param {Object} metadata Parsed metadata labels and values.
+ */
+function renderMetadata(metadata) {
   const runMetadata = byId("run-metadata");
   runMetadata.replaceChildren();
   const metadataOrder = [
@@ -509,15 +534,22 @@ function renderOverview() {
   if (!runMetadata.children.length) {
     runMetadata.append(text("p", "metadata/info.txt is not available.", "muted"));
   }
-  renderModules(data.modules);
-  const errors = byId("errors-list");
-  errors.replaceChildren();
-  if (!data.recent_errors.length) errors.append(text("li", "No parsed log events for this run."));
-  data.recent_errors.forEach((event) => {
-    const item = document.createElement("li");
-    item.append(text("code", event.module), text("span", event.message));
-    errors.append(item);
-  });
+}
+
+/**
+ * Render the latest parsed runtime log messages.
+ *
+ * @param {Object} payload Bounded log records and their total count.
+ */
+function renderLogs(payload) {
+  const errors = payload.items || [];
+  byId("logs-badge").textContent = compact(payload.total);
+  byId("logs-count").textContent = `${errors.length} shown · ${compact(payload.total)} total`;
+  renderTable("logs-table", errors, [
+    (row) => formatTime(row.event_time),
+    (row) => text("code", row.module),
+    (row) => row.message,
+  ]);
 }
 
 /** Render a module resource value with a 0–100 red heat-map background. */
@@ -559,6 +591,7 @@ function renderModules(modules) {
     (row) => compact(row.evidence_count),
     (row) => row.error_count,
   ]);
+  applySortIndicators("modules");
 }
 
 async function loadMetrics() {
@@ -590,6 +623,7 @@ function initializeRanges(run) {
   state.rangesInitialized = true;
 }
 
+/** Load the operational overview and its history charts. */
 async function loadOverview() {
   const payload = await api("overview", "/api/overview");
   if (!payload) return;
@@ -597,6 +631,20 @@ async function loadOverview() {
   initializeRanges(payload.run);
   renderOverview();
   await loadMetrics();
+}
+
+/** Load and render run metadata in its dedicated tab. */
+async function loadMetadata() {
+  const payload = await api("metadata", "/api/metadata");
+  if (!payload) return;
+  renderMetadata(payload.items || {});
+}
+
+/** Load and render parsed runtime messages in their dedicated tab. */
+async function loadLogs() {
+  const payload = await api("logs", "/api/logs");
+  if (!payload) return;
+  renderLogs(payload);
 }
 
 function listPath(name) {
@@ -637,6 +685,9 @@ function applyPage(name, payload) {
   page.next = payload.next_cursor;
   if (payload.full_total !== undefined) {
     byId(`${name}-badge`).textContent = compact(payload.full_total);
+    if (["alerts", "hosts"].includes(name)) {
+      updatePageTitle({ [name]: payload.full_total });
+    }
   }
   byId(`${name}-count`).textContent = `${payload.page_size} shown · ${compact(payload.total)} match`;
   applySortIndicators(name);
@@ -2202,8 +2253,10 @@ function tabLoader(name) {
     evidence: loadEvidence,
     firewall: loadFirewall,
     p2p: loadP2P,
+    logs: loadLogs,
     configuration: loadConfiguration,
     whitelists: loadWhitelists,
+    metadata: loadMetadata,
     hosts: loadHosts,
   }[name];
 }
@@ -2226,8 +2279,8 @@ async function refreshActive() {
 }
 
 function activeRangeIsLive() {
-  if (["configuration", "whitelists"].includes(state.activeTab)) return false;
-  if (["firewall", "p2p"].includes(state.activeTab)) return true;
+  if (["configuration", "whitelists", "metadata"].includes(state.activeTab)) return false;
+  if (["firewall", "p2p", "logs"].includes(state.activeTab)) return true;
   if (state.activeTab === "overview") return true;
   if (state.activeTab === "hosts" && state.host) {
     return rangeIsLive("host") && state.pages.hostFlows.index === 0;
