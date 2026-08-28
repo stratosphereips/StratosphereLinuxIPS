@@ -90,6 +90,8 @@ klogin,543,tcp,
 klogin,543,udp,
 kshell,544,tcp,krcmd
 kshell,544,udp,krcmd
+dhcp,67,udp,DHCP Server
+dhcp,68,udp,DHCP Client
 dhcpv6-client,546,tcp,DHCPv6 Client
 dhcpv6-client,546,udp,DHCPv6 Client
 rtsp,554,tcp,Real Time Streaming Protocol
