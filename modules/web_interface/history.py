@@ -19,7 +19,7 @@ ERROR_LINE = re.compile(
 )
 RAW_METRIC_RETENTION_SECONDS = 24 * 60 * 60
 FLOW_INDEX_BATCH_SIZE = 5000
-HOST_SNAPSHOT_INTERVAL_SECONDS = 5
+HOST_SNAPSHOT_INTERVAL_SECONDS = 60
 
 
 def connect_history(path: Path, read_only: bool = False) -> sqlite3.Connection:
@@ -60,7 +60,8 @@ def initialize_history(path: Path) -> None:
         "uid TEXT PRIMARY KEY, flow_rowid INTEGER NOT NULL, "
         "event_time REAL NOT NULL, src_ip TEXT NOT NULL, "
         "dst_ip TEXT NOT NULL, proto TEXT, app_proto TEXT, "
-        "bytes INTEGER NOT NULL, packets INTEGER NOT NULL, label TEXT)",
+        "bytes INTEGER NOT NULL, packets INTEGER NOT NULL, "
+        "source_packets INTEGER NOT NULL DEFAULT 0, label TEXT)",
         "CREATE INDEX IF NOT EXISTS flow_src_time_idx "
         "ON flow_index(src_ip, event_time DESC, uid)",
         "CREATE INDEX IF NOT EXISTS flow_dst_time_idx "
@@ -105,9 +106,23 @@ def initialize_history(path: Path) -> None:
                 "ALTER TABLE runtime_metrics_1s "
                 "ADD COLUMN flow_delta REAL NOT NULL DEFAULT 0"
             )
+        flow_columns = {
+            str(row["name"])
+            for row in connection.execute(
+                "PRAGMA table_info(flow_index)"
+            ).fetchall()
+        }
+        if "source_packets" not in flow_columns:
+            connection.execute(
+                "ALTER TABLE flow_index ADD COLUMN source_packets "
+                "INTEGER NOT NULL DEFAULT 0"
+            )
+            connection.execute(
+                "UPDATE flow_index SET source_packets = packets"
+            )
         connection.execute(
             "INSERT OR REPLACE INTO metadata(key, value) VALUES (?, ?)",
-            ("schema_version", "2"),
+            ("schema_version", "3"),
         )
 
 
@@ -140,6 +155,8 @@ class HistoryCollector:
         self._last_flow_check = time.monotonic()
         self._last_rollup = 0.0
         self._last_host_snapshot = 0.0
+        self._detection_schema_ready = False
+        self._redis_detection_backfill_complete = False
         initialize_history(self.history_path)
 
     @staticmethod
@@ -207,6 +224,7 @@ class HistoryCollector:
                         str(flow.get("appproto") or ""),
                         int(flow.get("bytes") or 0),
                         int(flow.get("pkts") or 0),
+                        int(flow.get("spkts") or flow.get("pkts") or 0),
                         str(row["label"] or ""),
                     )
                 )
@@ -214,8 +232,8 @@ class HistoryCollector:
                 history.executemany(
                     "INSERT OR REPLACE INTO flow_index "
                     "(uid, flow_rowid, event_time, src_ip, dst_ip, proto, "
-                    "app_proto, bytes, packets, label) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "app_proto, bytes, packets, source_packets, label) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     indexed,
                 )
             if rows:
@@ -870,15 +888,42 @@ class HistoryCollector:
             return 0
         try:
             with sqlite3.connect(self.flows_path, timeout=20) as connection:
-                schema_upgraded = self._detection_schema(connection)
+                schema_upgraded = False
+                if not self._detection_schema_ready:
+                    schema_upgraded = self._detection_schema(connection)
+                    self._detection_schema_ready = True
                 if schema_upgraded:
                     with connect_history(self.history_path) as history:
                         self._metadata_set(history, "alerts_json_offset", 0)
-                redis_count = (
-                    self._backfill_redis_evidence(connection)
-                    if self._redis_belongs_to_run()
-                    else 0
-                )
+                redis_count = 0
+                if not self._redis_detection_backfill_complete:
+                    with connect_history(self.history_path) as history:
+                        checkpoint = self._metadata_get(
+                            history,
+                            "redis_detection_backfill_complete",
+                            "0",
+                        )
+                    if checkpoint != "0":
+                        self._redis_detection_backfill_complete = True
+                    else:
+                        durable_evidence = int(
+                            connection.execute(
+                                "SELECT COUNT(*) FROM evidence"
+                            ).fetchone()[0]
+                        )
+                        redis_available = self._redis_belongs_to_run()
+                        if not durable_evidence and redis_available:
+                            redis_count = self._backfill_redis_evidence(
+                                connection
+                            )
+                        if durable_evidence or redis_available:
+                            with connect_history(self.history_path) as history:
+                                self._metadata_set(
+                                    history,
+                                    "redis_detection_backfill_complete",
+                                    time.time(),
+                                )
+                            self._redis_detection_backfill_complete = True
                 file_count = self._backfill_alert_file(connection)
             return redis_count + file_count
         except sqlite3.Error:
