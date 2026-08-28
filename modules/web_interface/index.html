@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips · Current run</title>
-  <link rel="stylesheet" href="/style.css?v=20260827-firewall-impact">
+  <link rel="stylesheet" href="/style.css?v=20260828-firewall-recovery">
 </head>
 <body>
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -112,7 +112,7 @@
         <div id="firewall-impact-summary" class="summary-grid impact-summary"></div>
       </article>
       <div class="toolbar"><input id="firewall-search" type="search" placeholder="Search IP or status"><span id="firewall-count" class="result-count"></span></div>
-      <div class="surface table-surface"><div class="table-wrap"><table id="firewall-table"><thead><tr><th>IP</th><th>Status</th><th>Blocked since</th><th>Unblock at</th><th>Remaining</th><th>Extra TWs</th><th>Est. stopped packets</th><th>Est. stopped flows</th><th>Evidence while blocked</th><th>Total evidence</th><th>Alerts</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="surface table-surface"><div class="table-wrap"><table id="firewall-table"><thead><tr><th>IP</th><th>Status</th><th>Rule origin</th><th>Blocked since</th><th>Unblock at</th><th>Remaining</th><th>Extra TWs</th><th>Est. stopped packets</th><th>Est. stopped flows</th><th>Evidence while blocked</th><th>Total evidence</th><th>Alerts</th></tr></thead><tbody></tbody></table></div></div>
       <article class="surface table-surface"><div class="table-heading"><div><h3>Block / unblock history</h3><p id="firewall-history-count">Firewall transitions and failed removals from this run.</p></div></div><div class="table-wrap"><table id="firewall-history-table"><thead><tr><th>Time</th><th>IP</th><th>Action</th><th>Details</th></tr></thead><tbody></tbody></table></div></article>
       <div id="firewall-history-pager" class="pager"></div>
     </section>
@@ -220,6 +220,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20260827-firewall-impact"></script>
+  <script src="/app.js?v=20260828-firewall-recovery"></script>
 </body>
 </html>
