@@ -33,6 +33,12 @@ def test_idle_connection_does_not_block_page_requests() -> None:
         with urlopen(f"http://127.0.0.1:{port}/", timeout=2) as response:
             assert response.status == 200
             assert b"Slips" in response.read()
+        with urlopen(
+            f"http://127.0.0.1:{port}/favicon.png", timeout=2
+        ) as response:
+            assert response.status == 200
+            assert response.headers["Content-Type"] == "image/png"
+            assert response.read(8) == b"\x89PNG\r\n\x1a\n"
     finally:
         idle_connection.close()
         server.shutdown()
@@ -313,6 +319,98 @@ def test_configuration_and_whitelist_tabs_are_wired() -> None:
     assert "const whitelistHandling" in app_source
     assert 'path == "/api/configuration"' in server_source
     assert 'path == "/api/whitelists"' in server_source
+
+
+def test_overview_prioritizes_operational_data() -> None:
+    """Keep supporting metadata and logs out of the operational overview."""
+    _module_factory = ModuleFactory()
+    app_source = Path("modules/web_interface/app.js").read_text(
+        encoding="utf-8"
+    )
+    index_source = Path("modules/web_interface/index.html").read_text(
+        encoding="utf-8"
+    )
+    overview = index_source.split('<section id="overview"', 1)[1].split(
+        '<section id="logs"', 1
+    )[0]
+
+    assert 'rel="icon" href="/favicon.png"' in index_source
+    assert 'data-tab="logs"' in index_source
+    assert 'data-tab="metadata"' in index_source
+    assert 'id="logs-table"' in index_source
+    assert 'id="run-metadata"' in index_source
+    assert "Data sources" not in overview
+    assert "Run metadata" not in overview
+    assert "Recent log events" not in overview
+    assert '["FW active", compact(firewall.current)]' in app_source
+    assert '["FW added", compact(firewall.added)]' in app_source
+    assert '["FW discarded", compact(firewall.discarded)]' in app_source
+    assert 'sort: "cpu_percent", order: "desc"' in app_source
+    assert "document.title = `Slips ${compact" in app_source
+
+
+def test_firewall_overview_counts_rule_transitions() -> None:
+    """Expose active, added, and discarded enforcement totals."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.zrange.return_value = [("10.0.0.1", 100.0)]
+    reader.redis.hgetall.return_value = {
+        "10.0.0.1": "{}",
+        "10.0.0.2": "{}",
+    }
+    history = [
+        {"action": "blocked", "ip": "10.0.0.1"},
+        {"action": "blocked", "ip": "10.0.0.2"},
+        {"action": "unblocked", "ip": "10.0.0.3"},
+        {"action": "unblock failed", "ip": "10.0.0.4"},
+    ]
+    reader._firewall_history = Mock(return_value=history)
+    reader._firewall_attack_estimate = Mock(
+        return_value={"packets": 8, "flows": 3, "evidence": 1}
+    )
+
+    result = reader._firewall_overview()
+
+    assert result == {
+        "current": 2,
+        "added": 2,
+        "discarded": 1,
+        "impact": {"packets": 8, "flows": 3, "evidence": 1},
+    }
+    reader._firewall_attack_estimate.assert_called_once_with(
+        history, {"10.0.0.1": 100.0}
+    )
+
+
+def test_metadata_and_logs_endpoints_are_bounded(tmp_path: Path) -> None:
+    """Read supporting run facts without loading the full overview."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.history_path = tmp_path / "history.sqlite"
+    metadata_dir = tmp_path / "metadata"
+    metadata_dir.mkdir()
+    (metadata_dir / "info.txt").write_text(
+        "Slips version: 1.2.3\nBranch: local-web-page\n",
+        encoding="utf-8",
+    )
+    initialize_history(reader.history_path)
+    with connect_history(reader.history_path) as history:
+        history.execute(
+            "INSERT INTO error_events(event_time, module, message, line) "
+            "VALUES (?, ?, ?, ?)",
+            (100.0, "Profiler", "failed once", "raw line"),
+        )
+
+    metadata = reader.metadata()
+    logs = reader.logs()
+
+    assert metadata["items"]["Slips version"] == "1.2.3"
+    assert metadata["items"]["Branch"] == "local-web-page"
+    assert logs["total"] == 1
+    assert logs["items"][0]["module"] == "Profiler"
+    assert logs["items"][0]["message"] == "failed once"
 
 
 @pytest.mark.parametrize(
