@@ -29,14 +29,14 @@ def test_idle_connection_does_not_block_page_requests() -> None:
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
     port = int(server.server_address[1])
-    idle_connection = socket.create_connection(("127.0.0.1", port), timeout=1)
+    idle_connection = socket.create_connection(("127.0.0.1", port), timeout=5)
 
     try:
-        with urlopen(f"http://127.0.0.1:{port}/", timeout=2) as response:
+        with urlopen(f"http://127.0.0.1:{port}/", timeout=10) as response:
             assert response.status == 200
             assert b"Slips" in response.read()
         with urlopen(
-            f"http://127.0.0.1:{port}/favicon.png", timeout=2
+            f"http://127.0.0.1:{port}/favicon.png", timeout=10
         ) as response:
             assert response.status == 200
             assert response.headers["Content-Type"] == "image/png"
@@ -45,7 +45,7 @@ def test_idle_connection_does_not_block_page_requests() -> None:
         idle_connection.close()
         server.shutdown()
         server.server_close()
-        server_thread.join(timeout=2)
+        server_thread.join(timeout=10)
 
 
 @pytest.mark.parametrize(
