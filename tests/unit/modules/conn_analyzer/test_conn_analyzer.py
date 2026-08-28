@@ -354,7 +354,7 @@ def test_check_multiple_reconnection_attempts(
     """
     conn = ModuleFactory().create_conn_analyzer_obj()
     mock_set_evidence = mocker.patch(
-        "modules.flow_alerts.set_evidence."
+        "modules.conn_analyzer.set_evidence."
         "SetEvidenceHelper.multiple_reconnection_attempts"
     )
     conn.db.get_reconnections_for_tw.return_value = {}
@@ -468,7 +468,7 @@ def test_check_data_upload(
     conn = ModuleFactory().create_conn_analyzer_obj()
     conn.is_ignored_ip_data_upload = Mock(return_value=ignored_ip)
     mock_set_evidence = mocker.patch(
-        "modules.flow_alerts.set_evidence.SetEvidenceHelper.data_exfiltration"
+        "modules.conn_analyzer.set_evidence.SetEvidenceHelper.data_exfiltration"
     )
     conn.gateway = "192.168.1.1"
     flow = Conn(

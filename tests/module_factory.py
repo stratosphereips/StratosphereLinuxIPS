@@ -1090,6 +1090,14 @@ class ModuleFactory:
         set_evidence_helper = SetEvidenceHelper(mock_db)
         return set_evidence_helper
 
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_conn_analyzer_set_evidence_helper(self, mock_db):
+        from modules.conn_analyzer.set_evidence import SetEvidenceHelper
+
+        """Create an instance of conn_analyzer's SetEvidenceHelper."""
+        set_evidence_helper = SetEvidenceHelper(mock_db)
+        return set_evidence_helper
+
     def create_output_obj(self):
         from slips_files.core.output import Output
 
