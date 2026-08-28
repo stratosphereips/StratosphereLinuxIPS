@@ -59,6 +59,7 @@ main { max-width: 1900px; margin: auto; padding: 2rem 2.5rem 4rem; }
 .summary-card span { color: var(--muted); font-size: .75rem; }
 .summary-card strong { display: block; margin-top: .3rem; font: 650 1.45rem ui-monospace, SFMono-Regular, Menlo, monospace; }
 .summary-card strong > .slips-score { font-size: inherit; }
+.impact-summary { grid-template-columns: repeat(3, minmax(150px, 1fr)); margin: .8rem 0 0; }
 .split-grid { display: grid; grid-template-columns: 2fr 1fr; gap: .8rem; margin-bottom: .8rem; }
 .surface { margin-bottom: .8rem; padding: 1rem; }
 .table-surface { padding: 0; overflow: hidden; }
