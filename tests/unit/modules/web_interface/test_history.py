@@ -37,6 +37,7 @@ def test_flow_index_is_restart_safe_and_deduplicates_uids(tmp_path) -> None:
         "appproto": "dns",
         "bytes": 100,
         "pkts": 2,
+        "spkts": 1,
     }
     with sqlite3.connect(flows_path) as connection:
         connection.executemany(
@@ -59,6 +60,7 @@ def test_flow_index_is_restart_safe_and_deduplicates_uids(tmp_path) -> None:
 
     assert len(rows) == 1
     assert rows[0]["bytes"] == 200
+    assert rows[0]["source_packets"] == 1
     assert checkpoint == "2"
 
 
@@ -115,6 +117,7 @@ def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
     )
 
     assert collector.backfill_detections() == 2
+    redis_scan_calls = redis_client.scan_iter.call_count
     with sqlite3.connect(flows_path) as connection:
         evidence = connection.execute(
             "SELECT accumulated_threat_level, accumulated_ratl "
@@ -136,6 +139,33 @@ def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
     assert relation == ("alert-1", "evidence-1")
     assert flow == ("evidence-1", "flow-1")
     assert collector.backfill_detections() == 0
+    assert redis_client.scan_iter.call_count == redis_scan_calls
+
+
+def test_backfill_skips_redis_scan_when_evidence_is_already_durable(
+    tmp_path,
+) -> None:
+    """Never rescan retained Redis windows after durable evidence exists."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    flows_path = output_dir / "databases" / "flows.sqlite"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    create_flow_database(flows_path)
+    redis_client = Mock()
+    redis_client.hget.return_value = str(output_dir)
+    collector = HistoryCollector(
+        str(output_dir), history_path, redis_client, 999999
+    )
+    with sqlite3.connect(flows_path) as connection:
+        collector._detection_schema(connection)
+        connection.execute(
+            "INSERT INTO evidence "
+            "(evidence_id, evidence_time, profile_ip) VALUES (?, ?, ?)",
+            ("evidence-1", 1, "10.0.0.1"),
+        )
+
+    assert collector.backfill_detections() == 0
+    redis_client.scan_iter.assert_not_called()
 
 
 def test_backfill_rejects_redis_owned_by_another_run(tmp_path) -> None:
@@ -292,7 +322,37 @@ def test_initialize_history_migrates_legacy_metric_schema(tmp_path) -> None:
 
     assert "flow_delta" in columns
     assert row["flow_delta"] == 0
-    assert version == "2"
+    assert version == "3"
+
+
+def test_initialize_history_migrates_source_packet_estimates(tmp_path) -> None:
+    """Use total packets as the safe fallback for previously indexed flows."""
+    _module_factory = ModuleFactory()
+    history_path = tmp_path / "history.sqlite"
+    with sqlite3.connect(history_path) as connection:
+        connection.execute(
+            "CREATE TABLE flow_index (uid TEXT PRIMARY KEY, "
+            "flow_rowid INTEGER NOT NULL, event_time REAL NOT NULL, "
+            "src_ip TEXT NOT NULL, dst_ip TEXT NOT NULL, proto TEXT, "
+            "app_proto TEXT, bytes INTEGER NOT NULL, "
+            "packets INTEGER NOT NULL, label TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO flow_index VALUES "
+            "('flow-1', 1, 10, '10.0.0.8', '10.0.0.1', "
+            "'tcp', '', 0, 7, '')"
+        )
+
+    initialize_history(history_path)
+
+    with connect_history(history_path, read_only=True) as connection:
+        row = connection.execute(
+            "SELECT packets, source_packets FROM flow_index "
+            "WHERE uid = 'flow-1'"
+        ).fetchone()
+
+    assert row["packets"] == 7
+    assert row["source_packets"] == 7
 
 
 def test_metric_sample_preserves_exact_profiler_delta(tmp_path) -> None:
