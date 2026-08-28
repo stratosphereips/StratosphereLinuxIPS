@@ -40,9 +40,9 @@ def test_idle_connection_does_not_block_page_requests() -> None:
         ) as response:
             assert response.status == 200
             assert response.headers["Content-Type"] == "image/svg+xml"
-            assert (
-                b'<svg xmlns="http://www.w3.org/2000/svg"' in response.read()
-            )
+            favicon = response.read()
+            assert b"<svg" in favicon
+            assert b'xmlns="http://www.w3.org/2000/svg"' in favicon
     finally:
         idle_connection.close()
         server.shutdown()
@@ -372,11 +372,16 @@ def test_overview_prioritizes_operational_data() -> None:
         '<section id="logs"', 1
     )[0]
 
-    assert 'rel="icon" href="/favicon.svg"' in index_source
+    assert (
+        'rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" sizes="any"'
+        in index_source
+    )
     favicon_source = Path("modules/web_interface/favicon.svg").read_text(
         encoding="utf-8"
     )
-    assert '<rect width="64" height="64" fill="#fff" />' in favicon_source
+    assert "<rect" not in favicon_source
+    assert 'viewBox="0 0 128 128"' in favicon_source
+    assert 'stroke-width="7.5"' in favicon_source
     assert 'data-tab="logs"' in index_source
     assert 'data-tab="metadata"' in index_source
     assert 'id="logs-table"' in index_source
