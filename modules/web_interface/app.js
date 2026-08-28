@@ -6,6 +6,7 @@ const state = {
   metrics: [],
   configuration: null,
   whitelists: null,
+  arpPoisoning: null,
   host: null,
   failures: 0,
   timer: null,
@@ -15,6 +16,11 @@ const state = {
   runIdentity: null,
   rangesInitialized: false,
   titleCounts: { alerts: 0, hosts: 0 },
+  localSorts: {
+    "arp-poisoning-hosts-table": { key: "ip", order: "asc" },
+    "arp-poisoning-events-table": { key: "timestamp", order: "desc" },
+    "arp-poisoning-evidence-table": { key: "timestamp", order: "desc" },
+  },
   pages: {
     alerts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
     evidence: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
@@ -244,6 +250,60 @@ function renderTable(id, rows, columns, onClick = null) {
     columns.forEach((column) => row.append(cell(column(record))));
     body.append(row);
   }
+}
+
+/** Sort one bounded client-side table and update its accessible indicators. */
+function sortLocalRows(id, rows) {
+  const sort = state.localSorts[id];
+  if (!sort) return [...rows];
+  document.querySelectorAll(`#${id} th[data-sort]`).forEach((header) => {
+    const active = header.dataset.sort === sort.key;
+    header.classList.toggle("sorted", active);
+    header.dataset.order = active ? sort.order : "";
+    header.setAttribute("aria-sort", active
+      ? (sort.order === "asc" ? "ascending" : "descending") : "none");
+  });
+  const direction = sort.order === "asc" ? 1 : -1;
+  return [...rows].sort((left, right) => {
+    const first = left[sort.key];
+    const second = right[sort.key];
+    if (first === null || first === undefined) return 1;
+    if (second === null || second === undefined) return -1;
+    const firstNumber = Number(first);
+    const secondNumber = Number(second);
+    if (Number.isFinite(firstNumber) && Number.isFinite(secondNumber)) {
+      return (firstNumber - secondNumber) * direction;
+    }
+    return String(first).localeCompare(String(second), undefined, {
+      numeric: true, sensitivity: "base",
+    }) * direction;
+  });
+}
+
+/** Bind keyboard and pointer sorting to one bounded client-side table. */
+function bindLocalTableSort(id, rerender) {
+  document.querySelectorAll(`#${id} th[data-sort]`).forEach((header) => {
+    header.tabIndex = 0;
+    const changeSort = () => {
+      const sort = state.localSorts[id];
+      const key = header.dataset.sort;
+      if (sort.key === key) sort.order = sort.order === "asc" ? "desc" : "asc";
+      else {
+        sort.key = key;
+        sort.order = ["ip", "status", "mac", "action", "current_tw", "release_tw",
+          "profile_ip", "threat_level", "evidence_type", "description"].includes(key)
+          ? "asc" : "desc";
+      }
+      rerender();
+    };
+    header.addEventListener("click", changeSort);
+    header.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        changeSort();
+      }
+    });
+  });
 }
 
 function pager(name, targetId, load) {
@@ -1002,6 +1062,78 @@ async function loadFirewall() {
   pager("firewall", "firewall-history-pager", loadFirewall);
 }
 
+/** Render ARP poisoner host state, transitions, and detector evidence. */
+function renderArpPoisoning() {
+  const payload = state.arpPoisoning;
+  if (!payload) return;
+  const search = byId("arp-poisoning-search").value.trim().toLowerCase();
+  const matches = (row) => !search
+    || JSON.stringify(row).toLowerCase().includes(search);
+  const hosts = (payload.hosts || []).filter(matches);
+  const events = (payload.events || []).filter(matches);
+  const evidence = (payload.evidence || []).filter(matches);
+  byId("arp-poisoning-count").textContent = `${hosts.length} shown · ${payload.counts.hosts} hosts`;
+  renderTable("arp-poisoning-hosts-table",
+    sortLocalRows("arp-poisoning-hosts-table", hosts), [
+      (row) => text("code", row.ip),
+      (row) => text("span", row.status,
+        `status ${row.status === "released" ? "ok" : "bad"}`),
+      (row) => formatTime(row.poisoned_at),
+      (row) => formatTime(row.unblock_at),
+      (row) => formatTime(row.released_at),
+      (row) => row.remaining_seconds === null
+        ? "—" : formatDuration(row.remaining_seconds),
+      (row) => row.current_tw ?? "—",
+      (row) => row.release_tw ?? "—",
+      (row) => row.extra_timewindows ?? "—",
+      (row) => text("code", row.mac || "—"),
+    ], (row) => openHost(row.ip));
+  renderTable("arp-poisoning-events-table",
+    sortLocalRows("arp-poisoning-events-table", events), [
+      (row) => formatTime(row.timestamp),
+      (row) => text("code", row.ip),
+      (row) => text("span", row.action,
+        `status ${row.action === "released" ? "ok" : "bad"}`),
+      (row) => row.current_tw ?? "—",
+      (row) => row.release_tw ?? "—",
+      (row) => formatTime(row.unblock_at),
+      (row) => row.extra_timewindows ?? "—",
+      (row) => row.details || "—",
+    ], (row) => openHost(row.ip));
+  renderTable("arp-poisoning-evidence-table",
+    sortLocalRows("arp-poisoning-evidence-table", evidence), [
+      (row) => formatTime(row.timestamp),
+      (row) => text("code", row.profile_ip),
+      (row) => threat(row.threat_level),
+      (row) => text("code", row.evidence_type),
+      (row) => `${Math.round(numeric(row.confidence) * 100)}%`,
+      (row) => compact(row.flow_count),
+      (row) => compact(row.alert_count),
+      (row) => row.description || "—",
+    ], (row) => openHost(row.profile_ip));
+}
+
+/** Load the bounded, run-scoped ARP poisoner and detector view. */
+async function loadArpPoisoning() {
+  const payload = await api("arpPoisoning", "/api/arp-poisoning");
+  if (!payload) return;
+  state.arpPoisoning = payload;
+  const counts = payload.counts || {};
+  const module = payload.module || {};
+  byId("arp-poisoning-badge").textContent = compact(counts.active);
+  byId("arp-poisoning-status").textContent = module.enabled
+    ? `arp_poisoner is ${module.state}${module.pid ? ` · PID ${module.pid}` : ""}.`
+    : "arp_poisoner did not start in this run.";
+  setSummaryCards([
+    ["Module", module.state || "not started"],
+    ["Poisoned now", compact(counts.active)],
+    ["Released", compact(counts.released)],
+    ["Transitions", compact(counts.transitions)],
+    ["ARP evidence", compact(counts.evidence)],
+  ], "arp-poisoning-summary");
+  renderArpPoisoning();
+}
+
 async function loadP2P() {
   const payload = await api("p2p", "/api/p2p");
   if (!payload) return;
@@ -1052,15 +1184,6 @@ async function loadP2P() {
   ]);
 }
 
-function formatDuration(seconds) {
-  const total = Math.max(0, Math.round(numeric(seconds)));
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const secs = total % 60;
-  if (hours) return `${hours}h ${minutes}m`;
-  if (minutes) return `${minutes}m ${secs}s`;
-  return `${secs}s`;
-}
 async function loadHosts() {
   const payload = await api("hosts", listPath("hosts"));
   if (!payload) return;
@@ -2264,6 +2387,7 @@ function tabLoader(name) {
     alerts: loadAlerts,
     evidence: loadEvidence,
     firewall: loadFirewall,
+    "arp-poisoning": loadArpPoisoning,
     p2p: loadP2P,
     logs: loadLogs,
     configuration: loadConfiguration,
@@ -2292,7 +2416,7 @@ async function refreshActive() {
 
 function activeRangeIsLive() {
   if (["configuration", "whitelists", "metadata"].includes(state.activeTab)) return false;
-  if (["firewall", "p2p", "logs"].includes(state.activeTab)) return true;
+  if (["firewall", "arp-poisoning", "p2p", "logs"].includes(state.activeTab)) return true;
   if (state.activeTab === "overview") return true;
   if (state.activeTab === "hosts" && state.host) {
     return rangeIsLive("host") && state.pages.hostFlows.index === 0;
@@ -2384,6 +2508,10 @@ byId("host-flow-limit").addEventListener("change", () => {
 
 bindFilters("firewall", ["firewall-search"], loadFirewall);
 bindFilters("host-evidence", ["host-evidence-search"], loadHostEvidence);
+byId("arp-poisoning-search").addEventListener("input", renderArpPoisoning);
+["arp-poisoning-hosts-table", "arp-poisoning-events-table",
+  "arp-poisoning-evidence-table"].forEach((id) =>
+  bindLocalTableSort(id, renderArpPoisoning));
 bindFilters("alerts", ["alerts-search", "alerts-threat"], loadAlerts);
 bindFilters("evidence", ["evidence-search", "evidence-threat", "evidence-link"], loadEvidence);
 bindFilters("hosts", ["hosts-search", "hosts-scope", "hosts-threat"], loadHosts);
