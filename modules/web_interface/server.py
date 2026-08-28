@@ -3350,7 +3350,11 @@ class RunDataReader:
             )
             deadline = self._event_timestamp(schedule.get("unblock_at"))
             remaining_windows = schedule.get("remaining_timewindows")
-            if deadline and now >= deadline:
+            recovery_status = str(schedule.get("recovery_status") or "")
+            recovered = schedule.get("recovered") is True
+            if recovery_status in {"legacy metadata", "invalid metadata"}:
+                status = "stale"
+            elif deadline and now >= deadline:
                 status = "overdue"
             elif remaining_windows == 0:
                 status = "probation"
@@ -3366,6 +3370,10 @@ class RunDataReader:
                         max(0, deadline - now) if deadline else None
                     ),
                     "remaining_timewindows": remaining_windows,
+                    "recovered": recovered,
+                    "recovery_status": recovery_status or None,
+                    "origin_run": schedule.get("origin_run"),
+                    "rule_comment": schedule.get("rule_comment"),
                     "evidence_count": self._profile_evidence_count(ip),
                     "alert_count": self._profile_alert_count(ip),
                     "stopped_packets": ip_impact["packets"],
@@ -3378,7 +3386,15 @@ class RunDataReader:
             records = [
                 item
                 for item in records
-                if search in item["ip"].lower() or search in item["status"]
+                if search
+                in " ".join(
+                    (
+                        item["ip"],
+                        item["status"],
+                        str(item.get("recovery_status") or ""),
+                        str(item.get("origin_run") or ""),
+                    )
+                ).lower()
             ]
         records.sort(key=lambda item: (item["unblock_at"] or 0, item["ip"]))
         history = all_history
