@@ -10,7 +10,7 @@ from multiprocessing import Lock
 from typing import Tuple, List, Dict, Any
 import validators
 
-from modules.flow_alerts.set_evidence import SetEvidenceHelper
+from modules.conn_analyzer.set_evidence import SetEvidenceHelper
 from modules.flow_alerts.utils import (
     SPECIAL_IPV4,
     get_ip_to_check,
