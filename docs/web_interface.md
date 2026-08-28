@@ -112,7 +112,7 @@ Only the active tab refreshes every five seconds and only when its range include
 
 ### Overview
 
-Overview shows run state, source freshness, disk use, Slips counters, and module health. It also displays the version, input path, branch, commit, command, start time, and Zeek version written to this run's `metadata/info.txt`. Each module row includes state, PID, CPU, resident memory, flows per minute, evidence, and parsed log events. CPU and memory cells are heat mapped from the normal table background at 0% to red at 100%; memory is scaled to total host RAM while the displayed value remains MiB. The Modules table is sortable by every displayed column; click a header again to reverse its direction.
+Overview prioritizes Alerts, Hosts, Evidence, processed flows, and firewall rules currently active, added, and discarded. Run version, branch, and commit stay visible in the header. Full run facts from `metadata/info.txt` are in **Metadata**, and parsed runtime messages are in **Logs**. Each module row includes state, PID, CPU, resident memory, flows per minute, evidence, and parsed log events. Modules start sorted by CPU usage and remain sortable by every displayed column. CPU and memory cells are heat mapped from the normal table background at 0% to red at 100%; memory is scaled to total host RAM while the displayed value remains MiB.
 
 Overview also shows the run-wide estimated firewall impact: packets and flows
 observed from blocked source IPs during recorded enforcement intervals, plus
