@@ -1051,6 +1051,187 @@ def test_firewall_tab_renders_transition_history() -> None:
     assert 'renderTable("firewall-history-table", history' in app_source
 
 
+def test_arp_poisoning_parser_tracks_extensions_and_releases(
+    tmp_path: Path,
+) -> None:
+    """Build host state from durable poison, extension, and release events."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    log_dir = tmp_path / "arp_poisoner"
+    log_dir.mkdir()
+    (log_dir / "arp_poisoning.log").write_text(
+        "2026/08/28 10:00:00.000000+0200 - Poisoned 10.0.0.8 at aa:bb:cc:dd:ee:08.\n"
+        "2026/08/28 10:00:01.000000+0200 - Current TW: 7. Registered a request to stop poisoning 10.0.0.8 at the end of: timewindow8. IP will be poisoned for 1 more timewindows. Timestamp to stop poisoning: 2026-08-28T12:00:00+02:00) \n"
+        "2026/08/28 10:10:00.000000+0200 - Current TW: 7. Registered a request to stop poisoning 10.0.0.8 at the end of: timewindow9. IP will be poisoned for 2 more timewindows. Timestamp to stop poisoning: 2026-08-28T13:00:00+02:00) \n"
+        "2026/08/28 10:20:00.000000+0200 - Poisoned 10.0.0.9 at aa:bb:cc:dd:ee:09.\n"
+        "2026/08/28 10:20:01.000000+0200 - Current TW: 8. Registered a request to stop poisoning 10.0.0.9 at the end of: timewindow9. IP will be poisoned for 1 more timewindows. Timestamp to stop poisoning: 2026-08-28T11:00:00+02:00) \n"
+        "2026/08/28 11:00:01.000000+0200 - Done poisoning 10.0.0.9. The poisoning lasted 1 timewindows. (1.0hrs - From 2026/08/28 10:20:00.000000+0200 to 2026/08/28 11:00:01.000000+0200).\n",
+        encoding="utf-8",
+    )
+
+    now = reader._event_timestamp("2026-08-28T13:00:01+02:00")
+    with patch("modules.web_interface.server.time.time", return_value=now):
+        result = reader._arp_poisoning_events()
+
+    hosts = {item["ip"]: item for item in result["hosts"]}
+    assert hosts["10.0.0.8"]["status"] == "release due"
+    assert hosts["10.0.0.8"]["release_tw"] == "timewindow9"
+    assert hosts["10.0.0.8"]["extra_timewindows"] == 2
+    assert hosts["10.0.0.8"]["remaining_seconds"] == 0
+    assert hosts["10.0.0.9"]["status"] == "released"
+    assert hosts["10.0.0.9"]["released_at"] == pytest.approx(
+        reader._event_timestamp("2026/08/28 11:00:01.000000+0200")
+    )
+    actions = [item["action"] for item in result["events"]]
+    assert actions.count("poisoned") == 2
+    assert actions.count("scheduled") == 2
+    assert actions.count("extended") == 1
+    assert actions.count("released") == 1
+
+
+def test_arp_evidence_uses_only_durable_arp_detections(
+    tmp_path: Path,
+) -> None:
+    """Return ARP evidence with durable flow and alert relationships."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY, "
+            "evidence_time REAL, profile_ip TEXT, timewindow TEXT, "
+            "threat_level TEXT, evidence_type TEXT, description TEXT, "
+            "confidence REAL, data TEXT)"
+        )
+        connection.execute(
+            "CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)"
+        )
+        connection.execute(
+            "CREATE TABLE alert_evidence (alert_id TEXT, evidence_id TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    "arp-1",
+                    20,
+                    "10.0.0.8",
+                    "7",
+                    "high",
+                    "MITM_ARP_ATTACK",
+                    "ARP packets claim different MACs",
+                    0.9,
+                    "{}",
+                ),
+                (
+                    "dns-1",
+                    30,
+                    "10.0.0.9",
+                    "7",
+                    "low",
+                    "DGA_NXDOMAINS",
+                    "Not ARP",
+                    1.0,
+                    "{}",
+                ),
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO evidence_flows VALUES (?, ?)",
+            [("arp-1", "flow-1"), ("arp-1", "flow-2")],
+        )
+        connection.execute(
+            "INSERT INTO alert_evidence VALUES (?, ?)",
+            ("alert-1", "arp-1"),
+        )
+
+    result = reader._arp_evidence()
+
+    assert result["total"] == 1
+    assert result["counts"] == {"MITM_ARP_ATTACK": 1}
+    assert [item["evidence_type"] for item in result["items"]] == [
+        "MITM_ARP_ATTACK"
+    ]
+    assert result["items"][0]["flow_count"] == 2
+    assert result["items"][0]["alert_count"] == 1
+
+
+def test_arp_poisoning_summarizes_current_module_state(tmp_path: Path) -> None:
+    """Summarize active, overdue, and released ARP isolation records."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.redis = Mock()
+    reader.redis.hget.return_value = None
+    reader._processes = {}
+    log_dir = tmp_path / "arp_poisoner"
+    log_dir.mkdir()
+    (log_dir / "arp_poisoning.log").touch()
+    reader._arp_poisoning_events = Mock(
+        return_value={
+            "hosts": [
+                {"ip": "10.0.0.8", "status": "poisoned"},
+                {"ip": "10.0.0.9", "status": "release due"},
+                {"ip": "10.0.0.10", "status": "released"},
+            ],
+            "events": [
+                {"ip": "10.0.0.8", "action": "poisoned"},
+                {"ip": "10.0.0.10", "action": "released"},
+            ],
+        }
+    )
+    reader._arp_evidence = Mock(
+        return_value={
+            "items": [{"evidence_type": "ARP_SCAN"}],
+            "total": 4,
+            "counts": {"ARP_SCAN": 4},
+        }
+    )
+
+    result = reader.arp_poisoning()
+
+    assert result["module"] == {
+        "enabled": True,
+        "state": "stopped",
+        "pid": None,
+    }
+    assert result["counts"] == {
+        "active": 2,
+        "released": 1,
+        "hosts": 3,
+        "transitions": 2,
+        "evidence": 4,
+    }
+    assert result["evidence_counts"] == {"ARP_SCAN": 4}
+
+
+def test_arp_poisoning_tab_is_wired_and_every_column_is_sortable() -> None:
+    """Keep all ARP state, history, and evidence columns sortable."""
+    _module_factory = ModuleFactory()
+    app_source = Path("modules/web_interface/app.js").read_text(
+        encoding="utf-8"
+    )
+    index_source = Path("modules/web_interface/index.html").read_text(
+        encoding="utf-8"
+    )
+    server_source = Path("modules/web_interface/server.py").read_text(
+        encoding="utf-8"
+    )
+    section = index_source.split('<section id="arp-poisoning"', 1)[1].split(
+        '<section id="p2p"', 1
+    )[0]
+
+    assert 'data-tab="arp-poisoning"' in index_source
+    assert 'id="arp-poisoning-hosts-table"' in section
+    assert 'id="arp-poisoning-events-table"' in section
+    assert 'id="arp-poisoning-evidence-table"' in section
+    assert section.count("<th ") == section.count('data-sort="')
+    assert 'api("arpPoisoning", "/api/arp-poisoning")' in app_source
+    assert "bindLocalTableSort(id, renderArpPoisoning)" in app_source
+    assert 'path == "/api/arp-poisoning"' in server_source
+
+
 def test_evidence_cursor_is_stable_when_newer_rows_arrive(tmp_path) -> None:
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
