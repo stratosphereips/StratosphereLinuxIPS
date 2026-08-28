@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" sizes="any">
-  <link rel="stylesheet" href="/style.css?v=20260828-overview-usability">
+  <link rel="stylesheet" href="/style.css?v=20260828-log-console">
 </head>
 <body>
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -74,7 +74,7 @@
     <section id="logs" class="panel" aria-labelledby="logs-title">
       <div class="section-heading"><div><p class="eyebrow">RUNTIME</p><h2 id="logs-title">Logs</h2></div><button class="secondary refresh-list" data-target="logs">Refresh</button></div>
       <div class="toolbar"><span id="logs-count" class="result-count"></span></div>
-      <div class="surface table-surface"><div class="table-wrap"><table id="logs-table"><thead><tr><th>Time</th><th>Module</th><th>Message</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="surface table-surface"><div class="table-wrap"><table id="logs-table"><thead><tr><th>Time</th><th>Level</th><th>Module</th><th>Message</th></tr></thead><tbody></tbody></table></div></div>
     </section>
 
     <section id="metadata" class="panel" aria-labelledby="metadata-title">
@@ -248,6 +248,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20260828-arp-poisoning"></script>
+  <script src="/app.js?v=20260828-log-console"></script>
 </body>
 </html>
