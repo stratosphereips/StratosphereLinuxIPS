@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-only
-"""Serve the run-scoped Slips interface on the loopback address."""
+"""Serve the run-scoped Slips web interface."""
 
 import argparse
 import base64
@@ -254,9 +254,12 @@ class RunDataReader:
                 "when evaluating domains."
             ),
             "web_interface.enabled": (
-                "Controls whether this run starts its loopback-only web interface."
+                "Controls whether this run starts its web interface."
             ),
-            "web_interface.port": "TCP port used by the loopback-only web server.",
+            "web_interface.bind": (
+                "Chooses localhost-only access or the monitored interface address."
+            ),
+            "web_interface.port": "TCP port used by the web server.",
         }
         full_path = f"{section}.{path}"
         if full_path in explicit:
@@ -3963,9 +3966,39 @@ class RequestHandler(BaseHTTPRequestHandler):
             )
 
 
+def ipv4_address(value: str) -> str:
+    """Validate one IPv4 bind address from the server command line.
+
+    Parameters:
+        value: Address supplied to ``--bind-address``.
+
+    Returns:
+        Normalized IPv4 address.
+
+    Raises:
+        argparse.ArgumentTypeError: When the value is not an IPv4 address.
+    """
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from error
+    if not isinstance(address, ipaddress.IPv4Address):
+        raise argparse.ArgumentTypeError("bind address must be IPv4")
+    if address.is_unspecified:
+        raise argparse.ArgumentTypeError(
+            "bind address must identify one exact interface"
+        )
+    return str(address)
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse run-specific server arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--bind-address",
+        type=ipv4_address,
+        default=LOOPBACK_ADDRESS,
+    )
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--redis-port", type=int, required=True)
     parser.add_argument("--output-dir", required=True)
@@ -3973,15 +4006,20 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def main() -> None:
-    """Start the single-run server on the IPv4 loopback address."""
+    """Start the single-run server on the configured IPv4 address."""
     args = parse_arguments()
     reader = RunDataReader(args.redis_port, args.output_dir)
     reader.validate_run_identity()
     server = SlipsHTTPServer(
-        (LOOPBACK_ADDRESS, args.port), RequestHandler, reader
+        (args.bind_address, args.port), RequestHandler, reader
+    )
+    display_host = (
+        "localhost"
+        if args.bind_address == LOOPBACK_ADDRESS
+        else args.bind_address
     )
     print(
-        f"Serving {args.output_dir} at http://localhost:{args.port}/",
+        f"Serving {args.output_dir} at http://{display_host}:{args.port}/",
         flush=True,
     )
     try:
