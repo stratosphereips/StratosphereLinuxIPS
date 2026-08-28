@@ -2234,6 +2234,12 @@ class RunDataReader:
                     "SELECT COUNT(*) AS count FROM host_snapshots"
                 ).fetchone()["count"]
             )
+            evidence_columns = {
+                str(row[1])
+                for row in connection.execute(
+                    "PRAGMA run_db.table_info(evidence)"
+                ).fetchall()
+            }
             start, end, range_name = self._time_bounds(query, latest)
             flow_expression = (
                 "(SELECT COUNT(*) FROM flow_index fi "
@@ -2262,6 +2268,15 @@ class RunDataReader:
             score_expression = (
                 f"COALESCE(json_extract(hs.data, '$.{score_field}'), 0)"
             )
+            peak_score_expression = (
+                f"(SELECT MAX(e.{score_field}) FROM run_db.evidence e "
+                "WHERE e.profile_ip = hs.ip)"
+                if score_field in evidence_columns
+                else "NULL"
+            )
+            peak_score_sort_expression = (
+                f"COALESCE({peak_score_expression}, 0)"
+            )
             sort_key, sort_expression, direction = self._sort_spec(
                 query,
                 {
@@ -2277,6 +2292,7 @@ class RunDataReader:
                     "evidence": evidence_expression,
                     "alerts": alert_expression,
                     "score": score_expression,
+                    "peak_score": peak_score_sort_expression,
                     "last_seen": last_seen_expression,
                 },
                 "last_seen",
@@ -2341,6 +2357,7 @@ class RunDataReader:
             ).fetchone()["count"]
             rows = connection.execute(
                 f"SELECT hs.ip, hs.observed_at, hs.data, "
+                f"{peak_score_expression} AS peak_alert_score, "
                 f"{sort_expression} AS sort_value FROM host_snapshots hs "
                 f"WHERE {where} ORDER BY {sort_expression} {direction}, "
                 f"hs.ip {direction} LIMIT ?",
@@ -2351,6 +2368,11 @@ class RunDataReader:
         for row in rows[:limit]:
             host = self._live_host(str(row["ip"]))
             host["observed_at"] = float(row["observed_at"])
+            host["peak_alert_score"] = (
+                float(row["peak_alert_score"])
+                if row["peak_alert_score"] is not None
+                else None
+            )
             host["load"] = self._host_load(str(row["ip"]))
             host.update(
                 self._ip_context_for_ip(str(host["ip"]), host.get("dns"))
