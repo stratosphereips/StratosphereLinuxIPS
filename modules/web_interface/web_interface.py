@@ -106,7 +106,11 @@ class WebInterface(IModule):
             and command[index + 1] == str(port)
             for index, value in enumerate(command)
         )
-        return process_uid == os.geteuid() and module_marker in command and has_port
+        return (
+            process_uid == os.geteuid()
+            and module_marker in command
+            and has_port
+        )
 
     def _replace_stale_server(self, port: int) -> bool:
         """
@@ -192,14 +196,14 @@ class WebInterface(IModule):
             self.history_stop.wait(max(1.0 - elapsed, 0.05))
 
     def _backfill_history(self) -> None:
-        """Recover durable detection history without blocking live data."""
+        """Recover durable detection history once per minute."""
         while not self.history_stop.is_set():
             try:
                 if self.history_collector:
                     self.history_collector.backfill_detections()
             except Exception as error:
                 self.print(f"Detection backfill error: {error}", 0, 1)
-            self.history_stop.wait(30)
+            self.history_stop.wait(60)
 
     def pre_main(self) -> bool:
         """
@@ -219,7 +223,9 @@ class WebInterface(IModule):
             )
             return True
 
-        history_path = Path(self.get_module_specific_output_path("history.sqlite"))
+        history_path = Path(
+            self.get_module_specific_output_path("history.sqlite")
+        )
         redis_client = redis.Redis(
             host="127.0.0.1",
             port=self.redis_port,
