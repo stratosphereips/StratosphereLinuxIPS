@@ -3072,6 +3072,72 @@ class RunDataReader:
                 metadata[label.strip()] = value.strip()
         return metadata
 
+    def _firewall_overview(self) -> Dict[str, Any]:
+        """Summarize current and historical firewall enforcement.
+
+        Returns:
+            Active IP count, block and unblock totals, and impact estimates.
+        """
+        try:
+            blocked_rows = self.redis.zrange(
+                "blocked_ips", 0, -1, withscores=True
+            )
+            schedule_rows = self.redis.hgetall("firewall_blocks")
+        except redis.RedisError:
+            blocked_rows, schedule_rows = [], {}
+        active_blocks: Dict[str, float] = {}
+        if isinstance(blocked_rows, (list, tuple)):
+            for row in blocked_rows:
+                try:
+                    ip, blocked_at = row
+                    active_blocks[str(ip)] = float(blocked_at)
+                except (TypeError, ValueError):
+                    continue
+        scheduled_ips = (
+            {str(ip) for ip in schedule_rows}
+            if isinstance(schedule_rows, dict)
+            else set()
+        )
+        history = self._firewall_history()
+        return {
+            "current": len(set(active_blocks) | scheduled_ips),
+            "added": sum(item.get("action") == "blocked" for item in history),
+            "discarded": sum(
+                item.get("action") == "unblocked" for item in history
+            ),
+            "impact": self._firewall_attack_estimate(history, active_blocks),
+        }
+
+    def metadata(self) -> Dict[str, Any]:
+        """Return the bounded metadata snapshot for this run.
+
+        Returns:
+            Parsed run metadata and its response timestamp.
+        """
+        return {"items": self._run_metadata(), "updated_at": time.time()}
+
+    def logs(self) -> Dict[str, Any]:
+        """Return the latest parsed runtime messages.
+
+        Returns:
+            Total parsed message count and the newest bounded records.
+        """
+        with connect_history(self.history_path, read_only=True) as history:
+            total = int(
+                history.execute(
+                    "SELECT COUNT(*) AS count FROM error_events"
+                ).fetchone()["count"]
+            )
+            items = [
+                dict(row)
+                for row in history.execute(
+                    "SELECT event_time, module, message, line "
+                    "FROM error_events ORDER BY event_time DESC, id DESC "
+                    "LIMIT 100"
+                ).fetchall()
+            ]
+        return {"items": items, "total": total, "updated_at": time.time()}
+
     def overview(self) -> Dict[str, Any]:
         """Build a bounded current-run operational overview."""
         analysis = self.redis.hgetall("analysis")
@@ -3154,6 +3220,7 @@ class RunDataReader:
         estimated_seconds_remaining = (
             disk.free / growth if growth > 0 else None
         )
+        firewall = self._firewall_overview()
         return {
             "run": {
                 **analysis,
@@ -3189,7 +3256,12 @@ class RunDataReader:
                 "processed_flows": processed_flows,
                 "module_errors": sum(error_counts.values()),
             },
-            "firewall_impact": self._firewall_attack_estimate(),
+            "firewall": {
+                "current": firewall["current"],
+                "added": firewall["added"],
+                "discarded": firewall["discarded"],
+            },
+            "firewall_impact": firewall["impact"],
             "diagnostics": {
                 "redis_alert_count": redis_alert_count,
                 "alert_count_mismatch": redis_alert_count != alert_count,
@@ -3749,9 +3821,18 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_asset(self, filename: str, content_type: str) -> None:
-        """Send one allow-listed interface asset."""
-        path = Path(__file__).with_name(filename)
+    def _send_asset(self, filename: str | Path, content_type: str) -> None:
+        """Send one allow-listed interface asset.
+
+        Parameters:
+            filename: Sibling filename or explicit repository asset path.
+            content_type: HTTP media type returned for the asset.
+        """
+        path = (
+            filename
+            if isinstance(filename, Path)
+            else Path(__file__).with_name(filename)
+        )
         try:
             body = path.read_bytes()
         except OSError:
@@ -3778,6 +3859,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = reader.identity()
         elif path == "/api/overview":
             payload = reader.overview()
+        elif path == "/api/metadata":
+            payload = reader.metadata()
+        elif path == "/api/logs":
+            payload = reader.logs()
         elif path == "/api/metrics":
             payload = reader.metrics(query)
         elif path == "/api/alerts":
@@ -3829,6 +3914,13 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/": ("index.html", "text/html; charset=utf-8"),
             "/app.js": ("app.js", "text/javascript; charset=utf-8"),
             "/style.css": ("style.css", "text/css; charset=utf-8"),
+            "/favicon.png": (
+                Path(__file__).parents[2]
+                / "docs"
+                / "images"
+                / "slips_logo.png",
+                "image/png",
+            ),
         }
         if parsed.path in assets:
             self._send_asset(*assets[parsed.path])
