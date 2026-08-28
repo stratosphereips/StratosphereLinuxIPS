@@ -81,6 +81,10 @@ def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
         ].split("function renderOverview", 1)[0]
         assert 'data-sort="score">Current Slips score</th>' in index_source
         assert (
+            'data-sort="peak_score">Past peak Slips score</th>' in index_source
+        )
+        assert "(row) => pastPeakSlipsScore(row)" in section
+        assert (
             'id="host-score-chart" class="line-chart" viewBox="0 0 1200 180"'
             in index_source
         )
@@ -1627,6 +1631,69 @@ def test_hosts_filter_by_maximum_threat_level(tmp_path) -> None:
     assert result["total"] == 1
     assert result["full_total"] == 2
     assert result["items"][0]["ip"] == "10.0.0.1"
+
+
+def test_hosts_show_and_sort_real_past_peak_score(tmp_path) -> None:
+    """Return full-run persisted score peaks and sort the complete inventory."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.score_mode = "ratl"
+    reader.alert_threshold = 5.0
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {}
+    reader._host_load = Mock(
+        return_value={"flows": 0, "bytes": 0, "packets": 0, "last_seen": 0}
+    )
+    reader._profile_evidence_count = Mock(return_value=0)
+    reader._profile_alert_count = Mock(return_value=0)
+    initialize_history(reader.history_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE evidence (profile_ip TEXT, "
+            "accumulated_threat_level REAL, accumulated_ratl REAL)"
+        )
+        connection.execute("CREATE TABLE alerts (ip_alerted TEXT)")
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?, ?)",
+            [
+                ("10.0.0.1", 3.0, 1.0),
+                ("10.0.0.1", 18.0, 6.0),
+                ("10.0.0.2", 9.0, 3.0),
+            ],
+        )
+    with connect_history(reader.history_path) as connection:
+        connection.executemany(
+            "INSERT INTO host_snapshots VALUES (?, ?, ?)",
+            [
+                (
+                    "10.0.0.1",
+                    1.0,
+                    json.dumps({"ip": "10.0.0.1", "scope": "local"}),
+                ),
+                (
+                    "10.0.0.2",
+                    2.0,
+                    json.dumps({"ip": "10.0.0.2", "scope": "local"}),
+                ),
+            ],
+        )
+
+    result = reader.hosts(
+        {"range": ["all"], "sort": ["peak_score"], "order": ["desc"]}
+    )
+
+    assert [item["ip"] for item in result["items"]] == [
+        "10.0.0.1",
+        "10.0.0.2",
+    ]
+    assert [item["peak_alert_score"] for item in result["items"]] == [
+        6.0,
+        3.0,
+    ]
+    assert result["sort"] == "peak_score"
+    assert result["order"] == "desc"
 
 
 def test_hosts_live_range_uses_indexed_flow_clock(tmp_path) -> None:
