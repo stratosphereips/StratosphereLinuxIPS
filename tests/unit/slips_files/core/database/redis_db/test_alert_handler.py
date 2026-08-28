@@ -41,10 +41,14 @@ def test_is_detection_disabled_accepts_canonical_and_legacy_names(
     alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.disabled_detections = [configured_name]
 
-    assert alert_handler.is_detection_disabled(EvidenceType.CONNECTION_WITHOUT_DNS)
+    assert alert_handler.is_detection_disabled(
+        EvidenceType.CONNECTION_WITHOUT_DNS
+    )
 
 
-def test_get_alert_generation_lock_is_scoped_to_profile_and_timewindow() -> None:
+def test_get_alert_generation_lock_is_scoped_to_profile_and_timewindow() -> (
+    None
+):
     """Verify workers for one profile and time window share a Redis lock."""
     alert_handler = ModuleFactory().create_alert_handler_obj()
     expected_lock = Mock()
@@ -59,7 +63,7 @@ def test_get_alert_generation_lock_is_scoped_to_profile_and_timewindow() -> None
     assert result is expected_lock
     alert_handler.r.lock.assert_called_once_with(
         "alert_generation_lock:profile_192.168.1.20:timewindow4",
-        timeout=60,
+        timeout=300,
         blocking_timeout=None,
     )
 
@@ -87,7 +91,9 @@ def test_get_alert_generation_lock_is_scoped_to_profile_and_timewindow() -> None
         ),
     ],
 )
-def test_remove_whitelisted_evidence(all_evidence, expected_result, side_effect):
+def test_remove_whitelisted_evidence(
+    all_evidence, expected_result, side_effect
+):
     alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
     alert_handler.r.sismember.side_effect = side_effect
@@ -241,7 +247,9 @@ def test_set_accumulated_threat_level(
         ),
     ],
 )
-def test_update_accumulated_threat_level(profileid, twid, update_val, expected_call):
+def test_update_accumulated_threat_level(
+    profileid, twid, update_val, expected_call
+):
     alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
 
@@ -305,7 +313,9 @@ def test_init_evidence_number(initial_value, expected_value):
 
     alert_handler.init_evidence_number()
 
-    alert_handler.r.set.assert_called_once_with("number_of_evidence", expected_value)
+    alert_handler.r.set.assert_called_once_with(
+        "number_of_evidence", expected_value
+    )
 
 
 @pytest.mark.parametrize(
@@ -403,7 +413,9 @@ def test_set_evidence(
         ("high", "critical", utils.threat_levels["critical"]),
     ],
 )
-def test_update_max_threat_level(max_threat_level, cur_threat_level, expected_max):
+def test_update_max_threat_level(
+    max_threat_level, cur_threat_level, expected_max
+):
     alert_handler = ModuleFactory().create_alert_handler_obj()
     profileid = "profile_192.168.1.1"
     alert_handler.r = MagicMock()
@@ -494,7 +506,9 @@ def test_get_accumulated_threat_level(profileid, twid, expected_result):
         ("evidence_456", False, False),
     ],
 )
-def test_is_whitelisted_evidence(evidence_id, sismember_return_value, expected_result):
+def test_is_whitelisted_evidence(
+    evidence_id, sismember_return_value, expected_result
+):
     alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
     alert_handler.r.sismember.return_value = sismember_return_value
@@ -527,14 +541,18 @@ def test_is_whitelisted_evidence(evidence_id, sismember_return_value, expected_r
         ("profile123", "twid456", "", {}),
     ],
 )
-def test_get_profileid_twid_alerts(profileid, twid, stored_alerts, expected_result):
+def test_get_profileid_twid_alerts(
+    profileid, twid, stored_alerts, expected_result
+):
     alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
     alert_handler.r.hget.return_value = stored_alerts
 
     result = alert_handler.get_profileid_twid_alerts(profileid, twid)
     assert result == expected_result
-    alert_handler.r.hget.assert_called_once_with(f"{profileid}_{twid}", "alerts")
+    alert_handler.r.hget.assert_called_once_with(
+        f"{profileid}_{twid}", "alerts"
+    )
 
 
 @pytest.mark.parametrize(
@@ -596,14 +614,18 @@ def test_set_flow_causing_evidence(uids, evidence_ID):
         ("evidence2", None, []),
     ],
 )
-def test_get_flows_causing_evidence(evidence_ID, returned_uids, expected_result):
+def test_get_flows_causing_evidence(
+    evidence_ID, returned_uids, expected_result
+):
     alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
     alert_handler.r.hget.return_value = returned_uids
 
     result = alert_handler.get_flows_causing_evidence(evidence_ID)
 
-    alert_handler.r.hget.assert_called_once_with("flows_causing_evidence", evidence_ID)
+    alert_handler.r.hget.assert_called_once_with(
+        "flows_causing_evidence", evidence_ID
+    )
     assert result == expected_result
 
 
@@ -611,7 +633,9 @@ def test_set_max_seen_risk_weight_caps_to_high_weight() -> None:
     alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
 
-    alert_handler._set_max_seen_risk_weight("profile_192.168.1.1", RiskWeight.HIGH)
+    alert_handler._set_max_seen_risk_weight(
+        "profile_192.168.1.1", RiskWeight.HIGH
+    )
 
     alert_handler.r.hset.assert_called_once_with(
         alert_handler.constants.MAX_RISK_WEIGHT_OF_ALL_PROFILES,
@@ -746,9 +770,13 @@ def test_get_evidence_causing_alert(profileid, twid, alert_id, expected_alert):
         '{"profile1_twid1_alert1": ["ev1", "ev2", "ev3"]}'
     )
 
-    result = alert_handler.get_evidence_causing_alert(profileid, twid, alert_id)
+    result = alert_handler.get_evidence_causing_alert(
+        profileid, twid, alert_id
+    )
 
-    alert_handler.r.hget.assert_called_once_with(f"{profileid}_{twid}", "alerts")
+    alert_handler.r.hget.assert_called_once_with(
+        f"{profileid}_{twid}", "alerts"
+    )
     assert result == expected_alert
 
 
