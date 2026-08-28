@@ -295,37 +295,3 @@ class Unblocker(IUnblocker):
             self.print(txt)
             self.log(txt)
             return False
-
-    def _remove_rule(
-        self,
-        ip: str,
-        flag: str,
-        options: Dict[str, str],
-    ) -> bool:
-        """Delete one rule and treat an already-absent rule as removed.
-
-        Parameters:
-            ip: IP address in the rule.
-            flag: Iptables source or destination selector.
-            options: Optional protocol and port selectors.
-
-        Returns:
-            True when the rule was deleted or no longer exists.
-        """
-        deleted = exec_iptables_command(
-            self.sudo,
-            action="delete",
-            ip_to_block=ip,
-            flag=flag,
-            options=options,
-        )
-        if deleted:
-            return True
-        still_exists = exec_iptables_command(
-            self.sudo,
-            action="check",
-            ip_to_block=ip,
-            flag=flag,
-            options=options,
-        )
-        return not still_exists
