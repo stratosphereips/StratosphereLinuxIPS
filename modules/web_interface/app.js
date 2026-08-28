@@ -608,6 +608,79 @@ function renderMetadata(metadata) {
   }
 }
 
+/** Infer a display severity without changing the retained raw log line. */
+function logSeverity(record) {
+  const content = `${record.message || ""} ${record.line || ""}`.toLowerCase();
+  if (/\b(critical|fatal|panic|traceback|exception)\b/.test(content)) return "critical";
+  if (/\b(warning|warn)\b/.test(content)) return "warning";
+  if (/\b(debug)\b/.test(content)) return "debug";
+  if (/\b(info|notice)\b/.test(content)) return "info";
+  return "error";
+}
+
+/** Append safe, lightly highlighted log text to a console line. */
+function appendHighlightedLogText(container, value) {
+  const content = String(value || "");
+  const tokenPattern = /(\b(?:critical|fatal|panic|traceback|exception|error|failed|failure|warning|warn)\b|(?:\/[\w.@-]+)+(?:\.py)?(?::\d+)?|\b(?:\d{1,3}\.){3}\d{1,3}\b)/gi;
+  let offset = 0;
+  for (const match of content.matchAll(tokenPattern)) {
+    if (match.index > offset) {
+      container.append(document.createTextNode(content.slice(offset, match.index)));
+    }
+    const token = match[0];
+    const className = token.startsWith("/") || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(token)
+      ? "log-token-reference" : "log-token-alert";
+    container.append(text("span", token, className));
+    offset = match.index + token.length;
+  }
+  if (offset < content.length) {
+    container.append(document.createTextNode(content.slice(offset)));
+  }
+}
+
+/** Open one retained runtime event in a console-style investigation drawer. */
+function openLog(record) {
+  const severity = logSeverity(record);
+  openDrawer("RUNTIME LOG", record.module || "Slips");
+  const body = byId("drawer-body");
+  body.append(investigationStats([
+    ["Time", formatTime(record.event_time)],
+    ["Module", record.module || "unknown"],
+    ["Level", text("span", severity, `log-level ${severity}`)],
+  ]));
+  const terminal = document.createElement("section");
+  terminal.className = `log-console ${severity}`;
+  const titlebar = document.createElement("div");
+  titlebar.className = "log-console-titlebar";
+  const lights = document.createElement("span");
+  lights.className = "log-console-lights";
+  lights.setAttribute("aria-hidden", "true");
+  lights.append(text("i", ""), text("i", ""), text("i", ""));
+  titlebar.append(lights, text("code", `${record.module || "Slips"} · errors.log`));
+  const output = document.createElement("div");
+  output.className = "log-console-output";
+  const line = document.createElement("div");
+  line.className = "log-console-line";
+  line.append(
+    text("span", formatTime(record.event_time), "log-console-time"),
+    text("span", `[${record.module || "unknown"}]`, "log-console-module"),
+    text("strong", severity, `log-console-level ${severity}`),
+  );
+  const message = document.createElement("span");
+  message.className = "log-console-message";
+  appendHighlightedLogText(message, record.message);
+  line.append(message);
+  const raw = document.createElement("div");
+  raw.className = "log-console-raw";
+  raw.append(
+    text("small", "RAW SOURCE"),
+    text("pre", record.line || record.message || "No source line retained."),
+  );
+  output.append(line, raw);
+  terminal.append(titlebar, output);
+  body.append(terminal);
+}
+
 /**
  * Render the latest parsed runtime log messages.
  *
@@ -619,9 +692,10 @@ function renderLogs(payload) {
   byId("logs-count").textContent = `${errors.length} shown · ${compact(payload.total)} total`;
   renderTable("logs-table", errors, [
     (row) => formatTime(row.event_time),
-    (row) => text("code", row.module),
-    (row) => row.message,
-  ]);
+    (row) => text("span", logSeverity(row), `log-level ${logSeverity(row)}`),
+    (row) => text("code", row.module, "log-module"),
+    (row) => text("span", row.message, `log-message ${logSeverity(row)}`),
+  ], openLog);
 }
 
 /** Render a module resource value with a 0–100 red heat-map background. */
