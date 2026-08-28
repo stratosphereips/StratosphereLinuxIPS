@@ -417,3 +417,27 @@ def test_reading_flows_from_cyst_uses_supported_module_name() -> None:
     process_manager.main.args.input_module = Modules.CYST.value
 
     assert process_manager._reading_flows_from_cyst() is True
+
+
+@pytest.mark.parametrize(
+    "cli_enabled, config_enabled, expected_disabled",
+    [
+        (False, False, True),
+        (False, True, False),
+        (True, False, False),
+    ],
+)
+def test_web_interface_feature_toggle(
+    cli_enabled: bool,
+    config_enabled: bool,
+    expected_disabled: bool,
+) -> None:
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.webinterface = cli_enabled
+    process_manager.main.conf.web_interface_enabled.return_value = (
+        config_enabled
+    )
+
+    disabled = process_manager._get_feature_toggled_disabled_modules()
+
+    assert (Modules.WEB_INTERFACE in disabled) is expected_disabled

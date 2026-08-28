@@ -108,6 +108,7 @@ class ProcessManager(
         self.read_config()
         self.all_children_started = False
         self.core_module_failure = False
+        self.shutdown_cause = ""
         self.disabled_warning_printed = False
         # total number of detection modules plus core processes (main,
         # evidence handler, profiler, input) slips is starting, used to

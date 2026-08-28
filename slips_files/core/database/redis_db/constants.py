@@ -71,6 +71,7 @@ class Constants:
     # used in the web interface
     BLOCKED_PROFILES_AND_TWS = "BlockedProfTW"
     BLOCKED_IPS = "blocked_ips"
+    FIREWALL_BLOCKS = "firewall_blocks"
     PROFILES = "profiles"
     NUMBER_OF_ALERTS = "number_of_alerts"
     KNOWN_FP_MD5_HASHES = "known_fps"
@@ -117,6 +118,8 @@ class Constants:
     PEER_TRUST = "peer_trust"
     P2P_TRUST_SET = "peers_strust"
     P2P_PEER_INFO_HASH = "peer_info"
+    P2P_MESSAGE_COUNTS = "p2p_message_counts"
+    P2P_MESSAGE_HISTORY = "p2p_message_history"
     FIDES_CACHE_KEY = "fides_cache"
     FIDES_CACHE_CREATED_SECONDS = "created_seconds"
     FLOWS_PER_MINUTE = "flows_per_minute"

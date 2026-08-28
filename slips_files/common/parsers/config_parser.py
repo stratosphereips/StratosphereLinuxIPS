@@ -121,6 +121,33 @@ class ConfigParser(object):
         except Exception:
             return 55000
 
+    @property
+    def web_interface_bind(self) -> str:
+        """Read where the web interface accepts connections.
+
+        Returns:
+            ``localhost`` or ``interface``; invalid values use localhost.
+        """
+        value = self.read_configuration("web_interface", "bind", "localhost")
+        normalized = str(value).strip().lower()
+        return (
+            normalized
+            if normalized in {"localhost", "interface"}
+            else "localhost"
+        )
+
+    def web_interface_enabled(self) -> bool:
+        """
+        Check whether the local web interface is enabled in configuration.
+
+        Returns:
+            True when web_interface.enabled is enabled.
+        """
+        value = self.read_configuration("web_interface", "enabled", False)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
     def get_entropy_threshold(self):
         """
         gets the shannon entropy used in detecting C&C over DNS TXT records from slips.conf/slips.yaml

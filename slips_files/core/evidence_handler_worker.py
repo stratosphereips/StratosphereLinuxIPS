@@ -10,6 +10,8 @@ import sys
 from multiprocessing import Queue
 from typing import Dict, List, Optional
 
+from redis.exceptions import LockNotOwnedError
+
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.idmefv2 import IDMEFv2
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -137,6 +139,7 @@ class EvidenceHandlerWorker(IModule):
             )
             note.update(
                 {
+                    "evidence_type": str(evidence.evidence_type),
                     "uids": evidence.uid,
                     "accumulated_threat_level": accumulated_threat_level,
                     "risk_accumulated_threat_level": risk_accumulated_threat_level,
@@ -215,7 +218,7 @@ class EvidenceHandlerWorker(IModule):
         now = utils.get_human_readable_datetime()
 
         alert_description = (
-            f"{alert.last_flow_datetime}: " f"Src IP {alert.profile.ip:26}. "
+            f"{alert.last_flow_datetime}: Src IP {alert.profile.ip:26}. "
         )
         if blocked:
             alert_description += "Is blocked "
@@ -229,7 +232,7 @@ class EvidenceHandlerWorker(IModule):
             f"{alert.timewindow.number}. (real time: {now})"
         )
         if self.is_running_non_stop:
-            alert_description += f" (risk weight:" f" {current_risk_weight})"
+            alert_description += f" (risk weight: {current_risk_weight})"
 
         self.add_to_log_file(alert_description)
         self.add_alert_to_json_log_file(alert)
@@ -506,6 +509,45 @@ class EvidenceHandlerWorker(IModule):
 
         profileid = str(evidence.profile)
         twid = str(evidence.timewindow)
+        # Do not trust publishers to enforce this setting. A delayed process
+        # from a replaced run can still publish briefly while shutting down.
+        if self.db.is_detection_disabled(evidence.evidence_type) is True:
+            self.db.delete_evidence(profileid, twid, evidence.id)
+            return
+
+        # Multiple evidence-handler processes consume the same queue. Scoring,
+        # selecting correlated evidence, persisting the alert, and resetting
+        # the score must therefore be one cross-process operation per profile
+        # and time window.
+        lock = self.db.get_alert_generation_lock(profileid, twid)
+        lock.acquire()
+        try:
+            self._handle_evidence_added_under_lock(evidence, profileid, twid)
+        finally:
+            try:
+                lock.release()
+            except LockNotOwnedError:
+                self.print(
+                    "Warning: Alert-generation lock expired before release for "
+                    f"{profileid}/{twid}; evidence processing completed.",
+                    1,
+                    0,
+                )
+
+    def _handle_evidence_added_under_lock(
+        self,
+        evidence: Evidence,
+        profileid: str,
+        twid: str,
+    ) -> None:
+        """
+        Process evidence while its profile and time window lock is held.
+
+        Parameters:
+            evidence: Evidence to score and potentially turn into an alert.
+            profileid: Canonical profile identifier for the evidence.
+            twid: Canonical time-window identifier for the evidence.
+        """
         timestamp = evidence.timestamp
 
         self.db.mark_evidence_as_processed(evidence.id, profileid, twid)
@@ -555,6 +597,12 @@ class EvidenceHandlerWorker(IModule):
                 "report_to_peers", json.dumps(utils.to_dict(evidence))
             )
 
+        # Informational evidence has no threat contribution and therefore
+        # cannot be the event that opens an alert. It remains processed and
+        # may still be correlated with a later, score-contributing alert.
+        if evidence.threat_level == ThreatLevel.INFO:
+            return
+
         if self.is_running_non_stop:
             # here we use the RATL to dynamically change the risk weight of
             # slips
@@ -569,7 +617,11 @@ class EvidenceHandlerWorker(IModule):
         if not tw_evidence:
             return
 
-        tw_start, tw_end = self.db.get_tw_limits(profileid, twid)
+        tw_start, tw_end = self.db.get_tw_limits(
+            profileid,
+            twid,
+            evidence.timestamp,
+        )
         evidence.timewindow.start_time = tw_start
         evidence.timewindow.end_time = tw_end
 

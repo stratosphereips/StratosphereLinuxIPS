@@ -4,6 +4,7 @@
 # and final cleanup for ProcessManager.
 import multiprocessing
 import os
+import select
 import signal
 import sys
 import time
@@ -13,6 +14,11 @@ from multiprocessing.process import BaseProcess
 from typing import List, Optional, Tuple
 
 from modules.supported_module_names import Modules
+from modules.blocking.slips_chain_manager import (
+    del_slips_blocking_chain,
+    has_slips_firewall_rules,
+)
+from modules.web_interface.web_interface import WebInterface
 from slips_files.common.plotter import Plotter
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import print_separator
@@ -191,6 +197,7 @@ class ShutdownMixin:
         if self.is_slips_live_updating_event.is_set():
             # slips is auto updating this version of slips should stop and
             # the updated one will start soon
+            self.shutdown_cause = "live_update"
             return True
 
         if not self.all_children_started:
@@ -202,9 +209,15 @@ class ShutdownMixin:
 
         if self._did_a_core_module_fail():
             self.core_module_failure = True
+            self.shutdown_cause = "core_failure"
             return True
 
-        if self.is_stop_msg_received() or self.is_done_receiving_new_flows():
+        if self.is_stop_msg_received():
+            self.shutdown_cause = "control"
+            return True
+
+        if self.is_done_receiving_new_flows():
+            self.shutdown_cause = "natural"
             return True
 
         return False
@@ -400,8 +413,7 @@ class ShutdownMixin:
 
         self.stopped_modules.append(str(Modules.LLM_PROXY))
         self.main.print(
-            "Stopping modules because llm_proxy stopped: "
-            f"{stopped_module_names}"
+            f"Stopping modules because llm_proxy stopped: {stopped_module_names}"
         )
 
     def health_check_modules(self):
@@ -465,6 +477,183 @@ class ShutdownMixin:
             self.kill_process_tree(int(pid))
             self.print_stopped_module(module_name, total_modules=len(children))
 
+    def _is_web_interface_enabled(self) -> bool:
+        """
+        Check whether CLI or configuration enabled the local web interface.
+
+        Returns:
+            True when this run started the local web interface.
+        """
+        if getattr(self.main.args, "webinterface", False) is True:
+            return True
+        accessor = getattr(self.main.conf, "web_interface_enabled", None)
+        return callable(accessor) and accessor() is True
+
+    def _ask_to_stop_web_interface(self) -> bool:
+        """
+        Ask whether to stop the local web interface after analysis stops.
+
+        Returns:
+            True when the server should stop immediately.
+        """
+        if not sys.stdin or not sys.stdin.isatty():
+            self.main.print(
+                "No interactive console is available; stopping the web interface."
+            )
+            return True
+
+        print(
+            "Slips analysis has stopped. Stop the web interface? [y/N] ",
+            end="",
+            flush=True,
+        )
+        while not getattr(self.main, "shutdown_signal_received", False):
+            try:
+                readable, _, _ = select.select([sys.stdin], [], [], 0.25)
+            except (OSError, ValueError):
+                return True
+            if not readable:
+                continue
+            response = sys.stdin.readline()
+            if response == "":
+                return True
+            return response.strip().lower() in {"y", "yes"}
+        return True
+
+    def _stop_web_interface(self, port: int) -> None:
+        """
+        Stop only the verified Slips web server on the configured port.
+
+        Parameters:
+            port: Configured HTTP port.
+        """
+        if WebInterface.stop_verified_server(port):
+            self.main.web_interface_shutdown = True
+            self.main.print("Web interface stopped.")
+            return
+        self.main.print(
+            f"Could not stop the verified web interface on port {port}.",
+            0,
+            1,
+        )
+
+    def _ask_to_keep_firewall_rules(self) -> bool:
+        """Ask whether managed firewall rules should survive Slips shutdown.
+
+        Returns:
+            True when rules should remain installed, false when deleted.
+        """
+        if not sys.stdin or not sys.stdin.isatty():
+            self.main.print(
+                "No interactive console is available; keeping Slips "
+                "firewall rules."
+            )
+            return True
+        print(
+            "Slips is stopping. Keep the installed firewall rules? [Y/n] ",
+            end="",
+            flush=True,
+        )
+        while not getattr(self.main, "shutdown_signal_received", False):
+            try:
+                readable, _, _ = select.select([sys.stdin], [], [], 0.25)
+            except (OSError, ValueError):
+                return True
+            if not readable:
+                continue
+            response = sys.stdin.readline()
+            if response == "":
+                return True
+            return response.strip().lower() not in {"n", "no", "d", "delete"}
+        return True
+
+    def _handle_firewall_after_analysis(self) -> None:
+        """Keep or remove managed firewall rules after an interactive run."""
+        if not has_slips_firewall_rules():
+            return
+        forced = (
+            self.main.mode == "daemonized"
+            or getattr(self.main, "force_shutdown_requested", False)
+            or getattr(self.main, "sigterm_received", False)
+        )
+        if forced:
+            self.main.print(
+                "Slips firewall rules remain installed after forced shutdown."
+            )
+            return
+        # The first Ctrl-C initiated graceful shutdown and must not cancel this
+        # explicit keep/delete decision.
+        self.main.shutdown_signal_received = False
+        if self._ask_to_keep_firewall_rules():
+            self.main.print("Keeping Slips firewall rules after shutdown.")
+            return
+        if not del_slips_blocking_chain():
+            self.main.print("Unable to delete the Slips firewall rules.", 0, 1)
+            return
+        states = self.main.db.get_firewall_block_states()
+        if isinstance(states, dict):
+            for ip in states:
+                self.main.db.del_firewall_block_state(ip)
+                self.main.db.del_blocked_ip(ip)
+        self.main.print("Deleted Slips firewall rules and recovery state.")
+
+    def _handle_web_interface_after_analysis(
+        self, natural_completion: bool
+    ) -> None:
+        """
+        Prompt and wait after normal completion, or stop on forced shutdown.
+
+        Parameters:
+            natural_completion: Whether finite input completed without a stop signal.
+        """
+        if not self._is_web_interface_enabled():
+            return
+        port = int(self.main.conf.web_interface_port)
+        if not WebInterface.is_verified_server_running(port):
+            self.main.web_interface_shutdown = True
+            return
+        keep_web_interface_available = natural_completion or getattr(
+            self.main, "keyboard_interrupt_received", False
+        )
+        if (
+            getattr(self.main, "force_shutdown_requested", False) is True
+            or getattr(self.main, "sigterm_received", False) is True
+            or not keep_web_interface_available
+        ):
+            self._stop_web_interface(port)
+            return
+
+        # The first Ctrl-C stopped the analysis. It must not also cancel the
+        # web-interface prompt; a later Ctrl-C remains a forced shutdown.
+        self.main.shutdown_signal_received = False
+        if self._ask_to_stop_web_interface():
+            self._stop_web_interface(port)
+            return
+
+        bind_mode = getattr(self.main.conf, "web_interface_bind", "localhost")
+        if not isinstance(bind_mode, str):
+            bind_mode = "localhost"
+        display_host = "localhost"
+        if bind_mode == "interface":
+            for interface in utils.get_all_interfaces(self.main.args):
+                candidate = self.main.db.get_host_ip(interface)
+                if isinstance(candidate, str) and candidate:
+                    display_host = candidate
+                    break
+        self.main.print(
+            f"Web interface remains available at "
+            f"http://{display_host}:{port}/. "
+            "Press CTRL-C to stop it and exit Slips."
+        )
+        try:
+            while WebInterface.is_verified_server_running(
+                port
+            ) and not getattr(self.main, "shutdown_signal_received", False):
+                time.sleep(0.5)
+        except KeyboardInterrupt:
+            self.main.shutdown_signal_received = True
+        self._stop_web_interface(port)
+
     def _generate_plots(self) -> None:
         """
         Generate performance plots after analysis finishes.
@@ -483,9 +672,14 @@ class ShutdownMixin:
             self.plotter.write_throughput_metrics()
             self.plotter.plot_flows_from_conn_log()
 
-    def shutdown_gracefully(self) -> Optional[bool]:
+    def shutdown_gracefully(
+        self, natural_completion: bool = False
+    ) -> Optional[bool]:
         """
         Wait for modules to finish or kill them after the timeout.
+
+        Parameters:
+            natural_completion: Whether finite input completed without a signal.
 
         Returns:
             False when interrupted during shutdown, otherwise None.
@@ -556,19 +750,25 @@ class ShutdownMixin:
                         "User pressed ctr+c or Slips was killed by the OS"
                     )
                     graceful_shutdown = False
+                    natural_completion = False
+                    self.main.shutdown_signal_received = True
 
+                    self.main.force_shutdown_requested = True
                 if time.time() - method_start_time >= timeout:
                     # getting here means we're killing them bc of the timeout
                     # not getting here means we're killing them bc of double
                     # ctr+c OR they terminated successfully
-                    shutdown_reason = (
-                        f"Killing modules that took more than {timeout}"
-                        f" mins to finish."
-                    )
+                    shutdown_reason = f"Killing modules that took more than {timeout} mins to finish."
                     print(shutdown_reason)
                     graceful_shutdown = False
+                    natural_completion = False
 
                 self.kill_all_children()
+
+            analysis_time, end_date = self.get_analysis_time()
+            self.main.metadata_man.set_analysis_end_date(end_date)
+            self._handle_firewall_after_analysis()
+            self._handle_web_interface_after_analysis(natural_completion)
 
             if not self.is_slips_live_updating_event.is_set():
                 self.main.redis_man.decide_on_saving_and_killing_the_redis_db()
@@ -579,9 +779,6 @@ class ShutdownMixin:
 
                 self.main.store_zeek_dir_copy()
                 self.main.delete_zeek_files()
-
-            analysis_time, end_date = self.get_analysis_time()
-            self.main.metadata_man.set_analysis_end_date(end_date)
 
             self.main.profilers_manager.cpu_profiler_release()
             self.main.profilers_manager.memory_profiler_release()
@@ -594,5 +791,9 @@ class ShutdownMixin:
                 graceful_shutdown, analysis_time, shutdown_reason, print
             )
         except KeyboardInterrupt:
+            self.main.shutdown_signal_received = True
+            if self._is_web_interface_enabled():
+                port = int(self.main.conf.web_interface_port)
+                self._stop_web_interface(port)
             return False
         return None

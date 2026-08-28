@@ -12,6 +12,7 @@ from slips_files.common.output_paths import get_this_db_path_inside_output_dir
 from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.alerts import Alert
+from slips_files.core.structures.evidence import Evidence
 from slips_files.core.output import Output
 
 
@@ -22,7 +23,16 @@ class SQLiteDB(ISQLite):
     """
 
     name = "sqlite_db"
-    _valid_table_names = frozenset({"flows", "altflows", "alerts"})
+    _valid_table_names = frozenset(
+        {
+            "flows",
+            "altflows",
+            "alerts",
+            "evidence",
+            "evidence_flows",
+            "alert_evidence",
+        }
+    )
 
     def __init__(self, logger: Output, output_dir: str, main_pid: int):
         self.printer = Printer(logger, self.name)
@@ -40,8 +50,26 @@ class SQLiteDB(ISQLite):
         super().__init__(self.name.lower(), main_pid, self._flows_db)
 
         if db_newly_created:
-            # only init tables if the db is newly created
             self.init_tables()
+        else:
+            self._ensure_history_schema()
+
+    def _ensure_history_schema(self) -> None:
+        """Add durable detection tables when opening an older run database."""
+        table_schema = {
+            "evidence": "evidence_id TEXT PRIMARY KEY, evidence_time REAL, "
+            "profile_ip TEXT, timewindow TEXT, threat_level TEXT, "
+            "evidence_type TEXT, description TEXT, confidence REAL, data TEXT, "
+            "whitelisted INTEGER DEFAULT 0",
+            "evidence_flows": "evidence_id TEXT, uid TEXT, "
+            "PRIMARY KEY (evidence_id, uid)",
+            "alert_evidence": "alert_id TEXT, evidence_id TEXT, "
+            "PRIMARY KEY (alert_id, evidence_id)",
+        }
+        for table_name, schema in table_schema.items():
+            self.create_table(table_name, schema)
+        self._ensure_detection_score_columns()
+        self._create_history_indexes()
 
     def init_tables(self):
         """creates the tables we're gonna use"""
@@ -50,12 +78,69 @@ class SQLiteDB(ISQLite):
             "TEXT, twid TEXT, aid TEXT",
             "altflows": "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, "
             "profileid TEXT, twid TEXT, flow_type TEXT",
-            "alerts": "alert_id TEXT PRIMARY KEY, alert_time TEXT, ip_alerted "
+            "alerts": "alert_id TEXT PRIMARY KEY, alert_time REAL, ip_alerted "
             "TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, "
-            "label TEXT",
+            "label TEXT, accumulated_threat_level REAL, "
+            "accumulated_ratl REAL, risk_weight REAL",
+            "evidence": "evidence_id TEXT PRIMARY KEY, evidence_time REAL, "
+            "profile_ip TEXT, timewindow TEXT, threat_level TEXT, "
+            "evidence_type TEXT, description TEXT, confidence REAL, data TEXT, "
+            "accumulated_threat_level REAL, accumulated_ratl REAL, "
+            "whitelisted INTEGER DEFAULT 0",
+            "evidence_flows": "evidence_id TEXT, uid TEXT, "
+            "PRIMARY KEY (evidence_id, uid)",
+            "alert_evidence": "alert_id TEXT, evidence_id TEXT, "
+            "PRIMARY KEY (alert_id, evidence_id)",
         }
         for table_name, schema in table_schema.items():
             self.create_table(table_name, schema)
+        self._create_history_indexes()
+
+    def _ensure_detection_score_columns(self) -> None:
+        """Add Slips detector-score columns to older run databases."""
+        columns = {
+            "alerts": {
+                "accumulated_threat_level": "REAL",
+                "accumulated_ratl": "REAL",
+                "risk_weight": "REAL",
+            },
+            "evidence": {
+                "accumulated_threat_level": "REAL",
+                "accumulated_ratl": "REAL",
+                "whitelisted": "INTEGER DEFAULT 0",
+            },
+        }
+        for table_name, additions in columns.items():
+            existing = set(self.get_columns(table_name))
+            for column_name, column_type in additions.items():
+                if column_name not in existing:
+                    self.execute(
+                        f"ALTER TABLE {table_name} "
+                        f"ADD COLUMN {column_name} {column_type}"
+                    )
+
+    def _create_history_indexes(self) -> None:
+        """Create indexes needed for bounded historical web queries."""
+        indexes = (
+            "CREATE INDEX IF NOT EXISTS alerts_time_idx "
+            "ON alerts(alert_time DESC, alert_id)",
+            "CREATE INDEX IF NOT EXISTS alerts_ip_time_idx "
+            "ON alerts(ip_alerted, alert_time DESC, alert_id)",
+            "CREATE INDEX IF NOT EXISTS evidence_time_idx "
+            "ON evidence(evidence_time DESC, evidence_id)",
+            "CREATE INDEX IF NOT EXISTS evidence_profile_time_idx "
+            "ON evidence(profile_ip, evidence_time DESC, evidence_id)",
+            "CREATE INDEX IF NOT EXISTS evidence_type_idx "
+            "ON evidence(evidence_type, evidence_time DESC)",
+            "CREATE INDEX IF NOT EXISTS evidence_threat_idx "
+            "ON evidence(threat_level, evidence_time DESC)",
+            "CREATE INDEX IF NOT EXISTS evidence_flows_uid_idx "
+            "ON evidence_flows(uid)",
+            "CREATE INDEX IF NOT EXISTS alert_evidence_evidence_idx "
+            "ON alert_evidence(evidence_id)",
+        )
+        for statement in indexes:
+            self.execute(statement)
 
     def _init_db(self):
         """
@@ -331,27 +416,129 @@ class SQLiteDB(ISQLite):
             parameters,
         )
 
-    def add_alert(self, alert: Alert):
+    def _execute_detection_transaction(
+        self, statements: List[tuple[str, tuple]]
+    ) -> None:
         """
-        adds an alert to the alerts table
+        Execute one atomic group of durable detection writes.
+
+        Parameters:
+            statements: SQL statements and their bound parameters.
+        """
+        with self.conn_lock:
+            with self._acquire_flock():
+                try:
+                    cursor = self.conn.cursor()
+                    cursor.execute("BEGIN")
+                    for query, parameters in statements:
+                        cursor.execute(query, parameters)
+                    self.conn.commit()
+                except Exception:
+                    self.conn.rollback()
+                    raise
+
+    def add_evidence(self, evidence: Evidence) -> None:
+        """
+        Persist evidence and its triggering flow identifiers.
+
+        Parameters:
+            evidence: Canonical evidence generated by Slips.
+        """
+        serialized = json.dumps(utils.to_dict(evidence))
+        evidence_time = utils.convert_ts_format(
+            evidence.timestamp, "unixtimestamp"
+        )
+        statements = [
+            (
+                "INSERT OR REPLACE INTO evidence "
+                "(evidence_id, evidence_time, profile_ip, timewindow, "
+                "threat_level, evidence_type, description, confidence, data) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    evidence.id,
+                    evidence_time,
+                    evidence.profile.ip,
+                    str(evidence.timewindow),
+                    str(evidence.threat_level),
+                    str(evidence.evidence_type),
+                    evidence.description,
+                    evidence.confidence,
+                    serialized,
+                ),
+            ),
+            (
+                "DELETE FROM evidence_flows WHERE evidence_id = ?",
+                (evidence.id,),
+            ),
+        ]
+        statements.extend(
+            (
+                "INSERT OR IGNORE INTO evidence_flows "
+                "(evidence_id, uid) VALUES (?, ?)",
+                (evidence.id, uid),
+            )
+            for uid in evidence.uid
+        )
+        self._execute_detection_transaction(statements)
+
+    def mark_evidence_whitelisted(self, evidence_id: str) -> None:
+        """
+        Persist that Evidence Handler excluded an evidence by whitelist.
+
+        Parameters:
+            evidence_id: Canonical evidence identifier.
+        """
+        self.execute(
+            "UPDATE evidence SET whitelisted = 1 WHERE evidence_id = ?",
+            (evidence_id,),
+        )
+
+    def add_alert(self, alert: Alert) -> None:
+        """
+        Persist an alert and its evidence relationships.
+
+        Parameters:
+            alert: Canonical alert generated by Slips.
         """
         now = utils.convert_ts_format(datetime.now(), "unixtimestamp")
-        self.execute(
-            "INSERT OR REPLACE INTO alerts "
-            "(alert_id, ip_alerted, timewindow, tw_start, tw_end, label, alert_time) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?);",
+        statements = [
             (
-                alert.id,
-                alert.profile.ip,
-                str(alert.timewindow),
-                alert.timewindow.start_time,
-                alert.timewindow.end_time,
-                "malicious",
-                # This is the local time slips detected this alert, not the
-                # network time
-                now,
+                "INSERT OR REPLACE INTO alerts "
+                "(alert_id, ip_alerted, timewindow, tw_start, tw_end, "
+                "label, alert_time, accumulated_threat_level, "
+                "accumulated_ratl, risk_weight) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    alert.id,
+                    alert.profile.ip,
+                    str(alert.timewindow),
+                    alert.timewindow.start_time,
+                    alert.timewindow.end_time,
+                    "malicious",
+                    now,
+                    getattr(alert, "accumulated_threat_level", None),
+                    getattr(alert, "accumulated_ratl", None),
+                    (
+                        alert.risk_level.weight
+                        if getattr(alert, "risk_level", None)
+                        else None
+                    ),
+                ),
             ),
+            (
+                "DELETE FROM alert_evidence WHERE alert_id = ?",
+                (alert.id,),
+            ),
+        ]
+        statements.extend(
+            (
+                "INSERT OR IGNORE INTO alert_evidence "
+                "(alert_id, evidence_id) VALUES (?, ?)",
+                (alert.id, evidence_id),
+            )
+            for evidence_id in alert.correl_id
         )
+        self._execute_detection_transaction(statements)
 
     def get_malicious_profiles(self) -> List[str]:
         """

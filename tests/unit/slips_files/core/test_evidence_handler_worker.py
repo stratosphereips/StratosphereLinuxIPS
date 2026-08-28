@@ -5,6 +5,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+from redis.exceptions import LockNotOwnedError
 
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.alerts import Alert
@@ -294,11 +295,24 @@ def test_add_evidence_to_json_log_file_adds_accumulated_ratl(
     assert note["accumulated_threat_level"] == accumulated_threat_level
     assert note["risk_accumulated_threat_level"] == accumulated_ratl
     assert note["risk_level"] == "medium"
+    assert note["evidence_type"] == str(evidence.evidence_type)
 
 
 def test_handle_evidence_added_message_sets_risk_level_on_objects() -> None:
     module_factory = ModuleFactory()
     worker = module_factory.create_evidence_handler_worker_obj()
+    critical_section_events = []
+    alert_generation_lock = MagicMock()
+    alert_generation_lock.acquire.side_effect = (
+        lambda: critical_section_events.append("lock_entered")
+    )
+    alert_generation_lock.release.side_effect = (
+        lambda: critical_section_events.append("lock_released")
+    )
+    worker.db.get_alert_generation_lock.return_value = alert_generation_lock
+    worker.db.mark_evidence_as_processed.side_effect = (
+        lambda *args: critical_section_events.append("evidence_processed")
+    )
     evidence = Evidence(
         evidence_type=EvidenceType.ARP_SCAN,
         description="ARP scan detected",
@@ -334,18 +348,159 @@ def test_handle_evidence_added_message_sets_risk_level_on_objects() -> None:
             "2024-10-04T16:00:00+00:00",
         )
     )
-    worker.handle_new_alert = Mock()
+    worker.handle_new_alert = Mock(
+        side_effect=lambda *args: critical_section_events.append(
+            "alert_stored"
+        )
+    )
     worker.detection_threshold_in_this_width = 10.0
 
     worker.handle_evidence_added_message(
         {"data": json.dumps(utils.to_dict(evidence))}
     )
 
+    worker.db.get_tw_limits.assert_called_once_with(
+        str(evidence.profile),
+        str(evidence.timewindow),
+        evidence.timestamp,
+    )
+    worker.db.get_alert_generation_lock.assert_called_once_with(
+        str(evidence.profile),
+        str(evidence.timewindow),
+    )
+    assert critical_section_events == [
+        "lock_entered",
+        "evidence_processed",
+        "alert_stored",
+        "lock_released",
+    ]
     logged_evidence = worker.add_evidence_to_json_log_file.call_args[0][0]
     assert logged_evidence.risk_level == RiskWeight.HIGH
 
     logged_alert = worker.handle_new_alert.call_args[0][0]
     assert logged_alert.risk_level == RiskWeight.HIGH
+
+
+def test_handle_evidence_added_message_tolerates_expired_lock() -> None:
+    """Verify an expired Redis lock does not crash an evidence worker."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = Evidence(
+        evidence_type=EvidenceType.ARP_SCAN,
+        description="ARP scan detected",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="192.168.1.20",
+        ),
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.8,
+        profile=ProfileID("192.168.1.20"),
+        timewindow=TimeWindow(1),
+        uid=["uid1"],
+        timestamp="2024/10/04 15:45:30.123456+0000",
+    )
+    alert_generation_lock = MagicMock()
+    alert_generation_lock.release.side_effect = LockNotOwnedError(
+        "Lock is no longer owned"
+    )
+    worker.db.get_alert_generation_lock.return_value = alert_generation_lock
+    worker._handle_evidence_added_under_lock = Mock()
+    worker.print = Mock()
+
+    worker.handle_evidence_added_message(
+        {"data": json.dumps(utils.to_dict(evidence))}
+    )
+
+    worker._handle_evidence_added_under_lock.assert_called_once()
+    handled_evidence, handled_profileid, handled_twid = (
+        worker._handle_evidence_added_under_lock.call_args.args
+    )
+    assert handled_evidence.id == evidence.id
+    assert (handled_profileid, handled_twid) == (
+        str(evidence.profile),
+        str(evidence.timewindow),
+    )
+    worker.print.assert_called_once_with(
+        "Warning: Alert-generation lock expired before release for "
+        f"{evidence.profile}/{evidence.timewindow}; evidence processing completed.",
+        1,
+        0,
+    )
+
+
+def test_disabled_evidence_message_is_deleted_without_processing() -> None:
+    """Reject disabled evidence even when a stale publisher sent it."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = Evidence(
+        evidence_type=EvidenceType.CONNECTION_WITHOUT_DNS,
+        description="Connection without DNS",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="10.0.0.1",
+        ),
+        threat_level=ThreatLevel.INFO,
+        confidence=0.8,
+        profile=ProfileID("10.0.0.1"),
+        timewindow=TimeWindow(1),
+        uid=["uid-disabled"],
+        timestamp="2024/10/04 15:45:30.123456+0000",
+    )
+    worker.db.is_detection_disabled.return_value = True
+
+    worker.handle_evidence_added_message(
+        {"data": json.dumps(utils.to_dict(evidence))}
+    )
+
+    worker.db.delete_evidence.assert_called_once_with(
+        str(evidence.profile),
+        str(evidence.timewindow),
+        evidence.id,
+    )
+    worker.db.get_alert_generation_lock.assert_not_called()
+    worker.db.mark_evidence_as_processed.assert_not_called()
+
+
+def test_info_evidence_cannot_open_alert_from_existing_score() -> None:
+    """Verify zero-weight evidence never becomes an alert threshold trigger."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = Evidence(
+        evidence_type=EvidenceType.HTTP_TRAFFIC,
+        description="Unencrypted HTTP traffic",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="10.0.66.100",
+        ),
+        threat_level=ThreatLevel.INFO,
+        confidence=1.0,
+        profile=ProfileID("10.0.66.100"),
+        timewindow=TimeWindow(1),
+        uid=["uid-http"],
+        timestamp="2023/02/16 17:46:13.000000+0000",
+    )
+    worker.whitelist.is_whitelisted_evidence.return_value = False
+    worker.is_running_non_stop = False
+    worker.formatter.add_threat_level_to_evidence_description = Mock(
+        return_value=evidence
+    )
+    worker.formatter.get_evidence_to_log = Mock(return_value="evidence_log")
+    worker.add_to_log_file = Mock()
+    worker.get_accumulated_threat_level = Mock(return_value=55.0)
+    worker.db.get_max_seen_risk_weight = Mock(
+        return_value={"risk_weight": RiskWeight.HIGH, "profile": ""}
+    )
+    worker.add_evidence_to_json_log_file = Mock()
+    worker.give_evidence_to_exporting_modules = Mock()
+    worker.get_evidence_for_tw = Mock()
+    worker.handle_new_alert = Mock()
+
+    worker.handle_evidence_added_message(
+        {"data": json.dumps(utils.to_dict(evidence))}
+    )
+
+    worker.get_evidence_for_tw.assert_not_called()
+    worker.handle_new_alert.assert_not_called()
 
 
 def test_escalate_risk_level_stores_current_weight_for_first_alert() -> None:

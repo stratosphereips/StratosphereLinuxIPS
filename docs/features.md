@@ -563,6 +563,11 @@ tr:nth-child(even) {
     <i>This module uses a machine learning model that is the result of training with the <a href="https://github.com/stratosphereips/pipeline_ml_training_for_SLIPS">Slips-ML-Training-Pipeline</a>. The official models, along with training results, usage instructions, and details on how they were trained, are published in the <a href="https://github.com/stratosphereips/Stratosphere-ML-trained-models">Stratosphere-ML-trained-models</a> repository.</i></td>
     <td>✅</td>
   </tr>
+  <tr>
+    <td>web_interface</td>
+    <td>Read-only, localhost-only interface for one Slips run, with runtime health, alerts, all evidence, triggering flows, and host context.</td>
+    <td>✅</td>
+  </tr>
 
 </table>
 
@@ -628,14 +633,22 @@ Refer to the [Flowalerts section of the docs](https://stratospherelinuxips.readt
 
 ### Disabled alerts
 
-All Slips detections are turned on by default, You can configure which alerts you want to enable/disable in ```config/slips.yaml```
+All Slips detections are turned on by default. Configure the detections to
+disable in `config/slips.yaml` before starting Slips.
 
 Slips support disabling unwanted alerts, simply add the detection you want to disable in
 the ```disabled_detections``` list and slips will not generate any alerts of this type.
 
-for example:
+For example, to disable connections without DNS resolution:
 
-    disabled_detections = [MaliciousJA3, DataExfiltration, SelfSignedCertificate]
+```yaml
+DisabledAlerts:
+  disabled_detections: [CONNECTION_WITHOUT_DNS]
+```
+
+Use the uppercase `EvidenceType` names listed in the comments above this
+setting in `config/slips.yaml`. Legacy CamelCase names remain accepted. The
+setting is applied when a Slips run starts, so restart Slips after changing it.
 
 
 Supported detections are:

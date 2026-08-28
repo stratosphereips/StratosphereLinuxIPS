@@ -78,6 +78,20 @@ class RedisManager:
         # server up after the analysis to avoid losing the analysis
         return not self.saved_redis_dump
 
+    def _is_web_interface_enabled(self) -> bool:
+        """
+        Check whether CLI or configuration enabled the local interface.
+
+        Returns:
+            True when the current run must remain readable by the interface.
+        """
+        if getattr(self.main, "web_interface_shutdown", False):
+            return False
+        if getattr(self.main.args, "webinterface", False) is True:
+            return True
+        accessor = getattr(self.main.conf, "web_interface_enabled", None)
+        return callable(accessor) and accessor() is True
+
     def _should_save_redis_db_after_analysis(self) -> bool:
         """
         Decide whether Slips should persist Redis after this analysis.
@@ -88,7 +102,7 @@ class RedisManager:
         if self.main.args.save:
             return True
 
-        return not self.main.args.webinterface
+        return not self._is_web_interface_enabled()
 
     def decide_on_saving_and_killing_the_redis_db(self) -> bool:
         """
@@ -103,22 +117,18 @@ class RedisManager:
         return self.saved_redis_dump
 
     def _save_redis_db(self) -> bool:
-        rdb_filepath = get_this_db_path_inside_output_dir(
-            self.main.args.output, "dump"
-        )
+        rdb_filepath = get_this_db_path_inside_output_dir(self.main.args.output, "dump")
         saved = bool(self.main.db.save(rdb_filepath))
         if saved:
-            self.main.print(
-                f"The redis database is saved to " f"{rdb_filepath}.rdb"
-            )
+            self.main.print(f"The redis database is saved to {rdb_filepath}.rdb")
         else:
             self.main.print("Failed to save the redis database.")
         return saved
 
     def _print_reason_for_not_killing_redis(self):
         reason = ""
-        if self.main.args.webinterface:
-            reason = "the web interface is running."
+        if self._is_web_interface_enabled():
+            reason = "the web interface is running"
         elif self.main.redis_port == 6379:
             reason = (
                 "the default redis port should always stay up"
@@ -147,9 +157,7 @@ class RedisManager:
             self.main.print(f"Killed Redis server on port {redis_port}.")
             self.remove_server_from_log(redis_port)
         else:
-            self.main.print(
-                f"Slips didn't kill the Redis server on port {redis_port}."
-            )
+            self.main.print(f"Slips didn't kill the Redis server on port {redis_port}.")
 
     def log_redis_server_pid(self, redis_port: int, redis_pid: int):
         now = utils.get_human_readable_datetime()
@@ -227,9 +235,7 @@ class RedisManager:
     def get_end_port(self):
         return self.end_port
 
-    def start_redis_cache_if_not_running(
-        self, redis_port=DEFAULT_REDIS_PORT
-    ) -> bool:
+    def start_redis_cache_if_not_running(self, redis_port=DEFAULT_REDIS_PORT) -> bool:
         """
         Check if we have redis-server running (this is the cache db it should
         always be running) adn start it if not running.
@@ -380,9 +386,7 @@ class RedisManager:
     @staticmethod
     def is_comment(line: str) -> bool:
         """returns true if the given line is a comment"""
-        return (line.startswith("#") or line.startswith("Date")) or len(
-            line
-        ) < 3
+        return (line.startswith("#") or line.startswith("Date")) or len(line) < 3
 
     def get_open_redis_servers(self) -> Dict[int, dict]:
         """
@@ -443,8 +447,7 @@ class RedisManager:
         """
         open_servers = {}
         to_print = (
-            "Choose which one to kill [0,1,2 etc..]\n"
-            "[0] Close all Redis servers\n"
+            "Choose which one to kill [0,1,2 etc..]\n[0] Close all Redis servers\n"
         )
         there_are_ports_to_print = False
         try:
@@ -452,11 +455,7 @@ class RedisManager:
                 line_number = 0
                 for line in f.read().splitlines():
                     # skip comments
-                    if (
-                        line.startswith("#")
-                        or line.startswith("Date")
-                        or len(line) < 3
-                    ):
+                    if line.startswith("#") or line.startswith("Date") or len(line) < 3:
                         continue
                     line_number += 1
                     line = line.split(",")
@@ -524,9 +523,7 @@ class RedisManager:
                 if utils.is_port_in_use(redis_port):
                     # server is/was used, is another slips instance currently
                     # using it?
-                    db = self._get_dbmanager_without_starting_a_new_server(
-                        redis_port
-                    )
+                    db = self._get_dbmanager_without_starting_a_new_server(redis_port)
                     if db.rdb:
                         client: redis.Redis = db.rdb.r
                         # ask the user to confirm IF the server is currently
@@ -561,10 +558,7 @@ class RedisManager:
                 if not self.confirm_server_altering(
                     client, DEFAULT_REDIS_PORT, "overwrite"
                 ):
-                    print(
-                        f"Stopping. User cancelled overwriting of port "
-                        f"{redis_port}."
-                    )
+                    print(f"Stopping. User cancelled overwriting of port {redis_port}.")
                     self.main.terminate_slips()
             # allow main DBManager to reconnect and flush if needed
             self._clear_cached_redis_instance(redis_port)
@@ -631,9 +625,7 @@ class RedisManager:
         if not self.is_redis_currently_receiving_new_commands(client):
             return True
 
-        if self.ask_user_to_confirm_altering_a_currently_used_server(
-            port, operation
-        ):
+        if self.ask_user_to_confirm_altering_a_currently_used_server(port, operation):
             return True
 
         return False
@@ -810,8 +802,7 @@ class RedisManager:
 
         except AlreadyKilledErr:
             print(
-                f"{base_msg} is already killed or you don't have "
-                f"permission to kill it."
+                f"{base_msg} is already killed or you don't have permission to kill it."
             )
             self.remove_server_from_log(port)
 

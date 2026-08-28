@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -185,3 +185,49 @@ def test_ml_module_enable_logs_uses_configured_or_default_value(
 
     parser.config = {}
     assert parser.ml_module_enable_logs(section) is False
+
+
+@pytest.mark.parametrize(
+    "configured, expected",
+    [
+        (True, True),
+        (False, False),
+        ("yes", True),
+        ("off", False),
+    ],
+)
+def test_web_interface_enabled(configured: object, expected: bool) -> None:
+    parser = ConfigParser.__new__(ConfigParser)
+    parser.read_configuration = Mock(return_value=configured)
+
+    assert parser.web_interface_enabled() is expected
+    parser.read_configuration.assert_called_once_with(
+        "web_interface", "enabled", False
+    )
+
+
+@pytest.mark.parametrize(
+    "configured, expected",
+    [
+        ("localhost", "localhost"),
+        ("interface", "interface"),
+        ("INTERFACE", "interface"),
+        ("all", "localhost"),
+        (None, "localhost"),
+    ],
+)
+def test_web_interface_bind(configured: object, expected: str) -> None:
+    """Accept only the two bounded web listen modes.
+
+    Parameters:
+        configured: Value read from the YAML file.
+        expected: Normalized safe mode.
+    """
+    _module_factory = ModuleFactory()
+    parser = ConfigParser.__new__(ConfigParser)
+    parser.read_configuration = Mock(return_value=configured)
+
+    assert parser.web_interface_bind == expected
+    parser.read_configuration.assert_called_once_with(
+        "web_interface", "bind", "localhost"
+    )

@@ -170,6 +170,25 @@ def test_update_lines_read_sums_worker_received_lines() -> None:
     assert profiler.lines == 42
 
 
+def test_profiler_monitor_loop_waits_between_updates() -> None:
+    """Verify the profiler monitor does not busy-spin between updates."""
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.did_all_workers_stop = Mock()
+    profiler.did_all_workers_stop.is_set.side_effect = [False, True]
+    profiler._update_lines_read_by_all_workers = Mock()
+    profiler.store_flows_read_per_second = Mock()
+    profiler._check_if_high_throughput_and_add_workers = Mock()
+    profiler._check_if_stabled_throughput_and_remove_workers = Mock()
+
+    profiler._run_profiler_workers_manager_loop()
+
+    profiler._update_lines_read_by_all_workers.assert_called_once_with()
+    profiler.store_flows_read_per_second.assert_called_once_with()
+    profiler._check_if_high_throughput_and_add_workers.assert_called_once_with()
+    profiler._check_if_stabled_throughput_and_remove_workers.assert_called_once_with()
+    profiler.did_all_workers_stop.wait.assert_called_once_with(timeout=1)
+
+
 @pytest.mark.parametrize(
     "stored_value, expected_fps",
     [

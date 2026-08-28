@@ -56,6 +56,7 @@ class ModuleFactory:
         output_dir="output/",
         flush_db=False,
         start_redis_server=True,
+        disabled_detections: list[str] | None = None,
     ):
         from slips_files.core.database.database_manager import DBManager
 
@@ -70,7 +71,7 @@ class ModuleFactory:
 
         conf = Mock()
         conf.delete_prev_db = Mock(return_value=False)
-        conf.disabled_detections = Mock(return_value=[])
+        conf.disabled_detections = Mock(return_value=disabled_detections or [])
         conf.evidence_signal_default = Mock(return_value="PAMP")
         conf.evidence_signal_overrides = Mock(
             return_value={
@@ -108,8 +109,7 @@ class ModuleFactory:
                 return_value=Mock(),
             ),
             patch(
-                "slips_files.core.database.redis_db.database."
-                "RedisDB._conf_file",
+                "slips_files.core.database.redis_db.database.RedisDB._conf_file",
                 "config/redis.conf.template",
             ),
             patch(
@@ -1311,8 +1311,7 @@ class ModuleFactory:
                 return_value=conf,
             ),
             patch(
-                "slips_files.core.evidence_logger."
-                "utils.change_logfiles_ownership"
+                "slips_files.core.evidence_logger.utils.change_logfiles_ownership"
             ),
             patch.object(
                 EvidenceLogger,
@@ -1553,3 +1552,31 @@ class ModuleFactory:
             cc_detection.db = mock_db
             cc_detection.letters_exporter = Mock()
             return cc_detection
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_web_interface_obj(self, mock_db: Mock) -> object:
+        """
+        Create a web interface module with isolated runtime dependencies.
+
+        Parameters:
+            mock_db: Patched database manager supplied by unittest.mock.
+
+        Returns:
+            Web interface module instance.
+        """
+        from modules.web_interface.web_interface import WebInterface
+
+        conf = Mock()
+        conf.web_interface_port = 55000
+        module = WebInterface(
+            logger=self.logger,
+            output_dir="output",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=conf,
+            ppid=12345,
+            bloom_filters_manager=Mock(),
+        )
+        module.print = Mock()
+        return module

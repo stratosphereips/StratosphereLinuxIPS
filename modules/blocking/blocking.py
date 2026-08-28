@@ -6,13 +6,21 @@ import os
 import shutil
 import json
 import subprocess
-from typing import Dict
+import math
+from datetime import datetime, timezone
+from typing import Any, Dict, List
 import time
 from threading import Lock
 
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.slips_utils import utils
-from .exec_iptables_cmd import exec_iptables_command
+from .exec_iptables_cmd import (
+    LEGACY_SLIPS_COMMENT,
+    exec_iptables_command,
+    format_slips_rule_comment,
+    list_slips_firewall_rules,
+    sync_slips_rule_comment,
+)
 from modules.blocking.unblocker import Unblocker
 
 
@@ -142,7 +150,7 @@ class Blocking(IModule):
         result = result.stdout.decode("utf-8")
         return ip in result
 
-    def _block_ip(self, ip_to_block: str, flags: Dict[str, str]) -> bool:
+    def _block_ip(self, ip_to_block: str, flags: Dict[str, Any]) -> bool:
         """
         This function determines the user's platform and firewall and calls
         the appropriate function to add the rules to the used firewall.
@@ -160,6 +168,22 @@ class Blocking(IModule):
 
         # Make sure ip isn't already blocked before blocking
         if self._is_ip_already_blocked(ip_to_block):
+            if self.db.get_blocking_timestamp(ip_to_block) is None:
+                blocked_at = flags.get("_blocked_at")
+                if blocked_at is None:
+                    self.db.set_blocked_ip(ip_to_block)
+                else:
+                    self.db.set_blocked_ip(ip_to_block, blocked_at)
+            comment = flags.get("rule_comment")
+            if comment and not sync_slips_rule_comment(
+                self.sudo, ip_to_block, comment
+            ):
+                self.print(
+                    f"Unable to update firewall recovery metadata for "
+                    f"{ip_to_block}.",
+                    0,
+                    1,
+                )
             return False
 
         from_ = flags.get("from_")
@@ -186,7 +210,7 @@ class Blocking(IModule):
                 }
             )
 
-        blocked = False
+        results = []
         if from_:
             # Add rule to block traffic from source ip_to_block (-s)
             blocked = exec_iptables_command(
@@ -195,8 +219,10 @@ class Blocking(IModule):
                 ip_to_block=ip_to_block,
                 flag="-s",
                 options=options,
+                comment=flags.get("rule_comment", LEGACY_SLIPS_COMMENT),
             )
             if blocked:
+                results.append(True)
                 txt = f"Blocked all traffic from: {ip_to_block}"
                 self.print(txt)
                 self.log(txt)
@@ -209,13 +235,155 @@ class Blocking(IModule):
                 ip_to_block=ip_to_block,
                 flag="-d",
                 options=options,
+                comment=flags.get("rule_comment", LEGACY_SLIPS_COMMENT),
             )
             if blocked:
+                results.append(True)
                 txt = f"Blocked all traffic to: {ip_to_block}"
                 self.print(txt)
                 self.log(f"Blocked all traffic to: {ip_to_block}")
+        if results:
+            blocked_at = flags.get("_blocked_at")
+            if blocked_at is None:
                 self.db.set_blocked_ip(ip_to_block)
-        return blocked
+            else:
+                self.db.set_blocked_ip(ip_to_block, blocked_at)
+        requested_rules = int(bool(from_)) + int(bool(to))
+        return bool(results) and len(results) == requested_rules
+
+    def _recovered_rule_flags(
+        self, rules: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Combine source, destination and transport state from saved rules.
+
+        Parameters:
+            rules: Existing managed iptables rules for one address.
+
+        Returns:
+            Flags suitable for later exact firewall removal.
+        """
+        flags: Dict[str, Any] = {
+            "from_": any(rule["from_"] for rule in rules),
+            "to": any(rule["to"] for rule in rules),
+        }
+        for key in ("dport", "sport", "protocol", "interface"):
+            values = {rule.get(key) for rule in rules if rule.get(key)}
+            flags[key] = values.pop() if len(values) == 1 else None
+        return flags
+
+    def _recovery_state(
+        self,
+        rules: List[Dict[str, Any]],
+        now: float,
+    ) -> Dict[str, Any]:
+        """Build Redis state from one address's persisted firewall rules.
+
+        Parameters:
+            rules: Managed source and destination rules for one address.
+            now: Current Unix time used to classify expiration.
+
+        Returns:
+            Serializable state including recovery and probation information.
+        """
+        valid_rules = [rule for rule in rules if rule["metadata_valid"]]
+        flags = self._recovered_rule_flags(rules)
+        if not valid_rules:
+            recovery_status = (
+                "legacy metadata"
+                if any(rule["legacy"] for rule in rules)
+                else "invalid metadata"
+            )
+            flags.update(
+                {
+                    "_recovered": True,
+                    "_recovery_status": recovery_status,
+                    "_origin_run": "unknown",
+                    "rule_comment": rules[0]["comment"],
+                }
+            )
+            return {
+                "unblock_at": None,
+                "remaining_timewindows": None,
+                "flags": flags,
+                "recovered": True,
+                "recovery_status": recovery_status,
+                "origin_run": "unknown",
+                "rule_comment": rules[0]["comment"],
+                "updated_at": now,
+            }
+
+        blocked_at = min(float(rule["blocked_at"]) for rule in valid_rules)
+        deadline = max(float(rule["unblock_at"]) for rule in valid_rules)
+        origin_runs = sorted({str(rule["run_id"]) for rule in valid_rules})
+        origin_run = ", ".join(origin_runs)
+        metadata_conflict = len({rule["comment"] for rule in rules}) > 1
+        if metadata_conflict:
+            recovery_status = "metadata conflict"
+        elif deadline <= now:
+            recovery_status = "expired; removal pending"
+        else:
+            recovery_status = "recovered"
+        width = max(1, int(self.conf.get_tw_width_in_seconds()))
+        remaining = max(0, math.ceil(max(0, deadline - now) / width) - 1)
+        unblock_at = datetime.fromtimestamp(deadline, timezone.utc).isoformat()
+        comment = max(valid_rules, key=lambda rule: float(rule["unblock_at"]))[
+            "comment"
+        ]
+        flags.update(
+            {
+                "_recovered": True,
+                "_recovery_status": recovery_status,
+                "_origin_run": origin_run,
+                "rule_comment": comment,
+            }
+        )
+        return {
+            "unblock_at": unblock_at,
+            "remaining_timewindows": remaining,
+            "flags": flags,
+            "recovered": True,
+            "recovery_status": recovery_status,
+            "origin_run": origin_run,
+            "rule_comment": comment,
+            "blocked_at": blocked_at,
+            "updated_at": now,
+        }
+
+    def _recover_firewall_rules(self) -> int:
+        """Import pre-existing Slips firewall rules into the current run.
+
+        Returns:
+            Number of distinct addresses recovered from iptables.
+        """
+        rules_by_ip: Dict[str, List[Dict[str, Any]]] = {}
+        for rule in list_slips_firewall_rules(self.sudo):
+            rules_by_ip.setdefault(rule["ip"], []).append(rule)
+        if not rules_by_ip:
+            return 0
+
+        now = time.time()
+        self.print(
+            f"WARNING: Found {len(rules_by_ip)} IPs in the existing "
+            "slipsBlocking chain. Recovering their firewall state.",
+            0,
+            1,
+        )
+        self.log(
+            f"Recovered {len(rules_by_ip)} pre-existing firewall records "
+            "from iptables comments."
+        )
+        for ip, rules in rules_by_ip.items():
+            state = self._recovery_state(rules, now)
+            blocked_at = state.get("blocked_at", now)
+            self.db.set_blocked_ip(ip, blocked_at)
+            self.db.set_firewall_block_state(ip, state)
+            status = state["recovery_status"]
+            self.print(
+                f"Recovered firewall rule for {ip}: {status}.",
+                0,
+                1,
+            )
+        return len(rules_by_ip)
 
     def shutdown_gracefully(self):
         self.unblocker.unblocker_thread.join(30)
@@ -223,6 +391,7 @@ class Blocking(IModule):
             self.print("Problem shutting down unblocker thread.")
 
     def pre_main(self):
+        self._recover_firewall_rules()
         self.unblocker = Unblocker(
             self.db, self.sudo, self.should_stop, self.logger, self.log
         )
@@ -261,12 +430,23 @@ class Blocking(IModule):
                 "protocol": data.get("protocol"),
                 "interface": data.get("interface"),
             }
+            request = self.unblocker.prepare_unblock_request(ip, tw, flags)
+            blocking_timestamp = self.db.get_blocking_timestamp(ip)
+            blocked_at = blocking_timestamp or time.time()
+            run_id = os.path.basename(os.path.normpath(self.parent_output_dir))
+            request_flags = request["flags"]
+            request_flags["_blocked_at"] = blocked_at
+            request_flags["_origin_run"] = run_id
+            request_flags["rule_comment"] = format_slips_rule_comment(
+                blocked_at,
+                request["tw_to_unblock"].end_time,
+                run_id,
+            )
             if block:
-                self._block_ip(ip, flags)
-            # whether this ip is blocked now, or was already blocked, make an
-            # unblocking request to either extend its
-            # blocking period, or block it until the next timewindow is over.
-            self.unblocker.unblock_request(ip, tw, flags)
+                self._block_ip(ip, request_flags)
+            # Whether this IP was newly blocked or already present, retain its
+            # latest deletion deadline and update the iptables comments.
+            self.unblocker.register_unblock_request(ip, request)
 
         if msg := self.get_msg("tw_closed"):
             # this channel receives requests for closed tws for every ip

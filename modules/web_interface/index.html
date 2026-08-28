@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slips</title>
+  <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" sizes="any">
+  <link rel="stylesheet" href="/style.css?v=20260828-overview-usability">
+</head>
+<body>
+  <div id="error-banner" class="error-banner" role="alert" hidden></div>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">STRATOSPHERE LINUX IPS</p>
+      <h1 id="run-name">Current run</h1>
+      <p id="run-meta" class="muted">Connecting to run data…</p>
+    </div>
+    <div class="run-state">
+      <span id="state-dot" class="state-dot"></span>
+      <div><strong id="run-state">Connecting</strong><small id="updated-at">Not updated</small></div>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Interface sections">
+    <button class="tab active" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="alerts">Alerts <span id="alerts-badge" class="badge">0</span></button>
+    <button class="tab" data-tab="evidence">Evidence <span id="evidence-badge" class="badge">0</span></button>
+    <button class="tab" data-tab="hosts">Hosts <span id="hosts-badge" class="badge">0</span></button>
+    <button class="tab" data-tab="firewall">Firewall <span id="firewall-badge" class="badge">0</span></button>
+    <button class="tab" data-tab="p2p">P2P <span id="p2p-badge" class="badge">0</span></button>
+    <button class="tab" data-tab="logs">Logs <span id="logs-badge" class="badge">0</span></button>
+    <button class="tab" data-tab="configuration">Configuration</button>
+    <button class="tab" data-tab="whitelists">Whitelists <span id="whitelists-badge" class="badge">0</span></button>
+    <button class="tab" data-tab="metadata">Metadata</button>
+  </nav>
+
+  <main>
+    <section id="overview" class="panel active" aria-labelledby="overview-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">RUN</p><h2 id="overview-title">Overview</h2></div>
+        <button class="secondary" id="refresh-overview">Refresh</button>
+      </div>
+      <div id="summary-cards" class="summary-grid overview-summary"></div>
+      <article class="surface"><h3>Current host load</h3><div id="system-load" class="metrics"></div></article>
+      <article class="surface">
+        <h3>Estimated attacks stopped by the firewall</h3>
+        <p class="muted">Traffic attempts observed from an IP after its block was installed. Packets remain visible to Zeek before iptables drops them.</p>
+        <div id="overview-firewall-impact" class="summary-grid impact-summary"></div>
+      </article>
+      <article class="surface">
+        <div class="table-heading">
+          <div><h3>Slips performance history</h3><p>Bounded view; exact seconds for 24 hours, minute rollups afterward.</p></div>
+          <select id="metrics-range" aria-label="Performance history range">
+            <option value="5m">5 minutes</option>
+            <option value="15m" selected>15 minutes</option>
+            <option value="1h">1 hour</option>
+            <option value="24h">24 hours</option>
+            <option value="all">Full run</option>
+          </select>
+        </div>
+        <div class="chart-grid">
+          <figure><figcaption>CPU · Slips process tree (% of host capacity)<small><i class="chart-key average"></i>Average <i class="chart-key peak"></i>Peak in each displayed interval</small></figcaption><svg id="cpu-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
+          <figure><figcaption>Resident memory · Slips process tree<small>Axis uses MiB or GiB <i class="chart-key average"></i>Average <i class="chart-key peak"></i>Peak in each displayed interval</small></figcaption><svg id="memory-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
+          <figure><figcaption>Processed flows · per second</figcaption><svg id="fps-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
+        </div>
+      </article>
+      <article class="surface table-surface">
+        <div class="table-heading"><h3>Modules</h3><input id="module-search" type="search" placeholder="Filter modules"></div>
+        <div class="table-wrap"><table id="modules-table"><thead><tr><th data-sort="name">Module</th><th data-sort="state">State</th><th data-sort="pid">PID</th><th data-sort="cpu_percent">CPU</th><th data-sort="memory_mb">Memory</th><th data-sort="flows_per_minute">Flows/min</th><th data-sort="evidence_count">Evidence</th><th data-sort="error_count">Errors</th></tr></thead><tbody></tbody></table></div>
+      </article>
+    </section>
+
+    <section id="logs" class="panel" aria-labelledby="logs-title">
+      <div class="section-heading"><div><p class="eyebrow">RUNTIME</p><h2 id="logs-title">Logs</h2></div><button class="secondary refresh-list" data-target="logs">Refresh</button></div>
+      <div class="toolbar"><span id="logs-count" class="result-count"></span></div>
+      <div class="surface table-surface"><div class="table-wrap"><table id="logs-table"><thead><tr><th>Time</th><th>Module</th><th>Message</th></tr></thead><tbody></tbody></table></div></div>
+    </section>
+
+    <section id="metadata" class="panel" aria-labelledby="metadata-title">
+      <div class="section-heading"><div><p class="eyebrow">RUN</p><h2 id="metadata-title">Metadata</h2></div><button class="secondary refresh-list" data-target="metadata">Refresh</button></div>
+      <article class="surface"><div id="run-metadata" class="metadata-grid"></div></article>
+    </section>
+
+    <section id="alerts" class="panel" aria-labelledby="alerts-title">
+      <div class="section-heading"><div><p class="eyebrow">DETECTIONS</p><h2 id="alerts-title">Alerts</h2><p id="alerts-description">Individual durable alerts. Select one to inspect its evidence and triggering flows.</p></div><button class="secondary refresh-list" data-target="alerts">Refresh</button></div>
+      <div class="toolbar">
+        <input id="alerts-search" type="search" placeholder="Search ID, host, label…">
+        <select id="alerts-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
+        <select id="alerts-view" aria-label="Alert display mode"><option value="individual">Individual alerts</option><option value="grouped">Group by host</option></select>
+        <select id="alerts-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
+        <input id="alerts-from" class="custom-time" type="datetime-local" hidden>
+        <input id="alerts-to" class="custom-time" type="datetime-local" hidden>
+        <span id="alerts-count" class="result-count"></span>
+      </div>
+      <div class="surface table-surface"><div class="table-wrap"><table id="alerts-table"><thead><tr></tr></thead><tbody></tbody></table></div></div>
+      <div id="alerts-pager" class="pager"></div>
+    </section>
+
+    <section id="evidence" class="panel" aria-labelledby="evidence-title">
+      <div class="section-heading"><div><p class="eyebrow">DETECTION EVENTS</p><h2 id="evidence-title">Evidence</h2><p id="evidence-description">Grouped by host and type, including records that never formed an alert.</p></div><button class="secondary refresh-list" data-target="evidence">Refresh</button></div>
+      <div class="toolbar">
+        <input id="evidence-search" type="search" placeholder="Search description, type, host…">
+        <select id="evidence-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
+        <select id="evidence-link"><option value="">All evidence</option><option value="linked">In an alert</option><option value="unlinked">Without alert</option></select>
+        <select id="evidence-view" aria-label="Evidence display mode"><option value="grouped" selected>Group by host and type</option><option value="individual">Individual evidence</option></select>
+        <select id="evidence-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
+        <input id="evidence-from" class="custom-time" type="datetime-local" hidden>
+        <input id="evidence-to" class="custom-time" type="datetime-local" hidden>
+        <span id="evidence-count" class="result-count"></span>
+      </div>
+      <div class="surface table-surface"><div class="table-wrap"><table id="evidence-table"><thead><tr></tr></thead><tbody></tbody></table></div></div>
+      <div id="evidence-pager" class="pager"></div>
+
+    </section>
+
+    <section id="firewall" class="panel" aria-labelledby="firewall-title">
+      <div class="section-heading"><div><p class="eyebrow">ENFORCEMENT</p><h2 id="firewall-title">Firewall blocks</h2><p>Confirmed active blocks, final probation windows, and durable rule transitions.</p></div><button class="secondary refresh-list" data-target="firewall">Refresh</button></div>
+      <article class="surface">
+        <h3>Estimated attacks stopped</h3>
+        <p class="muted">Run-wide traffic observed from blocked IPs during recorded enforcement intervals. These packets were visible at capture time but are estimated to have been dropped before reaching a service.</p>
+        <div id="firewall-impact-summary" class="summary-grid impact-summary"></div>
+      </article>
+      <div class="toolbar"><input id="firewall-search" type="search" placeholder="Search IP or status"><span id="firewall-count" class="result-count"></span></div>
+      <div class="surface table-surface"><div class="table-wrap"><table id="firewall-table"><thead><tr><th>IP</th><th>Status</th><th>Rule origin</th><th>Blocked since</th><th>Unblock at</th><th>Remaining</th><th>Extra TWs</th><th>Est. stopped packets</th><th>Est. stopped flows</th><th>Evidence while blocked</th><th>Total evidence</th><th>Alerts</th></tr></thead><tbody></tbody></table></div></div>
+      <article class="surface table-surface"><div class="table-heading"><div><h3>Block / unblock history</h3><p id="firewall-history-count">Firewall transitions and failed removals from this run.</p></div></div><div class="table-wrap"><table id="firewall-history-table"><thead><tr><th>Time</th><th>IP</th><th>Action</th><th>Details</th></tr></thead><tbody></tbody></table></div></article>
+      <div id="firewall-history-pager" class="pager"></div>
+    </section>
+
+    <section id="p2p" class="panel" aria-labelledby="p2p-title">
+      <div class="section-heading"><div><p class="eyebrow">COLLABORATIVE INTELLIGENCE</p><h2 id="p2p-title">P2P network</h2><p id="p2p-status">Loading peer connectivity and trust state…</p></div><button class="secondary refresh-list" data-target="p2p">Refresh</button></div>
+      <div id="p2p-summary" class="summary-grid"></div>
+      <article class="surface"><h3>Local identity</h3><div id="p2p-identity" class="metadata-grid"></div></article>
+      <article class="surface table-surface"><div class="table-heading"><div><h3>Peers</h3><p>Live connectivity plus the latest persistent trust state.</p></div></div><div class="table-wrap"><table id="p2p-peers-table"><thead><tr><th>Peer ID</th><th>IP</th><th>Connectivity</th><th>Trust</th><th>Reliability</th><th>Reports received</th><th>Last seen</th></tr></thead><tbody></tbody></table></div></article>
+      <div class="split-grid">
+        <article class="surface table-surface"><div class="table-heading"><div><h3>Trust evolution</h3><p>Newest persistent reliability changes.</p></div></div><div class="table-wrap"><table id="p2p-trust-table"><thead><tr><th>Time</th><th>Peer</th><th>Reliability</th></tr></thead><tbody></tbody></table></div></article>
+        <article class="surface table-surface"><div class="table-heading"><div><h3>Reports received</h3><p>Peer opinions received during this run.</p></div></div><div class="table-wrap"><table id="p2p-reports-table"><thead><tr><th>Time</th><th>Peer</th><th>Target</th><th>Score</th><th>Confidence</th></tr></thead><tbody></tbody></table></div></article>
+      </div>
+      <article class="surface table-surface"><div class="table-heading"><div><h3>Recent message activity</h3><p>Bounded send/receive telemetry from this run.</p></div></div><div class="table-wrap"><table id="p2p-activity-table"><thead><tr><th>Time</th><th>Direction</th><th>Type</th><th>Peer</th><th>Target</th></tr></thead><tbody></tbody></table></div></article>
+    </section>
+
+    <section id="configuration" class="panel" aria-labelledby="configuration-title">
+      <div class="section-heading"><div><p class="eyebrow">RUN SETTINGS</p><h2 id="configuration-title">Configuration</h2><p id="configuration-status">Loading the configuration snapshot captured when this run started…</p></div><button class="secondary refresh-list" data-target="configuration">Refresh</button></div>
+      <div class="toolbar"><input id="configuration-search" type="search" placeholder="Search setting, section, value, or explanation…"><span id="configuration-count" class="result-count"></span></div>
+      <article class="surface config-provenance"><h3>What this view means</h3><p id="configuration-source">This is the parsed run snapshot, organized and explained instead of displaying raw YAML.</p><p class="muted">Secrets are marked as configured but their values are intentionally hidden. A setting absent from the snapshot may still use a built-in Slips default.</p></article>
+      <div id="configuration-sections" class="configuration-sections"></div>
+    </section>
+
+    <section id="whitelists" class="panel" aria-labelledby="whitelists-title">
+      <div class="section-heading"><div><p class="eyebrow">SUPPRESSION RULES</p><h2 id="whitelists-title">Whitelists used in this run</h2><p id="whitelists-status">Loading parsed runtime rules and online benign-domain settings…</p></div><button class="secondary refresh-list" data-target="whitelists">Refresh</button></div>
+      <div id="whitelists-summary" class="summary-grid"></div>
+      <div class="split-grid">
+        <article class="surface"><h3>Local rules</h3><div id="whitelists-local-source" class="metadata-grid"></div></article>
+        <article class="surface"><h3>Online benign domains</h3><div id="whitelists-online-source" class="metadata-grid"></div></article>
+      </div>
+      <div class="toolbar"><input id="whitelists-search" type="search" placeholder="Search value, type, or effect…"><select id="whitelists-type"><option value="">All rule types</option><option>IP address</option><option>Domain</option><option>Organization</option><option>MAC address</option></select><span id="whitelists-count" class="result-count"></span></div>
+      <div class="surface table-surface"><div class="table-wrap"><table id="whitelists-table"><thead><tr><th>Type</th><th>Value</th><th>Applies on</th><th>Suppresses</th><th>Meaning</th><th>Runtime source</th></tr></thead><tbody></tbody></table></div></div>
+    </section>
+
+    <section id="hosts" class="panel" aria-labelledby="hosts-title">
+      <div id="hosts-list-view">
+        <div class="section-heading"><div><p class="eyebrow">INVENTORY</p><h2 id="hosts-title">Hosts</h2><p>Current and last-known identity with indexed historical activity.</p></div><button class="secondary refresh-list" data-target="hosts">Refresh</button></div>
+        <div class="toolbar">
+          <input id="hosts-search" type="search" placeholder="Search IP, MAC, hostname, DNS…">
+          <select id="hosts-scope"><option value="">All scopes</option><option value="local">Local</option><option value="public">Public</option><option value="special">Special</option></select>
+          <select id="hosts-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
+          <select id="hosts-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
+          <input id="hosts-from" class="custom-time" type="datetime-local" hidden>
+          <input id="hosts-to" class="custom-time" type="datetime-local" hidden>
+          <span id="hosts-count" class="result-count"></span>
+        </div>
+        <div class="surface table-surface"><div class="table-wrap"><table id="hosts-table"><thead><tr><th data-sort="ip">Primary IP</th><th data-sort="scope">Scope</th><th data-sort="hostname">Hostname</th><th>Name / domain</th><th>TI feeds</th><th data-sort="mac">MAC</th><th data-sort="threat">Threat</th><th data-sort="score">Current Slips score</th><th data-sort="peak_score">Past peak Slips score</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div></div>
+        <div id="hosts-pager" class="pager"></div>
+      </div>
+
+      <div id="host-detail-view" hidden>
+        <div class="section-heading host-heading">
+          <div><button id="host-back" class="text-button">← Back to hosts</button><p class="eyebrow">HOST WORKSPACE</p><h2 id="host-title">Host</h2><p id="host-subtitle"></p></div>
+          <div class="toolbar compact-toolbar">
+            <select id="host-flow-limit"><option>25</option><option>50</option><option selected>100</option><option>250</option><option>500</option><option>1000</option></select>
+            <select id="host-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
+            <input id="host-from" class="custom-time" type="datetime-local" hidden>
+            <input id="host-to" class="custom-time" type="datetime-local" hidden>
+          </div>
+        </div>
+        <div id="host-summary" class="summary-grid"></div>
+        <div class="split-grid">
+          <article class="surface"><h3>Identity and DNS</h3><div id="host-identity"></div></article>
+          <article class="surface"><h3>Threat intelligence</h3><pre id="host-ti"></pre></article>
+        </div>
+        <article class="surface">
+          <p id="host-traffic-status" class="muted">Traffic and peers match the exact profile IP only.</p>
+          <div class="chart-grid host-charts">
+            <figure class="score-history-figure"><figcaption>Slips score history<small><i class="chart-key average"></i>End of interval <i class="chart-key peak"></i>Peak <i class="chart-key threshold"></i>Alert threshold <i class="chart-key reset"></i>Reset</small></figcaption><p id="host-score-history-status" class="score-history-status">Loading processed score samples…</p><svg id="host-score-chart" class="line-chart" viewBox="0 0 1200 180"></svg></figure>
+            <figure><figcaption>Inbound / outbound flows</figcaption><svg id="host-flow-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
+            <figure><figcaption>Inbound / outbound bytes</figcaption><svg id="host-byte-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
+            <figure><figcaption>Protocols and applications</figcaption><div id="host-protocols" class="bar-chart"></div></figure>
+            <figure><figcaption>Top peers</figcaption><div id="host-peers" class="bar-chart"></div></figure>
+          </div>
+        </article>
+        <article class="surface host-alerts-panel">
+          <div class="host-section-heading"><div><h3 id="host-alerts-title">Related alerts</h3><p>Open an alert to inspect its evidence and triggering flows.</p></div></div>
+          <div id="host-alerts" class="host-alert-list"></div>
+        </article>
+        <article class="surface table-surface host-evidence-panel">
+          <div class="table-heading"><div><h3 id="host-evidence-title">Related evidence</h3><p id="host-evidence-count">Newest evidence for this exact profile IP.</p></div><input id="host-evidence-search" type="search" aria-label="Search related evidence" placeholder="Search any evidence field…"></div>
+          <div class="table-wrap host-evidence-wrap"><table id="host-evidence-table"><thead><tr><th data-sort="time">Time</th><th data-sort="threat">Threat</th><th data-sort="type">Type</th><th data-sort="module">Module</th><th>Score handling</th><th data-sort="confidence">Confidence</th><th data-sort="flows">Flows</th><th data-sort="alert">Alerts</th><th>Description</th></tr></thead><tbody></tbody></table></div>
+        </article>
+        <div id="host-evidence-pager" class="pager"></div>
+        <article class="surface table-surface">
+          <div class="table-heading"><div><h3>Historical traffic</h3><p id="host-flow-count"></p></div></div>
+          <div class="table-wrap"><table id="host-flows-table"><thead><tr><th>Time</th><th>Direction</th><th>Peer</th><th>Protocol</th><th>Ports</th><th>State</th><th>Packets</th><th>Bytes</th><th>Duration</th><th>Label</th></tr></thead><tbody></tbody></table></div>
+        </article>
+        <div id="host-flows-pager" class="pager"></div>
+      </div>
+    </section>
+  </main>
+
+  <aside id="drawer" class="drawer" aria-hidden="true">
+    <div id="drawer-resize" class="drawer-resize" role="separator" aria-label="Resize investigation panel" aria-orientation="vertical" tabindex="0"></div>
+    <div class="drawer-head">
+      <div class="drawer-heading">
+        <button id="drawer-back" class="drawer-back" type="button" hidden>← Back</button>
+        <p id="drawer-kind" class="eyebrow">DETAIL</p>
+        <h2 id="drawer-title">Record</h2>
+      </div>
+      <button id="drawer-close" class="icon-button" type="button" aria-label="Close investigation and return to the table">×</button>
+    </div>
+    <div id="drawer-body" class="drawer-body"></div>
+  </aside>
+  <div id="drawer-backdrop" class="backdrop"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js?v=20260828-overview-usability"></script>
+</body>
+</html>

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import time
 import json
+import re
 from typing import (
     List,
     Tuple,
@@ -29,6 +30,9 @@ from slips_files.core.structures.risk_weights import (
     RiskWeight,
     convert_weight_to_risk_weight_enum_member,
 )
+
+
+ALERT_GENERATION_LOCK_TIMEOUT_SECONDS = 300
 
 
 class AlertHandler:
@@ -59,6 +63,24 @@ class AlertHandler:
     add_profile: Callable[..., Any]
 
     name = "alert_handler_db"
+
+    def get_alert_generation_lock(self, profileid: str, twid: str) -> Any:
+        """
+        Create the cross-process lock for one profile and time window.
+
+        Parameters:
+            profileid: Profile whose accumulated threat level is being updated.
+            twid: Time window whose accumulated threat level is being updated.
+
+        Returns:
+            A Redis lock that serializes evidence scoring and alert creation.
+        """
+        lock_name = f"alert_generation_lock:{profileid}:{twid}"
+        return self.r.lock(
+            lock_name,
+            timeout=ALERT_GENERATION_LOCK_TIMEOUT_SECONDS,
+            blocking_timeout=None,
+        )
 
     def set_evidence_causing_alert(self, alert: Alert):
         """
@@ -117,11 +139,31 @@ class AlertHandler:
                 # found an evidence that has a matching ID
                 return evidence_details
 
-    def is_detection_disabled(self, evidence_type: EvidenceType):
+    def is_detection_disabled(self, evidence_type: EvidenceType) -> bool:
         """
-        Function to check if detection is disabled in slips.yaml
+        Check whether the configured disabled list contains a detection.
+
+        Parameters:
+            evidence_type: Detection type about to enter the evidence pipeline.
+
+        Returns:
+            True when the detection is disabled in the active configuration.
         """
-        return str(evidence_type) in self.disabled_detections
+        configured_detections = self.disabled_detections or []
+        if isinstance(configured_detections, str):
+            configured_detections = [configured_detections]
+
+        evidence_name = str(evidence_type).rsplit(".", 1)[-1].upper()
+        for configured_detection in configured_detections:
+            configured_name = str(configured_detection).strip()
+            configured_name = configured_name.rsplit(".", 1)[-1]
+            configured_name = re.sub(
+                r"(?<=[a-z0-9])(?=[A-Z])", "_", configured_name
+            )
+            configured_name = re.sub(r"[^A-Za-z0-9]+", "_", configured_name)
+            if configured_name.strip("_").upper() == evidence_name:
+                return True
+        return False
 
     def _classify_evidence_signal(
         self, evidence_type: EvidenceType
@@ -155,17 +197,17 @@ class AlertHandler:
         uids = self.r.hget(self.constants.FLOWS_CAUSING_EVIDENCE, evidence_id)
         return json.loads(uids) if uids else []
 
-    def set_blocked_ip(self, ip: str):
+    def set_blocked_ip(
+        self, ip: str, blocked_at: Optional[float] = None
+    ) -> None:
+        """Track an active firewall block and its original start time.
+
+        Parameters:
+            ip: Address currently enforced by the Slips firewall chain.
+            blocked_at: Original Unix block timestamp, or now for a new rule.
         """
-        Adds the given IP to the blocked IPs sorted set with the current timestamp as score.
-         Also ensures that only the 100 most recent IPs are kept in the
-         set. and deleted the rest,
-         :param ip: The IP address to block
-        """
-        limit = 100
-        self.zadd_but_keep_n_entries(
-            self.constants.BLOCKED_IPS, {ip: time.time()}, limit
-        )
+        timestamp = time.time() if blocked_at is None else float(blocked_at)
+        self.r.zadd(self.constants.BLOCKED_IPS, {ip: timestamp})
 
     def is_ip_blocked(self, ip: str) -> Optional[float]:
         ts = self.r.zscore(self.constants.BLOCKED_IPS, ip)
@@ -177,28 +219,73 @@ class AlertHandler:
         # remove ip from the blocked_ips sorted set
         self.r.zrem(self.constants.BLOCKED_IPS, ip)
 
-    def get_tw_limits(self, profileid, twid: str) -> Tuple[float, float]:
-        """
-        returns the timewindow start and endtime
-        """
-        twid_start_time: float = self.get_tw_start_time(profileid, twid)
-        if not twid_start_time:
-            # the given tw is in the future
-            # calc the start time of the twid manually based on the first
-            # twid
-            first_twid_start_time: float = self.get_first_flow_time()
-            given_twid: int = int(twid.replace("timewindow", ""))
-            # tws in slips start from 1.
-            #     tw1   tw2   tw3   tw4
-            # 0 ──────┬─────┬──────┬──────
-            #         │     │      │
-            #         2     4      6
-            twid_start_time = first_twid_start_time + (
-                self.width * (given_twid - 1)
-            )
+    def set_firewall_block_state(self, ip: str, state: Dict[str, Any]) -> None:
+        """Store the current firewall block schedule for an IP."""
+        self.r.hset(self.constants.FIREWALL_BLOCKS, ip, json.dumps(state))
 
-        twid_end_time: float = twid_start_time + self.width
-        return twid_start_time, twid_end_time
+    def get_firewall_block_states(self) -> Dict[str, Dict[str, Any]]:
+        """Return current firewall block schedules indexed by IP."""
+        states: Dict[str, Dict[str, Any]] = {}
+        for ip, raw in self.r.hgetall(self.constants.FIREWALL_BLOCKS).items():
+            try:
+                state = json.loads(raw)
+            except (TypeError, ValueError):
+                continue
+            if isinstance(state, dict):
+                states[ip] = state
+        return states
+
+    def del_firewall_block_state(self, ip: str) -> None:
+        """Remove the firewall block schedule for an unblocked IP."""
+        self.r.hdel(self.constants.FIREWALL_BLOCKS, ip)
+
+    def get_tw_limits(
+        self,
+        profileid: str,
+        twid: str,
+        fallback_time: Any = None,
+    ) -> Tuple[float, float]:
+        """
+        Return the start and end timestamps of a time window.
+
+        Parameters:
+            profileid: Profile that owns the time window.
+            twid: Canonical time-window identifier.
+            fallback_time: Evidence timestamp used when Redis anchors expired.
+
+        Returns:
+            Start and end Unix timestamps.
+        """
+        twid_start_time = self.get_tw_start_time(profileid, twid)
+        if twid_start_time is not None:
+            return float(twid_start_time), float(twid_start_time) + self.width
+
+        given_twid = int(twid.replace("timewindow", ""))
+        known_windows = self.r.zrange(f"tws{profileid}", 0, 0, withscores=True)
+        if known_windows:
+            known_twid, known_start = known_windows[0]
+            if isinstance(known_twid, bytes):
+                known_twid = known_twid.decode()
+            known_number = int(str(known_twid).replace("timewindow", ""))
+            twid_start_time = float(known_start) + self.width * (
+                given_twid - known_number
+            )
+        elif (first_twid_start_time := self.get_first_flow_time()) is not None:
+            twid_start_time = float(first_twid_start_time) + self.width * (
+                given_twid - 1
+            )
+        else:
+            try:
+                twid_start_time = float(fallback_time)
+            except (TypeError, ValueError):
+                try:
+                    twid_start_time = float(
+                        utils.convert_ts_format(fallback_time, "unixtimestamp")
+                    )
+                except (TypeError, ValueError):
+                    twid_start_time = time.time()
+
+        return twid_start_time, twid_start_time + self.width
 
     def _get_more_info_about_evidence(self, evidence) -> Evidence:
         """

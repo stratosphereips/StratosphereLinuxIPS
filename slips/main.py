@@ -52,6 +52,10 @@ class Main:
         self.parent_output_dir = "output/"
         self.mode = "interactive"
         self.sigterm_received = False
+        self.shutdown_signal_received = False
+        self.web_interface_shutdown = False
+        self.keyboard_interrupt_received = False
+        self.force_shutdown_requested = False
         # objects to manage various functionality
         self.checker = Checker(self)
         self.redis_man = RedisManager(self)
@@ -249,9 +253,7 @@ class Main:
             sys.exit(-1)
 
         if self.mode == DAEMONIZED_MODE:
-            print(
-                "Can't read input from stdin in daemonized mode. " "Stopping"
-            )
+            print("Can't read input from stdin in daemonized mode. Stopping")
             sys.exit(-1)
         line_type = input_information
         input_type = InputType.STDIN
@@ -674,30 +676,36 @@ class Main:
 
                 self.proc_man.load_modules()
 
-            if self.args.webinterface:
-                self.ui_man.start_webinterface()
+            def sig_handler(sig: int, frame: object) -> None:
+                """
+                Record a termination signal for forced shutdown.
 
-            def sig_handler(sig, frame):
-                """calls shutdown_gracefully on sig"""
+                Parameters:
+                    sig: Numeric signal received by the main process.
+                    frame: Interpreter frame active when the signal arrived.
+                """
                 if os.getpid() != self.pid:
-                    # to ensure that this SIGTERM handler is not inherited by
-                    # children created the signal.signal() call, because we
-                    # need this handler to be called only once when slips
-                    # is shutting down
+                    # Children created after this handler is installed inherit
+                    # it, but only the main process coordinates shutdown.
                     return
+                if self.shutdown_signal_received:
+                    return
+                self.shutdown_signal_received = True
+                self.sigterm_received = sig == signal.SIGTERM
+                signal_name = signal.Signals(sig).name
+                self.print(f"{signal_name} received, shutting down Slips.")
+                self.print(
+                    "Slips is stopping without completing the analysis.",
+                    0,
+                    1,
+                )
 
-                if not self.sigterm_received:
-                    self.sigterm_received = True
-                    self.print("SIGTERM received, shutting down slips.")
-                    self.print(
-                        "Slips is stopping without completing the analysis.",
-                        0,
-                        1,
-                    )
-
-            # The signals SIGKILL and SIGSTOP cannot be caught,
-            # blocked, or ignored.
-            signal.signal(signal.SIGTERM, sig_handler)
+            for handled_signal in (
+                signal.SIGTERM,
+                signal.SIGHUP,
+                signal.SIGQUIT,
+            ):
+                signal.signal(handled_signal, sig_handler)
 
             self.proc_man.start_evidence_process()
             self.proc_man.start_profiler_process()
@@ -740,7 +748,7 @@ class Main:
                 )
 
             while (not self.proc_man.should_stop_slips()) and (
-                not self.sigterm_received
+                not self.shutdown_signal_received
             ):
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
@@ -749,12 +757,6 @@ class Main:
 
                 self.print_gw_info()
                 self.print_localnet_info()
-
-                # if you remove check_if_webinterface_started() call anywhere
-                # before the above sleep(), it will try to get the return
-                # value very quickly before  the webinterface thread sets
-                # it. so don't:D
-                self.ui_man.check_if_webinterface_started()
 
                 self.update_stats()
                 self.timewindow_man.update_current_timewindow_if_due()
@@ -771,11 +773,14 @@ class Main:
                     self.update_man.update_slips()
 
         except KeyboardInterrupt:
-            # the EINTR error code happens if a signal occurred while
-            # the system call was in progress
-            # comes here if zeek terminates while slips is still working
-            pass
+            self.keyboard_interrupt_received = True
+            self.shutdown_signal_received = True
+            self.print("Interrupt received, shutting down Slips.")
 
-        if not self.sigterm_received:
-            # to avoid calling this func twice when sigterm is received
-            self.proc_man.shutdown_gracefully()
+        natural_completion = (
+            not self.shutdown_signal_received
+            and self.proc_man.shutdown_cause == "natural"
+        )
+        self.proc_man.shutdown_gracefully(
+            natural_completion=natural_completion
+        )

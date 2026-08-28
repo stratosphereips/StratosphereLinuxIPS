@@ -63,24 +63,14 @@ parameters:
   # These letters are used for re-training the model.
   export_strato_letters: false
 
-  # The 'analysis_direction' has two options: out or all. The 'out' option
-  # determines whether to analyze only the traffic that goes 'out' from the
-  # local network to other networks. 'Out' is mean to analyze if your
-  # computers are infected.
-  # In the 'out' configuration, Slips creates profiles for local IPs and
-  # public IPs, but only analyzes the outgoing traffic from the private IPs
-  # to public destinations.
-  # Any inbound traffic or attacks from external IPs are not processed.
+  # The 'analysis_direction' has two options: out or all.
+  # In 'out' mode, Slips creates a profile for each flow source IP and stores
+  # the flow as outgoing from that profile. This applies to supported flows
+  # regardless of whether the source or destination IP is private or public.
+  # Slips does not create a reverse destination-IP profile for the flow.
   #
-  # The 'all' option makes Slips also analyze what is coming IN to the
-  # local network.
-  # In the 'all' configuration, Slips creates profiles for both private and
-  # public IPs, and analyzes traffic in both directions, inbound and outbound.
-  # It processes traffic originating from private IP addresses, as well as
-  # external public IP addresses.
-  # 'All' is mean to also analze attacks to your network.
-  # This mode provides comprehensive network monitoring, allowing you to detect
-  # outgoing as well as incoming attacks and connections.
+  # In 'all' mode, Slips also creates a profile for each flow destination IP
+  # and stores the reverse, incoming view of supported connection flows.
   # analysis_direction : all
   analysis_direction: out
 
@@ -1119,7 +1109,11 @@ Profiling:
 
 #############################
 web_interface:
-  # Slips has a web interface
+  # Enable the local, single-run interface without passing -w.
+  enabled: false
+  # Listen only on localhost, or on the IPv4 address of the monitored interface.
+  # Allowed values: localhost, interface
+  bind: localhost
   # Define the port to use
   port: 55000
 
