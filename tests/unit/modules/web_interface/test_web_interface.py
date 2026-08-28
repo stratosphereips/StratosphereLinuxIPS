@@ -1,4 +1,5 @@
 import inspect
+import socket
 from pathlib import Path
 from unittest.mock import Mock, mock_open, patch
 
@@ -51,6 +52,9 @@ def test_pre_main_starts_server_for_current_run() -> None:
     module = module_factory.create_web_interface_obj()
     module.parent_output_dir = "output/current_run"
     module.redis_port = 32768
+    module.conf.web_interface_bind = "localhost"
+    module.args.interface = None
+    module.args.access_point = None
     process = Mock(pid=1234)
 
     with (
@@ -79,6 +83,7 @@ def test_pre_main_starts_server_for_current_run() -> None:
 
     assert result is False
     command = popen.call_args.args[0]
+    assert command[command.index("--bind-address") + 1] == "127.0.0.1"
     assert command[-3:] == [
         "32768",
         "--output-dir",
@@ -107,6 +112,9 @@ def test_detection_backfill_runs_outside_live_collector() -> None:
 def test_pre_main_rejects_used_port() -> None:
     module_factory = ModuleFactory()
     module = module_factory.create_web_interface_obj()
+    module.conf.web_interface_bind = "localhost"
+    module.args.interface = None
+    module.args.access_point = None
 
     with (
         patch.object(type(module), "_port_is_available", return_value=False),
@@ -119,6 +127,38 @@ def test_pre_main_rejects_used_port() -> None:
 
     assert result is True
     module.print.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "mode, interface, expected",
+    [
+        ("localhost", None, "127.0.0.1"),
+        ("interface", "eno1", "192.0.2.25"),
+        ("interface", None, None),
+    ],
+)
+def test_bind_address_uses_only_the_monitored_interface(
+    mode: str, interface: str | None, expected: str | None
+) -> None:
+    """Resolve localhost or the exact monitored IPv4 address.
+
+    Parameters:
+        mode: Configured web bind mode.
+        interface: Interface supplied to Slips.
+        expected: Exact address expected by the HTTP server.
+    """
+    module = ModuleFactory().create_web_interface_obj()
+    module.args.interface = interface
+    module.args.access_point = None
+    address = Mock(family=socket.AF_INET, address="192.0.2.25")
+
+    with patch(
+        "modules.web_interface.web_interface.psutil.net_if_addrs",
+        return_value={"eno1": [address]},
+    ):
+        result = module._bind_address(mode)
+
+    assert result == expected
 
 
 def test_main_reports_stopped_server() -> None:
@@ -157,10 +197,9 @@ def test_stop_verified_server_only_stops_owned_listener(
     with (
         patch.object(
             type(module),
-            "_port_is_available",
-            side_effect=[False, True] if owned_server else [False],
+            "_listener_pid",
+            side_effect=[1234, None] if owned_server else [1234],
         ),
-        patch.object(type(module), "_listener_pid", return_value=1234),
         patch.object(
             type(module), "_is_owned_web_server", return_value=owned_server
         ),
