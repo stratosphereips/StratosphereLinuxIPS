@@ -169,32 +169,27 @@ def test_successful_unblock_without_start_time_still_completes() -> None:
 
 
 @pytest.mark.parametrize(
-    "flags, expected_calls, unblock_success",
+    "flags, unblock_success",
     [
-        ({"from_": True}, 1, True),
-        ({"to": True}, 1, True),
-        ({"from_": True, "to": True}, 2, True),
-        ({}, 2, True),  # defaults to both True
-        ({"from_": True}, 1, False),
+        ({"from_": True}, True),
+        ({"to": True}, True),
+        ({"from_": True, "to": True}, True),
+        ({}, True),
+        ({"from_": True}, False),
     ],
 )
-def test__unblock(flags, expected_calls, unblock_success):
+def test__unblock(flags, unblock_success):
     unblocker = ModuleFactory().create_unblocker_obj()
     unblocker.db.get_timewindow.return_value = "tw-1337"
 
     ip = "1.2.3.4"
-    path = "modules.blocking.unblocker.exec_iptables_command"
+    path = "modules.blocking.unblocker.delete_slips_rules_for_ip"
 
-    def command_result(_sudo, action, **_kwargs):
-        """Model a deletion failure while the rule still exists."""
-        return unblock_success if action == "delete" else not unblock_success
-
-    with patch(path, side_effect=command_result) as mock_exec:
+    with patch(path, return_value=unblock_success) as mock_exec:
         result = unblocker._unblock(ip, flags)
 
         assert result == unblock_success
-        attempts_per_rule = 1 if unblock_success else 2
-        assert mock_exec.call_count == expected_calls * attempts_per_rule
+        mock_exec.assert_called_once_with(unblocker.sudo, ip, flags)
 
         if unblock_success:
             unblocker.print.assert_called_once_with(
