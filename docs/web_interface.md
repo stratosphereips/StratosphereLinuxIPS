@@ -258,7 +258,7 @@ table, so the next selection starts a new investigation.
 
 ### Hosts
 
-The host list combines current Redis metadata with persisted last-known identity, so hosts that expired from Redis remain visible. Inventory can be filtered by local/public scope and by the host's maximum threat level. Its current Slips score column reads the active time-window accumulator directly from Redis, retains the last snapshot for completed runs, shows the configured threshold, and is sortable.
+The host list combines current Redis metadata with persisted last-known identity, so hosts that expired from Redis remain visible. Inventory can be filtered by local/public scope and by the host's maximum threat level. Its current Slips score column reads the active time-window accumulator directly from Redis and retains the last snapshot for completed runs. The separate **Past peak Slips score** column shows the maximum real score persisted after evidence processing for that exact profile IP over the full run. Both values show the configured threshold and are sortable server-side.
 
 Selecting a host opens a full-width workspace with:
 
