@@ -842,6 +842,32 @@ class RunDataReader:
         return 0.0
 
     @staticmethod
+    def _run_uptime_seconds(
+        analysis: Dict[str, Any], now: Optional[float] = None
+    ) -> Optional[float]:
+        """
+        Calculate elapsed wall-clock time for the current Slips run.
+
+        Parameters:
+            analysis: Redis analysis metadata with start and optional end time.
+            now: Current Unix timestamp used while analysis is still running.
+
+        Returns:
+            Elapsed seconds, or None when the start time is unavailable.
+        """
+        started_at = RunDataReader._event_timestamp(
+            analysis.get("analysis_start")
+        )
+        if not started_at:
+            return None
+        finished_at = RunDataReader._event_timestamp(
+            analysis.get("analysis_end")
+        )
+        if not finished_at:
+            finished_at = time.time() if now is None else now
+        return max(0.0, finished_at - started_at)
+
+    @staticmethod
     def _module_for_evidence(evidence_type: str) -> str:
         """Infer the producing module from a canonical evidence type."""
         if evidence_type in EVIDENCE_MODULE:
@@ -3148,6 +3174,7 @@ class RunDataReader:
         """Build a bounded current-run operational overview."""
         analysis = self.redis.hgetall("analysis")
         complete = bool(analysis.get("analysis_end"))
+        now = time.time()
         durable_evidence_counts: Counter[str] = Counter()
         try:
             with self._connect_sqlite() as connection:
@@ -3233,6 +3260,7 @@ class RunDataReader:
                 "state": "complete" if complete else "running",
                 "redis_port": self.redis_port,
                 "output_dir": str(self.output_dir),
+                "uptime_seconds": self._run_uptime_seconds(analysis, now),
             },
             "run_metadata": self._run_metadata(),
             "sources": {
@@ -3276,7 +3304,7 @@ class RunDataReader:
                 evidence_counts, error_counts, complete
             ),
             "recent_errors": recent_errors,
-            "updated_at": time.time(),
+            "updated_at": now,
         }
 
     def _firewall_intervals(
