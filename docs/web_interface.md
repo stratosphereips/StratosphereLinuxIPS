@@ -170,6 +170,20 @@ packet was malicious.
 
 The tab also shows a newest-first block/unblock history for the run. Its authoritative append-only source is `output/<run>/blocking/blocking.log`; Slips records the human timestamp, IP, direction when blocked, successful removal, and failed removal attempts. The unblocker retains zero-window requests until their rules are actually absent, retries partial failures, and restores persisted schedules after a blocker restart.
 
+### ARP poisoning
+
+The ARP poisoning tab separates local ARP isolation from iptables firewall
+blocking. It shows whether `arp_poisoner` is running, every host poisoned or
+released during the run, its target MAC, the current and release time windows,
+the scheduled release time, remaining duration, and every schedule extension.
+If a release deadline passes without a recorded release, the host is marked
+**release due** instead of being shown as released.
+
+Poison, extension, and release transitions come from the run's durable
+`arp_poisoner/arp_poisoning.log`. The detection table comes from durable Slips
+evidence produced by the `arp` module. Every displayed column is sortable;
+search applies to isolation state, transition history, and ARP evidence.
+
 ### P2P
 
 The P2P tab combines current Redis connectivity with the persistent local P2P trust database. It shows the local Pigeon identity and listen address, connected and previously known peers, peer trust and reliability, reliability evolution, peer reports received during the current run, and bounded recent send/receive activity. An enabled module with zero connected peers is shown as healthy and listening.
