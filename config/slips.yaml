@@ -1111,7 +1111,9 @@ Profiling:
 web_interface:
   # Enable the local, single-run interface without passing -w.
   enabled: false
-  # Local web interface settings.
+  # Listen only on localhost, or on the IPv4 address of the monitored interface.
+  # Allowed values: localhost, interface
+  bind: localhost
   # Define the port to use
   port: 55000
 
