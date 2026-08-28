@@ -1,6 +1,8 @@
 from slips_files.common.slips_utils import utils
 import os
 
+from modules.blocking.exec_iptables_cmd import list_slips_firewall_rules
+
 
 def _chain_exists() -> bool:
     """
@@ -41,3 +43,13 @@ def del_slips_blocking_chain() -> bool:
 
     print("Successfully deleted slipsBlocking chain.")
     return True
+
+
+def has_slips_firewall_rules() -> bool:
+    """Check whether the Slips chain contains managed firewall rules.
+
+    Returns:
+        True when at least one Slips-commented rule is installed.
+    """
+    sudo = utils.get_sudo_according_to_env()
+    return bool(list_slips_firewall_rules(sudo))
