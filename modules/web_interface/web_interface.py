@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Launch the local web interface for the current Slips run."""
 
+import ipaddress
 import os
 import socket
 import subprocess
@@ -24,6 +25,7 @@ class WebInterface(IModule):
     name = "web_interface"
     description = "Local technical web interface for the current Slips run"
     authors = ["Stratosphere Laboratory"]
+    LOOPBACK_ADDRESS = "127.0.0.1"
 
     def init(self, **kwargs: object) -> None:
         """Initialize launcher and history collector state."""
@@ -39,12 +41,13 @@ class WebInterface(IModule):
         self.channels = {}
 
     @staticmethod
-    def _port_is_available(port: int) -> bool:
+    def _port_is_available(port: int, bind_address: str) -> bool:
         """
-        Check whether the configured loopback port can be bound.
+        Check whether the configured address and port can be bound.
 
         Parameters:
             port: TCP port to check.
+            bind_address: Exact IPv4 listen address.
 
         Returns:
             True when a new server can bind the port.
@@ -52,7 +55,7 @@ class WebInterface(IModule):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
-                listener.bind(("127.0.0.1", port))
+                listener.bind((bind_address, port))
             except OSError:
                 return False
         return True
@@ -60,7 +63,7 @@ class WebInterface(IModule):
     @staticmethod
     def _listener_pid(port: int) -> Optional[int]:
         """
-        Find the process listening on a loopback port.
+        Find a process listening on the configured TCP port.
 
         Parameters:
             port: Local TCP port.
@@ -77,9 +80,38 @@ class WebInterface(IModule):
                 connection.status == psutil.CONN_LISTEN
                 and connection.laddr
                 and connection.laddr.port == port
-                and connection.laddr.ip in {"127.0.0.1", "::1"}
             ):
                 return connection.pid
+        return None
+
+    def _bind_address(self, mode: str) -> Optional[str]:
+        """Resolve the configured web bind mode to an exact IPv4 address.
+
+        Parameters:
+            mode: ``localhost`` or ``interface`` configuration value.
+
+        Returns:
+            Exact IPv4 listen address, or None when no monitored address exists.
+        """
+        if mode != "interface":
+            return self.LOOPBACK_ADDRESS
+        interfaces = utils.get_all_interfaces(self.args)
+        if interfaces == ["default"]:
+            return None
+        try:
+            addresses = psutil.net_if_addrs()
+        except psutil.Error:
+            return None
+        for interface_name in interfaces:
+            for address in addresses.get(interface_name, []):
+                if address.family != socket.AF_INET:
+                    continue
+                try:
+                    candidate = ipaddress.ip_address(address.address)
+                except ValueError:
+                    continue
+                if not candidate.is_loopback and not candidate.is_unspecified:
+                    return str(candidate)
         return None
 
     @staticmethod
@@ -112,17 +144,20 @@ class WebInterface(IModule):
             and has_port
         )
 
-    def _replace_stale_server(self, port: int) -> bool:
+    def _replace_stale_server(self, port: int, bind_address: str) -> bool:
         """
         Stop a verified previous Slips server occupying the configured port.
 
         Parameters:
             port: Configured HTTP port.
+            bind_address: Exact IPv4 listen address for the new server.
 
         Returns:
             True when the port is available after replacement.
         """
-        return self.stop_verified_server(port)
+        if self._listener_pid(port):
+            return self.stop_verified_server(port)
+        return self._port_is_available(port, bind_address)
 
     @classmethod
     def is_verified_server_running(cls, port: int) -> bool:
@@ -135,8 +170,6 @@ class WebInterface(IModule):
         Returns:
             True only while the verified Slips web server is listening.
         """
-        if cls._port_is_available(port):
-            return False
         pid = cls._listener_pid(port)
         if not pid:
             return False
@@ -157,11 +190,9 @@ class WebInterface(IModule):
         Returns:
             True when no Slips server remains on the port.
         """
-        if cls._port_is_available(port):
-            return True
         pid = cls._listener_pid(port)
         if not pid:
-            return False
+            return True
         try:
             process = psutil.Process(pid)
         except psutil.Error:
@@ -181,7 +212,7 @@ class WebInterface(IModule):
             pass
         except psutil.Error:
             return False
-        return cls._port_is_available(port)
+        return cls._listener_pid(port) is None
 
     def _collect_history(self) -> None:
         """Collect one bounded history batch each second."""
@@ -207,16 +238,26 @@ class WebInterface(IModule):
 
     def pre_main(self) -> bool:
         """
-        Start the run-specific history collector and loopback HTTP server.
+        Start the run-specific history collector and configured HTTP server.
 
         Returns:
             True when startup failed and the module should stop.
         """
         utils.drop_root_privs_permanently()
         port = self.conf.web_interface_port
-        if not self._replace_stale_server(port):
+        bind_mode = self.conf.web_interface_bind
+        bind_address = self._bind_address(bind_mode)
+        if not bind_address:
             self.print(
-                f"Cannot start the web interface: localhost port {port} "
+                "Cannot start the web interface: bind=interface requires "
+                "a monitored interface with an IPv4 address.",
+                0,
+                1,
+            )
+            return True
+        if not self._replace_stale_server(port, bind_address):
+            self.print(
+                f"Cannot start the web interface: {bind_address}:{port} "
                 "belongs to another process.",
                 0,
                 1,
@@ -254,6 +295,8 @@ class WebInterface(IModule):
             sys.executable,
             "-m",
             "modules.web_interface.server",
+            "--bind-address",
+            bind_address,
             "--port",
             str(port),
             "--redis-port",
@@ -276,8 +319,11 @@ class WebInterface(IModule):
             name="web_interface_detection_backfill",
         )
         utils.start_thread(self.backfill_thread, self.db)
+        display_host = (
+            "localhost" if bind_mode == "localhost" else bind_address
+        )
         self.print(
-            f"Web interface available at http://localhost:{port}/ "
+            f"Web interface available at http://{display_host}:{port}/ "
             f"[PID {self.server_process.pid}]"
         )
         return False
