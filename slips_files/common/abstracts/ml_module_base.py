@@ -207,8 +207,8 @@ class MLBaseDetection(IModule, ABC):
             f"Minimum labels to start training: {self.minimum_labels_to_start_train}, "
             f"minimum labels to retrain: {self.minimum_labels_to_retrain}, "
             f"minimum labels to finalize training: {self.minimum_labels_to_finalize_train}.",
-            1,
-            1,
+            2,
+            0,
         )
 
     def read_configuration(self):

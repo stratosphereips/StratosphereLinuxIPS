@@ -5,6 +5,7 @@ __pycache__/
 2019*/
 2020*/
 .DS_Store
+.claude/
 # Do not store in git the files from the IoCs that we downloaded
 *.etag
 *.time
