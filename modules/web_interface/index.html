@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Slips · Current run</title>
-  <link rel="stylesheet" href="/style.css?v=20260828-firewall-recovery">
+  <title>Slips</title>
+  <link rel="icon" href="/favicon.png" type="image/png">
+  <link rel="stylesheet" href="/style.css?v=20260828-overview-usability">
 </head>
 <body>
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -27,27 +28,25 @@
     <button class="tab" data-tab="hosts">Hosts <span id="hosts-badge" class="badge">0</span></button>
     <button class="tab" data-tab="firewall">Firewall <span id="firewall-badge" class="badge">0</span></button>
     <button class="tab" data-tab="p2p">P2P <span id="p2p-badge" class="badge">0</span></button>
+    <button class="tab" data-tab="logs">Logs <span id="logs-badge" class="badge">0</span></button>
     <button class="tab" data-tab="configuration">Configuration</button>
     <button class="tab" data-tab="whitelists">Whitelists <span id="whitelists-badge" class="badge">0</span></button>
+    <button class="tab" data-tab="metadata">Metadata</button>
   </nav>
 
   <main>
     <section id="overview" class="panel active" aria-labelledby="overview-title">
       <div class="section-heading">
-        <div><p class="eyebrow">RUNTIME</p><h2 id="overview-title">Analysis state</h2></div>
+        <div><p class="eyebrow">RUN</p><h2 id="overview-title">Overview</h2></div>
         <button class="secondary" id="refresh-overview">Refresh</button>
       </div>
-      <div id="summary-cards" class="summary-grid"></div>
+      <div id="summary-cards" class="summary-grid overview-summary"></div>
+      <article class="surface"><h3>Current host load</h3><div id="system-load" class="metrics"></div></article>
       <article class="surface">
         <h3>Estimated attacks stopped by the firewall</h3>
         <p class="muted">Traffic attempts observed from an IP after its block was installed. Packets remain visible to Zeek before iptables drops them.</p>
         <div id="overview-firewall-impact" class="summary-grid impact-summary"></div>
       </article>
-      <div class="split-grid">
-        <article class="surface"><h3>Current host load</h3><div id="system-load" class="metrics"></div></article>
-        <article class="surface"><h3>Data sources</h3><div id="data-sources" class="source-list"></div></article>
-      </div>
-      <article class="surface"><h3>Run metadata</h3><div id="run-metadata" class="metadata-grid"></div></article>
       <article class="surface">
         <div class="table-heading">
           <div><h3>Slips performance history</h3><p>Bounded view; exact seconds for 24 hours, minute rollups afterward.</p></div>
@@ -66,10 +65,20 @@
         </div>
       </article>
       <article class="surface table-surface">
-        <div class="table-heading"><div><h3>Modules</h3><p>Current process health and bounded counters.</p></div><input id="module-search" type="search" placeholder="Filter modules"></div>
+        <div class="table-heading"><h3>Modules</h3><input id="module-search" type="search" placeholder="Filter modules"></div>
         <div class="table-wrap"><table id="modules-table"><thead><tr><th data-sort="name">Module</th><th data-sort="state">State</th><th data-sort="pid">PID</th><th data-sort="cpu_percent">CPU</th><th data-sort="memory_mb">Memory</th><th data-sort="flows_per_minute">Flows/min</th><th data-sort="evidence_count">Evidence</th><th data-sort="error_count">Errors</th></tr></thead><tbody></tbody></table></div>
       </article>
-      <article class="surface"><div class="table-heading"><div><h3>Recent log events</h3><p id="error-source">Parsed incrementally from this run’s errors log.</p></div></div><ol id="errors-list" class="event-list"></ol></article>
+    </section>
+
+    <section id="logs" class="panel" aria-labelledby="logs-title">
+      <div class="section-heading"><div><p class="eyebrow">RUNTIME</p><h2 id="logs-title">Logs</h2></div><button class="secondary refresh-list" data-target="logs">Refresh</button></div>
+      <div class="toolbar"><span id="logs-count" class="result-count"></span></div>
+      <div class="surface table-surface"><div class="table-wrap"><table id="logs-table"><thead><tr><th>Time</th><th>Module</th><th>Message</th></tr></thead><tbody></tbody></table></div></div>
+    </section>
+
+    <section id="metadata" class="panel" aria-labelledby="metadata-title">
+      <div class="section-heading"><div><p class="eyebrow">RUN</p><h2 id="metadata-title">Metadata</h2></div><button class="secondary refresh-list" data-target="metadata">Refresh</button></div>
+      <article class="surface"><div id="run-metadata" class="metadata-grid"></div></article>
     </section>
 
     <section id="alerts" class="panel" aria-labelledby="alerts-title">
@@ -220,6 +229,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20260828-host-peak-score"></script>
+  <script src="/app.js?v=20260828-overview-usability"></script>
 </body>
 </html>
