@@ -1,6 +1,6 @@
 # Local web interface
 
-The web_interface module is a read-only technical view of one local Slips run. It is designed for the person running Slips, not for receiving data from remote installations or combining concurrent runs. The HTTP server binds only to 127.0.0.1.
+The web_interface module is a read-only technical view of one Slips run. It is designed for the person running Slips, not for receiving data from remote installations or combining concurrent runs. It binds to localhost by default.
 
 ## Start it
 
@@ -15,10 +15,16 @@ The default URL is http://localhost:55000/. It can also be enabled in config/sli
 ```yaml
 web_interface:
   enabled: true
+  bind: localhost
   port: 55000
 ```
 
-The -w flag enables the module even when enabled is false. The bind address is deliberately not configurable.
+The `-w` flag enables the module even when `enabled` is false. `bind` accepts:
+
+- `localhost` — default; listens only on `127.0.0.1`.
+- `interface` — listens only on the IPv4 address of the interface Slips is monitoring. Slips reports the resulting URL in the console. This mode fails closed if no monitored IPv4 interface is available.
+
+The interface mode exposes run data to hosts that can reach that network interface. The server has no login layer; use host firewall rules or a trusted network.
 
 Only one web-enabled Slips run is supported on a host. A new -w run replaces an older listener only after verifying that it is a Slips web server owned by the same user. It never terminates an unrelated program using the port. If another program owns the port, the module reports an error and stops.
 
