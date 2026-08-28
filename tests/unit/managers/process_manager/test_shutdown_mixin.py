@@ -729,6 +729,113 @@ def test_ask_to_stop_web_interface(response: str, expected_stop: bool) -> None:
     assert result is expected_stop
 
 
+@pytest.mark.parametrize(
+    "response, expected_keep",
+    [
+        ("y\n", True),
+        ("\n", True),
+        ("n\n", False),
+        ("delete\n", False),
+    ],
+)
+def test_ask_to_keep_firewall_rules(
+    response: str,
+    expected_keep: bool,
+) -> None:
+    """Interpret the interactive firewall shutdown decision.
+
+    Parameters:
+        response: Console response to the prompt.
+        expected_keep: Whether Slips should leave the rules installed.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    stdin = Mock()
+    stdin.isatty.return_value = True
+    stdin.readline.return_value = response
+    process_manager.main.shutdown_signal_received = False
+
+    with (
+        patch("managers.process_manager.shutdown_mixin.sys.stdin", stdin),
+        patch(
+            "managers.process_manager.shutdown_mixin.select.select",
+            return_value=([stdin], [], []),
+        ),
+    ):
+        result = process_manager._ask_to_keep_firewall_rules()
+
+    assert result is expected_keep
+
+
+def test_firewall_shutdown_delete_removes_rules_and_local_state() -> None:
+    """Delete inherited rules and every corresponding Redis record."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.mode = "interactive"
+    process_manager.main.force_shutdown_requested = False
+    process_manager.main.sigterm_received = False
+    process_manager.main.shutdown_signal_received = True
+    process_manager.main.db.get_firewall_block_states.return_value = {
+        "1.2.3.4": {},
+        "5.6.7.8": {},
+    }
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "has_slips_firewall_rules",
+            return_value=True,
+        ),
+        patch.object(
+            process_manager,
+            "_ask_to_keep_firewall_rules",
+            return_value=False,
+        ),
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "del_slips_blocking_chain",
+            return_value=True,
+        ) as delete_chain,
+    ):
+        process_manager._handle_firewall_after_analysis()
+
+    delete_chain.assert_called_once_with()
+    assert process_manager.main.db.del_firewall_block_state.call_args_list == [
+        call("1.2.3.4"),
+        call("5.6.7.8"),
+    ]
+    assert process_manager.main.db.del_blocked_ip.call_args_list == [
+        call("1.2.3.4"),
+        call("5.6.7.8"),
+    ]
+
+
+def test_firewall_shutdown_keep_leaves_rules_installed() -> None:
+    """Retain managed rules when the operator accepts the default choice."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.mode = "interactive"
+    process_manager.main.force_shutdown_requested = False
+    process_manager.main.sigterm_received = False
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "has_slips_firewall_rules",
+            return_value=True,
+        ),
+        patch.object(
+            process_manager,
+            "_ask_to_keep_firewall_rules",
+            return_value=True,
+        ),
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "del_slips_blocking_chain"
+        ) as delete_chain,
+    ):
+        process_manager._handle_firewall_after_analysis()
+
+    delete_chain.assert_not_called()
+
+
 def test_forced_shutdown_stops_web_interface_without_prompt() -> None:
     """Test signal-driven shutdown immediately stops the verified server."""
     process_manager = ModuleFactory().create_process_manager_obj()
