@@ -10,6 +10,7 @@ from urllib.request import urlopen
 from unittest.mock import Mock, patch
 
 import pytest
+import psutil
 
 from modules.web_interface.history import connect_history, initialize_history
 from modules.web_interface.server import (
@@ -1252,6 +1253,10 @@ def test_module_rows_exclude_internal_threads(mocker) -> None:
     process.status.return_value = "sleeping"
     process.memory_info.return_value = Mock(rss=1024 * 1024)
     process.cpu_percent.return_value = 0
+    process_constructor = mocker.patch(
+        "modules.web_interface.server.psutil.Process",
+        side_effect=psutil.NoSuchProcess(123),
+    )
     mocker.patch(
         "modules.web_interface.server.psutil.virtual_memory",
         return_value=Mock(total=100 * 1024 * 1024),
@@ -1262,6 +1267,7 @@ def test_module_rows_exclude_internal_threads(mocker) -> None:
 
     assert rows[0]["memory_percent"] == 1.0
     assert [row["name"] for row in rows] == ["flow_alerts"]
+    process_constructor.assert_not_called()
 
 
 def test_live_evidence_range_uses_newest_capture_timestamp(tmp_path) -> None:
