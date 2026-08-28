@@ -443,6 +443,12 @@ function renderOverview() {
     ["Processed flows", compact(data.counts.processed_flows)],
     ["Logged events", compact(data.counts.module_errors)],
   ]);
+  const firewallImpact = data.firewall_impact || {};
+  setSummaryCards([
+    ["Packets stopped (estimated)", compact(firewallImpact.packets)],
+    ["Flows stopped (estimated)", compact(firewallImpact.flows)],
+    ["Evidence while blocked", compact(firewallImpact.evidence)],
+  ], "overview-firewall-impact");
   const system = data.system;
   const metrics = [
     ["CPU", `${numeric(system.cpu_percent).toFixed(1)}%`],
@@ -883,6 +889,12 @@ async function loadFirewall() {
   if (!payload) return;
   byId("firewall-badge").textContent = compact(payload.total);
   byId("firewall-count").textContent = `${payload.page_size} active enforcement record${payload.page_size === 1 ? "" : "s"}`;
+  const impact = payload.impact || {};
+  setSummaryCards([
+    ["Packets stopped (estimated)", compact(impact.packets)],
+    ["Flows stopped (estimated)", compact(impact.flows)],
+    ["Evidence while blocked", compact(impact.evidence)],
+  ], "firewall-impact-summary");
   renderTable("firewall-table", payload.items, [
     (row) => text("code", row.ip),
     (row) => text("span", row.status, `status ${["blocked", "overdue"].includes(row.status) ? "bad" : "warn"}`),
@@ -890,6 +902,9 @@ async function loadFirewall() {
     (row) => row.unblock_at ? formatTime(row.unblock_at) : "Schedule unavailable",
     (row) => row.remaining_seconds === null ? "Schedule unavailable" : formatDuration(row.remaining_seconds),
     (row) => row.remaining_timewindows === null ? "—" : row.remaining_timewindows,
+    (row) => compact(row.stopped_packets),
+    (row) => compact(row.stopped_flows),
+    (row) => compact(row.evidence_while_blocked),
     (row) => compact(row.evidence_count),
     (row) => compact(row.alert_count),
   ], (row) => openHost(row.ip));
