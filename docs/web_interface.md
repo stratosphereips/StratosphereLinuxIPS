@@ -24,6 +24,12 @@ Only one web-enabled Slips run is supported on a host. A new -w run replaces an 
 
 When a file or folder analysis finishes naturally, or after the first Ctrl-C stops a web-enabled live analysis, Slips asks `Slips analysis has stopped. Stop the web interface? [y/N]`. Answer `y` or `yes` to stop the page and finish shutdown. Answer `n`, `no`, or press Enter to keep the page and its Redis/SQLite data available; Slips then waits until the page is stopped or you press Ctrl-C. A later web-enabled run can replace a verified older listener.
 
+If the `slipsBlocking` chain contains Slips-managed rules at shutdown, Slips
+first asks `Keep the installed firewall rules? [Y/n]`. Press Enter or answer
+`y` to retain enforcement; answer `n` or `delete` to remove the complete Slips
+chain and its local recovery records. Non-interactive and forced shutdowns
+keep the rules because silently dropping enforcement would be unsafe.
+
 A second Ctrl-C, SIGTERM, SIGHUP, SIGQUIT, daemon stop, core-module failure, and update shutdowns stop the web server with Slips without prompting. SIGKILL and SIGSTOP cannot be caught by any process, so no application can perform cleanup for those signals. In a non-interactive session where Slips cannot read a console answer, the web interface is stopped instead of leaving the command blocked indefinitely.
 
 Every data request checks that Redis still advertises the output directory configured for that server. If Redis belongs to a different run, the API returns HTTP 409 and the page displays a persistent run-mismatch banner instead of mixing runs. Detection producers perform the same ownership check before publishing evidence, so a delayed process from a replaced run cannot write into the new run.
@@ -128,6 +134,18 @@ Flow totals use exact profiler counter deltas rather than assuming every sample 
 ### Firewall
 
 The Firewall tab lists IPs currently confirmed in Slips' `slipsBlocking` firewall state. It distinguishes the current blocking window from the final **probation** window, shows the scheduled unblock time and remaining duration when available, and includes each IP's evidence and alert totals. A block whose deadline has passed but whose rules have not been removed is marked **overdue** instead of silently showing `0s` probation.
+
+Each new iptables rule has a readable ownership comment containing the run,
+the original block time, and the scheduled deletion time, for example
+`Slips run=eno1_... blocked=2026-08-28T10:00:00Z delete=2026-08-28T11:00:00Z`.
+When firewall blocking starts, Slips inspects existing managed rules before it
+accepts new requests. It warns in the console, rebuilds the local active-block
+and probation schedule from valid comments, resumes future deadlines, and
+queues already-expired rules for removal. The Firewall tab's **Rule origin**
+column identifies these recovered records. Older `Slips rule` comments and
+malformed comments do not provide a trustworthy deletion deadline; Slips
+keeps them, warns about them, and marks them **stale** in the web interface for
+manual review rather than guessing when to remove them.
 
 The tab includes the same run-wide estimated impact and cumulative per-IP
 columns. A **stopped flow** is an indexed flow whose source IP was inside a
