@@ -118,9 +118,11 @@ class IModule(ABC, Process):
             self.conf,
             self.ppid,
         )
+        self.db.source_module = self.name
         self.db.client_setname(self.name)
         self.keyboard_int_ctr = 0
         self.slips_version: str = utils.get_slips_version()
+        self.unversioned_channels: frozenset[str] = frozenset()
         self.init(**kwargs)
         # should after the module's init() so the module has a chance to
         # set its own channels
@@ -257,10 +259,18 @@ class IModule(ABC, Process):
         self.channel_tracker = self.init_channel_tracker()
         return self.pre_main()
 
-    def is_msg_version_compatible(self, message: dict) -> bool:
+    def is_msg_version_compatible(self, message: dict, channel: str) -> bool:
         """
         Check whether the incoming pub/sub message matches this module's
         Slips version.
+
+        Parameters:
+            message: Redis pub/sub message containing a JSON payload.
+            channel: Channel on which the message was received.
+
+        Returns:
+            True for the current Slips version, or for an explicitly allowed
+            unversioned compatibility channel.
         """
         if not message or "data" not in message:
             return False
@@ -277,7 +287,10 @@ class IModule(ABC, Process):
         if not isinstance(payload, dict):
             return False
 
-        return payload.get("version") == self.slips_version
+        version = payload.get("version")
+        if version == self.slips_version:
+            return True
+        return version is None and channel in self.unversioned_channels
 
     def get_msg(self, channel: str) -> Optional[dict]:
         try:
@@ -293,7 +306,7 @@ class IModule(ABC, Process):
                 # discard msgs if sent be a newer/older version of slips.
                 # may happen temporarily during handover, where the new
                 # version starts  before the old version stops.
-                if not self.is_msg_version_compatible(message):
+                if not self.is_msg_version_compatible(message, channel):
                     self.channel_tracker[channel]["msg_received"] = False
                     return None
                 self.channel_tracker[channel]["msg_received"] = True
