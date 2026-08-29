@@ -602,9 +602,7 @@ class ConnAnalyzer(IAsyncModule):
         Checks if there's a connection to a dstip that has no cached DNS
         answer
         """
-        if self.db.is_detection_disabled(
-            EvidenceType.CONNECTION_WITHOUT_DNS
-        ):
+        if self.db.is_detection_disabled(EvidenceType.CONNECTION_WITHOUT_DNS):
             return False
 
         if self.should_ignore_conn_without_dns(flow):
