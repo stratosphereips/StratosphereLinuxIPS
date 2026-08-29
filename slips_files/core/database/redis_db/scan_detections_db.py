@@ -89,7 +89,9 @@ class ScanDetectionsHandler:
         self.ask_ip_cache[ip] = True
         return True
 
-    def _hscan(self, key: str, redis_client=None, count: int = 100) -> Iterator:
+    def _hscan(
+        self, key: str, redis_client=None, count: int = 100
+    ) -> Iterator:
         if not redis_client:
             redis_client = self.r
 
@@ -207,10 +209,6 @@ class ScanDetectionsHandler:
         }
 
         for ip_state, ip in cases.items():
-            # to avoid asking about the same ip so many times
-            if not self._should_ask_modules_about_ip(ip):
-                continue
-
             if ip in self.our_ips:
                 # dont ask p2p or other modules about your own ip
                 continue
@@ -232,7 +230,9 @@ class ScanDetectionsHandler:
                 data_to_send.update({"cache_age": 1000, "ip": str(ip)})
                 self.publish("p2p_data_request", json.dumps(data_to_send))
 
-    def add_ips(self, profileid: ProfileID, twid: TimeWindow, flow, role: Role):
+    def add_ips(
+        self, profileid: ProfileID, twid: TimeWindow, flow, role: Role
+    ):
         """
         Function to add metadata about the flow's ips and ports
         """
@@ -304,7 +304,9 @@ class ScanDetectionsHandler:
         proto: Protocol,
     ) -> Iterator[Tuple[str, int]]:
         str_proto = proto.name.lower()
-        key = f"{profileid}_{twid}:{str_proto}:not_estab:dstports:total_packets"
+        key = (
+            f"{profileid}_{twid}:{str_proto}:not_estab:dstports:total_packets"
+        )
         yield from self._hscan(key)
 
     def get_total_dstips_for_not_estab_flows_on_port(
@@ -499,7 +501,9 @@ class ScanDetectionsHandler:
 
         return pipe
 
-    def _store_conn_to_multiple_ports_info(self, pipe, profileid, twid, role, flow):
+    def _store_conn_to_multiple_ports_info(
+        self, pipe, profileid, twid, role, flow
+    ):
         # updates the following:
         # zset profile_tw:tcp:estab:ips <ip> <first_seen>
         # hash profile_tw:tcp:estab:<ip>:dstports <port> <uid>
@@ -541,11 +545,15 @@ class ScanDetectionsHandler:
             self.tw_width = int(self.conf.get_tw_width_in_seconds())
 
         # Get the state. Established, NotEstablished
-        summary_state: str = self.get_final_state_from_flags(flow.state, flow.pkts)
+        summary_state: str = self.get_final_state_from_flags(
+            flow.state, flow.pkts
+        )
         state: State = self.convert_str_to_state(summary_state)
         proto: Protocol = self._convert_str_to_proto(flow.proto)
 
-        if self._is_info_needed_by_the_portscan_detector_modules(role, proto, state):
+        if self._is_info_needed_by_the_portscan_detector_modules(
+            role, proto, state
+        ):
             pipe = self._store_vertical_portscan_info(
                 pipe, profileid, twid, proto, target_ip, flow
             )
@@ -602,10 +610,14 @@ class ScanDetectionsHandler:
         """
         key = f"profile_{attacker}"
         self.r.hset(key, self.constants.DETECTED_DOING_PORTSCAN, 1)
-        self.r.hexpire(key, 10800, self.constants.DETECTED_DOING_PORTSCAN, nx=True)
+        self.r.hexpire(
+            key, 10800, self.constants.DETECTED_DOING_PORTSCAN, nx=True
+        )
 
     def is_a_port_scanner(self, ip: str, timewindow):
-        return self.r.hget(f"profile_{ip}", self.constants.DETECTED_DOING_PORTSCAN)
+        return self.r.hget(
+            f"profile_{ip}", self.constants.DETECTED_DOING_PORTSCAN
+        )
 
     def get_final_state_from_flags(self, state, pkts):
         """
@@ -723,7 +735,9 @@ class ScanDetectionsHandler:
                     # but we can't tell without -z b.
                     # So we use as heuristic the amount of packets. If <=3,
                     # then is not established because the OS retries 3 times.
-                    return "Not Established" if int(pkts) <= 3 else "Established"
+                    return (
+                        "Not Established" if int(pkts) <= 3 else "Established"
+                    )
                 elif "FIN" in pre:
                     # TCP. When -z B is not used in argus, states are single
                     # words. Most connections are finished with FIN when
@@ -732,7 +746,9 @@ class ScanDetectionsHandler:
                     # but we can't tell without -z b.
                     # So we use as heuristic the amount of packets. If <=3,
                     # then is not established because the OS retries 3 times.
-                    return "Not Established" if int(pkts) <= 3 else "Established"
+                    return (
+                        "Not Established" if int(pkts) <= 3 else "Established"
+                    )
                 else:
                     """
                     Examples:
