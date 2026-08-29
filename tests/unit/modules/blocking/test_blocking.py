@@ -88,7 +88,7 @@ def test_is_ip_already_blocked():
         ("192.168.1.10", {}, False, True, True, ["-s", "-d"]),  # normal
         ("192.168.1.10", {"from_": True}, False, True, True, ["-s"]),
         ("192.168.1.10", {"to": True}, False, True, True, ["-d"]),
-        ("192.168.1.10", {}, True, True, False, []),  # already blocked
+        ("192.168.1.10", {}, True, True, True, []),  # already blocked
         (None, {}, False, True, False, []),  # invalid ip type
     ],
 )
@@ -147,8 +147,144 @@ def test_block_ip_tracks_preexisting_firewall_rule() -> None:
     with patch.object(blocking, "_is_ip_already_blocked", return_value=True):
         result = blocking._block_ip("192.168.1.10", {})
 
-    assert result is False
+    assert result is True
     blocking.db.set_blocked_ip.assert_called_once_with("192.168.1.10")
+
+
+def test_block_ip_uses_direction_specific_private_interfaces() -> None:
+    """Use input matching for source rules and output matching for targets."""
+    blocking = ModuleFactory().create_blocking_obj()
+    blocking.firewall = "iptables"
+    flags = {
+        "from_": True,
+        "to": True,
+        "interface": "eth0",
+    }
+
+    with (
+        patch.object(blocking, "_is_ip_already_blocked", return_value=False),
+        patch(
+            "modules.blocking.blocking.exec_iptables_command",
+            return_value=True,
+        ) as execute,
+        patch.object(blocking, "print"),
+        patch.object(blocking, "log"),
+    ):
+        result = blocking._block_ip("192.168.1.10", flags)
+
+    assert result is True
+    execute.assert_has_calls(
+        [
+            call(
+                blocking.sudo,
+                action="insert",
+                ip_to_block="192.168.1.10",
+                flag="-s",
+                options={
+                    "protocol": "",
+                    "dport": "",
+                    "sport": "",
+                    "interface": "-i eth0",
+                },
+                comment="Slips rule",
+            ),
+            call(
+                blocking.sudo,
+                action="insert",
+                ip_to_block="192.168.1.10",
+                flag="-d",
+                options={
+                    "protocol": "",
+                    "dport": "",
+                    "sport": "",
+                    "interface": "-o eth0",
+                },
+                comment="Slips rule",
+            ),
+        ]
+    )
+
+
+def test_block_ip_rolls_back_partial_rule_insertion() -> None:
+    """Remove an inserted source rule when destination insertion fails."""
+    blocking = ModuleFactory().create_blocking_obj()
+    blocking.firewall = "iptables"
+
+    with (
+        patch.object(blocking, "_is_ip_already_blocked", return_value=False),
+        patch(
+            "modules.blocking.blocking.exec_iptables_command",
+            side_effect=[True, False, True],
+        ) as execute,
+        patch.object(blocking, "print"),
+        patch.object(blocking, "log"),
+        patch.object(blocking.db, "set_blocked_ip") as set_blocked,
+    ):
+        result = blocking._block_ip("192.168.1.10", {})
+
+    assert result is False
+    assert [item.kwargs["action"] for item in execute.call_args_list] == [
+        "insert",
+        "insert",
+        "delete",
+    ]
+    assert [item.kwargs["flag"] for item in execute.call_args_list] == [
+        "-s",
+        "-d",
+        "-s",
+    ]
+    set_blocked.assert_not_called()
+
+
+def test_main_does_not_schedule_unblock_after_insertion_failure() -> None:
+    """Do not persist an unblock deadline for a rule that was never added."""
+    blocking = ModuleFactory().create_blocking_obj()
+    blocking.parent_output_dir = "output/test-firewall-run"
+    blocking_data = {
+        "ip": "1.2.3.4",
+        "tw": 5,
+        "block": True,
+        "from": True,
+        "to": False,
+    }
+    request = {
+        "tw_to_unblock": TimeWindow(
+            number=6,
+            end_time="2026-08-28T12:00:00+00:00",
+        ),
+        "block_this_ip_for": 1,
+        "flags": {
+            "from_": True,
+            "to": False,
+            "dport": None,
+            "sport": None,
+            "protocol": None,
+            "interface": None,
+        },
+    }
+    blocking.db.get_blocking_timestamp.return_value = None
+
+    with (
+        patch.object(
+            blocking,
+            "get_msg",
+            return_value={"data": json.dumps(blocking_data)},
+        ),
+        patch.object(blocking, "_block_ip", return_value=False),
+        patch.object(
+            blocking.unblocker,
+            "prepare_unblock_request",
+            return_value=request,
+        ),
+        patch.object(
+            blocking.unblocker, "register_unblock_request"
+        ) as register,
+        patch.object(blocking, "print"),
+        patch("modules.blocking.blocking.time.time", return_value=100.0),
+    ):
+        blocking.main()
+
+    register.assert_not_called()
 
 
 @pytest.mark.parametrize(
