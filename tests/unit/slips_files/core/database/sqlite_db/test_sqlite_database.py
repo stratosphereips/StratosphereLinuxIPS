@@ -180,6 +180,7 @@ def test_evidence_and_alert_relationships_are_persisted(db) -> None:
         timewindow="timewindow1",
         threat_level="high",
         evidence_type="UNKNOWN_PORT",
+        source_module="flow_alerts",
         description="Test evidence",
         confidence=0.9,
         uid=["flow-1", "flow-2"],
@@ -204,6 +205,13 @@ def test_evidence_and_alert_relationships_are_persisted(db) -> None:
     db.add_alert(alert)
 
     assert db.select("evidence")[0][0] == "evidence-1"
+    assert (
+        db.execute(
+            "SELECT source_module FROM evidence WHERE evidence_id = ?",
+            ("evidence-1",),
+        ).fetchone()[0]
+        == "flow_alerts"
+    )
     assert set(db.select("evidence_flows")) == {
         ("evidence-1", "flow-1"),
         ("evidence-1", "flow-2"),
