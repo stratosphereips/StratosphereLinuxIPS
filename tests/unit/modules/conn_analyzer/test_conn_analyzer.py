@@ -1,16 +1,19 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-"""Unit test for modules/flow_alerts/conn.py"""
+"""Unit test for modules/conn_analyzer/conn_analyzer.py"""
 
+from dataclasses import asdict
 from slips_files.core.flows.zeek import Conn
 from tests.module_factory import ModuleFactory
 import json
 from unittest.mock import (
     Mock,
+    MagicMock,
 )
 import pytest
 from ipaddress import ip_address
 from slips_files.common.input_type import InputType
+from tests.unit.common_test_utils import get_mock_coro
 
 # dummy params used for testing
 profileid = "profile_192.168.1.1"
@@ -162,7 +165,7 @@ def test_check_unknown_port(
     conn.db.is_ftp_port.return_value = mock_is_ftp_port
 
     port_belongs_mock = mocker.patch(
-        "modules.flow_alerts.conn.Conn.port_belongs_to_an_org"
+        "modules.conn_analyzer.conn_analyzer.ConnAnalyzer.port_belongs_to_an_org"
     )
     port_belongs_mock.return_value = mock_port_belongs_to_an_org
 
@@ -351,7 +354,7 @@ def test_check_multiple_reconnection_attempts(
     """
     conn = ModuleFactory().create_conn_analyzer_obj()
     mock_set_evidence = mocker.patch(
-        "modules.flow_alerts.set_evidence."
+        "modules.conn_analyzer.set_evidence."
         "SetEvidenceHelper.multiple_reconnection_attempts"
     )
     conn.db.get_reconnections_for_tw.return_value = {}
@@ -465,7 +468,7 @@ def test_check_data_upload(
     conn = ModuleFactory().create_conn_analyzer_obj()
     conn.is_ignored_ip_data_upload = Mock(return_value=ignored_ip)
     mock_set_evidence = mocker.patch(
-        "modules.flow_alerts.set_evidence.SetEvidenceHelper.data_exfiltration"
+        "modules.conn_analyzer.set_evidence.SetEvidenceHelper.data_exfiltration"
     )
     conn.gateway = "192.168.1.1"
     flow = Conn(
@@ -1447,3 +1450,204 @@ def test_check_connection_to_local_ip_ignores_dns_and_dhcpv6_service_ports(
 def test_parse_closed_tw_message(msg, expected_result):
     conn = ModuleFactory().create_conn_analyzer_obj()
     assert conn._parse_closed_tw_message(msg) == expected_result
+
+
+async def test_check_non_ssl_port_443_conns_not_interested():
+    """mock a flow that we're not interested in in that function, like a
+    dns flow or something"""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.is_tcp_established_443_non_empty_flow = Mock(return_value=False)
+    result = await conn.check_non_ssl_port_443_conns(None, None)
+    assert result is False
+
+
+async def test_check_non_ssl_port_443_conns_is_ssl():
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.is_tcp_established_443_non_empty_flow = Mock(return_value=True)
+    conn.is_ssl_proto_recognized_by_zeek = Mock(return_value=True)
+    conn.keep_track_of_ssl_flow = Mock()
+    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
+    result = await conn.check_non_ssl_port_443_conns(None, flow)
+    assert result is False
+    conn.keep_track_of_ssl_flow.assert_called_once()
+
+
+async def test_check_non_ssl_port_443_conns_matching_ssl_past():
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.is_tcp_established_443_non_empty_flow = Mock(return_value=True)
+    conn.is_ssl_proto_recognized_by_zeek = Mock(return_value=False)
+    # Simulate a matching SSL flow
+    conn.search_ssl_recognized_flows_for_ts_range = Mock(return_value=[1.0])
+    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
+    result = await conn.check_non_ssl_port_443_conns(None, flow)
+    assert result is False
+
+
+async def test_check_non_ssl_port_443_conns_matching_ssl_future():
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.is_tcp_established_443_non_empty_flow = Mock(return_value=True)
+    conn.is_ssl_proto_recognized_by_zeek = Mock(return_value=False)
+    # Simulate a matching SSL flow
+    conn.search_ssl_recognized_flows_for_ts_range = Mock(return_value=[1.0])
+    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
+    result = await conn.check_non_ssl_port_443_conns(
+        None, flow, timeout_reached=True
+    )
+    assert result is False
+
+
+async def test_check_non_ssl_port_443_conns_no_matching_ssl_timeout():
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.is_tcp_established_443_non_empty_flow = Mock(return_value=True)
+    conn.is_ssl_proto_recognized_by_zeek = Mock(return_value=False)
+
+    # No matching SSL flows
+    conn.search_ssl_recognized_flows_for_ts_range = Mock(return_value=[])
+    conn.set_evidence = MagicMock()
+    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
+    result = await conn.check_non_ssl_port_443_conns(
+        None, flow, timeout_reached=True
+    )
+    assert result
+    conn.set_evidence.non_ssl_port_443_conn.assert_called_once()
+
+
+async def test_check_non_ssl_port_443_conns_no_matching_ssl_no_timeout():
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.is_tcp_established_443_non_empty_flow = Mock(return_value=True)
+    conn.is_ssl_proto_recognized_by_zeek = Mock(return_value=False)
+    conn.set_evidence.non_ssl_port_443_conn = Mock()
+    conn.search_ssl_recognized_flows_for_ts_range = Mock(return_value=[])
+    conn.wait_for_new_flows_or_timeout = get_mock_coro(True)
+    # No matching SSL flows
+    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
+    result = await conn.check_non_ssl_port_443_conns(None, flow)
+    assert result is False
+    conn.wait_for_new_flows_or_timeout.assert_called_once()
+    conn.set_evidence.non_ssl_port_443_conn.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "dport, proto, sbytes, dbytes, final_state, expected",
+    [
+        ("443", "tcp", 0, 0, "Established", False),
+    ],
+)
+def test_is_tcp_established_443_non_empty_flow(
+    dport,
+    proto,
+    sbytes,
+    dbytes,
+    final_state,
+    expected,
+):
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    flow = Mock(
+        dport=dport,
+        cert_chain_fuids="",
+        client_cert_chain_fuids="",
+        pkts=80,
+        proto=proto,
+        sbytes=sbytes,
+        dbytes=dbytes,
+    )
+
+    conn.db.get_final_state_from_flags.return_value = final_state
+
+    result = conn.is_tcp_established_443_non_empty_flow(flow)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "ssl_recognized_flows, flow, start, end, expected",
+    [
+        # case: matching timestamps within the range
+        (
+            {("192.168.1.1", "10.0.0.1"): [1.0, 2.0, 3.0, 4.0, 5.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            2.0,
+            4.0,
+            [2.0, 3.0, 4.0],
+        ),
+        # case: no matching timestamps (empty result)
+        (
+            {("192.168.1.1", "10.0.0.1"): [1.0, 2.0, 3.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            4.0,
+            5.0,
+            [],
+        ),
+        # case: flow does not exist in ssl_recognized_flows
+        (
+            {("192.168.1.2", "10.0.0.2"): [1.0, 2.0, 3.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            1.0,
+            3.0,
+            [],
+        ),
+        # case: start and end cover all timestamps
+        (
+            {("192.168.1.1", "10.0.0.1"): [1.0, 2.0, 3.0, 4.0, 5.0]},
+            {"saddr": "192.168.1.1", "daddr": "10.0.0.1"},
+            1.0,
+            5.0,
+            [1.0, 2.0, 3.0, 4.0, 5.0],
+        ),
+    ],
+)
+def test_search_ssl_recognized_flows_for_ts_range(
+    ssl_recognized_flows, flow, start, end, expected
+):
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.ssl_recognized_flows = ssl_recognized_flows
+    flow = Mock(saddr=flow["saddr"], daddr=flow["daddr"])
+    result = conn.search_ssl_recognized_flows_for_ts_range(flow, start, end)
+    assert result == expected
+
+
+async def test_main_new_flow_msg_checks_non_ssl_port_443_conns(mocker):
+    """
+    the new_flow branch of main() should trigger the non-ssl-on-443
+    check that used to live in ssl.py's analyze()
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    flow = Conn(
+        starttime="1726249372.312124",
+        uid=uid,
+        saddr="192.168.1.87",
+        daddr="1.1.1.1",
+        dur=1,
+        proto="",
+        appproto="",
+        sport="0",
+        dport="",
+        spkts=0,
+        dpkts=0,
+        sbytes=0,
+        dbytes=0,
+        smac="",
+        dmac="",
+        state="",
+        history="",
+    )
+    msg = {
+        "channel": "new_flow",
+        "data": json.dumps(
+            {
+                "profileid": "profile_192.168.1.1",
+                "twid": "timewindow1",
+                "flow": asdict(flow),
+            }
+        ),
+    }
+
+    def fake_get_msg(channel):
+        return msg if channel == "new_flow" else None
+
+    mocker.patch.object(conn, "get_msg", side_effect=fake_get_msg)
+    mock_create_task = mocker.patch.object(conn, "create_task")
+
+    await conn.main()
+
+    called_funcs = [call.args[0] for call in mock_create_task.call_args_list]
+    assert conn.check_non_ssl_port_443_conns in called_funcs

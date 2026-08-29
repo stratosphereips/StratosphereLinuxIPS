@@ -765,12 +765,22 @@ class ModuleFactory:
         flowalerts = self.create_flowalerts_obj()
         return Tunnel(flowalerts.db, flowalerts=flowalerts)
 
-    @patch(DB_MANAGER, name="mock_db")
+    @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_conn_analyzer_obj(self, mock_db):
-        from modules.flow_alerts.conn import Conn
+        from modules.conn_analyzer.conn_analyzer import ConnAnalyzer
 
-        flowalerts = self.create_flowalerts_obj()
-        return Conn(flowalerts.db, flowalerts=flowalerts)
+        conn_analyzer = ConnAnalyzer(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
+        )
+        conn_analyzer.print = Mock()
+        return conn_analyzer
 
     @patch(DB_MANAGER, name="mock_db")
     def create_software_analyzer_obj(self, mock_db):
@@ -1077,6 +1087,14 @@ class ModuleFactory:
         from modules.flow_alerts.set_evidence import SetEvidenceHelper
 
         """Create an instance of SetEvidenceHelper."""
+        set_evidence_helper = SetEvidenceHelper(mock_db)
+        return set_evidence_helper
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_conn_analyzer_set_evidence_helper(self, mock_db):
+        from modules.conn_analyzer.set_evidence import SetEvidenceHelper
+
+        """Create an instance of conn_analyzer's SetEvidenceHelper."""
         set_evidence_helper = SetEvidenceHelper(mock_db)
         return set_evidence_helper
 

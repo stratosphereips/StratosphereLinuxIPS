@@ -16,6 +16,7 @@ class Modules(str, Enum):
     BLOCKING = "blocking"
     BRUTE_FORCE_DETECTOR = "brute_force_detector"
     CESNET = "cesnet"
+    CONN_ANALYZER = "conn_analyzer"
     CYST = "cyst"
     EVIDENCE_HANDLER = "evidence_handler"
     EXPORTING_ALERTS = "exporting_alerts"

@@ -249,6 +249,11 @@ class ConfigMixin:
         if self.main.input_type != InputType.PCAP:
             runtime_disabled_modules.add(Modules.LEAK_DETECTOR)
 
+        if self.main.input_type == InputType.ZEEK_LOG_FILE:
+            # a single zeek conn.log file has no dns.log, ssl.log,
+            # etc. for flow_alerts to analyze
+            runtime_disabled_modules.add(Modules.FLOW_ALERTS)
+
         if not self._reading_flows_from_cyst():
             runtime_disabled_modules.add(Modules.CYST)
 

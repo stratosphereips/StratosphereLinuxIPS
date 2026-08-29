@@ -238,6 +238,49 @@ def test_get_runtime_disabled_modules_uses_runtime_rules() -> None:
     }
 
 
+def test_get_runtime_disabled_modules_disables_flow_alerts_for_zeek_log_file() -> (
+    None
+):
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.db.is_running_non_stop.return_value = False
+    process_manager.main.conf.export_to.return_value = []
+    process_manager.main.conf.use_local_p2p.return_value = False
+    process_manager.main.conf.use_global_p2p.return_value = False
+    process_manager.main.conf.send_to_warden.return_value = False
+    process_manager.main.conf.receive_from_warden.return_value = False
+    process_manager.main.args.clearblocking = False
+    process_manager.main.args.blocking = False
+    process_manager.main.input_type = InputType.ZEEK_LOG_FILE
+    process_manager.main.args.input_module = ""
+    process_manager.slips_disabled_modules = set()
+
+    assert (
+        Modules.FLOW_ALERTS in process_manager.get_runtime_disabled_modules()
+    )
+
+
+def test_get_runtime_disabled_modules_keeps_flow_alerts_enabled_otherwise() -> (
+    None
+):
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.db.is_running_non_stop.return_value = False
+    process_manager.main.conf.export_to.return_value = []
+    process_manager.main.conf.use_local_p2p.return_value = False
+    process_manager.main.conf.use_global_p2p.return_value = False
+    process_manager.main.conf.send_to_warden.return_value = False
+    process_manager.main.conf.receive_from_warden.return_value = False
+    process_manager.main.args.clearblocking = False
+    process_manager.main.args.blocking = False
+    process_manager.main.input_type = InputType.ZEEK
+    process_manager.main.args.input_module = ""
+    process_manager.slips_disabled_modules = set()
+
+    assert (
+        Modules.FLOW_ALERTS
+        not in process_manager.get_runtime_disabled_modules()
+    )
+
+
 def test_get_disabled_modules_keeps_unrelated_modules_enabled() -> None:
     """Test disabling regex_generator does not disable unrelated modules."""
     process_manager = ModuleFactory().create_process_manager_obj()
