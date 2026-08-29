@@ -40,6 +40,8 @@ A second Ctrl-C, SIGTERM, SIGHUP, SIGQUIT, daemon stop, core-module failure, and
 
 Every data request checks that Redis still advertises the output directory configured for that server. If Redis belongs to a different run, the API returns HTTP 409 and the page displays a persistent run-mismatch banner instead of mixing runs. Detection producers perform the same ownership check before publishing evidence, so a delayed process from a replaced run cannot write into the new run.
 
+ARP scan evidence requires at least five requests from one source to five distinct destination IPs within 30 seconds. The bundled ARP Zeek script writes a unique synthetic UID into every `arp.log` request and reply. Slips preserves that UID through parsing, storage, and evidence linking; it also assigns a fallback UID when reading legacy or externally generated ARP logs without one. New ARP scan evidence can therefore display every retained contributing request. Older evidence explicitly reports that its linked records were collapsed and states the detector threshold instead of implying that one packet triggered the detection.
+
 Do not enable this interface with -m or for several concurrent Slips instances.
 
 ## Storage and retention
