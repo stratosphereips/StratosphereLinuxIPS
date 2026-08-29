@@ -1962,6 +1962,19 @@ async function openEvidence(record) {
   const portScanEvidence = ["HORIZONTAL_PORT_SCAN", "VERTICAL_PORT_SCAN"].includes(
     String(record.evidence_type).toUpperCase(),
   );
+  const arpScanEvidence = String(record.evidence_type).toUpperCase() === "ARP_SCAN";
+  if (arpScanEvidence) {
+    const retainedFlowCount = numeric(record.flow_count);
+    const retainedLabel = `${retainedFlowCount} linked ARP record${retainedFlowCount === 1 ? "" : "s"}`;
+    const retentionMessage = retainedFlowCount < 5
+      ? `This legacy evidence retains only ${retainedLabel} because its ARP records had no unique UIDs. It was not detected from one packet.`
+      : `This evidence retains ${retainedLabel}; the contributing requests are listed below.`;
+    body.append(text(
+      "p",
+      `ARP scan rule: at least 5 requests to 5 distinct destination IPs within 30 seconds. ${retentionMessage}`,
+      retainedFlowCount < 5 ? "flow-missing" : "description-box",
+    ));
+  }
   body.append(
     investigationHeading(
       "Triggering flows",
