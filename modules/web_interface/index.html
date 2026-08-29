@@ -5,15 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" sizes="any">
-  <link rel="stylesheet" href="/style.css?v=20260828-log-console">
+  <link rel="stylesheet" href="/style.css?v=20260829-header-logo">
 </head>
 <body>
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
   <header class="topbar">
-    <div>
-      <p class="eyebrow">STRATOSPHERE LINUX IPS</p>
-      <h1 id="run-name">Current run</h1>
-      <p id="run-meta" class="muted">Connecting to run data…</p>
+    <div class="brand">
+      <img class="brand-logo" src="/slips-logo.png?v=1" alt="" aria-hidden="true">
+      <div class="brand-copy">
+        <p class="brand-name">SLIPS</p>
+        <h1 id="run-name">Current run</h1>
+        <p id="run-meta" class="muted">Connecting to run data…</p>
+      </div>
     </div>
     <div class="run-state">
       <span id="state-dot" class="state-dot"></span>
@@ -248,6 +251,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20260828-log-console"></script>
+  <script src="/app.js?v=20260829-connection-state"></script>
 </body>
 </html>
