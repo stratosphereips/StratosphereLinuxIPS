@@ -550,7 +550,7 @@ class HistoryCollector:
             connection: Writable flows.sqlite connection.
 
         Returns:
-            True when detector-score columns were added.
+            True when durable detection columns were added.
         """
         statements = (
             "CREATE INDEX IF NOT EXISTS alerts_time_idx "
@@ -560,7 +560,8 @@ class HistoryCollector:
             "CREATE TABLE IF NOT EXISTS evidence ("
             "evidence_id TEXT PRIMARY KEY, evidence_time REAL, "
             "profile_ip TEXT, timewindow TEXT, threat_level TEXT, "
-            "evidence_type TEXT, description TEXT, confidence REAL, data TEXT, "
+            "evidence_type TEXT, source_module TEXT, description TEXT, "
+            "confidence REAL, data TEXT, "
             "accumulated_threat_level REAL, accumulated_ratl REAL, "
             "whitelisted INTEGER DEFAULT 0)",
             "CREATE TABLE IF NOT EXISTS evidence_flows ("
@@ -591,6 +592,7 @@ class HistoryCollector:
                 "accumulated_threat_level": "REAL",
                 "accumulated_ratl": "REAL",
                 "whitelisted": "INTEGER DEFAULT 0",
+                "source_module": "TEXT",
             },
         }
         upgraded = False
@@ -681,8 +683,8 @@ class HistoryCollector:
                 connection.execute(
                     "INSERT OR IGNORE INTO evidence "
                     "(evidence_id, evidence_time, profile_ip, timewindow, "
-                    "threat_level, evidence_type, description, confidence, data) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "threat_level, evidence_type, source_module, description, "
+                    "confidence, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         canonical_id,
                         self._event_timestamp(evidence.get("timestamp")),
@@ -690,6 +692,7 @@ class HistoryCollector:
                         f"timewindow{window_number}",
                         str(evidence.get("threat_level", "info")).lower(),
                         str(evidence.get("evidence_type", "unknown")),
+                        str(evidence.get("source_module", "")),
                         str(evidence.get("description", "")),
                         float(evidence.get("confidence") or 0),
                         json.dumps(evidence),
@@ -794,10 +797,12 @@ class HistoryCollector:
             "INSERT INTO evidence "
             "(evidence_id, evidence_time, profile_ip, timewindow, "
             "threat_level, evidence_type, description, confidence, data, "
-            "accumulated_threat_level, accumulated_ratl) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "source_module, accumulated_threat_level, accumulated_ratl) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(evidence_id) DO UPDATE SET "
             "data = excluded.data, "
+            "source_module = COALESCE(NULLIF(excluded.source_module, ''), "
+            "evidence.source_module), "
             "accumulated_threat_level = excluded.accumulated_threat_level, "
             "accumulated_ratl = excluded.accumulated_ratl",
             (
@@ -810,6 +815,7 @@ class HistoryCollector:
                 str(record.get("Description", "")),
                 float(record.get("Confidence") or 0),
                 json.dumps(record),
+                str(note.get("source_module", "")),
                 note.get("accumulated_threat_level"),
                 note.get("risk_accumulated_threat_level"),
             ),
