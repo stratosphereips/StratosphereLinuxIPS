@@ -408,6 +408,26 @@ class Blocking(IModule):
             self.db, self.sudo, self.should_stop, self.logger, self.log
         )
 
+    def _get_enforcement_timewindow(
+        self, ip: str, evidence_tw: int | None
+    ) -> int:
+        """Return the time window that must anchor firewall enforcement.
+
+        Parameters:
+            ip: Address whose firewall rule is being scheduled.
+            evidence_tw: Historical time window carried by the detection.
+
+        Returns:
+            The later of the current processing and evidence time windows.
+        """
+        current_twid: str = self.db.get_timewindow(
+            time.time(), f"profile_{ip}", add_to_db=False
+        )
+        current_tw = int(current_twid.replace("timewindow", ""))
+        if evidence_tw is None:
+            return current_tw
+        return max(current_tw, int(evidence_tw))
+
     def main(self):
         if msg := self.get_msg("new_blocking"):
             # message['data'] in the new_blocking channel is a dictionary that contains
@@ -431,7 +451,8 @@ class Blocking(IModule):
 
             data = json.loads(msg["data"])
             ip = data.get("ip")
-            tw: int = data.get("tw")
+            evidence_tw: int | None = data.get("tw")
+            tw = self._get_enforcement_timewindow(ip, evidence_tw)
             block = data.get("block")
 
             flags = {
