@@ -329,6 +329,7 @@ def test_main_blocking_logic(block, expected_block_called):
     }
     blocking.parent_output_dir = "output/test-firewall-run"
     blocking.db.get_blocking_timestamp.return_value = None
+    blocking.db.get_timewindow.return_value = "timewindow23"
 
     with (
         patch.object(
@@ -354,7 +355,7 @@ def test_main_blocking_logic(block, expected_block_called):
         else:
             mock_block.assert_not_called()
 
-        mock_prepare.assert_called_once_with("1.2.3.4", 5, flags)
+        mock_prepare.assert_called_once_with("1.2.3.4", 23, flags)
         mock_register.assert_called_once_with("1.2.3.4", request)
         mock_update.assert_not_called()
 
@@ -362,6 +363,39 @@ def test_main_blocking_logic(block, expected_block_called):
     assert request["flags"]["_origin_run"] == "test-firewall-run"
     assert request["flags"]["rule_comment"].startswith(
         "Slips run=test-firewall-run blocked=1970-01-01T00:01:40Z delete="
+    )
+
+
+@pytest.mark.parametrize(
+    "evidence_tw,current_twid,expected_tw",
+    [
+        (4, "timewindow23", 23),
+        (23, "timewindow23", 23),
+        (24, "timewindow23", 24),
+        (None, "timewindow23", 23),
+    ],
+)
+def test_get_enforcement_timewindow_never_uses_stale_detection_window(
+    evidence_tw: int | None,
+    current_twid: str,
+    expected_tw: int,
+) -> None:
+    """Anchor firewall expiration to processing time, not delayed evidence.
+
+    Parameters:
+        evidence_tw: Time window carried by the block request.
+        current_twid: Current wall-clock time window returned by the database.
+        expected_tw: Window that must anchor the firewall schedule.
+    """
+    blocking = ModuleFactory().create_blocking_obj()
+    blocking.db.get_timewindow.return_value = current_twid
+
+    with patch("modules.blocking.blocking.time.time", return_value=100.0):
+        result = blocking._get_enforcement_timewindow("1.2.3.4", evidence_tw)
+
+    assert result == expected_tw
+    blocking.db.get_timewindow.assert_called_once_with(
+        100.0, "profile_1.2.3.4", add_to_db=False
     )
 
 
