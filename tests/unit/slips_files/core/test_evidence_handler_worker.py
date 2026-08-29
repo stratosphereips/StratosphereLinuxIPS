@@ -241,6 +241,7 @@ def test_add_evidence_to_json_log_file_maps_confidence_to_string(
         timewindow=TimeWindow(1),
         uid=["uid1"],
         timestamp="2024/10/04 15:45:30.123456+0000",
+        source_module="arp",
     )
 
     worker.add_evidence_to_json_log_file(evidence)
@@ -249,6 +250,7 @@ def test_add_evidence_to_json_log_file_maps_confidence_to_string(
     note = logged_evidence["Note"]
     assert '"confidence":' in note
     assert f'"confidence": "{expected_output}"' in note
+    assert '"source_module": "arp"' in note
 
 
 @pytest.mark.parametrize(
