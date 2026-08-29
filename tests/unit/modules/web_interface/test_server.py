@@ -782,7 +782,8 @@ def test_web_returns_durable_connection_without_dns_and_linked_alert(
         connection.execute(
             "CREATE TABLE evidence (evidence_id TEXT, evidence_time REAL, "
             "profile_ip TEXT, timewindow TEXT, threat_level TEXT, "
-            "evidence_type TEXT, description TEXT, confidence REAL, data TEXT)"
+            "evidence_type TEXT, source_module TEXT, description TEXT, "
+            "confidence REAL, data TEXT)"
         )
         connection.execute(
             "CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)"
@@ -803,7 +804,7 @@ def test_web_returns_durable_connection_without_dns_and_linked_alert(
             ),
         )
         connection.execute(
-            "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 "evidence-1",
                 now - 2,
@@ -811,6 +812,7 @@ def test_web_returns_durable_connection_without_dns_and_linked_alert(
                 "timewindow1",
                 "high",
                 "CONNECTION_WITHOUT_DNS",
+                "conn_analyzer",
                 "Durable evidence",
                 1.0,
                 "{}",
@@ -824,6 +826,9 @@ def test_web_returns_durable_connection_without_dns_and_linked_alert(
     host = reader.host("10.0.0.1")
     evidence_page = reader.evidence(
         {"range": ["all"], "search": ["CONNECTION_WITHOUT_DNS"]}
+    )
+    grouped_evidence_page = reader.evidence(
+        {"range": ["all"], "group": ["host_type"]}
     )
     alert_page = reader.alerts(
         {"range": ["all"], "search": ["alert-1"], "limit": ["1"]}
@@ -843,6 +848,8 @@ def test_web_returns_durable_connection_without_dns_and_linked_alert(
         evidence_page["items"][0]["evidence_type"] == "CONNECTION_WITHOUT_DNS"
     )
     assert evidence_page["items"][0]["alert_ids"] == ["alert-1"]
+    assert evidence_page["items"][0]["module"] == "conn_analyzer"
+    assert grouped_evidence_page["items"][0]["module"] == "conn_analyzer"
     assert alert_page["full_total"] == 1
     assert alert_page["total"] == 1
     assert alert_page["items"][0]["evidence"][0]["id"] == "evidence-1"
@@ -2217,3 +2224,56 @@ def test_p2p_reports_enabled_listener_and_healthy_empty_network(
     assert result["local_peer_id"] == "QmLocalPeer"
     assert result["counts"]["connected"] == 0
     assert result["peers"] == []
+
+
+def test_p2p_uses_redis_identity_and_live_peer_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Prefer Redis identity and expose live peer updates without log data."""
+    _module_factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    output_dir = tmp_path / "output" / "run"
+    output_dir.mkdir(parents=True)
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = output_dir
+    reader.redis = Mock()
+    reader.redis.get.side_effect = lambda key: {
+        "connected_peers": json.dumps(["QmRemotePeer"]),
+        "multiAddress": ("/ip4/10.0.0.1/tcp/32768/p2p/QmRedisLocalPeer"),
+    }.get(key)
+    reader.redis.hget.side_effect = lambda key, field: (
+        "123" if (key, field) == ("PIDs", "p2p_trust") else None
+    )
+    reader.redis.hgetall.side_effect = lambda key: {
+        "analysis": {"analysis_start": "2026-08-25T23:07:20"},
+        "peer_info": {
+            "QmRemotePeer": json.dumps(
+                {
+                    "ip": "192.0.2.10",
+                    "reliability": 0.75,
+                    "timestamp": 1649445643,
+                }
+            )
+        },
+    }.get(key, {})
+    reader.redis.zrange.return_value = []
+    reader.redis.lrange.return_value = []
+
+    result = reader.p2p()
+
+    assert result["listener"] == (
+        "/ip4/10.0.0.1/tcp/32768/p2p/QmRedisLocalPeer"
+    )
+    assert result["local_peer_id"] == "QmRedisLocalPeer"
+    assert result["counts"]["connected"] == 1
+    assert result["peers"] == [
+        {
+            "peer_id": "QmRemotePeer",
+            "ip": "192.0.2.10",
+            "connected": True,
+            "trust": None,
+            "reliability": 0.75,
+            "last_seen": 1649445643.0,
+            "reports_received": 0,
+        }
+    ]
