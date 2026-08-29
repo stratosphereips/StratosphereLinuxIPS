@@ -174,6 +174,58 @@ def test_wait_for_processes_to_finish(alive_statuses, expected_alive_count):
     )
 
 
+def test_wait_defers_web_stopped_message_while_server_is_running() -> None:
+    """Do not report the launcher exit as an HTTP server shutdown."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.webinterface = True
+    process_manager.main.conf.web_interface_port = 55000
+    process_manager.main.web_interface_shutdown = False
+    web_launcher = Mock()
+    web_launcher.name = Modules.WEB_INTERFACE.value
+    web_launcher.is_alive.return_value = False
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "WebInterface.is_verified_server_running",
+            return_value=True,
+        ),
+        patch.object(process_manager, "print_stopped_module") as print_stopped,
+    ):
+        alive_processes = process_manager.wait_for_processes_to_finish(
+            [web_launcher]
+        )
+
+    assert alive_processes == []
+    assert process_manager.deferred_stopped_modules == {
+        Modules.WEB_INTERFACE.value
+    }
+    print_stopped.assert_not_called()
+
+
+def test_kill_skips_web_launcher_with_deferred_status() -> None:
+    """Do not revisit the launcher while its stopped status is deferred."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.webinterface = True
+    process_manager.main.conf.web_interface_port = 55000
+    process_manager.main.web_interface_shutdown = False
+    web_launcher = Mock(pid=1234)
+    process_manager.children = [web_launcher]
+    process_manager.deferred_stopped_modules = {Modules.WEB_INTERFACE.value}
+    process_manager.main.db.get_name_of_module_at.return_value = (
+        Modules.WEB_INTERFACE.value
+    )
+
+    with (
+        patch.object(process_manager, "kill_process_tree") as kill_process,
+        patch.object(process_manager, "print_stopped_module") as print_stopped,
+    ):
+        process_manager.kill_all_children()
+
+    kill_process.assert_not_called()
+    print_stopped.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "end_date_str, start_time_str, expected_analysis_time",
     [
@@ -834,6 +886,24 @@ def test_firewall_shutdown_keep_leaves_rules_installed() -> None:
         process_manager._handle_firewall_after_analysis()
 
     delete_chain.assert_not_called()
+
+
+def test_stop_web_interface_reports_status_after_server_stops() -> None:
+    """Mark the web interface stopped after terminating its HTTP server."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.children = [Mock()]
+    process_manager.main.web_interface_shutdown = False
+
+    with patch(
+        "managers.process_manager.shutdown_mixin."
+        "WebInterface.stop_verified_server",
+        return_value=True,
+    ) as stop_server:
+        process_manager._stop_web_interface(55000)
+
+    stop_server.assert_called_once_with(55000)
+    assert process_manager.main.web_interface_shutdown is True
+    assert process_manager.stopped_modules == [Modules.WEB_INTERFACE.value]
 
 
 def test_forced_shutdown_stops_web_interface_without_prompt() -> None:
