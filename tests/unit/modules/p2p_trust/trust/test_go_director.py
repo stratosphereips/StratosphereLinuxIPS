@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import json
 from unittest.mock import Mock, patch
 import pytest
 from tests.module_factory import ModuleFactory
@@ -546,6 +547,50 @@ def test_process_go_update(data, expected_calls):
             actual_calls.append(("insert_go_ip_pairing", call[0]))
 
         assert actual_calls == expected_calls
+
+
+@pytest.mark.parametrize(
+    "connected, existing_peers, expected_peers",
+    [
+        (True, ["existing_peer"], ["existing_peer", "test_peer"]),
+        (False, ["existing_peer", "test_peer"], ["existing_peer"]),
+    ],
+)
+def test_process_go_update_publishes_live_peer_state(
+    connected: bool,
+    existing_peers: list[str],
+    expected_peers: list[str],
+) -> None:
+    """
+    Ensure Pigeon activation changes update the Redis state used by the web.
+
+    Parameters:
+        connected: Connectivity reported by Pigeon.
+        existing_peers: Connected peers already present in Redis.
+        expected_peers: Connected peers expected after processing.
+    """
+    go_director = ModuleFactory().create_go_director_obj()
+    go_director.db.get_connected_peers.return_value = existing_peers
+    go_director.db.get_peer_trust_data.return_value = json.dumps(
+        {"ip": "192.168.1.1", "reliability": 0.4}
+    )
+
+    go_director.process_go_update(
+        {
+            "peerid": "test_peer",
+            "connected": connected,
+            "timestamp": 1649445643,
+        }
+    )
+
+    stored_state = json.loads(
+        go_director.db.store_peer_trust_data.call_args.args[1]
+    )
+    assert stored_state["connected"] is connected
+    assert stored_state["timestamp"] == 1649445643
+    go_director.db.store_connected_peers.assert_called_once_with(
+        expected_peers
+    )
 
 
 def test_respond_to_message_request_with_info():
