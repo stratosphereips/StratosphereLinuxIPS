@@ -161,7 +161,7 @@ class Blocking(IModule):
         """
 
         if self.firewall != "iptables":
-            return
+            return False
 
         if not isinstance(ip_to_block, str):
             return False
@@ -184,7 +184,7 @@ class Blocking(IModule):
                     0,
                     1,
                 )
-            return False
+            return True
 
         from_ = flags.get("from_")
         to = flags.get("to")
@@ -197,59 +197,71 @@ class Blocking(IModule):
             from_, to = True, True
         # This dictionary will be used to construct the rule
         options = {
-            "protocol": f" -p {protocol}" if protocol is not None else "",
-            "dport": f" --dport {dport}" if dport is not None else "",
-            "sport": f" --sport {sport}" if sport is not None else "",
+            "protocol": f"-p {protocol}" if protocol is not None else "",
+            "dport": f"--dport {dport}" if dport is not None else "",
+            "sport": f"--sport {sport}" if sport is not None else "",
         }
-
+        source_options = dict(options)
+        destination_options = dict(options)
         if utils.is_private_ip(ip_to_block) and interface:
-            # block all ingoing AND outgoing packet on the given interface
-            options.update(
-                {
-                    "interface": f" -i {interface} -o {interface}",
-                }
-            )
+            source_options["interface"] = f"-i {interface}"
+            destination_options["interface"] = f"-o {interface}"
 
-        results = []
+        requested_rules = []
         if from_:
-            # Add rule to block traffic from source ip_to_block (-s)
-            blocked = exec_iptables_command(
-                self.sudo,
-                action="insert",
-                ip_to_block=ip_to_block,
-                flag="-s",
-                options=options,
-                comment=flags.get("rule_comment", LEGACY_SLIPS_COMMENT),
-            )
-            if blocked:
-                results.append(True)
-                txt = f"Blocked all traffic from: {ip_to_block}"
-                self.print(txt)
-                self.log(txt)
-
+            requested_rules.append(("-s", source_options, "from"))
         if to:
-            # Add rule to block traffic to ip_to_block (-d)
-            blocked = exec_iptables_command(
+            requested_rules.append(("-d", destination_options, "to"))
+
+        inserted_rules = []
+        comment = flags.get("rule_comment", LEGACY_SLIPS_COMMENT)
+        for rule_flag, rule_options, direction in requested_rules:
+            if exec_iptables_command(
                 self.sudo,
                 action="insert",
                 ip_to_block=ip_to_block,
-                flag="-d",
-                options=options,
-                comment=flags.get("rule_comment", LEGACY_SLIPS_COMMENT),
-            )
-            if blocked:
-                results.append(True)
-                txt = f"Blocked all traffic to: {ip_to_block}"
-                self.print(txt)
-                self.log(f"Blocked all traffic to: {ip_to_block}")
-        if results:
-            blocked_at = flags.get("_blocked_at")
-            if blocked_at is None:
-                self.db.set_blocked_ip(ip_to_block)
-            else:
-                self.db.set_blocked_ip(ip_to_block, blocked_at)
-        requested_rules = int(bool(from_)) + int(bool(to))
-        return bool(results) and len(results) == requested_rules
+                flag=rule_flag,
+                options=rule_options,
+                comment=comment,
+            ):
+                inserted_rules.append((rule_flag, rule_options))
+                continue
+
+            rollback_success = True
+            for inserted_flag, inserted_options in reversed(inserted_rules):
+                deleted = exec_iptables_command(
+                    self.sudo,
+                    action="delete",
+                    ip_to_block=ip_to_block,
+                    flag=inserted_flag,
+                    options=inserted_options,
+                    comment=comment,
+                )
+                rollback_success = deleted and rollback_success
+            message = f"Unable to block traffic {direction} {ip_to_block}."
+            if inserted_rules:
+                rollback_result = (
+                    "Inserted rules were rolled back."
+                    if rollback_success
+                    else "Unable to roll back every inserted rule."
+                )
+                message = f"{message} {rollback_result}"
+            self.print(message, 0, 1)
+            self.log(message)
+            return False
+
+        if not inserted_rules:
+            return False
+        blocked_at = flags.get("_blocked_at")
+        if blocked_at is None:
+            self.db.set_blocked_ip(ip_to_block)
+        else:
+            self.db.set_blocked_ip(ip_to_block, blocked_at)
+        for _, _, direction in requested_rules:
+            message = f"Blocked all traffic {direction}: {ip_to_block}"
+            self.print(message)
+            self.log(message)
+        return True
 
     def _recovered_rule_flags(
         self, rules: List[Dict[str, Any]]
@@ -443,7 +455,14 @@ class Blocking(IModule):
                 run_id,
             )
             if block:
-                self._block_ip(ip, request_flags)
+                if not self._block_ip(ip, request_flags):
+                    self.print(
+                        f"Firewall rule insertion failed for {ip}; "
+                        "no unblock request was registered.",
+                        0,
+                        1,
+                    )
+                    return
             # Whether this IP was newly blocked or already present, retain its
             # latest deletion deadline and update the iptables comments.
             self.unblocker.register_unblock_request(ip, request)
