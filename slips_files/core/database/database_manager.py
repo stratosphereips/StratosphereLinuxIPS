@@ -70,6 +70,7 @@ class DBManager:
         self.main_pid = main_pid
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
+        self.source_module: str = ""
         self.regex_generator_storage = None
         self.t_cell_storage = None
         # only the main process should ever flush the Redis DB. to avoid
@@ -891,6 +892,9 @@ class DBManager:
             return False
         if self.is_detection_disabled(evidence.evidence_type):
             return False
+
+        if not getattr(evidence, "source_module", ""):
+            evidence.source_module = self.source_module
 
         if evidence.evidence_type in {
             EvidenceType.HORIZONTAL_PORT_SCAN,
