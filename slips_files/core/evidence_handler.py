@@ -59,7 +59,9 @@ class EvidenceHandler(ICore):
     is_filtered_evidence = EvidenceHandlerWorker.is_filtered_evidence
     get_threat_level = EvidenceHandlerWorker.get_threat_level
     send_to_exporting_module = EvidenceHandlerWorker.send_to_exporting_module
-    is_blocking_modules_supported = EvidenceHandlerWorker.is_blocking_modules_supported
+    is_blocking_modules_supported = (
+        EvidenceHandlerWorker.is_blocking_modules_supported
+    )
     show_popup = EvidenceHandlerWorker.show_popup
 
     def init(self, total_processes_to_start: int = 1):
@@ -88,7 +90,9 @@ class EvidenceHandler(ICore):
         self.evidence_logger = EvidenceLogger(
             logger_stop_signal=self.logger_stop_signal,
             evidence_logger_q=self.evidence_logger_q,
-            output_dir=get_alerts_path_inside_output_dir(self.parent_output_dir),
+            output_dir=get_alerts_path_inside_output_dir(
+                self.parent_output_dir
+            ),
             slips_args=self.args,
         )
         self.logger_thread = threading.Thread(
@@ -99,7 +103,9 @@ class EvidenceHandler(ICore):
         utils.start_thread(self.logger_thread, self.db)
 
         conf = ConfigParser()
-        self.exporting_modules_enabled = conf.export_to() or conf.send_to_warden()
+        self.exporting_modules_enabled = (
+            conf.export_to() or conf.send_to_warden()
+        )
         self.notify = None
         if self.popup_alerts:
             self.notify = Notify()
@@ -160,7 +166,9 @@ class EvidenceHandler(ICore):
         """
         idmef_evidence: dict = self.idmefv2.convert_to_idmef_event(evidence)
         if not idmef_evidence:
-            self.handle_unable_to_log(evidence, "Can't convert to IDMEF evidence")
+            self.handle_unable_to_log(
+                evidence, "Can't convert to IDMEF evidence"
+            )
             return
 
         try:
@@ -176,6 +184,7 @@ class EvidenceHandler(ICore):
                             "threat_level": str(evidence.threat_level),
                             "evidence_signal": str(evidence.evidence_signal),
                             "timewindow": evidence.timewindow.number,
+                            "source_module": evidence.source_module,
                         }
                     )
                 }
