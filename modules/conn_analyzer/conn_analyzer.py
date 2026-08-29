@@ -27,6 +27,7 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.input_type import InputType
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
+from slips_files.core.structures.evidence import EvidenceType
 
 
 NOT_ESTAB = "Not Established"
@@ -601,9 +602,7 @@ class ConnAnalyzer(IAsyncModule):
         Checks if there's a connection to a dstip that has no cached DNS
         answer
         """
-        if self.db.is_detection_disabled(
-            EvidenceType.CONNECTION_WITHOUT_DNS
-        ):
+        if self.db.is_detection_disabled(EvidenceType.CONNECTION_WITHOUT_DNS):
             return False
 
         if self.should_ignore_conn_without_dns(flow):
