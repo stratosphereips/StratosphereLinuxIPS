@@ -38,6 +38,7 @@ def test_idle_connection_does_not_block_page_requests() -> None:
             page = response.read()
             assert b"Slips" in page
             assert b'class="brand-logo"' in page
+            assert b'src="/favicon.svg?v=3"' in page
             assert b'<p class="brand-name">SLIPS</p>' in page
         with urlopen(
             f"http://127.0.0.1:{port}/favicon.svg", timeout=10
