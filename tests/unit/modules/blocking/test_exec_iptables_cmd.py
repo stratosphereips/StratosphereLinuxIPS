@@ -1,17 +1,75 @@
 """Unit tests for recoverable Slips iptables rule metadata."""
 
+import subprocess
 from unittest.mock import Mock, call, patch
 
 import pytest
 
 from modules.blocking.exec_iptables_cmd import (
     delete_slips_rules_for_ip,
+    exec_iptables_command,
     format_slips_rule_comment,
     list_slips_firewall_rules,
     parse_slips_rule_comment,
     sync_slips_rule_comment,
 )
 from tests.module_factory import ModuleFactory
+
+
+@pytest.mark.parametrize("returncode, expected", [(0, True), (2, False)])
+def test_exec_iptables_command_preserves_argument_boundaries(
+    returncode: int,
+    expected: bool,
+) -> None:
+    """Pass comments and sanitized options as distinct iptables arguments.
+
+    Parameters:
+        returncode: Exit status returned by iptables.
+        expected: Boolean result expected from the wrapper.
+    """
+    _module_factory = ModuleFactory()
+    completed = Mock(returncode=returncode)
+
+    with patch(
+        "modules.blocking.exec_iptables_cmd.subprocess.run",
+        return_value=completed,
+    ) as run:
+        result = exec_iptables_command(
+            "sudo -n",
+            action="insert",
+            ip_to_block="192.168.1.10",
+            flag="-s",
+            options={
+                "protocol": " -p tcp",
+                "interface": " -i eth0",
+            },
+            comment="Slips run=test",
+        )
+
+    assert result is expected
+    run.assert_called_once_with(
+        [
+            "sudo",
+            "-n",
+            "iptables",
+            "--insert",
+            "slipsBlocking",
+            "-s",
+            "192.168.1.10",
+            "-m",
+            "comment",
+            "--comment",
+            "Slips run=test",
+            "-p",
+            "tcp",
+            "-i",
+            "eth0",
+            "-j",
+            "DROP",
+        ],
+        stdout=subprocess.DEVNULL,
+        check=False,
+    )
 
 
 def test_format_and_parse_slips_rule_comment() -> None:
