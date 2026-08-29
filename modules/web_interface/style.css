@@ -33,6 +33,10 @@ figcaption small { display: block; margin-top: .2rem; font-size: .7rem; }
 .muted, .section-heading p, .table-heading p { margin-bottom: 0; color: var(--muted); font-size: .82rem; }
 .error-banner { position: sticky; top: 0; z-index: 50; padding: .75rem 2.5rem; border-bottom: 1px solid var(--danger); background: #31171c; color: #ffd8dc; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 2rem; padding: 1.6rem 2.5rem 1.25rem; border-bottom: 1px solid var(--line); background: linear-gradient(100deg, #0c151d, #101e27); }
+.brand { display: flex; align-items: center; gap: .9rem; min-width: 0; }
+.brand-copy { min-width: 0; }
+.brand-logo { width: 56px; height: 56px; flex: none; object-fit: contain; }
+.brand-name { margin-bottom: .2rem; color: var(--text); font-size: .9rem; font-weight: 850; letter-spacing: .14em; }
 .run-state { display: flex; align-items: center; gap: .8rem; min-width: 170px; }
 .run-state small { display: block; margin-top: .25rem; color: var(--muted); }
 .state-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 5px #e5ad4f18; }
