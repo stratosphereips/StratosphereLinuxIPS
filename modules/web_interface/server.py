@@ -883,6 +883,47 @@ class RunDataReader:
                 return module
         return "flow_alerts"
 
+    @classmethod
+    def _evidence_source_module(
+        cls, source_module: Any, evidence_type: str
+    ) -> str:
+        """
+        Resolve recorded evidence provenance with a legacy fallback.
+
+        Parameters:
+            source_module: Module name stored with the evidence.
+            evidence_type: Canonical evidence type used for old records.
+
+        Returns:
+            Recorded module name, or the historical type-based inference.
+        """
+        recorded = str(source_module or "").strip()
+        return recorded or cls._module_for_evidence(evidence_type)
+
+    @classmethod
+    def _evidence_module_expression(
+        cls, connection: sqlite3.Connection, table_alias: str = ""
+    ) -> str:
+        """
+        Build a SQLite expression for evidence module provenance.
+
+        Parameters:
+            connection: Active flows database connection.
+            table_alias: Optional evidence table alias.
+
+        Returns:
+            SQL expression preferring stored provenance when available.
+        """
+        columns = {
+            str(row[1])
+            for row in connection.execute("PRAGMA table_info(evidence)")
+        }
+        prefix = f"{table_alias}." if table_alias else ""
+        fallback = f"evidence_module(COALESCE({prefix}evidence_type, ''))"
+        if "source_module" not in columns:
+            return fallback
+        return f"COALESCE(NULLIF(TRIM({prefix}source_module), ''), {fallback})"
+
     @staticmethod
     def _scope(ip: str) -> str:
         """Classify an IP as local, public, or special."""
@@ -1147,13 +1188,16 @@ class RunDataReader:
                     else str(profile).removeprefix(PROFILE_PREFIX)
                 )
                 evidence_type = str(evidence.get("evidence_type", "unknown"))
+                source_module = evidence.get("source_module", "")
                 evidence.update(
                     {
                         "id": canonical_id,
                         "profile_ip": profile_ip
                         or profile_id.removeprefix(PROFILE_PREFIX),
                         "twid": f"timewindow{twid}",
-                        "module": self._module_for_evidence(evidence_type),
+                        "module": self._evidence_source_module(
+                            source_module, evidence_type
+                        ),
                         "alert_ids": alert_ids_by_evidence.get(
                             canonical_id, []
                         ),
@@ -1193,6 +1237,9 @@ class RunDataReader:
             (evidence_id,),
         ).fetchone()["count"]
         evidence_type = str(row["evidence_type"] or "unknown")
+        source_module = (
+            row["source_module"] if "source_module" in row.keys() else ""
+        ) or record.get("source_module", "")
         record.update(
             {
                 "id": evidence_id,
@@ -1203,7 +1250,9 @@ class RunDataReader:
                 "evidence_type": evidence_type,
                 "description": str(row["description"] or ""),
                 "confidence": float(row["confidence"] or 0),
-                "module": self._module_for_evidence(evidence_type),
+                "module": self._evidence_source_module(
+                    source_module, evidence_type
+                ),
                 "alert_ids": alert_ids,
                 "flow_count": int(flow_count),
                 "whitelisted": (
@@ -1296,6 +1345,7 @@ class RunDataReader:
             connection.create_function(
                 "evidence_module", 1, self._module_for_evidence
             )
+            module_expression = self._evidence_module_expression(connection)
             latest_row = connection.execute(
                 "SELECT MAX(evidence_time) AS latest FROM evidence"
             ).fetchone()
@@ -1346,7 +1396,7 @@ class RunDataReader:
                 "profile_ip || char(31) || evidence_type AS group_id, "
                 "MAX(evidence_time) AS timestamp, "
                 f"MAX({threat_expression}) AS threat_rank, "
-                "evidence_module(evidence_type) AS module, "
+                f"GROUP_CONCAT(DISTINCT {module_expression}) AS module, "
                 "COUNT(*) AS evidence_count, "
                 "GROUP_CONCAT(evidence_id) AS evidence_ids, "
                 f"SUM({whitelist_expression}) AS persisted_whitelisted_count, "
@@ -1481,6 +1531,9 @@ class RunDataReader:
                 connection.create_function(
                     "evidence_module", 1, self._module_for_evidence
                 )
+                module_expression = self._evidence_module_expression(
+                    connection
+                )
                 latest_row = connection.execute(
                     "SELECT MAX(evidence_time) AS latest FROM evidence"
                 ).fetchone()
@@ -1498,9 +1551,7 @@ class RunDataReader:
                         "host": "LOWER(COALESCE(profile_ip, ''))",
                         "threat": threat_expression,
                         "type": "LOWER(COALESCE(evidence_type, ''))",
-                        "module": (
-                            "LOWER(evidence_module(COALESCE(evidence_type, '')))"
-                        ),
+                        "module": f"LOWER({module_expression})",
                         "confidence": "confidence",
                         "flows": flow_expression,
                         "alert": alert_expression,
@@ -1527,7 +1578,7 @@ class RunDataReader:
                         "LOWER(COALESCE(description, '')) LIKE ? OR "
                         "LOWER(COALESCE(CAST(confidence AS TEXT), '')) LIKE ? OR "
                         "LOWER(COALESCE(data, '')) LIKE ? OR "
-                        "LOWER(COALESCE(evidence_module(COALESCE(evidence_type, '')), '')) LIKE ? OR "
+                        f"LOWER(COALESCE({module_expression}, '')) LIKE ? OR "
                         "EXISTS (SELECT 1 FROM evidence_flows ef "
                         "WHERE ef.evidence_id = evidence.evidence_id "
                         "AND LOWER(ef.uid) LIKE ?) OR "
@@ -3077,15 +3128,17 @@ class RunDataReader:
         """
         if not self._table_exists(connection, "evidence"):
             return Counter()
+        connection.create_function(
+            "evidence_module", 1, self._module_for_evidence
+        )
+        module_expression = self._evidence_module_expression(connection)
         rows = connection.execute(
-            "SELECT evidence_type, COUNT(*) AS count FROM evidence "
-            "GROUP BY evidence_type"
+            f"SELECT {module_expression} AS module, COUNT(*) AS count "
+            f"FROM evidence GROUP BY {module_expression}"
         ).fetchall()
         counts: Counter[str] = Counter()
         for row in rows:
-            module = self._module_for_evidence(
-                str(row["evidence_type"] or "unknown")
-            )
+            module = str(row["module"] or "flow_alerts")
             counts[module] += int(row["count"])
         return counts
 
@@ -4007,6 +4060,12 @@ class RunDataReader:
                 or ""
             )
             reliability = latest_reliability.get(peer_id, {})
+            reliability_value = reliability.get("reliability")
+            if reliability_value is None:
+                try:
+                    reliability_value = float(info["reliability"])
+                except (KeyError, TypeError, ValueError):
+                    reliability_value = None
             peers.append(
                 {
                     "peer_id": peer_id,
@@ -4015,9 +4074,10 @@ class RunDataReader:
                     "trust": (
                         float(peer_trust[ip]) if ip in peer_trust else None
                     ),
-                    "reliability": reliability.get("reliability"),
+                    "reliability": reliability_value,
                     "last_seen": max(
                         float(peer_seen.get(peer_id, 0)),
+                        self._event_timestamp(info.get("timestamp")),
                         float(pairing.get("timestamp") or 0),
                         float(reliability.get("timestamp") or 0),
                     ),
@@ -4034,18 +4094,28 @@ class RunDataReader:
         p2p_log = self.output_dir / "p2p_trust" / "p2p.log"
         listener = ""
         local_peer_id = ""
-        try:
-            log_tail = p2p_log.read_text(encoding="utf-8", errors="replace")[
-                -65536:
-            ]
-            matches = re.findall(r"(/ip4/[^\s]+/p2p/([^\s]+))", log_tail)
-            if matches:
-                listener, local_peer_id = matches[-1]
-        except OSError:
-            pass
+        multiaddress = str(self.redis.get("multiAddress") or "").strip()
+        matches = re.findall(
+            r"(/(?:ip4|ip6)/[^\s]+/p2p/([^\s/]+))", multiaddress
+        )
+        if matches:
+            listener, local_peer_id = matches[-1]
+        else:
+            try:
+                log_tail = p2p_log.read_text(
+                    encoding="utf-8", errors="replace"
+                )[-65536:]
+                matches = re.findall(
+                    r"(/(?:ip4|ip6)/[^\s]+/p2p/([^\s/]+))", log_tail
+                )
+                if matches:
+                    listener, local_peer_id = matches[-1]
+            except OSError:
+                pass
         current_reports = [item for item in reports if item["this_run"]]
         return {
             "enabled": bool(self.redis.hget("PIDs", "p2p_trust"))
+            or bool(listener)
             or p2p_log.exists(),
             "listener": listener,
             "local_peer_id": local_peer_id,
