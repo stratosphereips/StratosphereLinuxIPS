@@ -60,12 +60,18 @@ class ShutdownMixin:
                 # by slips.py, we don't have it stored in
                 # the db so just skip it
                 continue
-            if module_name in self.stopped_modules:
+            if (
+                module_name in self.stopped_modules
+                or module_name in self.deferred_stopped_modules
+            ):
                 # already stopped
                 continue
 
             process.join(3)
             self.kill_process_tree(process.pid)
+            if self._should_defer_web_interface_stopped_message(module_name):
+                self.deferred_stopped_modules.add(module_name)
+                continue
             self.print_stopped_module(module_name)
 
     def warn_about_pending_modules(
@@ -168,6 +174,10 @@ class ShutdownMixin:
             if process.is_alive():
                 # reached timeout
                 alive_processes.append(process)
+            elif self._should_defer_web_interface_stopped_message(
+                process.name
+            ):
+                self.deferred_stopped_modules.add(str(process.name))
             else:
                 self.print_stopped_module(process.name)
 
@@ -489,6 +499,37 @@ class ShutdownMixin:
         accessor = getattr(self.main.conf, "web_interface_enabled", None)
         return callable(accessor) and accessor() is True
 
+    def _should_defer_web_interface_stopped_message(
+        self, module_name: object
+    ) -> bool:
+        """Defer the launcher status while its HTTP server remains available.
+
+        Parameters:
+            module_name: Name of the child process that exited.
+
+        Returns:
+            True when the detached web server is still running.
+        """
+        if str(module_name).casefold() != Modules.WEB_INTERFACE.value:
+            return False
+        if not self._is_web_interface_enabled():
+            return False
+        if getattr(self.main, "web_interface_shutdown", False):
+            return False
+        port = int(self.main.conf.web_interface_port)
+        return WebInterface.is_verified_server_running(port)
+
+    def _report_web_interface_stopped(self) -> None:
+        """Report the web interface only after its HTTP server has stopped."""
+        self.deferred_stopped_modules.discard(Modules.WEB_INTERFACE.value)
+        total_modules = max(
+            len(getattr(self, "children", [])), len(self.stopped_modules) + 1
+        )
+        self.print_stopped_module(
+            Modules.WEB_INTERFACE.value,
+            total_modules=total_modules,
+        )
+
     def _ask_to_stop_web_interface(self) -> bool:
         """
         Ask whether to stop the local web interface after analysis stops.
@@ -529,7 +570,7 @@ class ShutdownMixin:
         """
         if WebInterface.stop_verified_server(port):
             self.main.web_interface_shutdown = True
-            self.main.print("Web interface stopped.")
+            self._report_web_interface_stopped()
             return
         self.main.print(
             f"Could not stop the verified web interface on port {port}.",
@@ -611,6 +652,7 @@ class ShutdownMixin:
         port = int(self.main.conf.web_interface_port)
         if not WebInterface.is_verified_server_running(port):
             self.main.web_interface_shutdown = True
+            self._report_web_interface_stopped()
             return
         keep_web_interface_available = natural_completion or getattr(
             self.main, "keyboard_interrupt_received", False
