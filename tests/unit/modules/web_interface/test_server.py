@@ -1777,6 +1777,7 @@ def test_host_evidence_excludes_mac_alias_profiles(
     assert result["total"] == 1
     assert [item["id"] for item in result["items"]] == ["low"]
 
+
 def test_host_evidence_searches_all_durable_evidence_fields(tmp_path) -> None:
     """Test host evidence search includes raw fields and linked identifiers."""
     _module_factory = ModuleFactory()
@@ -1852,7 +1853,6 @@ def test_ip_context_prefers_rdns_and_reports_ti_feeds() -> None:
     assert fallback["dns_name"] == "domain.example.test"
     assert fallback["dns_name_source"] == "DNS"
     assert fallback["ti_feeds"] == []
-
 
 
 def test_run_metadata_reads_info_file(tmp_path) -> None:
@@ -2275,3 +2275,68 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
             "reports_received": 0,
         }
     ]
+
+
+def test_p2p_report_counter_is_not_limited_to_latest_500(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Count every report from this run while limiting returned report rows."""
+    _module_factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    output_dir = tmp_path / "output" / "run"
+    output_dir.mkdir(parents=True)
+    trust_path = tmp_path / "permanent" / "p2p_trust_runtime" / "trustdb.db"
+    trust_path.parent.mkdir(parents=True)
+    with sqlite3.connect(trust_path) as connection:
+        connection.execute(
+            "CREATE TABLE go_reliability "
+            "(peerid TEXT, reliability REAL, update_time REAL)"
+        )
+        connection.execute(
+            "CREATE TABLE peer_ips "
+            "(peerid TEXT, ipaddress TEXT, update_time REAL)"
+        )
+        connection.execute(
+            "CREATE TABLE reports "
+            "(reporter_peerid TEXT, reported_key TEXT, score REAL, "
+            "confidence REAL, update_time REAL)"
+        )
+        connection.executemany(
+            "INSERT INTO reports VALUES (?, ?, ?, ?, ?)",
+            [
+                (
+                    "QmRemotePeer",
+                    f"192.0.2.{index}",
+                    0.5,
+                    0.8,
+                    1000 + index,
+                )
+                for index in range(501)
+            ]
+            + [
+                (
+                    "QmOldPeer",
+                    f"198.51.100.{index}",
+                    0.5,
+                    0.8,
+                    index,
+                )
+                for index in range(20)
+            ],
+        )
+
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = output_dir
+    reader.redis = Mock()
+    reader.redis.get.return_value = None
+    reader.redis.hget.return_value = None
+    reader.redis.hgetall.side_effect = lambda key: (
+        {"analysis_start": "1000"} if key == "analysis" else {}
+    )
+    reader.redis.zrange.return_value = []
+    reader.redis.lrange.return_value = []
+
+    result = reader.p2p()
+
+    assert len(result["reports"]) == 200
+    assert result["counts"]["reports_received"] == 501
