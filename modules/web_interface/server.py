@@ -3988,6 +3988,7 @@ class RunDataReader:
         trust_path = Path("permanent") / "p2p_trust_runtime" / "trustdb.db"
         trust_history: List[Dict[str, Any]] = []
         reports: List[Dict[str, Any]] = []
+        reports_received = 0
         peer_ips: Dict[str, Dict[str, Any]] = {}
         if trust_path.exists():
             try:
@@ -4037,6 +4038,18 @@ class RunDataReader:
                                 or timestamp >= run_start,
                             }
                         )
+                    if run_start:
+                        report_count_row = connection.execute(
+                            "SELECT COUNT(*) AS total FROM reports "
+                            "WHERE update_time >= ?",
+                            (run_start,),
+                        ).fetchone()
+                    else:
+                        report_count_row = connection.execute(
+                            "SELECT COUNT(*) AS total FROM reports"
+                        ).fetchone()
+                    if report_count_row:
+                        reports_received = int(report_count_row["total"])
             except sqlite3.Error:
                 pass
         report_counts = Counter(item["peer_id"] for item in reports)
@@ -4128,7 +4141,7 @@ class RunDataReader:
                 "known": len(peers),
                 "reports_sent": counts.get("sent:report", 0)
                 + counts.get("sent:blame", 0),
-                "reports_received": len(current_reports),
+                "reports_received": reports_received,
                 "requests_sent": counts.get("sent:request", 0),
                 "requests_received": counts.get("received:request", 0),
             },
