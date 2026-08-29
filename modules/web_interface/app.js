@@ -9,6 +9,8 @@ const state = {
   arpPoisoning: null,
   host: null,
   failures: 0,
+  connected: false,
+  lastSuccessfulRequest: null,
   timer: null,
   requests: new Map(),
   drawerHistory: [],
@@ -173,6 +175,32 @@ function clearError() {
   byId("error-banner").hidden = true;
 }
 
+/**
+ * Show whether the browser can currently reach the local web server.
+ *
+ * @param {boolean} connected True after a successful API response.
+ */
+function renderConnectionState(connected) {
+  state.connected = connected;
+  const dot = byId("state-dot");
+  const label = byId("run-state");
+  const updated = byId("updated-at");
+  if (!connected) {
+    dot.className = "state-dot error";
+    label.textContent = "Web disconnected";
+    updated.textContent = state.lastSuccessfulRequest
+      ? `Last update ${state.lastSuccessfulRequest.toLocaleTimeString()}`
+      : "No connection";
+    return;
+  }
+  const runState = state.overview?.run?.state;
+  dot.className = `state-dot ${runState || "running"}`;
+  label.textContent = runState
+    ? (runState === "running" ? "Analysis running" : "Analysis complete")
+    : "Web connected";
+  updated.textContent = `Updated ${state.lastSuccessfulRequest.toLocaleTimeString()}`;
+}
+
 function toast(message) {
   const element = byId("toast");
   element.textContent = message;
@@ -212,11 +240,14 @@ async function api(key, path) {
     }
     applyRunIdentity(payload.run_identity);
     state.failures = 0;
+    state.lastSuccessfulRequest = new Date();
+    renderConnectionState(true);
     clearError();
     return payload;
   } catch (error) {
     if (error.name === "AbortError") return null;
     state.failures += 1;
+    renderConnectionState(false);
     showError(error.status === 409
       ? `Run mismatch: ${error.message}. Reload after the current web-enabled Slips run has started.`
       : `Web data unavailable: ${error.message}`);
@@ -530,9 +561,7 @@ function renderRunContext(data) {
     metadata["Slips version"] ? `Slips ${metadata["Slips version"]}` : "",
     metadata.Commit ? `commit ${metadata.Commit}` : "",
   ].filter(Boolean).join(" · ");
-  byId("run-state").textContent = run.state === "running" ? "Analysis running" : "Analysis complete";
-  byId("state-dot").className = `state-dot ${run.state}`;
-  byId("updated-at").textContent = `Updated ${new Date(data.updated_at * 1000).toLocaleTimeString()}`;
+  renderConnectionState(true);
   byId("alerts-badge").textContent = compact(data.counts.alerts);
   byId("evidence-badge").textContent = compact(data.counts.evidence);
   byId("hosts-badge").textContent = compact(data.counts.hosts);
