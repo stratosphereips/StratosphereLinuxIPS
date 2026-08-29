@@ -35,7 +35,10 @@ def test_idle_connection_does_not_block_page_requests() -> None:
     try:
         with urlopen(f"http://127.0.0.1:{port}/", timeout=10) as response:
             assert response.status == 200
-            assert b"Slips" in response.read()
+            page = response.read()
+            assert b"Slips" in page
+            assert b'class="brand-logo"' in page
+            assert b'<p class="brand-name">SLIPS</p>' in page
         with urlopen(
             f"http://127.0.0.1:{port}/favicon.svg", timeout=10
         ) as response:
@@ -44,6 +47,12 @@ def test_idle_connection_does_not_block_page_requests() -> None:
             favicon = response.read()
             assert b"<svg" in favicon
             assert b'xmlns="http://www.w3.org/2000/svg"' in favicon
+        with urlopen(
+            f"http://127.0.0.1:{port}/slips-logo.png", timeout=10
+        ) as response:
+            assert response.status == 200
+            assert response.headers["Content-Type"] == "image/png"
+            assert response.read().startswith(b"\x89PNG\r\n\x1a\n")
     finally:
         idle_connection.close()
         server.shutdown()
@@ -83,6 +92,25 @@ def test_server_rejects_non_ipv4_bind_addresses(value: str) -> None:
 
     with pytest.raises(argparse.ArgumentTypeError):
         ipv4_address(value)
+
+
+def test_header_marks_failed_web_connection_as_disconnected() -> None:
+    """Keep the persistent run indicator honest when API polling fails."""
+    _module_factory = ModuleFactory()
+    app_source = Path("modules/web_interface/app.js").read_text(
+        encoding="utf-8"
+    )
+    connection_renderer = app_source.split(
+        "function renderConnectionState(connected)", 1
+    )[1].split("function toast", 1)[0]
+    api_error_handler = app_source.split("async function api", 1)[1].split(
+        "function renderTable", 1
+    )[0]
+
+    assert 'dot.className = "state-dot error"' in connection_renderer
+    assert 'label.textContent = "Web disconnected"' in connection_renderer
+    assert "renderConnectionState(false);" in api_error_handler
+    assert "renderConnectionState(true);" in api_error_handler
 
 
 @pytest.mark.parametrize("tab", ["alerts", "evidence", "hosts"])
