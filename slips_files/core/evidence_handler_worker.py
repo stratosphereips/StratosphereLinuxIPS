@@ -149,6 +149,7 @@ class EvidenceHandlerWorker(IModule):
                     ),
                     "timewindow": evidence.timewindow.number,
                     "immune_type": evidence.immune_type,
+                    "source_module": evidence.source_module,
                 }
             )
             idmef_evidence.update({"Note": json.dumps(note)})
