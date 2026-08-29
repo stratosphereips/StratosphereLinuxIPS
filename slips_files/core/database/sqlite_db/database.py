@@ -59,7 +59,8 @@ class SQLiteDB(ISQLite):
         table_schema = {
             "evidence": "evidence_id TEXT PRIMARY KEY, evidence_time REAL, "
             "profile_ip TEXT, timewindow TEXT, threat_level TEXT, "
-            "evidence_type TEXT, description TEXT, confidence REAL, data TEXT, "
+            "evidence_type TEXT, source_module TEXT, description TEXT, "
+            "confidence REAL, data TEXT, "
             "whitelisted INTEGER DEFAULT 0",
             "evidence_flows": "evidence_id TEXT, uid TEXT, "
             "PRIMARY KEY (evidence_id, uid)",
@@ -84,7 +85,8 @@ class SQLiteDB(ISQLite):
             "accumulated_ratl REAL, risk_weight REAL",
             "evidence": "evidence_id TEXT PRIMARY KEY, evidence_time REAL, "
             "profile_ip TEXT, timewindow TEXT, threat_level TEXT, "
-            "evidence_type TEXT, description TEXT, confidence REAL, data TEXT, "
+            "evidence_type TEXT, source_module TEXT, description TEXT, "
+            "confidence REAL, data TEXT, "
             "accumulated_threat_level REAL, accumulated_ratl REAL, "
             "whitelisted INTEGER DEFAULT 0",
             "evidence_flows": "evidence_id TEXT, uid TEXT, "
@@ -108,6 +110,7 @@ class SQLiteDB(ISQLite):
                 "accumulated_threat_level": "REAL",
                 "accumulated_ratl": "REAL",
                 "whitelisted": "INTEGER DEFAULT 0",
+                "source_module": "TEXT",
             },
         }
         for table_name, additions in columns.items():
@@ -452,8 +455,8 @@ class SQLiteDB(ISQLite):
             (
                 "INSERT OR REPLACE INTO evidence "
                 "(evidence_id, evidence_time, profile_ip, timewindow, "
-                "threat_level, evidence_type, description, confidence, data) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "threat_level, evidence_type, source_module, description, "
+                "confidence, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     evidence.id,
                     evidence_time,
@@ -461,6 +464,7 @@ class SQLiteDB(ISQLite):
                     str(evidence.timewindow),
                     str(evidence.threat_level),
                     str(evidence.evidence_type),
+                    getattr(evidence, "source_module", ""),
                     evidence.description,
                     evidence.confidence,
                     serialized,
