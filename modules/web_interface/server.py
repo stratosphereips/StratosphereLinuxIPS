@@ -4223,6 +4223,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                 Path(__file__).with_name("favicon.svg"),
                 "image/svg+xml",
             ),
+            "/slips-logo.png": (
+                Path(__file__).with_name("slips-logo.png"),
+                "image/png",
+            ),
         }
         if parsed.path in assets:
             self._send_asset(*assets[parsed.path])
