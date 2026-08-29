@@ -106,6 +106,9 @@ class Trust(IModule):
 
         self.gopy_channel = self.gopy_channel_raw + str_port
         self.pygo_channel = self.pygo_channel_raw + str_port
+        # Older Pigeon binaries did not add the Slips version to messages.
+        # Only this local, dedicated Go-to-Python channel accepts that format.
+        self.unversioned_channels = frozenset({self.gopy_channel})
         self.storage_name = self.db.constants.IPS_INFO
         if self.rename_redis_ip_info:
             self.storage_name += str(self.port)
@@ -660,6 +663,7 @@ class Trust(IModule):
             "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
             "-redis-channel-pygo": self.pygo_channel_raw,
             "-redis-channel-gopy": self.gopy_channel_raw,
+            "-slips-version": self.slips_version,
         }
         self.print(f"P2P is listening on {self.host} port {self.port}.")
         executable = [self.pigeon_binary] + [
@@ -704,6 +708,7 @@ class Trust(IModule):
     def shutdown_gracefully(self):
         if hasattr(self, "pigeon") and self.pigeon is not None:
             self.pigeon.send_signal(signal.SIGINT)
+        self.db.store_connected_peers([])
         if hasattr(self, "trust_db"):
             self.trust_db.__del__()
 
@@ -711,6 +716,7 @@ class Trust(IModule):
         utils.drop_root_privs_permanently()
         self._init_log_files()
         self._configure()
+        self.db.store_connected_peers([])
         self._start_pigeon()
         # check if it was possible to start up pigeon
         if self.start_pigeon and self.pigeon is None:
