@@ -86,6 +86,7 @@ def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
                 "uids": ["flow-1"],
                 "accumulated_threat_level": 4.0,
                 "risk_accumulated_threat_level": 1.28,
+                "source_module": "conn_analyzer",
             }
         ),
     }
@@ -120,7 +121,7 @@ def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
     redis_scan_calls = redis_client.scan_iter.call_count
     with sqlite3.connect(flows_path) as connection:
         evidence = connection.execute(
-            "SELECT accumulated_threat_level, accumulated_ratl "
+            "SELECT accumulated_threat_level, accumulated_ratl, source_module "
             "FROM evidence WHERE evidence_id = 'evidence-1'"
         ).fetchone()
         alert = connection.execute(
@@ -134,7 +135,7 @@ def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
             "SELECT * FROM evidence_flows WHERE evidence_id = 'evidence-1'"
         ).fetchone()
 
-    assert evidence == (4.0, 1.28)
+    assert evidence == (4.0, 1.28, "conn_analyzer")
     assert alert == (16.0, 5.12, 0.32)
     assert relation == ("alert-1", "evidence-1")
     assert flow == ("evidence-1", "flow-1")
