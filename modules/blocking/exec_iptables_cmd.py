@@ -1,5 +1,4 @@
 import ipaddress
-import os
 import re
 import shlex
 import subprocess
@@ -332,11 +331,25 @@ def exec_iptables_command(
     except ValueError:
         return False
 
-    command = (
-        f"{sudo} iptables --{action} slipsBlocking {flag} {ip_to_block} "
-        f"-m comment --comment {shlex.quote(comment)}"
-    )
+    arguments = [
+        f"--{action}",
+        "slipsBlocking",
+        flag,
+        ip_to_block,
+        "-m",
+        "comment",
+        "--comment",
+        comment,
+    ]
     for cmd_parameter in options.values():
-        command += utils.sanitize(cmd_parameter)
-    command += " -j DROP >/dev/null 2>&1"
-    return os.system(command) == 0
+        try:
+            arguments.extend(shlex.split(utils.sanitize(cmd_parameter)))
+        except (TypeError, ValueError):
+            return False
+    arguments.extend(("-j", "DROP"))
+    result = subprocess.run(
+        _iptables_command(sudo, arguments),
+        stdout=subprocess.DEVNULL,
+        check=False,
+    )
+    return result.returncode == 0
