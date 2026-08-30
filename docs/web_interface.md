@@ -209,7 +209,7 @@ The P2P tab combines current Redis connectivity with the persistent local P2P tr
 
 Message counters begin when telemetry-capable P2P code starts. Reliability history can span earlier runs because `permanent/p2p_trust_runtime/trustdb.db` is persistent; the reports table is filtered using this run's analysis start time.
 
-Pigeon adds the running Slips version to every Go-to-Python message. The P2P module also accepts unversioned messages only on its dedicated local Pigeon channel so an older bundled binary cannot silently disconnect the data pipeline. Peer activation and deactivation updates maintain `connected_peers` and `peer_info` in Redis; the persistent trust database continues to hold reliability, peer-IP mappings, and reports. The local identity and listen address come from Pigeon's Redis `multiAddress`, with `p2p.log` used only as a fallback for older runs.
+Pigeon adds the running Slips version to every Go-to-Python message. The P2P module also accepts unversioned messages only on its dedicated local Pigeon channel so an older bundled binary cannot silently disconnect the data pipeline. Authenticated libp2p TCP 5-tuples are stored in Redis as individually expiring records and removed from live state on disconnect. The web tab derives connected/offline status from those same live records, while `peer_info` and the persistent trust database retain historical identity, reliability, peer-IP mappings, and reports. The local identity and listen address come from Pigeon's Redis `multiAddress`, with `p2p.log` used only as a fallback for older runs.
 
 ### Configuration
 
