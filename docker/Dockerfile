@@ -56,10 +56,10 @@ RUN apt-get update -o Acquire::Retries=5 -o Acquire::https::No-Cache=True \
     && make distclean \
     && if [[ "$TARGETARCH" == "arm64" || "$TARGETARCH" == "arm" ]]; then \
            echo "Building Redis for $TARGETARCH with libc malloc"; \
-           make build redis MALLOC=libc -j"$(nproc)"; \
+           make build core MALLOC=libc -j"$(nproc)"; \
        else \
            echo "Building Redis for $TARGETARCH with jemalloc"; \
-           make build redis MALLOC=jemalloc -j"$(nproc)"; \
+           make build core MALLOC=jemalloc -j"$(nproc)"; \
        fi \
     && ./src/redis-server --version \
     && rm -f /redis-stable.tar.gz \
