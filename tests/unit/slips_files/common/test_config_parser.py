@@ -18,7 +18,7 @@ def test_evidence_signal_default_falls_back_to_pamp():
 
 
 def test_evidence_signal_overrides_sanitizes_values():
-    parser = ConfigParser.__new__(ConfigParser)
+    parser = object.__new__(ConfigParser)
     parser.config = {
         "EvidenceSignals": {
             "overrides": {
@@ -197,7 +197,7 @@ def test_ml_module_enable_logs_uses_configured_or_default_value(
     ],
 )
 def test_web_interface_enabled(configured: object, expected: bool) -> None:
-    parser = ConfigParser.__new__(ConfigParser)
+    parser = object.__new__(ConfigParser)
     parser.read_configuration = Mock(return_value=configured)
 
     assert parser.web_interface_enabled() is expected
@@ -224,10 +224,35 @@ def test_web_interface_bind(configured: object, expected: str) -> None:
         expected: Normalized safe mode.
     """
     _module_factory = ModuleFactory()
-    parser = ConfigParser.__new__(ConfigParser)
+    parser = object.__new__(ConfigParser)
     parser.read_configuration = Mock(return_value=configured)
 
     assert parser.web_interface_bind == expected
     parser.read_configuration.assert_called_once_with(
         "web_interface", "bind", "localhost"
     )
+
+
+@pytest.mark.parametrize(
+    "setting, value, expected",
+    [
+        ("listen_port", "7777", 7777),
+        ("listen_port", "invalid", 6668),
+        ("connection_ttl", "45", 45),
+        ("connection_ttl", None, 30),
+        ("handshake_pending_seconds", "1.5", 1.5),
+        ("handshake_pending_seconds", "invalid", 2.0),
+    ],
+)
+def test_local_p2p_connection_settings(setting: str, value, expected) -> None:
+    """Parse dedicated P2P listener and bounded connection-state settings."""
+    _module_factory = ModuleFactory()
+    parser = object.__new__(ConfigParser)
+    parser.config = {"local_p2p": {setting: value}}
+    readers = {
+        "listen_port": parser.p2p_listen_port,
+        "connection_ttl": parser.p2p_connection_ttl,
+        "handshake_pending_seconds": parser.p2p_handshake_pending_seconds,
+    }
+
+    assert readers[setting]() == expected
