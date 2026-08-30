@@ -11,6 +11,9 @@ const state = {
   failures: 0,
   connected: false,
   lastSuccessfulRequest: null,
+  runUptimeSeconds: null,
+  runUptimeObservedAt: 0,
+  runUptimeRunning: false,
   timer: null,
   requests: new Map(),
   drawerHistory: [],
@@ -199,6 +202,21 @@ function renderConnectionState(connected) {
     ? (runState === "running" ? "Analysis running" : "Analysis complete")
     : "Web connected";
   updated.textContent = `Updated ${state.lastSuccessfulRequest.toLocaleTimeString()}`;
+}
+
+/** Update the top-right uptime from the latest server-provided baseline. */
+function renderHeaderUptime() {
+  const element = byId("run-uptime");
+  if (state.runUptimeSeconds === null) {
+    element.textContent = "Uptime —";
+    return;
+  }
+  const elapsed = state.runUptimeRunning
+    ? Math.max(0, (Date.now() - state.runUptimeObservedAt) / 1000)
+    : 0;
+  element.textContent = `Uptime ${formatDuration(
+    state.runUptimeSeconds + elapsed
+  )}`;
 }
 
 function toast(message) {
@@ -573,6 +591,11 @@ function updatePageTitle(counts = {}) {
  */
 function renderRunContext(data) {
   const run = data.run;
+  state.runUptimeSeconds = Number.isFinite(Number(run.uptime_seconds))
+    ? Number(run.uptime_seconds) : null;
+  state.runUptimeObservedAt = Date.now();
+  state.runUptimeRunning = run.state === "running";
+  renderHeaderUptime();
   const outputName = String(run.output_dir || "").split("/").filter(Boolean).at(-1);
   byId("run-name").textContent = outputName || "Current run";
   const metadata = data.run_metadata || {};
@@ -582,6 +605,14 @@ function renderRunContext(data) {
     metadata["Slips version"] ? `Slips ${metadata["Slips version"]}` : "",
     metadata.Commit ? `commit ${metadata.Commit}` : "",
   ].filter(Boolean).join(" · ");
+  const addresses = data.host_addresses || {};
+  const addressParts = [
+    addresses.ipv4?.length ? `IPv4: ${addresses.ipv4.join(", ")}` : "",
+    addresses.ipv6?.length ? `IPv6: ${addresses.ipv6.join(", ")}` : "",
+  ].filter(Boolean);
+  const addressLine = byId("run-addresses");
+  addressLine.textContent = addressParts.join(" · ");
+  addressLine.hidden = !addressParts.length;
   renderConnectionState(true);
   byId("alerts-badge").textContent = compact(data.counts.alerts);
   byId("evidence-badge").textContent = compact(data.counts.evidence);
@@ -2727,4 +2758,5 @@ window.addEventListener("beforeunload", () =>
   state.requests.forEach((controller) => controller.abort()));
 
 initDrawerResize();
+window.setInterval(renderHeaderUptime, 1000);
 loadOverview().then(schedulePoll).catch(schedulePoll);
