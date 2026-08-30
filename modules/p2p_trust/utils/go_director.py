@@ -110,6 +110,9 @@ class GoDirector:
                 # update in peers reliability or IP address.
                 self.process_go_update(message_contents)
 
+            elif message_type == "connection_update":
+                self.process_connection_update(message_contents)
+
             elif message_type == "go_data":
                 # a peer request or update
                 self.process_go_data(message_contents)
@@ -132,6 +135,37 @@ class GoDirector:
                 0,
                 1,
             )
+
+    def process_connection_update(self, connection: dict) -> None:
+        """Record one authenticated P2P connection lifecycle update.
+
+        Parameters:
+            connection: Peer identity and exact TCP endpoint tuple from Go.
+        """
+        required = {
+            "peer_id",
+            "protocol",
+            "local_ip",
+            "local_port",
+            "remote_ip",
+            "remote_port",
+            "authenticated",
+            "connected",
+        }
+        if not isinstance(connection, dict) or not required.issubset(
+            connection
+        ):
+            raise ValueError("Incomplete authenticated P2P connection update")
+        if connection["authenticated"] is not True:
+            raise ValueError("Unauthenticated P2P connection update")
+        self.db.record_p2p_message(
+            "received",
+            {
+                "message_type": "connection_update",
+                "peer_id": str(connection["peer_id"]),
+                "connected": connection["connected"] is True,
+            },
+        )
 
     def process_go_data(self, report: dict) -> None:
         """Process peer updates, requests and reports sent by the go layer
