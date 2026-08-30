@@ -1,6 +1,9 @@
 import numpy
 import pandas as pd
 import pytest
+from unittest.mock import Mock
+
+from tests.module_factory import ModuleFactory
 
 from slips_files.common.abstracts.ml_module_base import (
     BENIGN,
@@ -98,14 +101,30 @@ class TestMLBaseModule:
                 "detailed_ground_truth_label": [BENIGN],
                 "label": [BENIGN],
                 "module_labels": [{"m": BENIGN}],
+                "flow_tags": [["slips-p2p"]],
             }
         )
         cleaned = base_module.drop_labels(raw)
         assert list(cleaned.columns) == ["dur"]
 
     def test_train_default_passes_both_classes_on_first_fit(self, base_module):
-        base_module._train_default(
-            sum_labeled_flows=2
-        )
+        base_module._train_default(sum_labeled_flows=2)
         assert len(base_module.fit_calls) == 1
         assert base_module.fit_calls[0]["classes"] == [MALICIOUS, BENIGN]
+
+
+def test_main_ignores_authenticated_p2p_flow(base_module) -> None:
+    """Do not submit a centrally tagged P2P control flow to an ML detector."""
+    _module_factory = ModuleFactory()
+    base_module.get_msg = Mock(
+        return_value={
+            "data": '{"twid":"timewindow1","profileid":"profile_1",'
+            '"flow":{"flow_tags":["slips-p2p"]}}'
+        }
+    )
+    base_module.run_test_on_flow = Mock()
+    base_module.mode = "test"
+
+    base_module.main()
+
+    base_module.run_test_on_flow.assert_not_called()
