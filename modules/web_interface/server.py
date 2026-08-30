@@ -4002,15 +4002,46 @@ class RunDataReader:
             in " ".join((item["ip"], item["action"], item["details"])).lower()
         ]
 
+    def _live_p2p_connections(self) -> List[Dict[str, Any]]:
+        """Return unexpired authenticated P2P tuples from live Redis state.
+
+        Returns:
+            Authenticated connection records whose individual TTL keys exist.
+        """
+        connections = []
+        index = "p2p:active_connections"
+        prefix = "p2p:active_connection:"
+        try:
+            members = self.redis.smembers(index)
+            if not isinstance(members, (set, list, tuple)):
+                return []
+            for connection_id in members:
+                raw = self.redis.get(f"{prefix}{connection_id}")
+                if raw is None:
+                    self.redis.srem(index, connection_id)
+                    continue
+                connection = self._loads(raw, {})
+                if (
+                    isinstance(connection, dict)
+                    and connection.get("authenticated") is True
+                    and connection.get("connected") is True
+                ):
+                    connections.append(connection)
+        except redis.RedisError:
+            return []
+        return connections
+
     def p2p(
         self, query: Optional[Dict[str, List[str]]] = None
     ) -> Dict[str, Any]:
         """Return live P2P connectivity, report activity, and trust history."""
         query = query or {"range": ["all"]}
-        connected_raw = self._loads(self.redis.get("connected_peers"), [])
-        connected = set(
-            connected_raw if isinstance(connected_raw, list) else []
-        )
+        live_connections = self._live_p2p_connections()
+        connected = {
+            str(connection.get("peer_id"))
+            for connection in live_connections
+            if connection.get("peer_id")
+        }
         peer_info = {
             peer_id: self._loads(raw, {})
             for peer_id, raw in self.redis.hgetall("peer_info").items()
@@ -4172,6 +4203,11 @@ class RunDataReader:
                         float(reliability.get("timestamp") or 0),
                     ),
                     "reports_received": report_counts[peer_id],
+                    "connections": [
+                        connection
+                        for connection in live_connections
+                        if str(connection.get("peer_id")) == peer_id
+                    ],
                 }
             )
         peers.sort(
