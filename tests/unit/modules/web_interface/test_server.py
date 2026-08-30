@@ -2551,3 +2551,56 @@ def test_alerts_default_to_grouped_by_host() -> None:
     )
     assert 'params.set("group", "host")' in app_source
     assert "Grouped by host. Select a host" in html_source
+
+
+def test_header_shows_monitored_interface_addresses() -> None:
+    """Expose and render IPv4 and IPv6 addresses from monitored interfaces."""
+    _module_factory = ModuleFactory()
+    interface_addresses = {
+        "eth0": [
+            Mock(family=socket.AF_INET, address="192.0.2.10"),
+            Mock(family=socket.AF_INET6, address="2001:db8::10%eth0"),
+            Mock(family=socket.AF_INET6, address="::1"),
+        ],
+        "wlan0": [
+            Mock(family=socket.AF_INET, address="198.51.100.20"),
+        ],
+    }
+
+    with patch(
+        "modules.web_interface.server.psutil.net_if_addrs",
+        return_value=interface_addresses,
+    ):
+        addresses = RunDataReader._interface_addresses("eth0, wlan0")
+
+    assert addresses == {
+        "ipv4": ["192.0.2.10", "198.51.100.20"],
+        "ipv6": ["2001:db8::10"],
+    }
+    app_source = Path("modules/web_interface/app.js").read_text(
+        encoding="utf-8"
+    )
+    index_source = Path("modules/web_interface/index.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'id="run-addresses"' in index_source
+    assert "data.host_addresses || {}" in app_source
+    assert '`IPv4: ${addresses.ipv4.join(", ")}`' in app_source
+    assert '`IPv6: ${addresses.ipv6.join(", ")}`' in app_source
+
+
+def test_header_uptime_ticks_from_server_baseline() -> None:
+    """Show run uptime below Updated and advance it only while running."""
+    _module_factory = ModuleFactory()
+    app_source = Path("modules/web_interface/app.js").read_text(
+        encoding="utf-8"
+    )
+    index_source = Path("modules/web_interface/index.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'id="run-uptime">Uptime —</small>' in index_source
+    assert "function renderHeaderUptime()" in app_source
+    assert 'state.runUptimeRunning = run.state === "running"' in app_source
+    assert "state.runUptimeSeconds + elapsed" in app_source
+    assert "window.setInterval(renderHeaderUptime, 1000)" in app_source
