@@ -439,7 +439,12 @@ function renderLineChart(id, points, series, formatValue = formatChartValue) {
     svg.append(label);
     return;
   }
-  const values = points.flatMap((point) => series.map((item) => numeric(point[item.key])));
+  const hasValue = (point, key) => point[key] !== null
+    && point[key] !== undefined
+    && Number.isFinite(Number(point[key]));
+  const values = points.flatMap((point) => series
+    .filter((item) => hasValue(point, item.key))
+    .map((item) => numeric(point[item.key])));
   const maximum = Math.max(...values, 1);
   const minimumTime = numeric(points[0].ts);
   const maximumTime = numeric(points.at(-1).ts);
@@ -477,15 +482,31 @@ function renderLineChart(id, points, series, formatValue = formatChartValue) {
     svg.append(label);
   });
   for (const item of series) {
+    const seriesPoints = points.filter((point) => hasValue(point, item.key));
+    if (!seriesPoints.length) continue;
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    const d = points.map((point, index) => {
+    const d = seriesPoints.map((point, index) => {
       const x = left + ((numeric(point.ts) - minimumTime) / span) * plotWidth;
       const y = height - bottom - (numeric(point[item.key]) / maximum) * plotHeight;
       return `${index ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
     }).join(" ");
     path.setAttribute("d", d);
     path.setAttribute("class", `chart-line ${item.className || ""}`);
+    if (item.label) {
+      const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      title.textContent = item.label;
+      path.append(title);
+    }
     svg.append(path);
+    if (seriesPoints.length === 1) {
+      const point = seriesPoints[0];
+      const marker = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      marker.setAttribute("cx", String(left + ((numeric(point.ts) - minimumTime) / span) * plotWidth));
+      marker.setAttribute("cy", String(height - bottom - (numeric(point[item.key]) / maximum) * plotHeight));
+      marker.setAttribute("r", "3");
+      marker.setAttribute("class", `chart-point ${item.className || ""}`);
+      svg.append(marker);
+    }
   }
   points.filter((point) => point.reset_reason).forEach((point) => {
     const x = left + ((numeric(point.ts) - minimumTime) / span) * plotWidth;
@@ -1238,8 +1259,47 @@ async function loadArpPoisoning() {
   renderArpPoisoning();
 }
 
+/** Render one compact reliability-history line for every known P2P peer. */
+function renderP2PTrustChart(history, peers) {
+  const rows = history.filter((row) => Number.isFinite(Number(row.timestamp))
+    && Number.isFinite(Number(row.reliability)));
+  const peerIds = [...new Set(rows.map((row) => String(row.peer_id)))];
+  const peerIndexes = new Map(peerIds.map((peerId, index) => [peerId, index]));
+  const peerIps = new Map(peers.map((peer) => [String(peer.peer_id), peer.ip]));
+  const points = rows.map((row) => ({
+    ts: numeric(row.timestamp),
+    [`peer_${peerIndexes.get(String(row.peer_id))}`]: numeric(row.reliability),
+  })).sort((left, right) => left.ts - right.ts);
+  const series = peerIds.map((peerId, index) => ({
+    key: `peer_${index}`,
+    className: `peer-trust-line-${index % 8}`,
+    label: peerIps.get(peerId) || peerId,
+  }));
+  renderLineChart(
+    "p2p-trust-chart",
+    points,
+    series,
+    (value) => numeric(value).toFixed(2),
+  );
+  const legend = byId("p2p-trust-legend");
+  legend.replaceChildren();
+  peerIds.forEach((peerId, index) => {
+    const item = text(
+      "span",
+      peerIps.get(peerId) || peerId,
+      "p2p-trust-legend-item",
+    );
+    const marker = document.createElement("i");
+    marker.className = `peer-trust-key peer-trust-line-${index % 8}`;
+    item.prepend(marker);
+    item.title = peerId;
+    legend.append(item);
+  });
+}
+
 async function loadP2P() {
-  const payload = await api("p2p", "/api/p2p");
+  const range = byId("p2p-range").value;
+  const payload = await api("p2p", `/api/p2p?range=${encodeURIComponent(range)}`);
   if (!payload) return;
   const counts = payload.counts || {};
   byId("p2p-badge").textContent = compact(counts.connected);
@@ -1258,6 +1318,7 @@ async function loadP2P() {
     detailRow("Local peer ID", payload.local_peer_id || "Waiting for Pigeon identity"),
     detailRow("Listen address", payload.listener || "Waiting for listener announcement"),
   );
+  renderP2PTrustChart(payload.trust_history || [], payload.peers || []);
   renderTable("p2p-peers-table", payload.peers || [], [
     (row) => text("code", row.peer_id),
     (row) => text("code", row.ip || "—"),
@@ -2188,12 +2249,10 @@ function renderHostCards(host) {
 async function loadHostEvidence() {
   if (!state.host) return;
   const page = state.pages["host-evidence"];
-  const params = new URLSearchParams({
-    range: "all",
-    limit: "100",
-    sort: page.sort,
-    order: page.order,
-  });
+  const params = hostRangeParams();
+  params.set("limit", "100");
+  params.set("sort", page.sort);
+  params.set("order", page.order);
   const search = byId("host-evidence-search").value.trim();
   if (search) params.set("search", search);
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
@@ -2612,6 +2671,7 @@ document.querySelectorAll(".refresh-list").forEach((button) =>
   button.addEventListener("click", () => tabLoader(button.dataset.target)().catch(() => {})));
 byId("refresh-overview").addEventListener("click", () => loadOverview().catch(() => {}));
 byId("metrics-range").addEventListener("change", () => loadMetrics().catch(() => {}));
+byId("p2p-range").addEventListener("change", () => loadP2P().catch(() => {}));
 byId("module-search").addEventListener("input", () =>
   state.overview && renderModules(state.overview.modules));
 byId("drawer-close").addEventListener("click", closeDrawer);
@@ -2641,6 +2701,7 @@ bindRange("alerts", "alerts", loadAlerts);
 bindRange("evidence", "evidence", loadEvidence);
 bindRange("hosts", "hosts", loadHosts);
 bindRange("host", "hostFlows", async () => {
+  resetPage("host-evidence");
   await Promise.all([
     loadHostFlows(), loadHostSummary(), loadHostScoreHistory(), loadHostEvidence(),
   ]);
