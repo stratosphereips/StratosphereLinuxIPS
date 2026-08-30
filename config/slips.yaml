@@ -1132,3 +1132,9 @@ local_p2p:
    # create p2p.log with additional info about peer communications?
    create_p2p_logfile : False
    use_p2p : False
+   # Dedicated TCP listener. SLIPS does not scan ephemeral ports for P2P.
+   listen_port: 6668
+   # Authenticated connection records are refreshed by successful activity.
+   connection_ttl: 30
+   # Briefly hold candidate handshake flows while authentication completes.
+   handshake_pending_seconds: 2
