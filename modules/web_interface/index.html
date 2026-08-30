@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" sizes="any">
-  <link rel="stylesheet" href="/style.css?v=20260829-header-logo">
+  <link rel="stylesheet" href="/style.css?v=20260830-range-trust-chart">
 </head>
 <body>
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -86,11 +86,11 @@
     </section>
 
     <section id="alerts" class="panel" aria-labelledby="alerts-title">
-      <div class="section-heading"><div><p class="eyebrow">DETECTIONS</p><h2 id="alerts-title">Alerts</h2><p id="alerts-description">Individual durable alerts. Select one to inspect its evidence and triggering flows.</p></div><button class="secondary refresh-list" data-target="alerts">Refresh</button></div>
+      <div class="section-heading"><div><p class="eyebrow">DETECTIONS</p><h2 id="alerts-title">Alerts</h2><p id="alerts-description">Grouped by host. Select a host, then an alert, its evidence, and triggering flows.</p></div><button class="secondary refresh-list" data-target="alerts">Refresh</button></div>
       <div class="toolbar">
         <input id="alerts-search" type="search" placeholder="Search ID, host, label…">
         <select id="alerts-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
-        <select id="alerts-view" aria-label="Alert display mode"><option value="individual">Individual alerts</option><option value="grouped">Group by host</option></select>
+        <select id="alerts-view" aria-label="Alert display mode"><option value="individual">Individual alerts</option><option value="grouped" selected>Group by host</option></select>
         <select id="alerts-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
         <input id="alerts-from" class="custom-time" type="datetime-local" hidden>
         <input id="alerts-to" class="custom-time" type="datetime-local" hidden>
@@ -152,6 +152,14 @@
       <div class="section-heading"><div><p class="eyebrow">COLLABORATIVE INTELLIGENCE</p><h2 id="p2p-title">P2P network</h2><p id="p2p-status">Loading peer connectivity and trust state…</p></div><button class="secondary refresh-list" data-target="p2p">Refresh</button></div>
       <div id="p2p-summary" class="summary-grid"></div>
       <article class="surface"><h3>Local identity</h3><div id="p2p-identity" class="metadata-grid"></div></article>
+      <article class="surface p2p-trust-history">
+        <div class="table-heading p2p-chart-heading">
+          <div><h3>Peer trust history</h3><p>Persistent reliability used by the trust model; current computed trust is shown in the peers table.</p></div>
+          <select id="p2p-range" class="range-select" aria-label="Peer trust history range"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full history</option></select>
+        </div>
+        <div id="p2p-trust-legend" class="p2p-trust-legend"></div>
+        <div class="chart-grid p2p-trust-chart-grid"><svg id="p2p-trust-chart" class="line-chart compact-line-chart" viewBox="0 0 1200 130"></svg></div>
+      </article>
       <article class="surface table-surface"><div class="table-heading"><div><h3>Peers</h3><p>Live connectivity plus the latest persistent trust state.</p></div></div><div class="table-wrap"><table id="p2p-peers-table"><thead><tr><th>Peer ID</th><th>IP</th><th>Connectivity</th><th>Trust</th><th>Reliability</th><th>Reports received</th><th>Last seen</th></tr></thead><tbody></tbody></table></div></article>
       <div class="split-grid">
         <article class="surface table-surface"><div class="table-heading"><div><h3>Trust evolution</h3><p>Newest persistent reliability changes.</p></div></div><div class="table-wrap"><table id="p2p-trust-table"><thead><tr><th>Time</th><th>Peer</th><th>Reliability</th></tr></thead><tbody></tbody></table></div></article>
@@ -251,6 +259,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20260829-connection-state"></script>
+  <script src="/app.js?v=20260830-range-trust-chart"></script>
 </body>
 </html>
