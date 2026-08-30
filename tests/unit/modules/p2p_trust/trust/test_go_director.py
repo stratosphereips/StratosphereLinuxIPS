@@ -653,3 +653,60 @@ def test_respond_to_message_request_without_info():
             go_director.print.assert_called_once_with(expected_print, 2, 0)
 
             mock_send_evaluation.assert_not_called()
+
+
+def test_connection_update_is_validated_and_recorded() -> None:
+    """Accept one authenticated exact-tuple lifecycle update from Pigeon."""
+    go_director = ModuleFactory().create_go_director_obj()
+    connection = {
+        "peer_id": "peer-a",
+        "protocol": "tcp",
+        "local_ip": "192.0.2.10",
+        "local_port": "6668",
+        "remote_ip": "198.51.100.20",
+        "remote_port": "51000",
+        "authenticated": True,
+        "connected": True,
+    }
+
+    go_director.handle_gopy_data(
+        {
+            "message_type": "connection_update",
+            "message_contents": connection,
+        }
+    )
+
+    go_director.db.record_p2p_message.assert_called_once_with(
+        "received",
+        {
+            "message_type": "connection_update",
+            "peer_id": "peer-a",
+            "connected": True,
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    "connection",
+    [
+        {},
+        {
+            "peer_id": "peer-a",
+            "protocol": "tcp",
+            "local_ip": "192.0.2.10",
+            "local_port": "6668",
+            "remote_ip": "198.51.100.20",
+            "remote_port": "51000",
+            "authenticated": False,
+            "connected": True,
+        },
+    ],
+)
+def test_connection_update_rejects_incomplete_or_unauthenticated_data(
+    connection: dict,
+) -> None:
+    """Reject lifecycle records that cannot authorize a flow exemption."""
+    go_director = ModuleFactory().create_go_director_obj()
+
+    with pytest.raises(ValueError):
+        go_director.process_connection_update(connection)
