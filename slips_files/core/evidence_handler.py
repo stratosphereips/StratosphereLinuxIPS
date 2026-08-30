@@ -56,6 +56,7 @@ class EvidenceHandler(ICore):
     is_evidence_done_by_others = (
         EvidenceHandlerWorker.is_evidence_done_by_others
     )
+    is_slips_p2p_evidence = EvidenceHandlerWorker.is_slips_p2p_evidence
     is_filtered_evidence = EvidenceHandlerWorker.is_filtered_evidence
     get_threat_level = EvidenceHandlerWorker.get_threat_level
     send_to_exporting_module = EvidenceHandlerWorker.send_to_exporting_module
