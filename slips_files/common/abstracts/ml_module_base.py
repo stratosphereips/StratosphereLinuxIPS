@@ -469,6 +469,7 @@ class MLBaseDetection(IModule, ABC):
                 "detailed_ground_truth_label",
                 "label",
                 "module_labels",
+                "flow_tags",
             ],
             axis=1,
             errors="ignore",
@@ -965,6 +966,9 @@ class MLBaseDetection(IModule, ABC):
             self.twid = msg["twid"]
             self.profileid = msg["profileid"]
             self.flow = msg["flow"]
+
+            if "slips-p2p" in self.flow.get("flow_tags", []):
+                return
 
             self.flow.update(
                 {
