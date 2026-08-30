@@ -726,7 +726,7 @@ class MLBaseDetection(IModule, ABC):
     def process_flow(self, flow_to_process: dict):
         """Convert one raw flow dict into processed single-row dataframe."""
         try:
-            raw_flow = pd.DataFrame(flow_to_process, index=[0])
+            raw_flow = pd.DataFrame([flow_to_process])
             dflow = self.process_features(raw_flow)
             if dflow.empty:
                 return None
