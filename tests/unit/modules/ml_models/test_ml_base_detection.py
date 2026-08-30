@@ -93,6 +93,17 @@ def base_module():
 
 
 class TestMLBaseModule:
+    def test_process_flow_accepts_empty_flow_tags(self, base_module) -> None:
+        """Treat an empty flow tag list as one cell in a one-row dataframe."""
+        _module_factory = ModuleFactory()
+        flow = {"dur": 1.0, "flow_tags": []}
+
+        processed_flow = base_module.process_flow(flow)
+
+        assert processed_flow is not None
+        assert len(processed_flow.index) == 1
+        assert processed_flow.iloc[0]["flow_tags"] == []
+
     def test_drop_labels_removes_known_label_columns(self, base_module):
         raw = pd.DataFrame(
             {
