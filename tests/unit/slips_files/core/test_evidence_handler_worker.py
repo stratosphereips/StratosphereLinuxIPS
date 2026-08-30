@@ -820,3 +820,35 @@ def test_log_alert(
     worker.add_alert_to_json_log_file.assert_called_once()
     assert flow_datetime in worker.add_to_log_file.call_args[0][0]
     assert str(twid) in worker.add_to_log_file.call_args[0][0]
+
+
+def test_p2p_tagged_evidence_is_excluded_from_scoring_and_blocking() -> None:
+    """Filter evidence only when all of its triggering flows are tagged P2P."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = Mock(
+        id="p2p-evidence",
+        uid=["flow-a", "flow-b"],
+        attacker=Mock(direction="SRC"),
+    )
+    worker.db.get_flow.side_effect = lambda uid: {
+        uid: json.dumps({"flow_tags": ["slips-p2p"]})
+    }
+
+    assert worker.is_filtered_evidence(evidence, []) is True
+
+
+def test_mixed_p2p_and_unrelated_evidence_is_not_filtered() -> None:
+    """Keep blocking eligible when any triggering traffic is unrelated."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = Mock(
+        id="mixed-evidence",
+        uid=["p2p-flow", "other-flow"],
+        attacker=Mock(direction="SRC"),
+    )
+    worker.db.get_flow.side_effect = lambda uid: {
+        uid: json.dumps(
+            {"flow_tags": ["slips-p2p"] if uid == "p2p-flow" else []}
+        )
+    }
+
+    assert worker.is_filtered_evidence(evidence, []) is False
