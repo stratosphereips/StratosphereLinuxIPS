@@ -37,6 +37,7 @@ figcaption small { display: block; margin-top: .2rem; font-size: .7rem; }
 .brand-copy { min-width: 0; }
 .brand-logo { width: 56px; height: 56px; flex: none; object-fit: contain; }
 .brand-name { margin-bottom: .2rem; color: var(--text); font-size: .9rem; font-weight: 850; letter-spacing: .14em; }
+.run-addresses { margin: .22rem 0 0; overflow-wrap: anywhere; font: 600 .76rem ui-monospace, SFMono-Regular, Menlo, monospace; }
 .run-state { display: flex; align-items: center; gap: .8rem; min-width: 170px; }
 .run-state small { display: block; margin-top: .25rem; color: var(--muted); }
 .state-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 5px #e5ad4f18; }
