@@ -3226,9 +3226,50 @@ class RunDataReader:
             ]
         return {"items": items, "total": total, "updated_at": time.time()}
 
+    @staticmethod
+    def _interface_addresses(interface_names: str) -> Dict[str, List[str]]:
+        """
+        Return non-loopback IPv4 and IPv6 addresses for monitored interfaces.
+
+        Parameters:
+            interface_names: Comma- or whitespace-separated interface names.
+
+        Returns:
+            Address lists grouped under ``ipv4`` and ``ipv6``.
+        """
+        result: Dict[str, List[str]] = {"ipv4": [], "ipv6": []}
+        names = [
+            name
+            for name in re.split(r"[,\s]+", interface_names.strip())
+            if name
+        ]
+        if not names:
+            return result
+        try:
+            interface_addresses = psutil.net_if_addrs()
+        except psutil.Error:
+            return result
+        for interface_name in names:
+            for address in interface_addresses.get(interface_name, []):
+                if address.family not in (socket.AF_INET, socket.AF_INET6):
+                    continue
+                raw_address = str(address.address).split("%", 1)[0]
+                try:
+                    candidate = ipaddress.ip_address(raw_address)
+                except ValueError:
+                    continue
+                if candidate.is_loopback or candidate.is_unspecified:
+                    continue
+                family = "ipv4" if candidate.version == 4 else "ipv6"
+                normalized = str(candidate)
+                if normalized not in result[family]:
+                    result[family].append(normalized)
+        return result
+
     def overview(self) -> Dict[str, Any]:
         """Build a bounded current-run operational overview."""
         analysis = self.redis.hgetall("analysis")
+        run_metadata = self._run_metadata()
         complete = bool(analysis.get("analysis_end"))
         now = time.time()
         durable_evidence_counts: Counter[str] = Counter()
@@ -3318,7 +3359,10 @@ class RunDataReader:
                 "output_dir": str(self.output_dir),
                 "uptime_seconds": self._run_uptime_seconds(analysis, now),
             },
-            "run_metadata": self._run_metadata(),
+            "run_metadata": run_metadata,
+            "host_addresses": self._interface_addresses(
+                str(analysis.get("interface") or run_metadata.get("File", ""))
+            ),
             "sources": {
                 "redis": True,
                 "sqlite": self.sqlite_path.exists(),
