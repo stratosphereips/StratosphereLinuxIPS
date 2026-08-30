@@ -2239,9 +2239,21 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
     reader.output_dir = output_dir
     reader.redis = Mock()
     reader.redis.get.side_effect = lambda key: {
-        "connected_peers": json.dumps(["QmRemotePeer"]),
-        "multiAddress": ("/ip4/10.0.0.1/tcp/32768/p2p/QmRedisLocalPeer"),
+        "multiAddress": ("/ip4/10.0.0.1/tcp/6668/p2p/QmRedisLocalPeer"),
+        "p2p:active_connection:connection-a": json.dumps(
+            {
+                "peer_id": "QmRemotePeer",
+                "protocol": "tcp",
+                "local_ip": "10.0.0.1",
+                "local_port": "6668",
+                "remote_ip": "192.0.2.10",
+                "remote_port": "51000",
+                "authenticated": True,
+                "connected": True,
+            }
+        ),
     }.get(key)
+    reader.redis.smembers.return_value = {"connection-a"}
     reader.redis.hget.side_effect = lambda key, field: (
         "123" if (key, field) == ("PIDs", "p2p_trust") else None
     )
@@ -2263,7 +2275,7 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
     result = reader.p2p()
 
     assert result["listener"] == (
-        "/ip4/10.0.0.1/tcp/32768/p2p/QmRedisLocalPeer"
+        "/ip4/10.0.0.1/tcp/6668/p2p/QmRedisLocalPeer"
     )
     assert result["local_peer_id"] == "QmRedisLocalPeer"
     assert result["counts"]["connected"] == 1
@@ -2276,6 +2288,18 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
             "reliability": 0.75,
             "last_seen": 1649445643.0,
             "reports_received": 0,
+            "connections": [
+                {
+                    "peer_id": "QmRemotePeer",
+                    "protocol": "tcp",
+                    "local_ip": "10.0.0.1",
+                    "local_port": "6668",
+                    "remote_ip": "192.0.2.10",
+                    "remote_port": "51000",
+                    "authenticated": True,
+                    "connected": True,
+                }
+            ],
         }
     ]
 
@@ -2607,3 +2631,17 @@ def test_header_uptime_ticks_from_server_baseline() -> None:
     assert 'state.runUptimeRunning = run.state === "running"' in app_source
     assert "state.runUptimeSeconds + elapsed" in app_source
     assert "window.setInterval(renderHeaderUptime, 1000)" in app_source
+
+
+def test_p2p_live_state_prunes_expired_connection_record() -> None:
+    """Do not display an indexed peer as connected after its tuple TTL expires."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.smembers.return_value = {"expired-connection"}
+    reader.redis.get.return_value = None
+
+    assert reader._live_p2p_connections() == []
+    reader.redis.srem.assert_called_once_with(
+        "p2p:active_connections", "expired-connection"
+    )
