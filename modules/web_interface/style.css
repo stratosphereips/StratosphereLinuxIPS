@@ -119,10 +119,34 @@ tbody tr:hover { background: #1b2a3540; }
 .chart-grid .grid-line { stroke: #263a49; stroke-width: 1; }
 .chart-grid .chart-grid-line { stroke-dasharray: 2 3; }
 .chart-grid .chart-line { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.chart-grid .chart-point { fill: var(--accent); }
 .chart-grid .chart-line.secondary-line { stroke: var(--blue); }
 .chart-grid .chart-line.threshold-line { stroke: var(--danger); stroke-dasharray: 6 4; stroke-width: 1.5; }
 .chart-grid .chart-reset-line { stroke: var(--warn); stroke-dasharray: 2 4; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .chart-grid .chart-label { fill: var(--muted); font-size: 10px; }
+.p2p-trust-history { padding: 0; overflow: hidden; }
+.p2p-chart-heading { padding: .75rem 1rem; }
+.p2p-trust-chart-grid { grid-template-columns: minmax(0, 1fr); padding: 0 1rem 1rem; }
+.p2p-trust-chart-grid .compact-line-chart { height: 130px; min-height: 130px; }
+.p2p-trust-legend { display: flex; min-height: 1.8rem; padding: .55rem 1rem .1rem; gap: .35rem .9rem; overflow-x: auto; color: var(--muted); font: .68rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+.p2p-trust-legend-item { display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap; }
+.peer-trust-key { width: .65rem; height: .18rem; flex: none; border-radius: 1rem; background: var(--accent); }
+.chart-grid .chart-line.peer-trust-line-0, .peer-trust-key.peer-trust-line-0 { stroke: #43c7b5; background: #43c7b5; }
+.chart-grid .chart-line.peer-trust-line-1, .peer-trust-key.peer-trust-line-1 { stroke: #65aaff; background: #65aaff; }
+.chart-grid .chart-line.peer-trust-line-2, .peer-trust-key.peer-trust-line-2 { stroke: #e4ac4e; background: #e4ac4e; }
+.chart-grid .chart-line.peer-trust-line-3, .peer-trust-key.peer-trust-line-3 { stroke: #ef6b73; background: #ef6b73; }
+.chart-grid .chart-line.peer-trust-line-4, .peer-trust-key.peer-trust-line-4 { stroke: #bc8cff; background: #bc8cff; }
+.chart-grid .chart-line.peer-trust-line-5, .peer-trust-key.peer-trust-line-5 { stroke: #ff8bc7; background: #ff8bc7; }
+.chart-grid .chart-line.peer-trust-line-6, .peer-trust-key.peer-trust-line-6 { stroke: #83d66d; background: #83d66d; }
+.chart-grid .chart-line.peer-trust-line-7, .peer-trust-key.peer-trust-line-7 { stroke: #ff9860; background: #ff9860; }
+.chart-grid .chart-point.peer-trust-line-0 { fill: #43c7b5; }
+.chart-grid .chart-point.peer-trust-line-1 { fill: #65aaff; }
+.chart-grid .chart-point.peer-trust-line-2 { fill: #e4ac4e; }
+.chart-grid .chart-point.peer-trust-line-3 { fill: #ef6b73; }
+.chart-grid .chart-point.peer-trust-line-4 { fill: #bc8cff; }
+.chart-grid .chart-point.peer-trust-line-5 { fill: #ff8bc7; }
+.chart-grid .chart-point.peer-trust-line-6 { fill: #83d66d; }
+.chart-grid .chart-point.peer-trust-line-7 { fill: #ff9860; }
 .bar-chart { display: grid; gap: .45rem; min-height: 180px; align-content: start; }
 .bar-row { display: grid; grid-template-columns: minmax(90px, 1fr) 3fr 55px; align-items: center; gap: .55rem; font-size: .72rem; }
 .bar-track { height: 8px; overflow: hidden; border-radius: 9px; background: #263a49; }
