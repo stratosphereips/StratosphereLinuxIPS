@@ -11,7 +11,7 @@ from typing import Dict, Optional, Tuple
 import json
 import socket
 
-from slips_files.common.ips import IPV4_ANY, IPV4_LOCALHOST, LOCALHOST_HOSTNAME
+from slips_files.common.ips import IPV4_LOCALHOST, LOCALHOST_HOSTNAME
 from slips_files.common.style import green
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -100,7 +100,7 @@ class Trust(IModule):
         self.p2p_trust_runtime_dir = self.db.get_p2p_trust_dir()
         self.sql_db_name = self.db.get_p2p_trust_db_path()
 
-        self.port = self.get_available_port()
+        self.port = self.p2p_listen_port
         self.host = self.get_local_IP()
         str_port = str(self.port) if self.rename_with_port else ""
 
@@ -162,6 +162,11 @@ class Trust(IModule):
     def read_configuration(self):
         conf = ConfigParser()
         self.create_p2p_logfile: bool = conf.create_p2p_logfile()
+        self.p2p_listen_port: int = conf.p2p_listen_port()
+        self.p2p_connection_ttl: int = conf.p2p_connection_ttl()
+        self.p2p_handshake_pending_seconds: float = (
+            conf.p2p_handshake_pending_seconds()
+        )
 
     def get_local_IP(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -169,19 +174,6 @@ class Trust(IModule):
         local_ip = s.getsockname()[0]
         s.close()
         return local_ip
-
-    def get_available_port(self) -> int:
-        for port in range(32768, 65535):
-            if port == self.redis_port:
-                continue
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            try:
-                sock.bind((IPV4_ANY, port))
-                sock.close()
-                return port
-            except Exception:
-                # port is in use
-                continue
 
     def _configure(self):
         self.trust_db = self.db.trust_db
@@ -664,6 +656,10 @@ class Trust(IModule):
             "-redis-channel-pygo": self.pygo_channel_raw,
             "-redis-channel-gopy": self.gopy_channel_raw,
             "-slips-version": self.slips_version,
+            "-connection-ttl": str(self.p2p_connection_ttl),
+            "-flow-grace-period": str(
+                max(1, int(self.p2p_handshake_pending_seconds) + 1)
+            ),
         }
         self.print(f"P2P is listening on {self.host} port {self.port}.")
         executable = [self.pigeon_binary] + [
