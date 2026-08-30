@@ -5,7 +5,7 @@ import configparser
 import ipaddress
 import time
 import json
-from typing import Union, Dict
+from typing import Union, Dict, Optional, Tuple
 
 
 # TODO: add outputQueue printing to this file (or remove all prints, they are debug anyway)
@@ -90,7 +90,9 @@ def validate_go_reports(data: str) -> list:
 #
 
 
-def get_ip_info_from_slips(ip_address: str, db) -> (float, float):
+def get_ip_info_from_slips(
+    ip_address: str, db
+) -> Tuple[Optional[float], Optional[float]]:
     """
     Get score and confidence on IP from Slips.
 
@@ -106,21 +108,11 @@ def get_ip_info_from_slips(ip_address: str, db) -> (float, float):
             slips_score: float = threat_levels[threat_level]
         else:
             slips_score = float(db.get_ip_info(ip_address, "score"))
-    except (KeyError, ValueError):
+        slips_confidence = float(db.get_ip_info(ip_address, "confidence"))
+    except (KeyError, TypeError, ValueError):
         return None, None
 
-    try:
-        slips_confidence = float(db.get_ip_info(ip_address, "confidence"))
-    except ValueError:
-        pass
-
-    # check that both values were provided
-    # TODO by Martin: Dita does not handle scenario when only confidence is None, is it intentional?
-    return (
-        (None, None)
-        if slips_score is None
-        else (slips_score, slips_confidence)
-    )
+    return slips_score, slips_confidence
 
 
 #
