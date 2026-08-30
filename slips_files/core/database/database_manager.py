@@ -1159,9 +1159,6 @@ class DBManager:
     def get_uids_for_horizontal_portscan(self, *args, **kwargs):
         return self.rdb.get_uids_for_horizontal_portscan(*args, **kwargs)
 
-    def get_uids_for_horizontal_portscan(self, *args, **kwargs):
-        return self.rdb.get_uids_for_horizontal_portscan(*args, **kwargs)
-
     def get_timewindow(self, *args, **kwargs):
         return self.rdb.get_timewindow(*args, **kwargs)
 
@@ -1617,6 +1614,18 @@ class DBManager:
 
     def get_p2p_message_telemetry(self, *args, **kwargs):
         return self.rdb.get_p2p_message_telemetry(*args, **kwargs)
+
+    def store_authenticated_p2p_connection(self, *args, **kwargs):
+        return self.rdb.store_authenticated_p2p_connection(*args, **kwargs)
+
+    def remove_authenticated_p2p_connection(self, *args, **kwargs):
+        return self.rdb.remove_authenticated_p2p_connection(*args, **kwargs)
+
+    def get_authenticated_p2p_connections(self, *args, **kwargs):
+        return self.rdb.get_authenticated_p2p_connections(*args, **kwargs)
+
+    def is_authenticated_p2p_flow(self, *args, **kwargs):
+        return self.rdb.is_authenticated_p2p_flow(*args, **kwargs)
 
     def cache_network_opinion(self, target: str, opinion: dict, time: float):
         self.rdb.cache_network_opinion(target, opinion, time)
