@@ -706,11 +706,49 @@ class Trust(IModule):
                 )
 
     def shutdown_gracefully(self):
-        if hasattr(self, "pigeon") and self.pigeon is not None:
-            self.pigeon.send_signal(signal.SIGINT)
+        self._stop_pigeon()
         self.db.store_connected_peers([])
         if hasattr(self, "trust_db"):
             self.trust_db.__del__()
+
+    def _stop_pigeon(self) -> None:
+        """
+        Stop the p2p4slips child and wait until it has exited.
+
+        This method is idempotent so it can run during both normal cleanup and
+        the final safeguard around an unexpected module exit.
+        """
+        pigeon = getattr(self, "pigeon", None)
+        if pigeon is None:
+            return
+
+        if pigeon.poll() is None:
+            pigeon.send_signal(signal.SIGINT)
+            try:
+                pigeon.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.print(
+                    "Warning: p2p4slips did not stop after SIGINT; "
+                    "terminating it."
+                )
+                pigeon.terminate()
+                try:
+                    pigeon.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.print(
+                        "Warning: p2p4slips did not terminate; killing it."
+                    )
+                    pigeon.kill()
+                    pigeon.wait()
+
+        self.pigeon = None
+
+    def run(self) -> None:
+        """Run p2p_trust and guarantee its Go child cannot be orphaned."""
+        try:
+            super().run()
+        finally:
+            self._stop_pigeon()
 
     def pre_main(self):
         utils.drop_root_privs_permanently()
@@ -744,7 +782,15 @@ class Trust(IModule):
             self.data_request_callback(msg)
 
         if msg := self.get_msg(self.gopy_channel):
-            self.gopy_callback(msg)
+            try:
+                self.gopy_callback(msg)
+            except Exception as error:
+                self.print(
+                    "Warning: Ignoring malformed p2p_gopy message after "
+                    f"processing failed: {error}",
+                    0,
+                    1,
+                )
 
         ret_code = self.pigeon.poll()
         if ret_code not in (None, 0):
