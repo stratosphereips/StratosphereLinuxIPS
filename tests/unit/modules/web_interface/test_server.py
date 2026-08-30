@@ -2343,3 +2343,214 @@ def test_p2p_report_counter_is_not_limited_to_latest_500(
 
     assert len(result["reports"]) == 200
     assert result["counts"]["reports_received"] == 501
+
+
+def test_host_workspace_live_range_uses_run_wide_flow_clock(tmp_path) -> None:
+    """Exclude an inactive host from Live using the newest run-wide flow."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader._host_ips = Mock(return_value=["10.0.0.1"])
+    reader._live_host = Mock(return_value={})
+    reader.score_mode = "ratl"
+    reader.alert_threshold = 5.0
+    initialize_history(reader.history_path)
+    with connect_history(reader.history_path) as connection:
+        connection.executemany(
+            "INSERT INTO flow_index "
+            "(uid, flow_rowid, event_time, src_ip, dst_ip, proto, "
+            "app_proto, bytes, packets, label) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    "inactive-host-flow",
+                    1,
+                    100.0,
+                    "10.0.0.1",
+                    "8.8.8.8",
+                    "udp",
+                    "dns",
+                    100,
+                    2,
+                    "benign",
+                ),
+                (
+                    "run-clock-flow",
+                    2,
+                    4000.0,
+                    "10.0.0.2",
+                    "1.1.1.1",
+                    "tcp",
+                    "ssl",
+                    200,
+                    3,
+                    "benign",
+                ),
+            ],
+        )
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE flows (uid TEXT, flow TEXT, label TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            ("inactive-host-flow", "{}", "benign"),
+        )
+        connection.execute(
+            "CREATE TABLE evidence (evidence_id TEXT, evidence_time REAL, "
+            "profile_ip TEXT, timewindow TEXT, accumulated_ratl REAL)"
+        )
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?, ?, ?, ?)",
+            [
+                ("inactive-evidence", 100, "10.0.0.1", "timewindow1", 1.0),
+                ("run-clock-evidence", 4000, "10.0.0.2", "timewindow1", 2.0),
+            ],
+        )
+
+    live_flows = reader.flows_for_host("10.0.0.1", {"range": ["live"]})
+    full_flows = reader.flows_for_host("10.0.0.1", {"range": ["all"]})
+    live_summary = reader.traffic_summary("10.0.0.1", {"range": ["live"]})
+    live_score = reader.score_history("10.0.0.1", {"range": ["live"]})
+
+    assert live_flows["total"] == 0
+    assert live_flows["items"] == []
+    assert full_flows["total"] == 1
+    assert live_summary["timeline"] == []
+    assert live_score["timeline"] == []
+    assert live_score["evidence_total"] == 0
+
+
+def test_host_workspace_range_is_used_for_evidence_and_reset() -> None:
+    """Send the selected host range to evidence and reset its cursor."""
+    _module_factory = ModuleFactory()
+    app_source = Path("modules/web_interface/app.js").read_text(
+        encoding="utf-8"
+    )
+    evidence_loader = app_source.split("async function loadHostEvidence()", 1)[
+        1
+    ].split("async function loadHostFlows()", 1)[0]
+    host_binding = app_source.split('bindRange("host", "hostFlows"', 1)[
+        1
+    ].split("bindTableSort", 1)[0]
+
+    assert "const params = hostRangeParams();" in evidence_loader
+    assert 'range: "all"' not in evidence_loader
+    assert 'resetPage("host-evidence");' in host_binding
+
+
+def test_p2p_trust_history_honors_selected_range(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Filter plotted history while preserving each peer's latest reliability."""
+    _module_factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    output_dir = tmp_path / "output" / "run"
+    output_dir.mkdir(parents=True)
+    trust_path = tmp_path / "permanent" / "p2p_trust_runtime" / "trustdb.db"
+    trust_path.parent.mkdir(parents=True)
+    with sqlite3.connect(trust_path) as connection:
+        connection.execute(
+            "CREATE TABLE go_reliability "
+            "(peerid TEXT, reliability REAL, update_time REAL)"
+        )
+        connection.execute(
+            "CREATE TABLE peer_ips "
+            "(peerid TEXT, ipaddress TEXT, update_time REAL)"
+        )
+        connection.execute(
+            "CREATE TABLE reports "
+            "(reporter_peerid TEXT, reported_key TEXT, score REAL, "
+            "confidence REAL, update_time REAL)"
+        )
+        connection.executemany(
+            "INSERT INTO go_reliability VALUES (?, ?, ?)",
+            [("QmOldPeer", 0.25, 100), ("QmRecentPeer", 0.75, 4000)],
+        )
+        connection.executemany(
+            "INSERT INTO peer_ips VALUES (?, ?, ?)",
+            [
+                ("QmOldPeer", "192.0.2.1", 100),
+                ("QmRecentPeer", "192.0.2.2", 4000),
+            ],
+        )
+
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = output_dir
+    reader.redis = Mock()
+    reader.redis.get.return_value = None
+    reader.redis.hget.return_value = None
+    reader.redis.hgetall.side_effect = lambda key: (
+        {"analysis_start": "0"} if key == "analysis" else {}
+    )
+    reader.redis.zrange.return_value = []
+    reader.redis.lrange.return_value = []
+
+    result = reader.p2p({"range": ["live"]})
+
+    assert result["trust_range"] == "live"
+    assert [row["peer_id"] for row in result["trust_history"]] == [
+        "QmRecentPeer"
+    ]
+    assert {peer["peer_id"] for peer in result["peers"]} == {
+        "QmOldPeer",
+        "QmRecentPeer",
+    }
+
+
+def test_p2p_api_forwards_selected_history_range() -> None:
+    """Forward the P2P history selector through the HTTP API route."""
+    _module_factory = ModuleFactory()
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.server = Mock()
+    handler.server.reader.response_metadata.return_value = {}
+    handler.server.reader.p2p.return_value = {"trust_history": []}
+    query = {"range": ["1h"]}
+
+    result = handler._api_response("/api/p2p", query)
+
+    assert result["trust_history"] == []
+    handler.server.reader.p2p.assert_called_once_with(query)
+
+
+def test_p2p_trust_chart_uses_compact_range_control() -> None:
+    """Wire the compact peer chart to the selected API history range."""
+    _module_factory = ModuleFactory()
+    app_source = Path("modules/web_interface/app.js").read_text(
+        encoding="utf-8"
+    )
+    html_source = Path("modules/web_interface/index.html").read_text(
+        encoding="utf-8"
+    )
+    css_source = Path("modules/web_interface/style.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'id="p2p-range"' in html_source
+    assert 'id="p2p-trust-chart"' in html_source
+    assert "function renderP2PTrustChart" in app_source
+    assert "/api/p2p?range=${encodeURIComponent(range)}" in app_source
+    assert 'byId("p2p-range").addEventListener("change"' in app_source
+    assert (
+        ".compact-line-chart { height: 130px; min-height: 130px; }"
+        in css_source
+    )
+
+
+def test_alerts_default_to_grouped_by_host() -> None:
+    """Default the Alerts tab to its host-grouped API and table layout."""
+    _module_factory = ModuleFactory()
+    html_source = Path("modules/web_interface/index.html").read_text(
+        encoding="utf-8"
+    )
+    app_source = Path("modules/web_interface/app.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        '<option value="grouped" selected>Group by host</option>'
+        in html_source
+    )
+    assert 'params.set("group", "host")' in app_source
+    assert "Grouped by host. Select a host" in html_source
