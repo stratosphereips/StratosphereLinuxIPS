@@ -2656,8 +2656,7 @@ class RunDataReader:
         predicate, params = self._ip_predicate(ips)
         with connect_history(self.history_path, read_only=True) as history:
             latest_row = history.execute(
-                f"SELECT MAX(event_time) AS latest FROM flow_index WHERE {predicate}",
-                params,
+                "SELECT MAX(event_time) AS latest FROM flow_index"
             ).fetchone()
         latest = float(latest_row["latest"] or 0)
         start, end, range_name = self._time_bounds(query, latest)
@@ -2763,8 +2762,7 @@ class RunDataReader:
         predicate, params = self._ip_predicate(ips)
         with connect_history(self.history_path, read_only=True) as connection:
             latest_row = connection.execute(
-                f"SELECT MAX(event_time) AS latest FROM flow_index WHERE {predicate}",
-                params,
+                "SELECT MAX(event_time) AS latest FROM flow_index"
             ).fetchone()
         latest = float(latest_row["latest"] or 0)
         start, end, range_name = self._time_bounds(query, latest)
@@ -2864,9 +2862,7 @@ class RunDataReader:
                 ).fetchall()
             }
             latest_row = connection.execute(
-                f"SELECT MAX(evidence_time) AS latest FROM evidence "
-                f"WHERE profile_ip IN ({placeholders})",
-                ips,
+                "SELECT MAX(evidence_time) AS latest FROM evidence"
             ).fetchone()
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
@@ -3961,8 +3957,11 @@ class RunDataReader:
             in " ".join((item["ip"], item["action"], item["details"])).lower()
         ]
 
-    def p2p(self) -> Dict[str, Any]:
+    def p2p(
+        self, query: Optional[Dict[str, List[str]]] = None
+    ) -> Dict[str, Any]:
         """Return live P2P connectivity, report activity, and trust history."""
+        query = query or {"range": ["all"]}
         connected_raw = self._loads(self.redis.get("connected_peers"), [])
         connected = set(
             connected_raw if isinstance(connected_raw, list) else []
@@ -3986,7 +3985,9 @@ class RunDataReader:
         analysis = self.redis.hgetall("analysis")
         run_start = self._event_timestamp(analysis.get("analysis_start"))
         trust_path = Path("permanent") / "p2p_trust_runtime" / "trustdb.db"
+        trust_range = "all"
         trust_history: List[Dict[str, Any]] = []
+        latest_reliability: Dict[str, Dict[str, Any]] = {}
         reports: List[Dict[str, Any]] = []
         reports_received = 0
         peer_ips: Dict[str, Dict[str, Any]] = {}
@@ -3996,9 +3997,29 @@ class RunDataReader:
                     f"file:{trust_path}?mode=ro", uri=True, timeout=5
                 ) as connection:
                     connection.row_factory = sqlite3.Row
+                    latest_reliability_row = connection.execute(
+                        "SELECT MAX(update_time) AS latest FROM go_reliability"
+                    ).fetchone()
+                    latest_reliability_time = self._event_timestamp(
+                        latest_reliability_row["latest"]
+                    )
+                    trust_start, trust_end, trust_range = self._time_bounds(
+                        query, latest_reliability_time
+                    )
+                    trust_clauses = ["1 = 1"]
+                    trust_params: List[Any] = []
+                    if trust_start is not None:
+                        trust_clauses.append("update_time >= ?")
+                        trust_params.append(trust_start)
+                    if trust_end is not None:
+                        trust_clauses.append("update_time <= ?")
+                        trust_params.append(trust_end)
+                    trust_where = " AND ".join(trust_clauses)
                     for row in connection.execute(
-                        "SELECT peerid, reliability, update_time FROM go_reliability "
-                        "ORDER BY update_time DESC LIMIT 500"
+                        "SELECT peerid, reliability, update_time "
+                        f"FROM go_reliability WHERE {trust_where} "
+                        "ORDER BY update_time DESC LIMIT 2000",
+                        trust_params,
                     ):
                         trust_history.append(
                             {
@@ -4008,6 +4029,20 @@ class RunDataReader:
                                     row["update_time"]
                                 ),
                             }
+                        )
+                    for row in connection.execute(
+                        "SELECT peerid, reliability, update_time "
+                        "FROM go_reliability ORDER BY update_time DESC"
+                    ):
+                        latest_reliability.setdefault(
+                            str(row["peerid"]),
+                            {
+                                "peer_id": str(row["peerid"]),
+                                "reliability": float(row["reliability"]),
+                                "timestamp": self._event_timestamp(
+                                    row["update_time"]
+                                ),
+                            },
                         )
                     for row in connection.execute(
                         "SELECT peerid, ipaddress, update_time FROM peer_ips "
@@ -4053,9 +4088,6 @@ class RunDataReader:
             except sqlite3.Error:
                 pass
         report_counts = Counter(item["peer_id"] for item in reports)
-        latest_reliability: Dict[str, Dict[str, Any]] = {}
-        for item in trust_history:
-            latest_reliability.setdefault(item["peer_id"], item)
         peer_ids = (
             set(peer_info)
             | set(peer_ips)
@@ -4134,6 +4166,7 @@ class RunDataReader:
             "local_peer_id": local_peer_id,
             "peers": peers,
             "trust_history": trust_history,
+            "trust_range": trust_range,
             "reports": current_reports[:200],
             "activity": [item for item in activity if isinstance(item, dict)],
             "counts": {
@@ -4262,7 +4295,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         elif path == "/api/arp-poisoning":
             payload = reader.arp_poisoning()
         elif path == "/api/p2p":
-            payload = reader.p2p()
+            payload = reader.p2p(query)
         elif path == "/api/configuration":
             payload = reader.configuration()
         elif path == "/api/whitelists":
