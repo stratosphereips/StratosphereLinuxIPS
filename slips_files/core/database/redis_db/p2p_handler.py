@@ -89,6 +89,153 @@ class P2PHandler:
         self.r.zrem(self.constants.P2P_TRUST_SET, peer_id)
         self.r.hdel(self.constants.P2P_PEER_INFO_HASH, peer_id)
 
+    def store_authenticated_p2p_connection(
+        self,
+        connection_id: str,
+        connection: dict,
+        ttl: int,
+        active: bool = True,
+    ) -> None:
+        """Store one exact authenticated P2P TCP connection with a TTL.
+
+        Parameters:
+            connection_id: Stable identifier for the connection tuple.
+            connection: Peer identity and local/remote endpoint data.
+            ttl: Number of seconds before the record expires without activity.
+            active: Whether to store this in the live or recent-flow registry.
+        """
+        index = (
+            self.constants.P2P_ACTIVE_CONNECTIONS
+            if active
+            else self.constants.P2P_RECENT_CONNECTIONS
+        )
+        prefix = (
+            self.constants.P2P_ACTIVE_CONNECTION_PREFIX
+            if active
+            else self.constants.P2P_RECENT_CONNECTION_PREFIX
+        )
+        self.r.sadd(index, connection_id)
+        self.r.set(
+            f"{prefix}{connection_id}",
+            json.dumps(connection),
+            ex=max(1, int(ttl)),
+        )
+
+    def remove_authenticated_p2p_connection(self, connection_id: str) -> None:
+        """Delete a connection from the live authenticated registry.
+
+        Parameters:
+            connection_id: Stable identifier for the connection tuple.
+        """
+        self.r.srem(self.constants.P2P_ACTIVE_CONNECTIONS, connection_id)
+        self.r.delete(
+            f"{self.constants.P2P_ACTIVE_CONNECTION_PREFIX}{connection_id}"
+        )
+
+    def _read_p2p_connection_registry(
+        self, index: str, prefix: str
+    ) -> List[dict]:
+        """Read a P2P tuple registry and prune expired index members.
+
+        Parameters:
+            index: Redis set containing connection identifiers.
+            prefix: Prefix used by expiring connection records.
+
+        Returns:
+            Valid decoded authenticated connection records.
+        """
+        connections = []
+        for raw_id in self.r.smembers(index):
+            connection_id = (
+                raw_id.decode(errors="replace")
+                if isinstance(raw_id, bytes)
+                else str(raw_id)
+            )
+            raw = self.r.get(f"{prefix}{connection_id}")
+            if raw is None:
+                self.r.srem(index, connection_id)
+                continue
+            try:
+                connection = json.loads(raw)
+            except (TypeError, ValueError):
+                self.r.srem(index, connection_id)
+                self.r.delete(f"{prefix}{connection_id}")
+                continue
+            if connection.get("authenticated") is True:
+                connections.append(connection)
+        return connections
+
+    def get_authenticated_p2p_connections(
+        self, include_recent: bool = False
+    ) -> List[dict]:
+        """Return exact live authenticated tuples and optional recent tuples.
+
+        Parameters:
+            include_recent: Include the short post-disconnect flow grace set.
+
+        Returns:
+            Authenticated P2P connection records whose Redis TTL is live.
+        """
+        connections = self._read_p2p_connection_registry(
+            self.constants.P2P_ACTIVE_CONNECTIONS,
+            self.constants.P2P_ACTIVE_CONNECTION_PREFIX,
+        )
+        if include_recent:
+            connections.extend(
+                self._read_p2p_connection_registry(
+                    self.constants.P2P_RECENT_CONNECTIONS,
+                    self.constants.P2P_RECENT_CONNECTION_PREFIX,
+                )
+            )
+        return connections
+
+    def is_authenticated_p2p_flow(
+        self, flow, include_recent: bool = True
+    ) -> bool:
+        """Match a flow against an exact authenticated P2P TCP 5-tuple.
+
+        Parameters:
+            flow: Parsed connection flow object or dictionary.
+            include_recent: Include tuples retained briefly after disconnect.
+
+        Returns:
+            True only for an exact tuple match in the authenticated registry.
+        """
+        get_value = (
+            flow.get
+            if isinstance(flow, dict)
+            else lambda key: getattr(flow, key, None)
+        )
+        if str(get_value("proto") or "").lower() != "tcp":
+            return False
+        flow_tuple = (
+            str(get_value("saddr") or ""),
+            str(get_value("sport") or ""),
+            str(get_value("daddr") or ""),
+            str(get_value("dport") or ""),
+        )
+        reverse_tuple = (
+            flow_tuple[2],
+            flow_tuple[3],
+            flow_tuple[0],
+            flow_tuple[1],
+        )
+        for connection in self.get_authenticated_p2p_connections(
+            include_recent=include_recent
+        ):
+            connection_tuple = (
+                str(connection.get("local_ip") or ""),
+                str(connection.get("local_port") or ""),
+                str(connection.get("remote_ip") or ""),
+                str(connection.get("remote_port") or ""),
+            )
+            if (
+                flow_tuple == connection_tuple
+                or reverse_tuple == connection_tuple
+            ):
+                return True
+        return False
+
     def cache_network_opinion(self, target: str, opinion: dict, time: float):
         cache_key = f"{self.constants.FIDES_CACHE_KEY}:{target}"
 
