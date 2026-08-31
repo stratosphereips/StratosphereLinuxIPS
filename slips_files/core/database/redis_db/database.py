@@ -535,7 +535,7 @@ class RedisDB(
                 # so make sure it's established first
                 cls.r.client_list()
                 return True, ""
-            except redis.ConnectionRefused as e:
+            except redis.ConnectionError as e:
                 last_err = f"database.connect_to_redis_server: {e}"
                 if attempt < 2:
                     time.sleep(backoff)
@@ -1348,9 +1348,12 @@ class RedisDB(
     def get_tranco_top_domains(self, limit: Optional[int] = None) -> List[str]:
         end = -1 if limit is None or limit <= 0 else limit - 1
         try:
-            return self.rcache.zrange(
-                self.constants.TRANCO_WHITELISTED_DOMAINS, 0, end
-            ) or []
+            return (
+                self.rcache.zrange(
+                    self.constants.TRANCO_WHITELISTED_DOMAINS, 0, end
+                )
+                or []
+            )
         except redis.ResponseError as error:
             if "WRONGTYPE" not in str(error):
                 raise
@@ -1359,9 +1362,12 @@ class RedisDB(
 
     def is_whitelisted_tranco_domain(self, domain: str) -> bool:
         try:
-            return self.rcache.zscore(
-                self.constants.TRANCO_WHITELISTED_DOMAINS, domain
-            ) is not None
+            return (
+                self.rcache.zscore(
+                    self.constants.TRANCO_WHITELISTED_DOMAINS, domain
+                )
+                is not None
+            )
         except redis.ResponseError as error:
             if "WRONGTYPE" not in str(error):
                 raise
