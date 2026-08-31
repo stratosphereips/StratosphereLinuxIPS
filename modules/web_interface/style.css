@@ -40,6 +40,7 @@ figcaption small { display: block; margin-top: .2rem; font-size: .7rem; }
 .run-addresses { margin: .22rem 0 0; overflow-wrap: anywhere; font: 600 .76rem ui-monospace, SFMono-Regular, Menlo, monospace; }
 .run-state { display: flex; align-items: center; gap: .8rem; min-width: 170px; }
 .run-state small { display: block; margin-top: .25rem; color: var(--muted); }
+.run-state small.error { color: var(--danger); }
 .state-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 5px #e5ad4f18; }
 .state-dot.running { background: var(--accent); box-shadow: 0 0 0 5px #42c8b420; }
 .state-dot.error { background: var(--danger); box-shadow: 0 0 0 5px #ef6b7320; }

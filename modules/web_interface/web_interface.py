@@ -282,6 +282,7 @@ class WebInterface(IModule):
         )
         # Publish live hosts before the HTTP server accepts requests. Detection
         # backfill runs separately so it cannot delay live host refreshes.
+        self.history_collector.record_backend_heartbeat()
         self.history_collector.snapshot_hosts()
         self.history_thread = threading.Thread(
             target=self._collect_history,
@@ -360,6 +361,10 @@ class WebInterface(IModule):
                 self.history_collector.collect_once()
             except Exception as error:
                 self.print(f"Final history collection error: {error}", 0, 1)
+            try:
+                self.history_collector.mark_backend_disconnected()
+            except Exception as error:
+                self.print(f"Backend disconnect marker error: {error}", 0, 1)
         if self.server_log:
             self.server_log.close()
             self.server_log = None

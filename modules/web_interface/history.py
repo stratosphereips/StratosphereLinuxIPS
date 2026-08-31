@@ -20,6 +20,8 @@ ERROR_LINE = re.compile(
 RAW_METRIC_RETENTION_SECONDS = 24 * 60 * 60
 FLOW_INDEX_BATCH_SIZE = 5000
 HOST_SNAPSHOT_INTERVAL_SECONDS = 60
+BACKEND_HEARTBEAT_KEY = "backend_heartbeat_at"
+BACKEND_DISCONNECTED_KEY = "backend_disconnected_at"
 
 
 def connect_history(path: Path, read_only: bool = False) -> sqlite3.Connection:
@@ -178,6 +180,39 @@ class HistoryCollector:
             "INSERT OR REPLACE INTO metadata(key, value) VALUES (?, ?)",
             (key, str(value)),
         )
+
+    def record_backend_heartbeat(self, now: Optional[float] = None) -> float:
+        """
+        Record that the Slips-owned web collector is still alive.
+
+        Parameters:
+            now: Explicit Unix timestamp, or the current time when omitted.
+
+        Returns:
+            The heartbeat timestamp written to history.
+        """
+        heartbeat = time.time() if now is None else float(now)
+        with connect_history(self.history_path) as connection:
+            self._metadata_set(connection, BACKEND_HEARTBEAT_KEY, heartbeat)
+            self._metadata_set(connection, BACKEND_DISCONNECTED_KEY, 0)
+        return heartbeat
+
+    def mark_backend_disconnected(self, now: Optional[float] = None) -> float:
+        """
+        Mark a clean separation between the retained page and Slips backend.
+
+        Parameters:
+            now: Explicit Unix timestamp, or the current time when omitted.
+
+        Returns:
+            The disconnection timestamp written to history.
+        """
+        disconnected_at = time.time() if now is None else float(now)
+        with connect_history(self.history_path) as connection:
+            self._metadata_set(
+                connection, BACKEND_DISCONNECTED_KEY, disconnected_at
+            )
+        return disconnected_at
 
     def index_new_flows(self) -> int:
         """
@@ -992,6 +1027,7 @@ class HistoryCollector:
     def collect_once(self) -> None:
         """Run one bounded collector iteration."""
         now = time.time()
+        self.record_backend_heartbeat(now)
         if now - self._last_host_snapshot >= HOST_SNAPSHOT_INTERVAL_SECONDS:
             self.snapshot_hosts()
             self.sample_storage()

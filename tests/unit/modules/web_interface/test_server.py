@@ -95,23 +95,39 @@ def test_server_rejects_non_ipv4_bind_addresses(value: str) -> None:
         ipv4_address(value)
 
 
-def test_header_marks_failed_web_connection_as_disconnected() -> None:
-    """Keep the persistent run indicator honest when API polling fails."""
+def test_header_tracks_backend_heartbeat_and_freezes_uptime() -> None:
+    """Keep retained pages honest after the Slips backend disconnects."""
     _module_factory = ModuleFactory()
     app_source = Path("modules/web_interface/app.js").read_text(
+        encoding="utf-8"
+    )
+    style_source = Path("modules/web_interface/style.css").read_text(
         encoding="utf-8"
     )
     connection_renderer = app_source.split(
         "function renderConnectionState(connected)", 1
     )[1].split("function toast", 1)[0]
-    api_error_handler = app_source.split("async function api", 1)[1].split(
+    api_handler = app_source.split("async function api", 1)[1].split(
         "function renderTable", 1
     )[0]
 
     assert 'dot.className = "state-dot error"' in connection_renderer
-    assert 'label.textContent = "Web disconnected"' in connection_renderer
-    assert "renderConnectionState(false);" in api_error_handler
-    assert "renderConnectionState(true);" in api_error_handler
+    assert (
+        'label.textContent = "Disconnected from backend"'
+        in connection_renderer
+    )
+    assert 'const prefix = disconnected ? "Last uptime" : "Uptime"' in (
+        connection_renderer
+    )
+    assert 'element.classList.toggle("error", disconnected)' in (
+        connection_renderer
+    )
+    assert "state.runUptimeRunning && state.connected" in connection_renderer
+    assert "payload.backend_status?.connected === true" in api_handler
+    assert "renderConnectionState(false);" in api_handler
+    assert 'api("backendStatus", "/api/identity", false)' in app_source
+    assert "scheduleBackendStatusPoll();" in app_source
+    assert ".run-state small.error { color: var(--danger); }" in style_source
 
 
 @pytest.mark.parametrize("tab", ["alerts", "evidence", "hosts"])
@@ -2645,3 +2661,63 @@ def test_p2p_live_state_prunes_expired_connection_record() -> None:
     reader.redis.srem.assert_called_once_with(
         "p2p:active_connections", "expired-connection"
     )
+
+
+@pytest.mark.parametrize(
+    "heartbeat, disconnected_at, now, expected_connected",
+    [
+        (100.0, 0.0, 110.0, True),
+        (100.0, 0.0, 116.0, False),
+        (100.0, 100.0, 101.0, False),
+        (None, None, 101.0, False),
+        ("invalid", "invalid", 101.0, False),
+    ],
+)
+def test_backend_status_requires_a_fresh_attached_heartbeat(
+    heartbeat: object,
+    disconnected_at: object,
+    now: float,
+    expected_connected: bool,
+) -> None:
+    """
+    Distinguish a retained HTTP page from its live Slips backend.
+
+    Parameters:
+        heartbeat: Last heartbeat value from history metadata.
+        disconnected_at: Explicit backend shutdown value.
+        now: Current time used for deterministic freshness checks.
+        expected_connected: Expected backend connectivity result.
+    """
+    _module_factory = ModuleFactory()
+
+    status = RunDataReader._backend_status(heartbeat, disconnected_at, now)
+
+    assert status["connected"] is expected_connected
+    assert status["timeout_seconds"] == 15
+
+
+def test_response_metadata_exposes_stale_backend_status(
+    tmp_path: Path,
+) -> None:
+    """Report a stale collector heartbeat even while HTTP remains available."""
+    _module_factory = ModuleFactory()
+    history_path = tmp_path / "history.sqlite"
+    initialize_history(history_path)
+    with connect_history(history_path) as connection:
+        connection.execute(
+            "INSERT OR REPLACE INTO metadata(key, value) VALUES (?, ?)",
+            ("backend_heartbeat_at", "100"),
+        )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.history_path = history_path
+    reader.output_dir = tmp_path
+
+    with patch("modules.web_interface.server.time.time", return_value=116):
+        metadata = reader.response_metadata()
+
+    assert metadata["backend_status"] == {
+        "connected": False,
+        "last_seen": 100.0,
+        "age_seconds": 16.0,
+        "timeout_seconds": 15,
+    }
