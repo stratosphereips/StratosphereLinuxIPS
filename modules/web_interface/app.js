@@ -3,6 +3,8 @@
 const state = {
   activeTab: "overview",
   overview: null,
+  overviewEvidence: null,
+  overviewEvidenceLoading: false,
   metrics: [],
   configuration: null,
   whitelists: null,
@@ -251,6 +253,8 @@ function applyRunIdentity(identity) {
     closeHost();
     Object.keys(state.pages).forEach((name) => resetPage(name));
     state.overview = null;
+    state.overviewEvidence = null;
+    state.overviewEvidenceLoading = false;
     state.metrics = [];
     state.rangesInitialized = false;
     toast("A new Slips run is now active. Investigation state was cleared.");
@@ -677,6 +681,12 @@ function renderOverview() {
     row.append(text("small", label), text("strong", value));
     load.append(row);
   });
+  const evidenceButton = byId("load-module-evidence");
+  evidenceButton.disabled = state.overviewEvidenceLoading;
+  evidenceButton.textContent = state.overviewEvidenceLoading
+    ? "Loading evidence counts…"
+    : (data.evidence_details_loaded
+      ? "Refresh evidence counts" : "Load evidence counts");
   renderModules(data.modules);
 }
 
@@ -832,7 +842,8 @@ function renderModules(modules) {
       row.memory_percent, `${numeric(row.memory_mb).toFixed(1)} MiB`, "host memory",
     ),
     (row) => compact(row.flows_per_minute),
-    (row) => compact(row.evidence_count),
+    (row) => row.evidence_count === null || row.evidence_count === undefined
+      ? text("span", "Not loaded", "muted") : compact(row.evidence_count),
     (row) => row.error_count,
   ]);
   applySortIndicators("modules");
@@ -867,14 +878,46 @@ function initializeRanges(run) {
   state.rangesInitialized = true;
 }
 
-/** Load the operational overview and its history charts. */
+/** Apply explicitly requested evidence details to a fast Overview payload. */
+function applyOverviewEvidence(payload) {
+  if (!state.overviewEvidence || !payload) return;
+  payload.counts.evidence = state.overviewEvidence.evidence;
+  const moduleCounts = state.overviewEvidence.modules || {};
+  payload.modules.forEach((module) => {
+    module.evidence_count = numeric(moduleCounts[module.name]);
+  });
+  payload.evidence_details_loaded = true;
+}
+
+/** Load the operational overview and its bounded history charts. */
 async function loadOverview() {
   const payload = await api("overview", "/api/overview");
   if (!payload) return;
+  applyOverviewEvidence(payload);
   state.overview = payload;
   initializeRanges(payload.run);
   renderOverview();
   await loadMetrics();
+}
+
+/** Load exact retained evidence attribution only after a user asks for it. */
+async function loadOverviewEvidenceCounts() {
+  if (state.overviewEvidenceLoading) return;
+  state.overviewEvidenceLoading = true;
+  renderOverview();
+  try {
+    const payload = await api(
+      "overviewEvidence", "/api/overview/evidence-counts",
+    );
+    if (!payload) return;
+    state.overviewEvidence = payload;
+    applyOverviewEvidence(state.overview);
+    renderOverview();
+    toast(`Loaded exact evidence counts from ${payload.source}.`);
+  } finally {
+    state.overviewEvidenceLoading = false;
+    renderOverview();
+  }
 }
 
 /** Load and render run metadata in its dedicated tab. */
@@ -2736,6 +2779,8 @@ document.querySelectorAll(".tab").forEach((tab) =>
 document.querySelectorAll(".refresh-list").forEach((button) =>
   button.addEventListener("click", () => tabLoader(button.dataset.target)().catch(() => {})));
 byId("refresh-overview").addEventListener("click", () => loadOverview().catch(() => {}));
+byId("load-module-evidence").addEventListener("click", () =>
+  loadOverviewEvidenceCounts().catch(() => {}));
 byId("metrics-range").addEventListener("change", () => loadMetrics().catch(() => {}));
 byId("p2p-range").addEventListener("change", () => loadP2P().catch(() => {}));
 byId("module-search").addEventListener("input", () =>
